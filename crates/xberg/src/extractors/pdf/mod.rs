@@ -505,6 +505,7 @@ fn extract_native_blocking(
         not(target_arch = "wasm32")
     ))]
     let mut image_gap = None;
+    native_document.doc.begin_page_passes();
     let extraction = extract_all_from_native_document(
         &mut native_document,
         &config,
@@ -524,7 +525,9 @@ fn extract_native_blocking(
             acceleration: layout_acceleration_override.as_ref(),
             region_text: region_text_layout.as_ref(),
         },
-    )?;
+    );
+    native_document.doc.release_page_caches();
+    let extraction = extraction?;
     ensure_pdf_not_cancelled(&config)?;
 
     Ok(NativeBlockingOutput {

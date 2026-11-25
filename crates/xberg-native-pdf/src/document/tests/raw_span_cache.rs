@@ -69,10 +69,6 @@ fn page_reads(doc: &PdfDocument, page: usize) -> Vec<String> {
         ),
         format!("{preserved:?}"),
         format!("{witnesses:?}"),
-        format!(
-            "{:?}",
-            doc.extract_painting_text_and_spans(page).expect("painting spans")
-        ),
         format!("{:?}", doc.mc_actualtext_mcids.lock().unwrap().get(&page)),
     ]
 }
@@ -81,6 +77,7 @@ fn page_reads(doc: &PdfDocument, page: usize) -> Vec<String> {
 fn cached_reads_equal_a_fresh_interpretation_for_every_option_set() {
     let pdf = option_set_pdf();
     let warm = PdfDocument::from_bytes(pdf.clone()).expect("open warm document");
+    warm.begin_page_passes();
     let pages = warm.page_count().unwrap();
     assert_eq!(pages, 5);
     for page in 0..pages {
@@ -163,6 +160,7 @@ fn filtered_reads_bypass_the_unfiltered_cache() {
     assert!(!expected_filtered.contains("Layered"), "{expected_filtered:?}");
 
     let warm = PdfDocument::from_bytes(pdf).unwrap();
+    warm.begin_page_passes();
     let expected_unfiltered = unfiltered(&warm);
     assert!(expected_unfiltered.contains("Layered"), "{expected_unfiltered:?}");
     assert_eq!(filtered(&warm), expected_filtered);
@@ -175,6 +173,7 @@ fn filtered_reads_bypass_the_unfiltered_cache() {
 fn later_passes_over_more_than_eight_pages_do_not_reinterpret() {
     const PAGES: usize = 12;
     let doc = PdfDocument::from_bytes(many_pages_pdf(PAGES)).expect("open document");
+    doc.begin_page_passes();
     assert_eq!(doc.page_count().unwrap(), PAGES);
     let start = page_span_interpretations();
     for page in 0..PAGES {
@@ -221,6 +220,7 @@ fn later_passes_over_more_than_eight_pages_do_not_reinterpret() {
 fn a_witness_request_reinterprets_a_page_cached_without_witnesses() {
     let pdf = option_set_pdf();
     let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
+    doc.begin_page_passes();
     drop(
         doc.extract_page_text_with_script_geometry(1, ReadingOrder::TopToBottom)
             .unwrap(),
@@ -263,6 +263,7 @@ fn a_witness_request_reinterprets_a_page_cached_without_witnesses() {
 #[test]
 fn a_cache_hit_restores_the_pages_actual_text_entry() {
     let doc = PdfDocument::from_bytes(option_set_pdf()).unwrap();
+    doc.begin_page_passes();
     drop(doc.extract_spans_raw(3).unwrap());
     let recorded = doc.mc_actualtext_mcids.lock().unwrap().get(&3).cloned();
     assert_eq!(recorded, Some(HashSet::from([5])));
@@ -286,4 +287,82 @@ fn the_budget_admits_until_full_and_keeps_earlier_entries() {
     cache.clear();
     assert_eq!(cache.len(), 0);
     assert!(cache.insert(1, "b", 10));
+}
+
+#[test]
+fn the_cache_admission_check_matches_insert() {
+    let mut cache = crate::cache::AdmissionBudgetCache::new(10);
+    assert!(cache.admits(&0, 10));
+    assert!(!cache.admits(&0, 11));
+    assert!(cache.insert(0, "a", 6));
+    assert!(!cache.admits(&1, 5));
+    assert!(cache.admits(&0, 10), "a replacement counts the bytes it frees");
+}
+
+/// Outside `begin_page_passes`/`release_page_caches` nothing is cached, and
+/// releasing empties every per-page cache.
+#[test]
+fn the_page_pass_cache_lives_only_between_begin_and_release() {
+    let doc = PdfDocument::from_bytes(many_pages_pdf(2)).expect("open document");
+    let reads = |doc: &PdfDocument| {
+        let before = page_span_interpretations();
+        for _ in 0..2 {
+            drop(doc.extract_spans_raw(0).unwrap());
+        }
+        page_span_interpretations() - before
+    };
+    assert_eq!(reads(&doc), 2, "no cache before the passes begin");
+    doc.begin_page_passes();
+    assert_eq!(reads(&doc), 1, "one interpretation while the passes run");
+    drop(doc.extract_spans(1).unwrap());
+    drop(doc.extract_chars(1).unwrap());
+    doc.release_page_caches();
+    assert!(doc.raw_page_spans_cache.lock().unwrap().is_none());
+    assert_eq!(doc.page_spans_cache.lock().unwrap().len(), 0);
+    assert_eq!(doc.page_chars_cache.lock().unwrap().len(), 0);
+    assert_eq!(reads(&doc), 2, "no cache after release");
+}
+
+#[test]
+fn the_page_pass_budget_is_proportional_to_the_source_and_capped() {
+    let doc = PdfDocument::from_bytes(many_pages_pdf(2)).expect("open document");
+    doc.begin_page_passes();
+    let budget = doc
+        .raw_page_spans_cache
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .budget_bytes();
+    assert_eq!(budget, 32 * doc.source_bytes.len());
+    let mut large = PdfDocument::from_bytes(many_pages_pdf(2)).expect("open document");
+    large.source_bytes.resize(1024 * 1024, b' ');
+    large.begin_page_passes();
+    let budget = large
+        .raw_page_spans_cache
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .budget_bytes();
+    assert_eq!(budget, 8 * 1024 * 1024);
+}
+
+/// A page whose interpretation does not fit the budget is read on every pass
+/// and still equals an uncached read.
+#[test]
+fn pages_past_the_budget_are_interpreted_each_read_and_stay_equal() {
+    let pdf = many_pages_pdf(3);
+    let doc = PdfDocument::from_bytes(pdf.clone()).expect("open document");
+    doc.begin_page_passes();
+    *doc.raw_page_spans_cache.lock().unwrap() = Some(crate::cache::AdmissionBudgetCache::new(0));
+    let before = page_span_interpretations();
+    let first = format!("{:?}", doc.extract_spans_raw(2).unwrap());
+    let second = format!("{:?}", doc.extract_spans_raw(2).unwrap());
+    assert_eq!(page_span_interpretations() - before, 2);
+    assert_eq!(doc.raw_page_spans_cache.lock().unwrap().as_ref().unwrap().len(), 0);
+    let fresh = PdfDocument::from_bytes(pdf).unwrap();
+    let reference = format!("{:?}", fresh.extract_spans_raw(2).unwrap());
+    assert_eq!(first, reference);
+    assert_eq!(second, reference);
 }

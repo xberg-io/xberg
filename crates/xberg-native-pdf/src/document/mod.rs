@@ -928,10 +928,13 @@ pub struct PdfDocument {
     /// text pass, the ruled-table words, the heuristic table segments, the table
     /// script geometry and the structure pass; this serves every read after the
     /// first. The key holds every input the interpretation depends on besides the
-    /// page's immutable content and resources. Cleared when authentication changes
-    /// what a page decodes to.
+    /// page's immutable content and resources. `None` outside
+    /// `begin_page_passes`/`release_page_caches`; emptied when authentication
+    /// changes what a page decodes to.
     raw_page_spans_cache: Mutex<
-        crate::cache::AdmissionBudgetCache<extract_api::RawSpanKey, std::sync::Arc<extract_api::InterpretedPage>>,
+        Option<
+            crate::cache::AdmissionBudgetCache<extract_api::RawSpanKey, std::sync::Arc<extract_api::InterpretedPage>>,
+        >,
     >,
     /// Small-text density evidence for a single-page document.
     small_painted_text: std::sync::OnceLock<bool>,

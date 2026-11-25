@@ -315,9 +315,7 @@ impl PdfDocument {
             erase_regions: Mutex::new(HashMap::new()),
             page_content_cache: Mutex::new(BoundedEntryCache::new(64)),
             page_spans_cache: Mutex::new(BoundedEntryCache::new(8)),
-            raw_page_spans_cache: Mutex::new(crate::cache::AdmissionBudgetCache::new(
-                super::extract_api::RAW_PAGE_SPANS_BUDGET_BYTES,
-            )),
+            raw_page_spans_cache: Mutex::new(None),
             small_painted_text: std::sync::OnceLock::new(),
             search_index: Mutex::new(HashMap::new()),
             page_chars_cache: Mutex::new(BoundedEntryCache::new(8)),
@@ -699,7 +697,9 @@ impl PdfDocument {
             // cache path (it is resolved independently), so clearing
             // is always safe. ~keep
             self.object_cache.lock_or_recover().clear();
-            self.raw_page_spans_cache.lock_or_recover().clear();
+            if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
+                cache.clear();
+            }
             tracing::debug!(target: LOG_TARGET,
                 "authenticate(): object cache cleared after successful authentication \
                      to force re-decryption of any pre-auth cached objects"

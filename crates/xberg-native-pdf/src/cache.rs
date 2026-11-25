@@ -115,16 +115,21 @@ impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
         self.map.get(key).map(|(value, _)| value)
     }
 
+    /// Whether [`Self::insert`] would store an entry of `bytes` under `key`.
+    pub(crate) fn admits(&self, key: &K, bytes: usize) -> bool {
+        let replaced = self.map.get(key).map_or(0, |(_, bytes)| *bytes);
+        bytes <= self.budget_bytes - (self.used_bytes - replaced)
+    }
+
     /// Store `value` under `key`, replacing an existing entry, when the budget
     /// still fits it. Returns whether the value was stored; a value that does
     /// not fit leaves any existing entry in place.
     pub(crate) fn insert(&mut self, key: K, value: V, bytes: usize) -> bool {
-        let replaced = self.map.get(&key).map_or(0, |(_, bytes)| *bytes);
-        let used_without = self.used_bytes - replaced;
-        if bytes > self.budget_bytes - used_without {
+        if !self.admits(&key, bytes) {
             return false;
         }
-        self.used_bytes = used_without + bytes;
+        let replaced = self.map.get(&key).map_or(0, |(_, bytes)| *bytes);
+        self.used_bytes = self.used_bytes - replaced + bytes;
         self.map.insert(key, (value, bytes));
         true
     }
@@ -137,5 +142,10 @@ impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.map.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn budget_bytes(&self) -> usize {
+        self.budget_bytes
     }
 }
