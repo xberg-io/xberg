@@ -2004,22 +2004,26 @@ fn reconstruct_region_tables(
     horizontal_rules: usize,
     column_rules: &source_columns::PageRules<'_>,
 ) -> Vec<Table> {
-    let Some(parent) = source_columns::reconstruct_region_table(
+    let parent = match source_columns::reconstruct_region_table(
         region,
         page_height,
         page_number,
         allow_single_column,
         horizontal_rules,
         column_rules,
-    ) else {
-        return reconstruct_rejected_side_by_side(
-            region,
-            page_height,
-            page_number,
-            allow_single_column,
-            horizontal_rules,
-        )
-        .unwrap_or_default();
+    ) {
+        Ok(parent) => parent,
+        Err(rejection) => {
+            return reconstruct_rejected_side_by_side(
+                region,
+                rejection,
+                page_height,
+                page_number,
+                allow_single_column,
+                horizontal_rules,
+            )
+            .unwrap_or_default();
+        }
     };
     if parent.cells.first().map_or(0, Vec::len) < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
         return vec![parent];
@@ -2103,20 +2107,19 @@ fn side_by_side_child_gap(region: &[crate::pdf::table_reconstruct::HocrWord]) ->
 /// so two sides that pass unaided leave the rejected parent as it was. ~keep
 fn reconstruct_rejected_side_by_side(
     region: &[crate::pdf::table_reconstruct::HocrWord],
+    rejection: HeuristicTableRejection,
     page_height: f32,
     page_number: u32,
     allow_single_column: bool,
     horizontal_rules: usize,
 ) -> Option<Vec<Table>> {
-    let (left_region, right_region) = split_side_by_side_region(region)?;
-    let Err(HeuristicTableRejection::NotWellFormed { columns }) =
-        reconstruct_region_table_with_reason(region, page_height, page_number, allow_single_column, horizontal_rules)
-    else {
+    let HeuristicTableRejection::NotWellFormed { columns } = rejection else {
         return None;
     };
     if columns < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
         return None;
     }
+    let (left_region, right_region) = split_side_by_side_region(region)?;
     let child = |side: &[crate::pdf::table_reconstruct::HocrWord]| {
         reconstruct_wrapped_side_by_side_child(side, page_height, page_number, allow_single_column, horizontal_rules)
     };
@@ -2125,6 +2128,7 @@ fn reconstruct_rejected_side_by_side(
     if !(left_collapsed || right_collapsed) || !side_tables_have_independent_shape(&left, &right) {
         return None;
     }
+    let (left, right) = normalize_side_by_side_financial_tables(left, right);
     tracing::trace!(
         page = page_number,
         parent_columns = columns,
@@ -2149,9 +2153,9 @@ fn reconstruct_wrapped_side_by_side_child(
     }
     let col_gap = side_by_side_child_gap(region)?;
     let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
-    let row_lefts = grid_row_left_edges(region, grid.len());
+    let geometry = grid_row_geometry(region, grid.len())?;
     let indent_tolerance = median_word_height(region) / 2;
-    let collapsed = collapse_wrapped_financial_records(&grid, row_lefts.as_deref(), indent_tolerance)?;
+    let collapsed = collapse_wrapped_financial_records(&grid, &geometry, indent_tolerance)?;
     admit_region_grid(
         region,
         collapsed,
@@ -2166,9 +2170,19 @@ fn reconstruct_wrapped_side_by_side_child(
     .map(|table| (table, true))
 }
 
-/// Leftmost word edge of each grid row, or `None` when the region's rows do not map one to
-/// one onto the grid's (a merged header fragment or a dropped row), so no row is misread.
-fn grid_row_left_edges(region: &[crate::pdf::table_reconstruct::HocrWord], grid_rows: usize) -> Option<Vec<u32>> {
+/// Where one grid row sits on the page: its leftmost word edge and its vertical centre.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct GridRowGeometry {
+    left: u32,
+    center: u32,
+}
+
+/// Geometry of each grid row, or `None` when the region's rows do not map one to one onto
+/// the grid's (a merged header fragment or a dropped row), so no row is misread.
+fn grid_row_geometry(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    grid_rows: usize,
+) -> Option<Vec<GridRowGeometry>> {
     let positions = crate::table_core::detect_rows(region, REGION_ROW_THRESHOLD_RATIO);
     let mut lefts: Vec<Option<u32>> = vec![None; positions.len()];
     for word in region {
@@ -2178,46 +2192,69 @@ fn grid_row_left_edges(region: &[crate::pdf::table_reconstruct::HocrWord], grid_
         let left = &mut lefts[index];
         *left = Some(left.map_or(word.left, |current| current.min(word.left)));
     }
-    let lefts: Vec<u32> = lefts.into_iter().flatten().collect();
-    (lefts.len() == grid_rows).then_some(lefts)
+    let geometry: Vec<GridRowGeometry> = lefts
+        .into_iter()
+        .zip(positions)
+        .filter_map(|(left, center)| Some(GridRowGeometry { left: left?, center }))
+        .collect();
+    (geometry.len() == grid_rows).then_some(geometry)
 }
 
 /// Fewest wrapped records a side must collapse before its lines read as a wrapped schedule.
 const WRAPPED_RECORD_MIN_COLLAPSED: usize = 3;
 
+/// Gap above a line, as a percentage of the median row pitch, beyond which a line that
+/// starts a new entry is set apart from the record above it as a heading.
+const WRAPPED_HEADING_MIN_PITCH_PERCENT: u32 = 150;
+
 /// Collapse each wrapped record of a financial schedule into one row.
 ///
 /// A record's description wraps over descriptor-only lines and ends on the line that holds
 /// its numeric amount or value; those lines become one row whose descriptor joins them.
-/// A line back at the outdented left edge starts a new entry, so a section heading or
-/// issuer line above it stays a row of its own and is not counted as a wrapped record. A run longer than
-/// [`WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS`] is prose, not a record, and fails the
-/// collapse, as does a grid with fewer than [`WRAPPED_RECORD_MIN_COLLAPSED`] records.
+/// A new entry starts at a line back at the outdented left edge, and after a heading: a
+/// line that starts an entry with a gap above it wider than
+/// [`WRAPPED_HEADING_MIN_PITCH_PERCENT`] of the row pitch ends at the next line not indented
+/// deeper than itself. Such headings and issuer lines stay rows of their own and do not
+/// count as wrapped records. A run longer than [`WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS`]
+/// is prose, not a record, and fails the collapse, as do a grid without one
+/// `rows_geometry` entry per row (no indentation to read) and a grid with fewer than
+/// [`WRAPPED_RECORD_MIN_COLLAPSED`] records.
 fn collapse_wrapped_financial_records(
     grid: &[Vec<String>],
-    row_lefts: Option<&[u32]>,
+    rows_geometry: &[GridRowGeometry],
     indent_tolerance: u32,
 ) -> Option<Vec<Vec<String>>> {
     let width = grid.first()?.len();
-    if width < CANONICAL_FINANCIAL_COLUMNS || grid.iter().any(|row| row.len() != width) {
+    if width < CANONICAL_FINANCIAL_COLUMNS
+        || rows_geometry.len() != grid.len()
+        || grid.iter().any(|row| row.len() != width)
+    {
         return None;
     }
-    let outdent = row_lefts.and_then(|lefts| lefts.iter().min().copied());
-    let is_outdented = |index: usize| match (row_lefts, outdent) {
-        (Some(lefts), Some(outdent)) => lefts
-            .get(index)
-            .is_some_and(|&left| left <= outdent.saturating_add(indent_tolerance)),
-        _ => false,
+    let outdent = rows_geometry.iter().map(|row| row.left).min()?;
+    let is_outdented = |index: usize| rows_geometry[index].left <= outdent.saturating_add(indent_tolerance);
+    let pitch = median_row_pitch(rows_geometry);
+    let is_set_apart = |index: usize| {
+        index > 0
+            && pitch > 0
+            && rows_geometry[index]
+                .center
+                .saturating_sub(rows_geometry[index - 1].center)
+                .saturating_mul(100)
+                > pitch.saturating_mul(WRAPPED_HEADING_MIN_PITCH_PERCENT)
     };
 
     let mut rows = Vec::with_capacity(grid.len());
     let mut pending: Vec<&str> = Vec::new();
+    let mut heading_left: Option<u32> = None;
     let mut collapsed = 0usize;
     for (index, row) in grid.iter().enumerate() {
         let descriptor = row[0].trim();
         let values = &row[1..];
+        let ends_heading =
+            heading_left.is_some_and(|left| rows_geometry[index].left <= left.saturating_add(indent_tolerance));
         if values.iter().any(|value| is_numeric_word(value.trim())) {
-            if !descriptor.is_empty() && is_outdented(index) {
+            if ends_heading || (!descriptor.is_empty() && is_outdented(index)) {
                 flush_pending_descriptor(&mut pending, &mut rows, width);
             }
             if !pending.is_empty() {
@@ -2231,17 +2268,21 @@ fn collapse_wrapped_financial_records(
             record.extend(values.iter().cloned());
             pending.clear();
             rows.push(record);
+            heading_left = None;
         } else if !descriptor.is_empty() && values.iter().all(|value| value.trim().is_empty()) {
-            if is_outdented(index) {
+            if ends_heading || is_outdented(index) {
                 flush_pending_descriptor(&mut pending, &mut rows, width);
             }
+            let starts_entry = pending.is_empty();
             pending.push(descriptor);
             if pending.len() > WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS {
                 return None;
             }
+            heading_left = (starts_entry && is_set_apart(index)).then_some(rows_geometry[index].left);
         } else {
             flush_pending_descriptor(&mut pending, &mut rows, width);
             rows.push(row.clone());
+            heading_left = None;
         }
     }
     flush_pending_descriptor(&mut pending, &mut rows, width);
@@ -2252,6 +2293,15 @@ fn collapse_wrapped_financial_records(
         preserve_repeated_issuer_rows(&mut rows);
     }
     Some(rows)
+}
+
+fn median_row_pitch(rows: &[GridRowGeometry]) -> u32 {
+    let mut pitches: Vec<u32> = rows
+        .windows(2)
+        .map(|pair| pair[1].center.saturating_sub(pair[0].center))
+        .collect();
+    pitches.sort_unstable();
+    pitches.get(pitches.len() / 2).copied().unwrap_or(0)
 }
 
 fn flush_pending_descriptor(pending: &mut Vec<&str>, rows: &mut Vec<Vec<String>>, width: usize) {
@@ -3194,19 +3244,25 @@ fn reconstruct_region_table(
     allow_single_column: bool,
     horizontal_rules: usize,
 ) -> Option<Table> {
-    match reconstruct_region_table_with_reason(region, page_height, page_number, allow_single_column, horizontal_rules)
-    {
-        Ok(table) => Some(table),
-        Err(reason) => {
+    reconstruct_region_table_traced(region, page_height, page_number, allow_single_column, horizontal_rules).ok()
+}
+
+fn reconstruct_region_table_traced(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+) -> std::result::Result<Table, HeuristicTableRejection> {
+    reconstruct_region_table_with_reason(region, page_height, page_number, allow_single_column, horizontal_rules)
+        .inspect_err(|reason| {
             tracing::trace!(
                 page = page_number,
                 words = region.len(),
                 ?reason,
                 "heuristic table region rejected"
             );
-            None
-        }
-    }
+        })
 }
 
 fn reconstruct_region_table_with_reason(
@@ -4775,9 +4831,9 @@ mod tests {
             &["6.08%, 01/15/34 . . .", "500", "500,639"],
             &["", "", "68,077,028"],
         ]);
-        let lefts = [18, 18, 18, 27, 27, 18, 27, 36, 36, 27, 36, 253];
+        let geometry = evenly_pitched_rows(&[18, 18, 18, 27, 27, 18, 27, 36, 36, 27, 36, 253]);
 
-        let collapsed = collapse_wrapped_financial_records(&grid, Some(&lefts[..]), 5).expect("three wrapped records");
+        let collapsed = collapse_wrapped_financial_records(&grid, &geometry, 5).expect("three wrapped records");
 
         assert_eq!(
             collapsed,
@@ -4813,8 +4869,212 @@ mod tests {
             WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS + 1,
         ));
         rows.push(&["end of paragraph", "500", "500,889"]);
+        let mut lefts = vec![18];
+        lefts.extend(std::iter::repeat_n(27, rows.len() - 1));
 
-        assert_eq!(collapse_wrapped_financial_records(&grid_rows(&rows), None, 5), None);
+        assert_eq!(
+            collapse_wrapped_financial_records(&grid_rows(&rows), &evenly_pitched_rows(&lefts), 5),
+            None
+        );
+    }
+
+    fn evenly_pitched_rows(lefts: &[u32]) -> Vec<GridRowGeometry> {
+        lefts
+            .iter()
+            .zip(0u32..)
+            .map(|(&left, row)| GridRowGeometry { left, center: row * 12 })
+            .collect()
+    }
+
+    #[test]
+    fn wrapped_record_collapse_requires_row_geometry() {
+        let grid = grid_rows(&[
+            &["Security", "Par", "Value"],
+            &["Alpha Ltd., Series 2024-A, Class", "", ""],
+            &["A1R, 5.87%, 04/15/37 . . .", "1,000", "1,002,049"],
+            &["Beta Ltd., Series 2024-B, Class", "", ""],
+            &["B1R, 5.47%, 04/15/40 . . .", "250", "249,760"],
+            &["Gamma Ltd., Series 2024-G, Class", "", ""],
+            &["G1R, 6.08%, 01/15/34 . . .", "500", "500,639"],
+        ]);
+        let geometry = evenly_pitched_rows(&[18, 18, 27, 18, 27, 18, 27]);
+        assert!(
+            collapse_wrapped_financial_records(&grid, &geometry, 5).is_some(),
+            "the fixture must collapse when its rows have geometry"
+        );
+
+        assert_eq!(
+            collapse_wrapped_financial_records(&grid, &[], 5),
+            None,
+            "without indentation every heading would join the next record"
+        );
+        assert_eq!(collapse_wrapped_financial_records(&grid, &geometry[1..], 5), None);
+    }
+
+    #[test]
+    fn set_apart_heading_stays_its_own_row_but_a_set_apart_record_does_not_split() {
+        let grid = grid_rows(&[
+            &["Security", "Par", "Value"],
+            &["Alpha Ltd., Series 2024-A, Class", "", ""],
+            &["A1R, 5.87%, 04/15/37 . . .", "1,000", "1,002,049"],
+            &["Beta Ltd., Series 2024-B, Class", "", ""],
+            &["B1R, 5.47%, 04/15/40 . . .", "250", "249,760"],
+            &["Ireland — 0.6%", "", ""],
+            &["Series 2X, Class D, (3-mo.", "", ""],
+            &["EURIBOR + 3.30%), 5.34% . . .", "2,720", "3,100,879"],
+            &["Gamma Ltd., Series 2024-G, Class", "", ""],
+            &["G1R, 6.08%, 01/15/34 . . .", "500", "500,639"],
+        ]);
+        let geometry: Vec<GridRowGeometry> = [
+            (18, 0),
+            (18, 12),
+            (27, 24),
+            (18, 36),
+            (27, 48),
+            (80, 72),
+            (27, 84),
+            (27, 96),
+            (18, 120),
+            (27, 132),
+        ]
+        .into_iter()
+        .map(|(left, center)| GridRowGeometry { left, center })
+        .collect();
+
+        let collapsed = collapse_wrapped_financial_records(&grid, &geometry, 5).expect("four wrapped records");
+
+        assert_eq!(
+            collapsed,
+            grid_rows(&[
+                &["Security", "Par", "Value"],
+                &[
+                    "Alpha Ltd., Series 2024-A, Class A1R, 5.87%, 04/15/37 . . .",
+                    "1,000",
+                    "1,002,049"
+                ],
+                &[
+                    "Beta Ltd., Series 2024-B, Class B1R, 5.47%, 04/15/40 . . .",
+                    "250",
+                    "249,760"
+                ],
+                &["Ireland — 0.6%", "", ""],
+                &[
+                    "Series 2X, Class D, (3-mo. EURIBOR + 3.30%), 5.34% . . .",
+                    "2,720",
+                    "3,100,879"
+                ],
+                &[
+                    "Gamma Ltd., Series 2024-G, Class G1R, 6.08%, 01/15/34 . . .",
+                    "500",
+                    "500,639"
+                ],
+            ])
+        );
+    }
+
+    /// Lay out `lines` of one text column as single words at a 4pt character width, with
+    /// justification gaps of 3-9pt that vary by line and word, as typeset two-column papers
+    /// produce. Each line is `(indent, text)`.
+    fn extend_justified_lines(
+        words: &mut Vec<crate::pdf::table_reconstruct::HocrWord>,
+        origin: u32,
+        lines: &[(u32, &str)],
+    ) {
+        for (line, (indent, text)) in (0u32..).zip(lines) {
+            let top = 100 + line * 12;
+            let mut left = origin + indent;
+            for (index, word) in (0u32..).zip(text.split_whitespace()) {
+                let width = word.chars().count() as u32 * 4;
+                words.push(make_word(word, left, top, width));
+                left += width + 3 + (line * 7 + index * 5) % 7;
+            }
+        }
+    }
+
+    fn assert_two_text_columns_yield_no_table(left_lines: &[(u32, &str)], right_lines: &[(u32, &str)]) {
+        let mut words = Vec::new();
+        extend_justified_lines(&mut words, 20, left_lines);
+        extend_justified_lines(&mut words, 320, right_lines);
+        let (left, right) = split_side_by_side_region(&words).expect("two text columns must show a central seam");
+        for side in [&left, &right] {
+            assert!(
+                reconstruct_wrapped_side_by_side_child(side, 792.0, 1, false, 0)
+                    .is_none_or(|(_, collapsed)| !collapsed),
+                "a text column must never be admitted as a collapsed wrapped schedule"
+            );
+        }
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
+
+        assert!(tables.is_empty(), "two text columns must stay prose, got {tables:?}");
+    }
+
+    #[test]
+    fn two_column_reference_list_with_years_and_pages_yields_no_table() {
+        assert_two_text_columns_yield_no_table(
+            &[
+                (0, "[1] A. Vaswani, N. Shazeer, and N."),
+                (18, "Parmar. Attention is all you need."),
+                (18, "NeurIPS, vol. 30, pp. 5998-6008, 2017."),
+                (0, "[2] K. He, X. Zhang, S. Ren, and J."),
+                (18, "Sun. Deep residual learning. CVPR,"),
+                (18, "vol. 1, pp. 770-778, 2016."),
+                (0, "[3] Y. LeCun, Y. Bengio, and G. Hinton."),
+                (18, "Deep learning. Nature, vol. 521,"),
+                (18, "no. 7553, pp. 436-444, 2015."),
+                (0, "[4] D. Kingma and J. Ba. Adam: a"),
+                (18, "method for stochastic optimization."),
+                (18, "ICLR, vol. 3, pp. 1-15, 2015."),
+            ],
+            &[
+                (0, "[5] I. Goodfellow, J. Pouget-Abadie,"),
+                (18, "and M. Mirza. Generative adversarial"),
+                (18, "nets. NIPS, vol. 27, pp. 2672-2680, 2014."),
+                (0, "[6] S. Hochreiter and J. Schmidhuber."),
+                (18, "Long short-term memory. Neural Comp.,"),
+                (18, "vol. 9, no. 8, pp. 1735-1780, 1997."),
+                (0, "[7] A. Krizhevsky, I. Sutskever, and"),
+                (18, "G. Hinton. ImageNet classification."),
+                (18, "NIPS, vol. 25, pp. 1097-1105, 2012."),
+                (0, "[8] J. Devlin, M. Chang, K. Lee, and"),
+                (18, "K. Toutanova. BERT. NAACL, vol. 1,"),
+                (18, "pp. 4171-4186, 2019."),
+            ],
+        );
+    }
+
+    #[test]
+    fn two_column_prose_with_citations_and_years_yields_no_table() {
+        assert_two_text_columns_yield_no_table(
+            &[
+                (0, "Recent work on transformers [12] has"),
+                (0, "shown that scaling laws hold across"),
+                (0, "model sizes (Kaplan et al., 2020)."),
+                (0, "Earlier studies in 2017 and 2018 [3,"),
+                (0, "4] reported gains of 2.1 and 3.4 points"),
+                (0, "on GLUE, while Liu et al. (2019)"),
+                (0, "found that longer training on 160GB"),
+                (0, "of text improves results by 1.5%."),
+                (0, "We follow the setup of Section 3.2"),
+                (0, "and train for 300k steps with batch"),
+                (0, "size 8192, as described in [15]."),
+                (0, "Table 2 summarizes these results."),
+            ],
+            &[
+                (0, "In contrast to prior work [7, 9], our"),
+                (0, "method requires no labelled data. On"),
+                (0, "the 2021 benchmark it reaches 84.3"),
+                (0, "accuracy, compared with 81.7 reported"),
+                (0, "by Brown et al. (2020) and 79.2 in"),
+                (0, "[21]. Training takes 14 hours on 8"),
+                (0, "GPUs, about 3x faster than the 2019"),
+                (0, "baseline [5]. Figure 4 shows that the"),
+                (0, "gap widens beyond 10^9 parameters,"),
+                (0, "consistent with the trend in [18]."),
+                (0, "Section 5 discusses limitations and"),
+                (0, "future work on multilingual data."),
+            ],
+        );
     }
 
     fn wrapped_financial_side(prefix: &str) -> Table {
