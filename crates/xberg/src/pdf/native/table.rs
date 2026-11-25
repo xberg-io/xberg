@@ -1864,26 +1864,44 @@ fn supported_financial_track_centers(
         .saturating_mul(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROW_PERCENT)
         .div_ceil(100)
         .max(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROWS);
-    let mut candidates: Vec<u32> = rows
+    // Support depends only on a candidate's value, and every numeric word is a
+    // candidate, so testing each against every word of every row is quadratic in
+    // the region's numeric words (a wide value grid spent most of its table time
+    // here). Sorted per-row centers answer "does this row have a value within
+    // the tolerance" by binary search, once per distinct candidate value. ~keep
+    let row_centers: Vec<Vec<u32>> = rows
         .iter()
-        .flatten()
-        .filter(|word| is_numeric_word(&word.text))
-        .map(|word| word.left + word.width / 2)
-        .filter(|candidate| financial_track_support(rows, *candidate, x_tolerance) >= minimum_support)
+        .map(|row| {
+            let mut centers: Vec<u32> = row
+                .iter()
+                .filter(|word| is_numeric_word(&word.text))
+                .map(|word| word.left + word.width / 2)
+                .collect();
+            centers.sort_unstable();
+            centers
+        })
         .collect();
+    let mut candidates: Vec<u32> = row_centers.iter().flatten().copied().collect();
     candidates.sort_unstable();
-    candidates.dedup_by(|left, right| left.abs_diff(*right) <= x_tolerance);
-    candidates
-}
-
-fn financial_track_support(
-    rows: &[Vec<&crate::pdf::table_reconstruct::HocrWord>],
-    candidate: u32,
-    x_tolerance: u32,
-) -> usize {
-    rows.iter()
-        .filter(|row| row_has_financial_track(row, candidate, x_tolerance))
-        .count()
+    let mut supported = Vec::with_capacity(candidates.len());
+    for run in candidates.chunk_by(|left, right| left == right) {
+        let candidate = run[0];
+        let lowest = candidate.saturating_sub(x_tolerance);
+        let highest = candidate.saturating_add(x_tolerance);
+        let support = row_centers
+            .iter()
+            .filter(|centers| {
+                centers
+                    .get(centers.partition_point(|center| *center < lowest))
+                    .is_some_and(|center| *center <= highest)
+            })
+            .count();
+        if support >= minimum_support {
+            supported.extend_from_slice(run);
+        }
+    }
+    supported.dedup_by(|left, right| left.abs_diff(*right) <= x_tolerance);
+    supported
 }
 
 fn row_has_financial_track(row: &[&crate::pdf::table_reconstruct::HocrWord], track: u32, x_tolerance: u32) -> bool {
@@ -4746,6 +4764,95 @@ mod tests {
         assert!(
             split_side_by_side_region(&words).is_none(),
             "occupied central column must prevent a side-by-side split"
+        );
+    }
+
+    /// The per-candidate scan `supported_financial_track_centers` replaced: every
+    /// numeric word is a candidate, kept when enough rows hold a numeric word
+    /// within the tolerance of it.
+    fn quadratic_financial_track_centers(
+        rows: &[Vec<&crate::pdf::table_reconstruct::HocrWord>],
+        x_tolerance: u32,
+    ) -> Vec<u32> {
+        let minimum_support = rows
+            .len()
+            .saturating_mul(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROW_PERCENT)
+            .div_ceil(100)
+            .max(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROWS);
+        let mut candidates: Vec<u32> = rows
+            .iter()
+            .flatten()
+            .filter(|word| is_numeric_word(&word.text))
+            .map(|word| word.left + word.width / 2)
+            .filter(|candidate| {
+                rows.iter()
+                    .filter(|row| row_has_financial_track(row, *candidate, x_tolerance))
+                    .count()
+                    >= minimum_support
+            })
+            .collect();
+        candidates.sort_unstable();
+        candidates.dedup_by(|left, right| left.abs_diff(*right) <= x_tolerance);
+        candidates
+    }
+
+    #[test]
+    fn financial_track_centers_match_the_per_candidate_scan() {
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = |bound: u32| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state % u64::from(bound)) as u32
+        };
+        let texts = [
+            "1,234",
+            "Total",
+            "(56)",
+            "2009",
+            "—",
+            "Cash and equivalents",
+            "7.5%",
+            "?",
+            "x1",
+        ];
+        let mut checked_tracks = 0;
+        for region in 0..300 {
+            let row_count = 1 + next(40) as usize;
+            let columns = 1 + next(12);
+            let pitch = 40 + next(60);
+            let jitter = next(30);
+            let mut words = Vec::new();
+            for row in 0..row_count {
+                for column in 0..columns {
+                    if next(4) == 0 {
+                        continue;
+                    }
+                    let text = texts[next(texts.len() as u32) as usize];
+                    let left = 20 + column * pitch + next(jitter + 1);
+                    let mut word = make_word(text, left, 50 + row as u32 * 14, 8 + next(50));
+                    // Includes the saturating ends of the tolerance window.
+                    if region % 50 == 0 && column == 0 {
+                        word.left = u32::MAX - 200 - next(100);
+                        word.width = 2 * next(100);
+                    }
+                    words.push(word);
+                }
+            }
+            let rows = numeric_rows(&words, 3 + next(6));
+            let x_tolerance = if region % 25 == 0 { u32::MAX } else { 1 + next(30) };
+            let expected = quadratic_financial_track_centers(&rows, x_tolerance);
+            checked_tracks += expected.len();
+            assert_eq!(
+                supported_financial_track_centers(&rows, x_tolerance),
+                expected,
+                "region {region}: {} rows, tolerance {x_tolerance}",
+                rows.len()
+            );
+        }
+        assert!(
+            checked_tracks > 100,
+            "the generated regions must keep tracks, kept {checked_tracks}"
         );
     }
 
