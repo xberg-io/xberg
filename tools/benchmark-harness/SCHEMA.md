@@ -372,7 +372,9 @@ v2.9.0 aggregates are deserialized.
 
 Top-level `layout_impact` answers "what does the layout pass buy". One entry per
 (layout framework, baseline framework, `output_format`, `mode`, `file_type`) where both
-frameworks have rows. Frameworks pair by name: the variant's `layout` segment is replaced by
+frameworks have rows, for the file types layout can affect only: `pdf` and the raster images
+(`jpg`, `jpeg`, `png`, `gif`, `bmp`, `tiff`, `tif`, `webp`, `jp2`, `jpx`, `jpm`, `mj2`). Other
+formats get no entry. Frameworks pair by name: the variant's `layout` segment is replaced by
 `baseline` (`xberg-markdown-layout` with `xberg-markdown-baseline`,
 `xberg-markdown-layout-paddle` with `xberg-markdown-baseline-paddle`), or dropped when no such
 framework exists (`xberg-markdown-sceptre-ort-layout` with `xberg-markdown-sceptre-ort`); a
@@ -448,8 +450,10 @@ is one shared fixture.
   "xberg_ocr_fixture_count": 0, // shared fixtures xberg OCRed
   "competitor_ocr_fixture_count": 0, // shared fixtures the competitor OCRed
   "shared_fixture_count": 3, // both succeeded
-  "xberg_only_fixture_ids": ["doc_d"], // xberg succeeded, competitor absent or failed
-  "competitor_only_fixture_ids": [], // competitor succeeded, xberg absent or failed
+  "xberg_only_fixture_ids": ["doc_d"], // xberg succeeded, competitor absent or failed; first 50, sorted
+  "xberg_only_fixture_count": 1, // total, so a capped list shows as count > length
+  "competitor_only_fixture_ids": [], // competitor succeeded, xberg absent or failed; first 50, sorted
+  "competitor_only_fixture_count": 0,
   "duration_ms": { /* PairedDelta */ },
   "extraction_duration_ms": { /* PairedDelta */ },
   "peak_memory_mb": { /* PairedDelta */ },
@@ -459,6 +463,10 @@ is one shared fixture.
   "quality_score": { /* PairedDelta */ }
 }
 ```
+
+Each only-list holds at most 50 ids (the first in sorted order) so the file stays bounded across a
+large corpus; its `*_count` field is the total, and `validate-artifacts` checks the list holds
+exactly `min(count, 50)` ids.
 
 `PairedDelta` reads with `baseline` = competitor and `layout` = xberg, so a positive `delta_p50` on
 a quality metric means xberg scored higher. All medians cover only the shared fixtures, so a

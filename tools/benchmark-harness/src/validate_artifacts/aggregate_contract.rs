@@ -895,6 +895,7 @@ pub(super) fn validate_aggregate(
     paired::validate_layout_impact_coverage(&aggregate, path)?;
     paired::validate_layout_impact_classification(&aggregate, path)?;
     paired::validate_paired_delta_medians(&aggregate, path)?;
+    paired::validate_head_to_head_lists(&aggregate, path)?;
 
     let (allowed_entries, present_entries, actual_keys) = validate_aggregate_key_coverage(&aggregate, contract)?;
     validate_format_support(&aggregate, &present_entries, contract, path)?;

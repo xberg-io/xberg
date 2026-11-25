@@ -95,7 +95,8 @@ pub struct PairedFixtureDeltas {
     pub peak_memory_mb: Vec<FixtureDelta>,
 }
 
-/// Effect of the layout pass: a layout variant against its baseline variant (v2.12.0+).
+/// Effect of the layout pass: a layout variant against its baseline variant (v2.12.0+), for PDFs
+/// and raster images only.
 ///
 /// Variants pair by name, the layout variant's `layout` segment replaced by `baseline`
 /// (`xberg-markdown-layout` with `xberg-markdown-baseline`), or dropped when no such framework
@@ -171,10 +172,16 @@ pub struct HeadToHead {
     pub competitor_ocr_fixture_count: usize,
     /// Fixtures where both frameworks succeeded.
     pub shared_fixture_count: usize,
-    /// Fixtures xberg succeeded on and the competitor did not (absent or failed).
+    /// Fixtures xberg succeeded on and the competitor did not (absent or failed): the first 50 ids
+    /// in sorted order; `xberg_only_fixture_count` is the total.
     pub xberg_only_fixture_ids: Vec<String>,
-    /// Fixtures the competitor succeeded on and xberg did not (absent or failed).
+    #[serde(default)]
+    pub xberg_only_fixture_count: usize,
+    /// Fixtures the competitor succeeded on and xberg did not (absent or failed): the first 50 ids
+    /// in sorted order; `competitor_only_fixture_count` is the total.
     pub competitor_only_fixture_ids: Vec<String>,
+    #[serde(default)]
+    pub competitor_only_fixture_count: usize,
     pub duration_ms: PairedDelta,
     pub extraction_duration_ms: PairedDelta,
     pub peak_memory_mb: PairedDelta,

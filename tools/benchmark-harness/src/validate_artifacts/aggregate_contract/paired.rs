@@ -16,35 +16,72 @@ pub(super) fn validate_paired_sections_present(raw: &serde_json::Value, path: &P
     Ok(())
 }
 
-/// Every xberg layout variant that ran next to its baseline variant (same execution mode) must
-/// have at least one `layout_impact` entry, even when no fixture paired: the entry is what makes
-/// a layout pass that failed everywhere visible instead of absent.
+/// Every xberg layout variant that ran next to its baseline variant (same execution mode and a
+/// file type layout can affect) must have a `layout_impact` entry for that file type, even when no
+/// fixture paired: the entry is what makes a layout pass that failed everywhere visible instead of
+/// absent.
 pub(super) fn validate_layout_impact_coverage(aggregate: &NewConsolidatedResults, path: &Path) -> Result<()> {
-    let ran: BTreeSet<(&str, &str)> = aggregate
-        .per_fixture_results
+    let rows = &aggregate.per_fixture_results;
+    let frameworks: BTreeSet<&str> = rows.iter().map(|row| row.framework.as_str()).collect();
+    let ran: BTreeSet<(&str, &str, &str)> = rows
         .iter()
-        .map(|row| (row.framework.as_str(), row.execution_mode.as_str()))
+        .filter(|row| crate::aggregate::layout_applies_to(&row.file_type))
+        .map(|row| {
+            (
+                row.framework.as_str(),
+                row.execution_mode.as_str(),
+                row.file_type.as_str(),
+            )
+        })
         .collect();
-    let frameworks: BTreeSet<&str> = ran.iter().map(|(framework, _)| *framework).collect();
-    for &(framework, mode) in &ran {
+    for &(framework, mode, file_type) in &ran {
         if !framework.starts_with("xberg-") {
             continue;
         }
         let Some(baseline) = crate::aggregate::baseline_framework_for(framework, &frameworks) else {
             continue;
         };
-        if !ran.contains(&(baseline.as_str(), mode)) {
+        if !ran.contains(&(baseline.as_str(), mode, file_type)) {
             continue;
         }
         require(
             aggregate.layout_impact.iter().any(|impact| {
-                impact.layout_framework == framework && impact.baseline_framework == baseline && impact.mode == mode
+                impact.layout_framework == framework
+                    && impact.baseline_framework == baseline
+                    && impact.mode == mode
+                    && impact.file_type == file_type
             }),
             format!(
-                "{}: layout_impact has no entry for {framework} vs {baseline} ({mode})",
+                "{}: layout_impact has no entry for {framework} vs {baseline} ({mode}, {file_type})",
                 path.display()
             ),
         )?;
+    }
+    Ok(())
+}
+
+/// Each `head_to_head` only-list holds at most 50 ids and exactly `min(count, 50)` of them, so a
+/// truncated list is always visible through its count.
+pub(super) fn validate_head_to_head_lists(aggregate: &NewConsolidatedResults, path: &Path) -> Result<()> {
+    const MAX_LISTED: usize = 50;
+    for entry in &aggregate.head_to_head {
+        for (list, count) in [
+            (&entry.xberg_only_fixture_ids, entry.xberg_only_fixture_count),
+            (&entry.competitor_only_fixture_ids, entry.competitor_only_fixture_count),
+        ] {
+            require(
+                list.len() == count.min(MAX_LISTED),
+                format!(
+                    "{}: head_to_head {} vs {} ({}, {}) lists {} of {count} only-fixture ids",
+                    path.display(),
+                    entry.xberg_framework,
+                    entry.competitor_framework,
+                    entry.mode,
+                    entry.file_type,
+                    list.len()
+                ),
+            )?;
+        }
     }
     Ok(())
 }
@@ -307,6 +344,38 @@ mod tests {
             .expect_err("a 0.0 median without samples must fail")
             .to_string();
         assert!(error.contains("inconsistent with sample_count"), "{error}");
+    }
+
+    #[test]
+    fn layout_coverage_ignores_file_types_layout_cannot_affect() {
+        let mut docx_baseline = result("xberg-markdown-baseline", "a", true);
+        let mut docx_layout = result("xberg-markdown-layout", "a", true);
+        for docx in [&mut docx_baseline, &mut docx_layout] {
+            docx.file_path = PathBuf::from("a.docx");
+            docx.file_extension = "docx".to_string();
+        }
+        let aggregate = aggregate_new_format(&[docx_baseline, docx_layout]);
+        assert!(aggregate.layout_impact.is_empty());
+        validate_layout_impact_coverage(&aggregate, Path::new("aggregated.json")).expect("nothing required");
+    }
+
+    #[test]
+    fn head_to_head_lists_must_match_their_counts() {
+        let path = Path::new("aggregated.json");
+        let mut aggregate = aggregate_new_format(&[
+            result("xberg-markdown-baseline", "a", true),
+            result("xberg-markdown-baseline", "b", true),
+            result("liteparse", "a", true),
+        ]);
+        let entry = &aggregate.head_to_head[0];
+        assert_eq!(entry.xberg_only_fixture_count, 1);
+        validate_head_to_head_lists(&aggregate, path).expect("built aggregate is consistent");
+
+        aggregate.head_to_head[0].xberg_only_fixture_count = 2;
+        let error = validate_head_to_head_lists(&aggregate, path)
+            .expect_err("a list shorter than its uncapped count must fail")
+            .to_string();
+        assert!(error.contains("lists 1 of 2"), "{error}");
     }
 
     #[test]

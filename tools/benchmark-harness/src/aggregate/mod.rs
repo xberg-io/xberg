@@ -70,7 +70,7 @@ use failures::build_failure_summary;
 
 use percentiles::{aggregate_cold_starts, calculate_percentiles, parse_aggregate_key};
 
-pub(crate) use paired::baseline_framework_for;
+pub(crate) use paired::{baseline_framework_for, layout_applies_to};
 pub use ranking::apply_pinned_cohort_comparison;
 use ranking::build_comparison;
 pub(crate) use ranking::{comparison_for_cohort, resolve_shared_corpus_file_types};

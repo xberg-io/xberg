@@ -53,6 +53,13 @@ fn failed_after_extraction(framework: &str, fixture: &str) -> BenchmarkResult {
     result
 }
 
+fn as_file_type(mut result: BenchmarkResult, file_type: &str) -> BenchmarkResult {
+    let stem = result.file_path.file_stem().unwrap().to_str().unwrap().to_string();
+    result.file_path = PathBuf::from(format!("{stem}.{file_type}"));
+    result.file_extension = file_type.to_string();
+    result
+}
+
 fn with_ocr(mut result: BenchmarkResult) -> BenchmarkResult {
     result.ocr_status = OcrStatus::Used;
     result
@@ -302,6 +309,23 @@ fn layout_impact_reports_ocr_when_every_successful_row_agrees() {
 }
 
 #[test]
+fn layout_impact_covers_only_pdfs_and_images() {
+    let mut results = Vec::new();
+    for file_type in ["pdf", "png", "docx", "html"] {
+        results.push(as_file_type(scored(BASELINE, "a", 0.5, Some(0.5), 0.5), file_type));
+        results.push(as_file_type(scored(LAYOUT, "a", 0.5, Some(0.6), 0.5), file_type));
+    }
+    let aggregated = aggregate_new_format(&results);
+
+    let file_types: BTreeSet<&str> = aggregated
+        .layout_impact
+        .iter()
+        .map(|impact| impact.file_type.as_str())
+        .collect();
+    assert_eq!(file_types, BTreeSet::from(["pdf", "png"]));
+}
+
+#[test]
 fn baseline_name_resolution_covers_known_layout_variants() {
     let present: BTreeSet<&str> = [
         "xberg-markdown-baseline",
@@ -369,6 +393,7 @@ fn head_to_head_excludes_fixtures_only_one_side_ran() {
         .expect("liteparse shares fixtures with xberg");
     assert_eq!(h2h.shared_fixture_count, 3);
     assert_eq!(ids(&h2h.xberg_only_fixture_ids), ["f4", "f6"]);
+    assert_eq!(h2h.xberg_only_fixture_count, 2);
     assert_eq!(ids(&h2h.competitor_only_fixture_ids), ["f5"]);
     // f4 (xberg tf1 0.0) is not shared, so it must not pull xberg's median down.
     assert!((p50(h2h.tf1.layout_p50) - 0.8).abs() < EPS);
@@ -396,6 +421,28 @@ fn head_to_head_compares_a_fixture_xberg_auto_ocred_and_the_competitor_did_not()
     assert_eq!(h2h.xberg_ocr_fixture_count, 1);
     assert_eq!(h2h.competitor_ocr_fixture_count, 0);
     assert_eq!(h2h.tf1.sample_count, 2);
+}
+
+#[test]
+fn head_to_head_caps_only_lists_at_fifty_ids_and_keeps_the_total() {
+    let mut results = vec![
+        scored(BASELINE, "shared", 0.8, Some(0.8), 0.8),
+        scored("liteparse", "shared", 0.6, Some(0.6), 0.6),
+        scored("liteparse", "competitor_only", 0.6, Some(0.6), 0.6),
+    ];
+    for index in 0..60 {
+        results.push(scored(BASELINE, &format!("x{index:02}"), 0.8, Some(0.8), 0.8));
+    }
+    let aggregated = aggregate_new_format(&results);
+
+    let h2h = &aggregated.head_to_head[0];
+    assert_eq!(h2h.shared_fixture_count, 1);
+    assert_eq!(h2h.xberg_only_fixture_count, 60);
+    assert_eq!(h2h.xberg_only_fixture_ids.len(), 50);
+    assert_eq!(h2h.xberg_only_fixture_ids.first().map(String::as_str), Some("x00"));
+    assert_eq!(h2h.xberg_only_fixture_ids.last().map(String::as_str), Some("x49"));
+    assert_eq!(h2h.competitor_only_fixture_count, 1);
+    assert_eq!(ids(&h2h.competitor_only_fixture_ids), ["competitor_only"]);
 }
 
 #[test]

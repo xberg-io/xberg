@@ -4,8 +4,8 @@
 //! Rows pair by fixture inside one `(output_format, mode, file_type)` bucket and only on fixtures
 //! where both sides succeeded. OCR use is a property of each row, not part of the bucket: a failed
 //! row never reports it (`ocr: None`), and an auto-OCR variant reports it per document, so keying
-//! on it would split one fixture's rows apart. Every delta is the median of per-fixture deltas, never the
-//! difference of two medians, so a fixture present on one side cannot skew the other.
+//! on it would split one fixture's rows apart. Every delta is the median of per-fixture deltas,
+//! never the difference of two medians, so a fixture present on one side cannot skew the other.
 
 use super::types::{FixtureDelta, HeadToHead, LayoutImpact, PairedDelta, PairedFixtureDeltas, PerFixtureRow};
 use crate::stats::{percentile_r7, sanitize_f64};
@@ -19,6 +19,15 @@ const UNCHANGED_THRESHOLD: f64 = 0.005;
 /// process-level measurement shared by every document, so a per-fixture timing delta is
 /// meaningless there.
 const BATCH_MODE: &str = "batch";
+
+/// File types the layout pass can change: PDFs and raster images. The image list mirrors the one
+/// `Fixture::requires_ocr` treats as images.
+const LAYOUT_FILE_TYPES: &[&str] = &[
+    "pdf", "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "jp2", "jpx", "jpm", "mj2",
+];
+
+/// Cap on each fixture-id list of a [`HeadToHead`] entry; the matching count field keeps the total.
+const MAX_LISTED_FIXTURE_IDS: usize = 50;
 
 /// `(output_format rank, mode, file_type)`. The format is held as a rank because `OutputFormat` is
 /// not `Ord`; see [`format_rank`] and [`format_from_rank`].
@@ -225,6 +234,24 @@ pub(crate) fn baseline_framework_for(layout_framework: &str, present: &BTreeSet<
     candidates.into_iter().find(|name| present.contains(name.as_str()))
 }
 
+/// Whether `file_type` is one [`build_layout_impact`] compares (see [`LAYOUT_FILE_TYPES`]).
+pub(crate) fn layout_applies_to(file_type: &str) -> bool {
+    LAYOUT_FILE_TYPES
+        .iter()
+        .any(|layout_type| layout_type.eq_ignore_ascii_case(file_type))
+}
+
+/// The first [`MAX_LISTED_FIXTURE_IDS`] ids, in sorted order, and the full count.
+fn capped_ids(ids: BTreeSet<&str>) -> (Vec<String>, usize) {
+    let count = ids.len();
+    let listed = ids
+        .into_iter()
+        .take(MAX_LISTED_FIXTURE_IDS)
+        .map(str::to_string)
+        .collect();
+    (listed, count)
+}
+
 fn is_xberg(framework: &str) -> bool {
     framework.starts_with("xberg-")
 }
@@ -262,7 +289,8 @@ fn classify(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> Classified {
 }
 
 /// One [`LayoutImpact`] per (layout framework, baseline framework, output format, mode, file type)
-/// where both frameworks have rows. A bucket whose layout rows all failed still yields an entry
+/// where both frameworks have rows, for the file types layout can affect ([`layout_applies_to`]);
+/// other formats would only add entries with nothing to measure. A bucket whose layout rows all failed still yields an entry
 /// with `paired_fixture_count == 0` so the loss is visible rather than absent.
 pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
     let index = index_rows(rows);
@@ -276,7 +304,7 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
         let Some(baseline_buckets) = index.get(baseline_framework.as_str()) else {
             continue;
         };
-        for key in layout_buckets.keys() {
+        for key in layout_buckets.keys().filter(|key| layout_applies_to(&key.2)) {
             let Some(baseline_rows) = baseline_buckets.get(key) else {
                 continue;
             };
@@ -346,6 +374,10 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                 let pairs = succeeded_pairs(competitor_rows, xberg_rows);
                 let (competitor_ocr_fixture_count, xberg_ocr_fixture_count) = ocr_used_counts(&pairs);
                 let (xberg_ok, competitor_ok) = (succeeded_ids(xberg_rows), succeeded_ids(competitor_rows));
+                let (xberg_only_fixture_ids, xberg_only_fixture_count) =
+                    capped_ids(xberg_ok.difference(&competitor_ok).copied().collect());
+                let (competitor_only_fixture_ids, competitor_only_fixture_count) =
+                    capped_ids(competitor_ok.difference(&xberg_ok).copied().collect());
 
                 let sf1 = fixture_deltas(&pairs, sf1_of);
                 let reading_order = fixture_deltas(&pairs, reading_order_of);
@@ -360,8 +392,10 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                     xberg_ocr_fixture_count,
                     competitor_ocr_fixture_count,
                     shared_fixture_count: pairs.len(),
-                    xberg_only_fixture_ids: xberg_ok.difference(&competitor_ok).map(|id| id.to_string()).collect(),
-                    competitor_only_fixture_ids: competitor_ok.difference(&xberg_ok).map(|id| id.to_string()).collect(),
+                    xberg_only_fixture_ids,
+                    xberg_only_fixture_count,
+                    competitor_only_fixture_ids,
+                    competitor_only_fixture_count,
                     duration_ms: summarize(&fixture_deltas(&pairs, duration_of)),
                     extraction_duration_ms: summarize(&fixture_deltas(&pairs, extraction_duration_of)),
                     peak_memory_mb: summarize(&fixture_deltas(&pairs, peak_memory_of)),
