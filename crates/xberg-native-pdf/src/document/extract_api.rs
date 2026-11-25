@@ -225,6 +225,16 @@ impl PdfDocument {
         self.cached_page_spans(page_index, ScriptGeometry::Flatten, None)
     }
 
+    /// [`Self::extract_spans_raw`], with the MC-scope /ActualText set the read
+    /// recorded for the page (`None` when it left the entry alone), so a cache
+    /// of results derived from these spans can replay it.
+    pub(super) fn extract_spans_raw_with_mc_actualtext(
+        &self,
+        page_index: usize,
+    ) -> Result<(Vec<crate::layout::TextSpan>, Option<HashSet<u32>>)> {
+        self.cached_page_spans_with_mc_actualtext(page_index, ScriptGeometry::Flatten, None)
+    }
+
     /// Keep each page's unfiltered span interpretations until
     /// [`Self::release_page_caches`], so the per-page passes of one extraction
     /// interpret a page once per script geometry instead of once per read.
@@ -275,6 +285,16 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
     ) -> Result<Vec<crate::layout::TextSpan>> {
+        self.cached_page_spans_with_mc_actualtext(page_index, script_geometry, cmsy)
+            .map(|(spans, _)| spans)
+    }
+
+    fn cached_page_spans_with_mc_actualtext(
+        &self,
+        page_index: usize,
+        script_geometry: ScriptGeometry,
+        cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<(Vec<crate::layout::TextSpan>, Option<HashSet<u32>>)> {
         let key = RawSpanKey {
             page_index,
             script_geometry,
@@ -290,7 +310,7 @@ impl PdfDocument {
             if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
                 output.clone_from(witnesses);
             }
-            return Ok(page.spans.clone());
+            return Ok((page.spans.clone(), page.mc_actualtext.clone()));
         }
         let page = self.interpret_page_spans(
             page_index,
@@ -306,7 +326,7 @@ impl PdfDocument {
             output.clone_from(witnesses);
         }
         self.retain_interpretation(key, &page);
-        Ok(page.spans)
+        Ok((page.spans, page.mc_actualtext))
     }
 
     /// Copy `page` into the page-pass cache when the passes run and its budget
@@ -402,7 +422,7 @@ impl PdfDocument {
     /// self-contained per-page extraction and its own MC-scope detections must
     /// be authoritative. Accumulating would make stale results from an earlier
     /// filter-set leak into a later, differently-filtered call. ~keep
-    fn record_mc_actualtext(&self, page_index: usize, mc_set: Option<HashSet<u32>>) {
+    pub(super) fn record_mc_actualtext(&self, page_index: usize, mc_set: Option<HashSet<u32>>) {
         let Some(mc_set) = mc_set else {
             return;
         };

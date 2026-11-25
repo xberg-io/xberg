@@ -35,6 +35,7 @@ mod placed_forms;
 mod raw_span_cache;
 mod reading_order;
 mod redaction;
+mod span_cache_actual_text;
 mod span_postprocess;
 mod spans_text;
 mod spans_text_rtl;

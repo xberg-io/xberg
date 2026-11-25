@@ -922,7 +922,8 @@ pub struct PdfDocument {
     /// `extract_page_tables` → `extract_words` → `page_reading_order`; this serves
     /// the second from cache. Cleared by redaction (`erase_region` /
     /// `clear_erase_regions`), the only span-affecting mutation.
-    page_spans_cache: Mutex<BoundedEntryCache<usize, std::sync::Arc<Vec<crate::layout::TextSpan>>>>,
+    page_spans_cache:
+        Mutex<BoundedEntryCache<usize, std::sync::Arc<(Vec<crate::layout::TextSpan>, Option<HashSet<u32>>)>>>,
     /// Unfiltered, default-config content interpretations per page, before any
     /// ordering or postprocessing. One extraction reads the same page through the
     /// text pass, the ruled-table words, the heuristic table segments, the table

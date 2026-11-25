@@ -1108,15 +1108,20 @@ impl PdfDocument {
     /// ```
     pub fn extract_spans(&self, page_index: usize) -> Result<Vec<crate::layout::TextSpan>> {
         // Serve repeat per-page extractions from cache (the converters reach
-        // here twice per page; see `page_spans_cache`). ~keep
-        if let Some(cached) = self.page_spans_cache.lock_or_recover().get(&page_index) {
-            return Ok((**cached).clone());
+        // here twice per page; see `page_spans_cache`). A hit replays the raw
+        // read's MC-scope /ActualText entry, which the text assemblers read and a
+        // differently-filtered read may have replaced since. ~keep
+        let cached = self.page_spans_cache.lock_or_recover().get(&page_index).cloned();
+        if let Some(cached) = cached {
+            let (spans, mc_actualtext) = &*cached;
+            self.record_mc_actualtext(page_index, mc_actualtext.clone());
+            return Ok(spans.clone());
         }
-        let spans = self.extract_spans_raw(page_index)?;
+        let (spans, mc_actualtext) = self.extract_spans_raw_with_mc_actualtext(page_index)?;
         let spans = self.postprocess_spans(page_index, spans)?;
         self.page_spans_cache
             .lock_or_recover()
-            .insert(page_index, std::sync::Arc::new(spans.clone()));
+            .insert(page_index, std::sync::Arc::new((spans.clone(), mc_actualtext)));
         Ok(spans)
     }
 
