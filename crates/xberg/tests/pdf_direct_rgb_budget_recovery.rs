@@ -7,7 +7,11 @@
 
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, extract};
 
-const SCAN: &[u8] = include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan.pdf");
+/// The progressive label scan: its page render is refused at the 80 MiB budget below, since the
+/// renderer can decode a progressive JPEG only at full size (92 857 078 bytes at 261 dpi: the RGB
+/// raster and RGBA copy 64 260 000, two copies of the 398 723 encoded bytes, the 27 799 632-byte
+/// canvas). The baseline `label-scan.pdf` now renders and never reaches the direct retry.
+const SCAN: &[u8] = include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-progressive.pdf");
 const RECOVERED: &str = "was recovered from the page's embedded image XObjects";
 
 fn config() -> ExtractionConfig {
@@ -70,7 +74,7 @@ fn assert_original_budget_error(bytes: &[u8], config: &ExtractionConfig) {
     let error = run(bytes, config).expect_err("unsupported direct recovery must keep the typed refusal");
     let source = error.source().expect("original render failure source");
     assert!(format!("{source:?}").contains("SourceImageBudgetExceeded"), "{error:?}");
-    assert!(error.to_string().contains("93068536"), "{error}");
+    assert!(error.to_string().contains("92857078"), "{error}");
     assert!(error.to_string().contains("83886080"), "{error}");
     assert!(!error.to_string().contains(RECOVERED), "{error}");
 }
@@ -134,7 +138,8 @@ fn direct_rgb_budget_retry_retains_the_producing_tesseract_segmentation_mode() {
 
 #[test]
 fn mixed_pipeline_retry_records_segmentation_mode_for_the_recovered_page() {
-    const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed.pdf");
+    const MIXED: &[u8] =
+        include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed-progressive.pdf");
     let mut value = serde_json::to_value(config()).unwrap();
     value["ocr"]["pipeline"] = serde_json::json!({
         "stages": [{"backend": "tesseract", "tesseract_config": {"psm": 11}}],
