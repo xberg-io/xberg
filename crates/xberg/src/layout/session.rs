@@ -1,4 +1,4 @@
-use ort::session::{Session, builder::GraphOptimizationLevel};
+use ort::session::{Session, builder::SessionBuilder};
 
 use crate::core::config::acceleration::AccelerationConfig;
 use crate::layout::error::LayoutError;
@@ -22,21 +22,22 @@ pub(crate) fn build_session(
     accel: Option<&AccelerationConfig>,
     thread_budget: usize,
 ) -> Result<Session, LayoutError> {
-    let builder = Session::builder(crate::ort_discovery::ort_environment().map_err(LayoutError::Ort)?)?
-        .with_optimization_level(GraphOptimizationLevel::All)
-        .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?
-        .with_intra_threads(thread_budget)
-        .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?
-        .with_inter_threads(1)
-        .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?
-        .with_device_allocated_initializers()
-        .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?;
-
-    let builder = crate::ort_discovery::apply_execution_providers(builder, accel)
-        .map_err(|e| LayoutError::Ort(ort::Error::new(e.message())))?;
-
-    let mut builder = builder;
-    let session = builder.commit_from_file(path)?;
+    let configure = || -> Result<SessionBuilder, ort::Error> {
+        let builder = Session::builder(crate::ort_discovery::ort_environment()?)?
+            .with_intra_threads(thread_budget)
+            .map_err(|e| ort::Error::new(e.message()))?
+            .with_inter_threads(1)
+            .map_err(|e| ort::Error::new(e.message()))?
+            .with_device_allocated_initializers()
+            .map_err(|e| ort::Error::new(e.message()))?;
+        crate::ort_discovery::apply_execution_providers(builder, accel)
+    };
+    let session = crate::inference::ort_optimized::commit_from_file(
+        std::path::Path::new(path),
+        crate::ort_discovery::session_is_cpu_only(accel, true),
+        &configure,
+    )
+    .map_err(LayoutError::Ort)?;
 
     Ok(session)
 }

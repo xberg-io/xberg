@@ -16,7 +16,7 @@
 use std::borrow::Cow;
 use std::path::Path;
 
-use ort::session::builder::GraphOptimizationLevel;
+use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
 use ort::session::{Session, SessionInputValue};
 use ort::value::{DynValue, Tensor, TensorElementType, Value};
 use parking_lot::Mutex;
@@ -46,10 +46,8 @@ impl OrtBackend {
         thread_budget: usize,
         with_eps: bool,
     ) -> Result<Session, InferenceError> {
-        (|| -> Result<Session, ort::Error> {
+        let configure = || -> Result<SessionBuilder, ort::Error> {
             let mut builder = Session::builder(crate::ort_discovery::ort_environment()?)?
-                .with_optimization_level(GraphOptimizationLevel::All)
-                .map_err(|e| ort::Error::new(e.message()))?
                 .with_intra_threads(thread_budget)
                 .map_err(|e| ort::Error::new(e.message()))?
                 .with_inter_threads(1)
@@ -65,11 +63,24 @@ impl OrtBackend {
             if with_eps {
                 builder = crate::ort_discovery::apply_execution_providers(builder, accel)?;
             }
-            match source {
-                ModelSource::File(path) => builder.commit_from_file(path),
-                ModelSource::Memory(bytes) => builder.commit_from_memory(bytes),
-            }
-        })()
+            Ok(builder)
+        };
+        let optimized = || {
+            configure()?
+                .with_optimization_level(GraphOptimizationLevel::All)
+                .map_err(|e| ort::Error::new(e.message()))
+        };
+        match source {
+            #[cfg(model_download)]
+            ModelSource::File(path) => super::ort_optimized::commit_from_file(
+                path,
+                crate::ort_discovery::session_is_cpu_only(accel, with_eps),
+                &configure,
+            ),
+            #[cfg(not(model_download))]
+            ModelSource::File(path) => optimized().and_then(|mut builder| builder.commit_from_file(path)),
+            ModelSource::Memory(bytes) => optimized().and_then(|mut builder| builder.commit_from_memory(bytes)),
+        }
         .map_err(|e| InferenceError::Load(e.to_string()))
     }
 

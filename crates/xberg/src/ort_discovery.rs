@@ -439,6 +439,27 @@ pub(crate) fn apply_execution_providers(
     Ok(builder)
 }
 
+/// Whether a session built with `apply_execution_providers(builder, accel)` (or without it, when
+/// `with_eps` is false) runs on the CPU execution provider alone. Mirrors the provider choice in
+/// `apply_execution_providers` and `register_auto_providers`: `Auto` registers CoreML on macOS
+/// and CUDA on Linux builds with the `cuda` feature, and nothing elsewhere.
+#[cfg(all(ort_session_providers, model_download))]
+pub(crate) fn session_is_cpu_only(
+    accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    with_eps: bool,
+) -> bool {
+    use crate::core::config::acceleration::ExecutionProviderType;
+
+    if !with_eps {
+        return true;
+    }
+    match resolve_execution_provider(accel) {
+        ExecutionProviderType::Cpu => true,
+        ExecutionProviderType::Auto => !cfg!(any(target_os = "macos", all(target_os = "linux", feature = "cuda"))),
+        ExecutionProviderType::CoreMl | ExecutionProviderType::Cuda | ExecutionProviderType::TensorRt => false,
+    }
+}
+
 /// Build the CoreML execution provider, honouring the `XBERG_COREML_FORMAT` and
 /// `XBERG_COREML_UNITS` environment overrides. An unrecognised value is warned about and
 /// ignored rather than failing session creation. ~keep
