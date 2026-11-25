@@ -1,0 +1,32 @@
+{
+  "document": "../../../test_documents/pdf_scanned/docling_scanned.pdf",
+  "file_type": "pdf",
+  "file_size": 5225528,
+  "expected_frameworks": [
+    "xberg",
+    "docling",
+    "markitdown",
+    "mineru",
+    "pdfminer",
+    "pdfplumber",
+    "pdftotext",
+    "pymupdf4llm",
+    "pypdf",
+    "tika",
+    "unstructured"
+  ],
+  "metadata": {
+    "description": "Docling technical report, 9-page image-only scan: headings, tables, lists, two-column layout",
+    "category": "pdf-scanned",
+    "size_class": "large",
+    "pages": 9,
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/docling.txt",
+    "markdown_file": "../../../test_documents/ground_truth/pdf/docling.md",
+    "source": "mistral-pixtral"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "document": "../../../test_documents/images/layout_parser_paper_with_table.jpg",
+  "file_type": "jpg",
+  "file_size": 165505,
+  "expected_frameworks": ["xberg"],
+  "metadata": {
+    "description": "Rendered paper page: running header, small table, footnote, body text and a code block",
+    "category": "image-ocr-structured",
+    "size_class": "small",
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "markdown_file": "../../../test_documents/ground_truth/images/layout_parser_paper_with_table.md",
+    "source": "vision"
+  }
+}

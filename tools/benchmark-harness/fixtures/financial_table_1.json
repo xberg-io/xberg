@@ -1,0 +1,18 @@
+{
+  "document": "../../../test_documents/images/financial_table_1.png",
+  "file_type": "png",
+  "file_size": 212317,
+  "expected_frameworks": ["xberg"],
+  "metadata": {
+    "description": "Income statement image: multi-column financial table with headings",
+    "category": "image-ocr-structured",
+    "size_class": "small",
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "markdown_file": "../../../test_documents/ground_truth/images/financial_table_1.md",
+    "source": "vision"
+  }
+}

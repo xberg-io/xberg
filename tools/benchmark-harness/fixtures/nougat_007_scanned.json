@@ -1,0 +1,32 @@
+{
+  "document": "../../../test_documents/pdf_scanned/nougat_007_scanned.pdf",
+  "file_type": "pdf",
+  "file_size": 1814529,
+  "expected_frameworks": [
+    "xberg",
+    "docling",
+    "markitdown",
+    "mineru",
+    "pdfminer",
+    "pdfplumber",
+    "pdftotext",
+    "pymupdf4llm",
+    "pypdf",
+    "tika",
+    "unstructured"
+  ],
+  "metadata": {
+    "description": "4-page image-only scan of report with headings and lists",
+    "category": "pdf-scanned",
+    "size_class": "medium",
+    "pages": 4,
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/nougat_007.txt",
+    "markdown_file": "../../../test_documents/ground_truth/pdf/nougat_007.md",
+    "source": "nougat"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "document": "../../../test_documents/pdf_scanned/nougat_011_scanned.pdf",
+  "file_type": "pdf",
+  "file_size": 7174368,
+  "expected_frameworks": [
+    "xberg",
+    "docling",
+    "markitdown",
+    "mineru",
+    "pdfminer",
+    "pdfplumber",
+    "pdftotext",
+    "pymupdf4llm",
+    "pypdf",
+    "tika",
+    "unstructured"
+  ],
+  "metadata": {
+    "description": "10-page image-only scan of planning commission minutes",
+    "category": "pdf-scanned",
+    "size_class": "large",
+    "pages": 10,
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/nougat_011.txt",
+    "markdown_file": "../../../test_documents/ground_truth/pdf/nougat_011.md",
+    "source": "nougat"
+  }
+}
