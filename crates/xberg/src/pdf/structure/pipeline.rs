@@ -2529,6 +2529,8 @@ fn blocks_to_paragraphs(
         paragraphs.push(para);
     }
 
+    keep_adjacent_numbered_entries_as_list(&mut paragraphs);
+
     tracing::debug!(
         input_lines = lines.len(),
         output_paragraphs = paragraphs.len(),
@@ -3350,15 +3352,65 @@ fn is_bold_numbered_section_heading(
     clears_bold_font_gate: bool,
 ) -> bool {
     let multi_level = is_numbered_section_heading(text) && super::classify::infer_section_level(text) >= 3;
+    let mut tokens = text.split_whitespace();
+    let number_is_section_shaped = tokens.next().is_some_and(is_section_shaped_number);
+    let title_is_capitalised = tokens
+        .next()
+        .and_then(|word| word.chars().next())
+        .is_some_and(char::is_uppercase);
     body_font_size > 0.0
         && font_size > body_font_size + BODY_SIZE_TOLERANCE_PT
         && super::classify::starts_with_section_number(text)
+        && number_is_section_shaped
         && (clears_bold_font_gate || multi_level)
-        && text.chars().find(|c| c.is_alphabetic()).is_some_and(char::is_uppercase)
+        && title_is_capitalised
         && !text.ends_with(['.', ',', ';', ':'])
         && !super::classify::reads_as_body_content(text, word_count)
         && !super::layout_classify::is_separator_text(text)
         && !super::regions::looks_like_figure_label(text)
+}
+
+/// A section number has components of one to three digits, none zero-padded, so a
+/// year ("2024 Highlights") or a dotted date ("12.03.2024", "12.03.24") is not one.
+/// Roman and letter enumerators are left to `starts_with_section_number`.
+fn is_section_shaped_number(token: &str) -> bool {
+    let number = token.trim_end_matches(['.', ')']);
+    if !number.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.') {
+        return true;
+    }
+    !number.is_empty()
+        && number.split('.').all(|component| {
+            (1..=3).contains(&component.len())
+                && component.bytes().all(|byte| byte.is_ascii_digit())
+                && !(component.len() > 1 && component.starts_with('0'))
+        })
+}
+
+/// Whether a paragraph opens with a single-level number ("1.", "2)", "3").
+fn opens_with_single_level_number(paragraph: &PdfParagraph) -> bool {
+    let text = paragraph_text_raw(paragraph);
+    text.split_whitespace().next().is_some_and(|token| {
+        let number = token.trim_end_matches(['.', ')']);
+        (1..=3).contains(&number.len()) && number.bytes().all(|byte| byte.is_ascii_digit())
+    })
+}
+
+/// Turn adjacent single-level numbered headings back into list items.
+///
+/// Sections have body text between them; a bold, larger "1. Plan" directly followed by
+/// "2. Build" is a styled ordered list, not two empty sections. ~keep
+fn keep_adjacent_numbered_entries_as_list(paragraphs: &mut [PdfParagraph]) {
+    let entries: Vec<bool> = paragraphs
+        .iter()
+        .map(|paragraph| paragraph.heading_level.is_some() && opens_with_single_level_number(paragraph))
+        .collect();
+    for (index, paragraph) in paragraphs.iter_mut().enumerate() {
+        let has_entry_sibling = (index > 0 && entries[index - 1]) || entries.get(index + 1).copied().unwrap_or(false);
+        if entries[index] && has_entry_sibling {
+            paragraph.heading_level = None;
+            paragraph.is_list_item = true;
+        }
+    }
 }
 
 fn finalize_paragraph(

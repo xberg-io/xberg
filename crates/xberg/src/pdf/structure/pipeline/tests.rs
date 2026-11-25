@@ -8201,6 +8201,55 @@ fn bold_single_level_roman_number_just_above_body_size_is_not_a_heading() {
 }
 
 #[test]
+fn roman_number_followed_by_a_lowercase_title_is_not_a_heading() {
+    let para = finalize_bold_numbered_heading("II.", "methods", 12.0);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn dotted_date_just_above_body_size_is_not_a_subsection_heading() {
+    let para = finalize_bold_numbered_heading("12.03.24", "Minutes", 11.0);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn section_shaped_numbers_exclude_years_and_dates() {
+    for number in ["1.", "3.1.", "3.1.2", "12)", "II."] {
+        assert!(is_section_shaped_number(number), "{number} is a section number");
+    }
+    for number in ["2024", "12.03.2024", "12.03.24", "1.05"] {
+        assert!(!is_section_shaped_number(number), "{number} is not a section number");
+    }
+}
+
+#[test]
+fn adjacent_bold_numbered_entries_stay_an_ordered_list() {
+    let mut paragraphs = vec![
+        finalize_bold_numbered_heading("1.", "Plan", 12.0),
+        finalize_bold_numbered_heading("2.", "Build", 12.0),
+    ];
+    keep_adjacent_numbered_entries_as_list(&mut paragraphs);
+    for paragraph in &paragraphs {
+        assert_eq!(paragraph.heading_level, None);
+        assert!(paragraph.is_list_item);
+    }
+}
+
+#[test]
+fn numbered_heading_followed_by_body_text_stays_a_heading() {
+    let body_segment = seg_at("Body text of the introduction.", 72.0, 680.0, 10.0, false);
+    let body = finalize_paragraph(
+        &[&body_segment],
+        &[(10.0, None)],
+        &crate::pdf::structure::classify::precompute_gap_info(&[(10.0, None)]),
+    )
+    .expect("paragraph");
+    let mut paragraphs = vec![finalize_bold_numbered_heading("1.", "Introduction", 12.0), body];
+    keep_adjacent_numbered_entries_as_list(&mut paragraphs);
+    assert_eq!(paragraphs[0].heading_level, Some(2));
+}
+
+#[test]
 fn non_bold_numbered_line_above_body_size_stays_a_list_item() {
     let heading_map = vec![(10.0, None)];
     let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
