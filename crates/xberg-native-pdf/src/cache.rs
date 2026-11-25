@@ -84,74 +84,58 @@ impl<K: Eq + std::hash::Hash + Copy, V> BoundedEntryCache<K, V> {
         self.insertion_order.clear();
     }
 
-    pub(crate) fn remove(&mut self, key: &K) {
-        if self.map.remove(key).is_some()
-            && let Some(pos) = self.insertion_order.iter().position(|k| k == key)
-        {
-            self.insertion_order.remove(pos);
-        }
-    }
-
     pub(crate) fn len(&self) -> usize {
         self.map.len()
     }
 }
 
-/// Cache bounded by an estimated byte budget that pins entries while the budget
-/// lasts and never evicts them, backed by a small LRU for entries past it.
+/// Cache bounded by an estimated byte budget that admits entries while the
+/// budget lasts and never evicts.
 ///
 /// Whole-document passes read pages 0..N one after another. Under LRU or FIFO
-/// eviction alone a capacity smaller than the document makes every later pass
-/// miss on every page, because each page is evicted before the next pass reaches
-/// it; pinning until full keeps the first pages that fit warm for every pass. The
-/// LRU keeps the back-to-back reads of one page past the budget served. ~keep
-pub(crate) struct AdmissionBudgetCache<K: Eq + std::hash::Hash + Copy, V> {
-    pinned: HashMap<K, (V, usize)>,
+/// eviction a budget smaller than the document makes every later pass miss on
+/// every page, because each page is evicted before the next pass reaches it;
+/// admitting until full keeps the first pages that fit warm for every pass. ~keep
+pub(crate) struct AdmissionBudgetCache<K: Eq + std::hash::Hash, V> {
+    map: HashMap<K, (V, usize)>,
     used_bytes: usize,
     budget_bytes: usize,
-    recent: BoundedEntryCache<K, V>,
 }
 
-impl<K: Eq + std::hash::Hash + Copy, V> AdmissionBudgetCache<K, V> {
-    pub(crate) fn new(budget_bytes: usize, recent_entries: usize) -> Self {
+impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
+    pub(crate) fn new(budget_bytes: usize) -> Self {
         Self {
-            pinned: HashMap::new(),
+            map: HashMap::new(),
             used_bytes: 0,
             budget_bytes,
-            recent: BoundedEntryCache::new(recent_entries),
         }
     }
 
-    pub(crate) fn get(&mut self, key: &K) -> Option<&V> {
-        if self.pinned.contains_key(key) {
-            return self.pinned.get(key).map(|(value, _)| value);
-        }
-        self.recent.get(key)
+    pub(crate) fn get(&self, key: &K) -> Option<&V> {
+        self.map.get(key).map(|(value, _)| value)
     }
 
-    /// Store `value` under `key`, replacing any existing entry: pinned when the
-    /// budget still fits its estimated `bytes`, otherwise in the LRU.
-    pub(crate) fn insert(&mut self, key: K, value: V, bytes: usize) {
-        if let Some((_, replaced)) = self.pinned.remove(&key) {
-            self.used_bytes -= replaced;
+    /// Store `value` under `key`, replacing an existing entry, when the budget
+    /// still fits it. Returns whether the value was stored; a value that does
+    /// not fit leaves any existing entry in place.
+    pub(crate) fn insert(&mut self, key: K, value: V, bytes: usize) -> bool {
+        let replaced = self.map.get(&key).map_or(0, |(_, bytes)| *bytes);
+        let used_without = self.used_bytes - replaced;
+        if bytes > self.budget_bytes - used_without {
+            return false;
         }
-        if bytes <= self.budget_bytes - self.used_bytes {
-            self.recent.remove(&key);
-            self.used_bytes += bytes;
-            self.pinned.insert(key, (value, bytes));
-        } else {
-            self.recent.insert(key, value);
-        }
+        self.used_bytes = used_without + bytes;
+        self.map.insert(key, (value, bytes));
+        true
     }
 
     pub(crate) fn clear(&mut self) {
-        self.pinned.clear();
+        self.map.clear();
         self.used_bytes = 0;
-        self.recent.clear();
     }
 
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
-        self.pinned.len() + self.recent.len()
+        self.map.len()
     }
 }

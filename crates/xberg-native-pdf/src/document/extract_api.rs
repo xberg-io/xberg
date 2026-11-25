@@ -23,20 +23,6 @@ enum ScriptGeometry {
 /// budget keeps about 16 such pages, and every page of a typical document. ~keep
 pub(super) const RAW_PAGE_SPANS_BUDGET_BYTES: usize = 32 * 1024 * 1024;
 
-/// Estimated bytes of postprocessed spans one document may pin, for
-/// `extract_spans` reads repeated across passes. ~keep
-pub(super) const PAGE_SPANS_BUDGET_BYTES: usize = 8 * 1024 * 1024;
-
-/// Estimated bytes of character sequences one document may pin. A character
-/// costs about 170 bytes with its font name, so a dense 5,000-glyph page is
-/// under 1 MiB. ~keep
-pub(super) const PAGE_CHARS_BUDGET_BYTES: usize = 8 * 1024 * 1024;
-
-/// Pages each per-page cache also keeps past its budget, least recently used
-/// first out: the entry count the span and character caches had before they
-/// were budgeted. ~keep
-pub(super) const RECENT_PAGE_ENTRIES: usize = 8;
-
 /// Every input of an unfiltered default-config interpretation besides the page
 /// itself, whose content and resources never change.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,12 +80,6 @@ pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usiz
                     + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
             })
             .sum::<usize>()
-}
-
-/// Estimated heap and inline bytes of a character vector, for byte-budgeted caches.
-fn estimated_char_bytes(chars: &Vec<crate::layout::TextChar>) -> usize {
-    chars.capacity() * size_of::<crate::layout::TextChar>()
-        + chars.iter().map(|glyph| glyph.font_name.capacity()).sum::<usize>()
 }
 
 #[cfg(test)]
@@ -1506,10 +1486,9 @@ impl PdfDocument {
             return Ok(std::sync::Arc::clone(cached));
         }
         let chars = std::sync::Arc::new(self.extract_chars_impl(page_index, HashSet::new(), HashSet::new())?);
-        let bytes = estimated_char_bytes(&chars);
         self.page_chars_cache
             .lock_or_recover()
-            .insert(page_index, std::sync::Arc::clone(&chars), bytes);
+            .insert(page_index, std::sync::Arc::clone(&chars));
         Ok(chars)
     }
 

@@ -1114,11 +1114,9 @@ impl PdfDocument {
         }
         let spans = self.extract_spans_raw(page_index)?;
         let spans = self.postprocess_spans(page_index, spans)?;
-        let cached = spans.clone();
-        let bytes = super::extract_api::estimated_span_bytes(&cached);
         self.page_spans_cache
             .lock_or_recover()
-            .insert(page_index, std::sync::Arc::new(cached), bytes);
+            .insert(page_index, std::sync::Arc::new(spans.clone()));
         Ok(spans)
     }
 
