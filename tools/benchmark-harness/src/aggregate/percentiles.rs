@@ -372,7 +372,22 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
         batch_size,
         system_load,
         throughput_excluded_sample_count: performance_metrics.throughput_excluded_sample_count,
+        memory_methods: count_memory_methods(performance_samples),
     }
+}
+
+/// Counts the samples behind the `memory` percentiles by how their peak RSS was measured, using
+/// the same isolated-process filter as the memory values themselves.
+fn count_memory_methods(performance_samples: &[&BenchmarkResult]) -> std::collections::BTreeMap<String, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    for sample in performance_samples.iter().filter(|r| {
+        r.framework_capabilities.resource_measurement_scope == crate::types::ResourceMeasurementScope::IsolatedProcess
+    }) {
+        *counts
+            .entry(sample.metrics.memory_method.as_str().to_string())
+            .or_insert(0) += 1;
+    }
+    counts
 }
 
 /// Real per-invocation batch size: the number of result rows sharing each performance sample's

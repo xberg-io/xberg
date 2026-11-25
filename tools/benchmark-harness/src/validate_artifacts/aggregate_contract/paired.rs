@@ -81,6 +81,7 @@ mod tests {
                 p50_memory_bytes: 1,
                 p95_memory_bytes: 1,
                 p99_memory_bytes: 1,
+                ..Default::default(),
             },
             quality: success.then(|| QualityMetrics {
                 f1_score_text: 0.5,

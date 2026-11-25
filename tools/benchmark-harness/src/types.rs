@@ -521,6 +521,17 @@ pub enum MemoryMethod {
     SelfReported,
 }
 
+impl MemoryMethod {
+    /// The snake_case name this method serializes to.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RusageMaxRss => "rusage_max_rss",
+            Self::Sampled => "sampled",
+            Self::SelfReported => "self_reported",
+        }
+    }
+}
+
 /// Quality metrics comparing extraction output to ground truth
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityMetrics {

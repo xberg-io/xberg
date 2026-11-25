@@ -621,6 +621,10 @@ pub struct PerformancePercentiles {
     /// samples" from "some samples, all excluded."
     #[serde(default)]
     pub throughput_excluded_sample_count: usize,
+    /// Performance samples per `memory_method` (`rusage_max_rss`, `sampled`, `self_reported`) behind
+    /// `memory`, so a bucket mixing measurement methods is visible (v2.12.0+).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub memory_methods: std::collections::BTreeMap<String, usize>,
 }
 
 /// Aggregated system-load contention qualifier for a group of results.

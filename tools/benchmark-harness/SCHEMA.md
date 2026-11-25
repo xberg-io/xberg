@@ -125,7 +125,8 @@ suppression and dispersion contract (v2.10.0+):
   "system_load": {
     /* SystemLoadPercentiles */
   }, // Optional (v2.7.0+)
-  "throughput_excluded_sample_count": 0 // v2.8.0+
+  "throughput_excluded_sample_count": 0, // v2.8.0+
+  "memory_methods": { "rusage_max_rss": 24 } // samples per memory method behind `memory` (v2.12.0+)
 }
 ```
 
@@ -213,6 +214,8 @@ The batch dedup that collapses a native batch to one `performance_sample_count` 
   "file_type": "pdf",
   "duration_ms": 125.4,
   "peak_memory_mb": 180.5,
+  "memory_method": "rusage_max_rss", // how peak RSS was measured (v2.12.0+)
+  "self_reported_peak_memory_bytes": null, // framework's own report, diagnostic only (v2.12.0+)
   "f1_text": 0.92,
   "f1_layout": 0.78, // null for plaintext mode
   "f1_numeric": 0.85,
@@ -456,6 +459,14 @@ Additive only; 2.11.0 aggregates still deserialize (every new field defaults).
   convention as the other `pdf_*` quality rankings; frameworks with no reading-order sample are
   omitted rather than scored 0.
 - **`layout_impact`** and **`head_to_head`**: see above.
+- **Peak memory method**: `peak_memory_bytes` is now `ru_maxrss` from `wait4(2)` on the harness's
+  direct child (normalised to bytes) for every subprocess framework, on unix. It includes every
+  descendant the child reaped and is the peak of the largest single process in the tree, not a
+  sum. xberg's self-reported peak no longer replaces the measurement; it is kept in
+  `self_reported_peak_memory_bytes`. Rows carry `memory_method` (`rusage_max_rss`, `sampled`,
+  `self_reported`), and `PerformancePercentiles.memory_methods` counts them per bucket. Memory
+  figures before 2.12.0 compared an exact xberg self-report with a polled sampler that missed
+  short-lived competitor processes; do not compare memory across that boundary.
 
 ## Migration from v2.10.0 to v2.11.0
 
