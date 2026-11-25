@@ -3021,7 +3021,7 @@ mod tests {
         assert_eq!(capacity_of(&letter_pages(Some((104, 104, 1_067, 1_333)))), 1);
     }
 
-    /// The 300 dpi scans that lost layout render at 2586x3346 (25,961,868 B). Three of them and a
+    /// The 300 dpi scans that lost layout render at 2586x3346 (25,958,268 B). Three of them and a
     /// model workspace fit the default budget; a fourth is what tipped every such chunk over.
     #[test]
     fn chunk_footprint_admits_three_scan_rasters_but_not_four() {
@@ -3031,7 +3031,7 @@ mod tests {
             ..rendered_page(0, 1, 612.0)
         })
         .expect("scan footprint");
-        assert_eq!(scan.raster_bytes, 25_961_868);
+        assert_eq!(scan.raster_bytes, 25_958_268);
         let chunk_of = |pages: usize| (1..pages).fold(scan, |chunk, _| chunk.with(scan).expect("no overflow"));
 
         assert!(chunk_of(3).fits(&limits));
