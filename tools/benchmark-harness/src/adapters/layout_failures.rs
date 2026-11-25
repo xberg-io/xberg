@@ -9,6 +9,14 @@ use xberg::types::ExtractedDocument;
 /// and `layout-ocr` from the image extractor's layout-region OCR.
 const LAYOUT_WARNING_SOURCES: [&str; 2] = ["layout", "layout-ocr"];
 
+/// Warning sources from the PDF and image table-recognition paths. Their "table model is not
+/// available" warning means layout found tables but their structure was never recognized; CI
+/// prefetches the TATR model, so it signals a broken setup that would misreport layout quality.
+const TABLE_WARNING_SOURCES: [&str; 2] = ["pdf_tables", "image_tables"];
+
+/// Text of `layout::table_model_unavailable_warning`.
+const TABLE_MODEL_UNAVAILABLE_MARKER: &str = "table model is not available";
+
 /// Emitted when the CPU provider recovered the layout pass; the layout was applied, so on its own
 /// this clause leaves the row valid.
 const RECOVERED_ON_CPU_MARKER: &str = "recovered on CPU";
@@ -19,6 +27,9 @@ const RECOVERED_ON_CPU_MARKER: &str = "recovered on CPU";
 const LAYOUT_LOSS_MARKERS: [&str; 2] = ["layout detection failed", "could not be prepared for layout analysis"];
 
 fn is_layout_failure(source: &str, message: &str) -> bool {
+    if TABLE_WARNING_SOURCES.contains(&source) {
+        return message.contains(TABLE_MODEL_UNAVAILABLE_MARKER);
+    }
     LAYOUT_WARNING_SOURCES.contains(&source)
         && (LAYOUT_LOSS_MARKERS.iter().any(|marker| message.contains(marker))
             || !message.contains(RECOVERED_ON_CPU_MARKER))
@@ -141,6 +152,31 @@ mod tests {
         let combined = "automatic layout inference failed (provider error); recovered on CPU; \
                         layout detection failed (model not found); document extracted without layout hints";
         assert!(is_layout_failure("layout", combined));
+    }
+
+    const TABLE_MODEL_WARNING: &str = "layout detection found table regions but the TATR table model is not \
+                                       available; table structure recognition was skipped; check that the \
+                                       model is downloaded";
+
+    #[test]
+    fn a_skipped_table_model_is_a_failure_from_both_table_paths() {
+        for source in ["pdf_tables", "image_tables"] {
+            let mut document = ExtractedDocument::default();
+            document.processing_warnings.push(warning(source, TABLE_MODEL_WARNING));
+            let from_document = layout_failure_in_document(&document).expect("document table failure detected");
+            let from_item = layout_failure_in_item(&item(
+                serde_json::json!([{ "source": source, "message": TABLE_MODEL_WARNING }]),
+            ))
+            .expect("item table failure detected");
+            assert_eq!(from_document, from_item);
+            assert!(from_document.contains("TATR"), "{from_document}");
+        }
+    }
+
+    #[test]
+    fn other_table_warnings_and_sources_are_not_layout_failures() {
+        assert!(!is_layout_failure("pdf_tables", "table 2 had no detectable cells"));
+        assert!(!is_layout_failure("ocr", TABLE_MODEL_WARNING));
     }
 
     #[test]

@@ -154,3 +154,21 @@ fn layout_variants_accept_a_result_without_layout_failure_warnings() {
         assert!(adapter_for(pipeline).parse_output(&clean).is_ok(), "{pipeline}");
     }
 }
+
+#[test]
+fn a_skipped_table_model_rejects_layout_variants_but_not_baselines() {
+    let message = "layout detection found table regions but the TATR table model is not available; \
+                   table structure recognition was skipped; check that the model is downloaded";
+    for source in ["pdf_tables", "image_tables"] {
+        let payload = item(serde_json::json!([{ "source": source, "message": message }])).to_string();
+        for pipeline in LAYOUT_PIPELINES {
+            let error = adapter_for(pipeline)
+                .parse_output(&payload)
+                .expect_err(&format!("{pipeline} must not score a row without table recognition"));
+            assert!(error.to_string().contains("TATR"), "{pipeline}: {error}");
+        }
+        for pipeline in NON_LAYOUT_PIPELINES {
+            assert!(adapter_for(pipeline).parse_output(&payload).is_ok(), "{pipeline}");
+        }
+    }
+}
