@@ -242,7 +242,7 @@ def interpolate(job: str, template: str, cell: dict[str, str]) -> str:
 
 
 def is_optional_cell(framework: str, cohort: str) -> bool:
-    if framework == "mineru":
+    if framework == "mineru" or "-auto-ocr" in framework:
         return True
     if cohort in {"native-pdf-fast-b8", "ocr-pdf-fast-b4"}:
         return cohort == "ocr-pdf-fast-b4" and framework in {"tika", "unstructured"}
