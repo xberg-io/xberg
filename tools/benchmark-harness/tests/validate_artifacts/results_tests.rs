@@ -364,6 +364,43 @@ fn rejects_source_sha_mismatch() {
     assert_err_contains(validate(&scenario.args), "source SHA mismatch");
 }
 
+fn ocr_scenario_index(scenario: &ArtifactScenario, is_auto_ocr: bool) -> usize {
+    scenario
+        .contract
+        .matrix
+        .iter()
+        .position(|entry| {
+            entry.framework.starts_with("xberg-")
+                && entry.framework.contains("-auto-ocr") == is_auto_ocr
+                && !entry.framework.contains("paddle")
+        })
+        .expect("matrix entry")
+}
+
+fn set_every_ocr_status(scenario: &ArtifactScenario, index: usize, status: &str) {
+    tamper_json(&results_path(scenario, index), |value| {
+        for result in value.as_array_mut().unwrap() {
+            result["ocr_status"] = serde_json::Value::String(status.to_string());
+        }
+    });
+}
+
+#[test]
+fn accepts_auto_ocr_rows_that_declined_to_ocr() {
+    let scenario = artifact_scenario(Cohort::Ocr);
+    let index = ocr_scenario_index(&scenario, true);
+    set_every_ocr_status(&scenario, index, "not_used");
+    validate(&scenario.args).expect("auto-ocr rows may report OCR as not used");
+}
+
+#[test]
+fn rejects_forced_ocr_rows_that_did_not_use_ocr() {
+    let scenario = artifact_scenario(Cohort::Ocr);
+    let index = ocr_scenario_index(&scenario, false);
+    set_every_ocr_status(&scenario, index, "not_used");
+    assert_err_contains(validate(&scenario.args), "OCR status mismatch");
+}
+
 #[test]
 fn rejects_timeout_result() {
     let scenario = artifact_scenario(Cohort::Native);

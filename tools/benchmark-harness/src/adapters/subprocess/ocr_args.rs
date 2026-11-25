@@ -259,7 +259,7 @@ impl SubprocessAdapter {
     /// when the fixture explicitly requires OCR.
     pub(super) fn request_args_from(&self, base_args: &[String], force_ocr: bool) -> Vec<String> {
         let mut args = base_args.to_vec();
-        if !force_ocr {
+        if !force_ocr || self.ignore_fixture_force_ocr {
             return args;
         }
 
@@ -328,7 +328,7 @@ impl SubprocessAdapter {
         value
             .and_then(serde_json::Value::as_bool)
             .map(|used| if used { OcrStatus::Used } else { OcrStatus::NotUsed })
-            .or_else(|| force_ocr.then_some(OcrStatus::Used))
+            .or_else(|| (force_ocr && !self.ignore_fixture_force_ocr).then_some(OcrStatus::Used))
             .or(self.configured_ocr_status)
             .unwrap_or(OcrStatus::Unknown)
     }

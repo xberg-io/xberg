@@ -472,3 +472,73 @@ fn forced_ocr_uses_existing_behavior_for_malformed_xberg_config_json() {
     assert!(args.iter().any(|arg| arg == "--ocr"));
     assert!(args.windows(2).any(|pair| pair == ["--force-ocr", "true"]));
 }
+
+mod auto_ocr_force_ocr {
+    use super::super::support::test_build_identity;
+    use crate::adapters::subprocess::SubprocessAdapter;
+    use crate::adapters::xberg::{AutoOcrBackend, adapter_with_identity, auto_ocr_adapter_with_identity};
+    use crate::types::{OcrStatus, OutputFormat, XbergPdfBackend, XbergPipeline};
+
+    fn auto_adapter(backend: AutoOcrBackend, batch: bool) -> SubprocessAdapter {
+        auto_ocr_adapter_with_identity(backend, OutputFormat::Markdown, batch, test_build_identity()).unwrap()
+    }
+
+    fn forces_ocr(args: &[String]) -> bool {
+        args.iter().any(|arg| arg == "--force-ocr")
+    }
+
+    /// A fixture that requires OCR must not turn an auto-OCR variant into a forced one, in the
+    /// single-file, batch and single-file-fallback request paths. ~keep
+    #[test]
+    fn auto_ocr_adapters_never_force_ocr_for_ocr_fixtures() {
+        for backend in AutoOcrBackend::ALL {
+            for batch in [false, true] {
+                let adapter = auto_adapter(backend, batch);
+                let name = adapter.name.clone();
+                assert!(!forces_ocr(&adapter.request_args(true)), "{name} request_args");
+                assert!(
+                    !forces_ocr(&adapter.single_file_request_args(true)),
+                    "{name} single_file_request_args"
+                );
+                assert_eq!(
+                    adapter.request_args(true),
+                    adapter.request_args(false),
+                    "{name}: the fixture's OCR requirement must not change the request"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn auto_ocr_adapter_does_not_claim_ocr_ran_when_the_cli_reports_nothing() {
+        let adapter = auto_adapter(AutoOcrBackend::Tesseract, false);
+        assert_eq!(adapter.resolve_ocr_status(None, true), OcrStatus::Unknown);
+        assert_eq!(
+            adapter.resolve_ocr_status(Some(&serde_json::json!(false)), true),
+            OcrStatus::NotUsed
+        );
+    }
+
+    #[test]
+    fn forced_baseline_adapters_still_force_ocr_for_ocr_fixtures() {
+        for batch in [false, true] {
+            for pipeline in [XbergPipeline::Baseline, XbergPipeline::BaselinePaddle] {
+                let adapter = adapter_with_identity(
+                    pipeline,
+                    OutputFormat::Markdown,
+                    batch,
+                    true,
+                    XbergPdfBackend::Native,
+                    test_build_identity(),
+                )
+                .unwrap();
+                let name = adapter.name.clone();
+                assert!(forces_ocr(&adapter.request_args(true)), "{name} request_args");
+                assert!(
+                    forces_ocr(&adapter.single_file_request_args(true)),
+                    "{name} single_file_request_args"
+                );
+            }
+        }
+    }
+}

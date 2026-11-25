@@ -255,9 +255,21 @@ pub fn create_xberg_adapter(
     let build_id = probe_xberg_build_id(&cli_path)?;
     let build_identity = ExecutableBuildIdentity {
         build_id,
-        path: cli_path.clone(),
+        path: cli_path,
     };
+    adapter_with_identity(pipeline, output_format, batch, ocr_enabled, pdf_backend, build_identity)
+}
 
+/// Builds the adapter for a located executable; split from [`create_xberg_adapter`] so the
+/// argument and policy wiring is testable without an xberg binary.
+pub(crate) fn adapter_with_identity(
+    pipeline: XbergPipeline,
+    output_format: OutputFormat,
+    batch: bool,
+    ocr_enabled: bool,
+    pdf_backend: XbergPdfBackend,
+    build_identity: ExecutableBuildIdentity,
+) -> Result<SubprocessAdapter> {
     let content_format = match output_format {
         OutputFormat::Markdown => "markdown",
         OutputFormat::Plaintext => "plain",
@@ -305,15 +317,26 @@ pub fn create_xberg_auto_ocr_adapter(
     let build_id = probe_xberg_build_id(&cli_path)?;
     let build_identity = ExecutableBuildIdentity {
         build_id,
-        path: cli_path.clone(),
+        path: cli_path,
     };
+    auto_ocr_adapter_with_identity(backend, output_format, batch, build_identity)
+}
 
+/// Builds the auto-OCR adapter for a located executable. It ignores a fixture's `requires_ocr`,
+/// since forcing OCR would defeat the point of the variant.
+pub(crate) fn auto_ocr_adapter_with_identity(
+    backend: AutoOcrBackend,
+    output_format: OutputFormat,
+    batch: bool,
+    build_identity: ExecutableBuildIdentity,
+) -> Result<SubprocessAdapter> {
     let mut args = auto_ocr_args(backend, output_format, batch);
     args.push("--pdf-backend".to_string());
     args.push(XbergPdfBackend::Native.as_str().to_string());
 
     let framework_name = auto_ocr_framework_name(backend, output_format, batch);
     assemble_adapter(framework_name, build_identity, args, output_format, batch, false)
+        .map(SubprocessAdapter::with_ignored_fixture_force_ocr)
 }
 
 /// Framework name of an auto-OCR variant, e.g. `xberg-markdown-auto-ocr-paddle-batch`.
@@ -324,6 +347,19 @@ pub fn auto_ocr_framework_name(backend: AutoOcrBackend, output_format: OutputFor
     };
     let batch_suffix = if batch { "-batch" } else { "" };
     format!("xberg-{format_slug}-{}{batch_suffix}", backend.slug())
+}
+
+/// Whether `framework` names an auto-OCR variant in any output format and execution mode.
+pub fn is_auto_ocr_framework(framework: &str) -> bool {
+    AutoOcrBackend::ALL.iter().any(|backend| {
+        [OutputFormat::Markdown, OutputFormat::Plaintext]
+            .into_iter()
+            .any(|format| {
+                [false, true]
+                    .into_iter()
+                    .any(|batch| auto_ocr_framework_name(*backend, format, batch) == framework)
+            })
+    })
 }
 
 fn auto_ocr_args(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> Vec<String> {

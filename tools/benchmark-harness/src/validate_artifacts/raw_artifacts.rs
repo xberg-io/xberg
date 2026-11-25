@@ -6,6 +6,7 @@
 //! `contract_error`, JSON loaders, etc.) defined there.
 
 use super::*;
+use crate::adapters::xberg::is_auto_ocr_framework;
 
 /// Everything [`validate_provenance`] checks a `provenance.json` against, besides the record
 /// itself and its path -- bundled into one struct purely to keep the function's parameter count
@@ -242,31 +243,42 @@ fn validate_result_outcome(
     }
 }
 
-/// A result's OCR status is contractual only for xberg, the subject under test: the OCR cohort
-/// must exercise xberg's OCR pipeline (Used) and every other cohort must not (NotUsed). External
-/// competitors self-report OCR usage from their own internals — some are Tesseract-backed yet
-/// legitimately skip OCR on a given file (e.g. Tika reading an embedded text layer) — so their
-/// reported status is descriptive data we record, not a contract we enforce.
+/// The OCR status a result must report, or `None` when its status is not contractual.
+///
+/// It is contractual only for xberg, the subject under test: the OCR cohort must exercise
+/// xberg's OCR pipeline (Used) and every other cohort must not (NotUsed). Auto-OCR variants are
+/// exempt in the OCR cohort, because xberg's own trigger decides per page whether to OCR and may
+/// decline; they must still have succeeded. External competitors self-report OCR usage from
+/// their own internals — some are Tesseract-backed yet legitimately skip OCR on a given file
+/// (e.g. Tika reading an embedded text layer) — so their reported status is descriptive data we
+/// record, not a contract we enforce.
+fn required_ocr_status(framework: &str, cohort_expects_ocr: bool) -> Option<OcrStatus> {
+    if !framework.starts_with("xberg-") || (cohort_expects_ocr && is_auto_ocr_framework(framework)) {
+        return None;
+    }
+    Some(if cohort_expects_ocr {
+        OcrStatus::Used
+    } else {
+        OcrStatus::NotUsed
+    })
+}
+
 fn validate_result_ocr_and_iterations(
     index: usize,
     result: &BenchmarkResult,
     path: &Path,
     expected: &ResultExpectations<'_>,
 ) -> Result<()> {
-    let expected_ocr = if expected.cohort.expects_ocr() {
-        OcrStatus::Used
-    } else {
-        OcrStatus::NotUsed
-    };
-    let enforce_ocr_status = expected.entry.framework.starts_with("xberg-");
-    require(
-        !enforce_ocr_status || result.ocr_status == expected_ocr,
-        format!(
-            "{}: result {index} OCR status mismatch: expected {expected_ocr:?}, got {:?}",
-            path.display(),
-            result.ocr_status
-        ),
-    )?;
+    if let Some(expected_ocr) = required_ocr_status(&expected.entry.framework, expected.cohort.expects_ocr()) {
+        require(
+            result.ocr_status == expected_ocr,
+            format!(
+                "{}: result {index} OCR status mismatch: expected {expected_ocr:?}, got {:?}",
+                path.display(),
+                result.ocr_status
+            ),
+        )?;
+    }
     require(
         result.iterations.len() == expected.iterations,
         format!("{}: result {index} iteration count mismatch", path.display()),
@@ -473,4 +485,44 @@ pub(super) fn validate_raw_artifacts(args: &RawArtifactsArgs<'_>) -> Result<Stri
         actual_dirs.len(),
         args.cohort.as_str()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xberg_must_use_ocr_in_ocr_cohorts_and_not_elsewhere() {
+        assert_eq!(
+            required_ocr_status("xberg-markdown-baseline", true),
+            Some(OcrStatus::Used)
+        );
+        assert_eq!(
+            required_ocr_status("xberg-markdown-baseline-batch", false),
+            Some(OcrStatus::NotUsed)
+        );
+        assert_eq!(required_ocr_status("docling", true), None);
+    }
+
+    /// Auto-OCR rows may decline to OCR, so their status is exempt in the OCR cohort only. ~keep
+    #[test]
+    fn auto_ocr_rows_are_exempt_from_the_used_requirement_only_in_ocr_cohorts() {
+        for framework in [
+            "xberg-markdown-auto-ocr",
+            "xberg-markdown-auto-ocr-batch",
+            "xberg-plaintext-auto-ocr-paddle",
+            "xberg-markdown-auto-ocr-paddle-batch",
+        ] {
+            assert_eq!(required_ocr_status(framework, true), None, "{framework}");
+            assert_eq!(
+                required_ocr_status(framework, false),
+                Some(OcrStatus::NotUsed),
+                "{framework}"
+            );
+        }
+        assert_eq!(
+            required_ocr_status("xberg-markdown-paddle-ocr", true),
+            Some(OcrStatus::Used)
+        );
+    }
 }

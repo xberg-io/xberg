@@ -47,6 +47,9 @@ pub struct SubprocessAdapter {
     /// Reject an item whose extraction reports a failed layout pass, so a benchmark row can
     /// never be scored as a layout-pipeline result when the requested detector never ran. ~keep
     reject_layout_failures: bool,
+    /// Do not upgrade the request to forced OCR when a fixture requires OCR. For adapters whose
+    /// point is that the extractor decides per page whether to OCR. ~keep
+    ignore_fixture_force_ocr: bool,
     /// Worker limit passed to native batch implementations.
     batch_workers: usize,
     /// Resolved executable used by a specialized native batch path.
@@ -99,6 +102,7 @@ impl SubprocessAdapter {
             single_file_args: None,
             configured_ocr_status: None,
             reject_layout_failures: false,
+            ignore_fixture_force_ocr: false,
             batch_workers: 1,
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
@@ -142,6 +146,7 @@ impl SubprocessAdapter {
             single_file_args: None,
             configured_ocr_status: None,
             reject_layout_failures: false,
+            ignore_fixture_force_ocr: false,
             batch_workers: 1,
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
@@ -156,6 +161,12 @@ impl SubprocessAdapter {
     /// Rejects any item whose `processing_warnings` report a failed layout pass.
     pub fn with_layout_failure_rejection(mut self) -> Self {
         self.reject_layout_failures = true;
+        self
+    }
+
+    /// Keep OCR optional for fixtures that require it, leaving the decision to the extractor.
+    pub fn with_ignored_fixture_force_ocr(mut self) -> Self {
+        self.ignore_fixture_force_ocr = true;
         self
     }
 
