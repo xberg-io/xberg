@@ -1882,6 +1882,11 @@ harness = false
 required-features = ["pdf", "layout-detection", "ocr", "profiling"]
 
 [[bench]]
+name = "pdf_extract_e2e"
+harness = false
+required-features = ["pdf", "pdf-pdfium"]
+
+[[bench]]
 name = "concurrency_scaling"
 harness = false
 required-features = ["pdf", "layout-detection", "ocr"]
