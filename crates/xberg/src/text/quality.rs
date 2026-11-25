@@ -46,9 +46,8 @@ static NEWLINE_CLEANUP: Lazy<Regex> =
 static WORD_CHAR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\A\w\z").expect("word-char regex is valid"));
 static DECIMAL_DIGIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"\A\d\z").expect("digit regex is valid"));
 
-/// Equivalent to the regex crate's Unicode `\w`. ASCII and the common non-word
-/// punctuation/symbol blocks are answered without the regex; any other
-/// non-alphabetic code point is delegated to it, so the answer is always exact.
+/// Equivalent to the regex crate's Unicode `\w`. ASCII, Latin letters and whitespace are
+/// answered directly; every other code point is delegated to the regex, so the answer is exact.
 fn is_word_char(c: char) -> bool {
     if c.is_ascii() {
         return c.is_ascii_alphanumeric() || c == '_';
@@ -59,20 +58,7 @@ fn is_word_char(c: char) -> bool {
     if matches!(c as u32, 0xC0..=0x24F) && !matches!(c, '\u{D7}' | '\u{F7}') {
         return true;
     }
-    if c.is_whitespace()
-        || matches!(
-            c as u32,
-            0x80..=0xBF
-                | 0x2010..=0x2027
-                | 0x2030..=0x203E
-                | 0x2041..=0x2053
-                | 0x2055..=0x205E
-                | 0x2190..=0x22FF
-                | 0x3001..=0x3004
-                | 0x3008..=0x3020
-                | 0xFF01..=0xFF0F
-        )
-    {
+    if c.is_whitespace() {
         return false;
     }
     WORD_CHAR.is_match(c.encode_utf8(&mut [0u8; 4]))
