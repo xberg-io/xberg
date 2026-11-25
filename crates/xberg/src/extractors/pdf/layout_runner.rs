@@ -9,7 +9,9 @@
 //! requiring the whole document's rasterised frames to be live simultaneously.
 //! Each chunk is charged against `max_content_size` on its own: the rasters of
 //! earlier chunks are already-assembled output, so charging them too would turn
-//! a byte limit into a page limit (GH#1721).
+//! a byte limit into a page limit (GH#1721). Pages render one at a time and a
+//! chunk closes before the page that would push its rasters past the budget, so
+//! a document of large scans runs in smaller chunks instead of failing whole.
 //!
 //! The resulting images, page metadata, layout hints, and raw detections feed
 //! both native markdown structure recovery and OCR layout assembly.
@@ -498,7 +500,7 @@ struct RenderBudget<'a> {
     images_config: Option<&'a crate::core::config::ImageExtractionConfig>,
 }
 
-#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+#[cfg(all(test, feature = "pdf", feature = "layout-detection"))]
 fn render_layout_chunk(
     doc: &xberg_native_pdf::PdfDocument,
     page_rotations: &[u32],
@@ -509,55 +511,241 @@ fn render_layout_chunk(
     budget: RenderBudget<'_>,
 ) -> Vec<RenderedLayoutPage> {
     (chunk_start..chunk_end)
-        .map(|page_index| {
-            let (media_width, media_height) = doc
-                .get_page_media_box(page_index)
-                .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
-                .unwrap_or((612.0, 792.0));
-            let rotation = page_rotations.get(page_index).copied().unwrap_or(0);
-            let normalize_for_ocr = gated_handling == GatedPageHandling::RenderWithoutInference;
-            let (page_width_pts, page_height_pts) = if normalize_for_ocr {
-                (media_width, media_height)
-            } else {
-                displayed_page_dimensions(media_width, media_height, rotation)
-            };
-            let run_inference = gate_selects_page(gate_decisions, page_index);
-            let skip_render = !run_inference && gated_handling == GatedPageHandling::SkipRender;
-            let (image, render_failure, raster_dpi) = if skip_render {
-                (None, None, None)
-            } else {
-                match render_layout_page(
-                    doc,
-                    page_index,
-                    page_width_pts,
-                    page_height_pts,
-                    rotation,
-                    normalize_for_ocr,
-                    budget,
-                ) {
-                    Ok((image, dpi)) => (Some(image), None, dpi),
-                    Err(reason) => (None, Some(reason), None),
-                }
-            };
-
-            let inference_crop = if normalize_for_ocr || rotation % 360 != 0 {
-                None
-            } else {
-                image.as_ref().and_then(|image| visible_crop_px(doc, page_index, image))
-            };
-            RenderedLayoutPage {
-                page_index,
-                page_width_pts,
-                page_height_pts,
-                rotation,
-                image,
-                raster_dpi,
-                run_inference,
-                render_failure,
-                inference_crop,
-            }
-        })
+        .map(|page_index| render_layout_slot(doc, page_rotations, page_index, gate_decisions, gated_handling, budget))
         .collect()
+}
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+fn render_layout_slot(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_rotations: &[u32],
+    page_index: usize,
+    gate_decisions: Option<&[PageGateDecision]>,
+    gated_handling: GatedPageHandling,
+    budget: RenderBudget<'_>,
+) -> RenderedLayoutPage {
+    let (media_width, media_height) = doc
+        .get_page_media_box(page_index)
+        .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
+        .unwrap_or((612.0, 792.0));
+    let rotation = page_rotations.get(page_index).copied().unwrap_or(0);
+    let normalize_for_ocr = gated_handling == GatedPageHandling::RenderWithoutInference;
+    let (page_width_pts, page_height_pts) = if normalize_for_ocr {
+        (media_width, media_height)
+    } else {
+        displayed_page_dimensions(media_width, media_height, rotation)
+    };
+    let run_inference = gate_selects_page(gate_decisions, page_index);
+    let skip_render = !run_inference && gated_handling == GatedPageHandling::SkipRender;
+    let (image, render_failure, raster_dpi) = if skip_render {
+        (None, None, None)
+    } else {
+        match render_layout_page(
+            doc,
+            page_index,
+            page_width_pts,
+            page_height_pts,
+            rotation,
+            normalize_for_ocr,
+            budget,
+        ) {
+            Ok((image, dpi)) => (Some(image), None, dpi),
+            Err(reason) => (None, Some(reason), None),
+        }
+    };
+
+    let inference_crop = if normalize_for_ocr || rotation % 360 != 0 {
+        None
+    } else {
+        image.as_ref().and_then(|image| visible_crop_px(doc, page_index, image))
+    };
+    RenderedLayoutPage {
+        page_index,
+        page_width_pts,
+        page_height_pts,
+        rotation,
+        image,
+        raster_dpi,
+        run_inference,
+        render_failure,
+        inference_crop,
+    }
+}
+
+/// The bytes a chunk charges in [`detect_layout_chunk`]: every raster it holds, plus the largest
+/// inference crop among the pages that enter the model.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+#[derive(Clone, Copy, Default)]
+struct ChunkFootprint {
+    raster_bytes: u64,
+    largest_crop_bytes: u64,
+    infers: bool,
+}
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+impl ChunkFootprint {
+    fn of_page(page: &RenderedLayoutPage) -> Result<Self> {
+        let raster_bytes = match page.image.as_ref() {
+            Some(image) => {
+                let (width, height) = image.dimensions();
+                crate::layout::engine::live_raster_bytes(std::iter::once(image), width, height)?
+            }
+            None => 0,
+        };
+        let infers = enters_inference_batch(page);
+        let largest_crop_bytes = if infers {
+            inference_crop_bytes(std::slice::from_ref(page), &[0])?
+        } else {
+            0
+        };
+        Ok(Self {
+            raster_bytes,
+            largest_crop_bytes,
+            infers,
+        })
+    }
+
+    fn with(self, page: Self) -> Option<Self> {
+        Some(Self {
+            raster_bytes: self.raster_bytes.checked_add(page.raster_bytes)?,
+            largest_crop_bytes: self.largest_crop_bytes.max(page.largest_crop_bytes),
+            infers: self.infers || page.infers,
+        })
+    }
+
+    /// Whether [`detect_layout_chunk`] admits a chunk of this footprint. It fails exactly when a
+    /// one-page batch holding the largest crop does not fit beside the chunk's rasters, since a
+    /// smaller batch is what it falls back to; a chunk with no inference page charges nothing.
+    fn fits(self, security_limits: &crate::extractors::security::SecurityLimits) -> bool {
+        !self.infers
+            || self
+                .raster_bytes
+                .checked_add(self.largest_crop_bytes)
+                .is_some_and(|live| {
+                    crate::layout::engine::validate_layout_inference_peak(1, 1, live, 1, security_limits).is_ok()
+                })
+    }
+}
+
+/// Page-aligned output of every chunk the layout pass has detected and assembled.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+struct ChunkedLayout {
+    images: Vec<image::RgbImage>,
+    layout_results: Vec<PageLayoutResult>,
+    hints: Vec<Vec<LayoutHint>>,
+    detections: Vec<crate::layout::DetectionResult>,
+    render_failures: Vec<String>,
+    raster_dpis: crate::pdf::render::OcrRasterDpis,
+    rendered_pages: Vec<bool>,
+}
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+impl ChunkedLayout {
+    fn with_capacity(page_count: usize) -> Self {
+        Self {
+            images: Vec::with_capacity(page_count),
+            layout_results: Vec::with_capacity(page_count),
+            hints: Vec::with_capacity(page_count),
+            detections: Vec::with_capacity(page_count),
+            render_failures: Vec::new(),
+            raster_dpis: crate::pdf::render::OcrRasterDpis::new(),
+            rendered_pages: Vec::with_capacity(page_count),
+        }
+    }
+
+    fn record_render(&mut self, page: &RenderedLayoutPage) {
+        self.rendered_pages.push(page.image.is_some());
+        self.raster_dpis
+            .extend(page.raster_dpi.map(|dpi| (page.page_index, dpi)));
+        self.render_failures.extend(page.render_failure.clone());
+    }
+
+    fn detect_and_assemble(
+        &mut self,
+        engine: &mut crate::layout::LayoutEngine,
+        pages: Vec<RenderedLayoutPage>,
+        security_limits: &crate::extractors::security::SecurityLimits,
+    ) -> Result<()> {
+        tracing::debug!(
+            chunk_start = pages.first().map(|page| page.page_index),
+            chunk_len = pages.len(),
+            rendered = pages.iter().filter(|page| page.image.is_some()).count(),
+            "layout runner: detecting chunk"
+        );
+        let detections = detect_layout_chunk(engine, &pages, security_limits)?;
+        for page in assemble_layout_chunk(pages, detections)? {
+            self.images.push(page.image);
+            self.layout_results.push(page.result);
+            self.hints.push(page.hints);
+            self.detections.push(page.detection);
+        }
+        Ok(())
+    }
+}
+
+/// Render, detect and assemble every page, in chunks of at most [`LAYOUT_BATCH_CHUNK_SIZE`] pages
+/// that [`ChunkFootprint::fits`] admits. A chunk closes before rendering a page predicted (from the
+/// chunk's largest page) not to fit; a page that turns out larger than predicted is dropped,
+/// the chunk runs with only its own rasters live, and the page renders again into the next chunk.
+/// A page that does not fit even alone forms its own chunk, which fails as it always did.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+fn detect_layout_pages(
+    engine: &mut crate::layout::LayoutEngine,
+    doc: &xberg_native_pdf::PdfDocument,
+    page_count: usize,
+    page_rotations: &[u32],
+    gate_decisions: Option<&[PageGateDecision]>,
+    gated_handling: GatedPageHandling,
+    budget: RenderBudget<'_>,
+) -> Result<ChunkedLayout> {
+    let security_limits = budget.security_limits;
+    let mut output = ChunkedLayout::with_capacity(page_count);
+    let mut chunk: Vec<RenderedLayoutPage> = Vec::with_capacity(LAYOUT_BATCH_CHUNK_SIZE);
+    let mut footprint = ChunkFootprint::default();
+    let mut largest_page = ChunkFootprint::default();
+    let admits = |footprint: ChunkFootprint, page: ChunkFootprint| {
+        footprint.with(page).is_some_and(|joined| joined.fits(security_limits))
+    };
+
+    for page_index in 0..page_count {
+        let run_inference = gate_selects_page(gate_decisions, page_index);
+        let renders = run_inference || gated_handling == GatedPageHandling::RenderWithoutInference;
+        let predicted = if renders {
+            ChunkFootprint {
+                infers: run_inference,
+                ..largest_page
+            }
+        } else {
+            ChunkFootprint::default()
+        };
+        if !chunk.is_empty() && (chunk.len() == LAYOUT_BATCH_CHUNK_SIZE || !admits(footprint, predicted)) {
+            output.detect_and_assemble(engine, std::mem::take(&mut chunk), security_limits)?;
+            (footprint, largest_page) = Default::default();
+        }
+
+        let mut page = render_layout_slot(doc, page_rotations, page_index, gate_decisions, gated_handling, budget);
+        let mut page_footprint = ChunkFootprint::of_page(&page)?;
+        if !chunk.is_empty() && !admits(footprint, page_footprint) {
+            drop(page);
+            output.detect_and_assemble(engine, std::mem::take(&mut chunk), security_limits)?;
+            (footprint, largest_page) = Default::default();
+            page = render_layout_slot(doc, page_rotations, page_index, gate_decisions, gated_handling, budget);
+            page_footprint = ChunkFootprint::of_page(&page)?;
+        }
+
+        footprint = footprint.with(page_footprint).unwrap_or(page_footprint);
+        largest_page = ChunkFootprint {
+            raster_bytes: largest_page.raster_bytes.max(page_footprint.raster_bytes),
+            largest_crop_bytes: largest_page.largest_crop_bytes.max(page_footprint.largest_crop_bytes),
+            infers: false,
+        };
+        output.record_render(&page);
+        chunk.push(page);
+    }
+    if !chunk.is_empty() {
+        output.detect_and_assemble(engine, chunk, security_limits)?;
+    }
+    Ok(output)
 }
 
 /// The CropBox of an unrotated page in raster pixels, when it trims the rendered MediaBox, so the
@@ -1002,69 +1190,34 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
 
     let page_rotations = crate::pdf::render::get_page_rotations(&doc, page_count);
 
-    let mut all_images: Vec<image::RgbImage> = Vec::with_capacity(page_count);
-    let mut all_layout_results: Vec<PageLayoutResult> = Vec::with_capacity(page_count);
-    let mut all_hints: Vec<Vec<LayoutHint>> = Vec::with_capacity(page_count);
-    let mut all_detections: Vec<crate::layout::DetectionResult> = Vec::with_capacity(page_count);
-    let mut render_failures: Vec<String> = Vec::new();
-    let mut raster_dpis = crate::pdf::render::OcrRasterDpis::new();
-    let mut rendered_pages = Vec::with_capacity(page_count);
-
-    let total_chunks = page_count.div_ceil(LAYOUT_BATCH_CHUNK_SIZE);
-
-    for (chunk_idx, chunk_start) in (0..page_count).step_by(LAYOUT_BATCH_CHUNK_SIZE).enumerate() {
-        let chunk_end = (chunk_start + LAYOUT_BATCH_CHUNK_SIZE).min(page_count);
-        let pages = render_layout_chunk(
-            &doc,
-            &page_rotations,
-            chunk_start,
-            chunk_end,
-            gate_decisions.as_deref(),
-            gated_handling,
-            RenderBudget {
-                security_limits,
-                images_config,
-            },
-        );
-        rendered_pages.extend(pages.iter().map(|page| page.image.is_some()));
-        let rendered = pages.iter().filter(|page| page.image.is_some()).count();
-        raster_dpis.extend(
-            pages
-                .iter()
-                .filter_map(|page| page.raster_dpi.map(|dpi| (page.page_index, dpi))),
-        );
-        render_failures.extend(pages.iter().filter_map(|page| page.render_failure.clone()));
-        tracing::debug!(
-            chunk_idx,
-            total_chunks,
-            chunk_start,
-            chunk_end,
-            rendered,
-            "layout runner: detecting chunk"
-        );
-
-        let detections = match detect_layout_chunk(&mut engine, &pages, security_limits) {
-            Ok(detections) => detections,
-            Err(error) => {
-                crate::layout::return_engine(engine);
-                return Err(error);
-            }
-        };
-        for page in assemble_layout_chunk(pages, detections)? {
-            all_images.push(page.image);
-            all_layout_results.push(page.result);
-            all_hints.push(page.hints);
-            all_detections.push(page.detection);
-        }
-    }
-
+    let chunked = detect_layout_pages(
+        &mut engine,
+        &doc,
+        page_count,
+        &page_rotations,
+        gate_decisions.as_deref(),
+        gated_handling,
+        RenderBudget {
+            security_limits,
+            images_config,
+        },
+    );
     crate::layout::return_engine(engine);
+    let ChunkedLayout {
+        images,
+        layout_results,
+        hints,
+        detections,
+        render_failures,
+        raster_dpis,
+        rendered_pages,
+    } = chunked?;
 
     let render_warning = (!render_failures.is_empty()).then(|| page_render_failure_warning(&render_failures));
 
     Ok((
         LayoutRunOutput {
-            data: Some((all_images, all_layout_results, all_hints, all_detections)),
+            data: Some((images, layout_results, hints, detections)),
             gate_decisions,
             raster_dpis,
             rendered_pages,
@@ -2097,6 +2250,10 @@ mod tests {
     /// render resolution each page rasterises to 1275 × 1650 × 3 bytes, the page
     /// size #1721's accumulation arithmetic is stated in.
     fn blank_letter_pages_pdf(page_count: usize) -> Vec<u8> {
+        blank_pages_pdf(page_count, (612, 792))
+    }
+
+    fn blank_pages_pdf(page_count: usize, (width_pts, height_pts): (i64, i64)) -> Vec<u8> {
         use lopdf::{Document, Object, Stream, dictionary};
 
         let mut document = Document::with_version("1.5");
@@ -2110,7 +2267,7 @@ mod tests {
                 Object::Dictionary(dictionary! {
                     "Type" => "Page",
                     "Parent" => pages_id,
-                    "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+                    "MediaBox" => vec![0.into(), 0.into(), width_pts.into(), height_pts.into()],
                     "Resources" => dictionary! {},
                     "Contents" => content_id,
                 }),
@@ -2193,6 +2350,103 @@ mod tests {
                 page_index + 1
             );
         }
+    }
+
+    /// Four pages whose rasters each fit `max_content_size` but whose sum does not used to share
+    /// one chunk, so the chunk's rasters plus one model workspace exceeded the default budget and
+    /// the whole document lost layout. Large scans hit this at four pages (2586x3346 rasters).
+    /// The chunk now closes before the page that would not fit, and every page gets a detection.
+    #[test]
+    fn layout_splits_a_chunk_whose_rasters_together_exceed_the_budget() {
+        use crate::core::config::layout::LayoutStrategy;
+
+        const PAGE_COUNT: usize = 4;
+        // `landscape_layout_render_fits_default_budget_and_keeps_pdf_points` pins this render.
+        const LANDSCAPE_RASTER_AT_DEFAULT_LIMITS: (u32, u32) = (3_921, 2_205);
+        let limits = crate::extractors::security::SecurityLimits::default();
+        let (width, height) = LANDSCAPE_RASTER_AT_DEFAULT_LIMITS;
+        let page_bytes = crate::extraction::image_decode::decoded_byte_count(width, height, 3).expect("raster size");
+        assert!(
+            crate::layout::engine::validate_layout_inference_peak(
+                width,
+                height,
+                page_bytes * PAGE_COUNT as u64,
+                1,
+                &limits
+            )
+            .is_err(),
+            "the fixture must be one the single-chunk accounting refused"
+        );
+        const { assert!(PAGE_COUNT <= super::LAYOUT_BATCH_CHUNK_SIZE) };
+
+        let bytes = blank_pages_pdf(PAGE_COUNT, (1_920, 1_080));
+        let config = LayoutDetectionConfig {
+            strategy: LayoutStrategy::Always,
+            ..Default::default()
+        };
+        let (output, render_warning) = super::run_layout_for_pdf_pages_with_security_limits(
+            &bytes,
+            &config,
+            1,
+            GatedPageHandling::SkipRender,
+            &limits,
+            None,
+        )
+        .expect("pages that each fit the budget must complete the layout pass");
+
+        assert!(render_warning.is_none(), "{render_warning:?}");
+        let (images, _results, _hints, detections) = output.data.expect("layout data");
+        assert_eq!(images.len(), PAGE_COUNT);
+        assert_eq!(detections.len(), PAGE_COUNT);
+        for (page_index, (image, detection)) in images.iter().zip(&detections).enumerate() {
+            assert_eq!(image.dimensions(), LANDSCAPE_RASTER_AT_DEFAULT_LIMITS);
+            assert_eq!(
+                (detection.page_width, detection.page_height),
+                LANDSCAPE_RASTER_AT_DEFAULT_LIMITS,
+                "page {} must carry a detection from its own raster, not a placeholder",
+                page_index + 1
+            );
+        }
+    }
+
+    /// Splitting chunks must not admit a page whose own raster and one model workspace exceed the
+    /// budget: it is refused with the single-page error, not dropped or extracted without a check.
+    #[test]
+    fn layout_still_refuses_a_page_that_exceeds_the_budget_alone() {
+        use crate::core::config::layout::LayoutStrategy;
+
+        // A 1275x1650 Letter raster (6,311,250 B) renders within this budget, but with the
+        // 24,576,000 B model workspace it needs 30,887,250 B.
+        let limits = crate::extractors::security::SecurityLimits {
+            max_content_size: 30_000_000,
+            ..Default::default()
+        };
+        let config = LayoutDetectionConfig {
+            strategy: LayoutStrategy::Always,
+            ..Default::default()
+        };
+        let error = super::run_layout_for_pdf_pages_with_security_limits(
+            &blank_letter_pages_pdf(2),
+            &config,
+            1,
+            GatedPageHandling::SkipRender,
+            &limits,
+            None,
+        )
+        .err()
+        .expect("a page over budget on its own must fail the layout pass");
+
+        assert!(
+            matches!(error, XbergError::Validation { .. }),
+            "the refusal must stay a validation error: {error:?}"
+        );
+        assert!(
+            error.to_string().contains(
+                "Image dimensions 1275x1650 require 30887250 live image-processing bytes, exceeding or invalid \
+                 under security_limits.max_content_size (30000000 bytes)"
+            ),
+            "{error}"
+        );
     }
 
     /// #196's combination step: a CPU-retry recovery warning and a
@@ -2765,6 +3019,36 @@ mod tests {
             "uncropped pages keep the engine's capacity"
         );
         assert_eq!(capacity_of(&letter_pages(Some((104, 104, 1_067, 1_333)))), 1);
+    }
+
+    /// The 300 dpi scans that lost layout render at 2586x3346 (25,961,868 B). Three of them and a
+    /// model workspace fit the default budget; a fourth is what tipped every such chunk over.
+    #[test]
+    fn chunk_footprint_admits_three_scan_rasters_but_not_four() {
+        let limits = crate::extractors::security::SecurityLimits::default();
+        let scan = super::ChunkFootprint::of_page(&RenderedLayoutPage {
+            image: Some(image::RgbImage::new(2_586, 3_346)),
+            ..rendered_page(0, 1, 612.0)
+        })
+        .expect("scan footprint");
+        assert_eq!(scan.raster_bytes, 25_961_868);
+        let chunk_of = |pages: usize| (1..pages).fold(scan, |chunk, _| chunk.with(scan).expect("no overflow"));
+
+        assert!(chunk_of(3).fits(&limits));
+        assert!(!chunk_of(4).fits(&limits));
+
+        let gated = super::ChunkFootprint::of_page(&RenderedLayoutPage {
+            run_inference: false,
+            image: Some(image::RgbImage::new(2_586, 3_346)),
+            ..rendered_page(0, 1, 612.0)
+        })
+        .expect("gated footprint");
+        assert!(
+            (1..8)
+                .fold(gated, |chunk, _| chunk.with(gated).expect("no overflow"))
+                .fits(&limits),
+            "a chunk with no inference page charges nothing, as detect_layout_chunk does not"
+        );
     }
 }
 
