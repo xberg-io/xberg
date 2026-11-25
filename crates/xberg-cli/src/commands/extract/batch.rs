@@ -41,11 +41,7 @@ pub fn batch_command(
                 per_file_ms,
                 errors: output.errors,
             };
-            let stdout = std::io::stdout();
-            let mut stdout = stdout.lock();
-            serde_json::to_writer_pretty(&mut stdout, &envelope)
-                .context("Failed to serialize batch extraction results to JSON")?;
-            writeln!(stdout).context("Failed to write batch extraction results to stdout")?;
+            write_batch_envelope(std::io::stdout().lock(), &envelope)?;
             let mut diagnostics = std::io::stderr().lock();
             write_batch_errors(&envelope.errors, &mut diagnostics).context("Failed to write batch errors")?;
             fail_batch_errors(&envelope.errors)?;
@@ -66,6 +62,16 @@ pub fn batch_command(
         )?,
     }
 
+    Ok(())
+}
+
+/// Stdout is line-buffered, so pretty-printed JSON is buffered here to avoid one write per line.
+fn write_batch_envelope<W: Write>(out: W, envelope: &BatchEnvelope) -> Result<()> {
+    let mut out = std::io::BufWriter::new(out);
+    serde_json::to_writer_pretty(&mut out, envelope).context("Failed to serialize batch extraction results to JSON")?;
+    writeln!(out).context("Failed to write batch extraction results to stdout")?;
+    out.flush()
+        .context("Failed to write batch extraction results to stdout")?;
     Ok(())
 }
 
@@ -389,6 +395,50 @@ fn fail_batch_errors(errors: &[ExtractionErrorItem]) -> Result<()> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[derive(Default)]
+    struct CountingWriter {
+        bytes: Vec<u8>,
+        writes: usize,
+    }
+
+    impl Write for CountingWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.writes += 1;
+            self.bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn batch_envelope_is_buffered_and_byte_identical_to_unbuffered_output() {
+        let envelope = BatchEnvelope {
+            results: vec![ExtractedDocument::default(), ExtractedDocument::default()],
+            total_ms: 12.5,
+            per_file_ms: vec![Some(1.0), None],
+            errors: Vec::new(),
+        };
+        let mut expected = serde_json::to_vec_pretty(&envelope).unwrap();
+        expected.push(b'\n');
+
+        let mut sink = CountingWriter::default();
+        write_batch_envelope(&mut sink, &envelope).unwrap();
+
+        assert_eq!(sink.bytes, expected);
+        assert!(
+            expected.iter().filter(|&&b| b == b'\n').count() > 20,
+            "fixture must span many lines"
+        );
+        assert!(
+            sink.writes <= expected.len() / 8192 + 2,
+            "output must not be written line by line, got {}",
+            sink.writes
+        );
+    }
 
     fn timed_batch_result(source_index: Option<serde_json::Value>, duration_ms: Option<u64>) -> ExtractedDocument {
         let mut result = ExtractedDocument::default();
