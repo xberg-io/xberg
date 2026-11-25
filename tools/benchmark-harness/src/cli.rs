@@ -42,6 +42,12 @@ pub(crate) enum CliCohort {
     Data,
     /// OCR document-image family (png, jpeg, tiff)
     Images,
+    /// Native structured PDF cohort (native-pdf-structured-v1)
+    NativeStructured,
+    /// OCR structured PDF cohort (ocr-pdf-structured-v1)
+    OcrStructured,
+    /// OCR structured document-image cohort (ocr-images-structured-v2)
+    ImagesStructured,
 }
 
 impl From<CliCohort> for benchmark_harness::bench_matrix::Cohort {
@@ -56,6 +62,9 @@ impl From<CliCohort> for benchmark_harness::bench_matrix::Cohort {
             CliCohort::Email => Cohort::Email,
             CliCohort::Data => Cohort::Data,
             CliCohort::Images => Cohort::Images,
+            CliCohort::NativeStructured => Cohort::NativeStructured,
+            CliCohort::OcrStructured => Cohort::OcrStructured,
+            CliCohort::ImagesStructured => Cohort::ImagesStructured,
         }
     }
 }

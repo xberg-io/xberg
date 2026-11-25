@@ -4,7 +4,7 @@ use std::collections::HashSet;
 /// (cohort, total cells, required (non-optional) cells). The required count is what the raw
 /// artifact / aggregate validators gate publication on; optional competitor cells are allowed
 /// but never required for the per-format-family cohorts.
-const CONTRACT_CELL_COUNTS: [(Cohort, usize, usize); 8] = [
+const CONTRACT_CELL_COUNTS: [(Cohort, usize, usize); 11] = [
     (Cohort::Native, 23, 22),
     (Cohort::Ocr, 41, 30),
     (Cohort::Office, 11, 4),
@@ -13,6 +13,9 @@ const CONTRACT_CELL_COUNTS: [(Cohort, usize, usize); 8] = [
     (Cohort::Email, 6, 4),
     (Cohort::Data, 11, 4),
     (Cohort::Images, 19, 12),
+    (Cohort::NativeStructured, 23, 22),
+    (Cohort::OcrStructured, 41, 30),
+    (Cohort::ImagesStructured, 19, 12),
 ];
 
 #[test]
@@ -173,7 +176,7 @@ fn auto_ocr_cells_are_optional_and_only_in_the_ocr_pdf_cohort() {
             .into_iter()
             .filter(|entry| entry.framework.starts_with("xberg-") && entry.framework.contains("-auto-ocr"))
             .collect();
-        if cohort == Cohort::Ocr {
+        if matches!(cohort, Cohort::Ocr | Cohort::OcrStructured) {
             assert_eq!(
                 cells.len(),
                 8,
@@ -262,4 +265,90 @@ fn xberg_aggregate_keys_omit_output_format() {
         .find(|entry| entry.framework == "xberg-markdown-baseline")
         .expect("xberg-markdown-baseline cell present");
     assert_eq!(entry.aggregate_key(), "xberg-markdown-baseline:single");
+}
+
+#[test]
+fn every_cohort_manifest_resolves_to_its_pinned_contract() {
+    let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for cohort in Cohort::ALL {
+        let contract = cohort.contract();
+        let path = crate_root.join(format!("cohorts/{}.json", cohort.manifest_file_stem()));
+        let manifest = crate::cohort::CohortManifest::from_file(&path)
+            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let name = cohort.as_str();
+
+        assert_eq!(manifest.name, contract.manifest_name, "{name}: manifest name");
+        assert_eq!(manifest.batch_size, contract.batch_size, "{name}: batch size");
+        let fixtures: Vec<&str> = manifest.fixtures.iter().map(|f| f.to_str().unwrap()).collect();
+        assert_eq!(fixtures, contract.fixtures, "{name}: fixtures");
+        assert_eq!(contract.document_stems.len(), contract.fixtures.len(), "{name}: stems");
+        assert_eq!(
+            contract.document_extensions.len(),
+            contract.fixtures.len(),
+            "{name}: exts"
+        );
+        let digest = blake3::hash(&std::fs::read(&path).unwrap()).to_hex().to_string();
+        assert_eq!(digest, contract.manifest_blake3, "{name}: manifest BLAKE3");
+        assert_eq!(
+            manifest.ocr_enabled,
+            cohort.expects_ocr(),
+            "{name}: manifest ocr_enabled vs expects_ocr"
+        );
+
+        let aggregate_cohort = Cohort::ALL
+            .into_iter()
+            .find(|candidate| candidate.contract().manifest_name == manifest.name);
+        assert_eq!(aggregate_cohort, Some(cohort), "{name}: lookup by manifest name");
+    }
+}
+
+#[test]
+fn cohort_contracts_derive_artifact_names_from_their_own_manifest() {
+    for cohort in Cohort::ALL {
+        let stem = cohort.manifest_file_stem();
+        assert!(
+            cohort
+                .contract()
+                .matrix
+                .iter()
+                .all(|entry| entry.artifact.ends_with(&format!("-{stem}"))),
+            "{}: artifact names must end with the manifest stem {stem}",
+            cohort.as_str()
+        );
+    }
+}
+
+#[test]
+fn workflow_cohort_manifests_exist_and_pinned_ones_resolve() {
+    let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workflow = crate_root.join("../../.github/workflows/benchmarks.yaml");
+    let text = std::fs::read_to_string(&workflow).unwrap_or_else(|error| panic!("{}: {error}", workflow.display()));
+    let mut stems = HashSet::new();
+    for line in text.lines() {
+        let Some((_, rest)) = line.split_once("cohort: ") else {
+            continue;
+        };
+        let names: Vec<&str> = if let Some(list) = rest.trim_start().strip_prefix('[') {
+            list.split(']').next().unwrap_or("").split(',').collect()
+        } else if line.contains("{ pipeline:") {
+            vec![rest.split(['}', ',']).next().unwrap_or("")]
+        } else {
+            continue;
+        };
+        stems.extend(
+            names
+                .into_iter()
+                .map(|name| name.trim().to_string())
+                .filter(|name| !name.is_empty()),
+        );
+    }
+    assert!(stems.len() >= 8, "workflow cohort scan found only {stems:?}");
+    for stem in &stems {
+        let path = crate_root.join(format!("cohorts/{stem}.json"));
+        let manifest = crate::cohort::CohortManifest::from_file(&path)
+            .unwrap_or_else(|error| panic!("workflow cohort {stem}: {error}"));
+        if let Some(cohort) = Cohort::ALL.into_iter().find(|c| c.manifest_file_stem() == stem) {
+            assert_eq!(manifest.name, cohort.contract().manifest_name, "{stem}");
+        }
+    }
 }

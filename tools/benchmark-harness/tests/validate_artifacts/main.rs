@@ -99,6 +99,9 @@ fn materialize_fixture_tree(cohort: Cohort, contract: &CohortContract) -> Fixtur
         Cohort::Email => "native-email-fast",
         Cohort::Data => "native-data-fast",
         Cohort::Images => "ocr-images-fast",
+        Cohort::NativeStructured => "native-pdf-structured-v1",
+        Cohort::OcrStructured => "ocr-pdf-structured-v1",
+        Cohort::ImagesStructured => "ocr-images-structured-v2",
     };
     std::fs::copy(repo_path(&format!("cohorts/{cohort_slug}.json")), &cohort_manifest).expect("copy cohort manifest");
     let manifest_blake3 = blake3_hex(&cohort_manifest);
