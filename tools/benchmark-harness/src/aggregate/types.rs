@@ -1,4 +1,4 @@
-//! Schema types for the aggregated benchmark output (v2.11.0).
+//! Schema types for the aggregated benchmark output (v2.12.0).
 //!
 //! Pure data definitions only — see [`super`] for the aggregation logic that populates them.
 
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Schema version for the aggregated output format.
-pub const SCHEMA_VERSION: &str = "2.11.0";
+pub const SCHEMA_VERSION: &str = "2.12.0";
 
 /// Consolidated results using aggregation format v2.8.0.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +44,123 @@ pub struct NewConsolidatedResults {
     /// `#[serde(default)]` so aggregates produced before this field existed still deserialize.
     #[serde(default)]
     pub format_support: FormatSupportMatrix,
+    /// Layout-variant vs baseline-variant deltas on the fixtures where both succeeded, one entry
+    /// per (layout framework, baseline framework, output format, mode, file type, OCR bucket)
+    /// (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
+    #[serde(default)]
+    pub layout_impact: Vec<LayoutImpact>,
+    /// xberg vs competitor deltas on the fixtures where both succeeded, one entry per
+    /// (xberg framework, competitor framework, output format, mode, file type, OCR bucket)
+    /// (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
+    #[serde(default)]
+    pub head_to_head: Vec<HeadToHead>,
+}
+
+/// Paired comparison of one metric over the fixtures both sides produced a value for.
+///
+/// `baseline` is the reference side (the baseline variant in [`LayoutImpact`], the competitor in
+/// [`HeadToHead`]); `layout` is the compared side (the layout variant, respectively xberg).
+/// `delta_p50` is the median of the per-fixture deltas `layout - baseline`, NOT the difference of
+/// the two medians. `sample_count` is the number of fixtures with a value on both sides; all
+/// fields are `0` when that is zero.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PairedDelta {
+    /// Median of the reference side's per-fixture values.
+    pub baseline_p50: f64,
+    /// Median of the compared side's per-fixture values.
+    pub layout_p50: f64,
+    /// Median of the per-fixture deltas (`layout - baseline`).
+    pub delta_p50: f64,
+    /// Fixtures contributing to the three medians.
+    pub sample_count: usize,
+}
+
+/// One fixture's value on both sides of a paired comparison.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FixtureDelta {
+    pub fixture_id: String,
+    /// Reference-side value (see [`PairedDelta`]).
+    pub baseline: f64,
+    /// Compared-side value (see [`PairedDelta`]).
+    pub layout: f64,
+    /// `layout - baseline`.
+    pub delta: f64,
+}
+
+/// Per-fixture values behind the [`PairedDelta`]s of a [`LayoutImpact`], sorted by fixture id.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PairedFixtureDeltas {
+    pub sf1: Vec<FixtureDelta>,
+    pub tf1: Vec<FixtureDelta>,
+    pub reading_order: Vec<FixtureDelta>,
+    pub duration_ms: Vec<FixtureDelta>,
+    pub peak_memory_mb: Vec<FixtureDelta>,
+}
+
+/// Effect of the layout pass: a layout variant against its baseline variant (v2.12.0+).
+///
+/// Variants pair by name, the layout variant's `layout` segment replaced by `baseline`
+/// (`xberg-markdown-layout` with `xberg-markdown-baseline`), or dropped when no such framework
+/// exists (`xberg-markdown-sceptre-ort-layout` with `xberg-markdown-sceptre-ort`). Only fixtures
+/// where both variants succeeded are paired; duration and memory are further restricted to
+/// single-file, cold-process measurements (and isolated-process RSS for memory) because batch rows
+/// do not carry per-document timing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutImpact {
+    pub layout_framework: String,
+    pub baseline_framework: String,
+    pub output_format: OutputFormat,
+    pub mode: String,
+    pub file_type: String,
+    pub ocr: Option<bool>,
+    /// Fixtures where both variants succeeded.
+    pub paired_fixture_count: usize,
+    /// Structural F1; `None` for plaintext output or when no fixture carries it.
+    pub sf1: Option<PairedDelta>,
+    pub tf1: PairedDelta,
+    /// `None` when no paired fixture carries a reading-order score.
+    pub reading_order: Option<PairedDelta>,
+    pub quality_score: PairedDelta,
+    pub duration_ms: PairedDelta,
+    pub peak_memory_mb: PairedDelta,
+    /// Fixtures whose delta is at least `0.005` in the layout variant's favor, judged on SF1 for
+    /// markdown (on `quality_score` for plaintext, or when no paired fixture has SF1).
+    pub improved_fixture_ids: Vec<String>,
+    /// Fixtures whose delta is at most `-0.005` on the same metric.
+    pub regressed_fixture_ids: Vec<String>,
+    /// Fixtures with an absolute delta below `0.005` on the same metric.
+    pub unchanged_fixture_ids: Vec<String>,
+    pub per_fixture: PairedFixtureDeltas,
+}
+
+/// xberg against one competitor on the fixtures both succeeded on (v2.12.0+).
+///
+/// All [`PairedDelta`]s read with `baseline` = competitor, `layout` = xberg, so a positive
+/// `delta_p50` on a quality metric means xberg scored higher. Duration and memory carry
+/// `sample_count == 0` for batch mode and warm-process rows, as in [`LayoutImpact`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeadToHead {
+    pub xberg_framework: String,
+    pub competitor_framework: String,
+    pub output_format: OutputFormat,
+    pub mode: String,
+    pub file_type: String,
+    pub ocr: Option<bool>,
+    /// Fixtures where both frameworks succeeded.
+    pub shared_fixture_count: usize,
+    /// Fixtures xberg succeeded on and the competitor did not (absent or failed).
+    pub xberg_only_fixture_ids: Vec<String>,
+    /// Fixtures the competitor succeeded on and xberg did not (absent or failed).
+    pub competitor_only_fixture_ids: Vec<String>,
+    pub duration_ms: PairedDelta,
+    pub extraction_duration_ms: PairedDelta,
+    pub peak_memory_mb: PairedDelta,
+    pub tf1: PairedDelta,
+    /// Structural F1; `None` for plaintext output or when no shared fixture carries it.
+    pub sf1: Option<PairedDelta>,
+    /// `None` when no shared fixture carries a reading-order score.
+    pub reading_order: Option<PairedDelta>,
+    pub quality_score: PairedDelta,
 }
 
 /// Declared format-support coverage across the run.
@@ -204,6 +321,14 @@ pub struct ComparisonData {
     /// PDF-only: frameworks ranked by structural F1 / SF1 (highest first) — markdown only
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pdf_sf1_ranking_markdown: Vec<RankedFramework>,
+    /// PDF-only: frameworks ranked by reading-order score (highest first) — markdown only. Report
+    /// only: reading order is not part of `quality_score` (v2.12.0+).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pdf_reading_order_ranking_markdown: Vec<RankedFramework>,
+    /// PDF-only: frameworks ranked by reading-order score (highest first) — plaintext only
+    /// (v2.12.0+).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pdf_reading_order_ranking_plaintext: Vec<RankedFramework>,
     /// Frameworks ranked by median pages/sec (highest first). Only frameworks with at least one
     /// PDF pages/sec observation are included (see `PerformancePercentiles.pages_per_sec`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -536,6 +661,13 @@ pub struct QualityPercentiles {
     pub quality_score_p95: f64,
     /// Overall quality score 99th percentile
     pub quality_score_p99: f64,
+    /// Reading-order score 50th percentile over the results that carry one; report-only, not part
+    /// of `quality_score`. `None` when no result carries it (v2.12.0+).
+    #[serde(default)]
+    pub reading_order_p50: Option<f64>,
+    /// Number of results whose `quality.reading_order_score` is present (v2.12.0+).
+    #[serde(default)]
+    pub reading_order_sample_count: usize,
 }
 
 /// Minimum sample count required to report a `p95` value without fabricating precision the

@@ -1,10 +1,12 @@
-//! Aggregation module for benchmark results (v2.11.0 output schema).
+//! Aggregation module for benchmark results (v2.12.0 output schema).
 //!
 //! Groups [`BenchmarkResult`] records by framework-and-mode, output format, file type, and
 //! OCR usage (yes/no), then computes percentile-based statistics for each
-//! group. The output schema (`schema_version: "2.11.0"`) surfaces TF1 and SF1 separately
+//! group. The output schema (`schema_version: "2.12.0"`) surfaces TF1 and SF1 separately
 //! with per-fixture rows preserved and split rankings by output format, plus a cohort-wide
-//! [`FailureSummary`] rolling up framework-fault vs infrastructure failures (v2.9.0+).
+//! [`FailureSummary`] rolling up framework-fault vs infrastructure failures (v2.9.0+), plus
+//! paired layout-vs-baseline ([`LayoutImpact`]) and xberg-vs-competitor ([`HeadToHead`])
+//! deltas computed from the per-fixture rows (v2.12.0+).
 //!
 //! # Percentile methodology
 //!
@@ -48,6 +50,7 @@
 //! from, plus the aggregate-key helpers shared across the other submodules.
 
 mod failures;
+mod paired;
 mod percentiles;
 mod ranking;
 mod types;
@@ -107,6 +110,8 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
     let comparison = build_comparison(&aggregated_by_framework_mode, None);
     let failure_summary = build_failure_summary(results);
     let format_support = build_format_support_matrix(results, &grouped.file_types);
+    let layout_impact = paired::build_layout_impact(&per_fixture_results);
+    let head_to_head = paired::build_head_to_head(&per_fixture_results);
 
     NewConsolidatedResults {
         schema_version: SCHEMA_VERSION.to_string(),
@@ -118,6 +123,8 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         run_provenance: Vec::new(),
         failure_summary,
         format_support,
+        layout_impact,
+        head_to_head,
     }
 }
 
@@ -138,6 +145,8 @@ fn empty_consolidated_results() -> NewConsolidatedResults {
             pdf_tf1_ranking_markdown: Vec::new(),
             pdf_tf1_ranking_plaintext: Vec::new(),
             pdf_sf1_ranking_markdown: Vec::new(),
+            pdf_reading_order_ranking_markdown: Vec::new(),
+            pdf_reading_order_ranking_plaintext: Vec::new(),
             pages_per_sec_ranking: Vec::new(),
             cpu_seconds_ranking: Vec::new(),
             deltas_vs_baseline: HashMap::new(),
@@ -157,6 +166,8 @@ fn empty_consolidated_results() -> NewConsolidatedResults {
         run_provenance: Vec::new(),
         failure_summary: FailureSummary::default(),
         format_support: FormatSupportMatrix::default(),
+        layout_impact: Vec::new(),
+        head_to_head: Vec::new(),
     }
 }
 

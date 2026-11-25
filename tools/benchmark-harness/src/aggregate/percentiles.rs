@@ -262,6 +262,14 @@ fn build_quality_percentiles(successful: &[&BenchmarkResult]) -> Option<QualityP
         return None;
     }
 
+    let mut reading_orders: Vec<f64> = successful
+        .iter()
+        .filter_map(|r| r.quality.as_ref().and_then(|q| q.reading_order_score))
+        .filter(|v| v.is_finite())
+        .collect();
+    reading_orders.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let reading_order_p50 = (!reading_orders.is_empty()).then(|| sanitize_f64(percentile_r7(&reading_orders, 0.50)));
+
     f1_texts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     f1_numerics.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     f1_layouts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -296,6 +304,8 @@ fn build_quality_percentiles(successful: &[&BenchmarkResult]) -> Option<QualityP
         quality_score_p50: sanitize_f64(percentile_r7(&quality_scores, 0.50)),
         quality_score_p95: sanitize_f64(percentile_r7(&quality_scores, 0.95)),
         quality_score_p99: sanitize_f64(percentile_r7(&quality_scores, 0.99)),
+        reading_order_p50,
+        reading_order_sample_count: reading_orders.len(),
     })
 }
 

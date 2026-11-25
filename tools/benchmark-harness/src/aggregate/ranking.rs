@@ -471,6 +471,33 @@ fn collect_pdf_metrics(
     pdf_metrics
 }
 
+/// Per-framework coverage-adjusted PDF reading-order score, weighted by accountable samples across
+/// the OCR buckets that carry one. A framework with no reading-order sample anywhere is omitted
+/// rather than scored 0.0: the score is report-only and absent when too few anchors matched.
+fn collect_pdf_reading_order_metrics(
+    by_framework_mode: &HashMap<String, FrameworkModeAggregation>,
+) -> Vec<(String, f64, OutputFormat)> {
+    let mut metrics = Vec::new();
+    for (key, agg) in by_framework_mode {
+        let Some(pdf_ft) = agg.by_file_type.get("pdf") else {
+            continue;
+        };
+        let contributions: Vec<(f64, usize)> = [&pdf_ft.no_ocr, &pdf_ft.with_ocr]
+            .into_iter()
+            .flatten()
+            .filter_map(|perf| {
+                let value = perf.quality.as_ref()?.reading_order_p50?;
+                Some((coverage_adjusted_quality(value, perf), accountable_sample_count(perf)))
+            })
+            .collect();
+        let mean = weighted_avg(&contributions);
+        if mean.is_finite() {
+            metrics.push((key.clone(), mean, agg.output_format));
+        }
+    }
+    metrics
+}
+
 /// Per-format PDF quality/TF1/SF1 rankings built from [`collect_pdf_metrics`]'s output. Plaintext
 /// never carries an SF1 term (see module docs), so there is no `sf1_plaintext` field.
 struct PdfRankings {
@@ -479,34 +506,45 @@ struct PdfRankings {
     tf1_markdown: Vec<RankedFramework>,
     tf1_plaintext: Vec<RankedFramework>,
     sf1_markdown: Vec<RankedFramework>,
+    reading_order_markdown: Vec<RankedFramework>,
+    reading_order_plaintext: Vec<RankedFramework>,
+}
+
+/// Rank `items` descending into one PDF ranking. Shared by the PDF quality/TF1/SF1/reading-order
+/// rankings only, which are pre-filtered to a single output format before calling and are NOT part
+/// of the `(output_format, mode)` segmentation this module applies to `throughput_ranking`/
+/// `memory_ranking`/`cpu_seconds_ranking`/`pages_per_sec_ranking` (see `build_segmented_ranking`)
+/// — out of scope for that defect. ~keep
+fn rank_pdf_items(
+    items: &mut Vec<(String, f64)>,
+    format: OutputFormat,
+    optional_keys: &std::collections::HashSet<String>,
+) -> Vec<RankedFramework> {
+    items.retain(|(_, v)| v.is_finite());
+    items.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let best = items.first().map(|r| r.1).unwrap_or(1.0);
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, (k, v))| RankedFramework {
+            framework_mode: k.clone(),
+            rank: i + 1,
+            value: *v,
+            relative: if best > 0.0 { *v / best } else { 1.0 },
+            optional: optional_keys.contains(k),
+            output_format: format,
+            mode: parse_aggregate_key(k).1.to_string(),
+        })
+        .collect()
 }
 
 fn build_pdf_rankings(
     pdf_metrics: Vec<(String, f64, f64, f64, OutputFormat)>,
+    by_framework_mode: &HashMap<String, FrameworkModeAggregation>,
     optional_keys: &std::collections::HashSet<String>,
 ) -> PdfRankings {
-    // Shared by the PDF quality/TF1/SF1 rankings only, which are pre-filtered to a single output
-    // format before calling and are NOT part of the `(output_format, mode)` segmentation this
-    // module applies to `throughput_ranking`/`memory_ranking`/`cpu_seconds_ranking`/
-    // `pages_per_sec_ranking` (see `build_segmented_ranking`) — out of scope for that defect. ~keep
-    let build_ranking = |items: &mut Vec<(String, f64)>, format: OutputFormat| -> Vec<RankedFramework> {
-        items.retain(|(_, v)| v.is_finite());
-        items.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-        let best = items.first().map(|r| r.1).unwrap_or(1.0);
-        items
-            .iter()
-            .enumerate()
-            .map(|(i, (k, v))| RankedFramework {
-                framework_mode: k.clone(),
-                rank: i + 1,
-                value: *v,
-                relative: if best > 0.0 { *v / best } else { 1.0 },
-                optional: optional_keys.contains(k),
-                output_format: format,
-                mode: parse_aggregate_key(k).1.to_string(),
-            })
-            .collect()
-    };
+    let build_ranking =
+        |items: &mut Vec<(String, f64)>, format: OutputFormat| rank_pdf_items(items, format, optional_keys);
 
     // As with the all-file-types quality ranking above, PDF quality must also be split by
     // output format — plaintext-only frameworks never carry an SF1 term and must never be
@@ -537,12 +575,25 @@ fn build_pdf_rankings(
         .map(|(k, _, _, s, _)| (k.clone(), *s))
         .collect();
 
+    let reading_order_metrics = collect_pdf_reading_order_metrics(by_framework_mode);
+    let reading_order_for = |format: OutputFormat| -> Vec<(String, f64)> {
+        reading_order_metrics
+            .iter()
+            .filter(|(_, _, fmt)| *fmt == format)
+            .map(|(k, v, _)| (k.clone(), *v))
+            .collect()
+    };
+    let mut reading_order_markdown = reading_order_for(OutputFormat::Markdown);
+    let mut reading_order_plaintext = reading_order_for(OutputFormat::Plaintext);
+
     PdfRankings {
         quality_markdown: build_ranking(&mut pdf_qual_markdown, OutputFormat::Markdown),
         quality_plaintext: build_ranking(&mut pdf_qual_plaintext, OutputFormat::Plaintext),
         tf1_markdown: build_ranking(&mut pdf_tf1_markdown, OutputFormat::Markdown),
         tf1_plaintext: build_ranking(&mut pdf_tf1_plaintext, OutputFormat::Plaintext),
         sf1_markdown: build_ranking(&mut pdf_sf1_markdown, OutputFormat::Markdown),
+        reading_order_markdown: build_ranking(&mut reading_order_markdown, OutputFormat::Markdown),
+        reading_order_plaintext: build_ranking(&mut reading_order_plaintext, OutputFormat::Plaintext),
     }
 }
 
@@ -637,7 +688,7 @@ pub(super) fn build_comparison(
     let deltas_vs_baseline = build_deltas_vs_baseline(&collected.metrics);
 
     let pdf_metrics = collect_pdf_metrics(by_framework_mode);
-    let pdf_rankings = build_pdf_rankings(pdf_metrics, &optional_keys);
+    let pdf_rankings = build_pdf_rankings(pdf_metrics, by_framework_mode, &optional_keys);
 
     let pages_per_sec_ranking = build_segmented_ranking(
         collected.pages_per_sec_metrics,
@@ -668,6 +719,8 @@ pub(super) fn build_comparison(
         pdf_tf1_ranking_markdown: pdf_rankings.tf1_markdown,
         pdf_tf1_ranking_plaintext: pdf_rankings.tf1_plaintext,
         pdf_sf1_ranking_markdown: pdf_rankings.sf1_markdown,
+        pdf_reading_order_ranking_markdown: pdf_rankings.reading_order_markdown,
+        pdf_reading_order_ranking_plaintext: pdf_rankings.reading_order_plaintext,
         pages_per_sec_ranking,
         cpu_seconds_ranking,
         deltas_vs_baseline,
