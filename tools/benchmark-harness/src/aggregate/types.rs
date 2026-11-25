@@ -132,13 +132,17 @@ pub struct LayoutImpact {
     pub quality_score: PairedDelta,
     pub duration_ms: PairedDelta,
     pub peak_memory_mb: PairedDelta,
-    /// Fixtures whose delta is at least `0.005` in the layout variant's favor, judged on SF1 for
-    /// markdown (on `quality_score` for plaintext, or when no paired fixture has SF1).
+    /// Fixtures whose delta is at least `0.005` in the layout variant's favor, judged per fixture
+    /// on SF1 when both sides carry it, else on `quality_score` (always for plaintext).
     pub improved_fixture_ids: Vec<String>,
     /// Fixtures whose delta is at most `-0.005` on the same metric.
     pub regressed_fixture_ids: Vec<String>,
     /// Fixtures with an absolute delta below `0.005` on the same metric.
     pub unchanged_fixture_ids: Vec<String>,
+    /// Paired fixtures with neither SF1 nor `quality_score` on both sides (no ground truth). The
+    /// four id lists partition the paired fixtures.
+    #[serde(default)]
+    pub unscored_fixture_ids: Vec<String>,
     pub per_fixture: PairedFixtureDeltas,
 }
 

@@ -398,6 +398,7 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   "improved_fixture_ids": ["doc_a"],
   "regressed_fixture_ids": ["doc_b"],
   "unchanged_fixture_ids": ["doc_c"],
+  "unscored_fixture_ids": [], // paired, but neither SF1 nor quality_score on both sides
   "per_fixture": {
     "sf1": [{ "fixture_id": "doc_a", "baseline": 0.5, "layout": 0.8, "delta": 0.3 }],
     "tf1": [], "reading_order": [], "duration_ms": [], "peak_memory_mb": []
@@ -418,8 +419,10 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   succeeded; `baseline_ocr_fixture_count` / `layout_ocr_fixture_count` count the paired fixtures
   on which each side reported OCR use.
 - **Classification**: a fixture is `improved` when its delta is at least `0.005`, `regressed` at most
-  `-0.005`, otherwise `unchanged`. The metric is SF1 for markdown (`quality_score` for plaintext, or
-  when no paired fixture has SF1).
+  `-0.005`, otherwise `unchanged`. The metric is chosen per fixture: SF1 when both sides carry it,
+  else `quality_score` (always for plaintext). A paired fixture with neither on both sides (no
+  ground truth) is `unscored`. The four lists partition the paired fixtures, so their lengths sum
+  to `paired_fixture_count`; `validate-artifacts` enforces this.
 - **Timing**: `duration_ms` and `peak_memory_mb` use only single-file, cold-process rows
   (`peak_memory_mb` also requires an isolated-process measurement). A native batch has one
   process-level measurement shared by all documents, so batch buckets report `sample_count: 0` there

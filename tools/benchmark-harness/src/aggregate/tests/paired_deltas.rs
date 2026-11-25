@@ -143,6 +143,41 @@ fn layout_impact_classifies_with_half_percent_threshold() {
 }
 
 #[test]
+fn layout_impact_classifies_fixtures_without_sf1_on_quality_score() {
+    let mut unscored_layout = scored(LAYOUT, "no_gt", 0.5, None, 0.5);
+    unscored_layout.quality = None;
+    let mut unscored_baseline = scored(BASELINE, "no_gt", 0.5, None, 0.5);
+    unscored_baseline.quality = None;
+    let results = vec![
+        scored(BASELINE, "sf1_up", 0.5, Some(0.5), 0.5),
+        scored(LAYOUT, "sf1_up", 0.5, Some(0.7), 0.4),
+        scored(BASELINE, "score_up", 0.5, None, 0.5),
+        scored(LAYOUT, "score_up", 0.5, None, 0.6),
+        scored(BASELINE, "score_down", 0.5, None, 0.5),
+        scored(LAYOUT, "score_down", 0.5, None, 0.3),
+        scored(BASELINE, "score_same", 0.5, None, 0.5),
+        scored(LAYOUT, "score_same", 0.5, None, 0.5),
+        unscored_baseline,
+        unscored_layout,
+    ];
+    let aggregated = aggregate_new_format(&results);
+    let impact = &aggregated.layout_impact[0];
+
+    assert_eq!(impact.paired_fixture_count, 5);
+    assert_eq!(impact.sf1.as_ref().unwrap().sample_count, 1);
+    // sf1_up is judged on SF1 (+0.2) although its quality_score fell.
+    assert_eq!(ids(&impact.improved_fixture_ids), ["score_up", "sf1_up"]);
+    assert_eq!(ids(&impact.regressed_fixture_ids), ["score_down"]);
+    assert_eq!(ids(&impact.unchanged_fixture_ids), ["score_same"]);
+    assert_eq!(ids(&impact.unscored_fixture_ids), ["no_gt"]);
+    let classified = impact.improved_fixture_ids.len()
+        + impact.regressed_fixture_ids.len()
+        + impact.unchanged_fixture_ids.len()
+        + impact.unscored_fixture_ids.len();
+    assert_eq!(classified, impact.paired_fixture_count);
+}
+
+#[test]
 fn layout_impact_has_no_sf1_for_plaintext_and_classifies_on_quality_score() {
     let mut results = Vec::new();
     for (framework, fixture, score) in [

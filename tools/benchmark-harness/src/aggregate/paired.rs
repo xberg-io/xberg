@@ -229,20 +229,36 @@ fn is_xberg(framework: &str) -> bool {
     framework.starts_with("xberg-")
 }
 
-/// Classify per-fixture deltas into improved / regressed / unchanged ids.
-fn classify(deltas: &[FixtureDelta]) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let (mut improved, mut regressed, mut unchanged) = (Vec::new(), Vec::new(), Vec::new());
-    for d in deltas {
-        let bucket = if d.delta.abs() < UNCHANGED_THRESHOLD {
-            &mut unchanged
-        } else if d.delta > 0.0 {
-            &mut improved
-        } else {
-            &mut regressed
+/// Paired fixture ids by classification; together they partition the pairs.
+#[derive(Default)]
+struct Classified {
+    improved: Vec<String>,
+    regressed: Vec<String>,
+    unchanged: Vec<String>,
+    unscored: Vec<String>,
+}
+
+/// Classify each `(baseline, layout)` pair on SF1 when both sides carry it, else on
+/// `quality_score`, so a markdown bucket with partial SF1 coverage still classifies every pair. A
+/// pair with neither metric on both sides is unscored.
+fn classify(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> Classified {
+    let mut out = Classified::default();
+    for (baseline, layout) in pairs {
+        let delta = match (sf1_of(baseline), sf1_of(layout)) {
+            (Some(before), Some(after)) => Some(after - before),
+            _ => quality_score_of(baseline)
+                .zip(quality_score_of(layout))
+                .map(|(before, after)| after - before),
         };
-        bucket.push(d.fixture_id.clone());
+        let list = match delta {
+            None => &mut out.unscored,
+            Some(delta) if delta.abs() < UNCHANGED_THRESHOLD => &mut out.unchanged,
+            Some(delta) if delta > 0.0 => &mut out.improved,
+            Some(_) => &mut out.regressed,
+        };
+        list.push(baseline.fixture_id.clone());
     }
-    (improved, regressed, unchanged)
+    out
 }
 
 /// One [`LayoutImpact`] per (layout framework, baseline framework, output format, mode, file type)
@@ -275,18 +291,12 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
             let duration_ms = fixture_deltas(&pairs, duration_of);
             let peak_memory_mb = fixture_deltas(&pairs, peak_memory_of);
 
-            let output_format = format_from_rank(key.0);
-            let classified = if output_format == OutputFormat::Markdown && !sf1.is_empty() {
-                &sf1
-            } else {
-                &quality_score
-            };
-            let (improved, regressed, unchanged) = classify(classified);
+            let classified = classify(&pairs);
 
             out.push(LayoutImpact {
                 layout_framework: layout_framework.to_string(),
                 baseline_framework: baseline_framework.clone(),
-                output_format,
+                output_format: format_from_rank(key.0),
                 mode: key.1.clone(),
                 file_type: key.2.clone(),
                 ocr: common_ocr(baseline_rows.values().chain(layout_rows.values()).copied()),
@@ -299,9 +309,10 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
                 quality_score: summarize(&quality_score),
                 duration_ms: summarize(&duration_ms),
                 peak_memory_mb: summarize(&peak_memory_mb),
-                improved_fixture_ids: improved,
-                regressed_fixture_ids: regressed,
-                unchanged_fixture_ids: unchanged,
+                improved_fixture_ids: classified.improved,
+                regressed_fixture_ids: classified.regressed,
+                unchanged_fixture_ids: classified.unchanged,
+                unscored_fixture_ids: classified.unscored,
                 per_fixture: PairedFixtureDeltas {
                     sf1,
                     tf1,

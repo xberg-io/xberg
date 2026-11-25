@@ -49,6 +49,35 @@ pub(super) fn validate_layout_impact_coverage(aggregate: &NewConsolidatedResults
     Ok(())
 }
 
+/// The improved / regressed / unchanged / unscored lists of every `layout_impact` entry must
+/// partition its paired fixtures: disjoint, and together exactly `paired_fixture_count` long.
+pub(super) fn validate_layout_impact_classification(aggregate: &NewConsolidatedResults, path: &Path) -> Result<()> {
+    for impact in &aggregate.layout_impact {
+        let lists = [
+            &impact.improved_fixture_ids,
+            &impact.regressed_fixture_ids,
+            &impact.unchanged_fixture_ids,
+            &impact.unscored_fixture_ids,
+        ];
+        let listed: usize = lists.iter().map(|ids| ids.len()).sum();
+        let distinct: BTreeSet<&str> = lists.iter().flat_map(|ids| ids.iter().map(String::as_str)).collect();
+        require(
+            listed == impact.paired_fixture_count && distinct.len() == listed,
+            format!(
+                "{}: layout_impact {} vs {} ({}, {}) classifies {listed} fixture ids ({} distinct) for {} paired fixtures",
+                path.display(),
+                impact.layout_framework,
+                impact.baseline_framework,
+                impact.mode,
+                impact.file_type,
+                distinct.len(),
+                impact.paired_fixture_count
+            ),
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,6 +195,31 @@ mod tests {
         let aggregate = aggregate_new_format(&[result("xberg-markdown-baseline", "a", true)]);
         assert!(aggregate.layout_impact.is_empty());
         validate_layout_impact_coverage(&aggregate, Path::new("aggregated.json")).expect("nothing required");
+    }
+
+    #[test]
+    fn classification_must_partition_the_paired_fixtures() {
+        let path = Path::new("aggregated.json");
+        let mut aggregate = aggregate_new_format(&[
+            result("xberg-markdown-baseline", "a", true),
+            result("xberg-markdown-baseline", "b", true),
+            result("xberg-markdown-layout", "a", true),
+            result("xberg-markdown-layout", "b", true),
+        ]);
+        assert_eq!(aggregate.layout_impact[0].paired_fixture_count, 2);
+        validate_layout_impact_classification(&aggregate, path).expect("built aggregate partitions");
+
+        let impact = &mut aggregate.layout_impact[0];
+        let moved = impact.unchanged_fixture_ids.pop().expect("equal scores are unchanged");
+        validate_layout_impact_classification(&aggregate, path).expect_err("a dropped id must fail");
+
+        let impact = &mut aggregate.layout_impact[0];
+        impact.unchanged_fixture_ids.push(moved.clone());
+        impact.improved_fixture_ids.push(moved);
+        let error = validate_layout_impact_classification(&aggregate, path)
+            .expect_err("a double-listed id must fail")
+            .to_string();
+        assert!(error.contains("3 fixture ids (2 distinct)"), "{error}");
     }
 
     #[test]
