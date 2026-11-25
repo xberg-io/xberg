@@ -473,8 +473,11 @@ fn collect_pdf_metrics(
 }
 
 /// Per-framework coverage-adjusted PDF reading-order score, weighted by accountable samples across
-/// the OCR buckets that carry one. A framework with no reading-order sample anywhere is omitted
-/// rather than scored 0.0: the score is report-only and absent when too few anchors matched.
+/// the OCR buckets. As in [`collect_pdf_metrics`], a bucket that was attempted but failed entirely
+/// (no quality at all) contributes 0.0 at its accountable weight, so failing a whole bucket costs
+/// rank. A bucket whose successes simply carry no reading-order score (too few anchors matched) is
+/// skipped, and a framework with no reading-order sample in any bucket is omitted rather than
+/// scored 0.0: the score is report-only.
 fn collect_pdf_reading_order_metrics(
     by_framework_mode: &HashMap<String, FrameworkModeAggregation>,
 ) -> Vec<(String, f64, OutputFormat)> {
@@ -483,16 +486,25 @@ fn collect_pdf_reading_order_metrics(
         let Some(pdf_ft) = agg.by_file_type.get("pdf") else {
             continue;
         };
-        let contributions: Vec<(f64, usize)> = [&pdf_ft.no_ocr, &pdf_ft.with_ocr]
-            .into_iter()
-            .flatten()
-            .filter_map(|perf| {
-                let value = perf.quality.as_ref()?.reading_order_p50?;
-                Some((coverage_adjusted_quality(value, perf), accountable_sample_count(perf)))
-            })
-            .collect();
+        let mut contributions: Vec<(f64, usize)> = Vec::new();
+        let mut has_sample = false;
+        for perf in [&pdf_ft.no_ocr, &pdf_ft.with_ocr].into_iter().flatten() {
+            let weight = accountable_sample_count(perf);
+            if weight == 0 {
+                continue;
+            }
+            match &perf.quality {
+                Some(quality) => {
+                    if let Some(value) = quality.reading_order_p50 {
+                        has_sample = true;
+                        contributions.push((coverage_adjusted_quality(value, perf), weight));
+                    }
+                }
+                None => contributions.push((0.0, weight)),
+            }
+        }
         let mean = weighted_avg(&contributions);
-        if mean.is_finite() {
+        if has_sample && mean.is_finite() {
             metrics.push((key.clone(), mean, agg.output_format));
         }
     }

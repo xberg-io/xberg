@@ -456,8 +456,9 @@ Additive only; 2.11.0 aggregates still deserialize (every new field defaults).
 - **`QualityPercentiles.reading_order_p50` / `reading_order_sample_count`**: report-only reading
   order median and its sample count.
 - **`ComparisonData.pdf_reading_order_ranking_markdown` / `_plaintext`**: coverage-adjusted, same
-  convention as the other `pdf_*` quality rankings; frameworks with no reading-order sample are
-  omitted rather than scored 0.
+  convention as the other `pdf_*` quality rankings: an OCR bucket attempted and failed entirely
+  contributes 0 at its accountable weight. Frameworks with no reading-order sample in any bucket
+  are omitted rather than scored 0.
 - **`layout_impact`** and **`head_to_head`**: see above.
 - **Peak memory method**: `peak_memory_bytes` is now `ru_maxrss` from `wait4(2)` on the harness's
   direct child (normalised to bytes) for every subprocess framework, on unix. It includes every

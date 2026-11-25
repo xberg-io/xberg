@@ -360,6 +360,72 @@ fn reading_order_ranking_orders_frameworks_and_omits_those_without_a_score() {
 }
 
 #[test]
+fn reading_order_ranking_penalizes_a_fully_failed_ocr_bucket() {
+    // docling fails every OCR PDF after extraction (OCR status known, so the rows land in the
+    // with_ocr bucket with no quality); liteparse succeeds everywhere. docling's no-OCR score alone
+    // (0.8) would outrank liteparse; the failed bucket must pull it to (0.8 * 2 + 0.0 * 2) / 4.
+    let with_ocr = |mut result: BenchmarkResult| {
+        result.ocr_status = OcrStatus::Used;
+        result
+    };
+    let empty_ocr_failure = |fixture: &str| {
+        let mut result = with_ocr(scored("docling", fixture, 0.0, None, 0.0));
+        result.success = false;
+        result.error_kind = ErrorKind::EmptyContent;
+        result.error_message = Some("empty content".to_string());
+        result.quality = None;
+        result
+    };
+    let mut results = Vec::new();
+    for fixture in ["n1", "n2"] {
+        results.push(with_reading_order(
+            scored("docling", fixture, 0.5, Some(0.5), 0.5),
+            Some(0.8),
+        ));
+        results.push(with_reading_order(
+            scored("liteparse", fixture, 0.5, Some(0.5), 0.5),
+            Some(0.6),
+        ));
+    }
+    for fixture in ["s1", "s2"] {
+        results.push(empty_ocr_failure(fixture));
+        results.push(with_ocr(with_reading_order(
+            scored("liteparse", fixture, 0.5, Some(0.5), 0.5),
+            Some(0.6),
+        )));
+    }
+    let aggregated = aggregate_new_format(&results);
+
+    let ranking = &aggregated.comparison.pdf_reading_order_ranking_markdown;
+    let keys: Vec<&str> = ranking.iter().map(|r| r.framework_mode.as_str()).collect();
+    assert_eq!(keys, ["liteparse:markdown:single", "docling:markdown:single"]);
+    assert!((ranking[0].value - 0.6).abs() < EPS, "got {}", ranking[0].value);
+    assert!((ranking[1].value - 0.4).abs() < EPS, "got {}", ranking[1].value);
+}
+
+#[test]
+fn reading_order_ranking_omits_a_framework_whose_only_bucket_failed() {
+    let mut failure = scored("docling", "a", 0.0, None, 0.0);
+    failure.success = false;
+    failure.error_kind = ErrorKind::EmptyContent;
+    failure.error_message = Some("empty content".to_string());
+    failure.quality = None;
+    let results = vec![
+        failure,
+        with_reading_order(scored("liteparse", "a", 0.5, Some(0.5), 0.5), Some(0.6)),
+    ];
+    let aggregated = aggregate_new_format(&results);
+
+    let keys: Vec<&str> = aggregated
+        .comparison
+        .pdf_reading_order_ranking_markdown
+        .iter()
+        .map(|r| r.framework_mode.as_str())
+        .collect();
+    assert_eq!(keys, ["liteparse:markdown:single"]);
+}
+
+#[test]
 fn reading_order_ranking_is_coverage_adjusted() {
     let results = vec![
         with_reading_order(scored(BASELINE, "a", 0.5, Some(0.5), 0.5), Some(0.8)),
