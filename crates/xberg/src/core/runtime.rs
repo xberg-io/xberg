@@ -31,8 +31,29 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
+/// Worker-thread count for the global runtime, or `None` to leave it to tokio.
+///
+/// `tokio_env` is the raw `TOKIO_WORKER_THREADS` value: when it parses to a nonzero count tokio
+/// reads it itself, so no explicit count is set and the operator's choice stands. Otherwise the
+/// count is the process thread budget (`max_threads`, cgroup quota, or the default cap) bounded
+/// by the host CPU count, and at least one. One worker suffices to avoid deadlock with
+/// `block_in_place`, which hands the worker's core to a fresh thread before blocking.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_worker_threads(tokio_env: Option<&str>, thread_budget: usize, host_cpus: usize) -> Option<usize> {
+    if tokio_env
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .is_some_and(|n| n > 0)
+    {
+        return None;
+    }
+    Some(thread_budget.min(host_cpus).max(1))
+}
+
 /// Returns a reference to the shared multi-thread Tokio runtime, building it on
 /// first call.
+///
+/// The worker count is fixed by the first caller: it follows the thread budget in effect at
+/// that moment (see [`resolve_worker_threads`]).
 ///
 /// Use this for every synchronous wrapper that needs to `block_on` a future
 /// from a thread that is **not** already inside a Tokio runtime. Callers that
@@ -46,7 +67,15 @@ const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+        if let Some(workers) = resolve_worker_threads(
+            std::env::var("TOKIO_WORKER_THREADS").ok().as_deref(),
+            crate::core::config::concurrency::active_thread_budget(),
+            num_cpus::get(),
+        ) {
+            builder.worker_threads(workers);
+        }
+        builder
             .enable_all()
             // See GLOBAL_RUNTIME_STACK_SIZE_BYTES: the extraction future overflows
             // tokio's ~2 MB default worker stack and aborts rather than panicking.
@@ -217,6 +246,27 @@ mod large_stack_tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
+
+    #[test]
+    fn worker_threads_follow_the_budget_bounded_by_host_cpus() {
+        assert_eq!(super::resolve_worker_threads(None, 4, 14), Some(4));
+        assert_eq!(super::resolve_worker_threads(None, 32, 8), Some(8));
+        assert_eq!(super::resolve_worker_threads(None, 0, 8), Some(1));
+        assert_eq!(super::resolve_worker_threads(None, 1, 1), Some(1));
+    }
+
+    #[test]
+    fn tokio_worker_threads_env_defers_to_tokio_when_valid() {
+        assert_eq!(super::resolve_worker_threads(Some("3"), 4, 14), None);
+        assert_eq!(super::resolve_worker_threads(Some(" 1 "), 4, 14), None);
+    }
+
+    #[test]
+    fn invalid_or_zero_tokio_env_falls_back_to_the_budget() {
+        assert_eq!(super::resolve_worker_threads(Some("0"), 4, 14), Some(4));
+        assert_eq!(super::resolve_worker_threads(Some("many"), 4, 14), Some(4));
+        assert_eq!(super::resolve_worker_threads(Some(""), 4, 14), Some(4));
+    }
 
     #[tokio::test]
     async fn blocking_work_reports_cancellation_after_the_parser_returns() {
