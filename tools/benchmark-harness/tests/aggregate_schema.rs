@@ -745,50 +745,38 @@ fn test_empty_results_carry_empty_paired_sections() {
     assert_eq!(value["head_to_head"], serde_json::json!([]));
 }
 
-fn strip_keys(value: &mut serde_json::Value, keys: &[&str]) {
-    match value {
-        serde_json::Value::Object(map) => {
-            for key in keys {
-                map.remove(*key);
-            }
-            map.values_mut().for_each(|child| strip_keys(child, keys));
-        }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(|child| strip_keys(child, keys)),
-        _ => {}
-    }
-}
+/// A real 2.11.0 aggregate trimmed to a few groups and rows; see the fixture's commit for its
+/// source release.
+const AGGREGATE_2_11_0: &str = include_str!("fixtures/aggregated-2.11.0-email.json");
 
 #[test]
-fn test_2_11_0_shaped_aggregate_still_deserializes() {
-    let mut value = serde_json::to_value(aggregate_new_format(&baseline_and_layout_run())).unwrap();
-    value["schema_version"] = serde_json::json!("2.11.0");
-    strip_keys(
-        &mut value,
-        &[
-            "layout_impact",
-            "head_to_head",
-            "pdf_reading_order_ranking_markdown",
-            "pdf_reading_order_ranking_plaintext",
-            "reading_order_p50",
-            "reading_order_sample_count",
-        ],
-    );
-    assert!(
-        value.get("layout_impact").is_none(),
-        "fixture must look like a 2.11.0 file"
-    );
+fn test_published_2_11_0_aggregate_still_deserializes() {
+    let raw: serde_json::Value = serde_json::from_str(AGGREGATE_2_11_0).unwrap();
+    assert_eq!(raw["schema_version"], "2.11.0");
+    for key in ["layout_impact", "head_to_head"] {
+        assert!(raw.get(key).is_none(), "a 2.11.0 file has no {key}");
+    }
+    assert!(raw["comparison"].get("pdf_reading_order_ranking_markdown").is_none());
 
-    let legacy: NewConsolidatedResults = serde_json::from_value(value).expect("2.11.0 aggregate deserializes");
+    let legacy: NewConsolidatedResults = serde_json::from_str(AGGREGATE_2_11_0).expect("2.11.0 aggregate deserializes");
 
     assert_eq!(legacy.schema_version, "2.11.0");
+    assert_eq!(legacy.by_framework_mode.len(), 3);
+    assert_eq!(legacy.per_fixture_results.len(), 6);
+    assert_eq!(legacy.run_provenance.len(), 1);
     assert!(legacy.layout_impact.is_empty());
     assert!(legacy.head_to_head.is_empty());
     assert!(legacy.comparison.pdf_reading_order_ranking_markdown.is_empty());
-    let quality = legacy.by_framework_mode["xberg-markdown-baseline:single"].by_file_type["pdf"]
+    assert!(legacy.comparison.pdf_reading_order_ranking_plaintext.is_empty());
+    let bucket = legacy.by_framework_mode["xberg-markdown-baseline:single"].by_file_type["eml"]
         .no_ocr
         .as_ref()
-        .and_then(|bucket| bucket.quality.as_ref())
-        .expect("quality percentiles");
+        .expect("no-OCR bucket");
+    assert!(bucket.memory_methods.is_empty());
+    let quality = bucket.quality.as_ref().expect("quality percentiles");
     assert_eq!(quality.reading_order_p50, None);
     assert_eq!(quality.reading_order_sample_count, 0);
+    for row in &legacy.per_fixture_results {
+        assert_eq!(row.self_reported_peak_memory_bytes, None);
+    }
 }
