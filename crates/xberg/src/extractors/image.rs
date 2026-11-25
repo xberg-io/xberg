@@ -2960,6 +2960,10 @@ async fn recognize_cached_image_tables(
     let has_table_region = detections
         .iter()
         .any(|detection| detection.class_name == crate::layout::LayoutClass::Table);
+    // TATR reads only `Table` regions, so without one the outcome is empty and loading the model is wasted.
+    if !has_table_region {
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
+    }
     let recognized = tokio::task::spawn_blocking(move || {
         let mut model = crate::layout::take_or_create_tatr(acceleration.as_ref(), thread_budget)?;
         Some(crate::ocr::layout_assembly::recognize_page_tables_with_fallback(

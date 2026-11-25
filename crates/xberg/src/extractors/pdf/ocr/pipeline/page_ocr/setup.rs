@@ -622,7 +622,7 @@ pub(super) async fn prepare<'a>(
     // through `spawn_blocking`, mirroring the boundary already used for the RT-DETR layout
     // engine in `layout_runner::run_layout_for_pdf_pages_async`. ~keep
     #[cfg(feature = "layout-detection")]
-    let tatr_model = if layout_detections.is_some() && pdf_ocr_table_recognition_enabled(config) {
+    let tatr_model = if pdf_ocr_needs_table_model(config, layout_detections) {
         let tatr_acceleration = config.resolved_layout_acceleration().cloned();
         let tatr_thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
         let span = tracing::Span::current();

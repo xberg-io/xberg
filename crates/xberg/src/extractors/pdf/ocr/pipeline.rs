@@ -181,6 +181,23 @@ pub(super) fn pdf_ocr_table_recognition_enabled(config: &ExtractionConfig) -> bo
         .is_none_or(|layout| layout.table_model != crate::core::config::layout::TableModel::Disabled)
 }
 
+/// Whether the force-OCR PDF route needs a TATR model: table recognition is on and layout
+/// detection found a table region on some page. TATR reads only `Table` regions, so a document
+/// without one would load the model for nothing.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "layout-detection"))]
+pub(super) fn pdf_ocr_needs_table_model(
+    config: &ExtractionConfig,
+    layout_detections: Option<&[crate::layout::DetectionResult]>,
+) -> bool {
+    let has_table_region = layout_detections.is_some_and(|pages| {
+        pages
+            .iter()
+            .flat_map(|page| &page.detections)
+            .any(|detection| detection.class_name == crate::layout::LayoutClass::Table)
+    });
+    has_table_region && pdf_ocr_table_recognition_enabled(config)
+}
+
 /// ~keep The warning for a force-OCR extraction whose table model could not be checked out although
 /// layout detection found table regions and table recognition is on. `None` when a model is held,
 /// recognition is off, or no page has a table region.
@@ -190,13 +207,7 @@ pub(super) fn tatr_unavailable_warning(
     layout_detections: Option<&[crate::layout::DetectionResult]>,
     model_held: bool,
 ) -> Option<crate::types::ProcessingWarning> {
-    let has_table_region = layout_detections.is_some_and(|pages| {
-        pages
-            .iter()
-            .flat_map(|page| &page.detections)
-            .any(|detection| detection.class_name == crate::layout::LayoutClass::Table)
-    });
-    (!model_held && has_table_region && pdf_ocr_table_recognition_enabled(config))
+    (!model_held && pdf_ocr_needs_table_model(config, layout_detections))
         .then(|| crate::layout::table_model_unavailable_warning("pdf_tables", "TATR"))
 }
 

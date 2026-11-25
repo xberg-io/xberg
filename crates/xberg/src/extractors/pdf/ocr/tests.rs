@@ -6820,6 +6820,46 @@ Name: ___
         assert!(tatr_unavailable_warning(&config(TableModel::Tatr), None, false).is_none());
     }
 
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn force_ocr_route_loads_the_table_model_only_for_table_regions() {
+        use crate::core::config::layout::{LayoutDetectionConfig, TableModel};
+        use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
+
+        let pages = |classes: &[LayoutClass]| {
+            vec![DetectionResult {
+                page_width: 100,
+                page_height: 100,
+                detections: classes
+                    .iter()
+                    .map(|class| LayoutDetection::new(*class, 0.9, BBox::new(0.0, 0.0, 50.0, 50.0)))
+                    .collect(),
+            }]
+        };
+        let config = |table_model| ExtractionConfig {
+            layout: Some(LayoutDetectionConfig {
+                table_model,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert!(pdf_ocr_needs_table_model(
+            &config(TableModel::Tatr),
+            Some(&pages(&[LayoutClass::Text, LayoutClass::Table]))
+        ));
+        assert!(!pdf_ocr_needs_table_model(
+            &config(TableModel::Tatr),
+            Some(&pages(&[LayoutClass::Text, LayoutClass::Picture]))
+        ));
+        assert!(!pdf_ocr_needs_table_model(&config(TableModel::Tatr), Some(&pages(&[]))));
+        assert!(!pdf_ocr_needs_table_model(&config(TableModel::Tatr), None));
+        assert!(!pdf_ocr_needs_table_model(
+            &config(TableModel::Disabled),
+            Some(&pages(&[LayoutClass::Table]))
+        ));
+    }
+
     /// GH#1813: the force-OCR PDF route gated TATR on `layout_detections.is_some()` alone, so a
     /// user who set `table_model = "disabled"` still got TATR tables. `TableModel::` was read only
     /// on the native route and for standalone images.

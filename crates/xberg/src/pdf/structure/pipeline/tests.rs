@@ -373,6 +373,44 @@ fn unavailable_table_model_without_table_hints_does_not_warn() {
     }
 }
 
+/// Counts availability probes made by [`COUNTING_TABLE_MODELS`]; only `table_model_is_not_probed_without_table_pages`
+/// uses it, so parallel tests cannot disturb the count.
+#[cfg(feature = "layout-detection")]
+static TABLE_MODEL_PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(feature = "layout-detection")]
+const COUNTING_TABLE_MODELS: TableModelLoaders = TableModelLoaders {
+    available: |_, _, _| {
+        TABLE_MODEL_PROBES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        false
+    },
+    ..NO_TABLE_MODELS
+};
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn table_model_is_not_probed_without_table_pages() {
+    use crate::core::config::layout::TableModel;
+    use std::sync::atomic::Ordering;
+
+    let before = TABLE_MODEL_PROBES.load(Ordering::SeqCst);
+    let without_tables = table_hint_document_with(TableModel::Tatr, LayoutHintClass::Text, COUNTING_TABLE_MODELS, true);
+    assert_eq!(
+        TABLE_MODEL_PROBES.load(Ordering::SeqCst),
+        before,
+        "no Table hint, so the table model must not be loaded"
+    );
+    assert!(table_warnings(&without_tables).is_empty());
+
+    let with_tables = table_hint_document_with(TableModel::Tatr, LayoutHintClass::Table, COUNTING_TABLE_MODELS, true);
+    assert_eq!(
+        TABLE_MODEL_PROBES.load(Ordering::SeqCst),
+        before + 1,
+        "Table hints must still probe the table model once"
+    );
+    assert_eq!(table_warnings(&with_tables).len(), 1);
+}
+
 #[cfg(feature = "layout-detection")]
 #[test]
 fn should_warn_and_keep_structure_when_the_table_model_fails_to_load_after_the_preflight() {

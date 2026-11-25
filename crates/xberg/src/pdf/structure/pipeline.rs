@@ -4053,10 +4053,11 @@ fn build_document_structure_with_native(
                 TableModel::Disabled => "disabled",
             };
 
-            let has_table_model = if use_model_inference {
+            // The availability probe loads the model, so skip it when no page has a table to recognise.
+            let has_table_model = if use_model_inference && !table_pages.is_empty() {
                 let available = (loaders.available)(table_model, acceleration, session_thread_budget);
 
-                if !available && !table_pages.is_empty() {
+                if !available {
                     table_model_warning =
                         Some(crate::layout::table_model_unavailable_warning("pdf_tables", model_name));
                 }
