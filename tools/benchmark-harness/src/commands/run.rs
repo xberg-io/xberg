@@ -76,7 +76,7 @@ pub(crate) struct RunArgs {
     #[arg(long, default_value = "false")]
     pub(crate) measure_quality: bool,
 
-    /// Output format for extraction: markdown, plaintext, or both (default: markdown)
+    /// Output format for extraction: markdown or plaintext (default: markdown)
     #[arg(long, default_value = "markdown")]
     pub(crate) output_format: String,
 

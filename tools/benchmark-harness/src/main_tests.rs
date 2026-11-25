@@ -15,7 +15,7 @@ use benchmark_harness::provenance::{
 };
 use benchmark_harness::types::{ErrorKind, FrameworkCapabilities, OcrStatus, PerformanceMetrics};
 use benchmark_harness::{BenchmarkMode, BenchmarkResult, OutputFormat, XbergPdfBackend};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 #[test]
 fn tracing_filter_keeps_status_events_visible_by_default() {
@@ -187,6 +187,25 @@ fn parse_pdf_backends_rejects_unknown_and_duplicate_values() {
     assert!(parse_pdf_backends(&["pdf_oxide".to_string()]).is_err());
     assert!(parse_pdf_backends(&["native".to_string(), "native".to_string()]).is_err());
     assert_eq!(parse_pdf_backends(&[]).unwrap(), Vec::<XbergPdfBackend>::new());
+}
+
+#[test]
+fn run_output_format_help_lists_only_values_the_parser_accepts() {
+    let command = Cli::command();
+    let run = command.find_subcommand("run").expect("run subcommand");
+    let help = run
+        .get_arguments()
+        .find(|arg| arg.get_id() == "output_format")
+        .and_then(|arg| arg.get_help())
+        .expect("output-format help")
+        .to_string();
+
+    assert!(!help.contains("both"), "help advertises an unsupported value: {help}");
+    for value in ["markdown", "plaintext"] {
+        assert!(help.contains(value), "help should list {value}: {help}");
+        assert!(value.parse::<OutputFormat>().is_ok());
+    }
+    assert!("both".parse::<OutputFormat>().is_err());
 }
 
 #[test]
