@@ -35,8 +35,8 @@ class TestWorkflowMatrixValidation(unittest.TestCase):
     def test_expands_every_exact_contract_cell_once(self) -> None:
         cells = VALIDATOR.workflow_cells(WORKFLOW)
 
-        assert len(cells) == 136
-        assert len({VALIDATOR.cell_key(cell) for cell in cells}) == 136
+        assert len(cells) == 128
+        assert len({VALIDATOR.cell_key(cell) for cell in cells}) == 128
         assert sum(not cell["optional"] for cell in cells) == 84
         pdfium_cells = [cell for cell in cells if cell["framework"].endswith("-baseline-pdfium")]
         assert len(pdfium_cells) == 4

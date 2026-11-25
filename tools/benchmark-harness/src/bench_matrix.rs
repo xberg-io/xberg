@@ -492,7 +492,8 @@ fn xberg_entries(cohort: &str, include_layout: bool, include_paddle: bool, inclu
 }
 
 /// The OCR variants that leave `force_ocr` unset (xberg's own per-page trigger decides), run in
-/// the cohorts that run OCR. Optional until a CI run has proven the pipeline end to end.
+/// the OCR PDF cohort only: image fixtures are OCR'd regardless, so an image cell would duplicate
+/// the baseline. Optional until a CI run has proven the pipeline end to end.
 fn xberg_auto_ocr_entries(cohort: &str) -> Vec<MatrixEntry> {
     pipeline_entries(cohort, &["auto-ocr", "auto-ocr-paddle"], true)
 }
@@ -682,7 +683,6 @@ fn images_matrix() -> Vec<MatrixEntry> {
     // the published release contract. Keep the release cohort limited to the
     // pipelines whose full 14-image matrix is a stable comparison surface.
     let mut matrix = xberg_entries(IMAGES_COHORT, true, true, false);
-    matrix.extend(xberg_auto_ocr_entries(IMAGES_COHORT));
     matrix.extend(optional(grid_entries("docling", IMAGES_COHORT)));
     // pymupdf4llm has no OCR path (`pymupdf4llm.to_markdown` only reads existing text layers), so on
     // a scanned-image cohort it always returns empty content and can never clear the min-success-rate
@@ -808,7 +808,7 @@ mod tests {
         (Cohort::Ebook, 6, 4),
         (Cohort::Email, 6, 4),
         (Cohort::Data, 11, 4),
-        (Cohort::Images, 27, 12),
+        (Cohort::Images, 19, 12),
     ];
 
     #[test]
@@ -961,7 +961,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_ocr_cells_are_optional_and_only_in_the_ocr_cohorts() {
+    fn auto_ocr_cells_are_optional_and_only_in_the_ocr_pdf_cohort() {
         for cohort in Cohort::ALL {
             let cells: Vec<_> = cohort
                 .contract()
@@ -969,7 +969,7 @@ mod tests {
                 .into_iter()
                 .filter(|entry| entry.framework.starts_with("xberg-") && entry.framework.contains("-auto-ocr"))
                 .collect();
-            if cohort.includes_paddle_ocr() {
+            if cohort == Cohort::Ocr {
                 assert_eq!(
                     cells.len(),
                     8,

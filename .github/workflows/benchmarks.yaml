@@ -320,7 +320,8 @@ jobs:
         # Sceptre ORT remains a release comparison for OCR PDFs. Its image coverage runs against the
         # bounded structured-image diagnostic cohort below, outside the published release contract.
         # Layout pipelines run markdown only (plain output discards layout structure). The auto-OCR
-        # variants leave force_ocr unset and run only on the OCR cohorts; they are optional cells.
+        # variants leave force_ocr unset and run only on the OCR PDF cohort (image fixtures are OCR'd
+        # regardless, so an image cell would duplicate the baseline); they are optional cells.
         # NOTE: keep this block a clean list of `- {...}` entries — the validate-workflow-matrix.py
         # exclude parser stops at the first non-entry line, so do not intersperse comments here.
         exclude:
@@ -377,6 +378,8 @@ jobs:
           - { pipeline: auto-ocr-paddle, cohort: native-ebook-fast }
           - { pipeline: auto-ocr-paddle, cohort: native-email-fast }
           - { pipeline: auto-ocr-paddle, cohort: native-data-fast }
+          - { pipeline: auto-ocr, cohort: ocr-images-fast }
+          - { pipeline: auto-ocr-paddle, cohort: ocr-images-fast }
     steps:
       - uses: actions/checkout@v7
         with:
