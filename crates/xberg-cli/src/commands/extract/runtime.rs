@@ -23,13 +23,16 @@ thread_local! {
 ///
 /// `xberg::extract*` hands the whole extraction to the core library's process-global
 /// multi-thread runtime (`core::runtime::run_on_large_stack`), so this runtime only
-/// awaits that task's `JoinHandle`. A current-thread runtime is enough and spawns no
-/// worker threads, where a second multi-thread pool would add startup cost for nothing.
-/// `concurrency.max_threads` keeps capping the Rayon and ONNX pools inside the core.
+/// awaits that task's `JoinHandle`. One large-stack worker is enough; a full second pool
+/// would add startup cost for nothing. It stays multi-thread so the core's fallback, which
+/// runs the extraction inline when the global runtime cannot be built, still gets a 16 MB
+/// stack and `block_in_place`. `concurrency.max_threads` keeps capping the Rayon and ONNX
+/// pools inside the core.
 fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
     #[cfg(test)]
     RUNTIMES_BUILT.with(|built| built.set(built.get() + 1));
-    tokio::runtime::Builder::new_current_thread()
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
         .enable_all()
         .thread_stack_size(RUNTIME_WORKER_STACK_SIZE_BYTES)
         .build()
@@ -57,13 +60,14 @@ mod tests {
     }
 
     #[test]
-    fn build_runtime_is_current_thread() {
+    fn build_runtime_has_one_large_stack_worker() {
         let runtime = build_runtime().unwrap();
 
         assert_eq!(
             runtime.handle().runtime_flavor(),
-            tokio::runtime::RuntimeFlavor::CurrentThread
+            tokio::runtime::RuntimeFlavor::MultiThread
         );
+        assert_eq!(runtime.metrics().num_workers(), 1);
     }
 
     #[test]
