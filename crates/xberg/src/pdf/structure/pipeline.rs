@@ -8635,37 +8635,53 @@ fn collect_unique_outline_matches(
     all_pages: &[Vec<PdfParagraph>],
     outline_entries: &[PdfOutlineEntry],
 ) -> Vec<OutlineParagraphMatch> {
-    let mut outline_counts = ahash::AHashMap::<(usize, String), usize>::new();
+    // Per (page, title): how many outline entries carry it, and their shared depth
+    // (`None` once two of them disagree).
+    let mut outline_counts = ahash::AHashMap::<(usize, String), (usize, Option<usize>)>::new();
     for entry in outline_entries {
         if let Some(key) = outline_match_key(entry, all_pages.len()) {
-            *outline_counts.entry(key).or_default() += 1;
+            let (count, depth) = outline_counts.entry(key).or_insert((0, Some(entry.depth)));
+            *count += 1;
+            if *depth != Some(entry.depth) {
+                *depth = None;
+            }
         }
     }
     let paragraph_matches = all_pages
         .iter()
         .map(|page| {
-            let mut matches = ahash::AHashMap::<String, (usize, usize)>::new();
+            let mut matches = ahash::AHashMap::<String, Vec<usize>>::new();
             for (index, paragraph) in page.iter().enumerate() {
                 let title = normalize_outline_title(&paragraph_text_raw(paragraph));
-                let entry = matches.entry(title).or_insert((0, index));
-                entry.0 += 1;
+                matches.entry(title).or_default().push(index);
             }
             matches
         })
         .collect::<Vec<_>>();
 
+    // A page that repeats a sub-section title (two `Description` sections on one
+    // page) is matched only when the page carries the title exactly as often as the
+    // outline does, at one depth: outline order need not follow reading order, so
+    // pairing is sound only when every pairing assigns the same level. ~keep
+    let mut consumed = ahash::AHashMap::<(usize, String), usize>::new();
     outline_entries
         .iter()
         .filter_map(|entry| {
-            let (page_index, title) = outline_match_key(entry, all_pages.len())?;
-            if outline_counts.get(&(page_index, title.clone())) != Some(&1) {
+            let key = outline_match_key(entry, all_pages.len())?;
+            let &(outline_count, depth) = outline_counts.get(&key)?;
+            let depth = depth?;
+            let paragraph_indices = paragraph_matches[key.0].get(&key.1)?;
+            if paragraph_indices.len() != outline_count {
                 return None;
             }
-            let &(paragraph_count, paragraph_index) = paragraph_matches[page_index].get(&title)?;
-            (paragraph_count == 1).then_some(OutlineParagraphMatch {
+            let page_index = key.0;
+            let ordinal = consumed.entry(key).or_default();
+            let paragraph_index = *paragraph_indices.get(*ordinal)?;
+            *ordinal += 1;
+            Some(OutlineParagraphMatch {
                 page_index,
                 paragraph_index,
-                depth: entry.depth,
+                depth,
             })
         })
         .collect()

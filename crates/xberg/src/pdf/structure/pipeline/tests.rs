@@ -6371,6 +6371,62 @@ fn outline_recovery_rejects_ambiguous_titles() {
     assert!(pages[0].iter().all(|paragraph| paragraph.heading_level.is_none()));
 }
 
+/// A page holding two consecutive sub-sections repeats their titles (`Description`,
+/// `Potential Impact`). Requiring a title to be unique on its page left every such
+/// repeat as plain text while its single-occurrence siblings became headings.
+#[test]
+fn outline_recovery_matches_titles_repeated_on_a_page_as_often_as_the_outline() {
+    let mut pages = vec![vec![
+        outline_heading("1. Creating a new policy version", 2),
+        outline_para("Description"),
+        outline_para("Potential Impact"),
+        outline_heading("2. Setting the default policy version", 2),
+        outline_para("Description"),
+        outline_para("Potential Impact"),
+    ]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("1. Creating a new policy version", 0, 1),
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Potential Impact", 1, 1),
+        PdfOutlineEntry::test_entry("2. Setting the default policy version", 0, 1),
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Potential Impact", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    let levels: Vec<_> = pages[0].iter().map(|paragraph| paragraph.heading_level).collect();
+    assert_eq!(
+        levels,
+        [Some(2), Some(3), Some(3), Some(2), Some(3), Some(3)],
+        "each repeat of an outlined sub-section title must become a heading"
+    );
+}
+
+#[test]
+fn outline_recovery_rejects_repeated_titles_with_mismatched_counts_or_depths() {
+    let mut pages = vec![vec![
+        outline_para("Description"),
+        outline_para("Description"),
+        outline_para("Description"),
+        outline_para("Overview"),
+        outline_para("Overview"),
+    ]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Overview", 0, 1),
+        PdfOutlineEntry::test_entry("Overview", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    assert!(
+        pages[0].iter().all(|paragraph| paragraph.heading_level.is_none()),
+        "a count mismatch leaves the pairing unknown and mixed depths leave the level unknown"
+    );
+}
+
 #[test]
 fn outline_recovery_rejects_semantic_non_headings() {
     let mut header = outline_para("Header");
