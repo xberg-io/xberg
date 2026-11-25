@@ -1,6 +1,8 @@
 use super::*;
 #[path = "image_budget_tests/guards.rs"]
 mod guards;
+#[path = "image_budget_tests/in_place.rs"]
+mod in_place;
 #[path = "image_budget_tests/source.rs"]
 mod source;
 

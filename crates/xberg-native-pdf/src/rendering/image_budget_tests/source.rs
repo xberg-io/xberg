@@ -79,6 +79,16 @@ pub(super) fn document_with_paint(jpeg: &[u8], declared: u32, overlay: bool, ins
 /// A 32 pt page painting `/Im0` under `content`, with `entries` added to the image dictionary. The
 /// image is DCT-encoded unless `entries` names its own `/Filter`.
 pub(super) fn document_painting(jpeg: &[u8], declared: u32, content: &[u8], entries: &str) -> PdfDocument {
+    document_painting_of(jpeg, (declared, declared), content, entries)
+}
+
+/// [`document_painting`] with an image dictionary declaring `width` x `height`.
+pub(super) fn document_painting_of(
+    jpeg: &[u8],
+    (width, height): (u32, u32),
+    content: &[u8],
+    entries: &str,
+) -> PdfDocument {
     let filter = if entries.contains("/Filter") {
         ""
     } else {
@@ -89,7 +99,7 @@ pub(super) fn document_painting(jpeg: &[u8], declared: u32, content: &[u8], entr
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
         stream("", content),
-        stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 {filter} {entries}"), jpeg),
+        stream(&format!("/Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 {filter} {entries}"), jpeg),
     ];
     from_objects(&objects)
 }

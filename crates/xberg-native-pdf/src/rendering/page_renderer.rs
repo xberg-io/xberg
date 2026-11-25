@@ -2323,7 +2323,7 @@ impl PageRenderer {
             }
             None => extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?,
         };
-        let mut reduction = 1;
+        let mut decode = image_budget::JpegDecode::Full;
         let mut canvas = 0;
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
@@ -2335,22 +2335,38 @@ impl PageRenderer {
                 budget.admit_jpeg(&pdf_image, canvas)?;
             } else {
                 let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
-                reduction = budget.admit_jpeg_reducing(&pdf_image, canvas, painted)?;
+                let unmasked = mask_obj.is_none() && smask_obj.is_none();
+                decode = budget.admit_jpeg_decode(&pdf_image, canvas, painted, unmasked)?;
             }
         }
-        let dynamic_image = match pdf_image.data() {
-            ImageData::Jpeg(bytes) if reduction > 1 => match image_budget::decode_reduced_jpeg(bytes, reduction) {
-                Ok(image) => image,
-                Err(error) => {
-                    if let Some(budget) = self.source_image_budget.as_mut() {
-                        budget.refuse_failed_reduction(&pdf_image, canvas);
-                    }
-                    return Err(error);
-                }
-            },
-            _ => pdf_image.to_dynamic_image()?,
+        let decoded = match (pdf_image.data(), decode) {
+            (ImageData::Jpeg(bytes), image_budget::JpegDecode::Reduced(denominator)) => {
+                image_budget::decode_reduced_jpeg(bytes, denominator).map(|image| {
+                    let rgba = image.to_rgba8();
+                    (image, rgba)
+                })
+            }
+            // Only an image without a /Mask or /SMask is decoded in place, and those masks are the
+            // only readers of the source raster below, so an empty one stands in for it. ~keep
+            (ImageData::Jpeg(bytes), image_budget::JpegDecode::InPlace) => {
+                image_budget::decode_jpeg_into_rgba(bytes, (pdf_image.width(), pdf_image.height()))
+                    .map(|rgba| (image::DynamicImage::new_luma8(0, 0), rgba))
+            }
+            _ => {
+                let image = pdf_image.to_dynamic_image()?;
+                let rgba = image.to_rgba8();
+                Ok((image, rgba))
+            }
         };
-        let mut rgba_image = dynamic_image.to_rgba8();
+        let (dynamic_image, mut rgba_image) = match decoded {
+            Ok(decoded) => decoded,
+            Err(error) => {
+                if let Some(budget) = self.source_image_budget.as_mut() {
+                    budget.refuse_failed_reduction(&pdf_image, canvas);
+                }
+                return Err(error);
+            }
+        };
 
         // A referenced ImageMask uses stencil polarity: default /Decode [0 1]
         // makes sample 0 opaque, while [1 0] reverses it. ~keep
