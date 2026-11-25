@@ -6140,10 +6140,60 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
     if tables.is_empty() {
         return segments;
     }
+    let split_numbers = carried_split_numbers(&segments, tables);
     segments
         .into_iter()
-        .filter(|seg| !segment_is_carried(seg, tables))
+        .enumerate()
+        .filter(|(index, seg)| !split_numbers[*index] && !segment_is_carried(seg, tables))
+        .map(|(_, seg)| seg)
         .collect()
+}
+
+/// Segments that print one number in three font runs, `8` `.` `63%`: TeX sets a math-mode
+/// decimal point in CMMI between CMR digits. The grid holds `8.63%` as one run, which neither
+/// digit piece matches on its own, so without this the digits survived as prose beside the
+/// table while the point alone was suppressed. A piece is carried only together with its
+/// touching neighbours, as the whole number some covering table carries; a lone piece of a
+/// cell number is still not that cell's text. ~keep
+fn carried_split_numbers(segments: &[SegmentData], tables: &[TableCoverage]) -> Vec<bool> {
+    let mut carried = vec![false; segments.len()];
+    for start in 0..segments.len().saturating_sub(2) {
+        let [integer, point, fraction] = [&segments[start], &segments[start + 1], &segments[start + 2]];
+        if !prints_one_split_number(integer, point, fraction) {
+            continue;
+        }
+        let joined = SegmentData {
+            text: format!("{}{}{}", integer.text.trim(), point.text.trim(), fraction.text.trim()),
+            width: fraction.x + fraction.width - integer.x,
+            ..integer.clone()
+        };
+        if segment_is_carried(&joined, tables) {
+            carried[start..start + 3].fill(true);
+        }
+    }
+    carried
+}
+
+fn prints_one_split_number(integer: &SegmentData, point: &SegmentData, fraction: &SegmentData) -> bool {
+    const TOUCH_EM: f32 = 0.1;
+    let integer_text = integer.text.trim();
+    let fraction_text = fraction.text.trim();
+    let font_size = integer.font_size.max(fraction.font_size).max(1.0);
+    let touches =
+        |left: &SegmentData, right: &SegmentData| (right.x - (left.x + left.width)).abs() <= font_size * TOUCH_EM;
+    matches!(point.text.trim(), "." | ",")
+        && integer.is_unrotated()
+        && point.is_unrotated()
+        && fraction.is_unrotated()
+        && integer_text.ends_with(|character: char| character.is_ascii_digit())
+        && fraction_text.starts_with(|character: char| character.is_ascii_digit())
+        && !integer_text.contains(char::is_whitespace)
+        && !fraction_text.contains(char::is_whitespace)
+        && (integer.baseline_y - fraction.baseline_y).abs() <= font_size * TOUCH_EM
+        && point.y + point.height >= integer.y - font_size * TOUCH_EM
+        && point.y <= integer.y + integer.height + font_size * TOUCH_EM
+        && touches(integer, point)
+        && touches(point, fraction)
 }
 
 /// Whether some table both covers a segment and carries its text. See [`filter_segments_by_table_bboxes`].

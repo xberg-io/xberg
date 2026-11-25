@@ -4608,6 +4608,45 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
     );
 }
 
+/// TeX prints `8.63%` as three touching runs, `8` (CMR) `.` (CMMI) `63%` (CMR), while the grid
+/// holds the cell whole. The digits were emitted again as prose (`8 63%`) beside the table.
+#[test]
+fn should_suppress_a_number_printed_as_touching_integer_point_and_fraction_runs() {
+    let coverage = vec![TableCoverage::from_rows(
+        crate::types::BoundingBox {
+            x0: 30.0,
+            y0: 300.0,
+            x1: 560.0,
+            y1: 400.0,
+        },
+        [
+            vec!["ESG Indifference", "8.63%", "0.77"],
+            vec!["Sustain (N)", "9.52%", "0.78"],
+        ],
+    )];
+    let segments = vec![
+        column_seg("8", 175.0, 5.5, 380.0),
+        column_seg(".", 180.5, 3.0, 380.0),
+        column_seg("63%", 183.5, 20.0, 380.0),
+        column_seg("0.77", 221.0, 19.0, 380.0),
+        column_seg("8", 400.0, 5.5, 360.0),
+        column_seg("9", 175.0, 5.5, 350.0),
+        column_seg(".", 185.5, 3.0, 350.0),
+        column_seg("52%", 188.5, 20.0, 350.0),
+    ];
+
+    let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+        .into_iter()
+        .map(|seg| seg.text)
+        .collect();
+
+    assert_eq!(
+        kept,
+        vec!["8".to_string(), "9".to_string(), "52%".to_string()],
+        "a touching split number is carried as a whole; a lone or gapped piece of a cell number is not"
+    );
+}
+
 /// A form's line-item cells: every word of the printed instruction on lines 43 and 44 of IRS
 /// Form 8829 occurs in them, but no row holds the instruction, as a run or as its words.
 fn form_line_coverage() -> Vec<TableCoverage> {
