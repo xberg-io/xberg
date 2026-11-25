@@ -396,7 +396,7 @@ fn shares_row_grid(grid: &[f32], other: &[f32]) -> bool {
 
 /// Reorder a page's spans into reading order for the element-based extraction path,
 /// reading a two-up sheet (`two_up_gutter`) as its left page, then its right page.
-fn reorder_page_reading_order(
+pub(super) fn reorder_page_reading_order(
     spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
     page_width: f32,
     page_height: f32,
