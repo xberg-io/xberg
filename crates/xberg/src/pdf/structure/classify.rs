@@ -1677,6 +1677,44 @@ pub(super) fn is_body_size_bold_heading_candidate(para: &PdfParagraph, body_font
     para.word_count >= MIN_BOLD_HEADING_WORD_COUNT || is_numbered_section_heading(paragraph_plain_text(para).trim())
 }
 
+/// A one- or two-word section title must carry a word of at least this many letters:
+/// figure-panel labels (`C)`, `E)`) and initials are bold, body-size lines too. ~keep
+const MIN_SHORT_TITLE_WORD_LETTERS: usize = 3;
+
+/// Bold body-size gap between two segments of one line that reads as a column gutter,
+/// in multiples of the body font size: a bold table header row (`Name    Value`) is
+/// two short words on one line as well. ~keep
+const SHORT_TITLE_MAX_SEGMENT_GAP_EM: f32 = 2.0;
+
+/// Whether a one- or two-word bold body-size line reads as a section title
+/// (`Introduction`, `Background`, `Small Numbers`) rather than a label.
+///
+/// Below [`MIN_BOLD_HEADING_WORD_COUNT`] typography alone cannot tell a title from
+/// emphasis, so callers admit these only where bold body-size lines are the
+/// document's sole heading convention. The text guards reject the label shapes that
+/// convention still contains: `Note:` and `Total: 5` (a colon), `C)` (a panel
+/// label), `Rauch III,` (a signature), and a bold table header row (a gutter-wide
+/// gap between its segments).
+pub(super) fn is_short_body_size_section_title(para: &PdfParagraph, body_font_size: f32) -> bool {
+    if !is_body_size_bold_signal(para, body_font_size) || !(1..MIN_BOLD_HEADING_WORD_COUNT).contains(&para.word_count) {
+        return false;
+    }
+    let text = paragraph_plain_text(para);
+    let trimmed = text.trim();
+    let has_gutter_gap = para.lines.iter().any(|line| {
+        line.segments
+            .windows(2)
+            .any(|pair| pair[1].x - (pair[0].x + pair[0].width) > body_font_size * SHORT_TITLE_MAX_SEGMENT_GAP_EM)
+    });
+    !has_gutter_gap
+        && trimmed.chars().next().is_some_and(char::is_uppercase)
+        && !trimmed.contains(':')
+        && !trimmed.ends_with([')', ',', ';', '.'])
+        && trimmed
+            .split_whitespace()
+            .any(|word| word.chars().filter(|c| c.is_alphabetic()).count() >= MIN_SHORT_TITLE_WORD_LETTERS)
+}
+
 /// Preserve peer H2 sections when a sparse document repeats their font tier at
 /// the start of multiple pages. This prevents generic title inference from
 /// arbitrarily promoting only the first peer section. ~keep

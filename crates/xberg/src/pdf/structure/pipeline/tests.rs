@@ -8731,6 +8731,103 @@ fn should_promote_repeated_untagged_body_size_bold_sections_document_wide() {
     }
 }
 
+fn headingless_section(title: &str, body: &str) -> Vec<PdfParagraph> {
+    vec![
+        body_size_paragraph_with_bbox(title, true, None, (72.0, 700.0, 272.0, 712.0)),
+        body_size_paragraph_with_bbox(body, false, None, (72.0, 600.0, 472.0, 690.0)),
+    ]
+}
+
+/// 1004.1028 and 2026-14578 set every section title in bold at body size and have no
+/// other heading; one- and two-word titles (`Introduction`, `Small Numbers`) were
+/// below the three-word floor, so neither document emitted a single heading.
+#[test]
+fn should_promote_short_body_size_titles_to_h2_in_a_headingless_document() {
+    let mut pages: Vec<_> = ["Introduction", "Results", "Discussion", "Small Numbers"]
+        .into_iter()
+        .map(|title| headingless_section(title, &format!("The {title} section opens with ordinary body text.")))
+        .collect();
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    for page in &pages {
+        assert_eq!(
+            page[0].heading_level,
+            Some(2),
+            "{:?} is a section title of a document with no other heading",
+            paragraph_text_raw(&page[0])
+        );
+        assert_eq!(page[1].heading_level, None);
+    }
+}
+
+#[test]
+fn should_keep_short_bold_labels_as_text_in_a_headingless_document() {
+    let mut pages: Vec<_> = ["Introduction", "Results", "Discussion"]
+        .into_iter()
+        .map(|title| headingless_section(title, &format!("The {title} section opens with ordinary body text.")))
+        .collect();
+    for label in ["Note:", "Total: 5", "C)", "Rauch III,"] {
+        pages.push(headingless_section(
+            label,
+            "Ordinary body text follows the bold label here.",
+        ));
+    }
+    let mut header_row = body_size_paragraph_with_bbox("Name Value", true, None, (72.0, 700.0, 340.0, 712.0));
+    let mut value_cell = header_row.lines[0].segments[0].clone();
+    header_row.lines[0].segments[0].text = "Name".to_string();
+    header_row.lines[0].segments[0].x = 72.0;
+    header_row.lines[0].segments[0].width = 30.0;
+    value_cell.text = "Value".to_string();
+    value_cell.x = 300.0;
+    value_cell.width = 32.0;
+    header_row.lines[0].segments.push(value_cell);
+    pages.push(vec![
+        header_row,
+        body_size_paragraph_with_bbox("Alice Smith 42 Engineering", false, None, (72.0, 600.0, 472.0, 690.0)),
+    ]);
+    for _ in 0..3 {
+        pages.push(headingless_section(
+            "Federal Register",
+            "Rules and regulations continue in ordinary body text.",
+        ));
+    }
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    assert!(pages[..3].iter().all(|page| page[0].heading_level == Some(2)));
+    for page in &pages[3..] {
+        assert_eq!(
+            page[0].heading_level,
+            None,
+            "{:?} is a label, a table header row or a running label, not a section title",
+            paragraph_text_raw(&page[0])
+        );
+    }
+}
+
+#[test]
+fn should_not_promote_short_body_size_titles_beside_another_heading_system() {
+    let mut pages = vec![vec![body_size_paragraph_with_bbox(
+        "Existing document title",
+        true,
+        Some(1),
+        (72.0, 740.0, 272.0, 752.0),
+    )]];
+    pages.extend(
+        ["Introduction", "Results", "Discussion", "Conclusions"]
+            .into_iter()
+            .map(|title| headingless_section(title, &format!("The {title} section opens with ordinary body text."))),
+    );
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    assert!(
+        pages[1..].iter().all(|page| page[0].heading_level.is_none()),
+        "where another heading system exists a short bold line stays a label"
+    );
+}
+
 #[test]
 fn should_not_promote_indented_attributions_as_repeated_body_size_headings() {
     let mut attribution_pages = vec![vec![
