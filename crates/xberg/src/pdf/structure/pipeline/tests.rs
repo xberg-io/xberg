@@ -8138,6 +8138,49 @@ fn test_finalize_paragraph_suppresses_heading_for_lowercase_start_fragment() {
     );
 }
 
+/// A bold heading whose section number and title are separate segments on one
+/// baseline, as LaTeX emits `\section` titles, over a 10pt body.
+fn finalize_bold_numbered_heading(number: &str, title: &str, font_size: f32) -> PdfParagraph {
+    let heading_map = vec![(10.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let mut marker = seg_at(number, 72.0, 700.0, font_size, false);
+    marker.width = 14.0;
+    marker.is_bold = true;
+    let mut body = seg_at(title, 90.0, 700.0, font_size, false);
+    body.width = 80.0;
+    body.is_bold = true;
+    finalize_paragraph(&[&marker, &body], &heading_map, &gap_info).expect("paragraph")
+}
+
+#[test]
+fn bold_single_level_section_number_above_body_size_is_a_heading_not_a_list_item() {
+    let para = finalize_bold_numbered_heading("1.", "Introduction", 12.0);
+    assert_eq!(para.heading_level, Some(2));
+    assert!(
+        !para.is_list_item,
+        "a numbered section title must not render as an ordered list item"
+    );
+}
+
+#[test]
+fn bold_multi_level_section_number_just_above_body_size_is_a_subsection_heading() {
+    let para = finalize_bold_numbered_heading("3.1.", "Overview", 11.0);
+    assert_eq!(para.heading_level, Some(3));
+}
+
+#[test]
+fn bold_single_level_number_below_the_bold_font_gate_stays_a_list_item() {
+    let para = finalize_bold_numbered_heading("1.", "Preheat the oven", 11.0);
+    assert_eq!(para.heading_level, None);
+    assert!(para.is_list_item);
+}
+
+#[test]
+fn bold_multi_level_section_number_at_body_size_is_left_to_the_document_pass() {
+    let para = finalize_bold_numbered_heading("3.1.", "Overview", 10.0);
+    assert_eq!(para.heading_level, None);
+}
+
 /// Paragraph carrying real geometry, for the page-number validation tests.
 /// `y` is a PDF-space bottom coordinate on a 792pt page.
 fn positioned_para(text: &str, x: f32, y: f32) -> PdfParagraph {

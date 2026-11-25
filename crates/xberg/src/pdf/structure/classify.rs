@@ -1056,7 +1056,7 @@ fn infer_bold_heading_level(font_size: f32, body_font_size: f32, text: &str) -> 
 /// - "1 Introduction" or "I. INTRO" or "A. Proofs" → H2 (top-level section)
 /// - "1.1 Details" or "A.1 Sub" → H3 (sub-section)
 /// - "1.1.1 Deep" → H4 (sub-sub-section)
-fn infer_section_level(text: &str) -> u8 {
+pub(super) fn infer_section_level(text: &str) -> u8 {
     let trimmed = text.trim();
 
     let first_char = trimmed.chars().next().unwrap_or(' ');

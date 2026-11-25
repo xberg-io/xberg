@@ -3330,6 +3330,36 @@ fn paragraph_text(lines: &[&SegmentData]) -> String {
     text
 }
 
+/// A numbered heading wraps onto at most two visual lines.
+const MAX_NUMBERED_HEADING_LINES: usize = 2;
+/// A font this close to the body size reads as body text, not as a size step.
+const BODY_SIZE_TOLERANCE_PT: f32 = 0.5;
+
+/// Whether a bold line led by a section number reads as a heading on its own evidence.
+///
+/// A single-level number ("1. Introduction") is also an ordered-list marker, so it
+/// needs the full bold font gate: a bold, body-sized "1. First step" stays a list item.
+/// Multi-level, roman or all-caps numbering ("3.1. Overview") is never a list marker,
+/// so a size just above body suffices -- CVPR-style 11pt subsection titles over a 10pt
+/// body clear neither the bold gate nor the body-size bold pass. ~keep
+fn is_bold_numbered_section_heading(
+    text: &str,
+    word_count: usize,
+    font_size: f32,
+    body_font_size: f32,
+    clears_bold_font_gate: bool,
+) -> bool {
+    body_font_size > 0.0
+        && font_size > body_font_size + BODY_SIZE_TOLERANCE_PT
+        && super::classify::starts_with_section_number(text)
+        && (clears_bold_font_gate || is_numbered_section_heading(text))
+        && text.chars().any(char::is_alphabetic)
+        && !text.ends_with(':')
+        && !super::classify::reads_as_body_content(text, word_count)
+        && !super::layout_classify::is_separator_text(text)
+        && !super::regions::looks_like_figure_label(text)
+}
+
 fn finalize_paragraph(
     lines: &[&SegmentData],
     heading_map: &[(f32, Option<u8>)],
@@ -3454,6 +3484,22 @@ fn finalize_paragraph(
         && !super::regions::looks_like_figure_label(trimmed)
     {
         heading_level = Some(2);
+    }
+
+    if heading_level.is_none()
+        && is_bold
+        && !page_number_like
+        && reconstructed_lines.len() <= MAX_NUMBERED_HEADING_LINES
+        && word_count <= super::constants::MAX_BOLD_HEADING_WORD_COUNT
+        && is_bold_numbered_section_heading(
+            trimmed,
+            word_count,
+            first.font_size,
+            body_font_size,
+            clears_bold_font_gate,
+        )
+    {
+        heading_level = Some(super::classify::infer_section_level(trimmed));
     }
 
     if heading_level.is_none() {
