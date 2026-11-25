@@ -138,6 +138,24 @@ fn layout_impact_delta_p50_is_median_of_fixture_deltas_not_difference_of_medians
 }
 
 #[test]
+fn layout_impact_median_of_an_even_count_averages_the_two_middle_deltas() {
+    // Per-fixture SF1 deltas 0.1 / 0.2 / 0.4 / 0.8: the median is (0.2 + 0.4) / 2 = 0.3, not either
+    // middle value.
+    let mut results = Vec::new();
+    for (fixture, delta) in [("a", 0.1), ("b", 0.2), ("c", 0.4), ("d", 0.8)] {
+        results.push(scored(BASELINE, fixture, 0.5, Some(0.1), 0.5));
+        results.push(scored(LAYOUT, fixture, 0.5, Some(0.1 + delta), 0.5));
+    }
+    let aggregated = aggregate_new_format(&results);
+
+    let sf1 = aggregated.layout_impact[0].sf1.as_ref().expect("markdown carries sf1");
+    assert_eq!(sf1.sample_count, 4);
+    assert!((p50(sf1.delta_p50) - 0.3).abs() < EPS, "got {:?}", sf1.delta_p50);
+    assert!((p50(sf1.baseline_p50) - 0.1).abs() < EPS);
+    assert!((p50(sf1.layout_p50) - 0.4).abs() < EPS, "got {:?}", sf1.layout_p50);
+}
+
+#[test]
 fn layout_impact_classifies_with_half_percent_threshold() {
     let cases = [
         ("up_small", 0.504),
