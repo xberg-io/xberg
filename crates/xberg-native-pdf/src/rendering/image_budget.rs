@@ -37,31 +37,74 @@ pub(super) enum JpegDecode {
     Reduced(u8),
 }
 
-/// Where an image is painted: the device transform of its unit square.
+/// How `render_image` draws an axis-aligned downscale (`fast_resize_target`); every other image is
+/// drawn by tiny-skia's scaled pattern draw either way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Blit {
+    /// Pre-resize with `fast_image_resize`, then copy 1:1.
+    PreResize,
+    /// Let tiny-skia scale while drawing, bicubic, holding no resized copy. Admitted only when the
+    /// pre-resize does not fit.
+    Direct,
+}
+
+/// An admitted JPEG paint: how it is decoded and how it is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct JpegPaint {
+    pub(super) decode: JpegDecode,
+    pub(super) blit: Blit,
+}
+
+/// Bytes a tiny-skia `draw_pixmap` allocates beyond the pixmaps it reads and writes: the pattern
+/// borrows the source and the raster pipeline lives on the stack, leaving a 64-entry edge list
+/// (at most 64 x 96 bytes), the transformed rect path copies (under 100 bytes each, a few alive at
+/// once, one per tile on a canvas wider or taller than 8191 px) and allocation rounding.
+pub(super) const TINY_SKIA_DRAW_BYTES: u64 = 16 * 1024;
+
+/// Where and how an image is painted: the device transform of its unit square and the [`Blit`].
 #[derive(Clone, Copy)]
-pub(super) struct Placement(Transform);
+pub(super) struct Placement {
+    transform: Transform,
+    blit: Blit,
+}
 
 impl Placement {
     pub(super) fn new(transform: Transform) -> Self {
-        Self(transform)
+        Self {
+            transform,
+            blit: Blit::PreResize,
+        }
     }
 
     /// The unit square painted upright over `width` x `height` device pixels.
     #[cfg(test)]
     pub(super) fn extent(width: f32, height: f32) -> Self {
-        Self(Transform::from_row(width, 0.0, 0.0, -height, 0.0, height))
+        Self::new(Transform::from_row(width, 0.0, 0.0, -height, 0.0, height))
+    }
+
+    fn with_blit(self, blit: Blit) -> Self {
+        Self { blit, ..self }
     }
 
     /// The device extent, in canvas pixels, the image is painted over on each axis.
     fn painted(self) -> (f32, f32) {
-        (self.0.sx.hypot(self.0.ky), self.0.kx.hypot(self.0.sy))
+        let transform = self.transform;
+        (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy))
     }
 
-    /// Bytes `render_image`'s pre-resize of a `source` RGBA raster holds beside that raster, or 0
-    /// when it blits the source directly.
-    fn resize_bytes(self, source: (u32, u32)) -> u64 {
-        let image_transform = super::image_unit_square_transform(self.0, source.0, source.1);
-        super::fast_resize_target(image_transform, source).map_or(0, |target| resize_working_bytes(source, target))
+    /// Bytes drawing a `source` RGBA raster holds beside that raster: the larger of a pre-resize's
+    /// working set and its resized copy during the draw, or the draw alone.
+    fn paint_bytes(self, source: (u32, u32)) -> u64 {
+        let image_transform = super::image_unit_square_transform(self.transform, source.0, source.1);
+        match (super::fast_resize_target(image_transform, source), self.blit) {
+            (Some(target), Blit::PreResize) => {
+                let resized = u64::from(target.0)
+                    .saturating_mul(u64::from(target.1))
+                    .saturating_mul(4);
+                resize_working_bytes(source, target).max(resized.saturating_add(TINY_SKIA_DRAW_BYTES))
+            }
+            _ => TINY_SKIA_DRAW_BYTES,
+        }
     }
 }
 
@@ -74,21 +117,30 @@ impl ImageBudget {
     #[cfg(test)]
     pub(super) fn admit_jpeg(&mut self, image: &PdfImage, retained_canvas: u64) -> Result<()> {
         let own_size = Placement::extent(image.width() as f32, image.height() as f32);
-        self.admit_jpeg_at(image, retained_canvas, own_size)
+        self.admit_jpeg_at(image, retained_canvas, own_size).map(drop)
     }
 
-    pub(super) fn admit_jpeg_at(&mut self, image: &PdfImage, retained_canvas: u64, placement: Placement) -> Result<()> {
+    /// Admit `image`'s full-size decode, drawn with the pre-resize when that fits and directly
+    /// otherwise.
+    pub(super) fn admit_jpeg_at(
+        &mut self,
+        image: &PdfImage,
+        retained_canvas: u64,
+        placement: Placement,
+    ) -> Result<Blit> {
         let ImageData::Jpeg(bytes) = image.data() else {
-            return Ok(());
+            return Ok(Blit::PreResize);
         };
-        self.admit_required(jpeg_image_bytes(
-            image,
-            bytes,
-            bytes.capacity(),
-            retained_canvas,
-            4,
-            Some(placement),
-        ))
+        let full = |blit| {
+            let placement = placement.with_blit(blit);
+            jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4, Some(placement))
+        };
+        for blit in [Blit::PreResize, Blit::Direct] {
+            if full(blit).is_ok_and(|required| required <= self.limit as u64) {
+                return Ok(blit);
+            }
+        }
+        self.admit_required(full(Blit::PreResize)).map(|()| Blit::PreResize)
     }
 
     /// [`Self::admit_jpeg_decode`] without the in-place decode, as the scale denominator, for an
@@ -101,7 +153,7 @@ impl ImageBudget {
         device: (f32, f32),
     ) -> Result<u8> {
         self.admit_jpeg_decode(image, retained_canvas, Placement::extent(device.0, device.1), false)
-            .map(|decode| match decode {
+            .map(|paint| match paint.decode {
                 JpegDecode::Reduced(denominator) => denominator,
                 JpegDecode::Full | JpegDecode::InPlace => 1,
             })
@@ -118,23 +170,52 @@ impl ImageBudget {
     ///    full-size decode straight into the RGBA paint raster, which never holds the decoded raster
     ///    beside a converted copy.
     ///
-    /// Each charge covers the pre-resize `render_image` runs on the RGBA raster it paints from. An
-    /// image none of them fits is refused exactly as [`Self::admit_jpeg_at`] refuses it.
+    /// Each charge covers drawing the RGBA raster, including the pre-resize `render_image` runs on an
+    /// axis-aligned downscale. Only when none of them fits with that pre-resize does the same ladder
+    /// run again with a [`Blit::Direct`] draw. An image neither ladder fits is refused exactly as
+    /// [`Self::admit_jpeg_at`] refuses it.
     pub(super) fn admit_jpeg_decode(
         &mut self,
         image: &PdfImage,
         retained_canvas: u64,
         placement: Placement,
         unmasked: bool,
-    ) -> Result<JpegDecode> {
+    ) -> Result<JpegPaint> {
         let ImageData::Jpeg(bytes) = image.data() else {
-            return Ok(JpegDecode::Full);
+            return Ok(JpegPaint {
+                decode: JpegDecode::Full,
+                blit: Blit::PreResize,
+            });
         };
-        let capacity = bytes.capacity();
+        for blit in [Blit::PreResize, Blit::Direct] {
+            let placement = placement.with_blit(blit);
+            if let Some(decode) =
+                self.fitting_decode(image, (bytes, bytes.capacity()), retained_canvas, placement, unmasked)
+            {
+                return Ok(JpegPaint { decode, blit });
+            }
+        }
+        let full = jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4, Some(placement));
+        self.admit_required(full).map(|()| JpegPaint {
+            decode: JpegDecode::Full,
+            blit: Blit::PreResize,
+        })
+    }
+
+    /// The first decode of [`Self::admit_jpeg_decode`]'s ladder that fits, drawn as `placement` says.
+    /// `capacity` is that of the buffer holding the encoded `bytes`.
+    fn fitting_decode(
+        &self,
+        image: &PdfImage,
+        (bytes, capacity): (&[u8], usize),
+        retained_canvas: u64,
+        placement: Placement,
+        unmasked: bool,
+    ) -> Option<JpegDecode> {
         let device = placement.painted();
         let full = jpeg_image_bytes(image, bytes, capacity, retained_canvas, 4, Some(placement));
-        if full.as_ref().is_ok_and(|required| *required <= self.limit as u64) {
-            return Ok(JpegDecode::Full);
+        if full.is_ok_and(|required| required <= self.limit as u64) {
+            return Some(JpegDecode::Full);
         }
         // The rayon worker's batched `append_rows` path serves progressive scans only, and
         // `sequential_frame` excludes those. A frame that cannot be read, or that disagrees with the
@@ -150,7 +231,7 @@ impl ImageBudget {
                 }
                 let reduced = reduced_jpeg_image_bytes(bytes, capacity, retained_canvas, denominator, placement);
                 if reduced.is_ok_and(|required| required <= self.limit as u64) {
-                    return Ok(JpegDecode::Reduced(denominator));
+                    return Some(JpegDecode::Reduced(denominator));
                 }
             }
             if unmasked
@@ -158,10 +239,10 @@ impl ImageBudget {
                 && in_place_jpeg_image_bytes(bytes, capacity, retained_canvas, placement)
                     .is_ok_and(|required| required <= self.limit as u64)
             {
-                return Ok(JpegDecode::InPlace);
+                return Some(JpegDecode::InPlace);
             }
         }
-        self.admit_required(full).map(|()| JpegDecode::Full)
+        None
     }
 
     pub(super) fn admit_referenced_mask(
@@ -251,9 +332,9 @@ fn jpeg_image_bytes(
         (u32::from(info.width), u32::from(info.height))
     };
     let rgba_pixels = u64::from(paint_size.0) * u64::from(paint_size.1);
-    // `render_image` frees the decoded raster before it pre-resizes the paint raster, so the resize
-    // working set shares the paint raster with it but not the decoded one. ~keep
-    let resize = placement.map_or(0, |placement| placement.resize_bytes(paint_size));
+    // `render_image` frees the decoded raster before it draws the paint raster, so the draw's working
+    // set shares the paint raster with it but not the decoded one. ~keep
+    let resize = placement.map_or(0, |placement| placement.paint_bytes(paint_size));
     decoded
         .checked_add(converted)
         .map(|decoding| decoding.max(resize))
@@ -352,7 +433,7 @@ fn reduced_dimension(dimension: u32, denominator: u8) -> u64 {
 
 /// The JPEG working set at `denominator`: the largest of the paint phase (scaled raster plus its
 /// RGBA conversion), the decode phase (component planes, output and one MCU row of coefficients)
-/// and the resize phase (RGBA raster plus the pre-resize `placement` needs), on top of the encoded
+/// and the draw phase (RGBA raster plus what drawing it as `placement` says needs), on top of the encoded
 /// bytes and the retained canvas.
 ///
 /// The one-MCU-row bound holds because `jpeg-decoder` converts each coefficient row as it is read:
@@ -402,7 +483,7 @@ fn reduced_jpeg_image_bytes(
         .checked_mul(2)
         .and_then(|planes_and_output| planes_and_output.checked_add(coefficients?));
     // Both sides fit u16, which `chosen` checked. ~keep
-    let resizing = (pixels * 4).checked_add(placement.resize_bytes((width as u32, height as u32)));
+    let resizing = (pixels * 4).checked_add(placement.paint_bytes((width as u32, height as u32)));
     paint
         .zip(decoding)
         .zip(resizing)
@@ -521,7 +602,7 @@ pub(super) fn single_scan_frame(bytes: &[u8]) -> bool {
 }
 
 /// The working set of [`decode_jpeg_into_rgba`] and the paint after it: the RGBA raster the samples
-/// are decoded into, the larger of zune-jpeg's row buffers and the pre-resize `placement` needs, the
+/// are decoded into, the larger of zune-jpeg's row buffers and what drawing it as `placement` says needs, the
 /// encoded bytes, the decoder's copy of them and the metadata it may copy out of them (at most the
 /// input), and the retained canvas.
 fn in_place_jpeg_image_bytes(
@@ -544,7 +625,7 @@ fn in_place_jpeg_image_bytes(
         * MAX_MCU_COLUMNS
         * info.pixel_format.pixel_bytes() as u64
         * SINGLE_SCAN_ROW_BYTES_PER_COLUMN;
-    let resize = placement.resize_bytes((u32::from(info.width), u32::from(info.height)));
+    let resize = placement.paint_bytes((u32::from(info.width), u32::from(info.height)));
     raster
         .checked_add(rows.max(resize))
         .and_then(|sum| sum.checked_add(encoded_capacity as u64))

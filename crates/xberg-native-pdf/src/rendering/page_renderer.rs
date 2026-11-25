@@ -2324,6 +2324,7 @@ impl PageRenderer {
             None => extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?,
         };
         let mut decode = image_budget::JpegDecode::Full;
+        let mut blit = image_budget::Blit::PreResize;
         let mut canvas = 0;
         let placement = image_budget::Placement::new(transform);
         if let Some(budget) = self.source_image_budget.as_mut() {
@@ -2333,10 +2334,12 @@ impl PageRenderer {
                 .max(self.knockout_resources.retained_bytes());
             // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
             if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
-                budget.admit_jpeg_at(&pdf_image, canvas, placement)?;
+                blit = budget.admit_jpeg_at(&pdf_image, canvas, placement)?;
             } else {
                 let unmasked = mask_obj.is_none() && smask_obj.is_none();
-                decode = budget.admit_jpeg_decode(&pdf_image, canvas, placement, unmasked)?;
+                let admitted = budget.admit_jpeg_decode(&pdf_image, canvas, placement, unmasked)?;
+                decode = admitted.decode;
+                blit = admitted.blit;
             }
         }
         let decoded = match (pdf_image.data(), decode) {
@@ -2644,7 +2647,7 @@ impl PageRenderer {
             }
         }
         // Only the mask admissions above read the source raster. The image budget charges the
-        // pre-resize below beside the paint raster alone. ~keep
+        // draw below beside the paint raster alone. ~keep
         drop(dynamic_image);
 
         // A tiny_skia pixmap holds premultiplied RGBA. `/SMaskInData 2` already supplies colour
@@ -2653,43 +2656,9 @@ impl PageRenderer {
             premultiply_rgba(&mut rgba_image);
         }
 
-        let src_w = rgba_image.width();
-        let src_h = rgba_image.height();
-
-        let image_transform = image_unit_square_transform(transform, src_w, src_h);
-        let mut paint = pixmap_paint_for_image_blit(image_transform, gs.fill_alpha, &gs.blend_mode);
-
-        // Fast path: SIMD pre-resize when the transform is a pure scale+translate and
-        // the image is being downscaled.  fast_image_resize (AVX2/SSE4.1/NEON) resizes
-        // to exact output dimensions; we then blit the already-correct pixels at the
-        // right position with a translate-only transform and Nearest quality (no second
-        // resampling pass).  For rotated/sheared transforms or upscaling, fall through
-        // to the tiny-skia bilinear/bicubic path (already selected by the helper above). ~keep
-        let (blit_w, blit_h, blit_data, blit_transform) =
-            if let Some((dst_w, dst_h)) = fast_resize_target(image_transform, (src_w, src_h)) {
-                let resized = resize_rgba(&mut rgba_image, src_w, src_h, dst_w, dst_h);
-                if let Some(pixels) = resized {
-                    // SIMD pre-resize produced the exact output dimensions —
-                    // the subsequent blit is 1:1, so override to Nearest to
-                    // skip a second resampling pass. ~keep
-                    paint.quality = tiny_skia::FilterQuality::Nearest;
-                    let t = Transform::from_translate(image_transform.tx, image_transform.ty);
-                    (dst_w, dst_h, pixels, t)
-                } else {
-                    // fast_image_resize failed; fall back to tiny_skia
-                    // resampling with the helper's chosen quality. ~keep
-                    (src_w, src_h, rgba_image.into_raw(), image_transform)
-                }
-            } else {
-                (src_w, src_h, rgba_image.into_raw(), image_transform)
-            };
-
-        if let Some(img_pixmap) =
-            tiny_skia::IntSize::from_wh(blit_w, blit_h).and_then(|size| Pixmap::from_vec(blit_data, size))
-        {
-            pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, blit_transform, clip_mask);
-        }
-
+        let image_transform = image_unit_square_transform(transform, rgba_image.width(), rgba_image.height());
+        let paint = pixmap_paint_for_image_blit(image_transform, gs.fill_alpha, &gs.blend_mode);
+        blit_rgba(pixmap, rgba_image, image_transform, paint, clip_mask, blit);
         Ok(())
     }
 
@@ -7979,6 +7948,57 @@ fn fast_resize_target(image_transform: Transform, (src_w, src_h): (u32, u32)) ->
             ((image_transform.sy * src_h as f32).round() as u32).max(1),
         )
     })
+}
+
+/// Draw a premultiplied RGBA `image` onto `pixmap` through `image_transform` (from
+/// [`image_unit_square_transform`]) with `paint`, as the image budget admitted it.
+fn blit_rgba(
+    pixmap: &mut Pixmap,
+    mut image: image::RgbaImage,
+    image_transform: Transform,
+    mut paint: PixmapPaint,
+    clip_mask: Option<&tiny_skia::Mask>,
+    blit: image_budget::Blit,
+) {
+    let (src_w, src_h) = image.dimensions();
+    // Fast path: SIMD pre-resize when the transform is a pure scale+translate and
+    // the image is being downscaled.  fast_image_resize (AVX2/SSE4.1/NEON) resizes
+    // to exact output dimensions; we then blit the already-correct pixels at the
+    // right position with a translate-only transform and Nearest quality (no second
+    // resampling pass).  For rotated/sheared transforms or upscaling, fall through
+    // to the tiny-skia bilinear/bicubic path (already selected by the helper above). ~keep
+    let (blit_w, blit_h, blit_data, blit_transform) = match (fast_resize_target(image_transform, (src_w, src_h)), blit)
+    {
+        (Some((dst_w, dst_h)), image_budget::Blit::PreResize) => {
+            if let Some(pixels) = resize_rgba(&mut image, src_w, src_h, dst_w, dst_h) {
+                // SIMD pre-resize produced the exact output dimensions —
+                // the subsequent blit is 1:1, so override to Nearest to
+                // skip a second resampling pass. ~keep
+                paint.quality = tiny_skia::FilterQuality::Nearest;
+                let t = Transform::from_translate(image_transform.tx, image_transform.ty);
+                (dst_w, dst_h, pixels, t)
+            } else {
+                // fast_image_resize failed; fall back to tiny_skia
+                // resampling with the helper's chosen quality. ~keep
+                (src_w, src_h, image.into_raw(), image_transform)
+            }
+        }
+        // The budget refused the pre-resize's copies. tiny-skia samples without a resized copy;
+        // its bicubic 4x4 kernel spans +-2 source pixels, the nearest it has to the pre-resize's
+        // tent of +-1/scale (1.1 to 1.8 pixels over the 0.56 to 0.9 scales no reduced decode
+        // covers), and measured closer to it than bilinear. ~keep
+        (Some(_), image_budget::Blit::Direct) => {
+            paint.quality = tiny_skia::FilterQuality::Bicubic;
+            (src_w, src_h, image.into_raw(), image_transform)
+        }
+        (None, _) => (src_w, src_h, image.into_raw(), image_transform),
+    };
+
+    if let Some(img_pixmap) =
+        tiny_skia::IntSize::from_wh(blit_w, blit_h).and_then(|size| Pixmap::from_vec(blit_data, size))
+    {
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, blit_transform, clip_mask);
+    }
 }
 
 /// The clip a current path made of a single `m` describes. ISO 32000-1 8.5.3.3.1: a

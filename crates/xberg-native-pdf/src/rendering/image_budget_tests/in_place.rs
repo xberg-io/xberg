@@ -67,7 +67,7 @@ fn an_in_place_decode_is_kept_at_exactly_the_limit_and_refused_one_byte_under() 
     let required = in_place_required(&image, canvas);
     assert!(required < LIMIT as u64);
     let admit = |limit: u64| ImageBudget::new(limit as usize).admit_jpeg_decode(&image, canvas, painted(), true);
-    assert_eq!(admit(required).unwrap(), JpegDecode::InPlace);
+    assert_eq!(admit(required).unwrap().decode, JpegDecode::InPlace);
     let mut budget = ImageBudget::new(required as usize - 1);
     assert!(budget.admit_jpeg_decode(&image, canvas, painted(), true).is_err());
     assert!(budget.exceeded(), "the refusal is the budget class");
