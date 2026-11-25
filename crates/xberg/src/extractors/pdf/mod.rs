@@ -359,21 +359,33 @@ fn parsed_pdf_needs_lopdf_compatibility_pass(document: &crate::pdf::native::Nati
 }
 
 #[cfg(feature = "pdf")]
-fn extract_lopdf_compatibility_data(
-    content: &[u8],
-) -> (
-    Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
-    Vec<crate::types::ExtractedUri>,
-    Option<Vec<crate::types::DocumentRevision>>,
-) {
+#[derive(Default)]
+struct LopdfCompatibilityData {
+    outline_entries: Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
+    bookmark_uris: Vec<crate::types::ExtractedUri>,
+    revisions: Option<Vec<crate::types::DocumentRevision>>,
+    /// Whether the attachment pass, which loads these same bytes with lopdf, can find a file.
+    /// `false` when lopdf cannot load them, as the attachment pass then returns nothing too.
+    #[cfg(feature = "tokio-runtime")]
+    has_embedded_files: bool,
+}
+
+#[cfg(feature = "pdf")]
+fn extract_lopdf_compatibility_data(content: &[u8]) -> LopdfCompatibilityData {
     match lopdf::Document::load_mem(content) {
         Ok(lopdf_doc) => {
-            let entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
-            let uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&entries);
+            let outline_entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
+            let bookmark_uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&outline_entries);
             let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
-            (entries, uris, revisions)
+            LopdfCompatibilityData {
+                outline_entries,
+                bookmark_uris,
+                revisions,
+                #[cfg(feature = "tokio-runtime")]
+                has_embedded_files: crate::pdf::embedded_files::has_embedded_files_name_tree(&lopdf_doc),
+            }
         }
-        Err(_) => (Vec::new(), Vec::new(), None),
+        Err(_) => LopdfCompatibilityData::default(),
     }
 }
 
@@ -490,8 +502,16 @@ fn extract_native_blocking(
         None => None,
     };
     #[cfg(feature = "tokio-runtime")]
-    let may_have_embedded_files = compatibility_data.is_some() || may_have_embedded_files(&native_document.doc);
-    let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
+    let may_have_embedded_files = compatibility_data.as_ref().map_or_else(
+        || may_have_embedded_files(&native_document.doc),
+        |data| data.has_embedded_files,
+    );
+    let LopdfCompatibilityData {
+        outline_entries,
+        bookmark_uris,
+        revisions: pdf_revisions,
+        ..
+    } = compatibility_data.unwrap_or_default();
     ensure_pdf_not_cancelled(&config)?;
     let diagrams = if wants_dot_output(&config) {
         crate::extraction::diagram::pdf::recover(&mut native_document)
@@ -3697,4 +3717,93 @@ fn recovered_catalog_without_names_keeps_attachment_compatibility() {
     assert!(!catalog.as_dict().unwrap().contains_key("Names"));
     assert!(!recovered.has_unrecovered_catalog());
     assert!(may_have_embedded_files(&recovered));
+}
+
+/// One page of text whose catalog carries `/Outlines`, which sends it through the lopdf
+/// compatibility pass, and optionally a `/Names` → `/EmbeddedFiles` tree holding `attachment`.
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+fn outlined_pdf_with_attachment(attachment: Option<&[u8]>) -> Vec<u8> {
+    use lopdf::{Object, Stream, dictionary};
+
+    let mut pdf = lopdf::Document::with_version("1.7");
+    let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let contents = pdf.add_object(Stream::new(
+        dictionary! {},
+        b"BT /F1 24 Tf 72 720 Td (Outlined body) Tj ET".to_vec(),
+    ));
+    let pages = pdf.new_object_id();
+    let page = pdf.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages,
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        "Contents" => contents,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    pdf.objects.insert(
+        pages,
+        Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }),
+    );
+    let outlines = pdf.add_object(dictionary! { "Type" => "Outlines", "Count" => 0 });
+    let mut catalog = dictionary! { "Type" => "Catalog", "Pages" => pages, "Outlines" => outlines };
+    if let Some(payload) = attachment {
+        let data = pdf.add_object(Stream::new(dictionary! {}, payload.to_vec()));
+        let filespec = pdf.add_object(dictionary! { "EF" => dictionary! { "F" => data } });
+        catalog.set(
+            "Names",
+            dictionary! {
+                "EmbeddedFiles" => dictionary! {
+                    "Names" => vec![Object::string_literal("attachment.txt"), filespec.into()],
+                },
+            },
+        );
+    }
+    let root = pdf.add_object(catalog);
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+#[test]
+fn lopdf_compatibility_pass_reports_whether_an_attachment_tree_exists() {
+    let without = outlined_pdf_with_attachment(None);
+    let with = outlined_pdf_with_attachment(Some(b"Attachment text"));
+    assert!(raw_pdf_needs_lopdf_compatibility_pass(&without));
+    assert!(raw_pdf_needs_lopdf_compatibility_pass(&with));
+
+    assert!(!extract_lopdf_compatibility_data(&without).has_embedded_files);
+    assert!(extract_lopdf_compatibility_data(&with).has_embedded_files);
+    assert!(!extract_lopdf_compatibility_data(b"%PDF-1.7\n/Outlines but no document").has_embedded_files);
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[tokio::test]
+async fn outlined_pdf_keeps_its_attachment_after_the_compatibility_pass() {
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let extractor = PdfExtractor::new();
+
+    let document = extractor
+        .extract_content(
+            &outlined_pdf_with_attachment(Some(b"Attachment text")),
+            "application/pdf",
+            &config,
+        )
+        .await
+        .unwrap();
+    let [child] = document.children.as_deref().expect("the attachment must be extracted") else {
+        panic!("expected one attachment, got {:?}", document.children);
+    };
+    assert_eq!(child.path, "attachment.txt");
+    assert_eq!(child.result.content.trim(), "Attachment text");
+
+    let document = extractor
+        .extract_content(&outlined_pdf_with_attachment(None), "application/pdf", &config)
+        .await
+        .unwrap();
+    assert!(document.children.is_none(), "{:?}", document.children);
 }

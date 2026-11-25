@@ -48,36 +48,37 @@ pub struct EmbeddedFile {
 #[cfg(feature = "tokio-runtime")]
 pub(crate) fn extract_embedded_files(document: &Document) -> Vec<EmbeddedFile> {
     let mut files = Vec::new();
-
-    let catalog = match document.catalog() {
-        Ok(cat) => cat,
-        Err(_) => return files,
-    };
-
-    let names_obj = match catalog.get(b"Names") {
-        Ok(obj) => resolve_object(document, obj),
-        Err(_) => return files,
-    };
-
-    let names_dict = match names_obj {
-        Some(Object::Dictionary(dict)) => dict,
-        _ => return files,
-    };
-
-    let ef_obj = match names_dict.get(b"EmbeddedFiles") {
-        Ok(obj) => resolve_object(document, obj),
-        Err(_) => return files,
-    };
-
-    let ef_dict = match ef_obj {
-        Some(Object::Dictionary(dict)) => dict,
-        _ => return files,
+    let Some(ef_dict) = embedded_files_name_tree(document) else {
+        return files;
     };
 
     let mut visited_nodes = 0usize;
     collect_from_name_tree(document, &ef_dict, &mut files, &mut visited_nodes, 0);
 
     files
+}
+
+/// Whether `document` has a catalog `/Names` → `/EmbeddedFiles` name tree.
+///
+/// [`extract_embedded_files`] returns nothing without one, so a caller already holding a
+/// lopdf parse of the bytes can skip [`extract_and_process_embedded_files`], which would
+/// parse them again only to find no tree.
+#[cfg(feature = "tokio-runtime")]
+pub(crate) fn has_embedded_files_name_tree(document: &Document) -> bool {
+    embedded_files_name_tree(document).is_some()
+}
+
+#[cfg(feature = "tokio-runtime")]
+fn embedded_files_name_tree(document: &Document) -> Option<lopdf::Dictionary> {
+    let catalog = document.catalog().ok()?;
+    let names_obj = resolve_object(document, catalog.get(b"Names").ok()?);
+    let Some(Object::Dictionary(names_dict)) = names_obj else {
+        return None;
+    };
+    match resolve_object(document, names_dict.get(b"EmbeddedFiles").ok()?) {
+        Some(Object::Dictionary(dict)) => Some(dict),
+        _ => None,
+    }
 }
 
 /// Recursively collect embedded files from a PDF name tree node.
@@ -428,6 +429,38 @@ mod tests {
         let doc = Document::with_version("1.5");
         let files = extract_embedded_files(&doc);
         assert!(files.is_empty());
+        assert!(!has_embedded_files_name_tree(&doc));
+    }
+
+    /// The predicate that lets callers skip the attachment pass must hold exactly when the
+    /// catalog reaches an `/EmbeddedFiles` dictionary, the precondition of any extracted file.
+    #[test]
+    fn embedded_files_name_tree_predicate_tracks_the_catalog_tree() {
+        let mut with_tree = Document::with_version("1.7");
+        let fs_id = build_filespec(&mut with_tree, "report.txt", b"hello");
+        let root = with_tree.add_object(dictionary! {
+            "Names" => vec![Object::string_literal("report.txt"), Object::Reference(fs_id)],
+        });
+        attach_embedded_files_root(&mut with_tree, root);
+        assert!(has_embedded_files_name_tree(&with_tree));
+        assert_eq!(extract_embedded_files(&with_tree).len(), 1);
+
+        let mut dests_only = Document::with_version("1.7");
+        let dests = dests_only.add_object(dictionary! { "Names" => Vec::<Object>::new() });
+        let names = dests_only.add_object(dictionary! { "Dests" => Object::Reference(dests) });
+        let catalog = dests_only.add_object(dictionary! { "Type" => "Catalog", "Names" => Object::Reference(names) });
+        dests_only.trailer.set("Root", Object::Reference(catalog));
+        assert!(!has_embedded_files_name_tree(&dests_only));
+        assert!(extract_embedded_files(&dests_only).is_empty());
+
+        let mut dangling = Document::with_version("1.7");
+        let catalog = dangling.add_object(dictionary! {
+            "Type" => "Catalog",
+            "Names" => dictionary! { "EmbeddedFiles" => Object::Reference((999, 0)) },
+        });
+        dangling.trailer.set("Root", Object::Reference(catalog));
+        assert!(!has_embedded_files_name_tree(&dangling));
+        assert!(extract_embedded_files(&dangling).is_empty());
     }
 
     /// Build a synthetic `EmbeddedFile` with a given compressed and decompressed size
