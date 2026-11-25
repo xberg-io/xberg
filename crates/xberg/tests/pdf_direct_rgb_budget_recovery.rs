@@ -87,12 +87,42 @@ fn explicitly_forced_minimal_direct_ocr_keeps_its_budget_refusal() {
     assert_original_budget_error(SCAN, &config);
 }
 
+/// Without layout detection compiled in, OCR renders the page itself and keeps the typed refusal,
+/// since the direct retry is never offered to a layout request.
 #[test]
-#[cfg(all(feature = "layout-types", not(paddle_ocr)))]
+#[cfg(all(feature = "layout-types", not(feature = "layout-detection"), not(paddle_ocr)))]
 fn layout_request_keeps_the_original_rgb_render_budget_refusal() {
     let mut config = config();
     config.layout = Some(Default::default());
     assert_original_budget_error(SCAN, &config);
+}
+
+/// With layout detection compiled in, the layout pass renders the page first: it records the same
+/// refused render as a layout warning and hands OCR a blank page, so no typed error reaches the
+/// caller. The direct retry must still not recover the page of a layout request.
+#[test]
+#[cfg(all(feature = "layout-detection", not(paddle_ocr)))]
+fn layout_detection_records_the_rgb_render_budget_refusal_without_a_direct_retry() {
+    let mut config = config();
+    config.layout = Some(Default::default());
+    let document = run(SCAN, &config).expect("the layout pass records the refused render as a warning");
+    let messages: Vec<&str> = document
+        .processing_warnings
+        .iter()
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("could not be prepared for layout analysis")
+                && message.contains("92857078")
+                && message.contains("83886080")),
+        "{messages:?}"
+    );
+    assert!(
+        !messages.iter().any(|message| message.contains(RECOVERED)),
+        "{messages:?}"
+    );
 }
 
 #[test]
