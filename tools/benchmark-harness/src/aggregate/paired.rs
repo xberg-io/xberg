@@ -1,8 +1,10 @@
 //! Paired comparisons over per-fixture rows: layout-variant vs baseline-variant
 //! ([`LayoutImpact`]) and xberg vs competitor ([`HeadToHead`]).
 //!
-//! Rows pair only inside one `(output_format, mode, file_type, ocr)` bucket and only on fixtures
-//! where both sides succeeded. Every delta is the median of per-fixture deltas, never the
+//! Rows pair by fixture inside one `(output_format, mode, file_type)` bucket and only on fixtures
+//! where both sides succeeded. OCR use is a property of each row, not part of the bucket: a failed
+//! row never reports it (`ocr: None`), and an auto-OCR variant reports it per document, so keying
+//! on it would split one fixture's rows apart. Every delta is the median of per-fixture deltas, never the
 //! difference of two medians, so a fixture present on one side cannot skew the other.
 
 use super::types::{FixtureDelta, HeadToHead, LayoutImpact, PairedDelta, PairedFixtureDeltas, PerFixtureRow};
@@ -18,9 +20,9 @@ const UNCHANGED_THRESHOLD: f64 = 0.005;
 /// meaningless there.
 const BATCH_MODE: &str = "batch";
 
-/// `(output_format rank, mode, file_type, ocr)`. The format is held as a rank because
-/// `OutputFormat` is not `Ord`; see [`format_rank`] and [`format_from_rank`].
-type BucketKey = (u8, String, String, Option<bool>);
+/// `(output_format rank, mode, file_type)`. The format is held as a rank because `OutputFormat` is
+/// not `Ord`; see [`format_rank`] and [`format_from_rank`].
+type BucketKey = (u8, String, String);
 
 /// framework -> bucket -> fixture id -> row.
 type RowIndex<'a> = BTreeMap<&'a str, BTreeMap<BucketKey, BTreeMap<&'a str, &'a PerFixtureRow>>>;
@@ -47,7 +49,6 @@ fn index_rows(rows: &[PerFixtureRow]) -> RowIndex<'_> {
             format_rank(row.output_format),
             row.execution_mode.clone(),
             row.file_type.clone(),
-            row.ocr,
         );
         let slot = index
             .entry(row.framework.as_str())
@@ -174,6 +175,24 @@ fn succeeded_pairs<'a>(
         .collect()
 }
 
+/// OCR use every successful row reports, or `None` when they disagree, one did not report it, or
+/// none succeeded. Failed rows are ignored: they carry `ocr: None` because extraction never
+/// reported it.
+fn common_ocr<'a>(rows: impl IntoIterator<Item = &'a PerFixtureRow>) -> Option<bool> {
+    let mut reported = rows.into_iter().filter(|row| row.success).map(|row| row.ocr);
+    let first = reported.next()??;
+    reported.all(|ocr| ocr == Some(first)).then_some(first)
+}
+
+/// Pairs whose first (`a`) and second (`b`) rows reported OCR use, respectively.
+fn ocr_used_counts(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> (usize, usize) {
+    let used = |row: &PerFixtureRow| row.ocr == Some(true);
+    (
+        pairs.iter().filter(|pair| used(pair.0)).count(),
+        pairs.iter().filter(|pair| used(pair.1)).count(),
+    )
+}
+
 fn succeeded_ids<'a>(rows: &BTreeMap<&'a str, &'a PerFixtureRow>) -> BTreeSet<&'a str> {
     rows.iter().filter(|(_, row)| row.success).map(|(id, _)| *id).collect()
 }
@@ -226,9 +245,9 @@ fn classify(deltas: &[FixtureDelta]) -> (Vec<String>, Vec<String>, Vec<String>) 
     (improved, regressed, unchanged)
 }
 
-/// One [`LayoutImpact`] per (layout framework, baseline framework, output format, mode, file type,
-/// OCR bucket) where both frameworks have rows. A bucket whose layout rows all failed still yields
-/// an entry with `paired_fixture_count == 0` so the loss is visible rather than absent.
+/// One [`LayoutImpact`] per (layout framework, baseline framework, output format, mode, file type)
+/// where both frameworks have rows. A bucket whose layout rows all failed still yields an entry
+/// with `paired_fixture_count == 0` so the loss is visible rather than absent.
 pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
     let index = index_rows(rows);
     let present: BTreeSet<&str> = index.keys().copied().collect();
@@ -245,7 +264,9 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
             let Some(baseline_rows) = baseline_buckets.get(key) else {
                 continue;
             };
-            let pairs = succeeded_pairs(baseline_rows, &layout_buckets[key]);
+            let layout_rows = &layout_buckets[key];
+            let pairs = succeeded_pairs(baseline_rows, layout_rows);
+            let (baseline_ocr_fixture_count, layout_ocr_fixture_count) = ocr_used_counts(&pairs);
 
             let sf1 = fixture_deltas(&pairs, sf1_of);
             let tf1 = fixture_deltas(&pairs, tf1_of);
@@ -268,7 +289,9 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
                 output_format,
                 mode: key.1.clone(),
                 file_type: key.2.clone(),
-                ocr: key.3,
+                ocr: common_ocr(baseline_rows.values().chain(layout_rows.values()).copied()),
+                baseline_ocr_fixture_count,
+                layout_ocr_fixture_count,
                 paired_fixture_count: pairs.len(),
                 sf1: summarize_optional(&sf1),
                 tf1: summarize(&tf1),
@@ -292,8 +315,8 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
     out
 }
 
-/// One [`HeadToHead`] per (xberg framework, competitor framework, output format, mode, file type,
-/// OCR bucket) in which the two share at least one fixture id. Medians cover fixtures both
+/// One [`HeadToHead`] per (xberg framework, competitor framework, output format, mode, file type)
+/// in which the two share at least one fixture id. Medians cover fixtures both
 /// succeeded on; the `*_only_fixture_ids` lists name fixtures only one side succeeded on.
 pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
     let index = index_rows(rows);
@@ -310,6 +333,7 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                     continue;
                 }
                 let pairs = succeeded_pairs(competitor_rows, xberg_rows);
+                let (competitor_ocr_fixture_count, xberg_ocr_fixture_count) = ocr_used_counts(&pairs);
                 let (xberg_ok, competitor_ok) = (succeeded_ids(xberg_rows), succeeded_ids(competitor_rows));
 
                 let sf1 = fixture_deltas(&pairs, sf1_of);
@@ -321,7 +345,9 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                     output_format,
                     mode: key.1.clone(),
                     file_type: key.2.clone(),
-                    ocr: key.3,
+                    ocr: common_ocr(xberg_rows.values().chain(competitor_rows.values()).copied()),
+                    xberg_ocr_fixture_count,
+                    competitor_ocr_fixture_count,
                     shared_fixture_count: pairs.len(),
                     xberg_only_fixture_ids: xberg_ok.difference(&competitor_ok).map(|id| id.to_string()).collect(),
                     competitor_only_fixture_ids: competitor_ok.difference(&xberg_ok).map(|id| id.to_string()).collect(),

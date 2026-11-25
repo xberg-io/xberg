@@ -371,7 +371,7 @@ v2.9.0 aggregates are deserialized.
 ## LayoutImpact (v2.12.0+)
 
 Top-level `layout_impact` answers "what does the layout pass buy". One entry per
-(layout framework, baseline framework, `output_format`, `mode`, `file_type`, `ocr`) where both
+(layout framework, baseline framework, `output_format`, `mode`, `file_type`) where both
 frameworks have rows. Frameworks pair by name: the variant's `layout` segment is replaced by
 `baseline` (`xberg-markdown-layout` with `xberg-markdown-baseline`,
 `xberg-markdown-layout-paddle` with `xberg-markdown-baseline-paddle`), or dropped when no such
@@ -385,7 +385,9 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   "output_format": "markdown",
   "mode": "single",
   "file_type": "pdf",
-  "ocr": false,
+  "ocr": false, // shared by every successful row on both sides, else null
+  "baseline_ocr_fixture_count": 0, // paired fixtures the baseline variant OCRed
+  "layout_ocr_fixture_count": 0, // paired fixtures the layout variant OCRed
   "paired_fixture_count": 41, // fixtures where both variants succeeded
   "sf1": { "baseline_p50": 0.5, "layout_p50": 0.7, "delta_p50": 0.18, "sample_count": 41 }, // null for plaintext
   "tf1": { /* PairedDelta */ },
@@ -407,8 +409,14 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   values; `delta_p50` is the **median of the per-fixture deltas** (`layout - baseline`), not
   `layout_p50 - baseline_p50`. `sample_count` is the number of fixtures with a value on both sides;
   every field is `0` when it is `0`.
-- **Pairing** happens inside one bucket and only for fixtures where both variants succeeded. A bucket
-  whose layout rows all failed still gets an entry, with `paired_fixture_count: 0`.
+- **Pairing** happens by fixture inside one (`output_format`, `mode`, `file_type`) bucket and only
+  for fixtures where both variants succeeded. A bucket whose layout rows all failed still gets an
+  entry, with `paired_fixture_count: 0`.
+- **OCR** is a property of each row, not part of the bucket: failed rows never report it
+  (`ocr: null`), and an auto-OCR variant decides per document. `ocr` is the value every successful
+  row on both sides reports, and `null` when they disagree, any did not report it, or none
+  succeeded; `baseline_ocr_fixture_count` / `layout_ocr_fixture_count` count the paired fixtures
+  on which each side reported OCR use.
 - **Classification**: a fixture is `improved` when its delta is at least `0.005`, `regressed` at most
   `-0.005`, otherwise `unchanged`. The metric is SF1 for markdown (`quality_score` for plaintext, or
   when no paired fixture has SF1).
@@ -421,7 +429,9 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
 
 Top-level `head_to_head` compares every xberg framework with every non-xberg framework on the
 documents both succeeded on, one entry per (xberg framework, competitor framework,
-`output_format`, `mode`, `file_type`, `ocr`) in which the two share at least one fixture id.
+`output_format`, `mode`, `file_type`) in which the two share at least one fixture id. OCR use does
+not split entries (see LayoutImpact): a scan xberg auto-OCRed and the competitor read without OCR
+is one shared fixture.
 
 ```json
 {
@@ -430,7 +440,9 @@ documents both succeeded on, one entry per (xberg framework, competitor framewor
   "output_format": "markdown",
   "mode": "single",
   "file_type": "pdf",
-  "ocr": false,
+  "ocr": false, // shared by every successful row on both sides, else null
+  "xberg_ocr_fixture_count": 0, // shared fixtures xberg OCRed
+  "competitor_ocr_fixture_count": 0, // shared fixtures the competitor OCRed
   "shared_fixture_count": 3, // both succeeded
   "xberg_only_fixture_ids": ["doc_d"], // xberg succeeded, competitor absent or failed
   "competitor_only_fixture_ids": [], // competitor succeeded, xberg absent or failed

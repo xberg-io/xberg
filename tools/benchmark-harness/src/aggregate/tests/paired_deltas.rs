@@ -30,12 +30,31 @@ fn scored(framework: &str, fixture: &str, tf1: f64, sf1: Option<f64>, score: f64
     result
 }
 
+/// A framework error as every production failure path builds it: extraction never reported OCR
+/// use, so the status is `Unknown`.
 fn failed(framework: &str, fixture: &str) -> BenchmarkResult {
     let mut result = scored(framework, fixture, 0.0, None, 0.0);
     result.success = false;
     result.error_kind = ErrorKind::FrameworkError;
     result.error_message = Some("boom".to_string());
     result.quality = None;
+    result.ocr_status = OcrStatus::Unknown;
+    result
+}
+
+/// A failure scored after extraction (empty content), which keeps the reported OCR status and so
+/// lands in an OCR bucket of the per-framework aggregation.
+fn failed_after_extraction(framework: &str, fixture: &str) -> BenchmarkResult {
+    let mut result = scored(framework, fixture, 0.0, None, 0.0);
+    result.success = false;
+    result.error_kind = ErrorKind::EmptyContent;
+    result.error_message = Some("empty content".to_string());
+    result.quality = None;
+    result
+}
+
+fn with_ocr(mut result: BenchmarkResult) -> BenchmarkResult {
+    result.ocr_status = OcrStatus::Used;
     result
 }
 
@@ -146,12 +165,27 @@ fn layout_impact_has_no_sf1_for_plaintext_and_classifies_on_quality_score() {
 
 #[test]
 fn layout_impact_emits_zero_pair_entry_when_every_layout_row_failed() {
-    let results = vec![scored(BASELINE, "a", 0.5, Some(0.5), 0.5), failed(LAYOUT, "a")];
+    // Baseline rows report `ocr: Some(false)`, failed layout rows `ocr: None`; they must still
+    // share one bucket.
+    let results = vec![
+        scored(BASELINE, "a", 0.5, Some(0.5), 0.5),
+        scored(BASELINE, "b", 0.5, Some(0.5), 0.5),
+        failed(LAYOUT, "a"),
+        failed(LAYOUT, "b"),
+    ];
     let aggregated = aggregate_new_format(&results);
+    let rows = &aggregated.per_fixture_results;
+    assert!(rows.iter().filter(|r| r.framework == LAYOUT).all(|r| r.ocr.is_none()));
+    assert!(
+        rows.iter()
+            .filter(|r| r.framework == BASELINE)
+            .all(|r| r.ocr == Some(false))
+    );
 
     assert_eq!(aggregated.layout_impact.len(), 1);
     let impact = &aggregated.layout_impact[0];
     assert_eq!(impact.paired_fixture_count, 0);
+    assert_eq!(impact.ocr, Some(false), "OCR comes from the successful baseline rows");
     assert!(impact.sf1.is_none());
     assert_eq!(impact.tf1.sample_count, 0);
 }
@@ -186,13 +220,36 @@ fn layout_impact_reports_duration_and_memory_deltas_in_single_mode() {
 }
 
 #[test]
-fn layout_impact_does_not_pair_across_ocr_buckets() {
-    let mut layout = scored(LAYOUT, "a", 0.5, Some(0.5), 0.5);
-    layout.ocr_status = OcrStatus::Used;
-    let results = vec![scored(BASELINE, "a", 0.5, Some(0.5), 0.5), layout];
+fn layout_impact_pairs_a_fixture_across_reported_ocr_use() {
+    let results = vec![
+        scored(BASELINE, "a", 0.5, Some(0.5), 0.5),
+        scored(BASELINE, "b", 0.5, Some(0.5), 0.5),
+        with_ocr(scored(LAYOUT, "a", 0.5, Some(0.6), 0.5)),
+        scored(LAYOUT, "b", 0.5, Some(0.6), 0.5),
+    ];
     let aggregated = aggregate_new_format(&results);
 
-    assert!(aggregated.layout_impact.is_empty());
+    assert_eq!(aggregated.layout_impact.len(), 1);
+    let impact = &aggregated.layout_impact[0];
+    assert_eq!(impact.paired_fixture_count, 2);
+    assert_eq!(impact.ocr, None, "the sides disagree on OCR use");
+    assert_eq!(impact.baseline_ocr_fixture_count, 0);
+    assert_eq!(impact.layout_ocr_fixture_count, 1);
+}
+
+#[test]
+fn layout_impact_reports_ocr_when_every_successful_row_agrees() {
+    let results = vec![
+        with_ocr(scored(BASELINE, "a", 0.5, Some(0.5), 0.5)),
+        with_ocr(scored(LAYOUT, "a", 0.5, Some(0.6), 0.5)),
+        failed(LAYOUT, "b"),
+    ];
+    let aggregated = aggregate_new_format(&results);
+
+    let impact = &aggregated.layout_impact[0];
+    assert_eq!(impact.ocr, Some(true));
+    assert_eq!(impact.baseline_ocr_fixture_count, 1);
+    assert_eq!(impact.layout_ocr_fixture_count, 1);
 }
 
 #[test]
@@ -269,6 +326,27 @@ fn head_to_head_excludes_fixtures_only_one_side_ran() {
     assert!((h2h.tf1.baseline_p50 - 0.6).abs() < EPS);
     assert!((h2h.tf1.delta_p50 - 0.2).abs() < EPS);
     assert_eq!(h2h.tf1.sample_count, 3);
+}
+
+#[test]
+fn head_to_head_compares_a_fixture_xberg_auto_ocred_and_the_competitor_did_not() {
+    let results = vec![
+        with_ocr(scored(BASELINE, "scan", 0.8, Some(0.8), 0.8)),
+        scored(BASELINE, "native", 0.8, Some(0.8), 0.8),
+        scored("liteparse", "scan", 0.4, Some(0.4), 0.4),
+        scored("liteparse", "native", 0.6, Some(0.6), 0.6),
+    ];
+    let aggregated = aggregate_new_format(&results);
+
+    assert_eq!(aggregated.head_to_head.len(), 1, "{:?}", aggregated.head_to_head);
+    let h2h = &aggregated.head_to_head[0];
+    assert_eq!(h2h.shared_fixture_count, 2);
+    assert!(h2h.xberg_only_fixture_ids.is_empty());
+    assert!(h2h.competitor_only_fixture_ids.is_empty());
+    assert_eq!(h2h.ocr, None);
+    assert_eq!(h2h.xberg_ocr_fixture_count, 1);
+    assert_eq!(h2h.competitor_ocr_fixture_count, 0);
+    assert_eq!(h2h.tf1.sample_count, 2);
 }
 
 #[test]
@@ -364,18 +442,6 @@ fn reading_order_ranking_penalizes_a_fully_failed_ocr_bucket() {
     // docling fails every OCR PDF after extraction (OCR status known, so the rows land in the
     // with_ocr bucket with no quality); liteparse succeeds everywhere. docling's no-OCR score alone
     // (0.8) would outrank liteparse; the failed bucket must pull it to (0.8 * 2 + 0.0 * 2) / 4.
-    let with_ocr = |mut result: BenchmarkResult| {
-        result.ocr_status = OcrStatus::Used;
-        result
-    };
-    let empty_ocr_failure = |fixture: &str| {
-        let mut result = with_ocr(scored("docling", fixture, 0.0, None, 0.0));
-        result.success = false;
-        result.error_kind = ErrorKind::EmptyContent;
-        result.error_message = Some("empty content".to_string());
-        result.quality = None;
-        result
-    };
     let mut results = Vec::new();
     for fixture in ["n1", "n2"] {
         results.push(with_reading_order(
@@ -388,7 +454,7 @@ fn reading_order_ranking_penalizes_a_fully_failed_ocr_bucket() {
         ));
     }
     for fixture in ["s1", "s2"] {
-        results.push(empty_ocr_failure(fixture));
+        results.push(with_ocr(failed_after_extraction("docling", fixture)));
         results.push(with_ocr(with_reading_order(
             scored("liteparse", fixture, 0.5, Some(0.5), 0.5),
             Some(0.6),
@@ -405,13 +471,8 @@ fn reading_order_ranking_penalizes_a_fully_failed_ocr_bucket() {
 
 #[test]
 fn reading_order_ranking_omits_a_framework_whose_only_bucket_failed() {
-    let mut failure = scored("docling", "a", 0.0, None, 0.0);
-    failure.success = false;
-    failure.error_kind = ErrorKind::EmptyContent;
-    failure.error_message = Some("empty content".to_string());
-    failure.quality = None;
     let results = vec![
-        failure,
+        failed_after_extraction("docling", "a"),
         with_reading_order(scored("liteparse", "a", 0.5, Some(0.5), 0.5), Some(0.6)),
     ];
     let aggregated = aggregate_new_format(&results);
@@ -429,7 +490,7 @@ fn reading_order_ranking_omits_a_framework_whose_only_bucket_failed() {
 fn reading_order_ranking_is_coverage_adjusted() {
     let results = vec![
         with_reading_order(scored(BASELINE, "a", 0.5, Some(0.5), 0.5), Some(0.8)),
-        failed(BASELINE, "b"),
+        failed_after_extraction(BASELINE, "b"),
     ];
     let aggregated = aggregate_new_format(&results);
 

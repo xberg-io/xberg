@@ -45,13 +45,11 @@ pub struct NewConsolidatedResults {
     #[serde(default)]
     pub format_support: FormatSupportMatrix,
     /// Layout-variant vs baseline-variant deltas on the fixtures where both succeeded, one entry
-    /// per (layout framework, baseline framework, output format, mode, file type, OCR bucket)
-    /// (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
+    /// per (layout framework, baseline framework, output format, mode, file type) (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
     #[serde(default)]
     pub layout_impact: Vec<LayoutImpact>,
     /// xberg vs competitor deltas on the fixtures where both succeeded, one entry per
-    /// (xberg framework, competitor framework, output format, mode, file type, OCR bucket)
-    /// (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
+    /// (xberg framework, competitor framework, output format, mode, file type) (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
     #[serde(default)]
     pub head_to_head: Vec<HeadToHead>,
 }
@@ -105,6 +103,9 @@ pub struct PairedFixtureDeltas {
 /// where both variants succeeded are paired; duration and memory are further restricted to
 /// single-file, cold-process measurements (and isolated-process RSS for memory) because batch rows
 /// do not carry per-document timing.
+///
+/// OCR use does not split entries: a fixture pairs whatever OCR each side reported, since a failed
+/// row never reports it and an auto-OCR variant decides per document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LayoutImpact {
     pub layout_framework: String,
@@ -112,7 +113,15 @@ pub struct LayoutImpact {
     pub output_format: OutputFormat,
     pub mode: String,
     pub file_type: String,
+    /// OCR use reported by every successful row on both sides; `None` when they disagree, any did
+    /// not report it, or none succeeded.
     pub ocr: Option<bool>,
+    /// Paired fixtures on which the baseline variant reported OCR use.
+    #[serde(default)]
+    pub baseline_ocr_fixture_count: usize,
+    /// Paired fixtures on which the layout variant reported OCR use.
+    #[serde(default)]
+    pub layout_ocr_fixture_count: usize,
     /// Fixtures where both variants succeeded.
     pub paired_fixture_count: usize,
     /// Structural F1; `None` for plaintext output or when no fixture carries it.
@@ -137,7 +146,9 @@ pub struct LayoutImpact {
 ///
 /// All [`PairedDelta`]s read with `baseline` = competitor, `layout` = xberg, so a positive
 /// `delta_p50` on a quality metric means xberg scored higher. Duration and memory carry
-/// `sample_count == 0` for batch mode and warm-process rows, as in [`LayoutImpact`].
+/// `sample_count == 0` for batch mode and warm-process rows, as in [`LayoutImpact`]. OCR use does
+/// not split entries, as in [`LayoutImpact`]: xberg auto-OCRing a scan the competitor read without
+/// OCR is still one shared fixture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeadToHead {
     pub xberg_framework: String,
@@ -145,7 +156,15 @@ pub struct HeadToHead {
     pub output_format: OutputFormat,
     pub mode: String,
     pub file_type: String,
+    /// OCR use reported by every successful row on both sides; `None` when they disagree, any did
+    /// not report it, or none succeeded.
     pub ocr: Option<bool>,
+    /// Shared fixtures on which xberg reported OCR use.
+    #[serde(default)]
+    pub xberg_ocr_fixture_count: usize,
+    /// Shared fixtures on which the competitor reported OCR use.
+    #[serde(default)]
+    pub competitor_ocr_fixture_count: usize,
     /// Fixtures where both frameworks succeeded.
     pub shared_fixture_count: usize,
     /// Fixtures xberg succeeded on and the competitor did not (absent or failed).

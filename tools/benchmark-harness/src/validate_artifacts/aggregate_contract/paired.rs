@@ -99,7 +99,8 @@ mod tests {
             file_extension: "pdf".to_string(),
             framework_capabilities: FrameworkCapabilities::default(),
             pdf_metadata: None,
-            ocr_status: OcrStatus::NotUsed,
+            // Every production failure path reports Unknown: extraction never said whether it OCRed.
+            ocr_status: if success { OcrStatus::NotUsed } else { OcrStatus::Unknown },
             extracted_text: None,
             system_load: None,
         }
@@ -123,6 +124,29 @@ mod tests {
     fn layout_coverage_accepts_an_entry_with_no_paired_fixture() {
         let aggregate = baseline_and_layout(false);
         assert_eq!(aggregate.layout_impact[0].paired_fixture_count, 0);
+        validate_layout_impact_coverage(&aggregate, Path::new("aggregated.json")).expect("entry present");
+    }
+
+    #[test]
+    fn layout_coverage_accepts_a_layout_variant_whose_rows_all_failed_with_unknown_ocr() {
+        let aggregate = aggregate_new_format(&[
+            result("xberg-markdown-baseline", "a", true),
+            result("xberg-markdown-baseline", "b", true),
+            result("xberg-markdown-layout", "a", false),
+            result("xberg-markdown-layout", "b", false),
+        ]);
+        let layout_ocr: Vec<Option<bool>> = aggregate
+            .per_fixture_results
+            .iter()
+            .filter(|row| row.framework == "xberg-markdown-layout")
+            .map(|row| row.ocr)
+            .collect();
+        assert_eq!(layout_ocr, [None, None]);
+
+        assert_eq!(aggregate.layout_impact.len(), 1);
+        let impact = &aggregate.layout_impact[0];
+        assert_eq!(impact.paired_fixture_count, 0);
+        assert_eq!(impact.ocr, Some(false));
         validate_layout_impact_coverage(&aggregate, Path::new("aggregated.json")).expect("entry present");
     }
 
