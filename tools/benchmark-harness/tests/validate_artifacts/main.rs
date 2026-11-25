@@ -51,6 +51,7 @@ fn zero_metrics() -> PerformanceMetrics {
         p50_memory_bytes: 0,
         p95_memory_bytes: 0,
         p99_memory_bytes: 0,
+        ..Default::default()
     }
 }
 

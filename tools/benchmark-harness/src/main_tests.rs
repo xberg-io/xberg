@@ -446,6 +446,7 @@ fn sample_result(framework: &str, success: bool, error_kind: ErrorKind) -> Bench
             p50_memory_bytes: 0,
             p95_memory_bytes: 0,
             p99_memory_bytes: 0,
+            ..Default::default()
         },
         quality: None,
         iterations: vec![],

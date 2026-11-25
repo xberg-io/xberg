@@ -10,8 +10,8 @@ use crate::adapters::subprocess::SubprocessAdapter;
 use crate::extract_xberg_file;
 use crate::monitoring::{ResourceMonitor, ResourceStats};
 use crate::types::{
-    BatchCapability, BatchEntryPoint, BatchTimingScope, BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus,
-    PerformanceMetrics, ResourceMeasurementScope, TimingRegime,
+    BatchCapability, BatchEntryPoint, BatchTimingScope, BenchmarkResult, ErrorKind, FrameworkCapabilities,
+    MemoryMethod, OcrStatus, PerformanceMetrics, ResourceMeasurementScope, TimingRegime,
 };
 use crate::{Error, Result};
 use async_trait::async_trait;
@@ -29,6 +29,8 @@ fn metrics_from(resource_stats: &ResourceStats, throughput_bytes_per_sec: f64) -
     PerformanceMetrics {
         baseline_memory_bytes: 0,
         peak_memory_bytes: 0,
+        memory_method: MemoryMethod::Sampled,
+        self_reported_peak_memory_bytes: None,
         peak_memory_delta_bytes: 0,
         avg_cpu_percent: 0.0,
         cpu_seconds: 0.0,

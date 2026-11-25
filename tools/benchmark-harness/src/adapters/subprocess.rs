@@ -235,6 +235,8 @@ impl Default for PerformanceMetrics {
         Self {
             baseline_memory_bytes: 0,
             peak_memory_bytes: 0,
+            memory_method: crate::types::MemoryMethod::default(),
+            self_reported_peak_memory_bytes: None,
             peak_memory_delta_bytes: 0,
             avg_cpu_percent: 0.0,
             cpu_seconds: 0.0,

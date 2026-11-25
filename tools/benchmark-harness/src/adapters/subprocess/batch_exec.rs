@@ -5,7 +5,6 @@
 use crate::monitoring::ResourceStats;
 use crate::types::{
     BatchCapability, BatchEntryPoint, BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, OutputFormat,
-    PerformanceMetrics,
 };
 use crate::{Error, Result};
 use std::path::Path;
@@ -617,20 +616,10 @@ impl SubprocessAdapter {
             duration: shared.batch_makespan,
             extraction_duration: item.extraction_duration,
             subprocess_overhead: shared.batch_subprocess_overhead,
-            metrics: PerformanceMetrics {
-                baseline_memory_bytes: shared.resource_stats.baseline_memory_bytes,
-                peak_memory_bytes: shared.resource_stats.peak_memory_bytes,
-                peak_memory_delta_bytes: shared.resource_stats.peak_memory_delta_bytes,
-                avg_cpu_percent: shared.resource_stats.avg_cpu_percent,
-                cpu_seconds: shared.resource_stats.cpu_seconds,
-                // Every sibling carries the same process sample so each
-                // reporting bucket can recover it; aggregation deduplicates
-                // by `batch_sample_id`. ~keep
-                throughput_bytes_per_sec: shared.batch_throughput,
-                p50_memory_bytes: shared.resource_stats.p50_memory_bytes,
-                p95_memory_bytes: shared.resource_stats.p95_memory_bytes,
-                p99_memory_bytes: shared.resource_stats.p99_memory_bytes,
-            },
+            // Every sibling carries the same process sample so each
+            // reporting bucket can recover it; aggregation deduplicates
+            // by `batch_sample_id`. ~keep
+            metrics: Self::measured_metrics(shared.resource_stats, None, shared.batch_throughput),
             quality: None,
             iterations: vec![],
             statistics: None,

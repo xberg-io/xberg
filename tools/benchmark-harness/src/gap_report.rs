@@ -472,6 +472,7 @@ mod tests {
                 p50_memory_bytes: 0,
                 p95_memory_bytes: 0,
                 p99_memory_bytes: 0,
+                ..Default::default()
             },
             quality: success.then(|| QualityMetrics {
                 f1_score_text: tf1,

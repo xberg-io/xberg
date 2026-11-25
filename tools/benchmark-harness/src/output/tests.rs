@@ -36,6 +36,7 @@ fn create_benchmark_result(
             p50_memory_bytes: memory_bytes,
             p95_memory_bytes: memory_bytes,
             p99_memory_bytes: memory_bytes,
+            ..Default::default()
         },
         quality: None,
         iterations: vec![],
@@ -76,6 +77,7 @@ fn test_write_json() {
             p50_memory_bytes: 8_000_000,
             p95_memory_bytes: 9_500_000,
             p99_memory_bytes: 9_900_000,
+            ..Default::default()
         },
         quality: Some(QualityMetrics {
             f1_score_text: 0.91,

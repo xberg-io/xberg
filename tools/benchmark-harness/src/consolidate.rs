@@ -207,6 +207,7 @@ mod tests {
                 p50_memory_bytes: 900_000,
                 p95_memory_bytes: 950_000,
                 p99_memory_bytes: 990_000,
+                ..Default::default()
             },
             quality: None,
             iterations: vec![],

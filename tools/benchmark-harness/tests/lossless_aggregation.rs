@@ -15,7 +15,7 @@ use benchmark_harness::provenance::{
 use benchmark_harness::system_load::SystemLoad;
 use benchmark_harness::types::{
     BatchCapability, BatchEntryPoint, BatchTimingScope, BenchmarkResult, ErrorKind, FrameworkCapabilities,
-    IterationResult, OcrStatus, OutputFormat, PdfMetadata, PerformanceMetrics, QualityMetrics,
+    IterationResult, MemoryMethod, OcrStatus, OutputFormat, PdfMetadata, PerformanceMetrics, QualityMetrics,
 };
 use benchmark_harness::{
     aggregate_new_format, load_run_provenance, load_run_results, write_json, write_run_provenance,
@@ -28,6 +28,8 @@ fn sample_metrics() -> PerformanceMetrics {
     PerformanceMetrics {
         baseline_memory_bytes: 12_582_912,
         peak_memory_bytes: 188_743_680,
+        memory_method: MemoryMethod::RusageMaxRss,
+        self_reported_peak_memory_bytes: Some(180_000_000),
         peak_memory_delta_bytes: 176_160_768,
         avg_cpu_percent: 42.1,
         cpu_seconds: 0.31,
@@ -287,6 +289,8 @@ fn consolidate_pipeline_preserves_every_per_fixture_field_for_a_successful_resul
     assert_eq!(row.cpu_seconds, 0.31);
     assert_eq!(row.baseline_memory_bytes, 12_582_912);
     assert_eq!(row.peak_memory_delta_bytes, 176_160_768);
+    assert_eq!(row.memory_method, MemoryMethod::RusageMaxRss);
+    assert_eq!(row.self_reported_peak_memory_bytes, Some(180_000_000));
     assert_eq!(row.p50_memory_bytes, 150_000_000);
     assert_eq!(row.p95_memory_bytes, 175_000_000);
     assert_eq!(row.p99_memory_bytes, 189_000_000);

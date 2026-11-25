@@ -240,6 +240,13 @@ pub struct PerFixtureRow {
     /// Peak RSS above the captured baseline (v2.8.0+).
     #[serde(default)]
     pub peak_memory_delta_bytes: u64,
+    /// How `peak_memory_mb` was measured; see `crate::types::MemoryMethod` (v2.12.0+).
+    #[serde(default)]
+    pub memory_method: crate::types::MemoryMethod,
+    /// Framework-reported peak RSS, diagnostics only; never folded into `peak_memory_mb`
+    /// (v2.12.0+).
+    #[serde(default)]
+    pub self_reported_peak_memory_bytes: Option<u64>,
     /// 50th percentile memory usage in bytes, from this single measurement's own resource
     /// sampler timeline — not a cross-fixture percentile (v2.8.0+).
     #[serde(default)]

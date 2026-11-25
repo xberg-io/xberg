@@ -408,6 +408,8 @@ fn build_per_fixture_results(results: &[BenchmarkResult]) -> Vec<PerFixtureRow> 
             cpu_seconds: result.metrics.cpu_seconds,
             baseline_memory_bytes: result.metrics.baseline_memory_bytes,
             peak_memory_delta_bytes: result.metrics.peak_memory_delta_bytes,
+            memory_method: result.metrics.memory_method,
+            self_reported_peak_memory_bytes: result.metrics.self_reported_peak_memory_bytes,
             p50_memory_bytes: result.metrics.p50_memory_bytes,
             p95_memory_bytes: result.metrics.p95_memory_bytes,
             p99_memory_bytes: result.metrics.p99_memory_bytes,

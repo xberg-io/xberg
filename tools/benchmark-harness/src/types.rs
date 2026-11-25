@@ -458,8 +458,22 @@ pub struct PerformanceMetrics {
     #[serde(default)]
     pub baseline_memory_bytes: u64,
 
-    /// Absolute peak RSS in bytes.
+    /// Absolute peak RSS in bytes, measured as `memory_method` says.
+    ///
+    /// With [`MemoryMethod::RusageMaxRss`] this is the peak RSS of the largest single process
+    /// in the child's tree (the child folds in every descendant it reaped), not the sum of the
+    /// tree's concurrent RSS.
     pub peak_memory_bytes: u64,
+
+    /// How `peak_memory_bytes` was measured. Results written before this field existed
+    /// deserialize as [`MemoryMethod::Sampled`].
+    #[serde(default)]
+    pub memory_method: MemoryMethod,
+
+    /// Peak RSS the framework reported about itself, kept for diagnostics only; it never
+    /// replaces `peak_memory_bytes`.
+    #[serde(default)]
+    pub self_reported_peak_memory_bytes: Option<u64>,
 
     /// Peak RSS above the captured baseline.
     #[serde(default)]
@@ -491,6 +505,20 @@ pub struct PerformanceMetrics {
 
     /// 99th percentile memory usage in bytes
     pub p99_memory_bytes: u64,
+}
+
+/// How a result's `peak_memory_bytes` was obtained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryMethod {
+    /// `ru_maxrss` from `wait4(2)` on the harness's direct child, normalised to bytes.
+    RusageMaxRss,
+    /// Maximum of the polling sampler's process-tree RSS samples; misses processes that
+    /// live shorter than one sampling interval.
+    #[default]
+    Sampled,
+    /// The framework's own report of its peak RSS.
+    SelfReported,
 }
 
 /// Quality metrics comparing extraction output to ground truth
@@ -917,6 +945,7 @@ mod tests {
                 p50_memory_bytes: 1_000_000,
                 p95_memory_bytes: 1_000_000,
                 p99_memory_bytes: 1_000_000,
+                ..Default::default()
             },
             quality: None,
             iterations: vec![],

@@ -371,6 +371,8 @@ fn performance_metrics_from_row(row: &PerFixtureRow, path: &Path) -> Result<Perf
     Ok(PerformanceMetrics {
         baseline_memory_bytes: row.baseline_memory_bytes,
         peak_memory_bytes: peak_memory_bytes.round() as u64,
+        memory_method: row.memory_method,
+        self_reported_peak_memory_bytes: row.self_reported_peak_memory_bytes,
         peak_memory_delta_bytes: row.peak_memory_delta_bytes,
         avg_cpu_percent: row.avg_cpu_percent,
         cpu_seconds: row.cpu_seconds,

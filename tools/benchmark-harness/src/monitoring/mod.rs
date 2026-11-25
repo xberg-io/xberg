@@ -596,6 +596,7 @@ impl ResourceMonitor {
             baseline_memory_bytes: baseline_bytes,
             peak_memory_bytes: peak_memory,
             peak_memory_delta_bytes: memory_delta_values.iter().copied().max().unwrap_or(0),
+            memory_method: crate::types::MemoryMethod::Sampled,
             peak_vm_bytes: peak_vm,
             total_page_faults,
             memory_growth_rate_mb_s: memory_growth_rate_mb_per_s(samples, &memory_values),
@@ -697,6 +698,9 @@ pub struct ResourceStats {
     pub peak_memory_bytes: u64,
     /// Peak RSS above the captured baseline in bytes.
     pub peak_memory_delta_bytes: u64,
+    /// How `peak_memory_bytes` was obtained. The sampler always reports `Sampled`; the
+    /// subprocess adapter replaces the peak with the reaped child's `ru_maxrss` when available.
+    pub memory_method: crate::types::MemoryMethod,
     /// Peak virtual memory size in bytes
     pub peak_vm_bytes: u64,
     /// Total major page faults
