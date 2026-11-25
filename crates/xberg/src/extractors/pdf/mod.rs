@@ -460,11 +460,25 @@ where
 
 #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
 fn may_have_embedded_files(document: &xberg_native_pdf::PdfDocument) -> bool {
-    document.is_encrypted()
-        || !document.has_unrecovered_catalog()
-        || !document
-            .catalog()
-            .is_ok_and(|catalog| catalog.as_dict().is_some_and(|dict| !dict.contains_key("Names")))
+    if document.is_encrypted() || !document.has_unrecovered_catalog() {
+        return true;
+    }
+    let Ok(catalog) = document.catalog() else {
+        return true;
+    };
+    let Some(catalog) = catalog.as_dict() else {
+        return true;
+    };
+    let Some(names) = catalog.get("Names") else {
+        return false;
+    };
+    // A name tree of only `/Dests` or `/JavaScript` holds no attachment; anything this
+    // parser cannot resolve is left to the lopdf attachment pass.
+    document
+        .resolve_object(names)
+        .ok()
+        .and_then(|names| names.as_dict().map(|names| names.contains_key("EmbeddedFiles")))
+        .unwrap_or(true)
 }
 
 #[cfg(feature = "pdf")]
@@ -3717,6 +3731,34 @@ fn recovered_catalog_without_names_keeps_attachment_compatibility() {
     assert!(!catalog.as_dict().unwrap().contains_key("Names"));
     assert!(!recovered.has_unrecovered_catalog());
     assert!(may_have_embedded_files(&recovered));
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+#[test]
+fn name_tree_without_embedded_files_skips_attachment_parsing() {
+    use lopdf::{Object, dictionary};
+    use xberg_native_pdf::PdfDocument;
+
+    let with_names = |names: Object| {
+        let mut pdf = lopdf::Document::with_version("1.7");
+        let pages = pdf.add_object(dictionary! { "Type" => "Pages", "Count" => 0, "Kids" => Vec::<Object>::new() });
+        let names = pdf.add_object(names);
+        let root = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages, "Names" => names });
+        pdf.trailer.set("Root", root);
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        PdfDocument::from_bytes(bytes).unwrap()
+    };
+
+    let dests_only = with_names(Object::Dictionary(dictionary! { "Dests" => dictionary! {} }));
+    assert!(dests_only.has_unrecovered_catalog());
+    assert!(!may_have_embedded_files(&dests_only));
+
+    let attachments = with_names(Object::Dictionary(dictionary! { "EmbeddedFiles" => dictionary! {} }));
+    assert!(may_have_embedded_files(&attachments));
+
+    let unreadable = with_names(Object::Integer(7));
+    assert!(may_have_embedded_files(&unreadable));
 }
 
 /// One page of text whose catalog carries `/Outlines`, which sends it through the lopdf
