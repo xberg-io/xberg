@@ -57,6 +57,12 @@ pub struct ConcurrencyConfig {
     /// ceiling instead. On hosts with more than 8 cores and no cgroup quota,
     /// set `max_threads` explicitly to use the additional cores — the
     /// default will not scale past 8 on its own.
+    ///
+    /// The shared Tokio runtime's worker count also follows this budget, but it
+    /// is sized once, by the first caller. A direct embedding or reranking call
+    /// made before any extraction builds it from the automatic budget, and a
+    /// later `max_threads` does not resize it. `TOKIO_WORKER_THREADS`, when set
+    /// to a nonzero count, takes precedence.
     pub max_threads: Option<usize>,
 
     /// Maximum number of Tesseract recognition sessions that run at once.

@@ -31,22 +31,35 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
-/// Worker-thread count for the global runtime, or `None` to leave it to tokio.
+/// Worker-thread count for the global runtime.
 ///
-/// `tokio_env` is the raw `TOKIO_WORKER_THREADS` value: when it parses to a nonzero count tokio
-/// reads it itself, so no explicit count is set and the operator's choice stands. Otherwise the
-/// count is the process thread budget (`max_threads`, cgroup quota, or the default cap) bounded
-/// by the host CPU count, and at least one. One worker suffices to avoid deadlock with
+/// `tokio_env` is the raw `TOKIO_WORKER_THREADS` value. A nonzero count that parses (after trimming)
+/// wins; the count is always set explicitly on the builder, so tokio's own stricter env parse never
+/// runs. Otherwise the count is the process thread budget (`max_threads`, cgroup quota, or the default
+/// cap) bounded by the host CPU count, and at least one. One worker suffices to avoid deadlock with
 /// `block_in_place`, which hands the worker's core to a fresh thread before blocking.
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-fn resolve_worker_threads(tokio_env: Option<&str>, thread_budget: usize, host_cpus: usize) -> Option<usize> {
-    if tokio_env
+fn resolve_worker_threads(tokio_env: Option<&str>, thread_budget: usize, host_cpus: usize) -> usize {
+    tokio_env
         .and_then(|v| v.trim().parse::<usize>().ok())
-        .is_some_and(|n| n > 0)
-    {
-        return None;
-    }
-    Some(thread_budget.min(host_cpus).max(1))
+        .filter(|&n| n > 0)
+        .unwrap_or_else(|| thread_budget.min(host_cpus).max(1))
+}
+
+/// Build a multi-thread runtime with exactly `workers` workers and the large worker stack.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn build_runtime(workers: usize) -> crate::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(workers)
+        .enable_all()
+        // See GLOBAL_RUNTIME_STACK_SIZE_BYTES: the extraction future overflows
+        // tokio's ~2 MB default worker stack and aborts rather than panicking.
+        .thread_stack_size(GLOBAL_RUNTIME_STACK_SIZE_BYTES)
+        .build()
+        .map_err(|e| crate::XbergError::Plugin {
+            message: format!("Failed to create global Tokio runtime: {e}"),
+            plugin_name: "runtime".to_string(),
+        })
 }
 
 /// Returns a reference to the shared multi-thread Tokio runtime, building it on
@@ -67,24 +80,11 @@ fn resolve_worker_threads(tokio_env: Option<&str>, thread_budget: usize, host_cp
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
-        let mut builder = tokio::runtime::Builder::new_multi_thread();
-        if let Some(workers) = resolve_worker_threads(
+        build_runtime(resolve_worker_threads(
             std::env::var("TOKIO_WORKER_THREADS").ok().as_deref(),
             crate::core::config::concurrency::active_thread_budget(),
             num_cpus::get(),
-        ) {
-            builder.worker_threads(workers);
-        }
-        builder
-            .enable_all()
-            // See GLOBAL_RUNTIME_STACK_SIZE_BYTES: the extraction future overflows
-            // tokio's ~2 MB default worker stack and aborts rather than panicking.
-            .thread_stack_size(GLOBAL_RUNTIME_STACK_SIZE_BYTES)
-            .build()
-            .map_err(|e| crate::XbergError::Plugin {
-                message: format!("Failed to create global Tokio runtime: {e}"),
-                plugin_name: "runtime".to_string(),
-            })
+        ))
     })
 }
 
@@ -249,23 +249,32 @@ mod large_stack_tests {
 
     #[test]
     fn worker_threads_follow_the_budget_bounded_by_host_cpus() {
-        assert_eq!(super::resolve_worker_threads(None, 4, 14), Some(4));
-        assert_eq!(super::resolve_worker_threads(None, 32, 8), Some(8));
-        assert_eq!(super::resolve_worker_threads(None, 0, 8), Some(1));
-        assert_eq!(super::resolve_worker_threads(None, 1, 1), Some(1));
+        assert_eq!(super::resolve_worker_threads(None, 4, 14), 4);
+        assert_eq!(super::resolve_worker_threads(None, 32, 8), 8);
+        assert_eq!(super::resolve_worker_threads(None, 0, 8), 1);
+        assert_eq!(super::resolve_worker_threads(None, 1, 1), 1);
     }
 
     #[test]
-    fn tokio_worker_threads_env_defers_to_tokio_when_valid() {
-        assert_eq!(super::resolve_worker_threads(Some("3"), 4, 14), None);
-        assert_eq!(super::resolve_worker_threads(Some(" 1 "), 4, 14), None);
+    fn tokio_worker_threads_env_wins_and_is_trimmed() {
+        assert_eq!(super::resolve_worker_threads(Some("3"), 4, 14), 3);
+        assert_eq!(super::resolve_worker_threads(Some(" 1 "), 4, 14), 1);
+        assert_eq!(super::resolve_worker_threads(Some("20"), 4, 14), 20);
     }
 
     #[test]
     fn invalid_or_zero_tokio_env_falls_back_to_the_budget() {
-        assert_eq!(super::resolve_worker_threads(Some("0"), 4, 14), Some(4));
-        assert_eq!(super::resolve_worker_threads(Some("many"), 4, 14), Some(4));
-        assert_eq!(super::resolve_worker_threads(Some(""), 4, 14), Some(4));
+        assert_eq!(super::resolve_worker_threads(Some("0"), 4, 14), 4);
+        assert_eq!(super::resolve_worker_threads(Some("many"), 4, 14), 4);
+        assert_eq!(super::resolve_worker_threads(Some(""), 4, 14), 4);
+    }
+
+    #[test]
+    fn built_runtime_has_the_requested_worker_count() {
+        let runtime = super::build_runtime(3).unwrap();
+        assert_eq!(runtime.metrics().num_workers(), 3);
+        let one = super::build_runtime(1).unwrap();
+        assert_eq!(one.metrics().num_workers(), 1);
     }
 
     #[tokio::test]
