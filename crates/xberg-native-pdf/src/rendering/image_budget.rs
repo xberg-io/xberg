@@ -150,7 +150,7 @@ impl ImageBudget {
             jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4, Some(placement))
         };
         for blit in [Blit::PreResize, Blit::Direct] {
-            if full(blit).is_ok_and(|required| required <= self.limit as u64) {
+            if full(blit).is_ok_and(|required| self.fits(required)) {
                 return Ok(blit);
             }
         }
@@ -233,7 +233,7 @@ impl ImageBudget {
     ) -> Option<JpegDecode> {
         let device = placement.painted();
         let full = jpeg_image_bytes(image, bytes, capacity, retained_canvas, 4, Some(placement));
-        if full.is_ok_and(|required| required <= self.limit as u64) {
+        if full.is_ok_and(|required| self.fits(required)) {
             return Some(JpegDecode::Full);
         }
         // The rayon worker's batched `append_rows` path serves progressive scans only, and
@@ -249,14 +249,14 @@ impl ImageBudget {
                     break;
                 }
                 let reduced = reduced_jpeg_image_bytes(bytes, capacity, retained_canvas, denominator, placement);
-                if reduced.is_ok_and(|required| required <= self.limit as u64) {
+                if reduced.is_ok_and(|required| self.fits(required)) {
                     return Some(JpegDecode::Reduced(denominator));
                 }
             }
             if unmasked
                 && single_scan_frame(bytes)
                 && in_place_jpeg_image_bytes(bytes, capacity, retained_canvas, placement)
-                    .is_ok_and(|required| required <= self.limit as u64)
+                    .is_ok_and(|required| self.fits(required))
             {
                 return Some(JpegDecode::InPlace);
             }
@@ -296,9 +296,15 @@ impl ImageBudget {
         }
     }
 
+    /// Whether a `required` charge fits the budget. A charge that saturated at `u64::MAX` overflowed
+    /// its arithmetic, so it never fits, whatever the limit.
+    fn fits(&self, required: u64) -> bool {
+        required != u64::MAX && required <= self.limit as u64
+    }
+
     fn admit_required(&mut self, required: std::result::Result<u64, String>) -> Result<()> {
         let failure = match required {
-            Ok(required) if required <= self.limit as u64 => return Ok(()),
+            Ok(required) if self.fits(required) => return Ok(()),
             Ok(required) => Failure::Exceeded {
                 required,
                 limit: self.limit,
