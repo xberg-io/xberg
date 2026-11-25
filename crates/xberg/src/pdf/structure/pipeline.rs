@@ -18,7 +18,7 @@ use super::assembly::assemble_internal_document;
 use super::classify::{
     classify_formula_paragraphs, classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings,
     demote_unnumbered_subsections, is_body_size_bold_heading_candidate, is_body_size_bold_signal,
-    is_numbered_section_heading, is_short_body_size_section_title, mark_arxiv_noise,
+    is_numbered_section_heading, is_short_body_size_section_title, level_numbered_headings_by_depth, mark_arxiv_noise,
     mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
@@ -4729,6 +4729,9 @@ fn build_document_structure_with_native(
     }
     compact_final_heading_hierarchy(&mut all_page_paragraphs);
     promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, bold_heading_body_font_size);
+    if !used_structure_tree {
+        level_numbered_headings_by_depth(&mut all_page_paragraphs);
+    }
     #[cfg(feature = "layout-detection")]
     for ((page, projection), accepted_folio) in all_page_paragraphs
         .iter_mut()

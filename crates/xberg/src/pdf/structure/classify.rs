@@ -1543,6 +1543,111 @@ pub(super) fn demote_unnumbered_subsections(all_pages: &mut [Vec<PdfParagraph>])
     }
 }
 
+/// A document numbers its sections when at least this many headings carry a
+/// top-level section number (`1 Introduction`, `2 Data`, `3 Model`). ~keep
+const MIN_TOP_LEVEL_NUMBERED_HEADINGS: usize = 3;
+
+/// Level of a top-level numbered section: H1 is left to the document title. ~keep
+const TOP_LEVEL_SECTION_HEADING_LEVEL: usize = 2;
+
+/// A section-number component has at most two digits, so a leading year
+/// (`2026 Annual Report`) or quantity (`500 feet`) is not section numbering. ~keep
+const MAX_SECTION_NUMBER_COMPONENT_DIGITS: usize = 2;
+
+/// Depth of the section number opening a heading: `2 Data` is 1, `2.1 Data
+/// description` is 2, `A.1 Proof of Theorem 2` is 2. The number must be followed by
+/// whitespace and a word. A bare letter is no section number (`A quick example`).
+fn section_number_depth(text: &str) -> Option<usize> {
+    let text = text.trim();
+    let bytes = text.as_bytes();
+    let letter_led = bytes.first().is_some_and(u8::is_ascii_uppercase)
+        && bytes.get(1) == Some(&b'.')
+        && bytes.get(2).is_some_and(u8::is_ascii_digit);
+    let (mut index, mut depth) = if letter_led { (1, 1) } else { (0, 0) };
+    loop {
+        if depth > 0 {
+            if bytes.get(index) == Some(&b'.') && bytes.get(index + 1).is_some_and(u8::is_ascii_digit) {
+                index += 1;
+            } else {
+                break;
+            }
+        }
+        let digits = bytes[index..].iter().take_while(|byte| byte.is_ascii_digit()).count();
+        if !(1..=MAX_SECTION_NUMBER_COMPONENT_DIGITS).contains(&digits) {
+            return None;
+        }
+        index += digits;
+        depth += 1;
+    }
+    let rest = &text[index..];
+    let rest = rest.strip_prefix('.').unwrap_or(rest);
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    rest.trim_start()
+        .chars()
+        .next()
+        .filter(|character| character.is_alphabetic())
+        .map(|_| depth)
+}
+
+/// Set each numbered heading's level from the depth of its section number, when the
+/// document numbers its sections.
+///
+/// Font tiers do not track numbering: 2310.02163 set `2.1` subsections in the same
+/// tier as `2` sections (both H2), and 1710.02091 put its top-level sections at H1.
+/// A numbered section's depth is its level below the title: depth 1 is H2, `x.y` H3,
+/// `x.y.z` H4. Unnumbered back matter that shared the top-level sections' former
+/// level (`Acknowledgements`, `References` at H1) moves with them. ~keep
+pub(super) fn level_numbered_headings_by_depth(all_pages: &mut [Vec<PdfParagraph>]) {
+    let headings: Vec<(usize, usize, u8, Option<usize>)> = all_pages
+        .iter()
+        .enumerate()
+        .flat_map(|(page_index, page)| {
+            page.iter().enumerate().filter_map(move |(index, paragraph)| {
+                paragraph.heading_level.map(|level| {
+                    (
+                        page_index,
+                        index,
+                        level,
+                        section_number_depth(&paragraph_plain_text(paragraph)),
+                    )
+                })
+            })
+        })
+        .collect();
+
+    let Some(first_top_level) = headings.iter().position(|&(_, _, _, depth)| depth == Some(1)) else {
+        return;
+    };
+    let mut former_top_levels = [0usize; 7];
+    for &(_, _, level, depth) in &headings {
+        if depth == Some(1) {
+            former_top_levels[usize::from(level).min(6)] += 1;
+        }
+    }
+    if former_top_levels.iter().sum::<usize>() < MIN_TOP_LEVEL_NUMBERED_HEADINGS {
+        return;
+    }
+    let former_top_level = (1..former_top_levels.len())
+        .max_by_key(|&level| (former_top_levels[level], std::cmp::Reverse(level)))
+        .unwrap_or(TOP_LEVEL_SECTION_HEADING_LEVEL);
+
+    for (position, &(page_index, index, level, depth)) in headings.iter().enumerate() {
+        let new_level = match depth {
+            Some(depth) => (depth + 1).min(6),
+            None if position > first_top_level
+                && usize::from(level) == former_top_level
+                && former_top_level != TOP_LEVEL_SECTION_HEADING_LEVEL =>
+            {
+                TOP_LEVEL_SECTION_HEADING_LEVEL
+            }
+            None => continue,
+        };
+        all_pages[page_index][index].heading_level = u8::try_from(new_level).ok();
+    }
+}
+
 /// Demote long runs of consecutive same-level headings to body text.
 ///
 /// When the layout model (or font-size classification) produces 4+ consecutive
@@ -4217,6 +4322,111 @@ mod tests {
             pages[0][0].heading_level,
             Some(1),
             "at the sparsity floor a clearly larger title line must still be promoted"
+        );
+    }
+
+    fn heading_at(text: &str, level: u8) -> PdfParagraph {
+        let mut paragraph = make_text_paragraph(12.0, text, true);
+        paragraph.heading_level = Some(level);
+        paragraph
+    }
+
+    fn heading_levels(pages: &[Vec<PdfParagraph>]) -> Vec<Option<u8>> {
+        pages
+            .iter()
+            .flatten()
+            .map(|paragraph| paragraph.heading_level)
+            .collect()
+    }
+
+    #[test]
+    fn section_number_depth_reads_arabic_and_letter_led_numbering_only() {
+        assert_eq!(section_number_depth("2 Data"), Some(1));
+        assert_eq!(section_number_depth("1. INTRODUCTION"), Some(1));
+        assert_eq!(section_number_depth("2.1 Data description"), Some(2));
+        assert_eq!(section_number_depth("2.1.1 Introduction to RL"), Some(3));
+        assert_eq!(section_number_depth("A.1 Proof of Theorem 2"), Some(2));
+        assert_eq!(section_number_depth("A quick example"), None);
+        assert_eq!(section_number_depth("2026 Annual Report"), None);
+        assert_eq!(section_number_depth("3.5 = x"), None);
+        assert_eq!(section_number_depth("Introduction"), None);
+    }
+
+    /// 2310.02163 set `2.1` subsections in the `2` sections' tier and 1710.02091 put its
+    /// top-level sections (and its unnumbered back matter) at H1; the reference levels
+    /// follow the numbering depth below the title.
+    #[test]
+    fn numbered_headings_take_their_level_from_section_number_depth() {
+        let mut pages = vec![
+            vec![heading_at("A spatial model for extreme precipitation", 1)],
+            vec![
+                heading_at("1 Introduction", 1),
+                heading_at("2 Data", 1),
+                heading_at("2.1 Data description", 2),
+                heading_at("2.1.1 Station records", 2),
+            ],
+            vec![
+                heading_at("3 Model", 1),
+                make_text_paragraph(12.0, "Ordinary body text stays body text.", false),
+                heading_at("Acknowledgements", 1),
+                heading_at("References", 1),
+            ],
+        ];
+
+        level_numbered_headings_by_depth(&mut pages);
+
+        assert_eq!(
+            heading_levels(&pages),
+            [
+                Some(1),
+                Some(2),
+                Some(2),
+                Some(3),
+                Some(4),
+                Some(2),
+                None,
+                Some(2),
+                Some(2)
+            ]
+        );
+    }
+
+    #[test]
+    fn numbering_depth_needs_three_top_level_numbered_headings() {
+        let mut pages = vec![vec![
+            heading_at("Document title", 1),
+            heading_at("1 Overview", 1),
+            heading_at("2.1 Detail", 2),
+            heading_at("References", 1),
+        ]];
+
+        level_numbered_headings_by_depth(&mut pages);
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(1), Some(1), Some(2), Some(1)],
+            "one top-level numbered heading is no numbering scheme"
+        );
+    }
+
+    #[test]
+    fn numbering_depth_keeps_unnumbered_headings_off_the_former_top_level() {
+        let mut pages = vec![vec![
+            heading_at("Title", 1),
+            heading_at("1 Introduction", 2),
+            heading_at("Related questions", 3),
+            heading_at("2 Method", 2),
+            heading_at("2.1 Setup", 2),
+            heading_at("3 Results", 2),
+            heading_at("References", 1),
+        ]];
+
+        level_numbered_headings_by_depth(&mut pages);
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(1), Some(2), Some(3), Some(2), Some(3), Some(2), Some(1)],
+            "with top-level sections already at H2 only numbered headings move"
         );
     }
 
