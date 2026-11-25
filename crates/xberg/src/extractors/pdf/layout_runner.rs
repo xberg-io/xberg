@@ -688,6 +688,9 @@ impl ChunkedLayout {
 /// chunk's largest page) not to fit; a page that turns out larger than predicted is dropped,
 /// the chunk runs with only its own rasters live, and the page renders again into the next chunk.
 /// A page that does not fit even alone forms its own chunk, which fails as it always did.
+///
+/// The budget bounds the detect phase only: each page still renders under the full
+/// `max_content_size` while the chunk's earlier rasters are live, as every render did before.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 fn detect_layout_pages(
     engine: &mut crate::layout::LayoutEngine,
