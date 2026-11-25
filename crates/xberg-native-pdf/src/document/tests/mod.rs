@@ -32,6 +32,7 @@ mod placed_form_copies;
 mod placed_form_size;
 mod placed_form_verdicts;
 mod placed_forms;
+mod raw_span_cache;
 mod reading_order;
 mod redaction;
 mod span_postprocess;

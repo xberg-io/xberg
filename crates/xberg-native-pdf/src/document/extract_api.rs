@@ -9,10 +9,88 @@ use super::*;
 const MAX_PAGE_CONTENT_BYTES: usize = 256 * 1024 * 1024;
 const MAX_PAGE_CONTENT_ITEMS: usize = 100_000;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum ScriptGeometry {
     Flatten,
     Preserve,
+}
+
+/// Estimated bytes all cached interpretations of one document may hold.
+///
+/// A dense text page interprets to a few thousand spans at roughly 300 bytes
+/// each with their strings and glyph widths, about 1 MiB; one extraction caches
+/// up to two variants of a page (flattened and preserved script geometry). The
+/// budget keeps about 16 such pages, and every page of a typical document. ~keep
+pub(super) const RAW_PAGE_SPANS_BUDGET_BYTES: usize = 32 * 1024 * 1024;
+
+/// Every input of an unfiltered default-config interpretation besides the page
+/// itself, whose content and resources never change.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct RawSpanKey {
+    page_index: usize,
+    script_geometry: ScriptGeometry,
+    skip_nonpainting_text: bool,
+}
+
+/// What one content interpretation produced, including its effects on the
+/// document, so a cached copy can reproduce them exactly.
+pub(super) struct InterpretedPage {
+    spans: Vec<crate::layout::TextSpan>,
+    /// MCIDs whose in-stream `/ActualText` applied, or `None` when the page was
+    /// skipped before the extractor ran and the per-page entry was left alone.
+    mc_actualtext: Option<HashSet<u32>>,
+    /// CMSY glyph witnesses, present only when they were requested and the
+    /// extractor ran. Capturing them does not change the spans.
+    cmsy: Option<Vec<crate::layout::TextSpan>>,
+}
+
+impl InterpretedPage {
+    fn skipped() -> Self {
+        Self {
+            spans: Vec::new(),
+            mc_actualtext: None,
+            cmsy: None,
+        }
+    }
+
+    /// Whether this result answers a request with or without CMSY capture.
+    fn serves(&self, capture_cmsy: bool) -> bool {
+        !capture_cmsy || self.mc_actualtext.is_none() || self.cmsy.is_some()
+    }
+
+    fn estimated_bytes(&self) -> usize {
+        size_of::<Self>()
+            + estimated_span_bytes(&self.spans)
+            + self.cmsy.as_ref().map_or(0, estimated_span_bytes)
+            + self
+                .mc_actualtext
+                .as_ref()
+                .map_or(0, |set| set.capacity() * size_of::<u32>())
+    }
+}
+
+/// Estimated heap and inline bytes of a span vector, for byte-budgeted caches.
+pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usize {
+    spans.capacity() * size_of::<crate::layout::TextSpan>()
+        + spans
+            .iter()
+            .map(|span| {
+                span.text.capacity()
+                    + span.font_name.capacity()
+                    + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
+            })
+            .sum::<usize>()
+}
+
+#[cfg(test)]
+thread_local! {
+    static PAGE_SPAN_INTERPRETATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Content interpretations for spans run on this thread so far.
+#[cfg(test)]
+pub(super) fn page_span_interpretations() -> usize {
+    PAGE_SPAN_INTERPRETATIONS.with(std::cell::Cell::get)
 }
 
 /// Internal bridge: reorders `spans` with `order` as if each raised mark sat on the baseline of the
@@ -135,7 +213,67 @@ impl PdfDocument {
     /// `extract_spans_with_reading_order`. Spans are returned without any
     /// sorting or erase-region filtering applied.
     pub(super) fn extract_spans_raw(&self, page_index: usize) -> Result<Vec<crate::layout::TextSpan>> {
-        self.extract_spans_raw_with_extraction_config(page_index, crate::extractors::TextExtractionConfig::default())
+        self.cached_page_spans(page_index, ScriptGeometry::Flatten, false, None)
+    }
+
+    /// Drop completed per-page span results so the next read interprets the
+    /// page content again, for tests of the caches below the page level.
+    #[cfg(test)]
+    pub(super) fn clear_completed_span_caches(&self) {
+        self.page_spans_cache.lock_or_recover().clear();
+        self.raw_page_spans_cache.lock_or_recover().clear();
+    }
+
+    /// Unfiltered, default-config raw spans, served from `raw_page_spans_cache`
+    /// after the first interpretation of the same page and options.
+    ///
+    /// A hit reproduces the interpretation's document effects: it rewrites the
+    /// page's `mc_actualtext_mcids` entry, which a differently-filtered call may
+    /// have replaced since, and fills `cmsy` the same way.
+    fn cached_page_spans(
+        &self,
+        page_index: usize,
+        script_geometry: ScriptGeometry,
+        skip_nonpainting_text: bool,
+        cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<Vec<crate::layout::TextSpan>> {
+        let key = RawSpanKey {
+            page_index,
+            script_geometry,
+            skip_nonpainting_text,
+        };
+        let capture_cmsy = cmsy.is_some();
+        let cached = self.raw_page_spans_cache.lock_or_recover().get(&key).cloned();
+        if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
+            self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
+            if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
+                output.clone_from(witnesses);
+            }
+            return Ok(page.spans.clone());
+        }
+        let page = self.interpret_page_spans(
+            page_index,
+            crate::extractors::TextExtractionConfig::default(),
+            HashSet::new(),
+            HashSet::new(),
+            script_geometry,
+            skip_nonpainting_text,
+            capture_cmsy,
+        )?;
+        self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
+        if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
+            output.clone_from(witnesses);
+        }
+        let cached = InterpretedPage {
+            spans: page.spans.clone(),
+            mc_actualtext: page.mc_actualtext,
+            cmsy: page.cmsy,
+        };
+        let bytes = cached.estimated_bytes();
+        self.raw_page_spans_cache
+            .lock_or_recover()
+            .insert(key, std::sync::Arc::new(cached), bytes);
+        Ok(page.spans)
     }
 
     /// Internal helper: extract raw text spans using a specific extraction config.
@@ -183,18 +321,43 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         skip_nonpainting_text: bool,
     ) -> Result<Vec<crate::layout::TextSpan>> {
-        self.extract_spans_with_cmsy_capture(
+        let page = self.interpret_page_spans(
             page_index,
             config,
             excluded_layers,
             excluded_inks,
             script_geometry,
             skip_nonpainting_text,
-            None,
-        )
+            false,
+        )?;
+        self.record_mc_actualtext(page_index, page.mc_actualtext);
+        Ok(page.spans)
     }
 
-    fn extract_spans_with_cmsy_capture(
+    /// Store the MCIDs whose in-stream /ActualText applied during a page's
+    /// extraction, so the struct-tree-scope applier honours MC-scope-wins
+    /// precedence (§14.9.4). `None` leaves the page's entry alone.
+    ///
+    /// The per-page entry is REPLACED, not extended: every extraction is a
+    /// self-contained per-page extraction and its own MC-scope detections must
+    /// be authoritative. Accumulating would make stale results from an earlier
+    /// filter-set leak into a later, differently-filtered call. ~keep
+    fn record_mc_actualtext(&self, page_index: usize, mc_set: Option<HashSet<u32>>) {
+        let Some(mc_set) = mc_set else {
+            return;
+        };
+        let mut guard = self.mc_actualtext_mcids.lock_or_recover();
+        if mc_set.is_empty() {
+            guard.remove(&page_index);
+        } else {
+            guard.insert(page_index, mc_set);
+        }
+    }
+
+    /// Interpret a page's content stream into raw spans. Uncached; the document
+    /// effect it produces is returned in [`InterpretedPage`] for the caller to
+    /// record.
+    fn interpret_page_spans(
         &self,
         page_index: usize,
         config: crate::extractors::TextExtractionConfig,
@@ -202,11 +365,13 @@ impl PdfDocument {
         excluded_inks: HashSet<String>,
         script_geometry: ScriptGeometry,
         skip_nonpainting_text: bool,
-        cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
-    ) -> Result<Vec<crate::layout::TextSpan>> {
+        capture_cmsy: bool,
+    ) -> Result<InterpretedPage> {
+        #[cfg(test)]
+        PAGE_SPAN_INTERPRETATIONS.with(|count| count.set(count.get() + 1));
         if self.is_encrypted_unreadable() {
             tracing::warn!(target: LOG_TARGET, "PDF is encrypted and could not be decrypted; returning no spans");
-            return Ok(Vec::new());
+            return Ok(InterpretedPage::skipped());
         }
         use crate::extractors::TextExtractor;
 
@@ -226,7 +391,7 @@ impl PdfDocument {
                 reason = "no /Font resources and no Form XObjects",
                 "skipping page text extraction"
             );
-            return Ok(Vec::new());
+            return Ok(InterpretedPage::skipped());
         }
 
         let content_data = match self.cached_page_content(page_index) {
@@ -240,7 +405,7 @@ impl PdfDocument {
                     error_offset = ?error.telemetry_offset(),
                     "returning empty page content after decode failure"
                 );
-                return Ok(Vec::new());
+                return Ok(InterpretedPage::skipped());
             }
         };
 
@@ -252,7 +417,7 @@ impl PdfDocument {
                 reason = "content stream has no BT and no Do operator",
                 "skipping page text extraction"
             );
-            return Ok(Vec::new());
+            return Ok(InterpretedPage::skipped());
         }
 
         let mut extractor = TextExtractor::with_config(config);
@@ -283,31 +448,16 @@ impl PdfDocument {
             }
         }
 
-        if cmsy.is_some() {
+        if capture_cmsy {
             extractor.cmsy_witnesses = Some(Vec::new());
         }
         let spans = extractor.extract_text_spans(&content_data)?;
-        if let Some(output) = cmsy {
-            *output = extractor.cmsy_witnesses.take().unwrap_or_default();
-        }
-        // Drain MCIDs whose in-stream /ActualText was applied during
-        // extraction and stash on the document so the struct-tree-
-        // scope applier honours MC-scope-wins precedence (§14.9.4).
-        //
-        // The per-page entry is REPLACED, not extended: every
-        // `extract_spans_impl` call is a self-contained per-page
-        // extraction and its own MC-scope detections must be
-        // authoritative. Accumulating would make stale results from
-        // an earlier filter-set leak into a later, differently-
-        // filtered call. ~keep ~keep
-        let mc_set = extractor.take_mc_actualtext_mcids();
-        let mut guard = self.mc_actualtext_mcids.lock_or_recover();
-        if mc_set.is_empty() {
-            guard.remove(&page_index);
-        } else {
-            guard.insert(page_index, mc_set);
-        }
-        Ok(spans)
+        let cmsy = capture_cmsy.then(|| extractor.cmsy_witnesses.take().unwrap_or_default());
+        Ok(InterpretedPage {
+            spans,
+            mc_actualtext: Some(extractor.take_mc_actualtext_mcids()),
+            cmsy,
+        })
     }
 
     /// Internal Core bridge for text over a scanned picture. Render modes 3 and 7
@@ -320,14 +470,7 @@ impl PdfDocument {
     /// Return the painting transcript and the positioned spans from the same extraction. ~keep
     #[doc(hidden)]
     pub fn extract_painting_text_and_spans(&self, page_index: usize) -> Result<(String, Vec<crate::layout::TextSpan>)> {
-        let spans = self.extract_spans_impl(
-            page_index,
-            crate::extractors::TextExtractionConfig::default(),
-            HashSet::new(),
-            HashSet::new(),
-            ScriptGeometry::Flatten,
-            true,
-        )?;
+        let spans = self.cached_page_spans(page_index, ScriptGeometry::Flatten, true, None)?;
         let spans = self.postprocess_spans(page_index, spans)?;
         let text = self.assemble_text_from_spans(page_index, spans.clone(), &Default::default())?;
         Ok((Self::apply_mixed_rtl_line_pass(text), spans))
@@ -850,15 +993,7 @@ impl PdfDocument {
         reading_order: ReadingOrder,
         witnesses: Option<&mut Vec<crate::layout::TextSpan>>,
     ) -> Result<crate::layout::PageText> {
-        let spans = self.extract_spans_with_cmsy_capture(
-            page_index,
-            crate::extractors::TextExtractionConfig::default(),
-            HashSet::new(),
-            HashSet::new(),
-            ScriptGeometry::Preserve,
-            false,
-            witnesses,
-        )?;
+        let spans = self.cached_page_spans(page_index, ScriptGeometry::Preserve, false, witnesses)?;
         let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
         let chars = spans.iter().flat_map(|span| span.to_chars()).collect();
         let media_box = self.get_page_media_box(page_index)?;

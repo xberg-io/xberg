@@ -66,6 +66,7 @@ fn nested_form_pdf_with_leaf(roots: &[usize], leaf: &str) -> Vec<u8> {
 }
 
 fn raw_span_text(document: &PdfDocument, page: usize) -> String {
+    document.clear_completed_span_caches();
     document
         .extract_spans_raw(page)
         .expect("extract nested forms")
@@ -75,7 +76,7 @@ fn raw_span_text(document: &PdfDocument, page: usize) -> String {
 }
 
 fn public_text(document: &PdfDocument, page: usize, mode: &str) -> String {
-    document.page_spans_cache.lock().unwrap().clear();
+    document.clear_completed_span_caches();
     let text = match mode {
         "spans" => document
             .extract_spans(page)

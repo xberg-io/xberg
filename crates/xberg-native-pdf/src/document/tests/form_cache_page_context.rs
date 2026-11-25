@@ -65,7 +65,7 @@ fn assert_page_context_survives_cache_warm(page_heights: [u32; 2]) {
         assert_eq!(warmed.xobject_spans_cache.lock().unwrap().len(), 2);
         for page in order {
             // Bypass completed page spans so this read exercises the warm Form cache. ~keep
-            warmed.page_spans_cache.lock().unwrap().clear();
+            warmed.clear_completed_span_caches();
             assert_eq!(
                 span_text(&warmed, page),
                 expected[page],
@@ -92,7 +92,7 @@ fn equal_page_contexts_reuse_cached_form_spans_without_losing_text() {
     let document = PdfDocument::from_bytes(pdf).expect("open equal-page cache control");
     for page in [0, 1, 0, 1] {
         // Bypass completed page spans so repeated reads exercise the warm Form cache. ~keep
-        document.page_spans_cache.lock().unwrap().clear();
+        document.clear_completed_span_caches();
         assert_eq!(span_text(&document, page), TEXT, "page {page}");
         assert_eq!(document.xobject_spans_cache.lock().unwrap().len(), 1);
     }
@@ -160,7 +160,7 @@ fn cached_form_spans_keep_each_enclosing_cmap_donor() {
     for order in [[0, 1], [1, 0]] {
         let doc = PdfDocument::from_bytes(pdf.clone()).expect("open shared form");
         for page in order.into_iter().chain(order) {
-            doc.page_spans_cache.lock().unwrap().clear();
+            doc.clear_completed_span_caches();
             assert_eq!(span_text(&doc, page), expected[page], "page {page}, order {order:?}");
         }
     }
@@ -240,7 +240,7 @@ fn assert_shadowed_selected_font_survives_form(form_glyph: &str, form_size: u32,
     for order in [[0, 1], [1, 0]] {
         let doc = PdfDocument::from_bytes(pdf.clone()).expect("open shared Form contexts");
         for page in order.into_iter().chain(order) {
-            doc.page_spans_cache.lock().unwrap().clear();
+            doc.clear_completed_span_caches();
             assert_eq!(span_text(&doc, page), expected[page], "page {page}, order {order:?}");
         }
     }

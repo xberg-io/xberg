@@ -55,7 +55,7 @@ fn a_replayed_form_keeps_the_pen_continuation_of_its_arrays() {
         "the form is cached"
     );
     // Bypass the completed page spans so this read replays the cached form spans. ~keep
-    document.page_spans_cache.lock().unwrap().clear();
+    document.clear_completed_span_caches();
     let warm = runs(&document);
     assert!(warm.contains("brown"), "warm form run: {warm}");
     assert_eq!(warm, cold, "the replay must equal the cold run");
