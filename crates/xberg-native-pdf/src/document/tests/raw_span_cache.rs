@@ -274,16 +274,55 @@ fn a_cache_hit_restores_the_pages_actual_text_entry() {
 }
 
 #[test]
-fn the_budget_admits_until_full_and_keeps_earlier_entries() {
-    let mut cache = crate::cache::AdmissionBudgetCache::new(10);
-    assert!(cache.insert(0, "a", 6));
-    assert!(!cache.insert(1, "b", 5), "an entry past the budget is refused");
-    assert_eq!(cache.get(&0), Some(&"a"));
-    assert!(cache.insert(0, "c", 10), "a replacement may use the bytes it frees");
-    assert_eq!(cache.get(&0), Some(&"c"));
-    assert!(!cache.insert(0, "d", 11));
-    assert_eq!(cache.get(&0), Some(&"c"), "a refused replacement keeps the entry");
+fn the_budget_pins_until_full_and_keeps_recent_entries_past_it() {
+    let mut cache = crate::cache::AdmissionBudgetCache::new(10, 2);
+    cache.insert(0, "a", 6);
+    for (key, value) in [(1, "b"), (2, "c"), (3, "d")] {
+        cache.insert(key, value, 5);
+    }
+    assert_eq!(cache.get(&0), Some(&"a"), "a pinned entry outlives later inserts");
+    assert_eq!(cache.get(&1), None, "the least recent entry past the budget is evicted");
+    assert_eq!(cache.get(&2), Some(&"c"));
+    assert_eq!(cache.get(&3), Some(&"d"));
+    cache.insert(0, "e", 10);
+    assert_eq!(cache.get(&0), Some(&"e"), "a replacement may use the bytes it frees");
+    cache.insert(0, "f", 11);
+    assert_eq!(
+        cache.get(&0),
+        Some(&"f"),
+        "a replacement past the budget is kept as recent"
+    );
+    assert_eq!(cache.get(&2), None);
+    assert_eq!(cache.get(&3), Some(&"d"));
+    cache.insert(4, "g", 10);
+    assert_eq!(cache.get(&4), Some(&"g"), "the freed budget pins the next entry");
     cache.clear();
     assert_eq!(cache.len(), 0);
-    assert!(cache.insert(1, "b", 10));
+}
+
+/// Every pass over a document longer than the old 8-entry caches finds the
+/// postprocessed spans and characters of its first page still cached.
+#[test]
+fn span_and_char_caches_keep_every_page_of_a_long_document() {
+    const PAGES: usize = 12;
+    let doc = PdfDocument::from_bytes(many_pages_pdf(PAGES)).expect("open document");
+    let first_chars = doc.cached_page_chars(0).unwrap();
+    for page in 0..PAGES {
+        drop(doc.extract_spans(page).unwrap());
+    }
+    assert_eq!(doc.page_spans_cache.lock().unwrap().len(), PAGES);
+    assert!(std::sync::Arc::ptr_eq(&first_chars, &doc.cached_page_chars(0).unwrap()));
+    let fresh = PdfDocument::from_bytes(many_pages_pdf(PAGES)).unwrap();
+    for page in 0..PAGES {
+        assert_eq!(
+            format!("{:?}", doc.extract_spans(page).unwrap()),
+            format!("{:?}", fresh.extract_spans(page).unwrap()),
+            "page {page}"
+        );
+        assert_eq!(
+            format!("{:?}", doc.extract_chars(page).unwrap()),
+            format!("{:?}", fresh.extract_chars(page).unwrap()),
+            "page {page}"
+        );
+    }
 }
