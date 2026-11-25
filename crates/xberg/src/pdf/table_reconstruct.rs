@@ -2137,7 +2137,43 @@ pub(crate) fn is_well_formed_borderless_table(
     if !short_grid_has_positive_table_evidence(grid) {
         return false;
     }
+    if looks_like_numbered_reference_list(grid) {
+        return false;
+    }
     ruled || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
+}
+
+/// Fewest rows, and smallest percentage of rows, that open a numbered bibliography entry
+/// before a candidate reads as a reference list. A two-column bibliography's entries wrap
+/// and contain years, volumes and pages, which the prose statistics read as table cells;
+/// on the benchmark corpus such lists were admitted as tables (1001.1811 p6, 1401.4991 p4)
+/// while no genuine table had a cell opening an entry. ~keep
+const REFERENCE_LIST_MIN_ENTRY_ROWS: usize = 3;
+const REFERENCE_LIST_MIN_ENTRY_ROW_PERCENT: usize = 25;
+
+fn looks_like_numbered_reference_list(grid: &[Vec<String>]) -> bool {
+    let entries = grid
+        .iter()
+        .filter(|row| row.iter().any(|cell| opens_numbered_reference(cell)))
+        .count();
+    entries >= REFERENCE_LIST_MIN_ENTRY_ROWS
+        && entries.saturating_mul(100) >= grid.len().saturating_mul(REFERENCE_LIST_MIN_ENTRY_ROW_PERCENT)
+}
+
+/// `[12] A. Author, ...`: a bracketed entry number followed by entry text. A bare `[12]`
+/// is a citation in a table's reference column, not an entry, and does not count.
+fn opens_numbered_reference(cell: &str) -> bool {
+    let Some(rest) = cell.trim_start().strip_prefix('[') else {
+        return false;
+    };
+    let Some((number, text)) = rest.split_once(']') else {
+        return false;
+    };
+    (1..=3).contains(&number.len())
+        && number.bytes().all(|byte| byte.is_ascii_digit())
+        && text.starts_with(char::is_whitespace)
+        && text.trim_start().starts_with(char::is_alphabetic)
+        && text.split_whitespace().nth(1).is_some()
 }
 
 /// Rows a candidate must have before [`post_process_table_inner`]'s prose tests
@@ -6388,6 +6424,72 @@ mod tests {
             is_well_formed_borderless_table(&grid, &region, &columns, 0),
             "numeric value cells are the positive evidence the short-region gate asks for"
         );
+    }
+
+    fn grid_of(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn numbered_reference_list_is_not_well_formed_even_when_ruled() {
+        let entries: [[&str; 2]; 6] = [
+            [
+                "[1] Bartelmann M., Doran M., 2006, A&A, 454, 27",
+                "[4] Eke V., Cole S., 1996, MNRAS, 282, 263",
+            ],
+            ["Wetterich C., 2005, A&A, 454, 27", "Frenk C. S., 1996, MNRAS, 282, 263"],
+            [
+                "[2] Basilakos S., 2003, ApJ, 590, 636",
+                "[5] Kirkman D., 2003, ApJS, 149, 1",
+            ],
+            ["Polarski D., 2008, PRD, 77, 1", "Tytler D., 2003, ApJS, 149, 1"],
+            [
+                "[3] Carroll S. M., 2001, LRR, 4, 1",
+                "[6] Linder E. V., 2005, PRD, 72, 4",
+            ],
+            [
+                "Press W. H., 1992, ARA&A, 30, 499",
+                "Turner E. L., 1992, ARA&A, 30, 499",
+            ],
+        ];
+        let region = gh1760_clean_two_column_region(entries.len());
+        let columns = vec![0u32, 200];
+        let with_markers: Vec<&[&str]> = entries.iter().map(|row| &row[..]).collect();
+        let without_markers: Vec<Vec<String>> = entries
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|cell| cell.split_once("] ").map_or(*cell, |(_, text)| text).to_string())
+                    .collect()
+            })
+            .collect();
+
+        assert!(
+            is_well_formed_borderless_table(&without_markers, &region, &columns, 0),
+            "precondition: the same cells without entry numbers pass every other test"
+        );
+        for rules in [0, MIN_HORIZONTAL_RULES_FOR_ADMISSION] {
+            assert!(
+                !is_well_formed_borderless_table(&grid_of(&with_markers), &region, &columns, rules),
+                "rows opening `[n] Author` entries are a bibliography, not a table (rules={rules})"
+            );
+        }
+    }
+
+    #[test]
+    fn bare_citation_column_does_not_read_as_a_reference_list() {
+        let region = gh1760_clean_two_column_region(4);
+        let columns = vec![0u32, 200];
+        let grid = grid_of(&[
+            &["Method", "Ref.", "Accuracy"],
+            &["ResNet", "[12]", "76.1"],
+            &["ViT", "[7]", "81.8"],
+            &["Swin", "[21]", "83.3"],
+        ]);
+
+        assert!(is_well_formed_borderless_table(&grid, &region, &columns, 0));
     }
 
     #[test]
