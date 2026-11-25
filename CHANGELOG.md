@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [1.5.3] - 2026-11-25
+
+### Fixed
+
+- The 1.5.2 release did not finish publishing: the Windows archives carried CRLF line endings in `LICENSE`, the macOS Elixir NIF archive rejected the generated third-party notice, the Java package failed its style check and the `n8n-nodes-xberg` package failed to build. 1.5.3 ships the 1.5.0 changes with those packages fixed.
+
 ## [1.5.2] - 2026-11-24
 
 ### Fixed

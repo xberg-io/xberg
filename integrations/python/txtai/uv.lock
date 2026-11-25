@@ -1628,7 +1628,7 @@ wheels = [
 
 [[package]]
 name = "txtai-xberg"
-version = "1.5.2"
+version = "1.5.3"
 source = { editable = "." }
 dependencies = [
     { name = "xberg" },
@@ -1704,7 +1704,7 @@ wheels = [
 
 [[package]]
 name = "xberg"
-version = "1.5.2"
+version = "1.5.3"
 source = { editable = "../../../packages/python" }
 
 [package.metadata]

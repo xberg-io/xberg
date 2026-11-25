@@ -1,6 +1,6 @@
 # AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 # Content-Hash: blake3:39c940f3b66509996606543cbf415840086081671195d504ce78752a2000da49
-# Source-Hash: blake3:c737030b81aa77941284ed51d1f79c62507ea7731681c990b45239ed04ee8c83
+# Source-Hash: blake3:50bbaff2b70e82e93000233c31a3aaf267f9caa880fb472d7ddff0c1b922d0af
 # Schema-Version: v1
 
 """Register product skills and a local MCP tool bridge with Hermes."""
