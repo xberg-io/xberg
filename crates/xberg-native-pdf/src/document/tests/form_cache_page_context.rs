@@ -98,7 +98,7 @@ fn equal_page_contexts_reuse_cached_form_spans_without_losing_text() {
     }
 }
 
-fn inherited_cmap_form_pdf(second_donor: u32) -> Vec<u8> {
+pub(super) fn inherited_cmap_form_pdf(second_donor: u32) -> Vec<u8> {
     use super::pdf_fixtures::build_truetype_with_cmap_format4;
 
     let page = |font_id| {
@@ -189,7 +189,7 @@ fn equal_nonempty_font_scopes_reuse_the_same_cached_form_spans() {
     assert_eq!(cached_span_allocation(), first, "warm read must reuse the stored spans");
 }
 
-fn shadowed_selected_font_pdf(form_glyph: &str, form_size: u32) -> Vec<u8> {
+pub(super) fn shadowed_selected_font_pdf(form_glyph: &str, form_size: u32) -> Vec<u8> {
     let page = |font| {
         format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R \

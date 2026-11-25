@@ -7,7 +7,7 @@ const CONTENT: &str = "/P << /MCID 0 /ActualText (InlineWins) >> BDC BT /F1 12 T
 
 /// A tagged page whose MCID 0 carries an inline /ActualText while its structure
 /// element carries another, beside a default-off optional-content layer.
-fn tagged_layered_pdf() -> Vec<u8> {
+pub(super) fn tagged_layered_pdf() -> Vec<u8> {
     let content = format!("<< /Length {} >>\nstream\n{CONTENT}\nendstream", CONTENT.len());
     build_catalog_test_pdf(
         b"<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 7 0 R \

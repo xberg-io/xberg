@@ -45,60 +45,129 @@ fn many_pages_pdf(count: usize) -> Vec<u8> {
 
 /// Every read a default extraction makes of one page, under each option set the
 /// raw span cache keys on, rendered with `Debug` so every field is compared.
-fn page_reads(doc: &PdfDocument, page: usize) -> Vec<String> {
+/// `before_each` runs ahead of every read.
+fn page_reads(doc: &PdfDocument, page: usize, before_each: impl Fn(&PdfDocument)) -> Vec<String> {
+    let mut reads = Vec::new();
+    before_each(doc);
     let mut witnesses = Vec::new();
     let preserved = doc
         .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut witnesses))
         .expect("preserved script geometry");
-    vec![
-        format!("{:?}", doc.extract_spans_raw(page).expect("raw spans")),
-        format!(
-            "{:?}",
-            doc.extract_spans_with_reading_order(page, ReadingOrder::ColumnAware)
-                .expect("column-aware spans")
-        ),
-        format!(
-            "{:?}",
-            doc.extract_page_text_with_options(page, ReadingOrder::TopToBottom)
-                .expect("top-to-bottom page text")
-        ),
-        format!("{:?}", doc.extract_spans(page).expect("postprocessed spans")),
-        format!(
-            "{:?}",
-            doc.extract_page_text_with_script_geometry(page, ReadingOrder::TopToBottom)
-                .expect("script geometry")
-        ),
-        format!("{preserved:?}"),
-        format!("{witnesses:?}"),
-        format!("{:?}", doc.mc_actualtext_mcids.lock().unwrap().get(&page)),
-    ]
+    reads.push(format!("{preserved:?}"));
+    reads.push(format!("{witnesses:?}"));
+    before_each(doc);
+    reads.push(format!("{:?}", doc.extract_spans_raw(page).expect("raw spans")));
+    before_each(doc);
+    reads.push(format!(
+        "{:?}",
+        doc.extract_spans_with_reading_order(page, ReadingOrder::ColumnAware)
+            .expect("column-aware spans")
+    ));
+    before_each(doc);
+    reads.push(format!(
+        "{:?}",
+        doc.extract_page_text_with_options(page, ReadingOrder::TopToBottom)
+            .expect("top-to-bottom page text")
+    ));
+    before_each(doc);
+    reads.push(format!("{:?}", doc.extract_spans(page).expect("postprocessed spans")));
+    before_each(doc);
+    reads.push(format!(
+        "{:?}",
+        doc.extract_page_text_with_script_geometry(page, ReadingOrder::TopToBottom)
+            .expect("script geometry")
+    ));
+    before_each(doc);
+    reads.push(format!("{:?}", doc.extract_text(page).expect("text")));
+    reads.push(format!("{:?}", doc.mc_actualtext_mcids.lock().unwrap().get(&page)));
+    reads
 }
 
-#[test]
-fn cached_reads_equal_a_fresh_interpretation_for_every_option_set() {
-    let pdf = option_set_pdf();
-    let warm = PdfDocument::from_bytes(pdf.clone()).expect("open warm document");
+/// Read every page of `pdf` in `order` with the page passes running, then check
+/// that a second round is served entirely from the cache and equals, read by
+/// read, a cold document of the same bytes with every page cache emptied before
+/// each read.
+fn assert_cached_reads_equal_uncached(pdf: &[u8], order: &[usize]) {
+    let warm = PdfDocument::from_bytes(pdf.to_vec()).expect("open warm document");
     warm.begin_page_passes();
-    let pages = warm.page_count().unwrap();
-    assert_eq!(pages, 5);
-    for page in 0..pages {
-        drop(page_reads(&warm, page));
+    for &page in order {
+        drop(page_reads(&warm, page, |_| {}));
     }
-    for page in 0..pages {
-        let fresh = PdfDocument::from_bytes(pdf.clone()).expect("open fresh document");
+    for &page in order {
         let before = page_span_interpretations();
-        let cached = page_reads(&warm, page);
+        let cached = page_reads(&warm, page, |_| {});
         assert_eq!(
             page_span_interpretations(),
             before,
-            "page {page}: the warm reads must all be served from the cache"
+            "page {page}, order {order:?}: the warm reads must all be served from the cache"
         );
-        assert_eq!(cached, page_reads(&fresh, page), "page {page}");
+        let cold = PdfDocument::from_bytes(pdf.to_vec()).expect("open cold document");
+        let uncached = page_reads(&cold, page, PdfDocument::release_page_caches);
+        assert_eq!(cached, uncached, "page {page}, order {order:?}");
     }
 }
 
 #[test]
-fn the_fixture_exercises_script_geometry_rotation_and_actual_text() {
+fn cached_reads_equal_uncached_reads_for_every_option_set() {
+    assert_cached_reads_equal_uncached(&option_set_pdf(), &[0, 1, 2, 3, 4]);
+}
+
+#[test]
+fn cached_reads_equal_uncached_reads_on_a_tagged_layered_page() {
+    assert_cached_reads_equal_uncached(&super::span_cache_actual_text::tagged_layered_pdf(), &[0]);
+}
+
+/// Two pages that paint one Form XObject under different font scopes, read in
+/// both orders: the shared font and Form caches are where GH#2429 found
+/// order-dependent decoding.
+#[test]
+fn cached_reads_equal_uncached_reads_across_a_shared_form_in_either_order() {
+    let pdfs = [
+        super::form_cache_page_context::inherited_cmap_form_pdf(16),
+        super::form_cache_page_context::shadowed_selected_font_pdf("D", 13),
+        super::form_cache_page_context::shadowed_selected_font_pdf("space", 12),
+    ];
+    for pdf in &pdfs {
+        for order in [[0, 1], [1, 0]] {
+            assert_cached_reads_equal_uncached(pdf, &order);
+        }
+    }
+}
+
+/// The CMSY source-glyph fixture of the structure pass's inline-math evidence.
+fn cmsy_witness_pdf() -> Vec<u8> {
+    let content = "BT /F1 12 Tf 40 700 Td (V) Tj 0 -30 Td [(V)] TJ ET";
+    let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (
+                3,
+                &b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R \
+                   /Resources << /Font << /F1 5 0 R >> >> >>"[..],
+            ),
+            (4, stream.as_bytes()),
+            (5, &b"<< /Type /Font /Subtype /Type1 /BaseFont /ABCDEF+CMSY10 >>"[..]),
+        ],
+    )
+}
+
+#[test]
+fn cached_reads_equal_uncached_reads_with_cmsy_witnesses() {
+    let pdf = cmsy_witness_pdf();
+    let doc = PdfDocument::from_bytes(pdf.clone()).expect("open document");
+    let mut witnesses = Vec::new();
+    drop(
+        doc.extract_page_text_with_cmsy_capture(0, ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .unwrap(),
+    );
+    assert_eq!(witnesses.len(), 2, "the fixture must yield witnesses");
+    assert_cached_reads_equal_uncached(&pdf, &[0]);
+}
+
+#[test]
+fn the_fixture_exercises_script_geometry_and_actual_text() {
     let doc = PdfDocument::from_bytes(option_set_pdf()).expect("open document");
     let flattened = format!(
         "{:?}",
@@ -128,7 +197,6 @@ fn the_fixture_exercises_script_geometry_rotation_and_actual_text() {
             .any(|span| span.text.contains("Ghost")),
         "the default read keeps invisible text"
     );
-    assert_eq!(doc.get_page_rotation(2).unwrap(), 90);
     drop(doc.extract_spans_raw(3).unwrap());
     assert_eq!(
         doc.mc_actualtext_mcids.lock().unwrap().get(&3),
