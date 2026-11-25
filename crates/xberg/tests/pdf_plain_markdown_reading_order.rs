@@ -124,13 +124,13 @@ fn words(text: &str) -> Vec<String> {
 /// two outputs compares their reading order without depending on how each output format
 /// joins lines or renders a table.
 fn shared_unique_words(text: &[String], other: &[String]) -> Vec<String> {
-    let count = |words: &[String]| {
+    fn count(words: &[String]) -> HashMap<&str, usize> {
         let mut counts: HashMap<&str, usize> = HashMap::new();
         for word in words {
             *counts.entry(word.as_str()).or_default() += 1;
         }
         counts
-    };
+    }
     let (text_counts, other_counts) = (count(text), count(other));
     text.iter()
         .filter(|word| text_counts[word.as_str()] == 1 && other_counts.get(word.as_str()) == Some(&1))
