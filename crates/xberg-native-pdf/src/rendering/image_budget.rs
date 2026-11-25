@@ -62,9 +62,12 @@ pub(super) struct JpegPaint {
 pub(super) const TINY_SKIA_DRAW_BYTES: u64 = 16 * 1024;
 
 /// Smallest scale, on either axis, at which a [`Blit::Direct`] draw is admitted. tiny-skia's bicubic
-/// kernel reads only the 4x4 source pixels around each sample, so below half scale it skips source
-/// pixels and aliases; such an image is refused rather than drawn that way.
-const MIN_DIRECT_DRAW_SCALE: f32 = 0.5;
+/// kernel reads only the 4x4 source pixels around each sample, so the further it shrinks the more
+/// source pixels it skips: on dense text strokes a direct draw differs from the pre-resize by about
+/// 6 levels on average at 0.8, 9 at 0.7 and 12.6 at 0.6. Below 0.8 an image is refused rather than
+/// drawn that way, which also leaves a tall scan rendered well below its own resolution to the OCR
+/// path that reads its stored image.
+const MIN_DIRECT_DRAW_SCALE: f32 = 0.8;
 
 /// Where and how an image is painted: the device transform of its unit square and the [`Blit`].
 #[derive(Clone, Copy)]

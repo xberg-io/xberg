@@ -7985,8 +7985,8 @@ fn blit_rgba(
         }
         // The budget refused the pre-resize's copies. tiny-skia samples without a resized copy;
         // its bicubic 4x4 kernel spans +-2 source pixels, the nearest it has to the pre-resize's
-        // tent of +-1/scale (1.1 to 1.8 pixels over the 0.56 to 0.9 scales no reduced decode
-        // covers), and measured closer to it than bilinear. ~keep
+        // tent of +-1/scale (1.1 to 1.25 pixels over the 0.8 to 0.9 scales it is admitted at),
+        // and measured closer to it than bilinear. ~keep
         (Some(_), image_budget::Blit::Direct) => {
             paint.quality = tiny_skia::FilterQuality::Bicubic;
             (src_w, src_h, image.into_raw(), image_transform)

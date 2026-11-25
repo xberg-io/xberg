@@ -201,7 +201,7 @@ fn progressive_square() -> PdfImage {
 }
 
 #[test]
-fn a_direct_draw_is_admitted_down_to_half_scale_and_refused_below_it() {
+fn a_direct_draw_is_admitted_down_to_four_fifths_scale_and_refused_below_it() {
     let image = progressive_square();
     let canvas = 1000;
     let pixels = u64::from(SOURCE * SOURCE);
@@ -211,16 +211,16 @@ fn a_direct_draw_is_admitted_down_to_half_scale_and_refused_below_it() {
         let admitted = budget.admit_jpeg_decode(&image, canvas, Placement::extent(painted, painted), true);
         (admitted, budget.exceeded())
     };
-    // Painted over 610 px (scale 0.508), the pre-resize outweighs the RGB decode it follows, so only
+    // Painted over 970 px (scale 0.808), the pre-resize outweighs the RGB decode it follows, so only
     // the direct draw fits the decode and its RGBA copy.
-    assert!(resize_working_bytes((SOURCE, SOURCE), (610, 610)) > pixels * 3);
-    assert_eq!(admit(610.0).0.unwrap(), paint(JpegDecode::Full, Blit::Direct));
-    // Painted over 590 px (scale 0.492) a bicubic draw would skip source pixels, so the image is
-    // refused with the pre-resize's charge, the only draw left.
-    let (refused, exceeded) = admit(590.0);
+    assert!(resize_working_bytes((SOURCE, SOURCE), (970, 970)) > pixels * 3);
+    assert_eq!(admit(970.0).0.unwrap(), paint(JpegDecode::Full, Blit::Direct));
+    // Painted over 950 px (scale 0.792), below the 0.8 a direct draw needs, so the image is refused
+    // with the pre-resize's charge, the only draw left.
+    let (refused, exceeded) = admit(950.0);
     let error = refused.unwrap_err();
     assert!(exceeded, "{error}");
-    let pre_resize = pixels * 4 + resize_working_bytes((SOURCE, SOURCE), (590, 590)) + encoded(&image) + canvas;
+    let pre_resize = pixels * 4 + resize_working_bytes((SOURCE, SOURCE), (950, 950)) + encoded(&image) + canvas;
     assert!(
         error.to_string().contains(&format!("require {pre_resize} bytes")),
         "{error}"
