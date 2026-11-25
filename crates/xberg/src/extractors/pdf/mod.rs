@@ -677,13 +677,16 @@ fn apply_extracted_pdf_metadata(
 const MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE: usize = 20;
 const MIN_STRUCTURED_NATIVE_TOKEN_COVERAGE: f64 = 0.70;
 
+/// Lowercased words of `text` with edge ASCII punctuation trimmed. Tokens with no
+/// alphanumeric character (bullet and dash glyphs) are dropped: a structured list
+/// renders them as markers, so they can never be matched against the native text.
 fn normalized_pdf_tokens(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split_whitespace()
         .map(|word| {
             word.trim_matches(|character: char| character.is_ascii_punctuation())
                 .to_lowercase()
         })
-        .filter(|word| !word.is_empty())
+        .filter(|word| word.chars().any(char::is_alphanumeric))
 }
 
 fn structured_native_token_coverage(document: &InternalDocument, native_text: &str) -> Option<f64> {

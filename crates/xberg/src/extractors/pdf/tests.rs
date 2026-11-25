@@ -650,6 +650,44 @@ fn should_keep_structure_when_native_token_coverage_meets_floor() {
     assert!(matches!(selected.elements[0].kind, ElementKind::Heading { level: 1 }));
 }
 
+fn native_text_with_bullet_glyphs() -> String {
+    (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE)
+        .map(|index| format!("\u{2022} word{index} \u{2011}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn should_keep_structure_when_it_only_drops_bullet_and_dash_glyphs() {
+    let native_text = native_text_with_bullet_glyphs();
+    let words = (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut structured = InternalDocument::new("pdf");
+    structured.push_element(InternalElement::text(ElementKind::Heading { level: 1 }, words, 0));
+
+    let (_, is_structured) = select_native_pdf_document(&native_text, "application/pdf", Some(structured), None);
+
+    assert!(is_structured);
+}
+
+#[test]
+fn should_fall_back_when_words_are_missing_despite_ignored_bullet_glyphs() {
+    let native_text = native_text_with_bullet_glyphs();
+    let words = (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE / 2)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut structured = InternalDocument::new("pdf");
+    structured.push_element(InternalElement::text(ElementKind::Heading { level: 1 }, words, 0));
+
+    let (selected, is_structured) = select_native_pdf_document(&native_text, "application/pdf", Some(structured), None);
+
+    assert!(!is_structured);
+    assert_eq!(selected.elements[0].text, native_text);
+}
+
 #[test]
 fn should_count_table_cells_as_structured_native_text() {
     let native_text = coverage_native_text();
