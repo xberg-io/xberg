@@ -2,8 +2,9 @@
 // `system_fonts::load_font_file`. Upstream fontdb (`fs` + `memmap` features)
 // memory-maps each font file so the face scan touches only the pages it
 // parses; this copy dropped the memmap path to keep the crate free of
-// `unsafe`, which left a plain `std::fs::read` of every system font (~565 MB
-// on macOS, Apple Color Emoji alone 192 MB) on the first page render. Reading
+// `unsafe`, which left a plain `std::fs::read` of every system font (813 MB
+// across 369 files on macOS, Apple Color Emoji alone 192 MB) on the first page
+// render. Reading
 // only the table directories and the four tables the face parse consults gets
 // upstream's I/O profile back without `unsafe`. ~keep
 
@@ -16,7 +17,6 @@
 #![cfg_attr(any(target_arch = "wasm32", target_os = "android"), allow(dead_code))]
 
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
@@ -115,10 +115,45 @@ fn face_directories(prefix: &[u8], complete: bool) -> Option<Vec<Option<FaceDire
 }
 
 /// Reads the faces of the font file at `path` as a whole-file
-/// `FontRef::fonts` + `parse::parse_face_info` pass would, reading only the
-/// table directories and each face's [`FACE_INFO_TABLES`]. Each face is parsed
-/// from a compact single-face font holding those tables byte for byte.
+/// `FontRef::fonts` + `parse::parse_face_info` pass would. Reads only the
+/// table directories and each face's [`FACE_INFO_TABLES`] unless those tables
+/// add up to more than the file itself, and then reads the file once instead.
 pub(super) fn read_face_infos(path: &Path) -> io::Result<Vec<Result<FaceInfo, LoadError>>> {
+    match read_face_tables_within_budget(path)? {
+        Some(faces) => Ok(faces),
+        None => read_face_infos_whole_file(path),
+    }
+}
+
+/// A face's sfnt version and its present tables as `(tag, (offset, length))`.
+type FaceTables = (u32, Vec<(Tag, (u32, u32))>);
+
+/// The distinct table byte ranges of `faces`, sorted, or `None` when they sum
+/// to more than `file_len`. Collection faces commonly share tables, so each
+/// range is read once. ~keep
+fn distinct_ranges_within(faces: &[Option<FaceTables>], file_len: usize) -> Option<Vec<(u32, u32)>> {
+    let mut ranges: Vec<(u32, u32)> = faces
+        .iter()
+        .flatten()
+        .flat_map(|(_, present)| present.iter().map(|&(_, range)| range))
+        .collect();
+    ranges.sort_unstable();
+    ranges.dedup();
+    let total = ranges.iter().try_fold(0_usize, |total, &(_, length)| {
+        total.checked_add(length as usize).filter(|&total| total <= file_len)
+    });
+    total.map(|_| ranges)
+}
+
+/// The partial read behind [`read_face_infos`]: each face is parsed from a
+/// compact single-face font holding its [`FACE_INFO_TABLES`] byte for byte.
+///
+/// `None` when the distinct table ranges sum to more than the file length.
+/// Collection faces can point at different large, overlapping ranges, so
+/// reading per range could otherwise cost a multiple of the file. The
+/// directory prefix reads double up to the file length, so the partial path
+/// never reads more than about twice the file. ~keep
+fn read_face_tables_within_budget(path: &Path) -> io::Result<Option<Vec<Result<FaceInfo, LoadError>>>> {
     let mut file = File::open(path)?;
     let file_len = usize::try_from(file.metadata()?.len())
         .map_err(|_| io::Error::other("font file is larger than the address space"))?;
@@ -132,50 +167,59 @@ pub(super) fn read_face_infos(path: &Path) -> io::Result<Vec<Result<FaceInfo, Lo
         prefix_len = prefix_len.saturating_mul(2).min(file_len);
     };
 
+    // `FontRef::table_data` reads a null offset, or a range past the end of
+    // the file, as a missing table. ~keep
+    let faces: Vec<Option<FaceTables>> = directories
+        .into_iter()
+        .map(|directory| {
+            directory.map(|directory| {
+                let present = directory
+                    .tables
+                    .into_iter()
+                    .filter(|&(_, offset, length)| {
+                        offset != 0
+                            && (offset as usize)
+                                .checked_add(length as usize)
+                                .is_some_and(|end| end <= file_len)
+                    })
+                    .map(|(tag, offset, length)| (tag, (offset, length)))
+                    .collect();
+                (directory.sfnt_version, present)
+            })
+        })
+        .collect();
+
+    let Some(ranges) = distinct_ranges_within(&faces, file_len) else {
+        return Ok(None);
+    };
+    let mut table_bytes: HashMap<(u32, u32), Vec<u8>> = HashMap::with_capacity(ranges.len());
+    for (offset, length) in ranges {
+        let bytes = read_range(&mut file, offset as usize, length as usize)?;
+        table_bytes.insert((offset, length), bytes);
+    }
+
     let source = Source::File(path.to_path_buf());
-    // Collection faces commonly share tables; read each byte range once. ~keep
-    let mut table_bytes: HashMap<(u32, u32), Vec<u8>> = HashMap::new();
-    let mut faces = Vec::with_capacity(directories.len());
-    for (index, directory) in directories.into_iter().enumerate() {
+    let mut parsed_faces = Vec::with_capacity(faces.len());
+    for (index, face) in faces.into_iter().enumerate() {
         let index = index as u32;
-        let Some(directory) = directory else {
-            faces.push(Err(LoadError::Malformed));
+        let Some((sfnt_version, present)) = face else {
+            parsed_faces.push(Err(LoadError::Malformed));
             continue;
         };
-
-        // `FontRef::table_data` reads a null offset, or a range past the end
-        // of the file, as a missing table. ~keep
-        let present: Vec<(Tag, (u32, u32))> = directory
-            .tables
-            .into_iter()
-            .filter(|&(_, offset, length)| {
-                offset != 0
-                    && (offset as usize)
-                        .checked_add(length as usize)
-                        .is_some_and(|end| end <= file_len)
-            })
-            .map(|(tag, offset, length)| (tag, (offset, length)))
-            .collect();
-        for &(_, (offset, length)) in &present {
-            if let Entry::Vacant(slot) = table_bytes.entry((offset, length)) {
-                slot.insert(read_range(&mut file, offset as usize, length as usize)?);
-            }
-        }
-
         let tables: Vec<(Tag, &[u8])> = present
             .iter()
             .map(|(tag, range)| (*tag, table_bytes[range].as_slice()))
             .collect();
-        let parsed = match compact_font(directory.sfnt_version, &tables) {
+        let parsed = match compact_font(sfnt_version, &tables) {
             Some(compact) => match FontRef::new(&compact) {
                 Ok(font) => parse::parse_face_info(&font, source.clone(), index),
                 Err(_) => Err(LoadError::Malformed),
             },
             None => Err(LoadError::Malformed),
         };
-        faces.push(parsed);
+        parsed_faces.push(parsed);
     }
-    Ok(faces)
+    Ok(Some(parsed_faces))
 }
 
 /// Lays `tables` out as a single-face sfnt: a table directory whose records
@@ -210,9 +254,9 @@ fn read_range(file: &mut File, start: usize, len: usize) -> io::Result<Vec<u8>> 
     Ok(bytes)
 }
 
-/// The whole-file read `read_face_infos` replaced, kept as the reference the
-/// tests compare it against.
-#[cfg(test)]
+/// The whole-file read: upstream's parse over the full file bytes. The
+/// fallback for files whose tables exceed the partial-read budget, and the
+/// reference the tests compare the partial read against.
 fn read_face_infos_whole_file(path: &Path) -> io::Result<Vec<Result<FaceInfo, LoadError>>> {
     let data = std::fs::read(path)?;
     let source = Source::File(path.to_path_buf());
@@ -244,8 +288,14 @@ mod tests {
             .collect()
     }
 
+    /// The partial read alone; panics if the file falls back to a whole read,
+    /// so a comparison against [`whole_file`] cannot pass by taking that path.
     fn scanned(path: &Path) -> Vec<FaceSummary> {
-        summarize(read_face_infos(path).expect("scan font file"))
+        summarize(
+            read_face_tables_within_budget(path)
+                .expect("scan font file")
+                .expect("tables fit the partial-read budget"),
+        )
     }
 
     fn whole_file(path: &Path) -> Vec<FaceSummary> {
@@ -346,6 +396,90 @@ mod tests {
         for (name, bytes) in cases {
             let path = write_font(&dir, name, &bytes);
             assert_eq!(scanned(&path), whole_file(&path), "{name}");
+        }
+    }
+
+    /// Byte position of the `tag` record in the table directory at `base`.
+    fn record_position(font: &[u8], base: usize, tag: &[u8; 4]) -> usize {
+        let num_tables = usize::from(u16::from_be_bytes([font[base + 4], font[base + 5]]));
+        (0..num_tables)
+            .map(|record| base + SFNT_HEADER_LEN + record * TABLE_RECORD_LEN)
+            .find(|&at| &font[at..at + 4] == tag)
+            .expect("table record present")
+    }
+
+    fn be_u32(bytes: &[u8], at: usize) -> u32 {
+        u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap())
+    }
+
+    /// Each face's `OS/2` record reaches almost to the end of the file, with a
+    /// distinct length per face, so the distinct ranges sum to more than the
+    /// file: the scan must read the file once instead of once per range.
+    #[test]
+    fn scan_reads_the_whole_file_once_when_collection_tables_exceed_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let font = crate::fonts::bundled::DEJAVU_SANS;
+        let mut ttc = collection(&[font, font, font, font], 0);
+        let file_len = u32::try_from(ttc.len()).unwrap();
+        for face in 0..4_u32 {
+            let base = be_u32(&ttc, 12 + 4 * face as usize) as usize;
+            let os2 = record_position(&ttc, base, b"OS/2");
+            let length = file_len - be_u32(&ttc, os2 + 8) - 4 * face;
+            ttc[os2 + 12..os2 + 16].copy_from_slice(&length.to_be_bytes());
+        }
+        let path = write_font(&dir, "overlapping.ttc", &ttc);
+
+        assert!(
+            read_face_tables_within_budget(&path).unwrap().is_none(),
+            "overlapping tables must exceed the partial-read budget"
+        );
+        let faces = summarize(read_face_infos(&path).expect("read font file"));
+        assert_eq!(faces, whole_file(&path));
+        let weights: Vec<u16> = faces
+            .iter()
+            .map(|face| face.as_ref().expect("collection face parses").3.0)
+            .collect();
+        assert_eq!(weights, [400; 4]);
+    }
+
+    /// Lookup order matters once a directory is unsorted or repeats a tag:
+    /// `FontRef::table_data` then takes the first matching record. An `OTTO`
+    /// sfnt version must carry through to the compact font.
+    #[test]
+    fn scan_matches_whole_file_read_for_unusual_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let font = crate::fonts::bundled::DEJAVU_SANS;
+        let num_tables = usize::from(u16::from_be_bytes([font[4], font[5]]));
+        let last = SFNT_HEADER_LEN + (num_tables - 1) * TABLE_RECORD_LEN;
+        let name = record_position(font, 0, b"name");
+        let head = record_position(font, 0, b"head");
+        let bogus_name = |at: usize| {
+            let mut copy = font.to_vec();
+            copy.copy_within(head..head + TABLE_RECORD_LEN, at);
+            copy[at..at + 4].copy_from_slice(b"name");
+            copy
+        };
+
+        let mut unsorted = font.to_vec();
+        let first: Vec<u8> = unsorted[SFNT_HEADER_LEN..SFNT_HEADER_LEN + TABLE_RECORD_LEN].to_vec();
+        unsorted.copy_within(last..last + TABLE_RECORD_LEN, SFNT_HEADER_LEN);
+        unsorted[last..last + TABLE_RECORD_LEN].copy_from_slice(&first);
+        let mut cff_version = font.to_vec();
+        cff_version[..4].copy_from_slice(b"OTTO");
+
+        for (file, bytes, parses) in [
+            ("unsorted.ttf", unsorted, true),
+            ("duplicate-name-after.ttf", bogus_name(last), true),
+            ("duplicate-name-before.ttf", bogus_name(name - TABLE_RECORD_LEN), false),
+            ("otto.otf", cff_version, true),
+        ] {
+            let path = write_font(&dir, file, &bytes);
+            let faces = scanned(&path);
+            assert_eq!(faces, whole_file(&path), "{file}");
+            if parses {
+                let (_, families, ..) = faces[0].as_ref().expect("face parses");
+                assert_eq!(families[0].0, "DejaVu Sans", "{file}");
+            }
         }
     }
 
