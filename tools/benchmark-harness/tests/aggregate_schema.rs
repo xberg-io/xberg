@@ -1,4 +1,4 @@
-use benchmark_harness::aggregate::aggregate_new_format;
+use benchmark_harness::aggregate::{NewConsolidatedResults, aggregate_new_format};
 use benchmark_harness::system_load::SystemLoad;
 use benchmark_harness::types::{
     BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, OutputFormat, PdfMetadata, PerformanceMetrics,
@@ -59,7 +59,7 @@ fn make_benchmark_result(
 }
 
 #[test]
-fn test_schema_version_2_11_0() {
+fn test_schema_version_2_12_0() {
     let results = vec![make_benchmark_result(
         "xberg-markdown-baseline",
         OutputFormat::Markdown,
@@ -79,7 +79,7 @@ fn test_schema_version_2_11_0() {
     )];
 
     let aggregated = aggregate_new_format(&results);
-    assert_eq!(aggregated.schema_version, "2.11.0");
+    assert_eq!(aggregated.schema_version, "2.12.0");
 }
 
 #[test]
@@ -528,7 +528,7 @@ fn test_empty_results() {
     let results = vec![];
     let aggregated = aggregate_new_format(&results);
 
-    assert_eq!(aggregated.schema_version, "2.11.0");
+    assert_eq!(aggregated.schema_version, "2.12.0");
     assert!(aggregated.by_framework_mode.is_empty());
     assert!(aggregated.per_fixture_results.is_empty());
     assert_eq!(aggregated.metadata.total_results, 0);
@@ -662,4 +662,131 @@ fn test_pareto_frontier_reaches_public_schema() {
     assert_eq!(point.pages_per_sec, 100.0);
     assert_eq!(point.sf1, 0.88);
     assert_eq!(point.peak_memory_mb, 100.0);
+}
+
+fn quality(tf1: f64, sf1: Option<f64>, reading_order: Option<f64>) -> QualityMetrics {
+    QualityMetrics {
+        f1_score_text: tf1,
+        f1_score_numeric: tf1,
+        f1_score_layout: sf1,
+        quality_score: tf1,
+        missing_tokens: vec![],
+        extra_tokens: vec![],
+        correct: false,
+        reading_order_score: reading_order,
+    }
+}
+
+fn baseline_and_layout_run() -> Vec<BenchmarkResult> {
+    let row = |framework: &str, sf1: f64, reading_order: f64| {
+        make_benchmark_result(
+            framework,
+            OutputFormat::Markdown,
+            "fixture_1.pdf",
+            false,
+            true,
+            Some(quality(0.8, Some(sf1), Some(reading_order))),
+        )
+    };
+    vec![
+        row("xberg-markdown-baseline", 0.5, 0.6),
+        row("xberg-markdown-layout", 0.7, 0.9),
+        row("liteparse", 0.4, 0.5),
+    ]
+}
+
+#[test]
+fn test_schema_2_12_fields_are_serialized_with_expected_types() {
+    let aggregated = aggregate_new_format(&baseline_and_layout_run());
+    let value = serde_json::to_value(&aggregated).unwrap();
+
+    let layout_impact = value["layout_impact"].as_array().expect("layout_impact array");
+    assert_eq!(layout_impact.len(), 1);
+    let impact = &layout_impact[0];
+    assert_eq!(impact["layout_framework"], "xberg-markdown-layout");
+    assert_eq!(impact["baseline_framework"], "xberg-markdown-baseline");
+    assert_eq!(impact["paired_fixture_count"], 1);
+    assert!((impact["sf1"]["delta_p50"].as_f64().unwrap() - 0.2).abs() < 1e-9);
+    assert!(impact["reading_order"]["sample_count"].is_u64());
+    for key in ["improved_fixture_ids", "regressed_fixture_ids", "unchanged_fixture_ids"] {
+        assert!(impact[key].is_array(), "{key}");
+    }
+    assert_eq!(impact["improved_fixture_ids"][0], "fixture_1");
+    assert!(impact["per_fixture"]["sf1"][0]["delta"].is_f64());
+
+    let head_to_head = value["head_to_head"].as_array().expect("head_to_head array");
+    assert_eq!(head_to_head.len(), 2, "each xberg variant against liteparse");
+    for entry in head_to_head {
+        assert_eq!(entry["competitor_framework"], "liteparse");
+        assert_eq!(entry["shared_fixture_count"], 1);
+        assert!(entry["xberg_only_fixture_ids"].as_array().unwrap().is_empty());
+        assert!(entry["competitor_only_fixture_ids"].as_array().unwrap().is_empty());
+        assert!(entry["quality_score"]["delta_p50"].is_f64());
+    }
+
+    let quality =
+        &value["by_framework_mode"]["xberg-markdown-baseline:single"]["by_file_type"]["pdf"]["no_ocr"]["quality"];
+    assert!((quality["reading_order_p50"].as_f64().unwrap() - 0.6).abs() < 1e-9);
+    assert_eq!(quality["reading_order_sample_count"], 1);
+
+    let ranking = value["comparison"]["pdf_reading_order_ranking_markdown"]
+        .as_array()
+        .expect("reading-order ranking");
+    assert_eq!(ranking[0]["framework_mode"], "xberg-markdown-layout:single");
+}
+
+#[test]
+fn test_empty_results_carry_empty_paired_sections() {
+    let value = serde_json::to_value(aggregate_new_format(&[])).unwrap();
+
+    assert_eq!(value["layout_impact"], serde_json::json!([]));
+    assert_eq!(value["head_to_head"], serde_json::json!([]));
+}
+
+fn strip_keys(value: &mut serde_json::Value, keys: &[&str]) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for key in keys {
+                map.remove(*key);
+            }
+            map.values_mut().for_each(|child| strip_keys(child, keys));
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|child| strip_keys(child, keys)),
+        _ => {}
+    }
+}
+
+#[test]
+fn test_2_11_0_shaped_aggregate_still_deserializes() {
+    let mut value = serde_json::to_value(aggregate_new_format(&baseline_and_layout_run())).unwrap();
+    value["schema_version"] = serde_json::json!("2.11.0");
+    strip_keys(
+        &mut value,
+        &[
+            "layout_impact",
+            "head_to_head",
+            "pdf_reading_order_ranking_markdown",
+            "pdf_reading_order_ranking_plaintext",
+            "reading_order_p50",
+            "reading_order_sample_count",
+        ],
+    );
+    assert!(
+        value.get("layout_impact").is_none(),
+        "fixture must look like a 2.11.0 file"
+    );
+
+    let legacy: NewConsolidatedResults = serde_json::from_value(value).expect("2.11.0 aggregate deserializes");
+
+    assert_eq!(legacy.schema_version, "2.11.0");
+    assert!(legacy.layout_impact.is_empty());
+    assert!(legacy.head_to_head.is_empty());
+    assert!(legacy.comparison.pdf_reading_order_ranking_markdown.is_empty());
+    let quality = legacy.by_framework_mode["xberg-markdown-baseline:single"].by_file_type["pdf"]
+        .no_ocr
+        .as_ref()
+        .and_then(|bucket| bucket.quality.as_ref())
+        .expect("quality percentiles");
+    assert_eq!(quality.reading_order_p50, None);
+    assert_eq!(quality.reading_order_sample_count, 0);
 }

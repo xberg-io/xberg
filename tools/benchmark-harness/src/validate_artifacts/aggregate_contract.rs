@@ -7,6 +7,8 @@
 
 use super::*;
 
+mod paired;
+
 /// Validate one file-type bucket's failure accounting and report its sample count. Required cells
 /// must have no errors; optional cells may contain only framework-accountable failures. Cohorts
 /// can span several file types, so the caller also checks each bucket against the cohort's exact
@@ -522,6 +524,8 @@ fn validate_derived_aggregate_fields(
         "failure summary",
         path,
     )?;
+    require_serialized_equal(&aggregate.layout_impact, &rebuilt.layout_impact, "layout impact", path)?;
+    require_serialized_equal(&aggregate.head_to_head, &rebuilt.head_to_head, "head-to-head", path)?;
     let expected_comparison = comparison_for_cohort(&rebuilt.by_framework_mode, cohort);
     require_serialized_equal(&aggregate.comparison, &expected_comparison, "comparison rankings", path)?;
     require(
@@ -879,6 +883,8 @@ pub(super) fn validate_aggregate(
         aggregate.schema_version == SCHEMA_VERSION,
         format!("{}: unexpected schema", path.display()),
     )?;
+    paired::validate_paired_sections_present(&load_json_value(path)?, path)?;
+    paired::validate_layout_impact_coverage(&aggregate, path)?;
 
     let (allowed_entries, present_entries, actual_keys) = validate_aggregate_key_coverage(&aggregate, contract)?;
     validate_format_support(&aggregate, &present_entries, contract, path)?;

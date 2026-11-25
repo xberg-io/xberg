@@ -1,4 +1,4 @@
-# Aggregation Schema v2.11.0
+# Aggregation Schema v2.12.0
 
 This document describes the structure of `aggregated.json` produced by `benchmark-harness consolidate`.
 
@@ -6,7 +6,7 @@ This document describes the structure of `aggregated.json` produced by `benchmar
 
 ```json
 {
-  "schema_version": "2.11.0",
+  "schema_version": "2.12.0",
   "by_framework_mode": {
     "<aggregate_key>": {
       /* FrameworkModeAggregation */
@@ -34,7 +34,13 @@ This document describes the structure of `aggregated.json` produced by `benchmar
   },
   "format_support": {
     /* FormatSupportMatrix — v2.9.0+, see "FormatSupportMatrix" */
-  }
+  },
+  "layout_impact": [
+    /* LayoutImpact[] — v2.12.0+, see "LayoutImpact" */
+  ],
+  "head_to_head": [
+    /* HeadToHead[] — v2.12.0+, see "HeadToHead" */
+  ]
 }
 ```
 
@@ -164,9 +170,15 @@ Includes p50, p95, p99 for all F1 metrics. Layout percentiles are `null` for pla
   "f1_layout_p99": 0.65, // null for plaintext output format
   "quality_score_p50": 0.85,
   "quality_score_p95": 0.8,
-  "quality_score_p99": 0.7
+  "quality_score_p99": 0.7,
+  "reading_order_p50": 0.81, // null when no result carries a reading-order score (v2.12.0+)
+  "reading_order_sample_count": 38 // results with a reading-order score (v2.12.0+)
 }
 ```
+
+`reading_order_p50` is the median of `quality.reading_order_score` over the successful results that
+have one; results without it (too few anchor tokens, see `quality::reading_order_score`) are not
+counted as 0. It is report-only and is not part of `quality_score`.
 
 ## SystemLoadPercentiles (v2.7.0+)
 
@@ -352,6 +364,98 @@ aggregate cannot list a format that produced no result for any selected framewor
 maps each logical framework to observed file types absent from its declared capabilities; xberg is
 never listed because it is the full-corpus subject under test. Both fields default empty when older
 v2.9.0 aggregates are deserialized.
+
+## LayoutImpact (v2.12.0+)
+
+Top-level `layout_impact` answers "what does the layout pass buy". One entry per
+(layout framework, baseline framework, `output_format`, `mode`, `file_type`, `ocr`) where both
+frameworks have rows. Frameworks pair by name: the variant's `layout` segment is replaced by
+`baseline` (`xberg-markdown-layout` with `xberg-markdown-baseline`,
+`xberg-markdown-layout-paddle` with `xberg-markdown-baseline-paddle`), or dropped when no such
+framework exists (`xberg-markdown-sceptre-ort-layout` with `xberg-markdown-sceptre-ort`); a
+trailing model-version segment (`-layout-v3`) is discarded as a last resort.
+
+```json
+{
+  "layout_framework": "xberg-markdown-layout",
+  "baseline_framework": "xberg-markdown-baseline",
+  "output_format": "markdown",
+  "mode": "single",
+  "file_type": "pdf",
+  "ocr": false,
+  "paired_fixture_count": 41, // fixtures where both variants succeeded
+  "sf1": { "baseline_p50": 0.5, "layout_p50": 0.7, "delta_p50": 0.18, "sample_count": 41 }, // null for plaintext
+  "tf1": { /* PairedDelta */ },
+  "reading_order": { /* PairedDelta */ }, // null when no paired fixture carries a score
+  "quality_score": { /* PairedDelta */ },
+  "duration_ms": { /* PairedDelta */ },
+  "peak_memory_mb": { /* PairedDelta */ },
+  "improved_fixture_ids": ["doc_a"],
+  "regressed_fixture_ids": ["doc_b"],
+  "unchanged_fixture_ids": ["doc_c"],
+  "per_fixture": {
+    "sf1": [{ "fixture_id": "doc_a", "baseline": 0.5, "layout": 0.8, "delta": 0.3 }],
+    "tf1": [], "reading_order": [], "duration_ms": [], "peak_memory_mb": []
+  }
+}
+```
+
+- **`PairedDelta`**: `baseline_p50` and `layout_p50` are the medians of each side's per-fixture
+  values; `delta_p50` is the **median of the per-fixture deltas** (`layout - baseline`), not
+  `layout_p50 - baseline_p50`. `sample_count` is the number of fixtures with a value on both sides;
+  every field is `0` when it is `0`.
+- **Pairing** happens inside one bucket and only for fixtures where both variants succeeded. A bucket
+  whose layout rows all failed still gets an entry, with `paired_fixture_count: 0`.
+- **Classification**: a fixture is `improved` when its delta is at least `0.005`, `regressed` at most
+  `-0.005`, otherwise `unchanged`. The metric is SF1 for markdown (`quality_score` for plaintext, or
+  when no paired fixture has SF1).
+- **Timing**: `duration_ms` and `peak_memory_mb` use only single-file, cold-process rows
+  (`peak_memory_mb` also requires an isolated-process measurement). A native batch has one
+  process-level measurement shared by all documents, so batch buckets report `sample_count: 0` there
+  while quality deltas are unaffected.
+
+## HeadToHead (v2.12.0+)
+
+Top-level `head_to_head` compares every xberg framework with every non-xberg framework on the
+documents both succeeded on, one entry per (xberg framework, competitor framework,
+`output_format`, `mode`, `file_type`, `ocr`) in which the two share at least one fixture id.
+
+```json
+{
+  "xberg_framework": "xberg-markdown-layout",
+  "competitor_framework": "liteparse",
+  "output_format": "markdown",
+  "mode": "single",
+  "file_type": "pdf",
+  "ocr": false,
+  "shared_fixture_count": 3, // both succeeded
+  "xberg_only_fixture_ids": ["doc_d"], // xberg succeeded, competitor absent or failed
+  "competitor_only_fixture_ids": [], // competitor succeeded, xberg absent or failed
+  "duration_ms": { /* PairedDelta */ },
+  "extraction_duration_ms": { /* PairedDelta */ },
+  "peak_memory_mb": { /* PairedDelta */ },
+  "tf1": { /* PairedDelta */ },
+  "sf1": { /* PairedDelta */ }, // null for plaintext
+  "reading_order": { /* PairedDelta */ }, // null when no shared fixture carries a score
+  "quality_score": { /* PairedDelta */ }
+}
+```
+
+`PairedDelta` reads with `baseline` = competitor and `layout` = xberg, so a positive `delta_p50` on
+a quality metric means xberg scored higher. All medians cover only the shared fixtures, so a
+competitor that ran 3 of 4 documents is compared on those 3 rather than credited or penalised for
+the fourth.
+
+## Migration from v2.11.0 to v2.12.0
+
+Additive only; 2.11.0 aggregates still deserialize (every new field defaults).
+
+- **`QualityPercentiles.reading_order_p50` / `reading_order_sample_count`**: report-only reading
+  order median and its sample count.
+- **`ComparisonData.pdf_reading_order_ranking_markdown` / `_plaintext`**: coverage-adjusted, same
+  convention as the other `pdf_*` quality rankings; frameworks with no reading-order sample are
+  omitted rather than scored 0.
+- **`layout_impact`** and **`head_to_head`**: see above.
 
 ## Migration from v2.10.0 to v2.11.0
 
@@ -555,6 +659,12 @@ Contains all cross-framework rankings split by output format for quality metrics
   ],
   "pdf_sf1_ranking_markdown": [
     /* RankedFramework[] — markdown-only, never plaintext */
+  ],
+  "pdf_reading_order_ranking_markdown": [
+    /* RankedFramework[] — markdown-only, coverage-adjusted median reading order (v2.12.0+) */
+  ],
+  "pdf_reading_order_ranking_plaintext": [
+    /* RankedFramework[] — plaintext-only (v2.12.0+) */
   ],
   "pages_per_sec_ranking": [
     /* RankedFramework[] — descending, higher pages/sec first (v2.7.0+); segmented by
