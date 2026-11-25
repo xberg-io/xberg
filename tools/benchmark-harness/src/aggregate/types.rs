@@ -585,6 +585,11 @@ pub struct FileTypeAggregation {
     pub no_ocr: Option<PerformancePercentiles>,
     /// Results with OCR
     pub with_ocr: Option<PerformancePercentiles>,
+    /// Results whose OCR status was not reported (typically failures). Kept apart from the OCR
+    /// cohorts so an unknown status is never presented as no-OCR, but still ranked so those
+    /// failures cannot dodge the quality penalty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unknown_ocr: Option<PerformancePercentiles>,
 }
 
 /// Performance percentiles for a group of results

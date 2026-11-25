@@ -266,6 +266,7 @@ fn build_framework_mode_aggregations(
                     file_type: file_type.clone(),
                     no_ocr: aggregation.0,
                     with_ocr: aggregation.1,
+                    unknown_ocr: aggregate_unknown_ocr_status(&results_for_type),
                 },
             );
         }
@@ -464,6 +465,18 @@ fn aggregate_by_ocr_status(
     };
 
     (no_ocr_stats, with_ocr_stats)
+}
+
+/// Aggregate results whose OCR status is `Unknown`, or `None` when there are none. These stay out
+/// of the no-OCR and with-OCR cohorts but are ranked, so unreported-status failures still count
+/// against a framework. ~keep
+fn aggregate_unknown_ocr_status(results: &[&BenchmarkResult]) -> Option<PerformancePercentiles> {
+    let unknown: Vec<&BenchmarkResult> = results
+        .iter()
+        .filter(|result| result.ocr_status == crate::types::OcrStatus::Unknown)
+        .copied()
+        .collect();
+    (!unknown.is_empty()).then(|| calculate_percentiles(&unknown))
 }
 
 /// Extract framework name and mode from a raw framework string.

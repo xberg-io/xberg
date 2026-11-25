@@ -185,6 +185,46 @@ fn test_framework_fault_failure_penalizes_quality_and_success_rate() {
     assert!((ranking_value(&aggregated.comparison.quality_ranking_markdown, "fw") - 0.45).abs() < 1e-9);
 }
 
+/// Failed extractions rarely report an OCR status. Those failures stay out of the OCR cohorts but
+/// must still count against the framework: one 0.9 success plus one Unknown-status framework
+/// failure ranks at 0.45, in both the overall and the PDF rankings.
+#[test]
+fn unknown_ocr_status_failure_still_penalizes_rankings() {
+    let success = result_with_quality("fw", "pdf", 0.9, true);
+    let mut failure = result_with_quality("fw", "pdf", 0.0, false);
+    failure.ocr_status = OcrStatus::Unknown;
+
+    let aggregated = aggregate_new_format(&[success, failure]);
+
+    let pdf = &aggregated.by_framework_mode["fw:markdown:single"].by_file_type["pdf"];
+    assert_eq!(pdf.no_ocr.as_ref().expect("no-ocr cohort").successful_sample_count, 1);
+    assert!(pdf.with_ocr.is_none());
+    assert_eq!(pdf.unknown_ocr.as_ref().expect("unknown cohort").framework_errors, 1);
+    assert!((ranking_value(&aggregated.comparison.quality_ranking_markdown, "fw") - 0.45).abs() < 1e-9);
+    assert!((ranking_value(&aggregated.comparison.pdf_quality_ranking_markdown, "fw") - 0.45).abs() < 1e-9);
+}
+
+/// A framework whose every PDF failure has an Unknown OCR status used to have no OCR bucket at
+/// all and vanished from the rankings; it must rank at 0.0, below a working competitor.
+#[test]
+fn all_unknown_ocr_status_failures_rank_at_zero_not_absent() {
+    let good = result_with_quality("good", "pdf", 0.9, true);
+    let mut bad = result_with_quality("bad", "pdf", 0.0, false);
+    bad.ocr_status = OcrStatus::Unknown;
+
+    let aggregated = aggregate_new_format(&[good, bad]);
+
+    assert_eq!(
+        ranking_value(&aggregated.comparison.pdf_quality_ranking_markdown, "bad"),
+        0.0
+    );
+    assert_eq!(
+        ranking_value(&aggregated.comparison.quality_ranking_markdown, "bad"),
+        0.0
+    );
+    assert!(ranking_value(&aggregated.comparison.pdf_quality_ranking_markdown, "good") > 0.0);
+}
+
 /// An infrastructure failure (HarnessError / ConfigSetupError) must NOT penalize the framework:
 /// it is excluded from both the success-rate denominator and the quality percentiles, so a
 /// single success alongside one HarnessError still reads as 100% success and full quality.

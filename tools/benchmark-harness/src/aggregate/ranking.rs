@@ -84,7 +84,7 @@ pub(crate) fn resolve_shared_corpus_file_types(
             .by_file_type
             .iter()
             .filter(|(_, ft)| {
-                [&ft.no_ocr, &ft.with_ocr]
+                [&ft.no_ocr, &ft.with_ocr, &ft.unknown_ocr]
                     .into_iter()
                     .flatten()
                     .any(|perf| accountable_sample_count(perf) > 0)
@@ -132,7 +132,7 @@ fn build_shared_corpus_quality_ranking(
             let Some(ft) = agg.by_file_type.get(file_type.as_str()) else {
                 continue;
             };
-            for perf in [&ft.no_ocr, &ft.with_ocr].into_iter().flatten() {
+            for perf in [&ft.no_ocr, &ft.with_ocr, &ft.unknown_ocr].into_iter().flatten() {
                 let weight = accountable_sample_count(perf);
                 if weight == 0 {
                     continue;
@@ -436,7 +436,10 @@ fn collect_pdf_metrics(
             let mut qualities: Vec<(f64, usize)> = Vec::new();
             let mut tf1s: Vec<(f64, usize)> = Vec::new();
             let mut sf1s: Vec<(f64, usize)> = Vec::new();
-            for perf in [&pdf_ft.no_ocr, &pdf_ft.with_ocr].into_iter().flatten() {
+            for perf in [&pdf_ft.no_ocr, &pdf_ft.with_ocr, &pdf_ft.unknown_ocr]
+                .into_iter()
+                .flatten()
+            {
                 let weight = accountable_sample_count(perf);
                 if weight == 0 {
                     continue;
@@ -488,7 +491,10 @@ fn collect_pdf_reading_order_metrics(
         };
         let mut contributions: Vec<(f64, usize)> = Vec::new();
         let mut has_sample = false;
-        for perf in [&pdf_ft.no_ocr, &pdf_ft.with_ocr].into_iter().flatten() {
+        for perf in [&pdf_ft.no_ocr, &pdf_ft.with_ocr, &pdf_ft.unknown_ocr]
+            .into_iter()
+            .flatten()
+        {
             let weight = accountable_sample_count(perf);
             if weight == 0 {
                 continue;
