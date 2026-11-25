@@ -5493,7 +5493,11 @@ impl FontInfo {
                 return None;
             }
             // `cmbr` is CM Bright, a regular face; its bold is `cmbrbx`. ~keep
-            (shape.starts_with('b') && !shape.starts_with("br")) || shape.contains("bx") || shape.starts_with("mib")
+            // `dc` is demibold condensed (`cmssdc10`). ~keep
+            (shape.starts_with('b') && !shape.starts_with("br"))
+                || shape.contains("bx")
+                || shape.starts_with("mib")
+                || shape.ends_with("dc")
         } else if let Some(shape) = ["ec", "tc", "sf"]
             .iter()
             .find_map(|family| letters.strip_prefix(family))
@@ -5501,7 +5505,8 @@ impl FontInfo {
             if shape.len() != 2 {
                 return None;
             }
-            shape.starts_with('b') || shape == "sx" || shape == "so"
+            // `x` marks bold extended (`sx`, `xc` bold caps), `rb` roman bold. ~keep
+            shape.starts_with('b') || shape.contains('x') || shape.ends_with("rb") || shape == "so"
         } else if let Some(shape) = letters.strip_prefix("eu") {
             if shape.len() != 2 {
                 return None;
@@ -5523,7 +5528,9 @@ impl FontInfo {
         const REGULAR_STYLES: [&str; 10] = [
             "regular", "regu", "roman", "book", "normal", "plain", "italic", "it", "oblique", "obli",
         ];
-        const WEIGHT_ABBREVIATIONS: [&str; 8] = ["demi", "semi", "bd", "blk", "hv", "medi", "extra", "ultra"];
+        const WEIGHT_ABBREVIATIONS: [&str; 13] = [
+            "demi", "semi", "bd", "blk", "hv", "medi", "extra", "ultra", "sb", "md", "xb", "eb", "dm",
+        ];
         let styles: Vec<&str> = name_lower
             .split(['-', ','])
             .skip(1)
@@ -8782,6 +8789,9 @@ mod tests {
         assert_eq!(weight_of("Bookman-Demi-Italic", 140.0), FontWeight::Bold);
         assert_eq!(weight_of("Foo-Bd-It", 140.0), FontWeight::Bold);
         assert_eq!(weight_of("Foo-Blk-Roman", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Sb-It", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Md-Italic", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-XB-Oblique", 140.0), FontWeight::Bold);
     }
 
     #[test]
@@ -8791,6 +8801,11 @@ mod tests {
         assert_eq!(weight_of("SFSS1000", 140.0), FontWeight::Normal);
         assert_eq!(weight_of("ECBX1200", 60.0), FontWeight::Bold);
         assert_eq!(weight_of("SFSX1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("ECRB1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFRB1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("ECXC1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFXC1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("CMSSDC10", 60.0), FontWeight::Bold);
     }
 
     /// Test CIDToGIDMap Identity mapping
