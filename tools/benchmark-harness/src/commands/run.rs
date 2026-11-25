@@ -13,7 +13,7 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 
 mod xberg_registration;
-use xberg_registration::{XbergRegistration, register_xberg_pipelines};
+use xberg_registration::{XbergRegistration, register_xberg_pipelines, reject_plaintext_layout_requests};
 
 /// `run` subcommand arguments -- pulled out of the `Commands` enum (via `#[command(flatten)]`
 /// through the tuple-variant `Run(RunArgs)`) purely to keep `Commands` under the file's
@@ -671,6 +671,7 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
     let parsed_format = OutputFormat::from_str(&args.output_format).map_err(benchmark_harness::Error::Config)?;
     let batch_mode = matches!(config.benchmark_mode, BenchmarkMode::Batch);
     let frameworks = normalize_run_frameworks(&args.frameworks, batch_mode);
+    reject_plaintext_layout_requests(&frameworks)?;
     let model_provenance = parse_model_provenance(&args.model_ids)?;
 
     let registry = build_registry(

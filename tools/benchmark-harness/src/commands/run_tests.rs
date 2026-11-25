@@ -1,4 +1,4 @@
-use super::xberg_registration::{XbergRegistration, plan_xberg_adapters};
+use super::xberg_registration::{XbergRegistration, plan_xberg_adapters, reject_plaintext_layout_requests};
 use super::*;
 use benchmark_harness::adapters::xberg::{AutoOcrBackend, auto_ocr_framework_name};
 
@@ -141,4 +141,36 @@ fn tesseract_preflight_covers_auto_ocr_but_not_its_paddle_counterpart() {
     assert!(!selected_frameworks_use_tesseract(&[
         "xberg-markdown-auto-ocr-paddle".to_string()
     ]));
+}
+
+#[test]
+fn explicit_plaintext_layout_requests_are_rejected_with_the_reason() {
+    for name in [
+        "xberg-plaintext-layout",
+        "xberg-plaintext-layout-batch",
+        "xberg-plaintext-layout-v3",
+        "xberg-plaintext-layout-paddle",
+        "xberg-plaintext-sceptre-ort-layout",
+        "xberg-plaintext-layout-steady-state",
+    ] {
+        let error = reject_plaintext_layout_requests(&[name.to_string()]).expect_err(name);
+        let message = error.to_string();
+        assert!(message.contains("discards layout structure"), "{name}: {message}");
+        assert!(message.contains(name), "{name}: {message}");
+    }
+}
+
+#[test]
+fn other_requests_pass_the_plaintext_layout_check() {
+    let accepted: Vec<String> = [
+        "xberg-plaintext-baseline",
+        "xberg-plaintext-baseline-paddle",
+        "xberg-plaintext-sceptre-ort",
+        "xberg-markdown-layout",
+        "xberg-markdown-sceptre-ort-layout-batch",
+        "docling",
+    ]
+    .map(String::from)
+    .to_vec();
+    assert!(reject_plaintext_layout_requests(&accepted).is_ok());
 }

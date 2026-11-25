@@ -58,6 +58,34 @@ pub(crate) fn plaintext_layout_is_a_no_op(format: OutputFormat, pipeline: XbergP
     format == OutputFormat::Plaintext && pipeline_runs_layout(pipeline)
 }
 
+/// Rejects an explicit request for a plaintext layout variant. Such variants are never
+/// registered, so the request would otherwise surface only as an unexplained "unavailable".
+pub(super) fn reject_plaintext_layout_requests(frameworks: &[String]) -> Result<()> {
+    let plaintext_layout = |framework: &str| {
+        let Some(rest) = framework.strip_prefix("xberg-plaintext-") else {
+            return false;
+        };
+        XBERG_RUN_PIPELINES.iter().any(|&pipeline| {
+            let slug = pipeline.as_str();
+            pipeline_runs_layout(pipeline)
+                && (rest == slug || rest.strip_prefix(slug).is_some_and(|tail| tail.starts_with('-')))
+        })
+    };
+    let rejected: Vec<&str> = frameworks
+        .iter()
+        .map(String::as_str)
+        .filter(|framework| plaintext_layout(framework))
+        .collect();
+    if rejected.is_empty() {
+        return Ok(());
+    }
+    Err(benchmark_harness::Error::Config(format!(
+        "plaintext output discards layout structure, so plaintext layout variants are not benchmarked: {}; \
+         use the markdown variant",
+        rejected.join(", ")
+    )))
+}
+
 fn pipeline_requires_ocr(pipeline: XbergPipeline) -> bool {
     matches!(
         pipeline,
