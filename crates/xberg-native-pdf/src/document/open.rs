@@ -697,9 +697,15 @@ impl PdfDocument {
             // cache path (it is resolved independently), so clearing
             // is always safe. ~keep
             self.object_cache.lock_or_recover().clear();
+            // Every per-page result read before authentication came from
+            // undecrypted streams or an empty encrypted-page read. ~keep
             if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
                 cache.clear();
             }
+            self.page_content_cache.lock_or_recover().clear();
+            self.page_spans_cache.lock_or_recover().clear();
+            self.page_chars_cache.lock_or_recover().clear();
+            self.search_index.lock_or_recover().clear();
             tracing::debug!(target: LOG_TARGET,
                 "authenticate(): object cache cleared after successful authentication \
                      to force re-decryption of any pre-auth cached objects"
