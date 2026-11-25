@@ -285,46 +285,75 @@ fn later_passes_over_more_than_eight_pages_do_not_reinterpret() {
     );
 }
 
+/// The text pass reads preserved script geometry without witnesses and the
+/// markdown hierarchy then asks for them: while the passes run, the first read
+/// captures them, so the witness request is a hit that equals a cold capture.
 #[test]
-fn a_witness_request_reinterprets_a_page_cached_without_witnesses() {
-    let pdf = option_set_pdf();
-    let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
-    doc.begin_page_passes();
-    drop(
-        doc.extract_page_text_with_script_geometry(1, ReadingOrder::TopToBottom)
-            .unwrap(),
-    );
-    let before = page_span_interpretations();
-    let mut witnesses = vec![make_test_span("stale", 0.0, 0.0, 1.0, 1.0)];
-    let captured = doc
-        .extract_page_text_with_cmsy_capture(1, ReadingOrder::TopToBottom, Some(&mut witnesses))
-        .unwrap();
-    assert_eq!(page_span_interpretations() - before, 1);
+fn a_witness_request_is_served_from_a_page_cached_by_a_plain_read() {
+    for (pdf, page) in [(cmsy_witness_pdf(), 0), (option_set_pdf(), 1)] {
+        let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
+        doc.begin_page_passes();
+        let plain = doc
+            .extract_page_text_with_script_geometry(page, ReadingOrder::TopToBottom)
+            .unwrap();
+        let before = page_span_interpretations();
+        let mut witnesses = vec![make_test_span("stale", 0.0, 0.0, 1.0, 1.0)];
+        let captured = doc
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .unwrap();
+        assert_eq!(
+            page_span_interpretations(),
+            before,
+            "page {page}: the witness request is a hit"
+        );
+        assert_eq!(format!("{captured:?}"), format!("{plain:?}"));
 
-    let fresh = PdfDocument::from_bytes(pdf).unwrap();
-    let mut fresh_witnesses = vec![make_test_span("stale", 0.0, 0.0, 1.0, 1.0)];
-    let fresh_captured = fresh
-        .extract_page_text_with_cmsy_capture(1, ReadingOrder::TopToBottom, Some(&mut fresh_witnesses))
-        .unwrap();
-    assert_eq!(format!("{captured:?}"), format!("{fresh_captured:?}"));
-    assert_eq!(format!("{witnesses:?}"), format!("{fresh_witnesses:?}"));
+        let fresh = PdfDocument::from_bytes(pdf).unwrap();
+        let mut fresh_witnesses = vec![make_test_span("stale", 0.0, 0.0, 1.0, 1.0)];
+        let fresh_captured = fresh
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut fresh_witnesses))
+            .unwrap();
+        assert_eq!(format!("{captured:?}"), format!("{fresh_captured:?}"));
+        assert_eq!(format!("{witnesses:?}"), format!("{fresh_witnesses:?}"));
+    }
+}
 
-    let before = page_span_interpretations();
-    drop(
-        doc.extract_page_text_with_script_geometry(1, ReadingOrder::TopToBottom)
-            .unwrap(),
-    );
-    let mut again = Vec::new();
-    drop(
-        doc.extract_page_text_with_cmsy_capture(1, ReadingOrder::TopToBottom, Some(&mut again))
-            .unwrap(),
-    );
-    assert_eq!(
-        page_span_interpretations(),
-        before,
-        "the witness entry serves both requests"
-    );
-    assert_eq!(format!("{again:?}"), format!("{fresh_witnesses:?}"));
+/// Every option-set page and the CMSY fixture, each interpreted cold with and
+/// without witness capture: the page text, the warnings and the page's
+/// /ActualText entry are the same, which is what lets one cached entry answer
+/// both requests.
+#[test]
+fn capturing_witnesses_does_not_change_the_interpretation() {
+    let read = |pdf: &[u8], page: usize, capture: bool| {
+        let doc = PdfDocument::from_bytes(pdf.to_vec()).unwrap();
+        drop(doc.take_structured_warnings());
+        let mut witnesses = Vec::new();
+        let text = doc
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, capture.then_some(&mut witnesses))
+            .unwrap();
+        let effects = format!(
+            "{:?} {:?}",
+            doc.take_structured_warnings(),
+            doc.mc_actualtext_mcids.lock().unwrap().get(&page)
+        );
+        (format!("{text:?}"), effects, witnesses.len())
+    };
+    let cases = [
+        (option_set_pdf(), 0..5),
+        (cmsy_witness_pdf(), 0..1),
+        (warning_pdf(), 0..1),
+    ];
+    let mut witnessed = 0;
+    for (pdf, pages) in cases {
+        for page in pages {
+            let (plain_text, plain_effects, _) = read(&pdf, page, false);
+            let (captured_text, captured_effects, witnesses) = read(&pdf, page, true);
+            assert_eq!(captured_text, plain_text, "page {page}");
+            assert_eq!(captured_effects, plain_effects, "page {page}");
+            witnessed += witnesses;
+        }
+    }
+    assert_eq!(witnessed, 2, "the CMSY fixture must yield its two witnesses");
 }
 
 /// A filtered read replaces the page's MC-scope /ActualText entry; a cached

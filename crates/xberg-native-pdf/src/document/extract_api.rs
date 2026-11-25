@@ -43,8 +43,11 @@ pub(super) struct InterpretedPage {
     /// MCIDs whose in-stream `/ActualText` applied, or `None` when the page was
     /// skipped before the extractor ran and the per-page entry was left alone.
     mc_actualtext: Option<HashSet<u32>>,
-    /// CMSY glyph witnesses, present only when they were requested and the
-    /// extractor ran. Capturing them does not change the spans.
+    /// CMSY glyph witnesses, present when the extractor ran with capture on:
+    /// on request, and for every preserved-geometry read while the page passes
+    /// run. Capture only reads the span after it is built and touches no
+    /// document state an uncaptured read would not, so the spans and the
+    /// document effects are the same either way.
     cmsy: Option<Vec<crate::layout::TextSpan>>,
     /// Structured warnings the interpretation pushed into the document's sink.
     warnings: Vec<crate::extractors::warnings::Warning>,
@@ -314,11 +317,13 @@ impl PdfDocument {
             script_geometry,
         };
         let capture_cmsy = cmsy.is_some();
-        let cached = self
-            .raw_page_spans_cache
-            .lock_or_recover()
-            .as_ref()
-            .and_then(|cache| cache.get(&key).cloned());
+        let (passes_running, cached) = {
+            let cache = self.raw_page_spans_cache.lock_or_recover();
+            (
+                cache.is_some(),
+                cache.as_ref().and_then(|cache| cache.get(&key).cloned()),
+            )
+        };
         if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
             self.warning_sink.extend(page.warnings.iter().cloned());
             self.recovery_counts().add(&page.recovered);
@@ -328,6 +333,10 @@ impl PdfDocument {
             }
             return Ok((page.spans.clone(), page.mc_actualtext.clone()));
         }
+        // The markdown hierarchy asks for witnesses on preserved-geometry pages
+        // a plain read already cached; capturing on the first read lets the
+        // cached entry answer both instead of interpreting the page again. ~keep
+        let capture = capture_cmsy || (passes_running && script_geometry == ScriptGeometry::Preserve);
         let recovered_before = self.recovery_counts().snapshot();
         let (page, warnings) = crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
             self.interpret_page_spans(
@@ -337,7 +346,7 @@ impl PdfDocument {
                 HashSet::new(),
                 script_geometry,
                 false,
-                capture_cmsy,
+                capture,
             )
         });
         let mut page = page?;
