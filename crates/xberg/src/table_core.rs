@@ -3034,7 +3034,8 @@ mod tests {
             ("Item", ".", 110, 100, "5", 113, "Item . 5"),
             ("0", ".", 110, 100, "note", 113, "0 . note"),
             ("0", "-", 110, 100, "511", 113, "0 - 511"),
-            ("0", ".", 110, 90, "511", 113, "0 . 511"),
+            // Raised out of the line band, the separator reads as its own line (GH#1628 order).
+            ("0", ".", 110, 90, "511", 113, ". 0 511"),
         ] {
             let words = [
                 word(prefix, 100, 100, 10, 8),
