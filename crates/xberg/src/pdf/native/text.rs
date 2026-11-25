@@ -3153,8 +3153,20 @@ fn structured_path_page_spans(
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut spans);
         Ok(spans)
     };
-    match super::guard_native_panic(read, |panic| format!("panicked: {panic}")) {
+    let mut panicked = false;
+    let result = super::guard_native_panic(read, |panic| {
+        panicked = true;
+        panic
+    });
+    match result {
         Ok(spans) => Some(spans),
+        Err(error) if panicked => {
+            tracing::warn!(
+                page = page_index,
+                "structured-path span order panicked; keeping column-aware order: {error}"
+            );
+            None
+        }
         Err(error) => {
             tracing::debug!(
                 page = page_index,
@@ -3270,7 +3282,9 @@ fn retain_spans_inside_page_margins(
 /// Extract text from one page with column-aware ordering and guarded repairs.
 ///
 /// Applies sparse-column and glyph-fragmentation repairs before assembling the
-/// page text.
+/// page text. Pages none of the producer, panel, rotation or fragmentation paths claim are
+/// assembled from a second, top-to-bottom read in the structured path's order
+/// (`structured_path_page_spans`).
 ///
 /// Also returns the page's fabricated-mapping character counts, captured from the raw spans
 /// before margin filtering or reordering mutate them — `Some` only when `excluded_layers` is
