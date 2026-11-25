@@ -86,6 +86,33 @@ fn pipelines_that_need_ocr_are_not_planned_when_ocr_is_off() {
 }
 
 #[test]
+fn auto_ocr_variants_are_opt_in_and_need_ocr() {
+    let auto_ocr =
+        |names: Vec<String>| -> Vec<String> { names.into_iter().filter(|name| name.contains("-auto-ocr")).collect() };
+    assert!(
+        auto_ocr(planned_names(OutputFormat::Markdown, false, true, &[])).is_empty(),
+        "a default run must not register auto-OCR"
+    );
+    assert_eq!(
+        auto_ocr(planned_names(
+            OutputFormat::Markdown,
+            false,
+            true,
+            &["xberg-markdown-auto-ocr", "xberg-markdown-auto-ocr-paddle"]
+        )),
+        ["xberg-markdown-auto-ocr", "xberg-markdown-auto-ocr-paddle"]
+    );
+    assert_eq!(
+        planned_names(OutputFormat::Plaintext, true, true, &["xberg-plaintext-auto-ocr-batch"]),
+        ["xberg-plaintext-auto-ocr-batch"]
+    );
+    assert!(
+        planned_names(OutputFormat::Markdown, false, false, &["xberg-markdown-auto-ocr"]).is_empty(),
+        "auto-OCR needs OCR enabled"
+    );
+}
+
+#[test]
 fn auto_ocr_variants_are_named_per_format_and_mode() {
     let names = |format, batch| {
         AutoOcrBackend::ALL

@@ -108,7 +108,9 @@ pub(super) fn plan_xberg_adapters(
             }
         }
     }
-    if context.ocr {
+    // Opt-in like the other unproven pipelines: a CI run has not yet shown the automatic OCR
+    // trigger end to end, so a default run must not register them. ~keep
+    if context.ocr && context.has_explicit_frameworks {
         plan.extend(AutoOcrBackend::ALL.into_iter().map(PlannedAdapter::AutoOcr));
     }
     plan.retain(|planned| (context.should_init)(&planned.framework_name(context.format, context.batch_mode)));
