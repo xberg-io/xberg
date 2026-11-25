@@ -564,8 +564,9 @@ pub(crate) fn validate_layout_inference_peak(
 pub(crate) const LAYOUT_INFERENCE_MAX_BATCH: usize = 1;
 
 /// How many pages one inference call may take for this engine's model and execution provider.
-/// `Auto` resolves as the model loader resolves it (CPU on macOS); on other platforms it may
-/// pick a GPU the engine cannot see, so only an effective CPU provider is capped.
+/// The provider resolves as the session builder resolves it: the `XBERG_ORT_EP` override, then the
+/// config, with RT-DETR's `Auto` on macOS meaning CPU. `Auto` elsewhere is CPU unless this build
+/// can register CUDA, so a CUDA build is left uncapped.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 impl LayoutEngine {
     pub(crate) fn inference_batch_cap(&self) -> usize {
@@ -577,8 +578,18 @@ impl LayoutEngine {
                     ..
                 }
         );
-        let on_cpu = crate::layout::models::rtdetr::effective_acceleration(self.config.acceleration.as_ref())
-            .is_some_and(|accel| accel.provider == crate::core::config::acceleration::ExecutionProviderType::Cpu);
+        use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+        let provider = crate::ort_discovery::execution_provider_override().unwrap_or_else(|| {
+            crate::layout::models::rtdetr::effective_acceleration(self.config.acceleration.as_ref()).map_or(
+                ExecutionProviderType::Auto,
+                |AccelerationConfig { provider, .. }| provider,
+            )
+        });
+        // `Auto` registers a GPU provider only for CoreML on macOS and CUDA on Linux builds with the
+        // `cuda` feature (`register_auto_providers`); elsewhere it is plain CPU.
+        let auto_may_use_gpu = cfg!(target_os = "macos") || cfg!(all(target_os = "linux", feature = "cuda"));
+        let on_cpu =
+            provider == ExecutionProviderType::Cpu || (provider == ExecutionProviderType::Auto && !auto_may_use_gpu);
         if is_rtdetr && on_cpu {
             LAYOUT_INFERENCE_MAX_BATCH
         } else {
