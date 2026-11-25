@@ -315,6 +315,14 @@ class MacosElixirArchiveTests(unittest.TestCase):
         with expected_error(ValueError, "notice inventory"):
             archive.read_notices(directory)
 
+    def test_source_notice_accepts_the_generated_bundle_size(self) -> None:
+        path = self.root / "THIRD_PARTY_LICENSES.md"
+        path.write_bytes(b"x" * (2 * 1024 * 1024))
+        assert len(archive.read_notice(path)) == 2 * 1024 * 1024
+        path.write_bytes(b"x" * (archive.MAX_NOTICE + 1))
+        with expected_error(ValueError, "invalid source notice file"):
+            archive.read_notice(path)
+
     def test_extra_manifest_row_rejected_even_if_file_exists(self) -> None:
         directory, contents = synthetic_notices(self.root)
         (directory / "notices.sha256").write_bytes(contents["notices.sha256"] + b"a" * 64 + b"  extra.txt\n")

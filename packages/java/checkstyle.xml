@@ -10,7 +10,7 @@
   <property name="fileExtensions" value="java" />
 
   <module name="SuppressionFilter">
-    <property name="file" value="checkstyle-suppressions.xml" />
+    <property name="file" value="${config_loc}/checkstyle-suppressions.xml" />
     <property name="optional" value="true" />
   </module>
 

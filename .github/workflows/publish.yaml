@@ -42,6 +42,11 @@ on:
 
 env:
   GLIBC_FLOOR: "2.28"
+  # Windows runners check out with core.autocrlf=true, which turns LICENSE and THIRD_PARTY_LICENSES.md
+  # into CRLF and fails every notice-byte gate against the canonical LF bytes. ~keep
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: core.autocrlf
+  GIT_CONFIG_VALUE_0: "false"
   MACOSX_DEPLOYMENT_TARGET: "15.0"
   # jsDelivr (which serves the published @xberg-io/xberg-wasm package to the
   # live browser demo) hard-caps a single file at 50 MB and rejects the whole
@@ -2343,7 +2348,9 @@ jobs:
         run: |
           set -euo pipefail
           STAGE="xberg-cli-${TARGET}${SUFFIX}"
-          mise exec -- cargo deny --manifest-path crates/xberg-cli/Cargo.toml --locked \
+          # Naming the tool keeps `mise exec` from auto-installing every other tool in mise.toml;
+          # the unrelated dotnet install failed on this runner in 1.5.1 and 1.5.2. ~keep
+          mise exec cargo-deny -- cargo deny --manifest-path crates/xberg-cli/Cargo.toml --locked \
             --features "$FEATURES" --target "$TARGET" check licenses
           "$STAGE/xberg.exe" formats --format json > "$RUNNER_TEMP/xberg-formats.json"
           python .release-tools/scripts/ci/verify_no_gpl_cli_archive.py \
@@ -6768,6 +6775,80 @@ jobs:
       - name: Add pnpm bin to PATH
         shell: bash
         run: pnpm bin >> "$GITHUB_PATH"
+      # ~keep The binary ships inside per-platform npm packages (optionalDependencies of the root
+      # package) so `npx` works with no network access. A dry run has no release to download from,
+      # so it only exercises the root package.
+      - name: Configure npm registry authentication
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        uses: actions/setup-node@v7
+        with:
+          registry-url: "https://registry.npmjs.org"
+
+      # ~keep The release carries no checksum file, so the expected digests come from the sha256
+      # GitHub recorded for each asset at upload. Every archive is checked against them before it is
+      # packaged. Targets the release does not carry are skipped; the binstall archives are not
+      # the standalone CLI and are excluded.
+      - name: Build the platform packages
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p cli-archives
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir cli-archives \
+            --pattern 'xberg-cli-*.tar.gz' --pattern 'xberg-cli-*.zip' --clobber
+          rm -f cli-archives/xberg-cli-binstall-* cli-archives/*-no-gpl-lgpl.zip
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name | startswith("xberg-cli-") and (startswith("xberg-cli-binstall-") | not) and (endswith(".tar.gz") or endswith(".zip"))) | "\(.digest // "")  \(.name)"' \
+            | grep -E '^sha256:[0-9a-f]{64}  ' | sed 's/^sha256://' > cli-archives/cli-SHA256SUMS
+          [ -s cli-archives/cli-SHA256SUMS ] || { echo "::error::the release lists no sha256 digests for its CLI archives"; exit 1; }
+          python3 -I scripts/release/package_cli_npm.py --archives cli-archives --version "$VERSION" --out cli-npm-packages
+
+      # ~keep Platform packages first and the root last: a partial failure never leaves a root whose
+      # optionalDependencies are unpublished, and a rerun skips what is already on npm.
+      - name: Publish the platform packages
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ""
+          NPM_TAG: ${{ needs.prepare.outputs.npm_tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          unset NODE_AUTH_TOKEN
+          count=0
+          for dir in cli-npm-packages/*-*; do
+            name="$(node -p "require('./$dir/package.json').name")"
+            count=$((count + 1))
+            if [ -n "$(pnpm view "$name@$VERSION" version 2>/dev/null)" ]; then
+              echo "$name@$VERSION is already published"
+              continue
+            fi
+            (cd "$dir" && pnpm publish --provenance --access public --tag "$NPM_TAG" --no-git-checks)
+          done
+          [ "$count" -gt 0 ] || { echo "::error::no platform packages were built"; exit 1; }
+          cp cli-npm-packages/root/package.json cli-proxy/npm/package.json
+
+      - name: Wait for the platform packages
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          for dir in cli-npm-packages/*-*; do
+            name="$(node -p "require('./$dir/package.json').name")"
+            for _ in $(seq 1 60); do
+              [ -n "$(pnpm view "$name@$VERSION" version 2>/dev/null)" ] && continue 2
+              sleep 5
+            done
+            echo "::error::$name@$VERSION is not visible on npm"
+            exit 1
+          done
+
       # dry-run must be threaded explicitly: prepare synthesizes a dry-run tag, so this job's
       # `is_tag == 'true'` gate does not exclude dry runs (same reasoning as the elixir-natives
       # upload-artifact step elsewhere in this file), and check-cli.outputs.exists only guards

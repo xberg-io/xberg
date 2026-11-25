@@ -15,7 +15,7 @@ from typing import BinaryIO
 
 SCRIPTS = Path(__file__).resolve().parent
 MAX_UNCOMPRESSED = 256 * 1024 * 1024
-MAX_NOTICE = 128 * 1024
+MAX_NOTICE = 8 * 1024 * 1024
 BLOCK = tarfile.BLOCKSIZE
 ZERO_BLOCK = bytes(BLOCK)
 MAX_PAX_MTIME = 128

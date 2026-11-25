@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// Launcher: exec the downloaded native xberg binary, forwarding argv and
-// inheriting stdio. If the binary is missing (postinstall failed), download it
-// on demand before exec.
+// Launcher: exec the native xberg binary, forwarding argv and inheriting stdio.
+// Order: the binary shipped by the installed platform package (no network), then a healthy
+// binary already in bin/, then an on-demand download from the GitHub release.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { resolveBundledBinary } from "../install.js";
 
 const BIN_NAME = "xberg";
 
@@ -31,6 +32,25 @@ function isHealthy(file) {
 	}
 }
 
+// npm may pack files without an exec bit. The binary needs it, and so do the musl loader and the
+// real binary behind the musl launcher script, which are exec'd by relative path.
+function ensureExecutable(binary) {
+	if (os.type() === "Windows_NT") return;
+	const dir = path.dirname(binary);
+	const candidates = [binary, path.join(dir, `${BIN_NAME}.bin`)];
+	try {
+		for (const entry of fs.readdirSync(path.join(dir, "lib"))) {
+			if (entry.startsWith("ld-musl-")) candidates.push(path.join(dir, "lib", entry));
+		}
+	} catch {}
+	for (const file of candidates) {
+		try {
+			const { mode } = fs.statSync(file);
+			if ((mode & 0o111) === 0) fs.chmodSync(file, mode | 0o755);
+		} catch {}
+	}
+}
+
 async function ensureBinary() {
 	if (fs.existsSync(binPath) && isHealthy(binPath)) return;
 	process.stderr.write(`${BIN_NAME}: binary missing or corrupt, attempting download...\n`);
@@ -50,12 +70,17 @@ function printUnavailable() {
 }
 
 async function main() {
-	await ensureBinary();
-	if (!fs.existsSync(binPath) || !isHealthy(binPath)) {
-		printUnavailable();
-		process.exit(1);
+	const bundled = resolveBundledBinary();
+	if (bundled) ensureExecutable(bundled);
+	const target = bundled && isHealthy(bundled) ? bundled : null;
+	if (!target) {
+		await ensureBinary();
+		if (!fs.existsSync(binPath) || !isHealthy(binPath)) {
+			printUnavailable();
+			process.exit(1);
+		}
 	}
-	const result = spawnSync(binPath, process.argv.slice(2), { stdio: "inherit" });
+	const result = spawnSync(target ?? binPath, process.argv.slice(2), { stdio: "inherit" });
 	if (result.error) {
 		process.stderr.write(`${BIN_NAME}: failed to spawn binary: ${result.error.message}\n`);
 		process.exit(1);
