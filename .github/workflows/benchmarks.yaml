@@ -28,7 +28,7 @@ env:
 
 concurrency:
   group: benchmarks-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -300,6 +300,8 @@ jobs:
           - sceptre-ort
           - sceptre-ort-layout
           - sceptre-ort-autorotate
+          - auto-ocr
+          - auto-ocr-paddle
         output_format: [markdown, plaintext]
         mode: [single-file, batch]
         cohort:
@@ -317,6 +319,8 @@ jobs:
         # on the OCR cohorts (ocr-pdf-fast-b4, ocr-images-fast); drop them from every non-OCR cohort.
         # Sceptre ORT remains a release comparison for OCR PDFs. Its image coverage runs against the
         # bounded structured-image diagnostic cohort below, outside the published release contract.
+        # Layout pipelines run markdown only (plain output discards layout structure). The auto-OCR
+        # variants leave force_ocr unset and run only on the OCR cohorts; they are optional cells.
         # NOTE: keep this block a clean list of `- {...}` entries — the validate-workflow-matrix.py
         # exclude parser stops at the first non-entry line, so do not intersperse comments here.
         exclude:
@@ -358,6 +362,21 @@ jobs:
           - { pipeline: sceptre-ort-autorotate, cohort: native-email-fast }
           - { pipeline: sceptre-ort-autorotate, cohort: native-data-fast }
           - { pipeline: sceptre-ort-autorotate, cohort: ocr-images-fast }
+          - { pipeline: layout, output_format: plaintext }
+          - { pipeline: layout-paddle, output_format: plaintext }
+          - { pipeline: sceptre-ort-layout, output_format: plaintext }
+          - { pipeline: auto-ocr, cohort: native-pdf-fast-b8 }
+          - { pipeline: auto-ocr, cohort: native-office-fast }
+          - { pipeline: auto-ocr, cohort: native-markup-fast }
+          - { pipeline: auto-ocr, cohort: native-ebook-fast }
+          - { pipeline: auto-ocr, cohort: native-email-fast }
+          - { pipeline: auto-ocr, cohort: native-data-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-pdf-fast-b8 }
+          - { pipeline: auto-ocr-paddle, cohort: native-office-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-markup-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-ebook-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-email-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-data-fast }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1636,6 +1655,12 @@ jobs:
     if: >-
       ${{ github.ref == 'refs/heads/main' && (always() && !cancelled() && needs.prefetch-mineru-models.result == 'success') }}
     steps:
+      - name: Require the setup job
+        if: needs.setup.result != 'success'
+        run: |
+          echo "::error::setup job result is '${{ needs.setup.result }}': the benchmark harness was never built, so results cannot be validated or aggregated"
+          exit 1
+
       - name: Create GitHub App token (if credentials available)
         id: app-token
         # Optional: BOT_APP_ID/BOT_APP_PRIVATE_KEY may be unset (e.g. forked runs), and the
