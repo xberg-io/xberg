@@ -634,6 +634,7 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(feature = "layout-detection"))]
     let layout_hints = None::<&[Vec<crate::pdf::structure::types::LayoutHint>]>;
     let _span = tracing::debug_span!("extract_xberg_native_pdf").entered();
+    let _reading_orders = crate::pdf::native::hierarchy::ReadingOrderMemoScope::begin(doc.doc.source_bytes.len());
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
     let artifacts =
         crate::pdf::native::hierarchy::ArtifactRetention::from_content_filter(config.content_filter.as_ref());

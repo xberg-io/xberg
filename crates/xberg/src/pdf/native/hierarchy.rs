@@ -18,7 +18,10 @@ use super::span_geometry::{has_same_rotation, is_horizontal_ltr, upright_advance
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
+mod reading_order_memo;
 pub(crate) mod script_evidence;
+
+pub(crate) use reading_order_memo::ReadingOrderMemoScope;
 
 const COLUMN_BRIDGE_FRACTION: f32 = 0.6;
 const MIN_COLUMN_GUTTER_PTS: f32 = 8.0;
@@ -396,7 +399,21 @@ fn shares_row_grid(grid: &[f32], other: &[f32]) -> bool {
 
 /// Reorder a page's spans into reading order for the element-based extraction path,
 /// reading a two-up sheet (`two_up_gutter`) as its left page, then its right page.
+///
+/// Inside a [`ReadingOrderMemoScope`] an input identical to one already ordered for this page is
+/// served the stored order instead of being ordered again.
 pub(super) fn reorder_page_reading_order(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    page_width: f32,
+    page_height: f32,
+    page_index: usize,
+) {
+    reading_order_memo::reorder(spans, page_width, page_height, page_index, |spans| {
+        compute_page_reading_order(spans, page_width, page_height, page_index);
+    });
+}
+
+fn compute_page_reading_order(
     spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
     page_width: f32,
     page_height: f32,
