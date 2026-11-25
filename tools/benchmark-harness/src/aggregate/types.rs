@@ -144,6 +144,10 @@ pub struct LayoutImpact {
     /// four id lists partition the paired fixtures.
     #[serde(default)]
     pub unscored_fixture_ids: Vec<String>,
+    /// Fixture ids left out of pairing because they name more than one document (a stem repeated
+    /// in the corpus, told apart by file size). Not counted in `paired_fixture_count`.
+    #[serde(default)]
+    pub ambiguous_fixture_ids: Vec<String>,
     pub per_fixture: PairedFixtureDeltas,
 }
 
@@ -182,6 +186,13 @@ pub struct HeadToHead {
     pub competitor_only_fixture_ids: Vec<String>,
     #[serde(default)]
     pub competitor_only_fixture_count: usize,
+    /// Fixture ids left out of the comparison because they name more than one document (see
+    /// [`LayoutImpact::ambiguous_fixture_ids`]): the first 50 in sorted order;
+    /// `ambiguous_fixture_count` is the total.
+    #[serde(default)]
+    pub ambiguous_fixture_ids: Vec<String>,
+    #[serde(default)]
+    pub ambiguous_fixture_count: usize,
     pub duration_ms: PairedDelta,
     pub extraction_duration_ms: PairedDelta,
     pub peak_memory_mb: PairedDelta,

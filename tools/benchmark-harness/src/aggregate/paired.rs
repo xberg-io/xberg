@@ -36,6 +36,9 @@ type BucketKey = (u8, String, String);
 /// framework -> bucket -> fixture id -> row.
 type RowIndex<'a> = BTreeMap<&'a str, BTreeMap<BucketKey, BTreeMap<&'a str, &'a PerFixtureRow>>>;
 
+/// framework -> bucket -> fixture ids left out of pairing because they name more than one document.
+type AmbiguousIndex<'a> = BTreeMap<&'a str, BTreeMap<BucketKey, BTreeSet<&'a str>>>;
+
 fn format_rank(format: OutputFormat) -> u8 {
     match format {
         OutputFormat::Markdown => 0,
@@ -51,20 +54,51 @@ fn format_from_rank(rank: u8) -> OutputFormat {
     }
 }
 
-fn index_rows(rows: &[PerFixtureRow]) -> RowIndex<'_> {
+/// `(file_type, fixture_id)` pairs that name more than one document. `fixture_id` is the file stem
+/// and the corpus repeats stems across directories, so one id can stand for different files. Rows
+/// carry no path, so the source file size is the discriminator: an id seen with two different
+/// non-zero sizes is ambiguous. A size of 0 means the harness could not stat the file and is
+/// ignored. Same-sized collisions stay undetectable.
+fn ambiguous_fixtures(rows: &[PerFixtureRow]) -> BTreeSet<(&str, &str)> {
+    let mut sizes: BTreeMap<(&str, &str), BTreeSet<u64>> = BTreeMap::new();
+    for row in rows.iter().filter(|row| row.file_size > 0) {
+        sizes
+            .entry((row.file_type.as_str(), row.fixture_id.as_str()))
+            .or_default()
+            .insert(row.file_size);
+    }
+    sizes
+        .into_iter()
+        .filter(|(_, sizes)| sizes.len() > 1)
+        .map(|(fixture, _)| fixture)
+        .collect()
+}
+
+fn index_rows(rows: &[PerFixtureRow]) -> (RowIndex<'_>, AmbiguousIndex<'_>) {
+    let ambiguous_fixture_set = ambiguous_fixtures(rows);
     let mut index: RowIndex<'_> = BTreeMap::new();
+    let mut ambiguous: AmbiguousIndex<'_> = BTreeMap::new();
     for row in rows {
         let key: BucketKey = (
             format_rank(row.output_format),
             row.execution_mode.clone(),
             row.file_type.clone(),
         );
-        let slot = index
+        let bucket = index
             .entry(row.framework.as_str())
             .or_default()
-            .entry(key)
-            .or_default()
-            .entry(row.fixture_id.as_str());
+            .entry(key.clone())
+            .or_default();
+        if ambiguous_fixture_set.contains(&(row.file_type.as_str(), row.fixture_id.as_str())) {
+            ambiguous
+                .entry(row.framework.as_str())
+                .or_default()
+                .entry(key)
+                .or_default()
+                .insert(row.fixture_id.as_str());
+            continue;
+        }
+        let slot = bucket.entry(row.fixture_id.as_str());
         // Repeated rows for one fixture (re-runs) keep the first success, else the first row.
         slot.and_modify(|existing| {
             if !existing.success && row.success {
@@ -73,7 +107,17 @@ fn index_rows(rows: &[PerFixtureRow]) -> RowIndex<'_> {
         })
         .or_insert(row);
     }
-    index
+    (index, ambiguous)
+}
+
+/// Ambiguous fixture ids either framework had in `key`.
+fn ambiguous_in<'a>(ambiguous: &AmbiguousIndex<'a>, frameworks: [&str; 2], key: &BucketKey) -> BTreeSet<&'a str> {
+    frameworks
+        .iter()
+        .filter_map(|framework| ambiguous.get(*framework)?.get(key))
+        .flatten()
+        .copied()
+        .collect()
 }
 
 fn finite(value: f64) -> Option<f64> {
@@ -293,7 +337,7 @@ fn classify(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> Classified {
 /// other formats would only add entries with nothing to measure. A bucket whose layout rows all failed still yields an entry
 /// with `paired_fixture_count == 0` so the loss is visible rather than absent.
 pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
-    let index = index_rows(rows);
+    let (index, ambiguous) = index_rows(rows);
     let present: BTreeSet<&str> = index.keys().copied().collect();
     let mut out = Vec::new();
 
@@ -341,6 +385,10 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
                 regressed_fixture_ids: classified.regressed,
                 unchanged_fixture_ids: classified.unchanged,
                 unscored_fixture_ids: classified.unscored,
+                ambiguous_fixture_ids: ambiguous_in(&ambiguous, [layout_framework, baseline_framework.as_str()], key)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 per_fixture: PairedFixtureDeltas {
                     sf1,
                     tf1,
@@ -358,7 +406,7 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
 /// in which the two share at least one fixture id. Medians cover fixtures both
 /// succeeded on; the `*_only_fixture_ids` lists name fixtures only one side succeeded on.
 pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
-    let index = index_rows(rows);
+    let (index, ambiguous) = index_rows(rows);
     let mut out = Vec::new();
 
     for (&xberg_framework, xberg_buckets) in index.iter().filter(|(name, _)| is_xberg(name)) {
@@ -378,6 +426,8 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                     capped_ids(xberg_ok.difference(&competitor_ok).copied().collect());
                 let (competitor_only_fixture_ids, competitor_only_fixture_count) =
                     capped_ids(competitor_ok.difference(&xberg_ok).copied().collect());
+                let (ambiguous_fixture_ids, ambiguous_fixture_count) =
+                    capped_ids(ambiguous_in(&ambiguous, [xberg_framework, competitor_framework], key));
 
                 let sf1 = fixture_deltas(&pairs, sf1_of);
                 let reading_order = fixture_deltas(&pairs, reading_order_of);
@@ -396,6 +446,8 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                     xberg_only_fixture_count,
                     competitor_only_fixture_ids,
                     competitor_only_fixture_count,
+                    ambiguous_fixture_ids,
+                    ambiguous_fixture_count,
                     duration_ms: summarize(&fixture_deltas(&pairs, duration_of)),
                     extraction_duration_ms: summarize(&fixture_deltas(&pairs, extraction_duration_of)),
                     peak_memory_mb: summarize(&fixture_deltas(&pairs, peak_memory_of)),

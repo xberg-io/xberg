@@ -60,7 +60,7 @@ pub(super) fn validate_layout_impact_coverage(aggregate: &NewConsolidatedResults
     Ok(())
 }
 
-/// Each `head_to_head` only-list holds at most 50 ids and exactly `min(count, 50)` of them, so a
+/// Each `head_to_head` only-list and ambiguous list holds at most 50 ids and exactly `min(count, 50)` of them, so a
 /// truncated list is always visible through its count.
 pub(super) fn validate_head_to_head_lists(aggregate: &NewConsolidatedResults, path: &Path) -> Result<()> {
     const MAX_LISTED: usize = 50;
@@ -68,11 +68,12 @@ pub(super) fn validate_head_to_head_lists(aggregate: &NewConsolidatedResults, pa
         for (list, count) in [
             (&entry.xberg_only_fixture_ids, entry.xberg_only_fixture_count),
             (&entry.competitor_only_fixture_ids, entry.competitor_only_fixture_count),
+            (&entry.ambiguous_fixture_ids, entry.ambiguous_fixture_count),
         ] {
             require(
                 list.len() == count.min(MAX_LISTED),
                 format!(
-                    "{}: head_to_head {} vs {} ({}, {}) lists {} of {count} only-fixture ids",
+                    "{}: head_to_head {} vs {} ({}, {}) lists {} of {count} fixture ids",
                     path.display(),
                     entry.xberg_framework,
                     entry.competitor_framework,

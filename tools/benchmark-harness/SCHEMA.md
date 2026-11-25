@@ -401,6 +401,7 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   "regressed_fixture_ids": ["doc_b"],
   "unchanged_fixture_ids": ["doc_c"],
   "unscored_fixture_ids": [], // paired, but neither SF1 nor quality_score on both sides
+  "ambiguous_fixture_ids": [], // stems naming more than one document; not paired
   "per_fixture": {
     "sf1": [{ "fixture_id": "doc_a", "baseline": 0.5, "layout": 0.8, "delta": 0.3 }],
     "tf1": [], "reading_order": [], "duration_ms": [], "peak_memory_mb": []
@@ -416,6 +417,11 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
 - **Pairing** happens by fixture inside one (`output_format`, `mode`, `file_type`) bucket and only
   for fixtures where both variants succeeded. A bucket whose layout rows all failed still gets an
   entry, with `paired_fixture_count: 0`.
+- **Ambiguous fixture ids**: `fixture_id` is the file stem and the corpus repeats stems, so one id
+  can name several documents. Rows carry no path; an id seen (per `file_type`) with two different
+  non-zero `file_size` values is excluded from pairing on every side and listed in
+  `ambiguous_fixture_ids`. Repeated rows with one size are treated as re-runs of one document
+  (first success wins). Same-sized collisions cannot be detected.
 - **OCR** is a property of each row, not part of the bucket: failed rows never report it
   (`ocr: null`), and an auto-OCR variant decides per document. `ocr` is the value every successful
   row on both sides reports, and `null` when they disagree, any did not report it, or none
@@ -454,6 +460,8 @@ is one shared fixture.
   "xberg_only_fixture_count": 1, // total, so a capped list shows as count > length
   "competitor_only_fixture_ids": [], // competitor succeeded, xberg absent or failed; first 50, sorted
   "competitor_only_fixture_count": 0,
+  "ambiguous_fixture_ids": [], // stems naming more than one document (see LayoutImpact); not compared
+  "ambiguous_fixture_count": 0,
   "duration_ms": { /* PairedDelta */ },
   "extraction_duration_ms": { /* PairedDelta */ },
   "peak_memory_mb": { /* PairedDelta */ },
@@ -464,7 +472,7 @@ is one shared fixture.
 }
 ```
 
-Each only-list holds at most 50 ids (the first in sorted order) so the file stays bounded across a
+Each only-list and `ambiguous_fixture_ids` holds at most 50 ids (the first in sorted order) so the file stays bounded across a
 large corpus; its `*_count` field is the total, and `validate-artifacts` checks the list holds
 exactly `min(count, 50)` ids.
 

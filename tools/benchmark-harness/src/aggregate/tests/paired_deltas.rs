@@ -60,6 +60,11 @@ fn as_file_type(mut result: BenchmarkResult, file_type: &str) -> BenchmarkResult
     result
 }
 
+fn with_file_size(mut result: BenchmarkResult, bytes: u64) -> BenchmarkResult {
+    result.file_size = bytes;
+    result
+}
+
 fn with_ocr(mut result: BenchmarkResult) -> BenchmarkResult {
     result.ocr_status = OcrStatus::Used;
     result
@@ -326,6 +331,43 @@ fn layout_impact_covers_only_pdfs_and_images() {
 }
 
 #[test]
+fn layout_impact_excludes_a_stem_shared_by_two_documents() {
+    // Two different `report.pdf` files (sizes 100 and 200) collapse to fixture id `report`.
+    let mut results = vec![
+        scored(BASELINE, "a", 0.5, Some(0.5), 0.5),
+        scored(LAYOUT, "a", 0.5, Some(0.6), 0.5),
+    ];
+    for (bytes, layout_sf1) in [(100, 0.9), (200, 0.1)] {
+        results.push(with_file_size(scored(BASELINE, "report", 0.5, Some(0.5), 0.5), bytes));
+        results.push(with_file_size(
+            scored(LAYOUT, "report", 0.5, Some(layout_sf1), 0.5),
+            bytes,
+        ));
+    }
+    let aggregated = aggregate_new_format(&results);
+
+    let impact = &aggregated.layout_impact[0];
+    assert_eq!(impact.paired_fixture_count, 1);
+    assert_eq!(ids(&impact.ambiguous_fixture_ids), ["report"]);
+    let sf1_ids: Vec<&str> = impact.per_fixture.sf1.iter().map(|d| d.fixture_id.as_str()).collect();
+    assert_eq!(sf1_ids, ["a"]);
+}
+
+#[test]
+fn layout_impact_still_pairs_a_rerun_of_the_same_document() {
+    let results = vec![
+        failed(BASELINE, "a"),
+        scored(BASELINE, "a", 0.5, Some(0.5), 0.5),
+        scored(LAYOUT, "a", 0.5, Some(0.6), 0.5),
+    ];
+    let aggregated = aggregate_new_format(&results);
+
+    let impact = &aggregated.layout_impact[0];
+    assert_eq!(impact.paired_fixture_count, 1);
+    assert!(impact.ambiguous_fixture_ids.is_empty());
+}
+
+#[test]
 fn baseline_name_resolution_covers_known_layout_variants() {
     let present: BTreeSet<&str> = [
         "xberg-markdown-baseline",
@@ -443,6 +485,25 @@ fn head_to_head_caps_only_lists_at_fifty_ids_and_keeps_the_total() {
     assert_eq!(h2h.xberg_only_fixture_ids.last().map(String::as_str), Some("x49"));
     assert_eq!(h2h.competitor_only_fixture_count, 1);
     assert_eq!(ids(&h2h.competitor_only_fixture_ids), ["competitor_only"]);
+}
+
+#[test]
+fn head_to_head_does_not_pair_different_documents_with_one_stem() {
+    // xberg ran one `report.pdf`, the competitor a different file with the same stem.
+    let results = vec![
+        scored(BASELINE, "a", 0.8, Some(0.8), 0.8),
+        scored("liteparse", "a", 0.6, Some(0.6), 0.6),
+        with_file_size(scored(BASELINE, "report", 0.8, Some(0.8), 0.8), 100),
+        with_file_size(scored("liteparse", "report", 0.6, Some(0.6), 0.6), 200),
+    ];
+    let aggregated = aggregate_new_format(&results);
+
+    let h2h = &aggregated.head_to_head[0];
+    assert_eq!(h2h.shared_fixture_count, 1);
+    assert_eq!(h2h.ambiguous_fixture_count, 1);
+    assert_eq!(ids(&h2h.ambiguous_fixture_ids), ["report"]);
+    assert!(h2h.xberg_only_fixture_ids.is_empty());
+    assert!(h2h.competitor_only_fixture_ids.is_empty());
 }
 
 #[test]
