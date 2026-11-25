@@ -2033,6 +2033,9 @@ fn looks_like_standalone_heading_text(text: &str) -> bool {
 /// "Allrightsreserved" match. The second key is the sorted list of words, so the same words
 /// joined in a different order match: a stamp whose values join as "A B" on some pages and "B A"
 /// on others is one repeated line, not two lines that each fall under the page threshold.
+/// The third key masks digit runs, so a running line that carries a per-page counter
+/// ("45209 Federal Register / Vol. 91", "Frm 00030") still repeats, including against
+/// its pages that print no counter.
 fn margin_text_keys(normalized: &str) -> Vec<String> {
     let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
     if alphanum_key.is_empty() {
@@ -2045,7 +2048,36 @@ fn margin_text_keys(normalized: &str) -> Vec<String> {
         .collect();
     words.sort_unstable();
     let word_set_key = format!("words|{}", words.join(" "));
-    vec![alphanum_key, word_set_key]
+    let mut keys = vec![alphanum_key, word_set_key];
+    keys.extend(digit_masked_margin_key(normalized));
+    keys
+}
+
+/// Letters a margin line must keep once its digits are masked: rows of figures, bare
+/// page counters and numbered markers carry too few to tell one line from another. ~keep
+const MIN_MASKED_MARGIN_KEY_LETTERS: usize = 8;
+
+/// The margin line's alphanumerics with each interior digit run replaced by `#` and
+/// leading or trailing digit runs dropped, for lines with enough letters to identify
+/// them without their numbers. Dropping the edge runs matches a running head whose page
+/// number sits on alternate sides, or is absent on some pages, against itself.
+fn digit_masked_margin_key(normalized: &str) -> Option<String> {
+    let mut masked = String::new();
+    let mut letters = 0usize;
+    let mut in_digit_run = false;
+    for character in normalized.chars().filter(|c| c.is_alphanumeric()) {
+        if character.is_ascii_digit() {
+            if !in_digit_run {
+                masked.push('#');
+            }
+            in_digit_run = true;
+        } else {
+            masked.push(character);
+            letters += 1;
+            in_digit_run = false;
+        }
+    }
+    (letters >= MIN_MASKED_MARGIN_KEY_LETTERS).then(|| format!("masked|{}", masked.trim_matches('#')))
 }
 
 pub(super) fn reads_vertically(para: &PdfParagraph) -> bool {
@@ -3709,6 +3741,62 @@ mod tests {
                 "page {i}: neither line is on more than half the pages"
             );
         }
+    }
+
+    /// 2026-14578 prints `NNNNN Federal Register / Vol. 91 ...` atop every page, its page number
+    /// on alternate sides, and a `VerDate ... Frm 000NN` slug at the foot with a per-page frame
+    /// number: no two pages carry the same characters, so exact and word-set keys never repeat.
+    #[test]
+    fn test_cross_page_repeating_text_masks_per_page_counters() {
+        let page_heights = vec![792.0; 6];
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..6)
+            .map(|i| {
+                let folio = 45207 + i;
+                let header = if i % 2 == 0 {
+                    format!("Federal Register / Vol. 91, No. 137 / Rules and Regulations {folio}")
+                } else {
+                    format!("{folio} Federal Register / Vol. 91, No. 137 / Rules and Regulations")
+                };
+                let mut slug = make_margin_body(&format!("VerDate Sep<11>2014 Jkt 268001 Frm {:05} Fmt 4700", 21 + i));
+                slug.block_bbox = Some((50.0, 20.0, 300.0, 30.0));
+                vec![make_margin_body(&header), make_body_center(&format!("Body {i}")), slug]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
+
+        assert!(!pages[0][0].is_page_furniture, "the first running head stays");
+        assert!(!pages[0][2].is_page_furniture, "the first slug stays");
+        for (i, page) in pages.iter().enumerate().skip(1) {
+            assert!(page[0].is_page_furniture, "page {i} running head must be furniture");
+            assert!(page[2].is_page_furniture, "page {i} slug must be furniture");
+            assert!(!page[1].is_page_furniture);
+        }
+    }
+
+    /// Masking digits must not merge lines that are mostly numbers: a row of figures or a
+    /// numbered marker in a margin keeps too few letters to identify a running line.
+    #[test]
+    fn test_cross_page_repeating_text_keeps_numeric_margin_rows() {
+        let page_heights = vec![792.0; 6];
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..6)
+            .map(|i| {
+                let mut marker = make_margin_body(&format!("{}. Item {}", i + 1, i + 1));
+                marker.block_bbox = Some((50.0, 20.0, 300.0, 30.0));
+                vec![
+                    make_margin_body(&format!("Total: {} {} {}", 100 + i, 200 + i, 300 + i)),
+                    make_body_center(&format!("Body {i}")),
+                    marker,
+                ]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
+
+        assert!(
+            pages.iter().flatten().all(|paragraph| !paragraph.is_page_furniture),
+            "rows that differ only in their numbers and carry few letters are content"
+        );
     }
 
     #[test]
