@@ -12,7 +12,8 @@ const LIMIT: usize = 8 * 1024 * 1024;
 /// Canvas pixels the 32 pt fixture pages are painted over at 72 dpi, far below any reduced scale of
 /// the oversized fixtures.
 const DEVICE: (f32, f32) = (32.0, 32.0);
-/// Refuses the 4096 px fixtures even at 1/8 (about 1.8 MiB of rasters) while admitting the 32 px page.
+/// Refuses the 4096 px fixtures even at 1/8 (3 MiB of component planes, output and coefficient rows)
+/// while admitting the 32 px page.
 const TIGHT: usize = 1024 * 1024;
 const LARGE: u32 = 4096;
 

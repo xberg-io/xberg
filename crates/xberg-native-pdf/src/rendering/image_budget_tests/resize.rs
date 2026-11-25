@@ -190,3 +190,64 @@ fn the_direct_draw_stays_within_a_few_levels_of_the_pre_resize() {
     let gradient = direct_draw_error(&gradient(500), 0.854);
     assert!(gradient < 1.0, "a gradient differs by {gradient} levels on average");
 }
+
+/// The square as a progressive frame: only its full-size decode is available, so the half-scale rule
+/// alone decides whether it may be drawn directly.
+fn progressive_square() -> PdfImage {
+    let mut bytes = source::jpeg_of(SOURCE, SOURCE);
+    let frame = source::sof_marker_position(&bytes);
+    bytes[frame + 1] = 0xc2;
+    PdfImage::new(SOURCE, SOURCE, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(bytes))
+}
+
+#[test]
+fn a_direct_draw_is_admitted_down_to_half_scale_and_refused_below_it() {
+    let image = progressive_square();
+    let canvas = 1000;
+    let pixels = u64::from(SOURCE * SOURCE);
+    let full_direct = pixels * (3 + 4) + encoded(&image) + canvas;
+    let admit = |painted: f32| {
+        let mut budget = ImageBudget::new(full_direct as usize);
+        let admitted = budget.admit_jpeg_decode(&image, canvas, Placement::extent(painted, painted), true);
+        (admitted, budget.exceeded())
+    };
+    // Painted over 610 px (scale 0.508), the pre-resize outweighs the RGB decode it follows, so only
+    // the direct draw fits the decode and its RGBA copy.
+    assert!(resize_working_bytes((SOURCE, SOURCE), (610, 610)) > pixels * 3);
+    assert_eq!(admit(610.0).0.unwrap(), paint(JpegDecode::Full, Blit::Direct));
+    // Painted over 590 px (scale 0.492) a bicubic draw would skip source pixels, so the image is
+    // refused with the pre-resize's charge, the only draw left.
+    let (refused, exceeded) = admit(590.0);
+    let error = refused.unwrap_err();
+    assert!(exceeded, "{error}");
+    let pre_resize = pixels * 4 + resize_working_bytes((SOURCE, SOURCE), (590, 590)) + encoded(&image) + canvas;
+    assert!(
+        error.to_string().contains(&format!("require {pre_resize} bytes")),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_refusal_reports_the_cheaper_draw_and_stays_over_budget_at_any_size() {
+    let image = progressive_square();
+    let canvas = 1000;
+    let full_direct = u64::from(SOURCE * SOURCE) * (3 + 4) + encoded(&image) + canvas;
+    let mut budget = ImageBudget::new(1 << 20);
+    let error = budget
+        .admit_jpeg_decode(&image, canvas, Placement::extent(1000.0, 1000.0), true)
+        .unwrap_err();
+    assert!(
+        error.to_string().contains(&format!("require {full_direct} bytes")),
+        "the direct draw is cheaper than the pre-resize: {error}"
+    );
+    assert!(budget.exceeded());
+    // Squeezed to one pixel wide and stretched past any raster, the pre-resize charge saturates; the
+    // refusal must stay the over-budget class the OCR retry keys on.
+    let mut budget = ImageBudget::new(1 << 20);
+    assert!(
+        budget
+            .admit_jpeg_decode(&square(), canvas, Placement::extent(1.0, f32::MAX), true)
+            .is_err()
+    );
+    assert!(budget.exceeded());
+}
