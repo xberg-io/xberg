@@ -59,16 +59,16 @@ pub struct NewConsolidatedResults {
 /// `baseline` is the reference side (the baseline variant in [`LayoutImpact`], the competitor in
 /// [`HeadToHead`]); `layout` is the compared side (the layout variant, respectively xberg).
 /// `delta_p50` is the median of the per-fixture deltas `layout - baseline`, NOT the difference of
-/// the two medians. `sample_count` is the number of fixtures with a value on both sides; all
-/// fields are `0` when that is zero.
+/// the two medians. `sample_count` is the number of fixtures with a value on both sides; the three
+/// medians are `None` exactly when it is zero, so "not measured" never reads as "no difference".
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PairedDelta {
     /// Median of the reference side's per-fixture values.
-    pub baseline_p50: f64,
+    pub baseline_p50: Option<f64>,
     /// Median of the compared side's per-fixture values.
-    pub layout_p50: f64,
+    pub layout_p50: Option<f64>,
     /// Median of the per-fixture deltas (`layout - baseline`).
-    pub delta_p50: f64,
+    pub delta_p50: Option<f64>,
     /// Fixtures contributing to the three medians.
     pub sample_count: usize,
 }

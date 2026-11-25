@@ -723,6 +723,7 @@ fn test_schema_2_12_fields_are_serialized_with_expected_types() {
         assert!(entry["xberg_only_fixture_ids"].as_array().unwrap().is_empty());
         assert!(entry["competitor_only_fixture_ids"].as_array().unwrap().is_empty());
         assert!(entry["quality_score"]["delta_p50"].is_f64());
+        assert!(entry["duration_ms"]["delta_p50"].is_f64());
     }
 
     let quality =

@@ -151,9 +151,9 @@ fn summarize(deltas: &[FixtureDelta]) -> PairedDelta {
     let layouts: Vec<f64> = deltas.iter().map(|d| d.layout).collect();
     let diffs: Vec<f64> = deltas.iter().map(|d| d.delta).collect();
     PairedDelta {
-        baseline_p50: median(&baselines),
-        layout_p50: median(&layouts),
-        delta_p50: median(&diffs),
+        baseline_p50: Some(median(&baselines)),
+        layout_p50: Some(median(&layouts)),
+        delta_p50: Some(median(&diffs)),
         sample_count: deltas.len(),
     }
 }

@@ -393,7 +393,7 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   "tf1": { /* PairedDelta */ },
   "reading_order": { /* PairedDelta */ }, // null when no paired fixture carries a score
   "quality_score": { /* PairedDelta */ },
-  "duration_ms": { /* PairedDelta */ },
+  "duration_ms": { "baseline_p50": 410.0, "layout_p50": 655.0, "delta_p50": 240.0, "sample_count": 41 }, // medians null when sample_count is 0 (batch)
   "peak_memory_mb": { /* PairedDelta */ },
   "improved_fixture_ids": ["doc_a"],
   "regressed_fixture_ids": ["doc_b"],
@@ -409,7 +409,8 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
 - **`PairedDelta`**: `baseline_p50` and `layout_p50` are the medians of each side's per-fixture
   values; `delta_p50` is the **median of the per-fixture deltas** (`layout - baseline`), not
   `layout_p50 - baseline_p50`. `sample_count` is the number of fixtures with a value on both sides;
-  every field is `0` when it is `0`.
+  the three medians are `null` exactly when it is `0` (e.g. `duration_ms` in batch mode), so an
+  unmeasured metric never reads as "no difference". `validate-artifacts` enforces this.
 - **Pairing** happens by fixture inside one (`output_format`, `mode`, `file_type`) bucket and only
   for fixtures where both variants succeeded. A bucket whose layout rows all failed still gets an
   entry, with `paired_fixture_count: 0`.

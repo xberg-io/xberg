@@ -70,6 +70,10 @@ fn with_duration_ms(mut result: BenchmarkResult, ms: u64) -> BenchmarkResult {
     result
 }
 
+fn p50(value: Option<f64>) -> f64 {
+    value.expect("a delta with samples carries its medians")
+}
+
 fn ids(values: &[String]) -> Vec<&str> {
     values.iter().map(String::as_str).collect()
 }
@@ -115,10 +119,10 @@ fn layout_impact_delta_p50_is_median_of_fixture_deltas_not_difference_of_medians
     let aggregated = aggregate_new_format(&results);
 
     let sf1 = aggregated.layout_impact[0].sf1.as_ref().expect("markdown carries sf1");
-    assert!((sf1.baseline_p50 - 0.5).abs() < EPS);
-    assert!((sf1.layout_p50 - 0.9).abs() < EPS);
-    assert!((sf1.delta_p50 - 0.1).abs() < EPS, "got {}", sf1.delta_p50);
-    assert!((sf1.layout_p50 - sf1.baseline_p50 - 0.4).abs() < EPS);
+    assert!((p50(sf1.baseline_p50) - 0.5).abs() < EPS);
+    assert!((p50(sf1.layout_p50) - 0.9).abs() < EPS);
+    assert!((p50(sf1.delta_p50) - 0.1).abs() < EPS, "got {:?}", sf1.delta_p50);
+    assert!((p50(sf1.layout_p50) - p50(sf1.baseline_p50) - 0.4).abs() < EPS);
 }
 
 #[test]
@@ -223,6 +227,7 @@ fn layout_impact_emits_zero_pair_entry_when_every_layout_row_failed() {
     assert_eq!(impact.ocr, Some(false), "OCR comes from the successful baseline rows");
     assert!(impact.sf1.is_none());
     assert_eq!(impact.tf1.sample_count, 0);
+    assert_eq!(impact.tf1.delta_p50, None);
 }
 
 #[test]
@@ -238,6 +243,15 @@ fn layout_impact_skips_duration_deltas_for_batch_but_keeps_quality() {
     assert_eq!(impact.tf1.sample_count, 1);
     assert_eq!(impact.duration_ms.sample_count, 0);
     assert_eq!(impact.peak_memory_mb.sample_count, 0);
+    // Unmeasured is null, not a 0.0 that reads as "no difference".
+    assert_eq!(impact.duration_ms, PairedDelta::default());
+    assert_eq!(impact.duration_ms.delta_p50, None);
+    assert_eq!(impact.peak_memory_mb.baseline_p50, None);
+    let json = serde_json::to_value(&impact.duration_ms).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({"baseline_p50": null, "layout_p50": null, "delta_p50": null, "sample_count": 0})
+    );
 }
 
 #[test]
@@ -250,7 +264,7 @@ fn layout_impact_reports_duration_and_memory_deltas_in_single_mode() {
 
     let impact = &aggregated.layout_impact[0];
     assert_eq!(impact.duration_ms.sample_count, 1);
-    assert!((impact.duration_ms.delta_p50 - 150.0).abs() < EPS);
+    assert!((p50(impact.duration_ms.delta_p50) - 150.0).abs() < EPS);
     assert_eq!(impact.peak_memory_mb.sample_count, 1);
 }
 
@@ -357,9 +371,9 @@ fn head_to_head_excludes_fixtures_only_one_side_ran() {
     assert_eq!(ids(&h2h.xberg_only_fixture_ids), ["f4", "f6"]);
     assert_eq!(ids(&h2h.competitor_only_fixture_ids), ["f5"]);
     // f4 (xberg tf1 0.0) is not shared, so it must not pull xberg's median down.
-    assert!((h2h.tf1.layout_p50 - 0.8).abs() < EPS);
-    assert!((h2h.tf1.baseline_p50 - 0.6).abs() < EPS);
-    assert!((h2h.tf1.delta_p50 - 0.2).abs() < EPS);
+    assert!((p50(h2h.tf1.layout_p50) - 0.8).abs() < EPS);
+    assert!((p50(h2h.tf1.baseline_p50) - 0.6).abs() < EPS);
+    assert!((p50(h2h.tf1.delta_p50) - 0.2).abs() < EPS);
     assert_eq!(h2h.tf1.sample_count, 3);
 }
 

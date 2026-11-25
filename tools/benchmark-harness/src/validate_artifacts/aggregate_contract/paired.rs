@@ -78,6 +78,65 @@ pub(super) fn validate_layout_impact_classification(aggregate: &NewConsolidatedR
     Ok(())
 }
 
+fn paired_delta_is_consistent(delta: &crate::aggregate::PairedDelta) -> bool {
+    let medians = [delta.baseline_p50, delta.layout_p50, delta.delta_p50];
+    if delta.sample_count == 0 {
+        medians.iter().all(Option::is_none)
+    } else {
+        medians.iter().all(|median| median.is_some_and(f64::is_finite))
+    }
+}
+
+/// Every `PairedDelta` in the paired sections carries its three medians exactly when
+/// `sample_count > 0`, so an unmeasured metric is `null` rather than a `0.0` that reads as "no
+/// difference".
+pub(super) fn validate_paired_delta_medians(aggregate: &NewConsolidatedResults, path: &Path) -> Result<()> {
+    for impact in &aggregate.layout_impact {
+        let deltas = [
+            impact.sf1.as_ref(),
+            Some(&impact.tf1),
+            impact.reading_order.as_ref(),
+            Some(&impact.quality_score),
+            Some(&impact.duration_ms),
+            Some(&impact.peak_memory_mb),
+        ];
+        require(
+            deltas.into_iter().flatten().all(paired_delta_is_consistent),
+            format!(
+                "{}: layout_impact {} vs {} ({}, {}) has medians inconsistent with sample_count",
+                path.display(),
+                impact.layout_framework,
+                impact.baseline_framework,
+                impact.mode,
+                impact.file_type
+            ),
+        )?;
+    }
+    for entry in &aggregate.head_to_head {
+        let deltas = [
+            Some(&entry.duration_ms),
+            Some(&entry.extraction_duration_ms),
+            Some(&entry.peak_memory_mb),
+            Some(&entry.tf1),
+            entry.sf1.as_ref(),
+            entry.reading_order.as_ref(),
+            Some(&entry.quality_score),
+        ];
+        require(
+            deltas.into_iter().flatten().all(paired_delta_is_consistent),
+            format!(
+                "{}: head_to_head {} vs {} ({}, {}) has medians inconsistent with sample_count",
+                path.display(),
+                entry.xberg_framework,
+                entry.competitor_framework,
+                entry.mode,
+                entry.file_type
+            ),
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,7 +188,11 @@ mod tests {
             framework_capabilities: FrameworkCapabilities::default(),
             pdf_metadata: None,
             // Every production failure path reports Unknown: extraction never said whether it OCRed.
-            ocr_status: if success { OcrStatus::NotUsed } else { OcrStatus::Unknown },
+            ocr_status: if success {
+                OcrStatus::NotUsed
+            } else {
+                OcrStatus::Unknown
+            },
             extracted_text: None,
             system_load: None,
         }
@@ -220,6 +283,30 @@ mod tests {
             .expect_err("a double-listed id must fail")
             .to_string();
         assert!(error.contains("3 fixture ids (2 distinct)"), "{error}");
+    }
+
+    #[test]
+    fn paired_delta_medians_must_be_null_exactly_when_unsampled() {
+        let path = Path::new("aggregated.json");
+        let mut aggregate = aggregate_new_format(&[
+            result("xberg-markdown-baseline", "a", true),
+            result("xberg-markdown-layout", "a", true),
+            result("liteparse", "a", true),
+        ]);
+        validate_paired_delta_medians(&aggregate, path).expect("built aggregate is consistent");
+
+        let unsampled = &mut aggregate.layout_impact[0].tf1;
+        unsampled.sample_count = 0;
+        validate_paired_delta_medians(&aggregate, path).expect_err("medians without samples must fail");
+
+        let mut aggregate = baseline_and_layout(false);
+        assert_eq!(aggregate.layout_impact[0].tf1.sample_count, 0);
+        validate_paired_delta_medians(&aggregate, path).expect("all-null zero-pair entry is consistent");
+        aggregate.layout_impact[0].tf1.delta_p50 = Some(0.0);
+        let error = validate_paired_delta_medians(&aggregate, path)
+            .expect_err("a 0.0 median without samples must fail")
+            .to_string();
+        assert!(error.contains("inconsistent with sample_count"), "{error}");
     }
 
     #[test]

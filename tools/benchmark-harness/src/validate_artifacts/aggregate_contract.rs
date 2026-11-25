@@ -894,6 +894,7 @@ pub(super) fn validate_aggregate(
     paired::validate_paired_sections_present(&load_json_value(path)?, path)?;
     paired::validate_layout_impact_coverage(&aggregate, path)?;
     paired::validate_layout_impact_classification(&aggregate, path)?;
+    paired::validate_paired_delta_medians(&aggregate, path)?;
 
     let (allowed_entries, present_entries, actual_keys) = validate_aggregate_key_coverage(&aggregate, contract)?;
     validate_format_support(&aggregate, &present_entries, contract, path)?;
