@@ -70,11 +70,21 @@ impl PdfDocument {
         configs: [&TableDetectionConfig; N],
         recover_wide: bool,
     ) -> Result<(TablePaths, [RuledSourceTables; N])> {
+        let paths = match self.extract_paths(page_index) {
+            Ok(paths) => paths,
+            Err(error) => {
+                // Words were read first before the ruling gate existed; keep their error. ~keep
+                self.extract_table_word_spans(page_index)?;
+                return Err(error);
+            }
+        };
+        let lines = self.table_ruling_paths(page_index, &paths);
+        if recover_wide && rulings_cannot_bound_a_cell(configs, &lines) {
+            return Ok((paths, std::array::from_fn(|_| (Vec::new(), None))));
+        }
         let spans = self.extract_table_word_spans(page_index)?;
         #[cfg(test)]
         record_table_word_spans(&spans);
-        let paths = self.extract_paths(page_index)?;
-        let lines = self.table_ruling_paths(page_index, &paths);
         let tables = self.detect_ruled_source_tables(page_index, configs, recover_wide, &spans, &lines);
         Ok((paths, tables))
     }
@@ -227,6 +237,30 @@ fn is_line_only(config: &TableDetectionConfig) -> bool {
     config.horizontal_strategy == TableStrategy::Lines && config.vertical_strategy == TableStrategy::Lines
 }
 
+/// Axis tolerance the Lines/Lines detector classifies rules with.
+const RULE_AXIS_TOLERANCE: f32 = 2.0;
+
+/// Whether the Lines/Lines routes, wide recovery included, must come back empty
+/// whatever the page's words are, so building those words can be skipped.
+///
+/// With no rule that reads as vertical, the intersection grid and every line
+/// cluster lack the two column edges a cell needs; leftover-rule detection only
+/// runs beside a found table; painted-cell recovery needs at least
+/// `min_table_cells` paths; wide recovery needs vertical source rules. A page
+/// whose only rulings are a running header and footer rule is the common case. ~keep
+fn rulings_cannot_bound_a_cell<const N: usize>(
+    configs: [&TableDetectionConfig; N],
+    lines: &[crate::elements::PathContent],
+) -> bool {
+    configs.iter().all(|config| is_line_only(config))
+        && (lines.is_empty()
+            || (configs.iter().all(|config| lines.len() < config.min_table_cells)
+                && lines.iter().all(|line| {
+                    line.is_horizontal_line(RULE_AXIS_TOLERANCE) && !line.is_vertical_line(RULE_AXIS_TOLERANCE)
+                })
+                && !source_spanned_rules_present(lines)))
+}
+
 fn wide_ruled_ownership(
     table: &Table,
     config: &TableDetectionConfig,
@@ -311,3 +345,7 @@ fn certify_empty_legacy_routes<const N: usize>(
 #[cfg(test)]
 #[path = "source_ownership/wide_admission_tests.rs"]
 mod wide_admission_tests;
+
+#[cfg(test)]
+#[path = "source_ownership/ruling_gate_tests.rs"]
+mod ruling_gate_tests;
