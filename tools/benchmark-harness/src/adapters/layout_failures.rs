@@ -5,12 +5,24 @@
 
 use xberg::types::ExtractedDocument;
 
+/// Warning sources that report a failed or skipped layout pass: `layout` from the PDF extractor
+/// and `layout-ocr` from the image extractor's layout-region OCR.
+const LAYOUT_WARNING_SOURCES: [&str; 2] = ["layout", "layout-ocr"];
+
+/// Emitted when the CPU provider recovered the layout pass; the layout was applied, so the row
+/// is still valid.
+const RECOVERED_ON_CPU_MARKER: &str = "recovered on CPU";
+
+fn is_layout_failure(source: &str, message: &str) -> bool {
+    LAYOUT_WARNING_SOURCES.contains(&source) && !message.contains(RECOVERED_ON_CPU_MARKER)
+}
+
 /// The layout failure a document reports, if its extraction continued without layout hints.
 pub(crate) fn layout_failure_in_document(document: &ExtractedDocument) -> Option<String> {
     document
         .processing_warnings
         .iter()
-        .find(|warning| warning.source == "layout")
+        .find(|warning| is_layout_failure(&warning.source, &warning.message))
         .map(|warning| message(&warning.message))
 }
 
@@ -19,15 +31,17 @@ pub(crate) fn layout_failure_in_document(document: &ExtractedDocument) -> Option
 /// detector that failed is visible here instead of being scored as that detector's output. ~keep
 pub(crate) fn layout_failure_in_item(item: &serde_json::Value) -> Option<String> {
     let warnings = item.get("processing_warnings")?.as_array()?;
-    let warning = warnings
-        .iter()
-        .find(|warning| warning.get("source").and_then(serde_json::Value::as_str) == Some("layout"))?;
-    Some(message(
-        warning
-            .get("message")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("unknown layout error"),
-    ))
+    let warning = warnings.iter().find(|warning| {
+        is_layout_failure(
+            warning_text(warning, "source").unwrap_or_default(),
+            warning_text(warning, "message").unwrap_or_default(),
+        )
+    })?;
+    Some(message(warning_text(warning, "message").unwrap_or("unknown layout error")))
+}
+
+fn warning_text<'a>(warning: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+    warning.get(key).and_then(serde_json::Value::as_str)
 }
 
 fn message(reason: &str) -> String {
@@ -81,5 +95,26 @@ mod tests {
             None
         );
         assert_eq!(layout_failure_in_item(&serde_json::json!({ "content": "text" })), None);
+    }
+
+    #[test]
+    fn an_image_layout_ocr_failure_is_reported_in_both_shapes() {
+        let reason = "Layout-region OCR failed after whole-image OCR succeeded; retained whole-image output";
+        let mut document = ExtractedDocument::default();
+        document.processing_warnings.push(warning("layout-ocr", reason));
+        assert!(layout_failure_in_document(&document).is_some());
+        assert!(layout_failure_in_item(&item(serde_json::json!([{ "source": "layout-ocr", "message": reason }]))).is_some());
+    }
+
+    #[test]
+    fn a_cpu_recovered_layout_pass_is_not_a_failure() {
+        let reason = "automatic layout inference failed (provider error); recovered on CPU";
+        let mut document = ExtractedDocument::default();
+        document.processing_warnings.push(warning("layout", reason));
+        assert_eq!(layout_failure_in_document(&document), None);
+        assert_eq!(
+            layout_failure_in_item(&item(serde_json::json!([{ "source": "layout", "message": reason }]))),
+            None
+        );
     }
 }

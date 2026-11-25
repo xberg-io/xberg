@@ -48,6 +48,37 @@ const TESSERACT_BENCHMARK_CONFIG_JSON: &str = r#"{
     }
 }"#;
 
+/// Tesseract is configured but OCR is not forced, so xberg's own per-page trigger decides which
+/// pages get OCR'd.
+const AUTO_OCR_TESSERACT_BENCHMARK_CONFIG_JSON: &str = r#"{
+    "extraction_timeout_secs":1740,
+    "use_cache":false,
+    "ocr":{
+        "enabled":true,
+        "backend":"tesseract"
+    }
+}"#;
+
+/// OCR engine behind an auto-OCR variant, which leaves `force_ocr` unset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoOcrBackend {
+    Tesseract,
+    Paddle,
+}
+
+impl AutoOcrBackend {
+    /// Both auto-OCR variants, in registration order.
+    pub const ALL: [AutoOcrBackend; 2] = [AutoOcrBackend::Tesseract, AutoOcrBackend::Paddle];
+
+    /// Pipeline slug used in framework names and artifact names.
+    pub fn slug(self) -> &'static str {
+        match self {
+            AutoOcrBackend::Tesseract => "auto-ocr",
+            AutoOcrBackend::Paddle => "auto-ocr-paddle",
+        }
+    }
+}
+
 fn benchmark_config_json(tesseract_ocr_enabled: bool) -> &'static str {
     if tesseract_ocr_enabled {
         TESSERACT_BENCHMARK_CONFIG_JSON
@@ -57,6 +88,10 @@ fn benchmark_config_json(tesseract_ocr_enabled: bool) -> &'static str {
 }
 
 fn benchmark_base_args(batch: bool, content_format: &str, tesseract_ocr_enabled: bool) -> Vec<String> {
+    base_args_with_config(batch, content_format, benchmark_config_json(tesseract_ocr_enabled))
+}
+
+fn base_args_with_config(batch: bool, content_format: &str, config_json: &str) -> Vec<String> {
     let subcommand = if batch { "batch" } else { "extract" };
     vec![
         subcommand.to_string(),
@@ -66,7 +101,7 @@ fn benchmark_base_args(batch: bool, content_format: &str, tesseract_ocr_enabled:
         "--content-format".to_string(),
         content_format.to_string(),
         "--config-json".to_string(),
-        benchmark_config_json(tesseract_ocr_enabled).to_string(),
+        config_json.to_string(),
     ]
 }
 
@@ -100,6 +135,18 @@ fn push_ocr_args(args: &mut Vec<String>, backend: &str) {
 fn push_sceptre_args(args: &mut Vec<String>, engine_options: &str) {
     push_ocr_args(args, "sceptre");
     args.extend(["--ocr-backend-options".to_string(), engine_options.to_string()]);
+}
+
+/// Whether the pipeline runs layout detection, so a failed layout pass must fail the row rather
+/// than be scored as "layout made no difference".
+pub(crate) fn pipeline_runs_layout(pipeline: XbergPipeline) -> bool {
+    matches!(
+        pipeline,
+        XbergPipeline::Layout
+            | XbergPipeline::LayoutV3
+            | XbergPipeline::LayoutPaddle
+            | XbergPipeline::SceptreOrtLayout
+    )
 }
 
 fn pipeline_requires_ocr(pipeline: XbergPipeline) -> bool {
@@ -232,6 +279,87 @@ pub fn create_xberg_adapter(
     args.push(pdf_backend.as_str().to_string());
 
     let framework_name = xberg_framework_name(pipeline, output_format, batch, pdf_backend);
+    assemble_adapter(
+        framework_name,
+        cli_path,
+        build_identity,
+        args,
+        output_format,
+        batch,
+        pipeline_runs_layout(pipeline),
+    )
+}
+
+/// Creates an Xberg adapter that configures an OCR engine but does not force OCR, so xberg's own
+/// per-page trigger decides which pages are OCR'd.
+pub fn create_xberg_auto_ocr_adapter(
+    backend: AutoOcrBackend,
+    output_format: OutputFormat,
+    batch: bool,
+    ocr_enabled: bool,
+) -> Result<SubprocessAdapter> {
+    if !ocr_enabled {
+        return Err(crate::Error::Config(format!(
+            "xberg pipeline '{}' requires OCR, but OCR is disabled",
+            backend.slug()
+        )));
+    }
+
+    let cli_path = locate_xberg_cli()?;
+    let build_id = probe_xberg_build_id(&cli_path)?;
+    let build_identity = ExecutableBuildIdentity {
+        build_id,
+        path: cli_path.clone(),
+    };
+
+    let mut args = auto_ocr_args(backend, output_format, batch);
+    args.push("--pdf-backend".to_string());
+    args.push(XbergPdfBackend::Native.as_str().to_string());
+
+    let framework_name = auto_ocr_framework_name(backend, output_format, batch);
+    assemble_adapter(framework_name, cli_path, build_identity, args, output_format, batch, false)
+}
+
+fn auto_ocr_framework_name(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> String {
+    let format_slug = match output_format {
+        OutputFormat::Markdown => "markdown",
+        OutputFormat::Plaintext => "plaintext",
+    };
+    let batch_suffix = if batch { "-batch" } else { "" };
+    format!("xberg-{format_slug}-{}{batch_suffix}", backend.slug())
+}
+
+fn auto_ocr_args(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> Vec<String> {
+    let content_format = match output_format {
+        OutputFormat::Markdown => "markdown",
+        OutputFormat::Plaintext => "plain",
+    };
+    match backend {
+        AutoOcrBackend::Tesseract => {
+            base_args_with_config(batch, content_format, AUTO_OCR_TESSERACT_BENCHMARK_CONFIG_JSON)
+        }
+        AutoOcrBackend::Paddle => {
+            let mut args = base_args_with_config(batch, content_format, NATIVE_BENCHMARK_CONFIG_JSON);
+            args.extend([
+                "--ocr".to_string(),
+                "true".to_string(),
+                "--ocr-backend".to_string(),
+                "paddle-ocr".to_string(),
+            ]);
+            args
+        }
+    }
+}
+
+fn assemble_adapter(
+    framework_name: String,
+    cli_path: PathBuf,
+    build_identity: ExecutableBuildIdentity,
+    args: Vec<String>,
+    output_format: OutputFormat,
+    batch: bool,
+    reject_layout_failures: bool,
+) -> Result<SubprocessAdapter> {
     // Derive the benchmarkable format list from xberg's own MIME registry so it never drifts from
     // what xberg can actually extract (a stale hardcoded list silently filtered out fixtures for
     // formats like fb2/eml/msg/rst/org/latex/typst/docbook/tsv, which xberg fully supports).
@@ -267,9 +395,9 @@ pub fn create_xberg_adapter(
     .with_supported_output_formats(vec![output_format])
     .with_ocr_language_policy(declared_ocr_language_policy(&framework_name))
     .with_executable_build_identity(build_identity);
-    // A V3 row must prove the V3 detector ran: a failed layout pass otherwise yields plausible
-    // text that the harness would score as PP-DocLayoutV3 output. ~keep
-    let mut adapter = if pipeline == XbergPipeline::LayoutV3 {
+    // A layout row must prove the detector ran: a failed layout pass otherwise yields plausible
+    // text that the harness would score as layout output. ~keep
+    let mut adapter = if reject_layout_failures {
         adapter.with_layout_failure_rejection()
     } else {
         adapter
@@ -310,7 +438,7 @@ pub fn create_xberg_steady_adapter(
         xberg_framework_name(pipeline, output_format, false, pdf_backend),
         if batch { "-batch" } else { "" }
     );
-    let reject_layout_failures = pipeline == XbergPipeline::LayoutV3;
+    let reject_layout_failures = pipeline_runs_layout(pipeline);
     if batch {
         let adapter = NativeAdapter::with_identity(name, config);
         return Ok(if reject_layout_failures {
@@ -815,10 +943,10 @@ mod tests {
         );
     }
 
-    /// Negative control: the V3 adapters must refuse a document whose layout pass failed, so a
-    /// fallback read is never scored as PP-DocLayoutV3 output. ~keep
+    /// Negative control: every layout-bearing adapter must refuse a document whose layout pass
+    /// failed, so a fallback read is never scored as layout output; baseline must not. ~keep
     #[test]
-    fn only_the_layout_v3_adapter_rejects_a_failed_layout_pass() {
+    fn only_layout_adapters_reject_a_failed_layout_pass() {
         let adapter = |pipeline| {
             create_xberg_steady_adapter(
                 pipeline,
@@ -831,8 +959,78 @@ mod tests {
             .unwrap()
         };
         assert!(adapter(XbergPipeline::LayoutV3).rejects_layout_failures());
-        assert!(!adapter(XbergPipeline::Layout).rejects_layout_failures());
+        assert!(adapter(XbergPipeline::Layout).rejects_layout_failures());
         assert!(!adapter(XbergPipeline::Baseline).rejects_layout_failures());
+    }
+
+    #[test]
+    fn layout_rejection_policy_covers_exactly_the_layout_bearing_pipelines() {
+        let layout_bearing = [
+            XbergPipeline::Layout,
+            XbergPipeline::LayoutV3,
+            XbergPipeline::LayoutPaddle,
+            XbergPipeline::SceptreOrtLayout,
+        ];
+        let others = [
+            XbergPipeline::Baseline,
+            XbergPipeline::PaddleOcr,
+            XbergPipeline::BaselinePaddle,
+            XbergPipeline::SceptreOrt,
+            XbergPipeline::SceptreOrtAutoRotate,
+            XbergPipeline::SceptreTract,
+        ];
+        for pipeline in layout_bearing {
+            assert!(pipeline_runs_layout(pipeline), "{pipeline} runs layout");
+            let mut args = Vec::new();
+            push_pipeline_args(&mut args, pipeline);
+            assert!(args.iter().any(|arg| arg == "--layout"), "{pipeline} passes --layout");
+        }
+        for pipeline in others {
+            assert!(!pipeline_runs_layout(pipeline), "{pipeline} does not run layout");
+            let mut args = Vec::new();
+            push_pipeline_args(&mut args, pipeline);
+            assert!(!args.iter().any(|arg| arg == "--layout"), "{pipeline} must not pass --layout");
+        }
+    }
+
+    #[test]
+    fn auto_ocr_variants_configure_ocr_without_forcing_it() {
+        for (backend, name) in [
+            (AutoOcrBackend::Tesseract, "xberg-markdown-auto-ocr"),
+            (AutoOcrBackend::Paddle, "xberg-markdown-auto-ocr-paddle"),
+        ] {
+            assert_eq!(auto_ocr_framework_name(backend, OutputFormat::Markdown, false), name);
+            assert_eq!(
+                auto_ocr_framework_name(backend, OutputFormat::Markdown, true),
+                format!("{name}-batch")
+            );
+            let args = auto_ocr_args(backend, OutputFormat::Markdown, false);
+            assert!(!args.iter().any(|arg| arg == "--force-ocr"), "{name}: {args:?}");
+            let config_json = &args[args.iter().position(|arg| arg == "--config-json").unwrap() + 1];
+            let config: xberg::ExtractionConfig = serde_json::from_str(config_json).unwrap();
+            assert!(!config.force_ocr, "{name}");
+            match backend {
+                AutoOcrBackend::Tesseract => {
+                    let ocr = config.ocr.expect("tesseract auto-ocr enables OCR in the config");
+                    assert!(ocr.enabled);
+                    assert_eq!(ocr.backend, "tesseract");
+                }
+                AutoOcrBackend::Paddle => {
+                    assert!(args.windows(2).any(|pair| pair == ["--ocr", "true"]));
+                    assert!(args.windows(2).any(|pair| pair == ["--ocr-backend", "paddle-ocr"]));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn auto_ocr_adapter_is_rejected_when_ocr_is_disabled() {
+        let error = match create_xberg_auto_ocr_adapter(AutoOcrBackend::Tesseract, OutputFormat::Markdown, false, false)
+        {
+            Ok(_) => panic!("auto-ocr adapter should not be created when OCR is disabled"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("requires OCR"));
     }
 
     #[test]
