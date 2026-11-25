@@ -1382,28 +1382,84 @@ fn finish_cell_assignment(table: Vec<Vec<Vec<&HocrWord>>>) -> Vec<Vec<String>> {
 fn join_cell_words(words: &[&HocrWord]) -> String {
     let mut text = String::new();
     let mut previous = None;
-    for word in words {
+    let mut previous_was_bridging_separator = false;
+    for (index, word) in words.iter().enumerate() {
         let normalized = word.text.split_whitespace().collect::<Vec<_>>().join(" ");
         if normalized.is_empty() {
             previous = None;
+            previous_was_bridging_separator = false;
             continue;
         }
-        if !text.is_empty() && !previous.is_some_and(|prev| is_touching_numeric_continuation(prev, word)) {
+        let is_bridging_separator =
+            previous.is_some_and(|prev| is_bridging_decimal_separator(prev, word, words.get(index + 1).copied()));
+        let glued = previous_was_bridging_separator
+            || is_bridging_separator
+            || previous.is_some_and(|prev| is_touching_numeric_continuation(prev, word));
+        if !text.is_empty() && !glued {
             text.push(' ');
         }
         text.push_str(&normalized);
         previous = Some(*word);
+        previous_was_bridging_separator = is_bridging_separator;
     }
     text
+}
+
+fn is_numeric_prefix(text: &str) -> bool {
+    text.ends_with(|character: char| character.is_ascii_digit())
+        && text
+            .chars()
+            .all(|character| character.is_ascii_digit() || matches!(character, '.' | ',' | '(' | '[' | '+' | '-' | '−'))
+}
+
+fn numeric_gap_tolerance(previous: &HocrWord, next: &HocrWord) -> f64 {
+    // ~keep HocrWord rounds PDF coordinates to pixels; allow one rounding pixel at either edge.
+    (previous.height.max(next.height) as f64 * NUMERIC_CONTINUATION_GAP_HEIGHT_RATIO)
+        .max(NUMERIC_CONTINUATION_ROUNDING_TOLERANCE as f64)
+}
+
+fn horizontal_gap(previous: &HocrWord, next: &HocrWord) -> f64 {
+    next.left as f64 - previous.left as f64 - previous.width as f64
+}
+
+/// A decimal point or comma drawn as its own text run between two digit runs: TeX typesets
+/// the `.` of a math-mode number from the math italic font (CMMI) and the digits from the
+/// roman one (CMR), so `0.511` reaches a cell as the touching words `0`, `.`, `511`.
+///
+/// The separator may carry its glyph's own ink box (a dot sits low and is short), so it is
+/// only required to lie inside the line band of the digit run before it, while the two digit
+/// runs must share a line and size like any other numeric continuation.
+fn is_bridging_decimal_separator(previous: &HocrWord, separator: &HocrWord, next: Option<&HocrWord>) -> bool {
+    let Some(next) = next else {
+        return false;
+    };
+    let suffix = next.text.trim_end().trim_end_matches([')', ']', '%']);
+    if !matches!(separator.text.trim(), "." | ",")
+        || !is_numeric_prefix(previous.text.trim_end())
+        || !suffix.starts_with(|character: char| character.is_ascii_digit())
+        || !suffix
+            .chars()
+            .all(|character| character.is_ascii_digit() || matches!(character, '.' | ','))
+    {
+        return false;
+    }
+
+    let rounding = NUMERIC_CONTINUATION_ROUNDING_TOLERANCE;
+    let band_top = previous.top.saturating_sub(rounding);
+    let band_bottom = previous.top + previous.height + rounding;
+    let tolerance = numeric_gap_tolerance(previous, next);
+    previous.top.abs_diff(next.top) <= rounding
+        && previous.height.abs_diff(next.height) <= rounding
+        && separator.top >= band_top
+        && separator.top + separator.height <= band_bottom
+        && horizontal_gap(previous, separator).abs() <= tolerance
+        && horizontal_gap(separator, next).abs() <= tolerance
 }
 
 fn is_touching_numeric_continuation(previous: &HocrWord, next: &HocrWord) -> bool {
     let prefix = previous.text.as_str();
     let suffix = next.text.trim_end().trim_end_matches([')', ']', '%']);
-    if !prefix.ends_with(|character: char| character.is_ascii_digit())
-        || !prefix
-            .chars()
-            .all(|character| character.is_ascii_digit() || matches!(character, '.' | ',' | '(' | '[' | '+' | '-' | '−'))
+    if !is_numeric_prefix(prefix)
         || !suffix.starts_with(['.', ','])
         || !suffix
             .chars()
@@ -1416,13 +1472,9 @@ fn is_touching_numeric_continuation(previous: &HocrWord, next: &HocrWord) -> boo
         return false;
     }
 
-    // ~keep HocrWord rounds PDF coordinates to pixels; allow one rounding pixel at either edge.
-    let tolerance = (previous.height.max(next.height) as f64 * NUMERIC_CONTINUATION_GAP_HEIGHT_RATIO)
-        .max(NUMERIC_CONTINUATION_ROUNDING_TOLERANCE as f64);
-    let gap = next.left as f64 - previous.left as f64 - previous.width as f64;
     previous.top.abs_diff(next.top) <= NUMERIC_CONTINUATION_ROUNDING_TOLERANCE
         && previous.height.abs_diff(next.height) <= NUMERIC_CONTINUATION_ROUNDING_TOLERANCE
-        && gap.abs() <= tolerance
+        && horizontal_gap(previous, next).abs() <= numeric_gap_tolerance(previous, next)
 }
 
 /// Convert a table grid to markdown format.
@@ -2943,6 +2995,58 @@ mod tests {
             let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
             assert_eq!(table, vec![vec![expected.to_string()]]);
         }
+    }
+
+    /// TeX draws a math-mode decimal point from CMMI between CMR digit runs, so the cell
+    /// `0.511 ± 0.008` arrives as touching words `0` `.` `511` `±` `0` `.` `008`. The
+    /// separator may carry a font-size box or its own short ink box low on the line.
+    #[test]
+    fn should_join_a_decimal_separator_drawn_as_its_own_touching_run() {
+        for (separator_top, separator_height) in [(157, 6), (162, 1)] {
+            let words = [
+                word("0", 230, 157, 5, 6),
+                word(".", 235, separator_top, 3, separator_height),
+                word("511", 238, 157, 14, 6),
+                word("±", 254, 157, 7, 6),
+                word("0", 263, 157, 5, 6),
+                word(".", 268, separator_top, 3, separator_height),
+                word("008", 271, 157, 14, 6),
+            ];
+            let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+            assert_eq!(table, vec![vec!["0.511 ± 0.008".to_string()]]);
+        }
+        for (prefix, suffix, expected) in [("3", "9%", "3.9%"), ("(0", "027%)", "(0.027%)"), ("1", "000", "1.000")] {
+            let words = [
+                word(prefix, 100, 100, 10, 8),
+                word(".", 110, 100, 3, 8),
+                word(suffix, 113, 100, 20, 8),
+            ];
+            let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+            assert_eq!(table, vec![vec![expected.to_string()]]);
+        }
+    }
+
+    #[test]
+    fn should_keep_spaces_around_a_separator_that_does_not_bridge_two_touching_numbers() {
+        for (prefix, separator, separator_left, separator_top, suffix, suffix_left, expected) in [
+            ("0", ".", 114, 100, "511", 117, "0 . 511"),
+            ("0", ".", 110, 100, "511", 117, "0 . 511"),
+            ("Item", ".", 110, 100, "5", 113, "Item . 5"),
+            ("0", ".", 110, 100, "note", 113, "0 . note"),
+            ("0", "-", 110, 100, "511", 113, "0 - 511"),
+            ("0", ".", 110, 90, "511", 113, "0 . 511"),
+        ] {
+            let words = [
+                word(prefix, 100, 100, 10, 8),
+                word(separator, separator_left, separator_top, 3, 8),
+                word(suffix, suffix_left, 100, 20, 8),
+            ];
+            let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+            assert_eq!(table, vec![vec![expected.to_string()]], "{prefix} {separator} {suffix}");
+        }
+        let trailing = [word("12", 100, 100, 10, 8), word(".", 110, 100, 3, 8)];
+        let table = finish_cell_assignment(vec![vec![trailing.iter().collect()]]);
+        assert_eq!(table, vec![vec!["12 .".to_string()]]);
     }
 
     /// GH#1628: a cell's words must read left-to-right, not in the order they happened to
