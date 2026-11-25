@@ -14,8 +14,8 @@
     "ocr_language": "deu"
   },
   "ground_truth": {
-    "text_file": "../../../test_documents/ground_truth/pdf/pdf_image_only_german.md",
+    "text_file": "../../../test_documents/ground_truth/pdf/image_only_german_pdf.md",
     "source": "vision",
-    "markdown_file": "../../../test_documents/ground_truth/pdf/pdf_image_only_german.md"
+    "markdown_file": "../../../test_documents/ground_truth/pdf/image_only_german_pdf.md"
   }
 }
