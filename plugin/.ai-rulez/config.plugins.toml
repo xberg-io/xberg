@@ -1,6 +1,6 @@
 [plugin]
 name = "xberg"
-version = "1.5.3"
+version = "1.5.4"
 opencode_dependency = "^2.2.3"
 runtimes = [
   "claude",

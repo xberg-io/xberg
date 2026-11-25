@@ -76,6 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [1.5.4] - 2026-11-25
+
+### Added
+
+- Ship the CLI binary inside per-platform npm packages (`@xberg-io/xberg-cli-<os>-<cpu>[-<libc>]`) that the `@xberg-io/xberg-cli` launcher resolves first, so `npx` works in sandboxes without network access. The GitHub download remains the last-resort fallback. There is no Windows arm64 build yet, so Windows arm64 hosts still download the binary.
+- Precompiled Ruby 3.4 and 4.0 gems.
+
+### Changed
+
+- Upgrade dependencies, including `crawlberg` 1.13.4, `html-to-markdown-rs` 3.23.3, `tree-sitter-language-pack` 1.27.3 and `liter-llm` 2.7.5.
+
 ## [1.5.3] - 2026-11-25
 
 ### Fixed

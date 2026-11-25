@@ -1704,7 +1704,7 @@ wheels = [
 
 [[package]]
 name = "xberg"
-version = "1.5.3"
+version = "1.5.4"
 source = { editable = "../../../packages/python" }
 
 [package.metadata]

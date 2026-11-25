@@ -6,7 +6,7 @@ requires = ["maturin>=1.15.0,<2"]
 # project depends on xberg to preserve the previous virtual workspace's root sync behavior. ~keep
 [project]
 name = "xberg-dev"
-version = "1.5.3"
+version = "1.5.4"
 requires-python = ">=3.11"
 dependencies = ["xberg"]
 classifiers = ["Private :: Do Not Upload"]

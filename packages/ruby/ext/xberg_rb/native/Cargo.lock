@@ -45,13 +45,13 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.12"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+checksum = "54dae3d1d7b8956f3506c4e999a74e77f932a59153ccf38ab8cf96db74bb9dc0"
 dependencies = [
  "cfg-if",
  "const-random",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "serde",
  "version_check",
@@ -1364,9 +1364,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.2"
+version = "1.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83daebe277d3d758f5c0190b6f074d955fbf78cff24b5f530ab37ed6679fdaa8"
+checksum = "68f61676b15e570ad174720b9c96d51f1bfcf9f76672d0b25885fc71a9c443ca"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1412,7 +1412,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-stream",
- "toml 1.2.2+spec-1.1.0",
+ "toml 1.2.3+spec-1.1.0",
  "tower",
  "tracing",
  "url",
@@ -1421,9 +1421,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.2"
+version = "1.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bdee4100c0f1394b4eb83942d87d8aed19c8aa085401b0812859f01de11831a"
+checksum = "59440db2bf1c6a669509eff1a01964d58e178f6dd8c2a643fe1b8078cb2fb955"
 
 [[package]]
 name = "crc-fast"
@@ -2950,9 +2950,9 @@ checksum = "d45ed4d99334da2a2f221504e8ffc8ad09baf2a452b154465a976bfde697b004"
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.23.1"
+version = "3.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f09cfa811d84edfe08ecbc5dfe3bbf439e95958503ae2ba64c84bcdf7b50ac"
+checksum = "97df00d41ebf6a85b379912c09d4c7758cc6c57d15d9b5b24f3b9b58424ee0e5"
 dependencies = [
  "ahash",
  "astral-html",
@@ -3872,9 +3872,9 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "liter-llm"
-version = "2.7.4"
+version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86bb14438b21eacfa1c51240af771638f4971b9846c885f6d0e1cf33c13fc564"
+checksum = "1a17dd7b07af4be2e22b7bb5e088fa60a08b02a30cfee67ecb76f7544740cd69"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -3910,7 +3910,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-util",
- "toml 1.2.2+spec-1.1.0",
+ "toml 1.2.3+spec-1.1.0",
  "tower",
  "tracing",
  "tracing-opentelemetry",
@@ -7257,7 +7257,7 @@ dependencies = [
  "cfg-expr",
  "heck",
  "pkg-config",
- "toml 1.2.2+spec-1.1.0",
+ "toml 1.2.3+spec-1.1.0",
  "version-compare",
 ]
 
@@ -7670,9 +7670,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.2.2+spec-1.1.0"
+version = "1.2.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5426cb1b964690d913f6c5c1a1ae0b42f428ec506bb4d452876d7a209c9bca3b"
+checksum = "26b1f26e9485c1fa43ee89fe76e9f3fb9e2e52bb227f8594b4d687496b83d073"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -7729,9 +7729,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.1.6+spec-1.1.0"
+version = "1.1.7+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6769c452d71ba30696c6b37770c439a9cc9110f47f7d5cdbeda79840ef5ea31"
+checksum = "0bb28d6e049a9766c3bd91a8326e6179f5b132dec87906bb97018ef7a2f3431a"
 dependencies = [
  "winnow 1.0.5",
 ]
@@ -7970,9 +7970,9 @@ checksum = "d0af592be68c579aa78a16846bd19422978c3c52e438523d45ff5d1bff1f9d4a"
 
 [[package]]
 name = "tree-sitter-language-pack"
-version = "1.27.1"
+version = "1.27.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e47808a760e83b89a31706e8b7fdc595da68f88bda68d5c8e540b5a871d2158"
+checksum = "34dadf8eb61ccb510ebfe7f343282ede4d8a7c86cae43526609d9fe71b272e2c"
 dependencies = [
  "ahash",
  "cc",
@@ -8932,7 +8932,7 @@ dependencies = [
 
 [[package]]
 name = "xberg"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "aes-gcm",
  "ahash",
@@ -9040,7 +9040,7 @@ dependencies = [
  "tokenizers 0.21.4",
  "tokenizers 0.23.2",
  "tokio",
- "toml 1.2.2+spec-1.1.0",
+ "toml 1.2.3+spec-1.1.0",
  "tower",
  "tower-http 0.7.1",
  "tracing",
@@ -9074,7 +9074,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-candle-ocr"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "base64 0.23.1",
  "candle-core",
@@ -9094,7 +9094,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
@@ -9108,7 +9108,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libheif"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "enumn",
  "four-cc",
@@ -9118,7 +9118,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libwpd"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "cc",
  "flate2",
@@ -9131,7 +9131,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-native-pdf"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "aes",
  "base64 0.23.1",
@@ -9177,7 +9177,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-paddle-ocr"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -9192,7 +9192,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-pdfium-render"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -9209,7 +9209,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-rb"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -9225,7 +9225,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-tesseract"
-version = "1.5.3"
+version = "1.5.4"
 dependencies = [
  "cc",
  "cmake",
