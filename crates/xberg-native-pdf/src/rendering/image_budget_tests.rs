@@ -3,6 +3,8 @@ use super::*;
 mod guards;
 #[path = "image_budget_tests/in_place.rs"]
 mod in_place;
+#[path = "image_budget_tests/resize.rs"]
+mod resize;
 #[path = "image_budget_tests/source.rs"]
 mod source;
 
@@ -529,7 +531,9 @@ fn a_frame_the_decoder_would_scale_differently_is_never_admitted_at_that_scale()
     let limit = 20_000;
     assert!(image_budget::ImageBudget::new(limit).admit_jpeg(&image, 0).is_err());
     let admit = |device| image_budget::ImageBudget::new(limit).admit_jpeg_reducing(&image, 0, device);
-    assert_eq!(admit((1.0, 100.0)).unwrap(), 8);
+    // Painted 470 px tall, the 512-row decode is blitted without a pre-resize (470 / 512 >= 0.9),
+    // which would otherwise outweigh this limit. ~keep
+    assert_eq!(admit((1.0, 470.0)).unwrap(), 8);
     let mut budget = image_budget::ImageBudget::new(limit);
     assert!(budget.admit_jpeg_reducing(&image, 0, (1.0, 2000.0)).is_err());
     assert!(

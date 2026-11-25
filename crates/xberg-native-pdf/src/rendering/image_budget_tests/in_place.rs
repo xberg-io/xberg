@@ -1,6 +1,6 @@
 use super::*;
 use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
-use crate::rendering::page_renderer::image_budget::{ImageBudget, JpegDecode};
+use crate::rendering::page_renderer::image_budget::{ImageBudget, JpegDecode, Placement};
 use crate::rendering::render_png_page_with_budget_evidence;
 
 /// A tall scan painted over its own pixel extent, like a one-page scanned PDF whose page raster is
@@ -12,6 +12,11 @@ const PAINTED: &[u8] = b"q 600 0 0 2400 0 0 cm /Im0 Do Q\n";
 const EXTENT: (f32, f32) = (600.0, 2400.0);
 /// The frame padded to whole 32-column MCUs, three components, 1024 row bytes per column.
 const ROW_BYTES: u64 = 608 * 3 * 1024;
+
+/// The scan painted upright over its own pixel size, where no pre-resize runs.
+fn painted() -> Placement {
+    Placement::extent(EXTENT.0, EXTENT.1)
+}
 
 fn tall_scan() -> PdfImage {
     PdfImage::new(
@@ -61,10 +66,10 @@ fn an_in_place_decode_is_kept_at_exactly_the_limit_and_refused_one_byte_under() 
     let canvas = 1000;
     let required = in_place_required(&image, canvas);
     assert!(required < LIMIT as u64);
-    let admit = |limit: u64| ImageBudget::new(limit as usize).admit_jpeg_decode(&image, canvas, EXTENT, true);
+    let admit = |limit: u64| ImageBudget::new(limit as usize).admit_jpeg_decode(&image, canvas, painted(), true);
     assert_eq!(admit(required).unwrap(), JpegDecode::InPlace);
     let mut budget = ImageBudget::new(required as usize - 1);
-    assert!(budget.admit_jpeg_decode(&image, canvas, EXTENT, true).is_err());
+    assert!(budget.admit_jpeg_decode(&image, canvas, painted(), true).is_err());
     assert!(budget.exceeded(), "the refusal is the budget class");
 }
 
@@ -89,7 +94,7 @@ fn a_masked_or_multi_scan_jpeg_is_never_decoded_in_place() {
     let image = tall_scan();
     let mut budget = ImageBudget::new(LIMIT);
     assert!(
-        budget.admit_jpeg_decode(&image, 0, EXTENT, false).is_err(),
+        budget.admit_jpeg_decode(&image, 0, painted(), false).is_err(),
         "a mask reads the source raster an in-place decode does not keep"
     );
     assert!(budget.exceeded());
@@ -103,7 +108,7 @@ fn a_masked_or_multi_scan_jpeg_is_never_decoded_in_place() {
     let split = PdfImage::new(WIDTH, HEIGHT, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(split));
     assert!(
         ImageBudget::new(LIMIT)
-            .admit_jpeg_decode(&split, 0, EXTENT, true)
+            .admit_jpeg_decode(&split, 0, painted(), true)
             .is_err()
     );
 

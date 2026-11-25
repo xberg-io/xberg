@@ -35,14 +35,16 @@ impl PageRenderer {
 ///
 /// Returns `None` on failure (zero dimensions, SIMD dispatch error) so callers
 /// can fall back to tiny_skia's own resampling path.
-pub(super) fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
+///
+/// `from_slice_u8` takes the source mutably, but the resize only reads it: the caller lends its
+/// raster rather than holding a copy beside it. `image_budget::resize_working_bytes` bounds what
+/// this allocates: the output, the intermediate and the coefficient tables.
+pub(super) fn resize_rgba(src: &mut [u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
     use fast_image_resize::images::Image;
     use fast_image_resize::pixels::PixelType;
     use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 
-    // from_slice_u8 needs a mutable slice; copy into a local buffer. ~keep
-    let mut buf = src.to_vec();
-    let src_img = Image::from_slice_u8(src_w, src_h, &mut buf, PixelType::U8x4).ok()?;
+    let src_img = Image::from_slice_u8(src_w, src_h, src, PixelType::U8x4).ok()?;
     let mut dst_img = Image::new(dst_w, dst_h, PixelType::U8x4);
     Resizer::new()
         .resize(

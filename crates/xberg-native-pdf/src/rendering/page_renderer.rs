@@ -2325,6 +2325,7 @@ impl PageRenderer {
         };
         let mut decode = image_budget::JpegDecode::Full;
         let mut canvas = 0;
+        let placement = image_budget::Placement::new(transform);
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
             canvas = sidecar
@@ -2332,11 +2333,10 @@ impl PageRenderer {
                 .max(self.knockout_resources.retained_bytes());
             // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
             if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
-                budget.admit_jpeg(&pdf_image, canvas)?;
+                budget.admit_jpeg_at(&pdf_image, canvas, placement)?;
             } else {
-                let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
                 let unmasked = mask_obj.is_none() && smask_obj.is_none();
-                decode = budget.admit_jpeg_decode(&pdf_image, canvas, painted, unmasked)?;
+                decode = budget.admit_jpeg_decode(&pdf_image, canvas, placement, unmasked)?;
             }
         }
         let decoded = match (pdf_image.data(), decode) {
@@ -2362,7 +2362,7 @@ impl PageRenderer {
             Ok(decoded) => decoded,
             Err(error) => {
                 if let Some(budget) = self.source_image_budget.as_mut() {
-                    budget.refuse_failed_reduction(&pdf_image, canvas);
+                    budget.refuse_failed_reduction(&pdf_image, canvas, placement);
                 }
                 return Err(error);
             }
@@ -2643,6 +2643,9 @@ impl PageRenderer {
                 tracing::warn!("Ignoring /SMaskInData: the opacity channel does not match the image size");
             }
         }
+        // Only the mask admissions above read the source raster. The image budget charges the
+        // pre-resize below beside the paint raster alone. ~keep
+        drop(dynamic_image);
 
         // A tiny_skia pixmap holds premultiplied RGBA. `/SMaskInData 2` already supplies colour
         // premultiplied by its opacity; every other decoded image needs the conversion here. ~keep
@@ -2662,31 +2665,24 @@ impl PageRenderer {
         // right position with a translate-only transform and Nearest quality (no second
         // resampling pass).  For rotated/sheared transforms or upscaling, fall through
         // to the tiny-skia bilinear/bicubic path (already selected by the helper above). ~keep
-        let use_fast = image_transform.kx.abs() <= 1e-4
-            && image_transform.ky.abs() <= 1e-4
-            && image_transform.sx > 0.0
-            && image_transform.sy > 0.0
-            && (image_transform.sx < 0.9 || image_transform.sy < 0.9);
-
-        let (blit_w, blit_h, blit_data, blit_transform) = if use_fast {
-            let dst_w = ((image_transform.sx * src_w as f32).round() as u32).max(1);
-            let dst_h = ((image_transform.sy * src_h as f32).round() as u32).max(1);
-            let resized = resize_rgba(rgba_image.as_raw(), src_w, src_h, dst_w, dst_h);
-            if let Some(pixels) = resized {
-                // SIMD pre-resize produced the exact output dimensions —
-                // the subsequent blit is 1:1, so override to Nearest to
-                // skip a second resampling pass. ~keep
-                paint.quality = tiny_skia::FilterQuality::Nearest;
-                let t = Transform::from_translate(image_transform.tx, image_transform.ty);
-                (dst_w, dst_h, pixels, t)
+        let (blit_w, blit_h, blit_data, blit_transform) =
+            if let Some((dst_w, dst_h)) = fast_resize_target(image_transform, (src_w, src_h)) {
+                let resized = resize_rgba(&mut rgba_image, src_w, src_h, dst_w, dst_h);
+                if let Some(pixels) = resized {
+                    // SIMD pre-resize produced the exact output dimensions —
+                    // the subsequent blit is 1:1, so override to Nearest to
+                    // skip a second resampling pass. ~keep
+                    paint.quality = tiny_skia::FilterQuality::Nearest;
+                    let t = Transform::from_translate(image_transform.tx, image_transform.ty);
+                    (dst_w, dst_h, pixels, t)
+                } else {
+                    // fast_image_resize failed; fall back to tiny_skia
+                    // resampling with the helper's chosen quality. ~keep
+                    (src_w, src_h, rgba_image.into_raw(), image_transform)
+                }
             } else {
-                // fast_image_resize failed; fall back to tiny_skia
-                // resampling with the helper's chosen quality. ~keep
                 (src_w, src_h, rgba_image.into_raw(), image_transform)
-            }
-        } else {
-            (src_w, src_h, rgba_image.into_raw(), image_transform)
-        };
+            };
 
         if let Some(img_pixmap) =
             tiny_skia::IntSize::from_wh(blit_w, blit_h).and_then(|size| Pixmap::from_vec(blit_data, size))
@@ -7966,6 +7962,23 @@ fn image_unit_square_transform(parent: Transform, src_w: u32, src_h: u32) -> Tra
     parent
         .pre_translate(0.0, 1.0)
         .pre_scale(1.0 / src_w as f32, -1.0 / src_h as f32)
+}
+
+/// The size `render_image` pre-resizes a `source` RGBA raster to before blitting it through
+/// `image_transform`, or `None` when it blits the source directly: only an axis-aligned blit that
+/// shrinks either axis below 0.9 is pre-resized. The image budget charges the same decision.
+fn fast_resize_target(image_transform: Transform, (src_w, src_h): (u32, u32)) -> Option<(u32, u32)> {
+    let axis_aligned_downscale = image_transform.kx.abs() <= 1e-4
+        && image_transform.ky.abs() <= 1e-4
+        && image_transform.sx > 0.0
+        && image_transform.sy > 0.0
+        && (image_transform.sx < 0.9 || image_transform.sy < 0.9);
+    axis_aligned_downscale.then(|| {
+        (
+            ((image_transform.sx * src_w as f32).round() as u32).max(1),
+            ((image_transform.sy * src_h as f32).round() as u32).max(1),
+        )
+    })
 }
 
 /// The clip a current path made of a single `m` describes. ISO 32000-1 8.5.3.3.1: a

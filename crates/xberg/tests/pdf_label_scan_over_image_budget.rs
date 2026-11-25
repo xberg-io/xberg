@@ -17,9 +17,11 @@ const TWO_PAGE_LABEL_SCAN: &[u8] =
 const LOW_DPI_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-low-dpi.pdf");
 
-/// The page render needs about 93 MB of image working memory and the budget below is 80 MiB, so the
-/// render is refused and OCR retries on the embedded image at its proven 300 dpi. That image fits
-/// the configured size limit and is not shrunk, so the read keeps its glyphs.
+/// Under the budget below (80 MiB) the page renders at 261 dpi to a 3132 x 2219 canvas (27.8 MB). Its
+/// 3600 x 2550 scan then needs about 126 MB of image working memory counting that canvas: the
+/// 36.7 MB RGBA raster, the 60.3 MB pre-resize to its 3132 x 2218 footprint and 1 MB of encoded
+/// bytes. The render is refused and OCR retries on the embedded image at its proven 300 dpi. That
+/// image fits the configured size limit and is not shrunk, so the read keeps its glyphs.
 const REFUSING_BUDGET: usize = 80 * 1024 * 1024;
 const RECOVERY_CLAIM: &str = "was recovered from the page's embedded image XObjects";
 
