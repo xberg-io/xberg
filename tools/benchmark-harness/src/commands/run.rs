@@ -1,10 +1,6 @@
 //! `run`: executes benchmarks across one or more registered framework adapters.
 
 use crate::cli::CliMode;
-use benchmark_harness::adapters::xberg::{
-    AutoOcrBackend, auto_ocr_framework_name, create_xberg_auto_ocr_adapter, pipeline_runs_layout,
-};
-use benchmark_harness::adapters::{create_xberg_adapter, create_xberg_steady_adapter};
 use benchmark_harness::provenance::{CoverageGateProvenance, FrameworkCoverageProvenance};
 use benchmark_harness::types::ErrorKind;
 use benchmark_harness::{
@@ -15,6 +11,9 @@ use clap::Args;
 use std::path::PathBuf;
 use std::str::FromStr as _;
 use std::sync::Arc;
+
+mod xberg_registration;
+use xberg_registration::{XbergRegistration, register_xberg_pipelines};
 
 /// `run` subcommand arguments -- pulled out of the `Commands` enum (via `#[command(flatten)]`
 /// through the tuple-variant `Run(RunArgs)`) purely to keep `Commands` under the file's
@@ -413,212 +412,6 @@ pub(crate) fn parse_model_provenance(values: &[String]) -> Result<Vec<ModelProve
         .collect()
 }
 
-/// Shared, read-only state for registering `xberg-*` adapter permutations -- bundled into one
-/// struct purely to keep the registration helpers' parameter counts down; carries no behavior
-/// of its own.
-struct XbergRegistration<'a> {
-    config: &'a BenchmarkConfig,
-    batch_mode: bool,
-    has_explicit_frameworks: bool,
-    ocr: bool,
-    format: OutputFormat,
-    should_init: &'a dyn Fn(&str) -> bool,
-}
-
-/// Registers one `xberg-*` adapter permutation, if `should_init` selects it.
-fn register_one_xberg_adapter(
-    registry: &mut AdapterRegistry,
-    context: &XbergRegistration<'_>,
-    pipeline: XbergPipeline,
-    pdf_backend: XbergPdfBackend,
-    xberg_count: &mut usize,
-) {
-    let format_slug = match context.format {
-        OutputFormat::Markdown => "markdown",
-        OutputFormat::Plaintext => "plaintext",
-    };
-    let pdf_backend_suffix = match pdf_backend {
-        XbergPdfBackend::Native => "",
-        XbergPdfBackend::Pdfium => "-pdfium",
-    };
-    let base_name = format!("xberg-{}-{}{}", format_slug, pipeline.as_str(), pdf_backend_suffix);
-    let framework_name = if context.batch_mode {
-        format!("{base_name}-batch")
-    } else {
-        base_name
-    };
-    if !(context.should_init)(&framework_name) {
-        return;
-    }
-    match create_xberg_adapter(pipeline, context.format, context.batch_mode, context.ocr, pdf_backend)
-        .map(|adapter| adapter.with_batch_workers(context.config.max_concurrent))
-        .map(|adapter| match context.config.xberg_max_threads {
-            Some(max_threads) => adapter.with_xberg_max_threads(max_threads),
-            None => adapter,
-        }) {
-        Ok(adapter) => {
-            if let Err(err) = registry.register(Arc::new(adapter)) {
-                tracing::warn!(
-                    framework = %framework_name,
-                    error = %err,
-                    "adapter registration failed"
-                );
-            } else {
-                tracing::info!(framework = %framework_name, "adapter registered");
-                *xberg_count += 1;
-            }
-        }
-        Err(err) => {
-            tracing::warn!(
-                framework = %framework_name,
-                error = %err,
-                "adapter initialization failed"
-            );
-        }
-    }
-}
-
-fn register_steady_xberg_adapter(
-    registry: &mut AdapterRegistry,
-    context: &XbergRegistration<'_>,
-    pipeline: XbergPipeline,
-    pdf_backend: XbergPdfBackend,
-) -> bool {
-    if !context.has_explicit_frameworks
-        || !matches!(
-            pipeline,
-            XbergPipeline::Baseline | XbergPipeline::Layout | XbergPipeline::LayoutV3
-        )
-    {
-        return false;
-    }
-    let format_slug = match context.format {
-        OutputFormat::Markdown => "markdown",
-        OutputFormat::Plaintext => "plaintext",
-    };
-    let backend_suffix = if pdf_backend == XbergPdfBackend::Pdfium {
-        "-pdfium"
-    } else {
-        ""
-    };
-    let batch_suffix = if context.batch_mode { "-batch" } else { "" };
-    let steady_name = format!(
-        "xberg-{format_slug}-{}{backend_suffix}-steady-state{batch_suffix}",
-        pipeline.as_str()
-    );
-    if !(context.should_init)(&steady_name) {
-        return false;
-    }
-    match create_xberg_steady_adapter(
-        pipeline,
-        context.format,
-        context.batch_mode,
-        context.ocr,
-        pdf_backend,
-        context.config.xberg_max_threads,
-    ) {
-        Ok(adapter) => match registry.register(Arc::new(adapter)) {
-            Ok(()) => true,
-            Err(error) => {
-                tracing::warn!(framework = %steady_name, %error, "steady-state adapter registration failed");
-                false
-            }
-        },
-        Err(error) => {
-            tracing::warn!(framework = %steady_name, %error, "steady-state adapter initialization failed");
-            false
-        }
-    }
-}
-
-/// Plain output discards the layout-detected headings, lists and tables, so a plaintext layout
-/// run only pays the layout cost (the CLI warns about this in `overrides/layout.rs`).
-pub(crate) fn plaintext_layout_is_a_no_op(format: OutputFormat, pipeline: XbergPipeline) -> bool {
-    format == OutputFormat::Plaintext && pipeline_runs_layout(pipeline)
-}
-
-/// Registers the auto-OCR variants, which configure an OCR engine without forcing OCR.
-fn register_auto_ocr_adapters(registry: &mut AdapterRegistry, context: &XbergRegistration<'_>) -> usize {
-    if !context.ocr {
-        return 0;
-    }
-    let mut registered = 0;
-    for backend in AutoOcrBackend::ALL {
-        let framework_name = auto_ocr_framework_name(backend, context.format, context.batch_mode);
-        if !(context.should_init)(&framework_name) {
-            continue;
-        }
-        match create_xberg_auto_ocr_adapter(backend, context.format, context.batch_mode, context.ocr)
-            .map(|adapter| adapter.with_batch_workers(context.config.max_concurrent))
-            .map(|adapter| match context.config.xberg_max_threads {
-                Some(max_threads) => adapter.with_xberg_max_threads(max_threads),
-                None => adapter,
-            }) {
-            Ok(adapter) => match registry.register(Arc::new(adapter)) {
-                Ok(()) => {
-                    tracing::info!(framework = %framework_name, "adapter registered");
-                    registered += 1;
-                }
-                Err(error) => {
-                    tracing::warn!(framework = %framework_name, %error, "adapter registration failed");
-                }
-            },
-            Err(error) => {
-                tracing::warn!(framework = %framework_name, %error, "adapter initialization failed");
-            }
-        }
-    }
-    registered
-}
-
-/// Registers every eligible `xberg-*` adapter permutation (pipeline x pdf backend) for `run`.
-fn register_xberg_pipelines(
-    registry: &mut AdapterRegistry,
-    context: &XbergRegistration<'_>,
-    effective_pdf_backends: &[XbergPdfBackend],
-    has_explicit_frameworks: bool,
-) -> usize {
-    // `Pdfium` is a distinct cohort dimension, not a pipeline: it is opt-in only (must be
-    // requested explicitly via `--pdf-backends pdfium`) and restricted to `Baseline`, since the
-    // pdfium engine has no OCR fallback path of its own. Every other pipeline always runs
-    // `native`, regardless of `--pdf-backends`. ~keep
-    let native_only_backend = [XbergPdfBackend::Native];
-    let mut xberg_count = 0;
-    for pipeline in &XBERG_RUN_PIPELINES {
-        if !should_register_xberg_pipeline(*pipeline, has_explicit_frameworks)
-            || plaintext_layout_is_a_no_op(context.format, *pipeline)
-        {
-            continue;
-        }
-        if !context.ocr
-            && matches!(
-                pipeline,
-                XbergPipeline::PaddleOcr
-                    | XbergPipeline::BaselinePaddle
-                    | XbergPipeline::LayoutPaddle
-                    | XbergPipeline::SceptreOrt
-                    | XbergPipeline::SceptreOrtLayout
-                    | XbergPipeline::SceptreOrtAutoRotate
-                    | XbergPipeline::SceptreTract
-            )
-        {
-            continue;
-        }
-        let pdf_backends: &[XbergPdfBackend] = if matches!(pipeline, XbergPipeline::Baseline) {
-            effective_pdf_backends
-        } else {
-            &native_only_backend
-        };
-        for pdf_backend in pdf_backends {
-            register_one_xberg_adapter(registry, context, *pipeline, *pdf_backend, &mut xberg_count);
-            if register_steady_xberg_adapter(registry, context, *pipeline, *pdf_backend) {
-                xberg_count += 1;
-            }
-        }
-    }
-    xberg_count + register_auto_ocr_adapters(registry, context)
-}
-
 /// Registers the open-source competitor adapters selected by `should_init`. Batch mode only
 /// registers frameworks with a verified native batch API; single-file mode registers the full
 /// external roster.
@@ -730,8 +523,7 @@ fn build_registry(
         format: parsed_format,
         should_init: &should_init,
     };
-    let xberg_count =
-        register_xberg_pipelines(&mut registry, &context, effective_pdf_backends, has_explicit_frameworks);
+    let xberg_count = register_xberg_pipelines(&mut registry, &context, effective_pdf_backends);
 
     let total_requested = if frameworks.is_empty() {
         if args.ocr { 4 } else { 2 }

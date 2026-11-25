@@ -153,35 +153,52 @@ fn pipeline_requires_ocr(pipeline: XbergPipeline) -> bool {
     )
 }
 
+fn format_slug(output_format: OutputFormat) -> &'static str {
+    match output_format {
+        OutputFormat::Markdown => "markdown",
+        OutputFormat::Plaintext => "plaintext",
+    }
+}
+
+fn pdf_backend_suffix(pdf_backend: XbergPdfBackend) -> &'static str {
+    match pdf_backend {
+        XbergPdfBackend::Native => "",
+        XbergPdfBackend::Pdfium => "-pdfium",
+    }
+}
+
 /// Builds the framework name for a pipeline/format/batch/pdf-backend combination.
 ///
 /// `XbergPdfBackend::Native` must keep producing exactly today's name (no suffix) so existing
 /// committed results under `tools/benchmark-harness/results/` stay comparable. Only a non-default
 /// backend earns a `-pdfium` suffix, inserted before the `-batch` suffix.
-fn xberg_framework_name(
+pub fn xberg_framework_name(
     pipeline: XbergPipeline,
     output_format: OutputFormat,
     batch: bool,
     pdf_backend: XbergPdfBackend,
 ) -> String {
-    let format_slug = match output_format {
-        OutputFormat::Markdown => "markdown",
-        OutputFormat::Plaintext => "plaintext",
-    };
-    let pdf_backend_suffix = match pdf_backend {
-        XbergPdfBackend::Native => "",
-        XbergPdfBackend::Pdfium => "-pdfium",
-    };
-    if batch {
-        format!(
-            "xberg-{}-{}{}-batch",
-            format_slug,
-            pipeline.as_str(),
-            pdf_backend_suffix
-        )
-    } else {
-        format!("xberg-{}-{}{}", format_slug, pipeline.as_str(), pdf_backend_suffix)
-    }
+    let batch_suffix = if batch { "-batch" } else { "" };
+    format!(
+        "xberg-{}-{}{}{batch_suffix}",
+        format_slug(output_format),
+        pipeline.as_str(),
+        pdf_backend_suffix(pdf_backend),
+    )
+}
+
+/// Framework name of the in-process steady-state variant of a pipeline.
+pub fn xberg_steady_framework_name(
+    pipeline: XbergPipeline,
+    output_format: OutputFormat,
+    batch: bool,
+    pdf_backend: XbergPdfBackend,
+) -> String {
+    format!(
+        "{}-steady-state{}",
+        xberg_framework_name(pipeline, output_format, false, pdf_backend),
+        if batch { "-batch" } else { "" }
+    )
 }
 
 /// Push the flags that force OCR through one named backend.
@@ -341,12 +358,8 @@ pub(crate) fn auto_ocr_adapter_with_identity(
 
 /// Framework name of an auto-OCR variant, e.g. `xberg-markdown-auto-ocr-paddle-batch`.
 pub fn auto_ocr_framework_name(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> String {
-    let format_slug = match output_format {
-        OutputFormat::Markdown => "markdown",
-        OutputFormat::Plaintext => "plaintext",
-    };
     let batch_suffix = if batch { "-batch" } else { "" };
-    format!("xberg-{format_slug}-{}{batch_suffix}", backend.slug())
+    format!("xberg-{}-{}{batch_suffix}", format_slug(output_format), backend.slug())
 }
 
 /// Whether `framework` names an auto-OCR variant in any output format and execution mode.
@@ -466,11 +479,7 @@ pub fn create_xberg_steady_adapter(
     }
 
     let config = steady_extraction_config(pipeline, output_format, ocr_enabled, pdf_backend, max_threads)?;
-    let name = format!(
-        "{}-steady-state{}",
-        xberg_framework_name(pipeline, output_format, false, pdf_backend),
-        if batch { "-batch" } else { "" }
-    );
+    let name = xberg_steady_framework_name(pipeline, output_format, batch, pdf_backend);
     let reject_layout_failures = pipeline_runs_layout(pipeline);
     if batch {
         let adapter = NativeAdapter::with_identity(name, config);

@@ -1,60 +1,88 @@
+use super::xberg_registration::{XbergRegistration, plan_xberg_adapters};
 use super::*;
+use benchmark_harness::adapters::xberg::{AutoOcrBackend, auto_ocr_framework_name};
 
-#[test]
-fn steady_adapter_is_not_registered_without_explicit_selection() {
+/// Framework names `run` would build for these selections: the registration plan, which is what
+/// `register_xberg_pipelines` iterates, so the real filters decide the result.
+fn planned_names(format: OutputFormat, batch_mode: bool, ocr: bool, requested: &[&str]) -> Vec<String> {
     let config = BenchmarkConfig::default();
-    let should_init = |_name: &str| true;
+    let should_init = |name: &str| requested.is_empty() || requested.contains(&name);
     let context = XbergRegistration {
         config: &config,
-        batch_mode: false,
-        has_explicit_frameworks: false,
-        ocr: false,
-        format: OutputFormat::Markdown,
+        batch_mode,
+        has_explicit_frameworks: !requested.is_empty(),
+        ocr,
+        format,
         should_init: &should_init,
     };
-    let mut registry = AdapterRegistry::new();
-
-    assert!(!register_steady_xberg_adapter(
-        &mut registry,
-        &context,
-        XbergPipeline::Layout,
-        XbergPdfBackend::Native,
-    ));
-    assert!(registry.is_empty());
-}
-
-fn registered_names(format: OutputFormat) -> Vec<String> {
-    XBERG_RUN_PIPELINES
-        .iter()
-        .filter(|pipeline| !plaintext_layout_is_a_no_op(format, **pipeline))
-        .map(|pipeline| format!("xberg-{format}-{pipeline}"))
+    plan_xberg_adapters(&context, &[XbergPdfBackend::Native])
+        .into_iter()
+        .map(|planned| planned.framework_name(format, batch_mode))
         .collect()
 }
 
 #[test]
-fn no_plaintext_layout_variant_is_registered() {
-    let plaintext = registered_names(OutputFormat::Plaintext);
-    assert!(!plaintext.is_empty());
-    assert!(
-        plaintext.iter().all(|name| !name.contains("layout")),
-        "plaintext layout variants are a no-op: {plaintext:?}"
+fn steady_adapter_is_not_planned_without_explicit_selection() {
+    let names = planned_names(OutputFormat::Markdown, false, false, &[]);
+    assert!(!names.is_empty());
+    assert!(names.iter().all(|name| !name.contains("steady-state")), "{names:?}");
+
+    assert_eq!(
+        planned_names(
+            OutputFormat::Markdown,
+            false,
+            false,
+            &["xberg-markdown-layout-steady-state"]
+        ),
+        ["xberg-markdown-layout-steady-state"]
     );
-    assert!(plaintext.contains(&"xberg-plaintext-baseline".to_string()));
-    assert!(plaintext.contains(&"xberg-plaintext-baseline-paddle".to_string()));
-    assert!(plaintext.contains(&"xberg-plaintext-sceptre-ort".to_string()));
 }
 
 #[test]
-fn markdown_layout_variants_stay_registered() {
-    let markdown = registered_names(OutputFormat::Markdown);
-    assert_eq!(markdown.len(), XBERG_RUN_PIPELINES.len());
-    for name in [
-        "xberg-markdown-layout",
-        "xberg-markdown-layout-paddle",
-        "xberg-markdown-sceptre-ort-layout",
-    ] {
-        assert!(markdown.contains(&name.to_string()), "{name}");
-    }
+fn default_markdown_run_plans_exactly_the_proven_pipelines() {
+    assert_eq!(
+        planned_names(OutputFormat::Markdown, false, true, &[]),
+        [
+            "xberg-markdown-baseline",
+            "xberg-markdown-layout",
+            "xberg-markdown-baseline-paddle",
+            "xberg-markdown-layout-paddle",
+            "xberg-markdown-sceptre-ort",
+            "xberg-markdown-sceptre-ort-layout",
+            "xberg-markdown-sceptre-ort-autorotate",
+        ]
+    );
+}
+
+#[test]
+fn no_plaintext_layout_variant_is_planned() {
+    let plaintext = planned_names(OutputFormat::Plaintext, false, true, &[]);
+    assert_eq!(
+        plaintext,
+        [
+            "xberg-plaintext-baseline",
+            "xberg-plaintext-baseline-paddle",
+            "xberg-plaintext-sceptre-ort",
+            "xberg-plaintext-sceptre-ort-autorotate",
+        ]
+    );
+    assert!(
+        planned_names(
+            OutputFormat::Plaintext,
+            false,
+            true,
+            &["xberg-plaintext-layout", "xberg-plaintext-layout-v3"]
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn pipelines_that_need_ocr_are_not_planned_when_ocr_is_off() {
+    assert_eq!(
+        planned_names(OutputFormat::Markdown, false, false, &[]),
+        ["xberg-markdown-baseline", "xberg-markdown-layout"]
+    );
 }
 
 #[test]
