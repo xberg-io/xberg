@@ -2094,28 +2094,30 @@ mod tests {
     }
 
     /// A three-column page whose stream is written in reading order (2026-14578), with a
-    /// heading spanning columns two and three. The 13pt gutters sit under XY-Cut's 15pt
-    /// `min_valley_width`, and the dense repair splits at one gutter only, so without the
-    /// stream pass the second and third columns interleave.
-    #[test]
-    fn element_path_reads_a_three_column_stream_column_by_column() {
+    /// heading spanning columns two and three, handed over in row order. The 13pt gutters sit
+    /// under XY-Cut's 15pt `min_valley_width`, and the dense repair splits at one gutter only.
+    /// `first_column_ending(row)` ends each first-column line. Returns the spans and the
+    /// expected reading order.
+    fn three_column_stream_page(first_column_ending: fn(usize) -> &'static str) -> (Vec<TextSpan>, Vec<String>) {
         const LEFTS: [f32; 3] = [60.0, 233.0, 406.0];
         const WIDTH: f32 = 160.0;
         const LEADING: f32 = 14.0;
         const TOP_Y: f32 = 720.0;
-        let line = |label: &str, column: usize, row: usize| {
-            let text = format!("{label} column line {row} reads on");
+        let line = |label: &str, column: usize, row: usize, ending: &str| {
+            let text = format!("{label} column line {row} reads on{ending}");
             text_span(&text, LEFTS[column], TOP_Y - row as f32 * LEADING, WIDTH)
         };
-        let mut reading_order: Vec<TextSpan> = (0..10).map(|row| line("First", 0, row)).collect();
+        let mut reading_order: Vec<TextSpan> = (0..10)
+            .map(|row| line("First", 0, row, first_column_ending(row)))
+            .collect();
         reading_order.push(text_span(
             "Heading Spanning The Second And Third Columns",
             LEFTS[1],
             TOP_Y,
             LEFTS[2] + WIDTH - LEFTS[1],
         ));
-        reading_order.extend((2..10).map(|row| line("Second", 1, row)));
-        reading_order.extend((2..10).map(|row| line("Third", 2, row)));
+        reading_order.extend((2..10).map(|row| line("Second", 1, row, "")));
+        reading_order.extend((2..10).map(|row| line("Third", 2, row, "")));
         let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
         let mut spans: Vec<TextSpan> = reading_order
             .into_iter()
@@ -2129,8 +2131,29 @@ mod tests {
                 .total_cmp(&left.bbox.y)
                 .then(left.bbox.x.total_cmp(&right.bbox.x))
         });
+        (spans, expected)
+    }
+
+    #[test]
+    fn element_path_reads_a_three_column_stream_column_by_column() {
+        let (mut spans, expected) = three_column_stream_page(|_| "");
 
         super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+
+        let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        assert_eq!(texts, expected.iter().map(String::as_str).collect::<Vec<_>>());
+    }
+
+    /// First-column lines ending in a colon on five consecutive rows, each beside a
+    /// second-column line on its baseline within the key/value value track: every input
+    /// `reorder_ltr_key_value_rows` needs except a value bracketing its label. The row pass that
+    /// follows the column order in the hierarchy path must leave the accepted order intact.
+    #[test]
+    fn key_value_row_pass_keeps_an_accepted_three_column_order() {
+        let (mut spans, expected) = three_column_stream_page(|row| if (3..=7).contains(&row) { ":" } else { "" });
+
+        super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+        xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut spans);
 
         let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
         assert_eq!(texts, expected.iter().map(String::as_str).collect::<Vec<_>>());

@@ -6,9 +6,10 @@
 //! defeat both and fell back to row order, interleaving three columns line by line. Their
 //! producer writes the content stream in reading order, so the stream is read as the order
 //! when its geometry proves it: walked in `sequence` order, the spans form runs that each
-//! descend one column, the runs cover most of the page, at least three body-text runs stand
-//! side by side, and no same-size run is written before a run to its left that it stands
-//! beside. Shuffled or row-interleaved streams fail these tests and keep the geometric order.
+//! descend one column, the runs cover most of the page, at least three body-text prose runs
+//! stand side by side, and no same-size block is written before a block to its left that it
+//! stands beside or before a block above it. Shuffled, row-interleaved and bottom-first
+//! streams fail these tests and keep the geometric order.
 
 use std::collections::{HashMap, HashSet};
 
@@ -23,8 +24,6 @@ const MIN_RUN_LINES: usize = 3;
 const MIN_RUN_COVERAGE: f32 = 0.7;
 /// Baseline difference, as a fraction of the smaller type size, within which two spans share a line.
 const LINE_Y_TOLERANCE: f32 = 0.5;
-/// Overlap, as a fraction of the type size, a span may step back onto the line it continues.
-const LINE_BACKTRACK_TOLERANCE: f32 = 0.5;
 /// Drop, as a fraction of the type size, that makes a line the next line of its run.
 const MIN_LINE_DESCENT: f32 = 0.3;
 /// Vertical overlap, as a fraction of the shorter run, for two runs to stand side by side.
@@ -38,6 +37,17 @@ const MIN_COLUMN_WIDTH_FRACTION: f32 = 0.12;
 const SECONDARY_TYPE_RATIO: f32 = 0.9;
 /// Fewest alphabetic words for a line to count as prose.
 const MIN_PROSE_LINE_WORDS: usize = 3;
+/// Most line breaks in a prose column that leave room for the next line's first word. Prose
+/// breaks only where that word does not fit, so early breaks are paragraph ends; a text table
+/// written column by column breaks at every cell end. Measured on the Federal Register pages
+/// the median column breaks early 8% of the time; ragged text-table columns 36% to 64%.
+const MAX_EARLY_BREAK_FRACTION: f32 = 1.0 / 3.0;
+/// Percentile of a run's line ends taken as its right margin.
+const RIGHT_MARGIN_PERCENTILE: f32 = 0.8;
+/// Word space, as a fraction of the type size, assumed before a word that would have fit.
+const WORD_SPACE: f32 = 0.25;
+/// Slack, as a fraction of the type size, left at the right margin before a break counts as early.
+const MARGIN_SLACK: f32 = 0.5;
 
 struct StreamLine {
     left: f32,
@@ -45,6 +55,7 @@ struct StreamLine {
     y: f32,
     size: f32,
     words: usize,
+    first_word_width: f32,
 }
 
 struct StreamRun {
@@ -60,10 +71,11 @@ struct StreamRun {
 /// Reorder `spans` into content-stream order when that order reads a page of at least three
 /// side-by-side prose columns column by column, returning whether it did.
 ///
-/// Spans sharing a `sequence` (pieces of one split run) keep their relative order. Artifacts and
-/// rotated runs are left out of the analysis but, once the page is accepted, take their stream
-/// position like every other span. A page with too few distinct `sequence` values to describe
-/// a stream (synthetic spans all left at 0) is never reordered.
+/// Lines follow the stream; the spans of each line are then read left to right, so a run the
+/// producer wrote late (a bold word, an out-of-order `TJ` piece) does not scramble its line.
+/// Artifacts and rotated runs are left out of the analysis but, once the page is accepted, take
+/// their stream position like every other span. A page with too few distinct `sequence` values
+/// to describe a stream (synthetic spans all left at 0) is never reordered.
 pub fn order_by_stream_columns(spans: &mut [TextSpan]) -> bool {
     let mut candidates: Vec<&TextSpan> = spans.iter().filter(|span| is_flow_span(span)).collect();
     candidates.sort_by_key(|span| span.sequence);
@@ -77,6 +89,7 @@ pub fn order_by_stream_columns(spans: &mut [TextSpan]) -> bool {
         return false;
     }
     spans.sort_by_key(|span| span.sequence);
+    read_stream_lines_left_to_right(spans);
     true
 }
 
@@ -102,24 +115,36 @@ fn is_flow_span(span: &TextSpan) -> bool {
         && type_size(span) > 0.0
 }
 
+fn same_line(span: &TextSpan, line_y: f32, line_size: f32) -> bool {
+    (span.bbox.y - line_y).abs() <= LINE_Y_TOLERANCE * type_size(span).min(line_size)
+}
+
 fn alphabetic_words(text: &str) -> usize {
     text.split_whitespace()
         .filter(|word| word.chars().any(char::is_alphabetic))
         .count()
 }
 
-/// Group consecutive stream spans into lines: a span continues the current line when it sits on
-/// the same baseline and does not step back across what the line already holds.
+/// Width of the span's first word, its share of the span's characters.
+fn first_word_width(span: &TextSpan) -> f32 {
+    let text = span.text.trim();
+    let first = text.split_whitespace().next().unwrap_or_default();
+    span.bbox.width * first.chars().count() as f32 / text.chars().count().max(1) as f32
+}
+
+/// Group consecutive stream spans on one baseline into lines.
 fn stream_lines(spans: &[&TextSpan]) -> Vec<StreamLine> {
     let mut lines: Vec<StreamLine> = Vec::new();
     for span in spans {
-        let size = type_size(span);
         let (left, right) = (span.bbox.x, span.bbox.x + span.bbox.width);
         let words = alphabetic_words(&span.text);
         if let Some(line) = lines.last_mut()
-            && (span.bbox.y - line.y).abs() <= LINE_Y_TOLERANCE * size.min(line.size)
-            && left >= line.right - LINE_BACKTRACK_TOLERANCE * size
+            && same_line(span, line.y, line.size)
         {
+            if left < line.left {
+                line.left = left;
+                line.first_word_width = first_word_width(span);
+            }
             line.right = line.right.max(right);
             line.words += words;
             continue;
@@ -128,11 +153,29 @@ fn stream_lines(spans: &[&TextSpan]) -> Vec<StreamLine> {
             left,
             right,
             y: span.bbox.y,
-            size,
+            size: type_size(span),
             words,
+            first_word_width: first_word_width(span),
         });
     }
     lines
+}
+
+/// Share of the run's line breaks after which the next line's first word would still have fit
+/// before the run's right margin.
+fn early_break_fraction(lines: &[StreamLine], group: &[usize]) -> f32 {
+    let mut ends: Vec<f32> = group.iter().map(|&index| lines[index].right).collect();
+    ends.sort_by(f32::total_cmp);
+    let margin = ends[((ends.len() - 1) as f32 * RIGHT_MARGIN_PERCENTILE) as usize];
+    let breaks = group.len() - 1;
+    let early = group
+        .windows(2)
+        .filter(|pair| {
+            let (line, next) = (&lines[pair[0]], &lines[pair[1]]);
+            line.right + WORD_SPACE * line.size + next.first_word_width < margin - MARGIN_SLACK * line.size
+        })
+        .count();
+    early as f32 / breaks.max(1) as f32
 }
 
 /// Group consecutive lines into runs, each line below the previous one and overlapping it
@@ -166,13 +209,15 @@ fn stream_runs(lines: &[StreamLine]) -> Vec<StreamRun> {
                 .iter()
                 .filter(|&&index| lines[index].words >= MIN_PROSE_LINE_WORDS)
                 .count();
+            let prose =
+                prose_lines * 2 >= group.len() && early_break_fraction(lines, &group) <= MAX_EARLY_BREAK_FRACTION;
             StreamRun {
                 left: median(|line| line.left),
                 right: median(|line| line.right),
                 top: first.y + first.size,
                 bottom: last.y,
                 size: median(|line| line.size),
-                prose: prose_lines * 2 >= group.len(),
+                prose,
                 lines: group,
             }
         })
@@ -191,7 +236,7 @@ fn reads_column_by_column(lines: &[StreamLine], runs: &[StreamRun]) -> bool {
     if (covered as f32) < MIN_RUN_COVERAGE * lines.len() as f32 {
         return false;
     }
-    column_count(lines, &blocks) >= MIN_STREAM_COLUMNS && !writes_a_column_before_its_left_neighbour(&blocks)
+    column_count(lines, &blocks) >= MIN_STREAM_COLUMNS && !writes_a_block_out_of_order(&blocks)
 }
 
 /// The most body-text runs that stand side by side, disjoint left to right.
@@ -244,14 +289,34 @@ fn column_count(lines: &[StreamLine], blocks: &[&StreamRun]) -> usize {
         .unwrap_or(0)
 }
 
-/// True when a run is written before a same-size run that stands beside it on its left.
-fn writes_a_column_before_its_left_neighbour(blocks: &[&StreamRun]) -> bool {
+/// True when a block is written before a same-size block that stands beside it on its left, or
+/// before a same-size block above it that it overlaps horizontally (a lower story written first).
+fn writes_a_block_out_of_order(blocks: &[&StreamRun]) -> bool {
     blocks.iter().enumerate().any(|(later_index, later)| {
         blocks[..later_index].iter().any(|earlier| {
             let comparable = earlier.size.min(later.size) >= SECONDARY_TYPE_RATIO * earlier.size.max(later.size);
-            comparable && earlier.left >= later.right && side_by_side(earlier, later)
+            let right_of_later = earlier.left >= later.right && side_by_side(earlier, later);
+            let overlaps_horizontally = earlier.right.min(later.right) > earlier.left.max(later.left);
+            let below_later = overlaps_horizontally && earlier.top <= later.bottom;
+            comparable && (right_of_later || below_later)
         })
     })
+}
+
+/// Sort each run of consecutive same-baseline flow spans left to right, keeping the line order.
+fn read_stream_lines_left_to_right(spans: &mut [TextSpan]) {
+    let mut start = 0;
+    while start < spans.len() {
+        let mut end = start + 1;
+        if is_flow_span(&spans[start]) {
+            let (line_y, line_size) = (spans[start].bbox.y, type_size(&spans[start]));
+            while end < spans.len() && is_flow_span(&spans[end]) && same_line(&spans[end], line_y, line_size) {
+                end += 1;
+            }
+            spans[start..end].sort_by(|left, right| left.bbox.x.total_cmp(&right.bbox.x));
+        }
+        start = end;
+    }
 }
 
 #[cfg(test)]
@@ -365,6 +430,67 @@ mod tests {
         assert!(order_by_stream_columns(&mut spans));
 
         assert_eq!(texts(&spans), expected);
+    }
+
+    #[test]
+    fn words_written_out_of_order_on_a_line_read_left_to_right() {
+        let mut expected = Vec::new();
+        let mut written_order = Vec::new();
+        for whole in three_columns_under_spanning_heading() {
+            let half = whole.bbox.width / 2.0;
+            let piece = |name: &str, offset: f32| TextSpan {
+                text: format!("{} {name}", whole.text),
+                bbox: Rect::new(whole.bbox.x + offset, whole.bbox.y, half, whole.bbox.height),
+                ..whole.clone()
+            };
+            let (head, tail) = (piece("head", 0.0), piece("tail", half));
+            expected.extend([head.text.clone(), tail.text.clone()]);
+            written_order.extend([tail, head]);
+        }
+        let mut spans = rows(written(written_order));
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), expected);
+    }
+
+    #[test]
+    fn lower_story_written_before_the_story_above_keeps_geometric_order() {
+        let mut written_order = Vec::new();
+        for (label, &left) in ["lower first", "lower second", "lower third"].iter().zip(&COLUMN_LEFTS) {
+            written_order.extend(column(label, left, 10, 8));
+        }
+        for (label, &left) in ["upper first", "upper second", "upper third"].iter().zip(&COLUMN_LEFTS) {
+            written_order.extend(column(label, left, 0, 8));
+        }
+        let mut spans = rows(written(written_order));
+        let before: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
+
+        assert!(!order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), before);
+    }
+
+    /// Three columns of text cells, each cell three or more words, written column by column.
+    /// Every column passes the word count, so only the early-break test tells the cells from
+    /// prose: most cells end with room left for the next cell's first word.
+    #[test]
+    fn text_table_written_column_by_column_keeps_geometric_order() {
+        const CELL_WIDTHS: [f32; 8] = [60.0, 150.0, 90.0, 120.0, 70.0, 140.0, 80.0, 156.0];
+        let mut written_order = Vec::new();
+        for &left in &COLUMN_LEFTS {
+            for (row, &width) in CELL_WIDTHS.iter().enumerate() {
+                let y = TOP_Y - row as f32 * LEADING;
+                let text = format!("cell text in row {row} at {left}");
+                written_order.push(span(&text, left, y, width, BODY_SIZE));
+            }
+        }
+        let mut spans = rows(written(written_order));
+        let before: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
+
+        assert!(!order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), before);
     }
 
     #[test]
