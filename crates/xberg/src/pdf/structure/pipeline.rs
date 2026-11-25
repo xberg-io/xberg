@@ -420,6 +420,41 @@ fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size
     eligibility
 }
 
+/// Centroid of the heading map's body cluster: the non-heading cluster that carries
+/// the most text, which is how `assign_heading_levels_smart` chose it.
+///
+/// The first non-heading entry of the descending map is not that cluster when a
+/// slightly larger tier stays under the heading ratio. Measured on a Federal Register
+/// rule (2026-14578, clusters 10.1 / 8.9 / 6.2pt) the first entry was the 10.1pt
+/// running-head tier, so every 9pt bold section heading failed the body-size test
+/// and the document emitted no headings at all. ~keep
+fn body_cluster_font_size(heading_map: &[(f32, Option<u8>)], all_page_segments: &[Vec<SegmentData>]) -> Option<f32> {
+    let mut text_mass = vec![0usize; heading_map.len()];
+    for segment in all_page_segments.iter().flatten() {
+        if segment.text.trim().is_empty() || !segment.font_size.is_finite() {
+            continue;
+        }
+        let nearest = heading_map
+            .iter()
+            .enumerate()
+            .min_by(|(_, (left, _)), (_, (right, _))| {
+                (left - segment.font_size)
+                    .abs()
+                    .total_cmp(&(right - segment.font_size).abs())
+            })
+            .map(|(index, _)| index);
+        if let Some(index) = nearest {
+            text_mass[index] += segment.text.len();
+        }
+    }
+    heading_map
+        .iter()
+        .zip(text_mass)
+        .filter(|((_, level), mass)| level.is_none() && *mass > 0)
+        .max_by_key(|(_, mass)| *mass)
+        .map(|((size, _), _)| *size)
+}
+
 fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>], body_font_size: Option<f32>) {
     let Some(body_font_size) = body_font_size else {
         return;
@@ -4024,7 +4059,7 @@ fn build_document_structure_with_native(
     let struct_tree_results: Vec<Option<Vec<PdfParagraph>>> = vec![None; page_count];
     let heuristic_pages: Vec<usize> = (0..page_count).collect();
 
-    let (heading_map, doc_body_font_size) = if used_structure_tree {
+    let (heading_map, doc_body_font_size, bold_heading_body_font_size) = if used_structure_tree {
         let mut heading_map = build_heading_map_from_assigned_roles(&all_page_segments);
         if !suppress_all_heading_roles_when_sparse_and_untrusted(&mut heading_map, &mut all_page_segments)
             && promote_untagged_document_title(&mut heading_map, &all_page_segments)
@@ -4039,7 +4074,7 @@ fn build_document_structure_with_native(
             heading_map_len = heading_map.len(),
             "native structure pipeline: heading map from structure tree"
         );
-        (heading_map, doc_body_font_size)
+        (heading_map, doc_body_font_size, doc_body_font_size)
     } else {
         let (heading_map, _struct_tree_needs_classify) =
             build_heading_map(&all_page_segments, &struct_tree_results, &heuristic_pages, k_clusters)?;
@@ -4047,7 +4082,9 @@ fn build_document_structure_with_native(
             .iter()
             .find(|(_, level)| level.is_none())
             .map(|(size, _)| *size);
-        (heading_map, doc_body_font_size)
+        let bold_heading_body_font_size =
+            body_cluster_font_size(&heading_map, &all_page_segments).or(doc_body_font_size);
+        (heading_map, doc_body_font_size, bold_heading_body_font_size)
     };
 
     let page_heights: Vec<f32> = all_page_segments
@@ -4642,7 +4679,7 @@ fn build_document_structure_with_native(
         deduplicate_paragraphs(&mut all_page_paragraphs, &extracted_table_bboxes_by_page);
     }
     compact_final_heading_hierarchy(&mut all_page_paragraphs);
-    promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, doc_body_font_size);
+    promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, bold_heading_body_font_size);
     #[cfg(feature = "layout-detection")]
     for ((page, projection), accepted_folio) in all_page_paragraphs
         .iter_mut()

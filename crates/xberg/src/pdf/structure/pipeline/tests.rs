@@ -5935,6 +5935,33 @@ fn a_two_word_unnumbered_bold_fragment_is_not_a_heading_candidate() {
     );
 }
 
+/// 2026-14578: a 10pt running-head tier sits under the heading ratio, so it is the
+/// first non-heading entry of the descending map, yet the 9pt cluster carries the body.
+#[test]
+fn body_cluster_font_size_picks_the_non_heading_cluster_carrying_the_most_text() {
+    let heading_map = vec![(10.1, None), (8.9, None), (6.2, None)];
+    let pages = vec![vec![
+        seg_heuristic("Federal Register / Vol. 91, No. 137", 10.0, 760.0),
+        seg_heuristic(&"ordinary body text ".repeat(40), 9.0, 700.0),
+        seg_heuristic("Legal Authority for the Action", 9.0, 650.0),
+        seg_heuristic("1 A footnote.", 6.0, 40.0),
+    ]];
+    assert_eq!(body_cluster_font_size(&heading_map, &pages), Some(8.9));
+
+    let heading_heavy_map = vec![(14.0, Some(1)), (9.0, None)];
+    let heading_heavy = vec![vec![
+        seg_heuristic(&"Display title ".repeat(50), 14.0, 700.0),
+        seg_heuristic("short body", 9.0, 650.0),
+    ]];
+    assert_eq!(
+        body_cluster_font_size(&heading_heavy_map, &heading_heavy),
+        Some(9.0),
+        "a heading cluster is never the body, however much text it carries"
+    );
+
+    assert_eq!(body_cluster_font_size(&heading_map, &[]), None);
+}
+
 fn heading_page(heading: &str, heading_size: f32, body: &str) -> Vec<SegmentData> {
     let mut heading_segment = seg_heuristic(heading, heading_size, 700.0);
     heading_segment.is_bold = true;
