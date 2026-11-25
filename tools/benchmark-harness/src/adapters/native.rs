@@ -96,6 +96,8 @@ struct SingleResultContext<'a> {
 fn single_failure_result(context: SingleResultContext<'_>, error: &Error, timed_out: bool) -> BenchmarkResult {
     let error_kind = if timed_out {
         ErrorKind::Timeout
+    } else if matches!(error, Error::LayoutFailed(_)) {
+        ErrorKind::LayoutFailed
     } else {
         ErrorKind::HarnessError
     };
@@ -292,7 +294,7 @@ fn assemble_batch_rows(
                         context,
                         file_path,
                         message,
-                        ErrorKind::FrameworkError,
+                        ErrorKind::LayoutFailed,
                     )),
                     _ => Ok(batch_success_result(context, file_path, documents[0], config)),
                 },
@@ -711,7 +713,7 @@ impl FrameworkAdapter for NativeAdapter {
                     extraction_duration,
                     resource_stats: &resource_stats,
                 },
-                &Error::FrameworkError(message),
+                &Error::LayoutFailed(message),
                 false,
             ));
         }

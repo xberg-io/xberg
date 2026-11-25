@@ -61,7 +61,7 @@ fn dominant_error_kind(all_success: bool, failing_kinds: impl Iterator<Item = Er
             ErrorKind::Timeout => 4,
             ErrorKind::HarnessError => 3,
             ErrorKind::ConfigSetupError => 2,
-            ErrorKind::FrameworkError | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap => 1,
+            ErrorKind::FrameworkError | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap | ErrorKind::LayoutFailed => 1,
             ErrorKind::None => 0,
         })
         .unwrap_or(ErrorKind::None)

@@ -476,7 +476,7 @@ pub struct ConsolidationMetadata {
 
 /// Failure counts split by cause. Framework-fault kinds ([`crate::types::ErrorKind::FrameworkError`],
 /// [`crate::types::ErrorKind::EmptyContent`], [`crate::types::ErrorKind::ZeroOverlap`],
-/// [`crate::types::ErrorKind::Timeout`]) are the framework's own fault — it was handed a supported
+/// [`crate::types::ErrorKind::LayoutFailed`], [`crate::types::ErrorKind::Timeout`]) are the framework's own fault — it was handed a supported
 /// document and failed — and penalize its quality/success rate (see
 /// [`super::failures::is_framework_fault_failure`]). Infrastructure kinds
 /// ([`crate::types::ErrorKind::HarnessError`], [`crate::types::ErrorKind::ConfigSetupError`]) are
@@ -489,6 +489,9 @@ pub struct FailureCounts {
     /// `empty_content` (which means the framework produced no content at all).
     #[serde(default)]
     pub zero_overlap: usize,
+    /// Layout-bearing rows whose layout pass failed or was skipped.
+    #[serde(default)]
+    pub layout_failures: usize,
     pub timeouts: usize,
     /// Sum of the framework-fault kinds above (these penalize the score).
     pub framework_fault_total: usize,
@@ -569,6 +572,9 @@ pub struct PerformancePercentiles {
     /// non-empty ground truth — distinct from `empty_content` (v2.10.0+).
     #[serde(default)]
     pub zero_overlap: usize,
+    /// Number of layout-bearing extractions whose layout pass failed or was skipped.
+    #[serde(default)]
+    pub layout_failures: usize,
     /// Unique error messages with occurrence counts
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub error_details: HashMap<String, usize>,

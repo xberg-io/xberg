@@ -97,6 +97,18 @@ fn a_failed_layout_pass_is_rejected_only_when_the_adapter_asks_for_it() {
 }
 
 #[test]
+fn a_layout_rejection_is_classified_as_layout_failed_not_a_generic_framework_error() {
+    let payload = item(serde_json::json!([{ "source": "layout", "message": LAYOUT_FAILURE }])).to_string();
+    let error = rejecting_adapter()
+        .parse_output(&payload)
+        .expect_err("a V3 row must not be scored");
+    assert_eq!(
+        crate::adapters::subprocess::support::error_to_error_kind(&error),
+        crate::types::ErrorKind::LayoutFailed
+    );
+}
+
+#[test]
 fn every_layout_variant_rejects_the_pdf_and_image_layout_failure_warnings() {
     let pdf = item(serde_json::json!([{ "source": "layout", "message": LAYOUT_FAILURE }])).to_string();
     let image = item(serde_json::json!([{ "source": "layout-ocr", "message": IMAGE_LAYOUT_FAILURE }])).to_string();

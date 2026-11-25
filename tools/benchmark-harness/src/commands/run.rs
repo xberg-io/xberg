@@ -171,7 +171,11 @@ pub(crate) fn compute_framework_coverage<'a>(
             entry.0 += 1;
         } else if matches!(
             error_kind,
-            ErrorKind::FrameworkError | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap | ErrorKind::Timeout
+            ErrorKind::FrameworkError
+                | ErrorKind::EmptyContent
+                | ErrorKind::ZeroOverlap
+                | ErrorKind::LayoutFailed
+                | ErrorKind::Timeout
         ) {
             entry.1 += 1;
         } else {

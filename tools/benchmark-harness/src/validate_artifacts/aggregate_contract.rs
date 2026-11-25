@@ -18,7 +18,8 @@ fn validate_bucket(bucket: &PerformancePercentiles, key: &str, allow_failures: b
     // into `framework_fault_total` and `accountable_sample_count` includes it, but this sum
     // omitted it, so any bucket holding one failed the invariant against a `total_sample_count`
     // that counts every result. ~keep
-    let accountable_failures = bucket.framework_errors + bucket.timeouts + bucket.empty_content + bucket.zero_overlap;
+    let accountable_failures =
+        bucket.framework_errors + bucket.timeouts + bucket.empty_content + bucket.zero_overlap + bucket.layout_failures;
     let infrastructure_failures = bucket.harness_errors + bucket.config_setup_errors;
     let failures = accountable_failures + infrastructure_failures;
     require(
@@ -344,6 +345,7 @@ fn error_kind_from_row(row: &PerFixtureRow, path: &Path) -> Result<ErrorKind> {
         Some("FrameworkError") => Ok(ErrorKind::FrameworkError),
         Some("EmptyContent") => Ok(ErrorKind::EmptyContent),
         Some("ZeroOverlap") => Ok(ErrorKind::ZeroOverlap),
+        Some("LayoutFailed") => Ok(ErrorKind::LayoutFailed),
         Some("Timeout") => Ok(ErrorKind::Timeout),
         Some("HarnessError") => Ok(ErrorKind::HarnessError),
         Some("ConfigSetupError") => Ok(ErrorKind::ConfigSetupError),
@@ -773,9 +775,12 @@ fn validate_one_aggregate_row(
             format!("{}: failed required fixture row", path.display()),
         )?;
         require(
-            row.error_kind
-                .as_deref()
-                .is_some_and(|kind| matches!(kind, "FrameworkError" | "Timeout" | "EmptyContent" | "ZeroOverlap")),
+            row.error_kind.as_deref().is_some_and(|kind| {
+                matches!(
+                    kind,
+                    "FrameworkError" | "Timeout" | "EmptyContent" | "ZeroOverlap" | "LayoutFailed"
+                )
+            }),
             format!(
                 "{}: failed fixture rows: optional row has no accountable error kind",
                 path.display()
@@ -864,7 +869,8 @@ fn validate_aggregate_group_row_reconciliation(
                         && bucket.config_setup_errors == count_kind("ConfigSetupError")
                         && bucket.timeouts == count_kind("Timeout")
                         && bucket.empty_content == count_kind("EmptyContent")
-                        && bucket.zero_overlap == count_kind("ZeroOverlap"),
+                        && bucket.zero_overlap == count_kind("ZeroOverlap")
+                        && bucket.layout_failures == count_kind("LayoutFailed"),
                     format!("{key}: group failure counts do not match fixture rows for {file_type}"),
                 )?;
             }

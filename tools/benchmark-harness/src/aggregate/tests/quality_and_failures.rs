@@ -257,6 +257,29 @@ fn reclassified_zero_overlap_result_is_excluded_from_quality_and_counted_as_fail
     assert!((ranking_value(&aggregated.comparison.quality_ranking_markdown, "fw") - 0.45).abs() < 1e-9);
 }
 
+/// A layout-bearing row whose layout pass failed is the variant's own fault: it counts against
+/// the success rate and the framework-fault total, never as harness infrastructure.
+#[test]
+fn layout_failed_result_is_a_framework_fault_failure() {
+    let success = result_with_quality("fw", "pdf", 0.9, true);
+    let mut failed = create_test_result("fw", "pdf", OcrStatus::NotUsed, 100, 1_000_000.0, 10_000_000);
+    failed.success = false;
+    failed.error_kind = ErrorKind::LayoutFailed;
+    failed.error_message = Some("layout detection failed".to_string());
+
+    let mut counts = FailureCounts::default();
+    counts.record(&failed);
+    assert_eq!(counts.layout_failures, 1);
+    assert_eq!(counts.framework_errors, 0);
+    assert_eq!(counts.framework_fault_total, 1);
+    assert_eq!(counts.infra_total, 0);
+
+    let percentiles = calculate_percentiles(&[&success, &failed]);
+    assert_eq!(percentiles.layout_failures, 1);
+    assert_eq!(percentiles.total_sample_count, 2);
+    assert_eq!(percentiles.success_rate_percent, 50.0);
+}
+
 /// The Defect-A regression test: a zero-overlap-flipped result (`success = false`,
 /// `error_kind = ZeroOverlap`) must still contribute its own duration/throughput/memory
 /// measurements to the group's performance percentiles, because the framework really did run

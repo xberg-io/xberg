@@ -50,6 +50,11 @@ pub enum Error {
     #[error("{0}")]
     FrameworkError(String),
 
+    /// A layout-bearing variant extracted the document without the requested layout analysis, so
+    /// its output must not be scored as layout output.
+    #[error("{0}")]
+    LayoutFailed(String),
+
     /// Framework returned empty or missing content — ran successfully but produced nothing.
     #[error("Empty content: {0}")]
     EmptyContent(String),

@@ -189,6 +189,7 @@ struct ErrorKindCounts {
     timeouts: usize,
     empty_content: usize,
     zero_overlap: usize,
+    layout_failures: usize,
     error_details: HashMap<String, usize>,
 }
 
@@ -215,6 +216,10 @@ fn count_error_kinds_and_details(results: &[&BenchmarkResult]) -> ErrorKindCount
         .iter()
         .filter(|r| r.error_kind == ErrorKind::ZeroOverlap)
         .count();
+    let layout_failures = results
+        .iter()
+        .filter(|r| r.error_kind == ErrorKind::LayoutFailed)
+        .count();
 
     let mut error_details: HashMap<String, usize> = HashMap::new();
     for result in results.iter().filter(|r| !r.success) {
@@ -230,6 +235,7 @@ fn count_error_kinds_and_details(results: &[&BenchmarkResult]) -> ErrorKindCount
         timeouts,
         empty_content,
         zero_overlap,
+        layout_failures,
         error_details,
     }
 }
@@ -360,6 +366,7 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
         timeouts: error_counts.timeouts,
         empty_content: error_counts.empty_content,
         zero_overlap: error_counts.zero_overlap,
+        layout_failures: error_counts.layout_failures,
         error_details: error_counts.error_details,
         throughput: performance_metrics.throughput,
         memory: performance_metrics.memory,

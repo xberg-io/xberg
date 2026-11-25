@@ -101,6 +101,7 @@ pub(super) fn error_to_error_kind(e: &Error) -> ErrorKind {
         Error::Timeout(_) => ErrorKind::Timeout,
         Error::FrameworkError(_) => ErrorKind::FrameworkError,
         Error::EmptyContent(_) => ErrorKind::EmptyContent,
+        Error::LayoutFailed(_) => ErrorKind::LayoutFailed,
         Error::Benchmark(msg) | Error::Config(msg) => {
             let msg_lower = msg.to_lowercase();
 

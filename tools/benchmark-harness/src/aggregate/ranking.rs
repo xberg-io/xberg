@@ -17,6 +17,7 @@ fn accountable_sample_count(performance: &PerformancePercentiles) -> usize {
         + performance.timeouts
         + performance.empty_content
         + performance.zero_overlap
+        + performance.layout_failures
 }
 
 /// Convert a reported quality percentile into a ranking value that also reflects extraction

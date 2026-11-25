@@ -221,7 +221,7 @@ impl SubprocessAdapter {
         if self.reject_layout_failures
             && let Some(message) = crate::adapters::layout_failures::layout_failure_in_item(&parsed)
         {
-            return Err(Error::FrameworkError(message));
+            return Err(Error::LayoutFailed(message));
         }
 
         Ok(parsed)

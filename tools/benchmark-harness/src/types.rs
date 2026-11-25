@@ -248,6 +248,8 @@ pub enum OcrStatus {
 /// - **EmptyContent**: framework ran but produced no content
 /// - **ZeroOverlap**: framework produced non-empty output that shares zero tokens with a
 ///   non-empty ground truth
+/// - **LayoutFailed**: a layout-bearing variant extracted the document without the requested
+///   layout analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorKind {
@@ -269,6 +271,10 @@ pub enum ErrorKind {
     /// empty). Distinct from [`ErrorKind::EmptyContent`], which means the framework produced
     /// no content at all. Both are framework-fault failures and both are timing-eligible.
     ZeroOverlap,
+    /// A layout-bearing variant produced text, but its layout pass failed or was skipped, so the
+    /// row would otherwise be scored as the requested detector's output. A framework-fault
+    /// failure like [`ErrorKind::EmptyContent`].
+    LayoutFailed,
     /// No error occurred
     #[default]
     None,

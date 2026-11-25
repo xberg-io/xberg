@@ -226,7 +226,11 @@ fn validate_result_outcome(
         require(
             matches!(
                 result.error_kind,
-                ErrorKind::FrameworkError | ErrorKind::Timeout | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap
+                ErrorKind::FrameworkError
+                    | ErrorKind::Timeout
+                    | ErrorKind::EmptyContent
+                    | ErrorKind::ZeroOverlap
+                    | ErrorKind::LayoutFailed
             ),
             format!(
                 "{}: optional result {index} has an infrastructure error",

@@ -21,6 +21,10 @@ fn test_error_to_error_kind_mapping() {
         ErrorKind::EmptyContent
     );
     assert_eq!(
+        error_to_error_kind(&Error::LayoutFailed("test".into())),
+        ErrorKind::LayoutFailed
+    );
+    assert_eq!(
         error_to_error_kind(&Error::Benchmark("test".into())),
         ErrorKind::HarnessError
     );

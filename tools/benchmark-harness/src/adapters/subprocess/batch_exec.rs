@@ -504,7 +504,7 @@ impl SubprocessAdapter {
             if let Some(message) = crate::adapters::layout_failures::layout_failure_in_item(item) {
                 validation.0 = false;
                 validation.1 = Some(message);
-                validation.2 = ErrorKind::FrameworkError;
+                validation.2 = ErrorKind::LayoutFailed;
             }
         }
     }
