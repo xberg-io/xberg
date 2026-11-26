@@ -4593,7 +4593,13 @@ pub(super) mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             self.in_flight.fetch_sub(1, Ordering::SeqCst);
             Ok(crate::types::ExtractedDocument {
-                content: format!("recognised page text with enough real words on it to clear the noise gate {width}"),
+                // Long enough to bypass the short-text raster probe, which drops a short read.
+                content: format!(
+                    "Successful OCR page text repeated enough times to bypass the short-text raster probe. \
+                     Successful OCR page text repeated enough times to bypass the short-text raster probe. \
+                     Successful OCR page text repeated enough times to bypass the short-text raster probe. \
+                     {width}"
+                ),
                 ..Default::default()
             })
         }
@@ -4701,7 +4707,29 @@ pub(super) mod tests {
         let media_boxes: Vec<(u32, u32)> = (0..PAGES as u32).map(|page| (200 + 8 * page, 200)).collect();
         let pdf = build_minimal_pdf_with_media_boxes(&media_boxes);
         let ocr_pages: Vec<u32> = (1..=PAGES as u32).collect();
-        let mut config = ExtractionConfig::default();
+        // Forced pages with a native boundary each, as in
+        // `mixed_ocr_keeps_successful_pages_when_one_backend_call_fails`: the route then keeps
+        // every page's read in the per-page map instead of judging it against the native text.
+        let native_pages: Vec<String> = ocr_pages.iter().map(|page| format!("native page {page}")).collect();
+        let native_text = native_pages.join("\n");
+        let mut offset = 0;
+        let boundaries: Vec<crate::types::PageBoundary> = native_pages
+            .iter()
+            .enumerate()
+            .map(|(index, text)| {
+                let boundary = crate::types::PageBoundary {
+                    byte_start: offset,
+                    byte_end: offset + text.len(),
+                    page_number: (index + 1) as u32,
+                };
+                offset = boundary.byte_end + usize::from(index + 1 < native_pages.len());
+                boundary
+            })
+            .collect();
+        let mut config = ExtractionConfig {
+            force_ocr_pages: Some(ocr_pages.clone()),
+            ..Default::default()
+        };
         config.ocr = Some(crate::core::config::OcrConfig {
             backend: BACKEND.to_string(),
             ..Default::default()
@@ -4713,14 +4741,14 @@ pub(super) mod tests {
 
         let bounded = {
             let _sessions = PinnedRecognitionSessions::set(SESSIONS);
-            extract_mixed_ocr_native("native", &[], &ocr_pages, &pdf, &config, None)
+            extract_mixed_ocr_native(&native_text, &boundaries, &ocr_pages, &pdf, &config, None)
                 .await
                 .expect("the bounded per-page OCR route must complete")
         };
         let bounded_peak = peak.swap(0, Ordering::SeqCst);
         let bounded_calls = calls.swap(0, Ordering::SeqCst);
 
-        let unbounded = extract_mixed_ocr_native("native", &[], &ocr_pages, &pdf, &config, None)
+        let unbounded = extract_mixed_ocr_native(&native_text, &boundaries, &ocr_pages, &pdf, &config, None)
             .await
             .expect("the unbounded per-page OCR route must complete");
         let unbounded_peak = peak.load(Ordering::SeqCst);
