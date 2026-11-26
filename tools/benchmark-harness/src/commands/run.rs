@@ -707,6 +707,9 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
         args.cohort.as_deref(),
         args.ocr,
         selected_frameworks_use_tesseract(&frameworks),
+        // ~keep The harness builds its OCR configs without a tessdata_model, so xberg resolves the
+        // default set; pass the set here when a run selects another one.
+        xberg::TessdataModel::default(),
     )?;
 
     let fixed_batch_size = resolve_fixed_batch_size(batch_mode, args.batch_size, cohort_manifest.as_ref())?;
