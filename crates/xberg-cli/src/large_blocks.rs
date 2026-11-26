@@ -196,8 +196,82 @@ pub(crate) fn map_large_pix_data() {
 mod tests {
     use super::*;
 
+    unsafe extern "C" {
+        // libmalloc: the zone owning `ptr`, or null for memory no malloc zone handed out.
+        fn malloc_zone_from_ptr(ptr: *const c_void) -> *mut c_void;
+    }
+
     fn layout(size: usize) -> Layout {
         Layout::from_size_align(size, 8).expect("valid layout")
+    }
+
+    fn owned_by_libmalloc(block: *const u8) -> bool {
+        // SAFETY: the zone lookup only compares the address against zone ranges.
+        !unsafe { malloc_zone_from_ptr(block.cast()) }.is_null()
+    }
+
+    #[test]
+    fn size_class_is_decided_by_size_and_alignment_alone() {
+        assert!(!is_mapped(layout(0)), "a zero-size layout never maps");
+        assert!(!is_mapped(layout(MAPPED_THRESHOLD - 1)));
+        assert!(is_mapped(layout(MAPPED_THRESHOLD)));
+        assert!(is_mapped(
+            Layout::from_size_align(MAPPED_THRESHOLD, MIN_PAGE_ALIGN).expect("valid layout")
+        ));
+        assert!(!is_mapped(
+            Layout::from_size_align(MAPPED_THRESHOLD, MIN_PAGE_ALIGN * 2).expect("valid layout")
+        ));
+    }
+
+    #[test]
+    fn zero_size_values_never_reach_a_mapping() {
+        let empty: Vec<u8> = Vec::with_capacity(0);
+        assert_eq!(empty.capacity(), 0);
+        let mut grown: Vec<u8> = Vec::new();
+        grown.resize(MAPPED_THRESHOLD, 1);
+        grown.clear();
+        grown.shrink_to_fit();
+        assert_eq!(grown.capacity(), 0);
+    }
+
+    #[test]
+    fn each_block_is_released_by_the_allocator_that_made_it() {
+        let allocator = MappedLargeBlocks;
+        for size in [16, MAPPED_THRESHOLD - 1, MAPPED_THRESHOLD, MAPPED_THRESHOLD * 4 + 5] {
+            let block_layout = layout(size);
+            // SAFETY: non-zero layout; the block is released with the layout it was made with.
+            unsafe {
+                let block = allocator.alloc(block_layout);
+                assert!(!block.is_null(), "size {size}");
+                assert_eq!(
+                    owned_by_libmalloc(block),
+                    !is_mapped(block_layout),
+                    "size {size} must come from the allocator its layout selects"
+                );
+                allocator.dealloc(block, block_layout);
+            }
+        }
+    }
+
+    #[test]
+    fn realloc_moves_a_block_between_allocators_when_it_crosses_the_threshold() {
+        let allocator = MappedLargeBlocks;
+        let small = layout(4096);
+        // SAFETY: every block is released with the layout it currently has.
+        unsafe {
+            let block = allocator.alloc(small);
+            assert!(owned_by_libmalloc(block));
+            let large = allocator.realloc(block, small, MAPPED_THRESHOLD);
+            assert!(!large.is_null());
+            assert!(!owned_by_libmalloc(large), "growing past the threshold maps the block");
+            let back = allocator.realloc(large, layout(MAPPED_THRESHOLD), MAPPED_THRESHOLD - 1);
+            assert!(!back.is_null());
+            assert!(
+                owned_by_libmalloc(back),
+                "shrinking below the threshold returns it to libmalloc"
+            );
+            allocator.dealloc(back, layout(MAPPED_THRESHOLD - 1));
+        }
     }
 
     #[test]
