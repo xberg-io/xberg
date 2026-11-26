@@ -1307,6 +1307,11 @@ fn build_comrak_ast_with_table_mode<'a>(
         stack.last().map(|e| e.node).unwrap_or(*root)
     }
 
+    // The bullet list closed last and whether only page breaks have followed it: a list the
+    // pages split is one list, and a second sibling would make the writer emit a
+    // `<!-- end list -->` comment between the halves.
+    let mut paged_list: Option<(&'a AstNode<'a>, bool)> = None;
+
     for consolidated_elem in &consolidated {
         let orig_idx = consolidated_elem.original_index();
         let view = consolidated_elem.resolve(&doc.elements);
@@ -1319,8 +1324,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                     }
                     if is_container_end(elem) {
                         handle_container_end(&elem.kind, &mut state);
+                        paged_list = None;
                         match elem.kind {
-                            ElementKind::ListEnd => pop_container(&mut container_stack, ContainerKind::List),
+                            ElementKind::ListEnd => {
+                                paged_list = container_stack
+                                    .iter()
+                                    .rev()
+                                    .find(|entry| matches!(entry.kind, ContainerKind::List))
+                                    .map(|entry| (entry.node, false));
+                                pop_container(&mut container_stack, ContainerKind::List);
+                            }
                             ElementKind::QuoteEnd => pop_container(&mut container_stack, ContainerKind::BlockQuote),
                             ElementKind::GroupEnd => pop_container(&mut container_stack, ContainerKind::Group),
                             _ => {}
@@ -1342,6 +1355,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                     (ElementKind::Paragraph, *text, *annotations, 0u16, None, None, true)
                 }
             };
+
+        match elem_kind {
+            ElementKind::PageBreak => {
+                if let Some((_, crossed_page_break)) = &mut paged_list {
+                    *crossed_page_break = true;
+                }
+            }
+            ElementKind::ListStart { ordered: false } => {}
+            _ => paged_list = None,
+        }
 
         let parent = current_parent(&root, &container_stack);
 
@@ -1725,6 +1748,17 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::ListStart { ordered } => {
                 state.push_container(NestingKind::List { ordered, item_count: 0 }, elem_depth);
 
+                if let Some((list_node, true)) = paged_list.take()
+                    && resumes_list_across_page_break(list_node, parent)
+                {
+                    container_stack.push(ContainerEntry {
+                        node: list_node,
+                        kind: ContainerKind::List,
+                        empty_list_cursor: false,
+                    });
+                    continue;
+                }
+
                 let list_meta = configured(NodeList::default(), |list| {
                     list.list_type = if ordered {
                         comrak::nodes::ListType::Ordered
@@ -1831,6 +1865,19 @@ fn build_comrak_ast_with_table_mode<'a>(
     }
 
     root
+}
+
+/// Whether a bullet list opening after a page break continues `list_node`: that list is still
+/// the last block of the same parent, so nothing but the page break separates the two.
+fn resumes_list_across_page_break<'a>(list_node: &'a AstNode<'a>, parent: &'a AstNode<'a>) -> bool {
+    list_node
+        .parent()
+        .is_some_and(|list_parent| std::ptr::eq(list_parent, parent))
+        && parent.last_child().is_some_and(|last| std::ptr::eq(last, list_node))
+        && matches!(
+            &list_node.data.borrow().value,
+            NodeValue::List(list) if list.list_type == comrak::nodes::ListType::Bullet
+        )
 }
 
 /// Pop the innermost container matching the given kind from the stack.
@@ -2209,6 +2256,45 @@ mod tests {
         let out = render(&doc);
         assert!(out.contains("Alpha"), "got: {}", out);
         assert!(out.contains("Beta"), "got: {}", out);
+    }
+
+    /// A PDF closes its list at every page end; a bullet list running over the break came out as
+    /// two sibling lists, which the writer separates with a literal `<!-- end list -->` line.
+    #[test]
+    fn a_bullet_list_split_only_by_a_page_break_renders_as_one_list() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        b.push_list(false);
+        b.push_list_item("Docker Forensics", false, vec![], Some(1), None);
+        b.end_list();
+        b.push_page_break();
+        b.push_list(false);
+        b.push_list_item("Browser Artifacts", false, vec![], Some(2), None);
+        b.end_list();
+        let out = render(&b.build());
+        assert_eq!(out.matches("<!-- end list -->").count(), 0, "got: {out}");
+        assert!(out.contains("- Docker Forensics\n- Browser Artifacts"), "got: {out}");
+    }
+
+    /// Without a page break between them, or for numbered lists, two lists stay two lists.
+    #[test]
+    fn lists_not_split_by_a_page_break_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        b.push_list(false);
+        b.push_list_item("First", false, vec![], Some(1), None);
+        b.end_list();
+        b.push_list(false);
+        b.push_list_item("Second", false, vec![], Some(1), None);
+        b.end_list();
+        b.push_list(true);
+        b.push_list_item("Third", true, vec![], Some(1), None);
+        b.end_list();
+        b.push_page_break();
+        b.push_list(true);
+        b.push_list_item("Fourth", true, vec![], Some(2), None);
+        b.end_list();
+        let out = render(&b.build());
+        // First|Second (no page break), Second|Third (bullet then numbered), Third|Fourth (numbered).
+        assert_eq!(out.matches("<!-- end list -->").count(), 3, "got: {out}");
     }
 
     #[test]
