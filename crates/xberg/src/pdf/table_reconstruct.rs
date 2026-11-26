@@ -1203,6 +1203,27 @@ fn post_process_table_inner(
         }
     }
 
+    // Two or more columns that each wrap their own sentences down the rows are side-by-side
+    // prose columns, not a table: a wrapped table cell continues in one column while the
+    // others hold values (nougat_005 page 1 read its SUMMARY and INDICATORS columns as a
+    // 16-row table, row by row). ~keep
+    if !definition_grid && !has_recurring_numeric_tracks(&processed) {
+        let wrapping_columns = (0..processed[0].len())
+            .filter(|&column| column_wrap_count(&processed[1..], column) >= MIN_COLUMN_WRAPS_FOR_PROSE)
+            .count();
+        if wrapping_columns >= 2 {
+            tracing::debug!(
+                target: "xberg::table_reconstruct",
+                reason = "parallel_column_wraps",
+                wrapping_columns,
+                rows = processed.len(),
+                cols = processed[0].len(),
+                "post_process_table_inner: rejected table"
+            );
+            return None;
+        }
+    }
+
     {
         let num_cols = processed[0].len();
         let num_data_rows = processed.len() - 1;
@@ -2543,6 +2564,27 @@ fn is_dense_numeric_grid(grid: &[Vec<String>]) -> bool {
 
 /// Recurring numeric tracks are positive table evidence strong enough to
 /// distinguish wrapped row labels from prose flowing across inferred cells. ~keep
+/// Wrapped sentences a column must show before it counts as running prose.
+const MIN_COLUMN_WRAPS_FOR_PROSE: usize = 2;
+/// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label.
+const MIN_WRAPPED_LINE_WORDS: usize = 3;
+
+/// How many times `column` continues a sentence from one data row into the next: a cell of at
+/// least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause punctuation,
+/// followed by a cell that starts lowercase.
+fn column_wrap_count(data_rows: &[Vec<String>], column: usize) -> usize {
+    data_rows
+        .windows(2)
+        .filter(|pair| {
+            let above = pair[0].get(column).map_or("", |cell| cell.trim());
+            let below = pair[1].get(column).map_or("", |cell| cell.trim());
+            above.split_whitespace().count() >= MIN_WRAPPED_LINE_WORDS
+                && !above.ends_with(['.', '?', '!', ':', ';'])
+                && below.chars().next().is_some_and(char::is_lowercase)
+        })
+        .count()
+}
+
 fn has_recurring_numeric_tracks(grid: &[Vec<String>]) -> bool {
     let Some(width) = grid.first().map(Vec::len) else {
         return false;
@@ -4319,6 +4361,52 @@ mod tests {
             post_process_table(table, true, false).is_none(),
             "three incidental numeric tracks in five of eight prose rows must not bypass prose-flow rejection"
         );
+    }
+
+    #[test]
+    fn side_by_side_prose_columns_that_each_wrap_are_not_a_table() {
+        let rows: [[&str; 2]; 10] = [
+            ["SUMMARY", "INDICATORS"],
+            [
+                "For the 2021 APCO Annual Report, Myer Holdings Limited",
+                "This Annual Report shows the organisation's performance",
+            ],
+            [
+                "has achieved Level 3 (Advanced) for the core criteria. All se",
+                "against the APCO Packaging Sustainability Framework.",
+            ],
+            ["ven core criteria were answered and six out of six recommended", ""],
+            ["criteria were answered.", "CORE: All core criteria."],
+            ["", "TOTAL: Sum of all core and answered recommended"],
+            ["", "criteria."],
+            ["", "LEADERSHIP: All criteria that defines leadership on"],
+            ["", "packaging sustainability."],
+            ["", "OPERATIONS: All criteria related to business operations."],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        // Two columns, as the OCR grid of that page is after its empty tracks merge away.
+        assert!(post_process_table_inner(table, 2, false, None, false).is_none());
+    }
+
+    #[test]
+    fn a_wrapped_description_beside_a_value_column_stays_a_table() {
+        let rows: [[&str; 3]; 7] = [
+            ["Item", "Description", "Amount"],
+            ["Freight", "Carriage of the goods from the port", "1,200"],
+            ["", "to the warehouse in two loads", ""],
+            ["Storage", "Bonded storage for the first month", "640"],
+            ["", "at the agreed daily rate", ""],
+            ["Insurance", "Cover for the declared value.", "310"],
+            ["Handling", "Loading and unloading.", "95"],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert!(post_process_table_inner(table, 2, false, None, false).is_some());
     }
 
     #[test]
