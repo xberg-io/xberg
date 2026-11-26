@@ -3685,8 +3685,16 @@ mod tests {
         );
     }
 
+    /// The first page's column-aware text, or `None` when the fixture is absent; a missing
+    /// fixture fails the test under `XBERG_REQUIRE_TEST_FIXTURES=1`.
     fn extract_fixture_page(relative: &str) -> Option<String> {
-        let bytes = crate::utils::read_test_fixture(relative)?;
+        let Some(bytes) = crate::utils::read_test_fixture(relative) else {
+            assert!(
+                std::env::var_os("XBERG_REQUIRE_TEST_FIXTURES").is_none_or(|value| value != "1"),
+                "XBERG_REQUIRE_TEST_FIXTURES=1 but {relative} is missing"
+            );
+            return None;
+        };
         let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("RTL PDF fixture must parse");
         Some(
             extract_page_text_column_aware(
