@@ -292,6 +292,12 @@ const MIN_LABEL_VALUE_ROWS: usize = 3;
 // cut is prose running across the gutter, not column content. Matches the minimum column
 // width a cut must leave on each side. ~keep
 const MIN_STRADDLING_INK_PTS: f32 = 60.0;
+// A within-line gap at least this fraction of the line's widest gap is another cell boundary,
+// not word spacing inside a column line.
+const TABLE_ROW_GAP_RATIO: f32 = 0.5;
+// Gaps beyond the widest that make a line a table row: three comparable gaps are four cells,
+// more than the two column lines a narrow gutter separates.
+const TABLE_ROW_MIN_EXTRA_GAPS: usize = 2;
 
 /// Group `indices` into visual lines: anchored (not chained) on `y`, top to bottom, and
 /// further split on `x` wherever consecutive items are more than `MAX_INTRA_LINE_GAP_EM`
@@ -1662,6 +1668,8 @@ impl XYCutStrategy {
         // midpoint X. ~keep
         const MIN_GAP_PT: f32 = 6.0;
         let mut gap_positions: Vec<f32> = Vec::new();
+        // Midpoints of the gap-bearing lines that are table rows rather than two column lines.
+        let mut table_row_gaps: Vec<f32> = Vec::new();
         for line_spans in lines.values() {
             if line_spans.len() < 2 {
                 continue;
@@ -1679,6 +1687,14 @@ impl XYCutStrategy {
             }
             if largest_gap >= MIN_GAP_PT {
                 gap_positions.push(largest_mid);
+                let comparable_gaps = sorted
+                    .windows(2)
+                    .map(|w| w[1].0 - w[0].1)
+                    .filter(|&gap| gap >= MIN_GAP_PT && gap >= largest_gap * TABLE_ROW_GAP_RATIO)
+                    .count();
+                if comparable_gaps > TABLE_ROW_MIN_EXTRA_GAPS {
+                    table_row_gaps.push(largest_mid);
+                }
             }
         }
 
@@ -1734,6 +1750,19 @@ impl XYCutStrategy {
             return None;
         }
         if best_size * 5 < lines.len() {
+            return None;
+        }
+
+        // A two-column line has one gap the width of the gutter; a table row has a gap at
+        // every cell boundary, several of them as wide as the widest. When table rows carry
+        // the cluster, the "gutter" is a column boundary of a table set in a single-column
+        // body (1509.07624 page 37), and cutting there reads the table's columns and every
+        // prose line around it as two halves. ~keep
+        let table_rows_in_cluster = table_row_gaps
+            .iter()
+            .filter(|&&mid| (mid - best_center).abs() <= CLUSTER_RADIUS_PT)
+            .count();
+        if table_rows_in_cluster * 2 >= best_size {
             return None;
         }
 
@@ -5633,6 +5662,45 @@ mod tests {
             }
         }
         assert_eq!(reading_order(&spans), expected);
+    }
+
+    /// 1509.07624 page 37: a six-column table above full-width prose in one column. Every
+    /// table row's widest gap is the one before the `Real` column, at one X, so the twelve
+    /// rows form the narrow-gutter cluster while the prose lines bear no gap at all. The rows
+    /// have a gap at every cell boundary, so the cluster is a table's column boundary, not a
+    /// gutter: cutting there read the labels with the prose and the value columns after it.
+    #[test]
+    fn narrow_gutter_branch_declines_a_table_column_boundary_in_a_single_column_body() {
+        let cells: [(&str, f32, f32); 6] = [
+            ("1", 168.7, 5.0),
+            ("centre", 188.2, 26.3),
+            ("0", 228.9, 5.0),
+            ("10", 248.4, 10.0),
+            ("-0.0227049145535", 279.7, 75.9),
+            ("0.951481194735", 375.0, 67.5),
+        ];
+        let mut spans = Vec::new();
+        for row in 0..12 {
+            let y = 700.0 - row as f32 * 19.0;
+            for (text, x, width) in cells {
+                spans.push(make_span_text(x, y, width, 10.0, text, 10.0));
+            }
+        }
+        for line in 0..12 {
+            spans.push(make_span_text(
+                133.8,
+                450.0 - line as f32 * 12.0,
+                343.7,
+                10.0,
+                "with s and g as given, the solutions become increasingly oscillatory as kappa grows",
+                10.0,
+            ));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(kind, RegionKind::Prose);
+        assert_eq!(strategy.detect_narrow_gutter_prose(&spans, &indices, kind), None);
     }
 
     #[test]
