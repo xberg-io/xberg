@@ -229,6 +229,21 @@ mod tests {
         );
     }
 
+    #[test]
+    fn scope_progress_holds_the_wrapped_future_once() {
+        let payload = [7_u8; 8192];
+        let inner = async move { std::hint::black_box(&payload).len() };
+        let inner_size = std::mem::size_of_val(&inner);
+
+        let scoped = scope_progress(Arc::new(RecordingSink::default()), None, inner);
+
+        assert!(
+            std::mem::size_of_val(&scoped) < inner_size + 1024,
+            "scope_progress future is {} B around a {inner_size} B future",
+            std::mem::size_of_val(&scoped)
+        );
+    }
+
     #[derive(Default)]
     struct BlockingFirstSink {
         completions: Mutex<Vec<usize>>,
