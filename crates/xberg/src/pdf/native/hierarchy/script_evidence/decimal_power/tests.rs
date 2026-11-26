@@ -96,7 +96,7 @@ fn an_unclaimed_source_glyph_in_the_decimal_gap_prevents_ownership() {
         / 1000.0;
     extra.rendered_advance = extra.advance_width;
     extra.bbox.width = extra.advance_width;
-    authority.chars.push(extra);
+    std::sync::Arc::make_mut(&mut authority.chars).push(extra);
     rebuild_index(&mut authority);
     let runs = prepare_test(&mut spans, || Some(authority));
     assert_eq!(
@@ -152,7 +152,7 @@ fn duplicate_source_digits_or_points_cannot_supply_a_decimal_power() {
             .find(|glyph| glyph.char == duplicate && close(glyph.origin_y, baseline(point)) && glyph.origin_x > 470.0)
             .unwrap()
             .clone();
-        authority.chars.push(glyph);
+        std::sync::Arc::make_mut(&mut authority.chars).push(glyph);
         rebuild_index(&mut authority);
         assert_eq!(prepare_test(&mut spans, || Some(authority)).len(), 1, "{duplicate}");
         assert!(spans.iter().any(|span| span.text == "258"));
@@ -171,8 +171,8 @@ fn a_point_that_does_not_fill_the_actual_digit_gap_is_not_borrowed() {
         .position(|glyph| std::ptr::eq(glyph, point))
         .unwrap();
     spans[index].bbox.x += 0.002;
-    authority.chars[glyph_index].origin_x += 0.002;
-    authority.chars[glyph_index].bbox.x += 0.002;
+    std::sync::Arc::make_mut(&mut authority.chars)[glyph_index].origin_x += 0.002;
+    std::sync::Arc::make_mut(&mut authority.chars)[glyph_index].bbox.x += 0.002;
     assert!(
         unique_point(&authority, &spans[index]).is_some(),
         "source mapping still agrees"
@@ -204,7 +204,7 @@ fn ambiguous_source_operands_are_not_resolved_to_the_nearest_copy() {
         })
         .collect();
     assert_eq!(copies.len(), 2);
-    authority.chars.extend(copies);
+    std::sync::Arc::make_mut(&mut authority.chars).extend(copies);
     rebuild_index(&mut authority);
     assert!(terminal_edge(base, &authority).is_none());
     assert_eq!(prepare_test(&mut spans, || Some(authority)).len(), 1);
@@ -236,12 +236,12 @@ fn tagged_source_characters_cannot_certify_an_untagged_digit_span() {
     let mut authority = Authority::load(&doc.doc, 0).unwrap();
     let number = spans.iter().find(|span| span.text == "258").unwrap();
     let raw = number_glyphs(&authority, number).unwrap()[0] as *const TextChar;
-    authority
+    let index = authority
         .chars
-        .iter_mut()
-        .find(|glyph| std::ptr::eq(*glyph, raw))
-        .unwrap()
-        .mcid = Some(42);
+        .iter()
+        .position(|glyph| std::ptr::eq(glyph, raw))
+        .unwrap();
+    std::sync::Arc::make_mut(&mut authority.chars)[index].mcid = Some(42);
     assert_eq!(prepare_test(&mut spans, || Some(authority)).len(), 1);
     assert!(spans.iter().any(|span| span.text == "258"));
 }
@@ -344,7 +344,7 @@ fn unclaimed_source_text_after_the_operand_cannot_be_hidden_by_its_span_width() 
         .get_glyph_width(u16::from(b'x'))
         * glyph.font_size
         / 1000.0;
-    authority.chars.push(glyph);
+    std::sync::Arc::make_mut(&mut authority.chars).push(glyph);
     rebuild_index(&mut authority);
     assert_eq!(prepare_test(&mut spans, || Some(authority)).len(), 1);
     assert!(spans.iter().any(|span| span.text == "015"));
@@ -358,7 +358,7 @@ fn an_unclaimed_source_glyph_left_of_the_unsigned_digits_prevents_ownership() {
     let mut glyph = number_glyphs(&authority, number).unwrap()[0].clone();
     glyph.origin_x -= 1.0;
     glyph.bbox.x -= 1.0;
-    authority.chars.push(glyph);
+    std::sync::Arc::make_mut(&mut authority.chars).push(glyph);
     rebuild_index(&mut authority);
     assert_eq!(
         number_glyphs(&authority, number).unwrap().len(),
