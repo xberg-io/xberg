@@ -261,19 +261,39 @@ fn early_break_fraction(lines: &[StreamLine], group: &[usize]) -> f32 {
 /// Group consecutive lines into runs, each line below the previous one and overlapping it
 /// horizontally. A run's extent and size are medians, so a spanning heading at its top or a
 /// wide block at its foot does not widen it across a gutter.
+///
+/// A line opening a column's width or more left of the previous line starts a new run, and so
+/// does a body-size line after a run set mostly in note type: a column descends at one left
+/// edge, so a jump left is a full-width block (a table, its notes) or the next column's foot,
+/// and notes do not continue into body text. Federal Register pages write a table spanning the
+/// columns between the top of the last column and the foot of the first (2026-14578 page 9) or
+/// write the table's notes straight before the first column's text (page 7); merged into one
+/// run with the column text, neither column counted as prose and the page fell back to row
+/// order.
 fn stream_runs(lines: &[StreamLine]) -> Vec<StreamRun> {
+    let content_left = lines.iter().map(|line| line.left).fold(f32::INFINITY, f32::min);
+    let content_right = lines.iter().map(|line| line.right).fold(f32::NEG_INFINITY, f32::max);
+    let max_left_jump = MIN_COLUMN_WIDTH_FRACTION * (content_right - content_left);
+    let body = body_size(lines);
+    let is_note_type = |size: f32| body.is_some_and(|body| size < (1.0 - BODY_SIZE_TOLERANCE) * body);
+    let is_body_type = |size: f32| body.is_some_and(|body| (size - body).abs() <= BODY_SIZE_TOLERANCE * body);
     let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut note_lines_in_last_group = 0;
     for (index, line) in lines.iter().enumerate() {
         if let Some(group) = groups.last_mut() {
             let previous = &lines[*group.last().expect("groups are never empty")];
             let descends = line.y < previous.y - MIN_LINE_DESCENT * line.size;
             let overlaps = line.right.min(previous.right) > line.left.max(previous.left);
-            if descends && overlaps {
+            let jumps_left = line.left < previous.left - max_left_jump;
+            let leaves_notes = is_body_type(line.size) && note_lines_in_last_group > group.len() / 2;
+            if descends && overlaps && !jumps_left && !leaves_notes {
                 group.push(index);
+                note_lines_in_last_group += usize::from(is_note_type(line.size));
                 continue;
             }
         }
         groups.push(vec![index]);
+        note_lines_in_last_group = usize::from(is_note_type(line.size));
     }
     groups
         .into_iter()
@@ -671,6 +691,70 @@ mod tests {
         let mut spans = rows(written(notes_written_ahead_of_the_body(BODY_SIZE)));
 
         assert!(!order_by_stream_columns(&mut spans));
+    }
+
+    /// A block spanning all three columns, `rows` lines starting `skip` lines below the top.
+    fn spanning_block(label: &str, skip: usize, rows: usize, size: f32) -> Vec<TextSpan> {
+        let width = COLUMN_LEFTS[2] + COLUMN_WIDTH - COLUMN_LEFTS[0];
+        (0..rows)
+            .map(|row| {
+                let y = TOP_Y - (skip + row) as f32 * LEADING;
+                span(
+                    &format!("{label} row {row} across the page"),
+                    COLUMN_LEFTS[0],
+                    y,
+                    width,
+                    size,
+                )
+            })
+            .collect()
+    }
+
+    /// 2026-14578 page 9: the upper story's three columns, then a table spanning the page written
+    /// right after the top of the third column, then the lower story's three columns.
+    #[test]
+    fn table_written_between_two_stories_reads_in_stream_order() {
+        let mut reading_order = Vec::new();
+        for (label, &left) in ["upper first", "upper second", "upper third"].iter().zip(&COLUMN_LEFTS) {
+            reading_order.extend(column(label, left, 0, 8));
+        }
+        reading_order.extend(spanning_block("table", 9, 2, BODY_SIZE));
+        for (label, &left) in ["lower first", "lower second", "lower third"].iter().zip(&COLUMN_LEFTS) {
+            reading_order.extend(column(label, left, 12, 16));
+        }
+        let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
+        let mut spans = rows(written(reading_order));
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), expected);
+    }
+
+    /// 2026-14578 page 7: a table spanning the page, its notes in smaller type, then the three
+    /// columns below, written in that order.
+    #[test]
+    fn table_notes_written_before_the_columns_read_in_stream_order() {
+        let mut reading_order = spanning_block("table", 0, 2, BODY_SIZE);
+        reading_order.extend((0..6).map(|line| {
+            let y = TOP_Y - 2.0 * LEADING - line as f32 * 8.0;
+            let width = COLUMN_LEFTS[2] + COLUMN_WIDTH - COLUMN_LEFTS[0];
+            span(
+                &format!("table note line {line} in smaller type"),
+                COLUMN_LEFTS[0],
+                y,
+                width,
+                7.0,
+            )
+        }));
+        for (label, &left) in ["first", "second", "third"].iter().zip(&COLUMN_LEFTS) {
+            reading_order.extend(column(label, left, 7, 14));
+        }
+        let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
+        let mut spans = rows(written(reading_order));
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), expected);
     }
 
     #[test]
