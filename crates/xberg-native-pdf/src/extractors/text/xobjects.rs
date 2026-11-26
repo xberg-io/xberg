@@ -251,6 +251,7 @@ impl<'doc> TextExtractor<'doc> {
                             .extend_from_slice(&cached.descendants.placements);
                     }
                     cached.replay_pen_continuations(&mut self.pen_continuations, self.span_sequence_counter);
+                    cached.replay_invisible(&mut self.invisible_spans, self.span_sequence_counter);
                     (cached.required_depth, cached.replay(&mut self.span_sequence_counter))
                 });
             if let Some((required_depth, spans)) = cached_spans {
@@ -406,6 +407,7 @@ impl<'doc> TextExtractor<'doc> {
                 let spans_before = self.spans.len();
                 let sequence_start = self.span_sequence_counter;
                 let descendants_start = self.nested_xobject_placements.len();
+                let invisible_start = self.invisible_spans.len();
                 // The /BBox clip below must prune the character layer on the
                 // same decision it prunes spans, or `extract_chars` reports
                 // marks `extract_text` correctly dropped. ~keep
@@ -596,7 +598,8 @@ impl<'doc> TextExtractor<'doc> {
                         caller_fonts,
                         &self.fonts,
                     )
-                    .with_pen_continuations(new_continuations, sequence_start);
+                    .with_pen_continuations(new_continuations, sequence_start)
+                    .with_invisible(&self.invisible_spans[invisible_start..], sequence_start);
                     doc.xobject_spans_cache
                         .lock_or_recover()
                         .insert(spans_cache_key, cached);

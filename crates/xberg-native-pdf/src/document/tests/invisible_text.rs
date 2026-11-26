@@ -1,7 +1,7 @@
 //! White text is dropped only over unpainted page area; render mode 3 text is never dropped.
 
 use super::super::*;
-use super::common::build_minimal_pdf_with_font;
+use super::common::{build_minimal_pdf_with_font, build_page_and_form_pdf};
 
 fn span_texts(content: &str) -> Vec<String> {
     let doc = PdfDocument::from_bytes(build_minimal_pdf_with_font(content.as_bytes())).expect("fixture PDF parses");
@@ -78,4 +78,34 @@ fn black_text_is_untouched() {
     let texts = span_texts(&content);
 
     assert!(shown(&texts, "Visible") && shown(&texts, "Black"), "{texts:?}");
+}
+
+fn page_texts(document: &PdfDocument) -> Vec<String> {
+    document
+        .extract_spans(0)
+        .expect("fixture page extracts")
+        .into_iter()
+        .map(|span| span.text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect()
+}
+
+/// A Form's span-cache hit replays its spans without `push_span`, so the white ones once missed
+/// the drop list: the cold read dropped them, every warm read kept them.
+#[test]
+fn white_text_in_a_cached_form_is_dropped_on_every_read() {
+    let form = "BT /F1 12 Tf 50 700 Td (Shown) Tj ET BT /F1 12 Tf 1 g 50 600 Td (Hidden) Tj ET";
+    let document = PdfDocument::from_bytes(build_page_and_form_pdf("/Fm0 Do", form)).expect("fixture PDF parses");
+
+    let cold = page_texts(&document);
+    assert_eq!(
+        document.xobject_spans_cache.lock().unwrap().len(),
+        1,
+        "the form is cached"
+    );
+    document.clear_completed_span_caches();
+    let warm = page_texts(&document);
+
+    assert!(shown(&cold, "Shown") && !shown(&cold, "Hidden"), "{cold:?}");
+    assert_eq!(warm, cold);
 }

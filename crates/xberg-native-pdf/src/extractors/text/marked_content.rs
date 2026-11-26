@@ -120,7 +120,9 @@ impl<'doc> TextExtractor<'doc> {
         if (!self.skip_nonpainting_text || !matches!(render_mode, 3 | 7))
             && let Some(hold) = self.emit_hold()
         {
-            if invisible && self.invisible_text_page.is_some() {
+            // Noted on every read, not only one that drops white text: a Form's span-cache entry
+            // stores these, and a later dropping read replays them from it. ~keep
+            if invisible {
                 self.invisible_spans.push((span.sequence, span.bbox));
             }
             push_held(&mut self.spans, &mut self.span_holds, span, hold);

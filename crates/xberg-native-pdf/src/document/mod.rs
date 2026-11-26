@@ -191,6 +191,10 @@ pub(crate) struct CachedFormSpans {
     pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
     /// The spans among `spans` that start at the pen of the previous `TJ` array (GH#2664).
     pen_continuations: Vec<crate::extractors::text::SpanKey>,
+    /// Sequence and bounds of each white span among `spans` ([`crate::extractors::text`]'s
+    /// `paints_invisible_text`), relative to the Form's first sequence, so a hit drops the same
+    /// unpainted white text as the walk that stored it.
+    invisible: Vec<(usize, crate::geometry::Rect)>,
     sequence_len: usize,
     pub(crate) descendants: FormDescendantPlacements,
     /// Weak references retain allocation identity without retaining font data.
@@ -228,6 +232,7 @@ impl CachedFormSpans {
             required_depth,
             spans,
             pen_continuations: Vec::new(),
+            invisible: Vec::new(),
             sequence_len: sequence.len(),
             descendants,
             fonts,
@@ -253,6 +258,30 @@ impl CachedFormSpans {
             self.pen_continuations
                 .iter()
                 .map(|key| key.shift_sequence(0, sequence_start)),
+        );
+    }
+
+    pub(crate) fn with_invisible(
+        mut self,
+        invisible: &[(usize, crate::geometry::Rect)],
+        sequence_start: usize,
+    ) -> Self {
+        self.invisible = invisible
+            .iter()
+            .filter_map(|&(sequence, bbox)| Some((sequence.checked_sub(sequence_start)?, bbox)))
+            .collect();
+        self
+    }
+
+    pub(crate) fn replay_invisible(
+        &self,
+        destination: &mut Vec<(usize, crate::geometry::Rect)>,
+        sequence_start: usize,
+    ) {
+        destination.extend(
+            self.invisible
+                .iter()
+                .map(|&(sequence, bbox)| (sequence + sequence_start, bbox)),
         );
     }
 
