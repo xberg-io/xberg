@@ -207,7 +207,7 @@ impl ExtractionOverrides {
             ocr.auto_rotate = Some(rotate);
         }
         if let Some(model) = self.ocr_tessdata_model {
-            ocr.tessdata_model = model;
+            ocr.tessdata_model = model.into();
         }
         if let Some(no_cache) = self.ocr_no_cache {
             apply_ocr_no_cache(ocr, no_cache);

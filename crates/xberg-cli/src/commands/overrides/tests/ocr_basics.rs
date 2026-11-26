@@ -656,7 +656,7 @@ fn test_ocr_tessdata_model_flag_sets_only_the_model_set() {
         ..Default::default()
     };
     let overrides = ExtractionOverrides {
-        ocr_tessdata_model: Some(xberg::TessdataModel::Best),
+        ocr_tessdata_model: Some(TessdataModelArg::Best),
         ..default_overrides()
     };
     overrides.apply(&mut config);
@@ -671,7 +671,7 @@ fn test_ocr_tessdata_model_flag_sets_only_the_model_set() {
 fn test_ocr_tessdata_model_flag_alone_materialises_the_ocr_config() {
     let mut config = ExtractionConfig::default();
     let overrides = ExtractionOverrides {
-        ocr_tessdata_model: Some(xberg::TessdataModel::Best),
+        ocr_tessdata_model: Some(TessdataModelArg::Best),
         ..default_overrides()
     };
     overrides.apply(&mut config);

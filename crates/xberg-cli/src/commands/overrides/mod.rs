@@ -25,7 +25,7 @@ use xberg::ExtractionConfig;
 
 #[cfg(feature = "analysis")]
 pub use self::analysis::ReductionLevelArg;
-pub use self::general::AccelerationArg;
+pub use self::general::{AccelerationArg, TessdataModelArg};
 pub use self::output::JupyterCellRenderingArg;
 use crate::ContentOutputFormatArg;
 
@@ -133,7 +133,7 @@ pub struct ExtractionOverrides {
     /// Ignored for a tessdata directory given by `ocr.tessdata_path` or `TESSDATA_PREFIX`.
     #[cfg(feature = "ocr-surface")]
     #[arg(long, value_name = "SET")]
-    pub ocr_tessdata_model: Option<xberg::TessdataModel>,
+    pub ocr_tessdata_model: Option<TessdataModelArg>,
 
     /// JSON object of per-backend OCR options (e.g. `{"layout_mode":"whole_page"}`).
     #[cfg(feature = "ocr-surface")]
