@@ -250,6 +250,9 @@ impl TesseractBackend {
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
+        // The request-level `use_cache = false` wins over a backend option or `tesseract_config`
+        // that asks for caching, so no OCR result is read or written. ~keep
+        internal.use_cache &= !crate::core::extractor::cacheability::ocr_result_cache_disabled();
         // Word ownership receipts are transient and are absent from persisted OCR results. ~keep
         internal.use_cache &= !Self::capture_region_hocr_requested(config);
         internal
@@ -2114,6 +2117,48 @@ mod tests {
             backend.config_to_tesseract(&ocr_config).use_cache,
             InternalTesseractConfig::default().use_cache
         );
+    }
+
+    async fn resolved_result_cache(request_use_cache: bool, backend_option: Option<bool>) -> bool {
+        let ocr_config = OcrConfig {
+            backend: "tesseract".to_string(),
+            backend_options: backend_option.map(|value| serde_json::json!({ "use_cache": value })),
+            ..Default::default()
+        };
+        crate::core::extractor::cacheability::with_ocr_request(None, request_use_cache, async {
+            TesseractBackend::new().config_to_tesseract(&ocr_config).use_cache
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn request_use_cache_false_disables_the_result_cache_whatever_the_backend_option_says() {
+        assert!(!resolved_result_cache(false, None).await);
+        assert!(!resolved_result_cache(false, Some(true)).await);
+        assert!(!resolved_result_cache(false, Some(false)).await);
+    }
+
+    #[tokio::test]
+    async fn request_use_cache_true_defers_to_the_backend_option() {
+        assert!(resolved_result_cache(true, None).await);
+        assert!(resolved_result_cache(true, Some(true)).await);
+        assert!(!resolved_result_cache(true, Some(false)).await);
+    }
+
+    #[tokio::test]
+    async fn nested_request_scope_cannot_reenable_a_disabled_result_cache() {
+        let ocr_config = OcrConfig {
+            backend: "tesseract".to_string(),
+            ..Default::default()
+        };
+        let enabled = crate::core::extractor::cacheability::with_ocr_request(None, false, async {
+            crate::core::extractor::cacheability::with_ocr_request(None, true, async {
+                TesseractBackend::new().config_to_tesseract(&ocr_config).use_cache
+            })
+            .await
+        })
+        .await;
+        assert!(!enabled);
     }
 
     /// Callers that do not know their image's resolution — standalone image OCR, plugin callers

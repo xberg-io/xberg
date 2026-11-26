@@ -114,8 +114,9 @@ pub(crate) async fn extract_bytes_with_layout_pages(
         Box<dyn std::future::Future<Output = Result<ExtractedDocument>> + Send + '_>,
     > = extraction_future;
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let extraction_future = Box::pin(super::cacheability::with_ocr_cancellation(
+    let extraction_future = Box::pin(super::cacheability::with_ocr_request(
         config.cancel_token.as_ref(),
+        config.use_cache,
         extraction_future,
     ));
 

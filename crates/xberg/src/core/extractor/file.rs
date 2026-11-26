@@ -244,8 +244,9 @@ pub(crate) async fn extract_file(
         Box::pin(extract_file_with_extractor(path, &detected_mime, config)).await
     });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let extraction_future = Box::pin(super::cacheability::with_ocr_cancellation(
+    let extraction_future = Box::pin(super::cacheability::with_ocr_request(
         config.cancel_token.as_ref(),
+        config.use_cache,
         extraction_future,
     ));
 
