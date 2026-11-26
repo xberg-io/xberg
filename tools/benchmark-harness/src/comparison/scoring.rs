@@ -51,7 +51,8 @@ impl StructuralBreakdown {
 /// structural breakdown (SF1, reading order, per-dimension F1/precision/recall).
 pub fn score_document(content: &str, gt_text: &str, gt_markdown: Option<&str>) -> (f64, StructuralBreakdown) {
     let tf1 = {
-        let ext_tokens = tokenize(content);
+        // Leading front matter is metadata, not body text, as in `compute_quality_with_structure`.
+        let ext_tokens = tokenize(crate::markdown_quality::strip_leading_front_matter(content));
         let gt_tokens = tokenize(gt_text);
         compute_f1(&ext_tokens, &gt_tokens)
     };
