@@ -1030,7 +1030,7 @@ fn append_visual_word_gap(text: &mut String, gap: f32, font_size: f32) {
 fn assemble_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     let notes = numeric_notes(spans);
     let ordered = order_spans_with_inline_fragments(spans, &notes);
-    assemble_ordered_page_text(spans, ordered, &notes, |_, _| {})
+    line_wrap_hyphens::rejoin_line_wrap_hyphens(assemble_ordered_page_text(spans, ordered, &notes, |_, _| {}))
 }
 
 /// Add native separators to the selected order without relocating inline fragments.
@@ -3416,6 +3416,9 @@ fn apply_text_cleanup(text: &str) -> Cow<'_, str> {
     cleaned
 }
 
+#[path = "text/line_wrap_hyphens.rs"]
+mod line_wrap_hyphens;
+
 #[cfg(test)]
 #[path = "text/span_carrier_tests.rs"]
 mod span_carrier_tests;
@@ -4015,6 +4018,16 @@ mod tests {
         ];
 
         assert_eq!(assemble_page_text(&spans), "H2SO4 solution");
+    }
+
+    #[test]
+    fn line_wrap_hyphen_is_rejoined_in_assembled_page_text() {
+        let spans = vec![
+            span_with_width("small molecule per-", 100.0, 100.0, 90.0, 10.0, 10.0),
+            span_with_width("turbagens. In this work", 100.0, 88.0, 110.0, 10.0, 10.0),
+        ];
+
+        assert_eq!(assemble_page_text(&spans), "small molecule perturbagens. In this work");
     }
 
     #[test]
