@@ -194,22 +194,28 @@ impl<'doc> TextExtractor<'doc> {
     /// `finish_text_spans` for readability only — same single pass over
     /// `self.spans`, same lookup keyed by the raw resource alias. ~keep
     fn resolve_span_font_provenance(&mut self) {
+        let fonts = &self.fonts;
+        let provenance_cache = &self.font_provenance_cache;
         let font_names = &mut self.font_names;
-        let resolved: Vec<(Option<FontName>, Option<crate::fonts::MappingProvenance>)> = self
-            .spans
-            .iter()
-            .map(|s| {
-                self.fonts.get(s.font_name.as_str()).map_or((None, None), |f| {
-                    (
-                        Some(f.base_font.as_str())
-                            .filter(|b| !b.is_empty())
-                            .map(|b| intern_font_name(font_names, b)),
-                        Some(self.font_provenance_cache.resolve(f)),
-                    )
-                })
-            })
-            .collect();
-        for (span, (resolved_base_font, provenance)) in self.spans.iter_mut().zip(resolved) {
+        // Spans come in runs of one alias, and each lookup answers the same for the same alias, so
+        // a run reuses its first span's answer instead of hashing the alias again. ~keep
+        let mut previous: Option<(FontName, Option<FontName>, Option<crate::fonts::MappingProvenance>)> = None;
+        for span in &mut self.spans {
+            let (resolved_base_font, provenance) = match &previous {
+                Some((alias, base_font, provenance)) if *alias == span.font_name => (base_font.clone(), *provenance),
+                _ => {
+                    let resolved = fonts.get(span.font_name.as_str()).map_or((None, None), |f| {
+                        (
+                            Some(f.base_font.as_str())
+                                .filter(|b| !b.is_empty())
+                                .map(|b| intern_font_name(font_names, b)),
+                            Some(provenance_cache.resolve(f)),
+                        )
+                    });
+                    previous = Some((span.font_name.clone(), resolved.0.clone(), resolved.1));
+                    resolved
+                }
+            };
             if let Some(base_font) = resolved_base_font {
                 span.font_name = base_font;
             }

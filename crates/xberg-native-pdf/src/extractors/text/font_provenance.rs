@@ -177,6 +177,27 @@ mod tests {
     }
 
     #[test]
+    fn each_span_in_a_run_of_one_alias_gets_that_fonts_name_and_mapping() {
+        let mut procedural = (*type3_font("g02")).clone();
+        procedural.base_font = "Procedural".into();
+        let mut named = (*type3_font("A")).clone();
+        named.base_font = "Named".into();
+        let mut extractor = TextExtractor::new();
+        extractor.add_font_shared("F1".into(), Arc::new(procedural));
+        extractor.add_font_shared("F2".into(), Arc::new(named));
+        let content = b"BT /F1 12 Tf 10 100 Td (\\002) Tj 0 -20 Td (\\002) Tj \
+            /F2 12 Tf 0 -20 Td (\\002) Tj /F1 12 Tf 0 -20 Td (\\002) Tj ET";
+        let spans = extractor.extract_text_spans(content).expect("Type3 extraction");
+        let resolved: Vec<(&str, Option<MappingProvenance>)> = spans
+            .iter()
+            .map(|span| (span.font_name.as_str(), span.provenance))
+            .collect();
+        let fallback = ("Procedural", Some(MappingProvenance::Fallback));
+        let encoded = ("Named", Some(MappingProvenance::EncodingName));
+        assert_eq!(resolved, [fallback, fallback, encoded, fallback]);
+    }
+
+    #[test]
     fn dropping_extraction_cache_releases_its_font() {
         let font = type3_font("g02");
         let weak = Arc::downgrade(&font);
