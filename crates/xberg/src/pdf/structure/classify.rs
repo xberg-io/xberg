@@ -1738,22 +1738,23 @@ fn paragraph_plain_text(para: &PdfParagraph) -> String {
 
 /// A body-size bold title wraps in a narrow column: the Federal Register's three-column
 /// pages set `Summary of Major Provisions Within` / `the Rule` and four more titles of
-/// 2026-14578 on two lines, which a one-line test never admitted. The word-count cap
-/// still bounds the paragraph to title length. ~keep
-const MAX_BODY_SIZE_BOLD_HEADING_LINES: usize = 2;
+/// 2026-14578 on two lines, and 2026-13845's `III. Revised Motor Vehicle Emissions` /
+/// `Budgets for the 2008 8-Hour Ozone` / `Standard` on three, which a one-line test never
+/// admitted. [`reads_as_one_title_block`] keeps a multi-line candidate to one column. ~keep
+const MAX_BODY_SIZE_BOLD_HEADING_LINES: usize = 4;
 
 /// Left-edge drift, in multiples of the body font size, within which a second line is the
 /// wrap of the first rather than a label from another column.
 const WRAPPED_TITLE_LEFT_EDGE_EM: f32 = 1.0;
 
-/// Whether a two-line bold paragraph is one title wrapped in its column: the second line
-/// starts under the first and neither line has a gutter-wide gap. pdfa_001's form joins
-/// bold column labels from two rows (`Pediatric  intensive Care Newborn  Intermediate
-/// Card` / `Nursery`, and `McAuley Wing` above `Type of Service Provided`), and they were
-/// promoted as headings once two lines were admitted. A single line is unaffected. ~keep
-fn reads_as_one_title_block(para: &PdfParagraph, body_font_size: f32) -> bool {
-    let [first, second] = para.lines.as_slice() else {
-        return para.lines.len() == 1;
+/// Whether a multi-line bold paragraph is one title wrapped in its column: every line
+/// starts under the first and no line has a gutter-wide gap. pdfa_001's form joins bold
+/// column labels from two rows (`Pediatric  intensive Care Newborn  Intermediate Card` /
+/// `Nursery`, and `McAuley Wing` above `Type of Service Provided`), and they were promoted
+/// as headings once two lines were admitted. A single line is unaffected. ~keep
+pub(super) fn reads_as_one_title_block(para: &PdfParagraph, body_font_size: f32) -> bool {
+    let Some(first) = para.lines.first() else {
+        return false;
     };
     let left_edge = |line: &super::types::PdfLine| {
         line.segments
@@ -1766,7 +1767,23 @@ fn reads_as_one_title_block(para: &PdfParagraph, body_font_size: f32) -> bool {
             .windows(2)
             .any(|pair| pair[1].x - (pair[0].x + pair[0].width) > body_font_size * SHORT_TITLE_MAX_SEGMENT_GAP_EM)
     });
-    (left_edge(first) - left_edge(second)).abs() <= body_font_size * WRAPPED_TITLE_LEFT_EDGE_EM && !has_gutter_gap
+    let first_left = left_edge(first);
+    !has_gutter_gap
+        && para.lines[1..]
+            .iter()
+            .all(|line| (left_edge(line) - first_left).abs() <= body_font_size * WRAPPED_TITLE_LEFT_EDGE_EM)
+}
+
+/// Word cap for a body-size bold title: a wrapped title may run to a heading's length,
+/// a single bold line stays below it, where it is more often a run-in lead.
+/// 2026-13845's `II. Clean Air Act Procedural and Administrative Requirements for SIP
+/// Submittals and Criteria for Approval of Revised Budgets` is sixteen words on four lines.
+fn body_size_bold_title_word_cap(para: &PdfParagraph) -> usize {
+    if para.lines.len() > 1 {
+        MAX_HEADING_WORD_COUNT
+    } else {
+        MAX_BOLD_HEADING_WORD_COUNT
+    }
 }
 
 pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32) -> bool {
@@ -1780,7 +1797,7 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
         || !body_font_size.is_finite()
         || body_font_size <= 0.0
         || (para.dominant_font_size - body_font_size).abs() > 0.5
-        || para.word_count > MAX_BOLD_HEADING_WORD_COUNT
+        || para.word_count > body_size_bold_title_word_cap(para)
         || !reads_as_one_title_block(para, body_font_size)
     {
         return false;

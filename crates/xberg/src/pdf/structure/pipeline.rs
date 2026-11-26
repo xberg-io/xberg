@@ -489,6 +489,7 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
     let Some(body_font_size) = body_font_size else {
         return;
     };
+    join_wrapped_bold_titles(all_pages, body_font_size);
     let other_heading_count = all_pages
         .iter()
         .flatten()
@@ -531,6 +532,71 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
             }
         }
     }
+}
+
+/// Baseline pitch, in body font sizes, within which the next bold paragraph is the following
+/// line of the same title rather than a title of its own.
+const WRAPPED_TITLE_MAX_LINE_PITCH_EM: f32 = 1.6;
+
+/// Join a body-size bold title with the bold lines it wraps onto in its column.
+///
+/// The line grouper ends a paragraph after a numbered section line, so 2026-13845's
+/// `IV. Proposed Action and Request for` and `V. Statutory and Executive Order` were
+/// promoted alone and their remainders (`Public Comment`, `Reviews`) followed as bold
+/// prose. A following bold paragraph in the title's size, on the next line, is joined when
+/// the title is unterminated, the follower opens no section of its own, and the joined block
+/// still reads as one title in one column (see [`is_body_size_bold_signal`]).
+fn join_wrapped_bold_titles(all_pages: &mut [Vec<PdfParagraph>], body_font_size: f32) {
+    for page in all_pages.iter_mut() {
+        let mut index = 0;
+        while index + 1 < page.len() {
+            let joined = continues_bold_title(&page[index], &page[index + 1], body_font_size)
+                .then(|| joined_paragraph(&page[index], &page[index + 1]))
+                .filter(|joined| is_body_size_bold_signal(joined, body_font_size));
+            if let Some(joined) = joined {
+                page[index] = joined;
+                page.remove(index + 1);
+            } else {
+                index += 1;
+            }
+        }
+    }
+}
+
+fn continues_bold_title(title: &PdfParagraph, next: &PdfParagraph, body_font_size: f32) -> bool {
+    let plain = |paragraph: &PdfParagraph| {
+        paragraph.heading_level.is_none()
+            && paragraph.is_bold
+            && !paragraph.is_list_item
+            && !paragraph.is_code_block
+            && !paragraph.is_formula
+            && !paragraph.is_page_furniture
+    };
+    let pitch = title
+        .lines
+        .last()
+        .and_then(|line| line.baseline_y)
+        .zip(next.lines.first().and_then(|line| line.baseline_y))
+        .map(|(above, below)| above - below);
+    let title_text = paragraph_text_raw(title);
+    plain(title)
+        && plain(next)
+        && (title.dominant_font_size - next.dominant_font_size).abs() <= 0.5
+        && pitch.is_some_and(|pitch| pitch > 0.0 && pitch <= body_font_size * WRAPPED_TITLE_MAX_LINE_PITCH_EM)
+        && !title_text.trim_end().ends_with(['.', ':', ';', '!', '?'])
+        && !is_numbered_section_heading(paragraph_text_raw(next).trim())
+}
+
+fn joined_paragraph(title: &PdfParagraph, next: &PdfParagraph) -> PdfParagraph {
+    let mut joined = title.clone();
+    joined.lines.extend(next.lines.iter().cloned());
+    joined.block_bbox = match (title.block_bbox, next.block_bbox) {
+        (Some((tl, tb, tr, tt)), Some((nl, nb, nr, nt))) => Some((tl.min(nl), tb.min(nb), tr.max(nr), tt.max(nt))),
+        (bbox, None) | (None, bbox) => bbox,
+    };
+    joined.text.clear();
+    joined.word_count = PdfParagraph::compute_word_count("", &joined.lines);
+    joined
 }
 
 /// How often each short body-size bold title occurs in the document. A short bold

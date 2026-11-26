@@ -9047,11 +9047,13 @@ fn should_promote_a_body_size_bold_title_wrapped_onto_two_lines() {
         wrapped("Negligible Impact Analysis and", "Determination"),
         wrapped("Unmitigable Adverse Impact Analysis", "and Determination"),
     ];
-    let mut three_lines = wrapped("A bold block set", "over three lines");
-    let mut third = three_lines[0].lines[0].clone();
-    third.segments[0].text = "is not a title".to_string();
-    three_lines[0].lines.push(third);
-    pages.push(three_lines);
+    let mut five_lines = wrapped("A bold block set", "over five lines");
+    for text in ["runs past", "a wrapped", "title's length"] {
+        let mut more = five_lines[0].lines[0].clone();
+        more.segments[0].text = text.to_string();
+        five_lines[0].lines.push(more);
+    }
+    pages.push(five_lines);
     // pdfa_001: bold form labels from two rows of a grid join into one paragraph.
     let mut shifted_rows = wrapped("Building Name McAuley Wing", "Type of Service Provided");
     shifted_rows[0].lines[0].segments[0].x = 405.0;
@@ -9071,12 +9073,116 @@ fn should_promote_a_body_size_bold_title_wrapped_onto_two_lines() {
     }
     assert_eq!(
         pages[3][0].heading_level, None,
-        "three bold lines are a block, not a title"
+        "five bold lines are a block, not a title"
     );
     assert_eq!(
         (pages[4][0].heading_level, pages[5][0].heading_level),
         (None, None),
         "two bold rows that start apart or hold a column gutter are form labels, not a wrapped title"
+    );
+}
+
+/// A bold 12pt paragraph whose lines sit one 13.2pt pitch apart from `top_baseline` down.
+fn bold_title_paragraph(lines: &[&str], left: f32, top_baseline: f32) -> PdfParagraph {
+    let mut paragraph = body_size_paragraph(lines[0], true, None);
+    let template = paragraph.lines[0].clone();
+    paragraph.lines = lines
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let baseline = top_baseline - 13.2 * index as f32;
+            let mut line = template.clone();
+            line.baseline_y = Some(baseline);
+            line.segments[0].text = (*text).to_string();
+            line.segments[0].x = left;
+            line.segments[0].baseline_y = baseline;
+            line.segments[0].y = baseline;
+            line
+        })
+        .collect();
+    paragraph.text.clear();
+    paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
+    let bottom = top_baseline - 13.2 * (lines.len() - 1) as f32;
+    paragraph.block_bbox = Some((left, bottom, left + 160.0, top_baseline + 12.0));
+    paragraph
+}
+
+fn body_below(left: f32, top_baseline: f32) -> PdfParagraph {
+    let mut body = bold_title_paragraph(
+        &["For the reasons discussed above, the EPA is proposing to approve the revised budgets."],
+        left,
+        top_baseline,
+    );
+    body.is_bold = false;
+    body
+}
+
+/// 2026-13845 sets its roman-numbered section titles in bold at body size and wraps them over
+/// up to four lines of a narrow column. The line grouper ends a paragraph after the numbered
+/// line, so `IV. Proposed Action and Request for` was promoted alone with `Public Comment`
+/// left as bold prose, and the three-line `III.` title was refused for its line count.
+#[test]
+fn should_promote_a_bold_title_wrapped_over_several_lines_with_its_full_text() {
+    let mut pages = vec![
+        vec![
+            bold_title_paragraph(&["II. Clean Air Act Procedural and"], 45.0, 700.0),
+            bold_title_paragraph(
+                &[
+                    "Administrative Requirements for SIP",
+                    "Submittals and Criteria for Approval of",
+                    "Revised Budgets",
+                ],
+                45.0,
+                686.8,
+            ),
+            body_below(54.0, 640.0),
+        ],
+        vec![
+            bold_title_paragraph(
+                &[
+                    "III. Revised Motor Vehicle Emissions",
+                    "Budgets for the 2008 8-Hour Ozone",
+                    "Standard",
+                ],
+                399.0,
+                700.0,
+            ),
+            body_below(408.0, 650.0),
+        ],
+        vec![
+            bold_title_paragraph(&["IV. Proposed Action and Request for"], 399.0, 700.0),
+            bold_title_paragraph(&["Public Comment"], 399.0, 686.8),
+            body_below(408.0, 660.0),
+        ],
+        vec![
+            bold_title_paragraph(&["Summary of Request."], 45.0, 700.0),
+            bold_title_paragraph(&["Bold label below it:"], 45.0, 686.8),
+            body_below(54.0, 660.0),
+        ],
+    ];
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    let headings: Vec<String> = pages
+        .iter()
+        .flatten()
+        .filter(|paragraph| paragraph.heading_level.is_some())
+        .map(paragraph_text_raw)
+        .collect();
+    assert_eq!(
+        headings,
+        [
+            "II. Clean Air Act Procedural and Administrative Requirements for SIP Submittals and Criteria for \
+             Approval of Revised Budgets",
+            "III. Revised Motor Vehicle Emissions Budgets for the 2008 8-Hour Ozone Standard",
+            "IV. Proposed Action and Request for Public Comment",
+        ],
+        "each wrapped title is one heading carrying all of its lines"
+    );
+    assert_eq!(
+        pages[3].len(),
+        3,
+        "a terminated bold line does not absorb the bold line below it"
     );
 }
 
