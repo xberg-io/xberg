@@ -8768,6 +8768,7 @@ struct OutlineParagraphMatch {
 }
 
 fn recover_headings_from_outline(all_pages: &mut [Vec<PdfParagraph>], outline_entries: &[PdfOutlineEntry]) {
+    split_stacked_outline_titles(all_pages, outline_entries);
     let matches = collect_unique_outline_matches(all_pages, outline_entries);
     let offset = calibrated_outline_heading_offset(all_pages, &matches);
 
@@ -8784,6 +8785,89 @@ fn recover_headings_from_outline(all_pages: &mut [Vec<PdfParagraph>], outline_en
         paragraph.is_list_item = false;
         paragraph.is_page_furniture = false;
     }
+}
+
+/// Split a body paragraph whose leading visual lines spell an outline title of its page.
+///
+/// A section title stacked directly over its first sub-section title, both bold and
+/// unterminated, is joined into one paragraph by the continuation merge: 231425210 emitted
+/// `Android General - Blogs, Papers, How To's` and `Tools Static Analysis`, which no outline
+/// entry matches, so `Android`, `iOS` and `Tools` were lost as headings and every section
+/// below them lost its parent. The outline names the title exactly, so the paragraph is cut
+/// at the line boundary where the title ends; the remainder is classified on its own.
+fn split_stacked_outline_titles(all_pages: &mut [Vec<PdfParagraph>], outline_entries: &[PdfOutlineEntry]) {
+    let mut titles_by_page = ahash::AHashMap::<usize, ahash::AHashSet<String>>::new();
+    for entry in outline_entries {
+        if let Some((page_index, title)) = outline_match_key(entry, all_pages.len()) {
+            titles_by_page.entry(page_index).or_default().insert(title);
+        }
+    }
+    for (page_index, page) in all_pages.iter_mut().enumerate() {
+        let Some(titles) = titles_by_page.get(&page_index) else {
+            continue;
+        };
+        let mut index = 0;
+        while index < page.len() {
+            let split_at = (page[index].heading_level.is_none() && page[index].lines.len() > 1)
+                .then(|| stacked_title_line_count(&page[index], titles))
+                .flatten();
+            if let Some(line_count) = split_at {
+                let mut title = page[index].clone();
+                let remainder_lines = title.lines.split_off(line_count);
+                let mut remainder = page[index].clone();
+                remainder.lines = remainder_lines;
+                refresh_split_paragraph(&mut title);
+                refresh_split_paragraph(&mut remainder);
+                page[index] = title;
+                page.insert(index + 1, remainder);
+            }
+            index += 1;
+        }
+    }
+}
+
+/// How many leading lines of `paragraph` spell one of `titles`, when fewer than all of them
+/// do and those lines are set apart from the rest as a title is: bold, or in a larger size.
+fn stacked_title_line_count(paragraph: &PdfParagraph, titles: &ahash::AHashSet<String>) -> Option<usize> {
+    let mut prefix = String::new();
+    for (index, line) in paragraph.lines.iter().enumerate().take(paragraph.lines.len() - 1) {
+        for segment in &line.segments {
+            prefix.push(' ');
+            prefix.push_str(&segment.text);
+        }
+        if titles.contains(&normalize_outline_title(&prefix)) {
+            let (title_lines, rest) = paragraph.lines.split_at(index + 1);
+            let title_size = title_lines
+                .iter()
+                .map(|line| line.dominant_font_size)
+                .fold(0.0, f32::max);
+            let rest_size = rest.iter().map(|line| line.dominant_font_size).fold(0.0, f32::max);
+            let set_apart =
+                title_lines.iter().all(|line| line.is_bold) || title_size > rest_size + SPARSE_FONT_TIER_TOLERANCE;
+            return set_apart.then_some(index + 1);
+        }
+    }
+    None
+}
+
+fn refresh_split_paragraph(paragraph: &mut PdfParagraph) {
+    let segments = || paragraph.lines.iter().flat_map(|line| &line.segments);
+    paragraph.dominant_font_size = paragraph
+        .lines
+        .iter()
+        .map(|line| line.dominant_font_size)
+        .fold(0.0, f32::max);
+    paragraph.is_bold = paragraph.lines.iter().filter(|line| line.is_bold).count() * 2 > paragraph.lines.len();
+    paragraph.block_bbox = paragraph.block_bbox.map(|_| {
+        (
+            segments().map(|s| s.x).fold(f32::MAX, f32::min),
+            segments().map(|s| s.baseline_y).fold(f32::MAX, f32::min),
+            segments().map(|s| s.x + s.width).fold(f32::MIN, f32::max),
+            segments().map(|s| s.baseline_y + s.height).fold(f32::MIN, f32::max),
+        )
+    });
+    paragraph.text.clear();
+    paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
 }
 
 fn collect_unique_outline_matches(

@@ -6417,6 +6417,56 @@ fn outline_recovery_ignores_singleton_bad_calibration_anchor() {
     assert_eq!(pages[0][1].heading_level, Some(3));
 }
 
+fn bold_line(text: &str, font_size: f32) -> PdfLine {
+    let mut segment = seg(text, 0.0, 100.0);
+    segment.font_size = font_size;
+    segment.is_bold = true;
+    let mut bold = line(vec![segment]);
+    bold.dominant_font_size = font_size;
+    bold.is_bold = true;
+    bold
+}
+
+/// 231425210: the continuation merge joined the bold section title `Android` with the bold
+/// sub-section title stacked under it, and the joined text matched no outline entry.
+#[test]
+fn outline_recovery_splits_a_title_stacked_over_its_first_subsection() {
+    let stacked = para(vec![
+        bold_line("Android", 12.0),
+        bold_line("General \u{2011} Blogs, Papers, How To\u{2019}s", 10.9),
+    ]);
+    let tools = para(vec![bold_line("Tools", 10.9), bold_line("Static Analysis", 10.9)]);
+    let mut prose = para(vec![
+        line(vec![seg("Tools", 0.0, 40.0)]),
+        line(vec![seg("are listed below.", 0.0, 90.0)]),
+    ]);
+    prose.word_count = 4;
+    let mut pages = vec![vec![stacked, tools, prose]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("Android", 0, 1),
+        PdfOutlineEntry::test_entry("General - Blogs, Papers, How To\u{2019}s", 1, 1),
+        PdfOutlineEntry::test_entry("Tools", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    let summary: Vec<(String, Option<u8>)> = pages[0]
+        .iter()
+        .map(|paragraph| (paragraph_text_raw(paragraph), paragraph.heading_level))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            ("Android".to_string(), Some(2)),
+            ("General \u{2011} Blogs, Papers, How To\u{2019}s".to_string(), Some(3)),
+            ("Tools".to_string(), Some(3)),
+            ("Static Analysis".to_string(), None),
+            ("Tools are listed below.".to_string(), None),
+        ],
+        "a stacked bold title splits off at its line boundary; a prose line in the body style is not cut"
+    );
+}
+
 #[test]
 fn outline_recovery_rejects_ambiguous_titles() {
     let mut pages = vec![vec![
