@@ -693,10 +693,10 @@ mod tests {
         assert!(!order_by_stream_columns(&mut spans));
     }
 
-    /// A block spanning all three columns, `rows` lines starting `skip` lines below the top.
-    fn spanning_block(label: &str, skip: usize, rows: usize, size: f32) -> Vec<TextSpan> {
+    /// A block spanning all three columns, `count` lines starting `skip` lines below the top.
+    fn spanning_block(label: &str, skip: usize, count: usize, size: f32) -> Vec<TextSpan> {
         let width = COLUMN_LEFTS[2] + COLUMN_WIDTH - COLUMN_LEFTS[0];
-        (0..rows)
+        (0..count)
             .map(|row| {
                 let y = TOP_Y - (skip + row) as f32 * LEADING;
                 span(
