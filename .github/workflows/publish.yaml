@@ -2069,27 +2069,28 @@ jobs:
       matrix:
         # `ort-dynamic` keeps ONNX Runtime out of the link: the CLI loads the pinned runtime
         # shipped beside it on first model use, so text-only runs never map it. The Windows
-        # archives still link onnxruntime.dll; their closure gates require that import. ~keep
+        # archives still link onnxruntime.dll; their closure gates require that import.
+        # `heic-dynamic` does the same for libheif and its codecs on the Unix legs (ADR-0019). ~keep
         include:
           - {
               os: ubuntu-24.04,
               target: x86_64-unknown-linux-gnu,
-              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic",
             }
           - {
               os: ubuntu-24.04-arm,
               target: aarch64-unknown-linux-gnu,
-              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic",
             }
           - {
               os: macos-26,
               target: aarch64-apple-darwin,
-              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,candle-metal",
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic,candle-metal",
             }
           - {
               os: macos-26-intel,
               target: x86_64-apple-darwin,
-              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic",
             }
           - { os: windows-2022, target: x86_64-pc-windows-msvc }
           # Second Windows x64 archive without `heic`. The default Windows build links the vcpkg
@@ -2156,6 +2157,22 @@ jobs:
             echo "VCPKGRS_TRIPLET=x64-windows"
             echo "VCPKGRS_DYNAMIC=1"
           } >>"$GITHUB_ENV"
+
+      # `heic-dynamic` calls libheif only through dlopen'd wrappers, but `libheif-sys` still asks
+      # cargo to link it, which on macOS records an LC_LOAD_DYLIB that dyld maps at every start.
+      # A build-script override for its `links = "heif"` key replaces that request with nothing.
+      # It lives in the runner's cargo home, outside the checkout, so no tracked file changes. ~keep
+      - name: Keep libheif out of the CLI link (heic-dynamic)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          config="${CARGO_HOME:-$HOME/.cargo}/config.toml"
+          mkdir -p "$(dirname "$config")"
+          printf '\n[target.%s.heif]\nrustc-link-lib = []\n' "$TARGET" >>"$config"
+          cat "$config"
 
       # The v1.4.0 aarch64-gnu leg died with exit 143 ("runner received a shutdown signal"). The log
       # shows no output after the last `Compiling` line, then the runner kill. Thin LTO bounds the single-module memory peak, like the other
@@ -2352,24 +2369,42 @@ jobs:
                 echo "::error::vendored ONNX Runtime has unresolved dependencies:"; echo "$missing"; exit 1
               fi
             fi
-            # macOS CLI builds enable the formats feature, which dynamically
-            # links libheif. Bundle its complete non-system dylib closure next to
-            # the binary and rewrite load commands to @loader_path so the tarball
-            # is self-contained rather than carrying an absolute Homebrew libheif
-            # path that is absent on users' machines (xberg-io/xberg#1357). The
-            # dlopen'd ONNX Runtime dylib (Intel, handled above) is not a link-time
-            # dependency, so this closure walk does not disturb it.
+            # heic-dynamic opens libheif on the first HEIF decode, from beside the executable
+            # (ADR-0019), so the binary must not link it and the closure walk below no longer
+            # reaches it. Ship the library pkg-config resolves, the one libheif-sys built against,
+            # and vendor its codec closure beside it. ~keep
+            if grep -qi libheif <<<"$linked"; then
+              echo "::error::xberg links libheif at load time; the heic-dynamic build must not"
+              echo "$linked"
+              exit 1
+            fi
+            heif_libdir="$(pkg-config --variable=libdir libheif)"
+            if [[ "$TARGET" == *-apple-darwin ]]; then
+              cp -L "$heif_libdir/libheif.1.dylib" "$STAGE/libheif.1.dylib"
+              chmod u+w "$STAGE/libheif.1.dylib"
+              bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/libheif.1.dylib"
+            else
+              cp -L "$heif_libdir/libheif.so.1" "$STAGE/libheif.so.1"
+              chmod u+w "$STAGE/libheif.so.1"
+              bash scripts/ci/vendor-native-closure.sh "$STAGE/libheif.so.1"
+            fi
+            # Bundle any remaining non-system dylib imports of the binary next to it
+            # and rewrite their load commands to @loader_path so the tarball is
+            # self-contained rather than carrying an absolute Homebrew path that is
+            # absent on users' machines (xberg-io/xberg#1357). The dlopen'd ONNX
+            # Runtime and libheif are not link-time dependencies, so this closure
+            # walk does not disturb them.
             if [[ "$TARGET" == *-apple-darwin ]]; then
               bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/xberg"
               "$STAGE/xberg" --version
             fi
-            # Linux CLI builds enable the formats feature, which dynamically
-            # links libheif. Ship its complete non-system dependency closure.
+            # Ship the complete non-system dependency closure of the Linux binary.
             if [[ "$TARGET" == *-unknown-linux-gnu ]]; then
               bash scripts/ci/vendor-native-closure.sh "$STAGE/xberg"
               compgen -G "$STAGE/libheif.so*" >/dev/null
               env -u LD_LIBRARY_PATH "$STAGE/xberg" --version
             fi
+            bash scripts/ci/smoke-cli-heif.sh "$STAGE"
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 

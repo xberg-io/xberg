@@ -2218,6 +2218,38 @@ def test_unix_cli_loads_a_shipped_onnx_runtime_instead_of_linking_it() -> None:
     assert names.index("Select ONNX Runtime library to ship") < names.index("Package CLI artifact")
 
 
+def test_unix_cli_opens_a_shipped_libheif_instead_of_linking_it() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    entries = matrix_entries(block)
+    for entry in entries:
+        features = entry.get("cargo_features") or entry.get("extra_cargo_args", "").removeprefix("--features ")
+        dynamic = "heic-dynamic" in features.split(",")
+        assert dynamic == ("windows" not in entry["target"]), f"{entry['target']}: heic-dynamic={dynamic}"
+
+    steps = block["steps"]
+    names = [step.get("name") for step in steps]
+    [override] = [step for step in steps if step.get("name") == "Keep libheif out of the CLI link (heic-dynamic)"]
+    assert override["if"] == "runner.os != 'Windows'"
+    assert "[target.%s.heif]\\nrustc-link-lib = []" in override["run"], "the override must drop libheif-sys's -lheif"
+    build = next(
+        index
+        for index, step in enumerate(steps)
+        if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    )
+    assert names.index(override["name"]) < build, "the link override must be in place before the CLI compiles"
+
+    [package] = [step for step in steps if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    assert 'grep -qi libheif <<<"$linked"' in run, "the archive must prove xberg does not link libheif"
+    for library in ("libheif.1.dylib", "libheif.so.1"):
+        copy = f'cp -L "$heif_libdir/{library}" "$STAGE/{library}"'
+        assert copy in run, f"the archive must ship {library} from the libheif libheif-sys built against"
+    assert 'bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/libheif.1.dylib"' in run
+    assert 'bash scripts/ci/vendor-native-closure.sh "$STAGE/libheif.so.1"' in run
+    smoke = run.index('bash scripts/ci/smoke-cli-heif.sh "$STAGE"')
+    assert smoke < run.index('tar -czf "${STAGE}.tar.gz" "$STAGE"'), "the HEIF smoke must run before the archive"
+
+
 def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
     block = workflow_job(DOCKER_WORKFLOW, "build-docker")
     entries = matrix_entries(block)
