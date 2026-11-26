@@ -1786,6 +1786,20 @@ fn body_size_bold_title_word_cap(para: &PdfParagraph) -> usize {
     }
 }
 
+/// Size drop below the body, as a fraction of the body size, within which a bold line opening
+/// with `§` still titles a section. Regulatory text sets its section headings a point under
+/// the body (2026-14578's `§ 217.91 Effective dates.` is 8pt bold over a 9pt body); `§`
+/// itself is the evidence a smaller bold line needs. ~keep
+const SECTION_SYMBOL_TITLE_SIZE_DROP: f32 = 0.15;
+
+fn is_set_in_body_title_type(para: &PdfParagraph, body_font_size: f32) -> bool {
+    let drop = body_font_size - para.dominant_font_size;
+    drop.abs() <= 0.5
+        || (drop > 0.0
+            && drop <= SECTION_SYMBOL_TITLE_SIZE_DROP * body_font_size
+            && paragraph_plain_text(para).trim_start().starts_with('§'))
+}
+
 pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32) -> bool {
     if para.heading_level.is_some()
         || !para.is_bold
@@ -1796,7 +1810,7 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
         || !(1..=MAX_BODY_SIZE_BOLD_HEADING_LINES).contains(&para.lines.len())
         || !body_font_size.is_finite()
         || body_font_size <= 0.0
-        || (para.dominant_font_size - body_font_size).abs() > 0.5
+        || !is_set_in_body_title_type(para, body_font_size)
         || para.word_count > body_size_bold_title_word_cap(para)
         || !reads_as_one_title_block(para, body_font_size)
     {

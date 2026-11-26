@@ -5961,6 +5961,30 @@ fn a_two_word_numbered_heading_is_a_bold_heading_candidate() {
     );
 }
 
+/// 2026-14578 sets `§ 217.91 Effective dates.` in 8pt bold over its 9pt body. The section
+/// symbol admits a bold title a little under the body size; without it, or further under,
+/// a smaller bold line stays a label.
+#[test]
+fn a_section_symbol_title_set_under_the_body_is_a_bold_heading_candidate() {
+    let set_at = |text: &str, size: f32| {
+        let mut paragraph = body_size_paragraph_with_bbox(text, true, None, (45.0, 700.0, 145.0, 708.0));
+        paragraph.dominant_font_size = size;
+        paragraph
+    };
+    assert!(is_body_size_bold_heading_candidate(
+        &set_at("§ 217.91 Effective dates.", 10.5),
+        12.0
+    ));
+    assert!(!is_body_size_bold_heading_candidate(
+        &set_at("Effective dates of this rule", 10.5),
+        12.0
+    ));
+    assert!(!is_body_size_bold_heading_candidate(
+        &set_at("§ 217.91 Effective dates.", 9.0),
+        12.0
+    ));
+}
+
 /// The floor this exempts is still load-bearing for everything else: a short bold
 /// fragment with no numbering is emphasis or a label, not a heading.
 #[test]
