@@ -121,6 +121,7 @@ impl ReadingOrderMemoScope {
 
 /// The calling thread's memo, handed to the threads that read its pages in parallel so a page
 /// another pass already ordered is still served there.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub(super) struct ReadingOrderMemoShare {
     memo: Option<SharedMemo>,
@@ -128,6 +129,7 @@ pub(super) struct ReadingOrderMemoShare {
     computed: ComputedOrders,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl ReadingOrderMemoShare {
     pub(super) fn of_current_thread() -> Self {
         Self {
@@ -147,6 +149,7 @@ impl ReadingOrderMemoShare {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use = "the shared memo is used only while the guard is held"]
 pub(super) struct ReadingOrderMemoShareGuard {
     previous: Option<SharedMemo>,
@@ -154,6 +157,7 @@ pub(super) struct ReadingOrderMemoShareGuard {
     previous_computed: ComputedOrders,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for ReadingOrderMemoShareGuard {
     fn drop(&mut self) {
         let previous = self.previous.take();

@@ -1065,7 +1065,7 @@ pub(crate) fn extract_segments_from_page(
 /// When `mcid_roles` is non-empty, spans with matching MCIDs receive pre-assigned
 /// heading levels from the PDF structure tree.
 fn extract_segments_from_page_inner(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     page_index: usize,
     mcid_roles: &HashMap<u32, Option<u8>>,
     artifacts: ArtifactRetention,
@@ -1076,7 +1076,7 @@ fn extract_segments_from_page_inner(
 }
 
 fn extract_final_spans_from_page(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     page_index: usize,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
@@ -1330,53 +1330,54 @@ fn dedupe_redrawn_segments(segments: Vec<SegmentData>) -> Vec<SegmentData> {
 /// Returns `(segments, used_structure_tree)`. When `used_structure_tree` is true,
 /// the caller should skip font-size clustering and use the pre-assigned roles.
 fn extract_segments_with_structure_tree(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
-    skip_page: &impl Fn(usize) -> bool,
+    skip_page: &(impl Fn(usize) -> bool + Sync),
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    extract_pages_with_structure_tree(
-        doc,
-        artifacts,
-        script_geometry,
-        |doc, page_idx, mcid_roles, artifacts, script_geometry| {
-            if skip_page(page_idx) {
-                return Ok(Vec::new());
-            }
-            extract_segments_from_page_inner(doc, page_idx, mcid_roles, artifacts, script_geometry)
-        },
-        |segments| {
-            segments
-                .iter()
-                .filter(|segment| segment.assigned_role.is_some())
-                .count()
-        },
-    )
-}
-
-fn extract_pages_with_structure_tree<T>(
-    doc: &mut NativeDocument,
-    artifacts: ArtifactRetention,
-    script_geometry: ScriptGeometry,
-    extract_page: impl Fn(
-        &mut NativeDocument,
-        usize,
-        &HashMap<u32, Option<u8>>,
-        ArtifactRetention,
-        ScriptGeometry,
-    ) -> Result<T>,
-    count_roles: impl Fn(&T) -> usize,
-) -> Result<(Vec<T>, bool)> {
     let Some(page_roles) = structure_tree_page_roles(doc)? else {
         return Ok((Vec::new(), false));
     };
+    let pages = read_pages(page_roles.len(), |page_idx| {
+        if skip_page(page_idx) {
+            return Ok(Vec::new());
+        }
+        extract_segments_from_page_inner(doc, page_idx, &page_roles[page_idx], artifacts, script_geometry)
+    })?;
+    log_structure_tree_roles(&pages, |segments| {
+        segments
+            .iter()
+            .filter(|segment| segment.assigned_role.is_some())
+            .count()
+    });
+    Ok((pages, true))
+}
 
-    let mut all_pages: Vec<T> = Vec::with_capacity(page_roles.len());
-    for (page_idx, mcid_roles) in page_roles.iter().enumerate() {
-        all_pages.push(extract_page(doc, page_idx, mcid_roles, artifacts, script_geometry)?);
+/// `read` of every page in `0..count`, in index order, run across the thread budget.
+///
+/// A page read here only reads the document: its caches sit behind locks and answer as an
+/// uncached read would, and its recovery counts are sums. Each read uses the calling thread's
+/// reading-order memo, also a cache. So the pages equal those of a page-by-page loop, and the
+/// first failed page by index fails the whole read, as it would have stopped that loop.
+pub(super) fn read_pages<T: Send>(count: usize, read: impl Fn(usize) -> Result<T> + Sync + Send) -> Result<Vec<T>> {
+    // rayon's work-stealing pool needs OS threads; wasm32 has none. ~keep
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        let memo = reading_order_memo::ReadingOrderMemoShare::of_current_thread();
+        let pages: Vec<Result<T>> = (0..count)
+            .into_par_iter()
+            .map(|page| {
+                let _memo = memo.enter();
+                read(page)
+            })
+            .collect();
+        pages.into_iter().collect()
     }
-    log_structure_tree_roles(&all_pages, count_roles);
-    Ok((all_pages, true))
+    #[cfg(target_arch = "wasm32")]
+    {
+        (0..count).map(read).collect()
+    }
 }
 
 /// Each page's MCID heading roles from a reliable structure tree, or `None` when the document
@@ -1497,18 +1498,18 @@ pub(crate) fn extract_all_segments(
 /// Pages for which `skip_page` (0-based) holds get an empty segment list without
 /// being read, so the result still has one slot per page.
 pub(crate) fn extract_all_segments_for_tables(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     artifacts: ArtifactRetention,
-    skip_page: impl Fn(usize) -> bool,
+    skip_page: impl Fn(usize) -> bool + Sync,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
     extract_all_segments_inner(doc, artifacts, ScriptGeometry::Flatten, &skip_page)
 }
 
 fn extract_all_segments_inner(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
-    skip_page: &impl Fn(usize) -> bool,
+    skip_page: &(impl Fn(usize) -> bool + Sync),
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
     let (tree_segments, used_tree) = extract_segments_with_structure_tree(doc, artifacts, script_geometry, skip_page)?;
     if used_tree && !tree_segments.is_empty() {
@@ -1519,16 +1520,13 @@ fn extract_all_segments_inner(
         crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
     })?;
 
-    let mut all_pages: Vec<Vec<SegmentData>> = Vec::with_capacity(page_count);
-
-    for page_idx in 0..page_count {
+    let no_roles = HashMap::new();
+    let all_pages = read_pages(page_count, |page_idx| {
         if skip_page(page_idx) {
-            all_pages.push(Vec::new());
-            continue;
+            return Ok(Vec::new());
         }
-        let segments = extract_segments_from_page_inner(doc, page_idx, &HashMap::new(), artifacts, script_geometry)?;
-        all_pages.push(segments);
-    }
+        extract_segments_from_page_inner(doc, page_idx, &no_roles, artifacts, script_geometry)
+    })?;
 
     Ok((all_pages, false))
 }
