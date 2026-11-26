@@ -25,8 +25,10 @@ ffi_extern! {
 impl Pix {
     /// Rows converted per 32 bpp band by [`Pix::gray_from_raw_rgb`].
     pub(super) const GRAY_CONVERSION_STRIP_ROWS: usize = 64;
-    /// Leptonica's `PIX_SRC` raster operation (`0xc << 1` in `pix.h`): copy the source.
-    const PIX_SRC: i32 = 0xc << 1;
+    /// Leptonica's `PIX_SRC` raster operation: copy the source. It is `0xc` in the vendored
+    /// `pix.h`; older releases shifted the codes left by one, which this build reads as a
+    /// different operation. ~keep
+    const PIX_SRC: i32 = 0xc;
 
     /// Creates the 8 bpp grayscale Pix that `Pix::from_raw_rgb(data, width, height)?.to_grayscale()`
     /// returns, without ever holding the full-page 32 bpp Pix.
