@@ -6,28 +6,15 @@
 //! single newline or a blank line: double-spaced manuscripts and math-heavy pages put
 //! every body line farther apart than the paragraph-gap threshold.
 
-use crate::pdf::structure::pipeline::{HyphenWitnesses, is_word_hyphen, should_preserve_lexical_hyphen};
+use crate::pdf::structure::pipeline::{
+    HyphenWitnesses, WrapHyphen, classify_wrap, is_wrap_hyphen, record_hyphen_witnesses,
+};
 
-/// The word hyphens the markdown path dehyphenates, plus U+00AD SOFT HYPHEN, which only
-/// ever marks a discretionary break. Dashes and the math minus are excluded.
-fn is_line_wrap_hyphen(character: char) -> bool {
-    is_word_hyphen(character) || character == '\u{00ad}'
-}
-
-/// TeX and most hyphenation dictionaries leave at least two letters before a break, so a
-/// single letter before a line-final hyphen is a label or an initial, not a word stem.
-const MIN_WRAPPED_STEM_LETTERS: usize = 2;
-
-/// Continuations that mark a suspended hyphen (`pre- and post-processing`), where the
-/// hyphen belongs to the word before the break and must not be merged into the next one.
-const SUSPENDED_HYPHEN_CONTINUATIONS: [&str; 3] = ["and", "or", "nor"];
-
-/// Rejoin `<word>-` + line break + `<lowercase word>` into one word.
+/// Rejoin `<word>-` + line break + `<lowercase word>` into one word, by the policy of
+/// [`classify_wrap`] that the markdown path applies too. A kept hyphen is written as ASCII
+/// `-`, as the markdown path writes it. Either way the line break goes.
 ///
-/// The hyphen is dropped when the stem ends in a lowercase letter, unless the pair is a
-/// known compound or the same text writes it hyphenated mid-line; an uppercase stem
-/// (`COVID-` / `related`) keeps its hyphen. A kept hyphen is written as ASCII `-`, as the
-/// markdown path writes it. Either way the line break goes.
+/// Witnesses come from this page's text alone: the plain path assembles one page at a time.
 pub(super) fn rejoin_line_wrap_hyphens(text: String) -> String {
     rejoin_with(text, |_| {})
 }
@@ -76,7 +63,7 @@ impl RejoinOffsets {
 }
 
 fn rejoin_with(text: String, mut on_join: impl FnMut(Join)) -> String {
-    if !text.contains(is_line_wrap_hyphen) {
+    if !text.contains(is_wrap_hyphen) {
         return text;
     }
     let mut witnesses: Option<HyphenWitnesses> = None;
@@ -85,97 +72,37 @@ fn rejoin_with(text: String, mut on_join: impl FnMut(Join)) -> String {
     while let Some(break_at) = rest.find('\n') {
         let (line, after_line) = rest.split_at(break_at);
         let continuation = after_line.trim_start_matches(['\n', '\r', ' ', '\t']);
-        match wrapped_word(line.trim_end_matches([' ', '\t', '\r']), continuation) {
-            Some(wrap) => {
-                let witnesses = witnesses.get_or_insert_with(|| collect_mid_line_hyphen_pairs(&text));
-                joined.push_str(wrap.stem);
-                let keeps_hyphen = wrap.keeps_hyphen(witnesses);
-                if keeps_hyphen {
-                    joined.push('-');
-                }
-                on_join(Join {
-                    start: text.len() - rest.len() + wrap.stem.len(),
-                    end: text.len() - continuation.len(),
-                    inserted: usize::from(keeps_hyphen),
-                });
+        let line = line.trim_end_matches([' ', '\t', '\r']);
+        let wrap = if line.ends_with(is_wrap_hyphen) {
+            let witnesses = witnesses.get_or_insert_with(|| {
+                let mut witnesses = HyphenWitnesses::default();
+                record_hyphen_witnesses(&text, &mut witnesses);
+                witnesses
+            });
+            classify_wrap(line, continuation, witnesses)
+        } else {
+            WrapHyphen::NotApplicable
+        };
+        if wrap == WrapHyphen::NotApplicable {
+            joined.push_str(&rest[..rest.len() - continuation.len()]);
+        } else {
+            let hyphen_len = line.chars().next_back().map_or(0, char::len_utf8);
+            let stem = &line[..line.len() - hyphen_len];
+            joined.push_str(stem);
+            let keeps_hyphen = wrap == WrapHyphen::KeepHyphen;
+            if keeps_hyphen {
+                joined.push('-');
             }
-            None => joined.push_str(&rest[..rest.len() - continuation.len()]),
+            on_join(Join {
+                start: text.len() - rest.len() + stem.len(),
+                end: text.len() - continuation.len(),
+                inserted: usize::from(keeps_hyphen),
+            });
         }
         rest = continuation;
     }
     joined.push_str(rest);
     joined
-}
-
-/// A line-final hyphenation: the line without its hyphen and the two word halves.
-struct WrappedWord<'a> {
-    stem: &'a str,
-    left: &'a str,
-    right: &'a str,
-}
-
-impl WrappedWord<'_> {
-    fn keeps_hyphen(&self, witnesses: &HyphenWitnesses) -> bool {
-        !self.left.chars().next_back().is_some_and(char::is_lowercase)
-            || should_preserve_lexical_hyphen(self.left, self.right, witnesses)
-    }
-}
-
-/// The hyphenation ending `line` and continuing into `continuation`, or `None` when the
-/// break is not a line-wrap hyphenation.
-fn wrapped_word<'a>(line: &'a str, continuation: &'a str) -> Option<WrappedWord<'a>> {
-    let hyphen = line.chars().next_back().filter(|&c| is_line_wrap_hyphen(c))?;
-    let stem = &line[..line.len() - hyphen.len_utf8()];
-    let left = trailing_letters(stem);
-    if left.chars().count() < MIN_WRAPPED_STEM_LETTERS {
-        return None;
-    }
-    let right = leading_letters(continuation);
-    if !right.chars().next().is_some_and(char::is_lowercase) || SUSPENDED_HYPHEN_CONTINUATIONS.contains(&right) {
-        return None;
-    }
-    Some(WrappedWord { stem, left, right })
-}
-
-/// Lowercased `(left, right)` letter runs the text itself joins with a hyphen inside a
-/// line, the evidence that a hyphen at a break is authored rather than discretionary.
-fn collect_mid_line_hyphen_pairs(text: &str) -> HyphenWitnesses {
-    let mut witnesses = HyphenWitnesses::default();
-    for word in text.split_whitespace() {
-        let mut parts = word.split(is_word_hyphen);
-        let Some(mut left) = parts.next() else {
-            continue;
-        };
-        for right in parts {
-            let left_run = trailing_letters(left);
-            let right_run = leading_letters(right);
-            if left_run.chars().count() >= MIN_WRAPPED_STEM_LETTERS
-                && right_run.chars().count() >= MIN_WRAPPED_STEM_LETTERS
-            {
-                witnesses.insert((left_run.to_ascii_lowercase(), right_run.to_ascii_lowercase()));
-            }
-            left = right;
-        }
-    }
-    witnesses
-}
-
-fn trailing_letters(text: &str) -> &str {
-    let start = text
-        .char_indices()
-        .rev()
-        .take_while(|(_, c)| c.is_alphabetic())
-        .last()
-        .map_or(text.len(), |(index, _)| index);
-    &text[start..]
-}
-
-fn leading_letters(text: &str) -> &str {
-    let end = text
-        .char_indices()
-        .find(|(_, c)| !c.is_alphabetic())
-        .map_or(text.len(), |(index, _)| index);
-    &text[..end]
 }
 
 #[cfg(test)]

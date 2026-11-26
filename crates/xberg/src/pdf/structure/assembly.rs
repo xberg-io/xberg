@@ -10,6 +10,7 @@ use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
 use super::lines::{
     crosses_visual_line_break, needs_space_between, raised_numeric_prefix_has_word_gap, segments_need_space,
 };
+use super::pipeline::{WrapHyphen, classify_wrap};
 use super::text_repair::finalize_hyphens;
 use super::types::{LayoutHintClass, LayoutRegionPath, LayoutRegionTag, PdfParagraph};
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
@@ -1713,11 +1714,11 @@ pub(super) fn extract_text_with_glyph_offset(
             let next_first = next_seg.text.split_whitespace().next().unwrap_or("");
 
             match classify_line_break_hyphen(prev_last, next_first, prev_seg, next_seg, hyphen_witnesses) {
-                LineBreakHyphen::Weld => {
+                WrapHyphen::Weld => {
                     text.pop();
                 }
-                LineBreakHyphen::KeepHyphen => {}
-                LineBreakHyphen::NotApplicable => {
+                WrapHyphen::KeepHyphen => {}
+                WrapHyphen::NotApplicable => {
                     if annotated_segments_need_space(
                         prev_seg,
                         prev_last,
@@ -1746,12 +1747,12 @@ pub(super) fn extract_text_with_glyph_offset(
                     all_segments[seg_idx],
                     hyphen_witnesses,
                 ) {
-                    LineBreakHyphen::Weld => {
+                    WrapHyphen::Weld => {
                         text.pop();
                         previous_end = text.len();
                     }
-                    LineBreakHyphen::KeepHyphen => {}
-                    LineBreakHyphen::NotApplicable => {
+                    WrapHyphen::KeepHyphen => {}
+                    WrapHyphen::NotApplicable => {
                         if prev_seg_idx == seg_idx {
                             if needs_space_between(prev, word) {
                                 text.push(' ');
@@ -1847,16 +1848,16 @@ fn join_line_texts_plain(
             };
 
             match classify_line_break_hyphen(prev_word, word, prev_seg, seg, hyphen_witnesses) {
-                LineBreakHyphen::Weld => {
+                WrapHyphen::Weld => {
                     result.pop();
                     result.push_str(word);
                     continue;
                 }
-                LineBreakHyphen::KeepHyphen => {
+                WrapHyphen::KeepHyphen => {
                     result.push_str(word);
                     continue;
                 }
-                LineBreakHyphen::NotApplicable => {}
+                WrapHyphen::NotApplicable => {}
             }
 
             let insert_space = if std::ptr::eq(prev_seg, seg) {
@@ -1873,68 +1874,22 @@ fn join_line_texts_plain(
     result
 }
 
-/// Check if a line-ending hyphen should be removed and words joined.
+/// How the hyphen ending `prev` joins to `next`, by the shared [`classify_wrap`] policy.
 ///
 /// Requires `prev_seg`/`next_seg` to actually cross a visual line break (xberg-io/xberg#1581):
 /// without that check, a suspended hyphen mid-line ("onderhouds- en") matches the same text
 /// pattern as a genuine wrapped-line hyphen and gets welded regardless of position.
-/// How a hyphen that ends a visual line joins to the fragment after the break.
-///
-/// Two different things happen at a line break and the positional signals cannot tell them
-/// apart: a wrap that split a word (`Mon-` + `tanide`), and a compound whose own hyphen simply
-/// landed there (`long-` + `term`). Collapsing them into one boolean is what welded real
-/// compounds into tokens that do not exist (xberg-io/xberg#1613). `KeepHyphen` is a distinct
-/// outcome from `NotApplicable`: the pair still joins with no space between them, it is only the
-/// hyphen that survives. ~keep
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LineBreakHyphen {
-    /// Not a hyphen-at-a-break pair; normal spacing rules apply.
-    NotApplicable,
-    /// A wrap split one word: drop the hyphen and join the halves.
-    Weld,
-    /// The compound's own hyphen: keep it, and join without inserting a space.
-    KeepHyphen,
-}
-
 fn classify_line_break_hyphen(
     prev: &str,
     next: &str,
     prev_seg: &crate::pdf::hierarchy::SegmentData,
     next_seg: &crate::pdf::hierarchy::SegmentData,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
-) -> LineBreakHyphen {
-    let mut prev_chars = prev.chars();
-    if !prev_chars.next_back().is_some_and(super::pipeline::is_word_hyphen) {
-        return LineBreakHyphen::NotApplicable;
+) -> WrapHyphen {
+    if !prev.ends_with(super::pipeline::is_wrap_hyphen) || !crosses_visual_line_break(prev_seg, next_seg) {
+        return WrapHyphen::NotApplicable;
     }
-    let before_hyphen = prev_chars.next_back();
-    if !before_hyphen.is_some_and(|c| c.is_alphabetic()) {
-        return LineBreakHyphen::NotApplicable;
-    }
-    if !next.chars().next().is_some_and(|c| c.is_lowercase()) {
-        return LineBreakHyphen::NotApplicable;
-    }
-    if !crosses_visual_line_break(prev_seg, next_seg) {
-        return LineBreakHyphen::NotApplicable;
-    }
-    // The four conditions above are positional and typographic; they separate a hyphen at the
-    // break from one mid-line, but cannot separate the two things that both happen at a break:
-    // a wrap that split a word, and a compound whose own hyphen landed there. That is what
-    // `should_preserve_lexical_hyphen` weighs, and this site used to decide without it
-    // (xberg-io/xberg#1613). Arguments are prepared exactly as `dehyphenate_paragraph_lines`
-    // prepares them -- the guard trims non-lexical characters but deliberately keeps `-`, so
-    // the trailing hyphen must come off here. ~keep
-    let trailing_word = prev
-        .trim_end_matches(super::pipeline::is_word_hyphen)
-        .split_whitespace()
-        .last()
-        .unwrap_or("");
-    let leading_word = next.split_whitespace().next().unwrap_or("");
-    if super::pipeline::should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
-        LineBreakHyphen::KeepHyphen
-    } else {
-        LineBreakHyphen::Weld
-    }
+    classify_wrap(prev, next, hyphen_witnesses)
 }
 
 /// Collapse runs of 2+ spaces inside a line while preserving leading indentation.
@@ -4324,6 +4279,31 @@ mod tests {
 
         let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
         assert_eq!(paragraph_text(&document), "Zie de installatiehandleiding voor details");
+    }
+
+    #[test]
+    fn a_suspended_hyphen_or_uppercase_stem_at_a_line_break_is_not_welded() {
+        for (trailing, leading, expected) in [
+            ("both pre-", "and post-processing", "both pre- and post-processing"),
+            ("many COVID-", "related cases", "many COVID-related cases"),
+        ] {
+            let wrapped_line = |text: &str, baseline_y: f32| PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y,
+                    ..plain_segment(text)
+                }],
+                baseline_y: Some(baseline_y),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let mut para = make_paragraph("", None);
+            para.lines = vec![wrapped_line(trailing, 700.0), wrapped_line(leading, 686.0)];
+
+            let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
+            assert_eq!(paragraph_text(&document), expected);
+        }
     }
 
     /// GH#1622 duplication finding, direction 1 (suppressed when carried): a paragraph

@@ -44,20 +44,19 @@ const TOUCHING_SPAN_FONT_SIZE_TOLERANCE_RATIO: f32 = 0.01;
 /// than two lines split by a real line break.
 ///
 /// ~keep Deliberately a second constant rather than an import of pipeline.rs's private
-/// `INLINE_STYLE_BASELINE_TOLERANCE` (same value, 0.5pt): that const also drives four
-/// unrelated inline-style-grouping call sites in pipeline.rs, and coupling this module to it
-/// would let an unrelated change there silently retune dehyphenation. xberg-io/xberg#1581 was
-/// caused by a THIRD, looser notion of "line break" living at the dehyphenation call sites in
-/// assembly.rs (no geometry check at all); this gives assembly.rs the same test pipeline.rs's
-/// `spans_visual_line_break` already applies, instead of a fourth definition.
+/// `INLINE_STYLE_BASELINE_TOLERANCE` (same value, 0.5pt): that const also drives unrelated
+/// inline-style-grouping call sites in pipeline.rs, and coupling this module to it would let an
+/// unrelated change there silently retune dehyphenation. xberg-io/xberg#1581 was caused by a
+/// looser notion of "line break" at the dehyphenation call sites in assembly.rs (no geometry
+/// check at all); every dehyphenation site now gates on [`crosses_visual_line_break`].
 const LINE_BREAK_BASELINE_TOLERANCE: f32 = 0.5;
 
 /// True when `trailing` and `leading` sit on genuinely different visual lines rather than
 /// being two runs split mid-line by a style-run or font-resource boundary.
 ///
-/// Used to gate hyphen-joining in `assembly.rs`: a suspended hyphen inside one line
-/// (`onderhouds- en`) must never be welded, while a hyphen that really trails a wrapped line
-/// must still be.
+/// Gates hyphen-joining in `assembly.rs` and paragraph dehyphenation in `pipeline.rs`: a
+/// suspended hyphen inside one line (`onderhouds- en`) must never be welded, while a hyphen
+/// that really trails a wrapped line must still be.
 pub(crate) fn crosses_visual_line_break(trailing: &SegmentData, leading: &SegmentData) -> bool {
     if !trailing.has_same_rotation(leading) {
         return false;

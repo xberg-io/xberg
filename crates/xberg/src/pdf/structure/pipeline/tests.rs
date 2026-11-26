@@ -7215,7 +7215,7 @@ fn test_hyphen_only_fallback() {
     let mut trailing = seg("some soft-", 0.0, 0.0);
     trailing.baseline_y = 20.0;
     let mut p = para(vec![line(vec![trailing]), line(vec![seg("ware is great", 0.0, 0.0)])]);
-    dehyphenate_hyphen_only(&mut p, &HyphenWitnesses::default());
+    dehyphenate_line_breaks(&mut p, &HyphenWitnesses::default(), None);
     assert_eq!(p.lines[0].segments[0].text, "some software");
     assert_eq!(p.lines[1].segments[0].text, "is great");
 }
@@ -7285,8 +7285,70 @@ fn test_hyphen_only_uppercase_not_joined() {
         line(vec![seg("some well-", 0.0, 0.0)]),
         line(vec![seg("Known thing", 0.0, 0.0)]),
     ]);
-    dehyphenate_hyphen_only(&mut p, &HyphenWitnesses::default());
+    dehyphenate_line_breaks(&mut p, &HyphenWitnesses::default(), None);
     assert_eq!(p.lines[0].segments[0].text, "some well-");
+}
+
+#[test]
+fn wrap_classifier_welds_keeps_or_declines_by_one_policy() {
+    let witnesses: HyphenWitnesses = [("price".to_string(), "determining".to_string())].into_iter().collect();
+    for (left, right, expected) in [
+        ("some soft-", "ware is great", WrapHyphen::Weld),
+        ("mem\u{2011}", "ory", WrapHyphen::Weld),
+        ("approxi\u{00ad}", "mately", WrapHyphen::Weld),
+        ("COVID-", "related cases", WrapHyphen::KeepHyphen),
+        ("a well-", "known result", WrapHyphen::KeepHyphen),
+        ("a price-", "determining step", WrapHyphen::KeepHyphen),
+        ("pre-", "and post-processing", WrapHyphen::NotApplicable),
+        ("first-", "or second-order", WrapHyphen::NotApplicable),
+        ("item a-", "label", WrapHyphen::NotApplicable),
+        ("pages 12-", "fourteen", WrapHyphen::NotApplicable),
+        ("some text--", "more words", WrapHyphen::NotApplicable),
+        ("co-", "Worker", WrapHyphen::NotApplicable),
+        ("some \u{4E00}\u{4E01}-", "text", WrapHyphen::NotApplicable),
+        ("a pause \u{2014}", "then", WrapHyphen::NotApplicable),
+    ] {
+        assert_eq!(classify_wrap(left, right, &witnesses), expected, "{left:?} + {right:?}");
+    }
+}
+
+#[test]
+fn markdown_dehyphenation_keeps_a_suspended_hyphen_and_an_uppercase_stem_hyphen() {
+    for (trailing, leading, expected) in [
+        ("both pre-", "and post-processing", "both pre- and post-processing"),
+        ("many COVID-", "related cases", "many COVID-related cases"),
+    ] {
+        let mut p = para(vec![
+            line(vec![full_line_seg(trailing)]),
+            line(vec![seg(leading, 10.0, 200.0)]),
+        ]);
+        dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+        assert_eq!(paragraph_text(&p), expected);
+    }
+}
+
+#[test]
+fn dehyphenation_leaves_a_double_hyphen_line_end_intact() {
+    for has_positions in [true, false] {
+        let mut paragraphs = vec![para(vec![
+            line(vec![full_line_seg("some text--")]),
+            line(vec![seg("more words here", 10.0, 200.0)]),
+        ])];
+        dehyphenate_paragraphs(&mut paragraphs, has_positions, &HyphenWitnesses::default());
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, "some text--");
+        assert_eq!(paragraphs[0].lines[1].segments[0].text, "more words here");
+    }
+}
+
+#[test]
+fn dehyphenation_consumes_the_leading_word_after_leading_whitespace() {
+    let mut p = para(vec![
+        line(vec![full_line_seg("some soft-")]),
+        line(vec![seg("  ware is great", 10.0, 200.0)]),
+    ]);
+    dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+    assert_eq!(p.lines[0].segments[0].text, "some software");
+    assert_eq!(p.lines[1].segments[0].text, "is great");
 }
 
 #[test]

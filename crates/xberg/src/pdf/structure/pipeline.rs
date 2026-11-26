@@ -22,7 +22,7 @@ use super::classify::{
     mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
-use super::lines::{is_cjk_char, segments_need_space};
+use super::lines::{crosses_visual_line_break, is_cjk_char, segments_need_space};
 use super::paragraphs::{
     accent_letter_over_formula_start, merge_continuation_paragraphs, merge_continuation_paragraphs_with_gaps,
     split_embedded_list_items,
@@ -8461,7 +8461,7 @@ fn dehyphenate_paragraphs(paragraphs: &mut [PdfParagraph], has_positions: bool, 
         if has_positions {
             dehyphenate_paragraph_lines(para, hyphen_witnesses);
         } else {
-            dehyphenate_hyphen_only(para, hyphen_witnesses);
+            dehyphenate_line_breaks(para, hyphen_witnesses, None);
         }
     }
 }
@@ -8504,35 +8504,31 @@ const MIN_HYPHEN_WITNESS_WORD_LEN: usize = 2;
 fn collect_hyphen_witnesses(all_page_segments: &[Vec<SegmentData>]) -> HyphenWitnesses {
     let mut witnesses = HyphenWitnesses::default();
     for segment in all_page_segments.iter().flatten() {
-        let characters: Vec<char> = segment.text.chars().collect();
-        if characters.len() < 3 {
-            continue;
-        }
-        for position in 1..characters.len() - 1 {
-            if !is_word_hyphen(characters[position]) {
-                continue;
-            }
-            let left: String = characters[..position]
-                .iter()
-                .rev()
-                .take_while(|character| character.is_alphabetic())
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            let right: String = characters[position + 1..]
-                .iter()
-                .take_while(|character| character.is_alphabetic())
-                .collect();
-            let left_len = left.chars().count();
-            let right_len = right.chars().count();
-            if left_len < MIN_HYPHEN_WITNESS_WORD_LEN || right_len < MIN_HYPHEN_WITNESS_WORD_LEN {
-                continue;
-            }
-            witnesses.insert((left.to_ascii_lowercase(), right.to_ascii_lowercase()));
-        }
+        record_hyphen_witnesses(&segment.text, &mut witnesses);
     }
     witnesses
+}
+
+/// Record every `(left, right)` letter-run pair `text` joins with a word hyphen inside a
+/// token. A hyphen that ends its token (a wrap hyphen before a break) has no right-hand
+/// letters and so never witnesses itself.
+pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesses) {
+    for word in text.split_whitespace() {
+        let mut parts = word.split(is_word_hyphen);
+        let Some(mut left) = parts.next() else {
+            continue;
+        };
+        for right in parts {
+            let left_run = trailing_letters(left);
+            let right_run = leading_letters(right);
+            if left_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
+                && right_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
+            {
+                witnesses.insert((left_run.to_ascii_lowercase(), right_run.to_ascii_lowercase()));
+            }
+            left = right;
+        }
+    }
 }
 
 /// Collect standalone alphabetic words the document itself writes elsewhere, so
@@ -8587,6 +8583,93 @@ pub(crate) fn is_word_hyphen(character: char) -> bool {
     matches!(character, '-' | '\u{2010}' | '\u{2011}')
 }
 
+/// A hyphen that can end a wrapped line: a word hyphen, or U+00AD SOFT HYPHEN, which only
+/// ever marks a discretionary break. Dashes and the math minus are excluded.
+pub(crate) fn is_wrap_hyphen(character: char) -> bool {
+    is_word_hyphen(character) || character == '\u{00ad}'
+}
+
+/// TeX and most hyphenation dictionaries leave at least two letters before a break, so a
+/// single letter before a line-final hyphen is a label or an initial, not a word stem.
+const MIN_WRAPPED_STEM_LETTERS: usize = 2;
+
+/// Continuations that mark a suspended hyphen (`pre- and post-processing`), where the
+/// hyphen belongs to the word before the break and must not be merged into the next one.
+const SUSPENDED_HYPHEN_CONTINUATIONS: [&str; 3] = ["and", "or", "nor"];
+
+/// How a hyphen that ends a visual line joins to the fragment after the break.
+///
+/// Two different things happen at a line break and the positional signals cannot tell them
+/// apart: a wrap that split a word (`Mon-` + `tanide`), and a compound whose own hyphen simply
+/// landed there (`long-` + `term`). Collapsing them into one boolean is what welded real
+/// compounds into tokens that do not exist (xberg-io/xberg#1613). `KeepHyphen` is a distinct
+/// outcome from `NotApplicable`: the pair still joins with no space between them, it is only the
+/// hyphen that survives. ~keep
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WrapHyphen {
+    /// Not a hyphen-at-a-break pair; normal spacing rules apply.
+    NotApplicable,
+    /// A wrap split one word: drop the hyphen and join the halves.
+    Weld,
+    /// The compound's own hyphen: keep it, and join without inserting a space.
+    KeepHyphen,
+}
+
+/// The one line-wrap hyphen policy shared by the plain-text rejoin, paragraph
+/// dehyphenation and annotated assembly. `left` is the text ending at the break, `right`
+/// the text after it; callers apply their own geometry gates before asking.
+///
+/// A wrap needs a stem of at least [`MIN_WRAPPED_STEM_LETTERS`] non-CJK letters before the
+/// hyphen and a lowercase continuation that is not a conjunction completing a suspended
+/// hyphen. The hyphen survives for an uncased or uppercase stem (`COVID-` / `related`), a
+/// known compound, or a pair the document writes hyphenated mid-line.
+pub(crate) fn classify_wrap(left: &str, right: &str, witnesses: &HyphenWitnesses) -> WrapHyphen {
+    let mut left_chars = left.chars();
+    if !left_chars.next_back().is_some_and(is_wrap_hyphen) {
+        return WrapHyphen::NotApplicable;
+    }
+    let stem = left_chars.as_str();
+    let stem_letters = trailing_letters(stem);
+    let Some(last_letter) = stem_letters.chars().next_back() else {
+        return WrapHyphen::NotApplicable;
+    };
+    if stem_letters.chars().count() < MIN_WRAPPED_STEM_LETTERS || is_cjk_char(last_letter) {
+        return WrapHyphen::NotApplicable;
+    }
+    let right = right.trim_start();
+    let right_letters = leading_letters(right);
+    if !right_letters.chars().next().is_some_and(char::is_lowercase)
+        || SUSPENDED_HYPHEN_CONTINUATIONS.contains(&right_letters)
+    {
+        return WrapHyphen::NotApplicable;
+    }
+    let stem_word = stem.rsplit(char::is_whitespace).next().unwrap_or(stem);
+    let right_word = right.split_whitespace().next().unwrap_or("");
+    if !last_letter.is_lowercase() || should_preserve_lexical_hyphen(stem_word, right_word, witnesses) {
+        WrapHyphen::KeepHyphen
+    } else {
+        WrapHyphen::Weld
+    }
+}
+
+fn trailing_letters(text: &str) -> &str {
+    let start = text
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| c.is_alphabetic())
+        .last()
+        .map_or(text.len(), |(index, _)| index);
+    &text[start..]
+}
+
+fn leading_letters(text: &str) -> &str {
+    let end = text
+        .char_indices()
+        .find(|(_, c)| !c.is_alphabetic())
+        .map_or(text.len(), |(index, _)| index);
+    &text[..end]
+}
+
 pub(crate) fn should_preserve_lexical_hyphen(
     trailing_word: &str,
     leading_word: &str,
@@ -8604,23 +8687,49 @@ pub(crate) fn should_preserve_lexical_hyphen(
     matches_static_compound || hyphen_witnesses.contains(&(left.to_ascii_lowercase(), right.to_ascii_lowercase()))
 }
 
-/// Whether adjacent extraction runs actually cross a visual line boundary.
+/// Rejoin words that a hyphen split across a visual line boundary inside a paragraph.
 ///
-/// `PdfLine` boundaries can also be introduced by inline style/run splitting. A
-/// suspended hyphen such as `vracht- en` may therefore appear at the end of one
-/// logical line and the start of the next while both runs still share a baseline.
-/// Dehyphenation is only licensed when the runs use the same reading frame and
-/// their upright baselines differ by more than the inline-style tolerance.
-fn spans_visual_line_break(trailing: &SegmentData, leading: &SegmentData) -> bool {
-    if !trailing.has_same_rotation(leading) {
-        return false;
-    }
+/// `full_line_threshold` is the positional gate of the heuristic path: a line whose
+/// right edge stops short of it ended for another reason than wrapping, so its hyphen
+/// is left alone. `None` (structure-tree pages, where x/width may be zero) applies only
+/// the hyphen and line-crossing gates.
+fn dehyphenate_line_breaks(
+    para: &mut PdfParagraph,
+    hyphen_witnesses: &HyphenWitnesses,
+    full_line_threshold: Option<f32>,
+) {
+    for i in 0..para.lines.len().saturating_sub(1) {
+        let (Some(trailing), Some(leading)) = (para.lines[i].segments.last(), para.lines[i + 1].segments.first())
+        else {
+            continue;
+        };
+        if full_line_threshold.is_some_and(|threshold| trailing.x + trailing.width < threshold)
+            || !crosses_visual_line_break(trailing, leading)
+        {
+            continue;
+        }
+        let keeps_hyphen = match classify_wrap(&trailing.text, &leading.text, hyphen_witnesses) {
+            WrapHyphen::NotApplicable => continue,
+            WrapHyphen::Weld => false,
+            WrapHyphen::KeepHyphen => true,
+        };
+        let continuation = leading.text.trim_start();
+        let leading_word = continuation.split_whitespace().next().unwrap_or("");
+        let remainder = continuation[leading_word.len()..].trim_start().to_string();
+        let leading_word = leading_word.to_string();
 
-    let trailing_baseline = trailing.upright_baseline();
-    let leading_baseline = leading.upright_baseline();
-    trailing_baseline.is_finite()
-        && leading_baseline.is_finite()
-        && (trailing_baseline - leading_baseline).abs() > INLINE_STYLE_BASELINE_TOLERANCE
+        if let Some(seg) = para.lines[i].segments.last_mut() {
+            let hyphen_len = seg.text.chars().next_back().map_or(0, char::len_utf8);
+            seg.text.truncate(seg.text.len() - hyphen_len);
+            if keeps_hyphen {
+                seg.text.push('-');
+            }
+            seg.text.push_str(&leading_word);
+        }
+        if let Some(seg) = para.lines[i + 1].segments.first_mut() {
+            seg.text = remainder;
+        }
+    }
 }
 
 /// Core dehyphenation with position-based full-line detection.
@@ -8635,147 +8744,8 @@ fn dehyphenate_paragraph_lines(para: &mut PdfParagraph, hyphen_witnesses: &Hyphe
         .flat_map(|l| l.segments.iter())
         .map(|s| s.x + s.width)
         .fold(0.0_f32, f32::max);
-
-    if max_right_edge <= 0.0 {
-        dehyphenate_hyphen_only(para, hyphen_witnesses);
-        return;
-    }
-
-    let threshold = max_right_edge * FULL_LINE_FRACTION;
-
-    let n = para.lines.len();
-    for i in 0..(n - 1) {
-        let trailing_right = para.lines[i].segments.last().map(|s| s.x + s.width).unwrap_or(0.0);
-        if trailing_right < threshold {
-            continue;
-        }
-
-        let crosses_visual_line = match (para.lines[i].segments.last(), para.lines[i + 1].segments.first()) {
-            (Some(trailing), Some(leading)) => spans_visual_line_break(trailing, leading),
-            _ => false,
-        };
-        if !crosses_visual_line {
-            continue;
-        }
-
-        let trailing_text = match para.lines[i].segments.last() {
-            Some(s) if !s.text.is_empty() => s.text.clone(),
-            _ => continue,
-        };
-        let leading_text = match para.lines[i + 1].segments.first() {
-            Some(s) if !s.text.is_empty() => s.text.clone(),
-            _ => continue,
-        };
-
-        let has_trailing_hyphen = trailing_text.ends_with(is_word_hyphen);
-        if !has_trailing_hyphen {
-            continue;
-        }
-
-        let leading_word = leading_text.split_whitespace().next().unwrap_or("");
-        if leading_word.chars().next().is_some_and(|c| c.is_uppercase()) {
-            continue;
-        }
-
-        let trailing_word = trailing_text
-            .trim_end_matches(is_word_hyphen)
-            .split_whitespace()
-            .last()
-            .unwrap_or("");
-        if trailing_word.chars().last().is_some_and(is_cjk_char) {
-            continue;
-        }
-
-        let preserved_hyphen = if should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
-            "-"
-        } else {
-            ""
-        };
-        let joined_word = format!("{trailing_word}{preserved_hyphen}{leading_word}");
-
-        if let Some(seg) = para.lines[i].segments.last_mut() {
-            let text_without_word: String = seg
-                .text
-                .chars()
-                .rev()
-                .skip(trailing_word.chars().count() + 1)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            seg.text = format!("{text_without_word}{joined_word}");
-        }
-
-        if let Some(seg) = para.lines[i + 1].segments.first_mut() {
-            let after_leading_word = seg.text.trim_start_matches(leading_word).trim_start();
-            seg.text = after_leading_word.to_string();
-        }
-    }
-}
-
-/// Hyphen-only dehyphenation (no position data required).
-///
-/// Only joins lines when the trailing segment ends with an explicit hyphen.
-/// Used for structure tree pages where x/width may be zero.
-fn dehyphenate_hyphen_only(para: &mut PdfParagraph, hyphen_witnesses: &HyphenWitnesses) {
-    let n = para.lines.len();
-    for i in 0..(n - 1) {
-        let crosses_visual_line = match (para.lines[i].segments.last(), para.lines[i + 1].segments.first()) {
-            (Some(trailing), Some(leading)) => spans_visual_line_break(trailing, leading),
-            _ => false,
-        };
-        if !crosses_visual_line {
-            continue;
-        }
-
-        let trailing_text = match para.lines[i].segments.last() {
-            Some(s) if s.text.ends_with(is_word_hyphen) => s.text.clone(),
-            _ => continue,
-        };
-        let leading_text = match para.lines[i + 1].segments.first() {
-            Some(s) if !s.text.is_empty() => s.text.clone(),
-            _ => continue,
-        };
-
-        let leading_word = leading_text.split_whitespace().next().unwrap_or("");
-        if leading_word.chars().next().is_some_and(|c| c.is_uppercase()) {
-            continue;
-        }
-
-        let trailing_word = trailing_text
-            .trim_end_matches(is_word_hyphen)
-            .split_whitespace()
-            .last()
-            .unwrap_or("");
-        if trailing_word.chars().last().is_some_and(is_cjk_char) {
-            continue;
-        }
-
-        let preserved_hyphen = if should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
-            "-"
-        } else {
-            ""
-        };
-        let joined_word = format!("{trailing_word}{preserved_hyphen}{leading_word}");
-
-        if let Some(seg) = para.lines[i].segments.last_mut() {
-            let text_without_word: String = seg
-                .text
-                .chars()
-                .rev()
-                .skip(trailing_word.chars().count() + 1)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            seg.text = format!("{text_without_word}{joined_word}");
-        }
-
-        if let Some(seg) = para.lines[i + 1].segments.first_mut() {
-            let after_leading_word = seg.text.trim_start_matches(leading_word).trim_start();
-            seg.text = after_leading_word.to_string();
-        }
-    }
+    let full_line_threshold = (max_right_edge > 0.0).then_some(max_right_edge * FULL_LINE_FRACTION);
+    dehyphenate_line_breaks(para, hyphen_witnesses, full_line_threshold);
 }
 
 /// Detect whether a set of paragraphs contains any font-size variation.
