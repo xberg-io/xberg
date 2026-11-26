@@ -525,19 +525,22 @@ pub(crate) async fn run_pipeline_from_extractor(
     ))]
     placement: Option<crate::extraction::image_ocr::pdf_gap::Placement>,
 ) -> Result<ExtractedDocument> {
-    run_pipeline_impl(
-        doc,
-        config,
-        ProcessorSource::Global,
-        builtin_html_origin,
-        #[cfg(all(
-            feature = "pdf",
-            feature = "ocr",
-            feature = "tokio-runtime",
-            not(target_arch = "wasm32")
-        ))]
-        placement,
-    )
+    // ~keep Boxed in a frame of its own: `instrument` copies this body's future through the poll frame.
+    crate::core::runtime::pin_boxed(|| {
+        run_pipeline_impl(
+            doc,
+            config,
+            ProcessorSource::Global,
+            builtin_html_origin,
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            placement,
+        )
+    })
     .await
 }
 
