@@ -117,7 +117,8 @@ fn face_directories(prefix: &[u8], complete: bool) -> Option<Vec<Option<FaceDire
 /// Reads the faces of the font file at `path` as a whole-file
 /// `FontRef::fonts` + `parse::parse_face_info` pass would. Reads only the
 /// table directories and each face's [`FACE_INFO_TABLES`] unless those tables
-/// add up to more than the file itself, and then reads the file once instead.
+/// add up to more than the file itself, and then reads the whole file after the
+/// directory reads.
 pub(super) fn read_face_infos(path: &Path) -> io::Result<Vec<Result<FaceInfo, LoadError>>> {
     match read_face_tables_within_budget(path)? {
         Some(faces) => Ok(faces),
@@ -151,8 +152,9 @@ fn distinct_ranges_within(faces: &[Option<FaceTables>], file_len: usize) -> Opti
 /// `None` when the distinct table ranges sum to more than the file length.
 /// Collection faces can point at different large, overlapping ranges, so
 /// reading per range could otherwise cost a multiple of the file. The
-/// directory prefix reads double up to the file length, so the partial path
-/// never reads more than about twice the file. ~keep
+/// directory prefix reads double up to the file length, which can total about
+/// twice the file, and the table reads add at most the file once more (or the
+/// whole-file fallback does): up to about three times the file. ~keep
 fn read_face_tables_within_budget(path: &Path) -> io::Result<Option<Vec<Result<FaceInfo, LoadError>>>> {
     let mut file = File::open(path)?;
     let file_len = usize::try_from(file.metadata()?.len())
