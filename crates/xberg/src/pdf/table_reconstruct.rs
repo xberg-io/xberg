@@ -31,6 +31,7 @@ const SHORT_WIDE_MIN_COLUMNS: usize = 6;
 const SHORT_WIDE_MAX_EMPTY_CELL_PERCENT: usize = 35;
 const LARGE_TABLE_MIN_COLUMNS: usize = 6;
 const DEFAULT_MIN_DATA_ROW_DIGIT_CELLS: usize = 3;
+const MAX_MERGED_HEADER_ROWS: usize = 2;
 const REPEATED_DATA_ROW_COUNT: usize = 3;
 const ROW_SHAPE_MIN_OVERLAP_PERCENT: usize = 80;
 const DENSE_SCALAR_MIN_DATA_ROWS: usize = 20;
@@ -669,13 +670,13 @@ fn post_process_table_inner(
     };
     let mut data_rows = table[data_start..].to_vec();
 
-    if header_rows.len() > 2 {
+    if header_rows.len() > MAX_MERGED_HEADER_ROWS {
         // Keep the established two-row header cap, but do not discard an
         // unusually long prefix inferred by `find_data_start`. Earlier rows
         // are still table content; demote them to data in their original
         // order while retaining the two rows closest to the detected data
         // boundary as the header. ~keep
-        let surplus_header_rows = header_rows.len() - 2;
+        let surplus_header_rows = header_rows.len() - MAX_MERGED_HEADER_ROWS;
         let mut demoted_rows: Vec<Vec<String>> = header_rows.drain(..surplus_header_rows).collect();
         demoted_rows.append(&mut data_rows);
         data_rows = demoted_rows;
@@ -1352,6 +1353,7 @@ fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
         .iter()
         .position(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
         .unwrap_or(0);
+    let first_numeric_row = earliest_data_row_before(table, first_numeric_row);
     if !layout_guided
         && first_numeric_row > 0
         && table.get(first_numeric_row).is_some_and(|row| {
@@ -1382,6 +1384,43 @@ fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
                 || looks_like_multiline_numeric_header(&table[first_numeric_row], &table[first_numeric_row + 1..start])
         })
         .unwrap_or(first_numeric_row)
+}
+
+/// In a table of three columns or fewer, `DEFAULT_MIN_DATA_ROW_DIGIT_CELLS` is met only where the
+/// label itself carries a digit (`06/03/24, cost $10,172,087) | 5,237 | 1,557,536`), so the first
+/// such row can sit deep in the body. `post_process_table_inner` keeps the two rows above it as
+/// the header and demotes the rest below that header, moving later body rows above earlier ones.
+/// A row above it with digits in all but one of its digit columns (at least two) is already data,
+/// so the data starts at the first such row. A prefix of at most two rows is never demoted and
+/// stays as inferred, which keeps year and unit header rows above their data. ~keep
+fn earliest_data_row_before(table: &[Vec<String>], first_numeric_row: usize) -> usize {
+    if first_numeric_row <= MAX_MERGED_HEADER_ROWS {
+        return first_numeric_row;
+    }
+    let Some(anchor) = table.get(first_numeric_row) else {
+        return first_numeric_row;
+    };
+    let digit_columns: Vec<usize> = anchor
+        .iter()
+        .enumerate()
+        .filter(|(_, cell)| cell_has_digit(cell))
+        .map(|(column, _)| column)
+        .collect();
+    let required = digit_columns.len().saturating_sub(1).max(2);
+    table[..first_numeric_row]
+        .iter()
+        .position(|row| {
+            digit_columns
+                .iter()
+                .filter(|&&column| row.get(column).is_some_and(|cell| cell_has_digit(cell)))
+                .count()
+                >= required
+        })
+        .unwrap_or(first_numeric_row)
+}
+
+fn cell_has_digit(cell: &str) -> bool {
+    cell.chars().any(|character| character.is_ascii_digit())
 }
 
 fn looks_like_multiline_numeric_header(header: &[String], continuation_rows: &[Vec<String>]) -> bool {
@@ -3637,7 +3676,7 @@ mod tests {
     }
 
     #[test]
-    fn issue_1558_surplus_inferred_header_rows_are_demoted_not_dropped() {
+    fn issue_1558_parts_rows_keep_source_order_when_a_later_row_has_more_digits() {
         let table: Vec<Vec<String>> = (1..=18)
             .map(|row| {
                 vec![
@@ -3653,29 +3692,82 @@ mod tests {
             })
             .collect();
 
-        assert_eq!(find_data_start(&table, true), 6);
+        // Rows 1-6 already carry digits in two of row 7's three digit columns, so they are
+        // data, not a six-row header to be merged and demoted out of order.
+        assert_eq!(find_data_start(&table, true), 0);
         let processed = post_process_table(table, true, false).expect("dense parts table should remain valid");
 
-        // Six inferred header rows become one merged header plus four demoted
-        // data rows. No source row may disappear.
-        assert_eq!(processed.len(), 17);
-        let flattened = processed.iter().flatten().cloned().collect::<Vec<_>>().join(" ");
-        for row in 1..=18 {
-            let article = format!("8000{row:02}");
-            assert_eq!(
-                flattened.matches(&article).count(),
-                1,
-                "{article} must survive exactly once"
+        assert_eq!(processed.len(), 18);
+        for (index, row) in processed.iter().enumerate() {
+            let article = format!("8000{:02}", index + 1);
+            assert!(
+                row.iter().any(|cell| cell.contains(&article)),
+                "row {index} must hold {article}: {row:?}"
             );
         }
-        assert!(
-            processed[0]
-                .iter()
-                .any(|cell| cell.contains("800005") && cell.contains("800006"))
-        );
-        assert!(processed[1].iter().any(|cell| cell.contains("800001")));
-        assert!(processed[4].iter().any(|cell| cell.contains("800004")));
-        assert!(processed[5].iter().any(|cell| cell.contains("800007")));
+    }
+
+    #[test]
+    fn issue_1558_surplus_text_header_rows_are_demoted_not_dropped() {
+        let mut table: Vec<Vec<String>> = ["Catalogue", "Fasteners", "Screws and bolts", "Stainless steel"]
+            .iter()
+            .map(|title| vec![(*title).to_string(), String::new(), String::new(), String::new()])
+            .collect();
+        table.extend((1..=12).map(|row| {
+            vec![
+                format!("{row} 8000{row:02}"),
+                "Fastening screw".into(),
+                format!("{row},10"),
+                format!("package of {}", row * 10),
+            ]
+        }));
+
+        assert_eq!(find_data_start(&table, true), 4);
+        let processed = post_process_table(table, true, false).expect("dense parts table should remain valid");
+
+        // Four text header rows become one merged header plus two demoted data rows.
+        assert_eq!(processed.len(), 15);
+        assert!(processed[0][0].contains("Screws and bolts") && processed[0][0].contains("Stainless steel"));
+        assert_eq!(processed[1][0], "Catalogue");
+        assert_eq!(processed[2][0], "Fasteners");
+        assert!(processed[3][0].contains("800001"));
+    }
+
+    #[test]
+    fn narrow_holdings_table_starts_data_before_a_label_with_digits() {
+        let table: Vec<Vec<String>> = [
+            ["Kazakhstan - 0.0%(c)", "", ""],
+            ["Halyk Savings Bank of Kazakhstan", "", ""],
+            ["JSC, GDR", "28,078", "$ 697,332"],
+            ["Kaspi.KZ JSC, ADR", "13,193", "1,040,928"],
+            ["", "", "1,738,260"],
+            ["NXP Semiconductors NV", "107,259", "22,928,757"],
+            ["Teya Services Ltd., Series C, (Acquired", "", ""],
+            ["06/03/24, cost $10,172,087)(d)(f)(j)", "5,237", "1,557,536"],
+            ["Wolters Kluwer NV", "38,856", "6,052,172"],
+        ]
+        .iter()
+        .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+        .collect();
+
+        assert_eq!(find_data_start(&table, true), 2);
+        assert_eq!(find_data_start(&table, false), 2);
+    }
+
+    #[test]
+    fn label_digit_row_without_earlier_data_rows_keeps_its_header_prefix() {
+        let table: Vec<Vec<String>> = [
+            ["Schedule of rates", "", ""],
+            ["Effective 2025", "", ""],
+            ["Class", "Rate", "Limit"],
+            ["Plan 1", "1.25", "100"],
+            ["Plan 2", "1.50", "200"],
+        ]
+        .iter()
+        .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+        .collect();
+
+        assert_eq!(find_data_start(&table, true), 3);
     }
 
     #[test]
