@@ -1,0 +1,21 @@
+# Training corpus for the CLI linker order file (ADR-0020, scripts/ci/rust/order_file.py).
+# One run per line: <repository path> <content format> [extra xberg extract arguments...].
+# Every run also gets --no-config-discovery --format json --config-json '{"use_cache":false}'
+# --max-threads 4, the benchmark invocation. Runs touching the most shared code come first, since
+# the order file breaks ties by the earliest run that touched a function. Only tracked files: the
+# publish legs check out without the test_documents submodule. OCR stays off; it is not the
+# common path and its engines live in dlopen'd libraries the order file cannot reach.
+crates/xberg-native-pdf/tests/fixtures/hello_structure.pdf plain
+crates/xberg-native-pdf/tests/fixtures/hello_structure.pdf markdown
+crates/xberg/tests/fixtures/pdf/regressions/paragraph_order/gh2110-paragraph-after-heading.pdf plain
+crates/xberg/tests/fixtures/pdf/regressions/paragraph_order/gh2110-paragraph-after-heading.pdf markdown
+fixtures/repros/caltrans-native-table/fixtures/caltrans-p3.pdf plain
+fixtures/repros/caltrans-native-table/fixtures/caltrans-p3.pdf markdown
+crates/xberg-native-pdf/tests/fixtures/1.pdf plain
+crates/xberg-native-pdf/tests/fixtures/1008.3918v2.pdf plain
+crates/xberg-native-pdf/tests/fixtures/1008.3918v2.pdf markdown
+crates/xberg/tests/fixtures/office/merged_cells.docx markdown
+crates/xberg/tests/fixtures/office/merged_header.xlsx markdown
+crates/xberg/tests/fixtures/office/merged_table.pptx markdown
+crates/xberg/tests/fixtures/html_table_structure_2332/spans-and-two-tier-header.html markdown
+fixtures/images/test_hello_world.png plain --ocr false
