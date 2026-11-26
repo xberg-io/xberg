@@ -8419,6 +8419,32 @@ fn finalize_paragraph_keeps_a_display_title_that_opens_with_an_article() {
     );
 }
 
+/// 2026-13845 sets its five-digit page numbers in 11pt bold and its table titles at 10pt over
+/// a 9pt body; both clustered as heading tiers and were emitted as H1s.
+#[test]
+fn finalize_paragraph_does_not_make_a_folio_or_a_table_title_a_heading() {
+    let heading_map = vec![(11.0, Some(1)), (10.0, Some(2)), (9.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let mut folio = seg_at("42399", 536.0, 760.0, 11.0, false);
+    folio.is_bold = true;
+    let table_title = seg_at(
+        "TABLE 1\u{2014}SAN JOAQUIN VALLEY REVISED BUDGETS",
+        45.0,
+        500.0,
+        10.0,
+        false,
+    );
+    let section = seg_at("Background and Legal Authority", 45.0, 400.0, 10.0, false);
+    let level = |segment: &SegmentData| {
+        finalize_paragraph(&[segment], &heading_map, &gap_info)
+            .expect("paragraph")
+            .heading_level
+    };
+    assert_eq!(level(&folio), None, "a run of digits names no section");
+    assert_eq!(level(&table_title), None, "a table title is a caption");
+    assert_eq!(level(&section), Some(2), "a title in the same tier is still a heading");
+}
+
 /// 2212.11694 sets each word of its 14pt bold title as its own run on one baseline; the
 /// bold-title test counted runs, not visual lines, and the title stayed bold prose.
 #[test]

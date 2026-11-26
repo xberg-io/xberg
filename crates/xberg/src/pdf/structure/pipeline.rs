@@ -3691,6 +3691,10 @@ fn finalize_paragraph(
         }
     }
 
+    if heading_level.is_some() && !names_a_section(trimmed) {
+        heading_level = None;
+    }
+
     let is_list_item = heading_level.is_none() && is_list_candidate;
     let is_code_block =
         heading_level.is_none() && !is_list_item && lines.iter().all(|l| l.is_monospace) && lines.len() >= 2;
@@ -3898,6 +3902,29 @@ fn is_structural_heading_word(text: &str) -> bool {
             | "Results"
             | "Methodology"
     )
+}
+
+/// Labels that open a table or figure caption (`TABLE 1—`, `Figure 3:`).
+const CAPTION_LABELS: &[&str] = &["table", "figure", "fig.", "fig", "chart", "exhibit", "plate", "scheme"];
+
+/// Whether a block set in a heading's font can name a section. A run with no letter is a
+/// folio or a figure, and a caption label opens a caption: 2026-13845 set its five-digit
+/// page numbers in 11pt bold and its table titles (`TABLE 1—SAN JOAQUIN VALLEY ...`) at
+/// 10pt over a 9pt body, so both became H1s, and the dozen false headings then outnumbered
+/// the bold body-size section titles enough to block their promotion.
+fn names_a_section(text: &str) -> bool {
+    text.chars().any(char::is_alphabetic) && !opens_with_caption_label(text)
+}
+
+fn opens_with_caption_label(text: &str) -> bool {
+    let lower = text.trim_start().to_lowercase();
+    CAPTION_LABELS.iter().any(|label| {
+        lower
+            .strip_prefix(label)
+            .map(str::trim_start)
+            .and_then(|rest| rest.chars().next())
+            .is_some_and(|next| next.is_ascii_digit())
+    })
 }
 
 /// Font ratio over body at which a line is set at display-title scale.
