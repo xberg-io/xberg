@@ -19,3 +19,4 @@ mod pen_continuation;
 mod primary_lead_classification;
 mod run_continuation_bounds;
 mod script_gap_merge;
+mod space_span_weight;

@@ -597,12 +597,17 @@ impl<'doc> TextExtractor<'doc> {
         );
 
         let font_name_space = state.font_name.clone().unwrap_or_else(|| "Unknown".to_string());
-        let is_italic_space = state
-            .font_name
-            .as_ref()
-            .and_then(|name| self.fonts.get(name))
-            .map(|font| font.is_italic())
-            .unwrap_or(false);
+        let space_font = state.font_name.as_ref().and_then(|name| self.fonts.get(name));
+        let is_italic_space = space_font.is_some_and(|font| font.is_italic());
+        // The space carries the weight of the run it separates, as a glyph run's buffer does: span
+        // merging joins only same-weight spans, so a regular space between two bold words stays a
+        // span of its own, which segment projection drops as blank, and a word gap narrower than the
+        // geometric threshold (a bold heading set with 0.13 em `TJ` gaps) loses its space. ~keep
+        let space_weight = if space_font.is_some_and(|font| font.is_bold()) {
+            FontWeight::Bold
+        } else {
+            FontWeight::Normal
+        };
         // Bbox geometry follows the writing axis: a horizontal gap is
         // wide and font-tall; a vertical gap is glyph-em-wide and tall
         // along the writing direction. Downstream layout heuristics
@@ -625,7 +630,7 @@ impl<'doc> TextExtractor<'doc> {
             },
             font_name: font_name_space.into(),
             font_size: effective_font_size,
-            font_weight: FontWeight::Normal,
+            font_weight: space_weight,
             color: Color::new(state.fill_color_rgb.0, state.fill_color_rgb.1, state.fill_color_rgb.2),
             mcid: self.current_mcid,
             mcid_scope: Some(mcid_scope),
