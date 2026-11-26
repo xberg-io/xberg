@@ -163,7 +163,7 @@ impl PdfDocument {
         mut bottom_pagination: Option<&mut BottomPaginationSeparators>,
     ) -> Result<Vec<crate::elements::PathContent>> {
         let _warnings = self.warning_scope();
-        use crate::content::{Operator, parse_content_stream_paths_only};
+        use crate::content::Operator;
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::{FillRule, PathExtractor, PathGraphicsStateStack};
         use crate::layout::Color;
@@ -174,14 +174,21 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        let parsed = if bottom_pagination.is_some() {
+        let paginating = bottom_pagination.is_some();
+        // The page's operators are visited straight from the content stream instead of being
+        // collected first; only the focused separator query hands over a ready list. ~keep
+        let page_content;
+        let separator_ops;
+        if paginating {
             let Some(operators) = self.separator_operators(page_dict) else {
                 return Ok(Vec::new());
             };
-            Ok(operators)
+            separator_ops = Some(operators);
+            page_content = None;
         } else {
-            let content_data = match self.cached_page_content(page_index) {
-                Ok(data) => data,
+            separator_ops = None;
+            page_content = match self.cached_page_content(page_index) {
+                Ok(data) => Some(data),
                 Err(error) => {
                     tracing::warn!(
                         target: crate::LOG_TARGET_ROOT,
@@ -194,22 +201,7 @@ impl PdfDocument {
                     return Ok(Vec::new());
                 }
             };
-            parse_content_stream_paths_only(&content_data)
-        };
-        let operators = match parsed {
-            Ok(ops) => ops,
-            Err(error) => {
-                tracing::warn!(
-                    target: crate::LOG_TARGET_ROOT,
-                    operation = "parse_page_paths",
-                    page_index,
-                    error_code = error.telemetry_code(),
-                    error_offset = ?error.telemetry_offset(),
-                    "returning empty paths after parse failure"
-                );
-                return Ok(Vec::new());
-            }
-        };
+        }
 
         let mut extractor = PathExtractor::new();
         let mut state_stack = PathGraphicsStateStack::new();
@@ -223,7 +215,11 @@ impl PdfDocument {
             extractor.set_resources(resolved_resources);
         }
 
-        for op in operators {
+        let mut failure = None;
+        let mut apply = |op: Operator| {
+            if failure.is_some() {
+                return;
+            }
             if let Some(evidence) = bottom_pagination.as_deref_mut() {
                 evidence.observe(&op, &extractor);
             }
@@ -360,15 +356,16 @@ impl PdfDocument {
 
                 Operator::Do { name } => {
                     // The focused query observes page-local paths only. ~keep
-                    if bottom_pagination.is_some() {
-                        continue;
+                    if paginating {
+                        return;
                     }
                     if let Err(error) =
                         self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack, &mut form_budget)
                     {
                         // A truncated paint sequence cannot safely serve as source evidence. ~keep
                         if form_budget.incomplete {
-                            return Err(error);
+                            failure = Some(error);
+                            return;
                         }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
@@ -402,6 +399,14 @@ impl PdfDocument {
 
                 _ => {}
             }
+        };
+        match (separator_ops, page_content) {
+            (Some(operators), _) => operators.into_iter().for_each(&mut apply),
+            (None, Some(data)) => crate::content::parser::visit_page_path_operators(&data, &mut apply),
+            (None, None) => {}
+        }
+        if let Some(error) = failure {
+            return Err(error);
         }
 
         Ok(extractor.finish())

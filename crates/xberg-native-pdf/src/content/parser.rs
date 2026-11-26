@@ -242,6 +242,12 @@ pub(crate) fn visit_form_path_operators(data: &[u8], operator_limit: usize, visi
     visit_path_operators(data, Some(operator_limit), visit);
 }
 
+/// Feed `visit` the operators [`parse_content_stream_paths_only`] would collect, one at a time, under
+/// the same operator cap, without holding the list.
+pub(crate) fn visit_page_path_operators(data: &[u8], visit: impl FnMut(Operator)) {
+    visit_path_operators(data, None, visit);
+}
+
 /// Pass each path operator of `data` to `emit` in stream order. Returns how many were emitted and
 /// whether the scan reached the end of the stream.
 fn visit_path_operators(data: &[u8], operator_limit: Option<usize>, mut emit: impl FnMut(Operator)) -> (usize, bool) {
@@ -5858,6 +5864,17 @@ mod tests {
             None,
             "a Form with more operators than the limit is incomplete"
         );
+    }
+
+    #[test]
+    fn page_operator_visit_matches_the_collected_operators() {
+        let page = b"q 1 0 0 rg 1 0 0 1 5 5 cm 0 0 m 10 0 l s q 0 0 1 RG 0 0 4 4 re W n Q BT /F1 9 Tf (x) Tj ET \
+                     % c\n0 0 4 4 re f /Fm0 Do Q 3 w [2 1] 0 d 1 0 0 1 re B*";
+        let expected = parse_content_stream_paths_only(page).unwrap();
+        assert!(expected.len() > 10, "{expected:?}");
+        let mut visited = Vec::new();
+        visit_page_path_operators(page, |op| visited.push(op));
+        assert_eq!(visited, expected);
     }
 
     #[test]

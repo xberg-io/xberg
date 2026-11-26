@@ -347,6 +347,29 @@ const IMAGE_X1: &str = "<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /Co
 const FORM_X1: &str = "<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Length 12 >>\nstream\n0 0 1 1 re f\nendstream";
 
 #[test]
+fn page_paths_keep_state_across_nested_saves_clips_and_a_form() {
+    let paint = "1 0 0 rg 0 0 1 1 re f q 0 0 1 RG 0 0 m 1 1 l S Q 0 0 2 2 re W n /X1 Do";
+    let paths = page_with_xobject(paint, FORM_X1).extract_paths(0).unwrap();
+    let red = crate::layout::Color::new(1.0, 0.0, 0.0);
+    let blue = crate::layout::Color::new(0.0, 0.0, 1.0);
+
+    let fills: Vec<_> = paths.iter().filter(|p| p.has_fill()).collect();
+    assert_eq!(fills.len(), 2, "page rectangle and the form's rectangle");
+    assert!(fills.iter().all(|p| p.fill_color == Some(red)));
+    assert_eq!(fills[0].bbox.x, 300.0);
+    assert_eq!(fills[0].bbox.width, 20.0);
+
+    let strokes: Vec<_> = paths.iter().filter(|p| p.has_stroke()).collect();
+    assert_eq!(strokes.len(), 2, "the saved-state line and the trailing curve");
+    assert_eq!(
+        strokes[0].stroke_color,
+        Some(blue),
+        "colour set inside q is scoped to it"
+    );
+    assert_ne!(strokes[1].stroke_color, Some(blue), "Q restores the stroke colour");
+}
+
+#[test]
 fn bounded_page_local_paths_read_past_an_image_xobject() {
     assert_eq!(page_local_path_count(&page_with_xobject("", IMAGE_X1)), 1);
     assert_eq!(page_local_path_count(&page_with_xobject("/X1 Do", IMAGE_X1)), 1);
