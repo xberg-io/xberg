@@ -68,6 +68,29 @@ def assert_ci_docker_verifies_notices(text: str) -> None:
     assert names.index("Verify image notices") == names.index("Build Docker image") + 1
 
 
+def assert_ci_docker_tests_core_best(text: str) -> None:
+    """CI builds the core image's best target and runs its notice gate and best test variant."""
+    steps = load_workflow(text)["jobs"]["docker"]["steps"]
+    names = step_names(steps)
+    build = named_step(steps, "Build Docker image")["with"]
+    best = named_step(steps, "Build best Docker image")
+    assert best["with"].get("target") == "best"
+    assert best["with"]["build-args"] == build["build-args"]
+    assert best["with"]["cache-from"] == build["cache-from"]
+    verifier = named_step(steps, "Verify best image notices")
+    tests = named_step(steps, "Run best image tests")
+    assert (
+        names.index("Build best Docker image")
+        < names.index("Verify best image notices")
+        < names.index("Run best image tests")
+    )
+    for step in (best, verifier, tests):
+        assert step.get("if") == "matrix.variant == 'core'", step["name"]
+    assert VERIFIER in str(verifier.get("run"))
+    assert "--variant ${{ matrix.variant }}-best" in str(tests.get("run"))
+    assert "scripts/ci/tessdata/**" in push_paths(text)
+
+
 def assert_ci_docker_paths_cover_notices(text: str) -> None:
     """Editing a notice source or the gate itself must trigger the image check."""
     paths = push_paths(text)
@@ -181,6 +204,16 @@ def assert_rejected(check: Callable[[str], None], workflow: str, reason: str) ->
 
 def test_ci_docker_runs_the_byte_level_verifier_for_every_variant() -> None:
     assert_ci_docker_verifies_notices(CI_DOCKER.read_text())
+
+
+def test_ci_docker_builds_and_tests_the_core_best_image() -> None:
+    assert_ci_docker_tests_core_best(CI_DOCKER.read_text())
+
+
+def test_ci_docker_contract_rejects_a_missing_best_test() -> None:
+    broken = remove_step(CI_DOCKER.read_text(), "Run best image tests")
+
+    assert_rejected(assert_ci_docker_tests_core_best, broken, "no best image test")
 
 
 def test_ci_docker_path_filters_cover_the_notice_sources() -> None:
