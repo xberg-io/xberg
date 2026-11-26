@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::ptr;
 use std::sync::Mutex;
 
-use libheif_sys as lh;
+use crate::lh;
 
 #[cfg(feature = "v1_20")]
 use crate::AlphaCompositionMode;

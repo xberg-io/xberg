@@ -1,4 +1,4 @@
-use libheif_sys as lh;
+use crate::lh;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Chroma {

@@ -5,8 +5,8 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use std::{ffi, mem, ptr};
 
+use crate::lh;
 use four_cc::FourCC;
-use libheif_sys as lh;
 
 #[cfg(feature = "v1_19")]
 use crate::SecurityLimits;
@@ -117,6 +117,8 @@ impl<'a> HeifContext<'a> {
     /// The lifetime is chosen by the caller: the context is invariant over it, and a
     /// reader or input slice later installed must outlive it.
     pub fn new() -> Result<HeifContext<'a>> {
+        #[cfg(feature = "dynamic")]
+        crate::dynamic::ensure_loaded()?;
         // SAFETY: Allocation takes no caller-owned pointers. A non-null result is owned by the
         // `ContextOwner` created below, which frees it exactly once.
         let ctx = unsafe { lh::heif_context_alloc() };

@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 use std::os::raw::c_int;
 use std::{ptr, slice};
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::{
     Channel, ColorProfileNCLX, ColorProfileRaw, ColorProfileType, ColorSpace, HeifError, HeifErrorCode,

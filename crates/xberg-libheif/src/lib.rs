@@ -27,9 +27,19 @@ pub use security_limits::*;
 #[cfg(feature = "v1_20")]
 pub use track::*;
 pub use utils::check_file_type;
+
+// Every libheif call goes through `lh`: the linked `libheif-sys` declarations, or with the
+// `dynamic` feature their runtime-loaded wrappers. ~keep
+#[cfg(feature = "dynamic")]
+use dynamic as lh;
+#[cfg(not(feature = "dynamic"))]
+use libheif_sys as lh;
+
 mod color_profile;
 mod context;
 mod decoder;
+#[cfg(feature = "dynamic")]
+mod dynamic;
 mod encoder;
 mod enums;
 mod errors;

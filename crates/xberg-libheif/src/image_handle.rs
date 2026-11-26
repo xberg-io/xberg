@@ -4,8 +4,8 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::rc::Rc;
 
+use crate::lh;
 use four_cc::FourCC;
-use libheif_sys as lh;
 
 use crate::context::ContextOwner;
 use crate::utils::cstr_to_str;

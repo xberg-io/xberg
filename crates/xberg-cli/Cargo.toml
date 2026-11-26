@@ -181,6 +181,10 @@ summarization-llm = ["legacy-base", "xberg/summarization-llm"]
 # exposes every capability included by xberg's corresponding full feature set.
 transcription = ["legacy-base", "xberg/transcription"]
 heic = ["legacy-base", "formats", "xberg/heic"]
+# `heic` with libheif opened on the first HEIF decode instead of linked, so a PDF or Office run
+# never maps libheif, libde265 and libaom (ADR-0019). The Linux gnu and macOS release CLIs add
+# this and ship the libheif closure beside the binary. Unix only. ~keep
+heic-dynamic = ["heic", "xberg/heic-dynamic"]
 # Self-contained static single-file CLI for `cargo binstall xberg-cli`. Every
 # capability here is pure-Rust and statically linkable on musl: document
 # extraction (formats-no-heic), analysis, chunking, tree-sitter, URL ingestion,

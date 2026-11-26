@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::ptr;
 use std::sync::Mutex;
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::utils::cstr_to_str;
 use crate::{ColorConversionOptions, HeifError, HeifErrorCode, HeifErrorSubCode, ImageOrientation, Result};

@@ -294,6 +294,9 @@ ocr-wasm = [
 # bundled dav1d plugin fails to compile against current libdav1d, and it stripped the libheif version
 # feature on Windows — see CHANGELOG and the `system-libheif-provisioning` note.
 heic = ["dep:xberg-libheif", "dep:image", "dep:nom-exif", "image-encode"]
+# `heic` with libheif opened on the first HEIF decode instead of linked (ADR-0019), so other
+# documents never map libheif and its codecs at start. Unix only. ~keep
+heic-dynamic = ["heic", "xberg-libheif?/dynamic"]
 # WordPerfect (.wpd) extraction via the vendored libwpd/librevenge shim in
 # xberg-libwpd. Native C++ dependency (vendors boost), same shape as `heic`.
 wordperfect = ["dep:xberg-libwpd"]

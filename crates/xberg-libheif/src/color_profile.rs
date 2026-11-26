@@ -1,5 +1,5 @@
+use crate::lh;
 use four_cc::FourCC;
-use libheif_sys as lh;
 
 pub type ColorProfileType = FourCC;
 

@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::path::Path;
 use std::ptr;
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::decoder::get_decoding_options_ptr;
 use crate::utils::path_to_cstring;
@@ -27,6 +27,12 @@ pub struct LibHeif(());
 impl LibHeif {
     #[allow(unsafe_code)]
     pub fn new() -> Self {
+        // Without the library there is nothing to initialise; Drop then skips deinit, and the
+        // first context reports why libheif is unavailable. ~keep
+        #[cfg(feature = "dynamic")]
+        if crate::dynamic::load().is_err() {
+            return Self(());
+        }
         let mut init_params = lh::heif_init_params { version: 0 };
         // SAFETY: The local version-zero parameter block stays live through initialization.
         unsafe {
@@ -42,6 +48,8 @@ impl LibHeif {
     /// changed with help of environment variable `LIBHEIF_PLUGIN_PATH`.
     #[allow(unsafe_code)]
     pub fn new_checked() -> Result<Self> {
+        #[cfg(feature = "dynamic")]
+        crate::dynamic::ensure_loaded()?;
         let mut init_params = lh::heif_init_params { version: 0 };
         // SAFETY: The local version-zero parameter block stays live through initialization.
         let error = unsafe { lh::heif_init(&mut init_params as _) };
@@ -54,6 +62,11 @@ impl LibHeif {
 impl Drop for LibHeif {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // The load outcome is cached, so this matches the skip in `new`. ~keep
+        #[cfg(feature = "dynamic")]
+        if crate::dynamic::load().is_err() {
+            return;
+        }
         // SAFETY: Deinitialization balances a successful initialization.
         // new_checked enforces success before constructing a guard; new ignores the result.
         unsafe {

@@ -2,7 +2,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::{FileTypeResult, HeifError, HeifErrorCode, HeifErrorSubCode, Result};
 

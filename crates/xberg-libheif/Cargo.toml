@@ -41,6 +41,12 @@ v1_21 = ["v1_20", "libheif-sys/v1_21"]
 latest = ["v1_21"]
 # Register libheif as a decoder for the `image` crate.
 image = ["dep:image"]
+# Open libheif with dlopen on first use (`src/dynamic.rs`) instead of calling its linked symbols,
+# so a process that decodes no HEIF image never maps libheif and its codecs. Unix only.
+# `libheif-sys` still emits `-lheif`: Linux's `--as-needed` drops the unused entry, and on
+# macOS the build must suppress it with
+# `--config 'target.<triple>.heif.rustc-link-lib=[]'` (see ADR-0019). ~keep
+dynamic = []
 
 [dependencies]
 enumn = "0.1.14"

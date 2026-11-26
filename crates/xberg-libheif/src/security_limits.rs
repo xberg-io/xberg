@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use libheif_sys as lh;
+use crate::lh;
 
 /// Security limits.
 ///

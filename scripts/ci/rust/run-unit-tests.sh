@@ -322,6 +322,14 @@ if ! {
   # Default features preserve the v1_19 API contract on both current primary CI
   # and the explicitly selected minimum-runtime compatibility experiment. ~keep
   RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg-libheif --all-targets --verbose || exit
+
+  # The same suite through the dlopen wrappers the Unix release CLIs use (ADR-0019); its
+  # loader test also proves the installed libheif exports every wrapped function. ~keep
+  if [ "$(uname -s)" = "Linux" ] || [ "$(uname -s)" = "Darwin" ]; then
+    echo "=== cargo test -p xberg-libheif --features dynamic ==="
+    RUST_BACKTRACE=full cargo test --locked --no-fail-fast -p xberg-libheif --features dynamic \
+      --all-targets --verbose || exit
+  fi
 } 2>&1 | tee "$TEST_LOG"; then
   echo "=== Test execution failed ==="
   echo "Last 50 lines of test output:"
