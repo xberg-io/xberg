@@ -71,7 +71,8 @@ struct StreamRun {
 /// Reorder `spans` into content-stream order when that order reads a page of at least three
 /// side-by-side prose columns column by column, returning whether it did.
 ///
-/// Lines follow the stream; the spans of each line are then read left to right, so a run the
+/// Lines follow the stream, except that notes written ahead of the column text above them are
+/// read after it (`note_targets`); the spans of each line are then read left to right, so a run the
 /// producer wrote late (a bold word, an out-of-order `TJ` piece) does not scramble its line.
 /// Artifacts and rotated runs are left out of the analysis but, once the page is accepted, take
 /// their stream position like every other span. A page with too few distinct `sequence` values
@@ -83,14 +84,90 @@ pub fn order_by_stream_columns(spans: &mut [TextSpan]) -> bool {
     if distinct.len() < MIN_STREAM_COLUMNS * MIN_RUN_LINES {
         return false;
     }
-    let lines = stream_lines(&candidates);
+    let (lines, line_of_candidate) = stream_lines(&candidates);
     let runs = stream_runs(&lines);
     if !reads_column_by_column(&lines, &runs) {
         return false;
     }
+    let mut run_of_line = vec![0; lines.len()];
+    for (run_index, run) in runs.iter().enumerate() {
+        for &line in &run.lines {
+            run_of_line[line] = run_index;
+        }
+    }
+    let run_of_candidate: Vec<usize> = line_of_candidate.iter().map(|&line| run_of_line[line]).collect();
     spans.sort_by_key(|span| span.sequence);
+    defer_notes_written_ahead_of_their_column(spans, &run_of_candidate, &note_targets(&lines, &runs));
     read_stream_lines_left_to_right(spans);
     true
+}
+
+/// For each run, the run it is read after instead of at its stream position: a run in secondary
+/// type that the producer wrote before a body-size run standing above it in the same column is
+/// read after the last such run. Federal Register pages write every column's footnotes ahead of
+/// the body (2026-13845), so in stream order they open the page; read where they stand, each
+/// column's notes follow that column's text.
+fn note_targets(lines: &[StreamLine], runs: &[StreamRun]) -> Vec<Option<usize>> {
+    let Some(body_size) = body_size(lines) else {
+        return vec![None; runs.len()];
+    };
+    runs.iter()
+        .enumerate()
+        .map(|(index, note)| {
+            if note.size >= SECONDARY_TYPE_RATIO * body_size {
+                return None;
+            }
+            runs.iter()
+                .enumerate()
+                .skip(index + 1)
+                .filter(|(_, run)| {
+                    (run.size - body_size).abs() <= BODY_SIZE_TOLERANCE * body_size
+                        && run.right.min(note.right) > run.left.max(note.left)
+                        && note.top <= run.bottom
+                })
+                .map(|(target, _)| target)
+                .last()
+        })
+        .collect()
+}
+
+/// Move every flow span of a run with a target (`note_targets`) to just after the last flow span
+/// of that target, keeping the stream order inside each moved run. `spans` must already be in
+/// stream order, whose flow spans are then the `run_of_candidate` candidates in the same order.
+fn defer_notes_written_ahead_of_their_column(
+    spans: &mut [TextSpan],
+    run_of_candidate: &[usize],
+    targets: &[Option<usize>],
+) {
+    if targets.iter().all(Option::is_none) {
+        return;
+    }
+    let flow_positions: Vec<usize> = (0..spans.len()).filter(|&index| is_flow_span(&spans[index])).collect();
+    let mut last_position_of_run: Vec<Option<usize>> = vec![None; targets.len()];
+    for (candidate, &position) in flow_positions.iter().enumerate() {
+        last_position_of_run[run_of_candidate[candidate]] = Some(position);
+    }
+    let mut deferred_after: Vec<Vec<usize>> = vec![Vec::new(); spans.len()];
+    let mut moved = vec![false; spans.len()];
+    for (candidate, &position) in flow_positions.iter().enumerate() {
+        if let Some(target) = targets[run_of_candidate[candidate]]
+            && let Some(after) = last_position_of_run[target]
+        {
+            deferred_after[after].push(position);
+            moved[position] = true;
+        }
+    }
+    let mut order = Vec::with_capacity(spans.len());
+    for position in 0..spans.len() {
+        if !moved[position] {
+            order.push(position);
+            order.extend_from_slice(&deferred_after[position]);
+        }
+    }
+    let mut taken: Vec<TextSpan> = spans.iter_mut().map(std::mem::take).collect();
+    for (slot, &position) in spans.iter_mut().zip(&order) {
+        *slot = std::mem::take(&mut taken[position]);
+    }
 }
 
 fn type_size(span: &TextSpan) -> f32 {
@@ -132,9 +209,10 @@ fn first_word_width(span: &TextSpan) -> f32 {
     span.bbox.width * first.chars().count() as f32 / text.chars().count().max(1) as f32
 }
 
-/// Group consecutive stream spans on one baseline into lines.
-fn stream_lines(spans: &[&TextSpan]) -> Vec<StreamLine> {
+/// Group consecutive stream spans on one baseline into lines, also returning each span's line.
+fn stream_lines(spans: &[&TextSpan]) -> (Vec<StreamLine>, Vec<usize>) {
     let mut lines: Vec<StreamLine> = Vec::new();
+    let mut line_of_span = Vec::with_capacity(spans.len());
     for span in spans {
         let (left, right) = (span.bbox.x, span.bbox.x + span.bbox.width);
         let words = alphabetic_words(&span.text);
@@ -147,8 +225,10 @@ fn stream_lines(spans: &[&TextSpan]) -> Vec<StreamLine> {
             }
             line.right = line.right.max(right);
             line.words += words;
+            line_of_span.push(lines.len() - 1);
             continue;
         }
+        line_of_span.push(lines.len());
         lines.push(StreamLine {
             left,
             right,
@@ -158,7 +238,7 @@ fn stream_lines(spans: &[&TextSpan]) -> Vec<StreamLine> {
             first_word_width: first_word_width(span),
         });
     }
-    lines
+    (lines, line_of_span)
 }
 
 /// Share of the run's line breaks after which the next line's first word would still have fit
@@ -239,17 +319,21 @@ fn reads_column_by_column(lines: &[StreamLine], runs: &[StreamRun]) -> bool {
     column_count(lines, &blocks) >= MIN_STREAM_COLUMNS && !writes_a_block_out_of_order(&blocks)
 }
 
-/// The most body-text runs that stand side by side, disjoint left to right.
-fn column_count(lines: &[StreamLine], blocks: &[&StreamRun]) -> usize {
+/// The type size most stream lines are set in.
+fn body_size(lines: &[StreamLine]) -> Option<f32> {
     let mut size_counts: HashMap<i32, usize> = HashMap::new();
     for line in lines {
         *size_counts.entry((line.size * 10.0).round() as i32).or_default() += 1;
     }
-    let Some(body_size) = size_counts
+    size_counts
         .into_iter()
         .max_by_key(|&(size, count)| (count, std::cmp::Reverse(size)))
         .map(|(size, _)| size as f32 / 10.0)
-    else {
+}
+
+/// The most body-text runs that stand side by side, disjoint left to right.
+fn column_count(lines: &[StreamLine], blocks: &[&StreamRun]) -> usize {
+    let Some(body_size) = body_size(lines) else {
         return 0;
     };
     let content_left = lines.iter().map(|line| line.left).fold(f32::INFINITY, f32::min);
@@ -554,8 +638,26 @@ mod tests {
     }
 
     #[test]
-    fn notes_written_ahead_of_the_body_do_not_block_column_order() {
-        let reading_order = notes_written_ahead_of_the_body(7.0);
+    fn notes_written_ahead_of_the_body_are_read_after_their_column() {
+        let mut spans = rows(written(notes_written_ahead_of_the_body(7.0)));
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        let mut expected = Vec::new();
+        for (label, lines, notes_column) in [("first", 20, None), ("second", 14, Some(0)), ("third", 14, Some(1))] {
+            expected.extend((0..lines).map(|line| format!("{label} line {line} of prose")));
+            if let Some(column_index) = notes_column {
+                expected.extend((0..3).map(|line| format!("footnote {column_index} line {line} in smaller type")));
+            }
+        }
+        assert_eq!(texts(&spans), expected);
+    }
+
+    #[test]
+    fn notes_written_after_the_body_keep_their_stream_position() {
+        let mut reading_order = notes_written_ahead_of_the_body(7.0);
+        let notes: Vec<TextSpan> = reading_order.drain(..6).collect();
+        reading_order.extend(notes);
         let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
         let mut spans = rows(written(reading_order));
 
