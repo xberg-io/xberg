@@ -6,11 +6,13 @@
 //! single newline or a blank line: double-spaced manuscripts and math-heavy pages put
 //! every body line farther apart than the paragraph-gap threshold.
 
-use crate::pdf::structure::pipeline::{HyphenWitnesses, should_preserve_lexical_hyphen};
+use crate::pdf::structure::pipeline::{HyphenWitnesses, is_word_hyphen, should_preserve_lexical_hyphen};
 
-/// ASCII hyphen-minus, U+2010 HYPHEN and U+00AD SOFT HYPHEN: the characters producers
-/// emit for a discretionary line-wrap hyphen. Dashes and the math minus are excluded.
-const LINE_WRAP_HYPHENS: [char; 3] = ['-', '\u{2010}', '\u{00ad}'];
+/// The word hyphens the markdown path dehyphenates, plus U+00AD SOFT HYPHEN, which only
+/// ever marks a discretionary break. Dashes and the math minus are excluded.
+fn is_line_wrap_hyphen(character: char) -> bool {
+    is_word_hyphen(character) || character == '\u{00ad}'
+}
 
 /// TeX and most hyphenation dictionaries leave at least two letters before a break, so a
 /// single letter before a line-final hyphen is a label or an initial, not a word stem.
@@ -24,9 +26,10 @@ const SUSPENDED_HYPHEN_CONTINUATIONS: [&str; 3] = ["and", "or", "nor"];
 ///
 /// The hyphen is dropped when the stem ends in a lowercase letter, unless the pair is a
 /// known compound or the same text writes it hyphenated mid-line; an uppercase stem
-/// (`COVID-` / `related`) keeps its hyphen. Either way the line break goes.
+/// (`COVID-` / `related`) keeps its hyphen. A kept hyphen is written as ASCII `-`, as the
+/// markdown path writes it. Either way the line break goes.
 pub(super) fn rejoin_line_wrap_hyphens(text: String) -> String {
-    if !text.contains(LINE_WRAP_HYPHENS) {
+    if !text.contains(is_line_wrap_hyphen) {
         return text;
     }
     let mut witnesses: Option<HyphenWitnesses> = None;
@@ -68,7 +71,7 @@ impl WrappedWord<'_> {
 /// The hyphenation ending `line` and continuing into `continuation`, or `None` when the
 /// break is not a line-wrap hyphenation.
 fn wrapped_word<'a>(line: &'a str, continuation: &'a str) -> Option<WrappedWord<'a>> {
-    let hyphen = line.chars().next_back().filter(|c| LINE_WRAP_HYPHENS.contains(c))?;
+    let hyphen = line.chars().next_back().filter(|&c| is_line_wrap_hyphen(c))?;
     let stem = &line[..line.len() - hyphen.len_utf8()];
     let left = trailing_letters(stem);
     if left.chars().count() < MIN_WRAPPED_STEM_LETTERS {
@@ -86,7 +89,7 @@ fn wrapped_word<'a>(line: &'a str, continuation: &'a str) -> Option<WrappedWord<
 fn collect_mid_line_hyphen_pairs(text: &str) -> HyphenWitnesses {
     let mut witnesses = HyphenWitnesses::default();
     for word in text.split_whitespace() {
-        let mut parts = word.split('-');
+        let mut parts = word.split(is_word_hyphen);
         let Some(mut left) = parts.next() else {
             continue;
         };
@@ -193,6 +196,19 @@ mod tests {
         assert_eq!(
             rejoin("a price-determining rule\nand a price-\ndetermining step"),
             "a price-determining rule\nand a price-determining step"
+        );
+    }
+
+    #[test]
+    fn non_breaking_hyphen_wrap_is_rejoined() {
+        assert_eq!(rejoin("random access mem\u{2011}\nory"), "random access memory");
+    }
+
+    #[test]
+    fn unicode_hyphen_compound_written_mid_line_keeps_an_ascii_hyphen() {
+        assert_eq!(
+            rejoin("a cross\u{2011}account check\nand a cross\u{2010}\naccount report"),
+            "a cross\u{2011}account check\nand a cross-account report"
         );
     }
 
