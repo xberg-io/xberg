@@ -3167,7 +3167,8 @@ impl PdfExtractor {
             PdfSource::Shared(bytes) => (bytes, None),
             PdfSource::Borrowed(bytes) => (bytes::Bytes::copy_from_slice(bytes), Some(bytes)),
         };
-        let blocking_config = config.clone();
+        // ~keep Boxed so the ~10 KiB config is not copied with the closure through spawn_blocking's frames.
+        let blocking_config = Box::new(config.clone());
         #[cfg(feature = "layout-detection")]
         let region_text_layout = layout_pages
             .filter(|pages| pages.region_text.is_some() && crate::engine::layout_region_text::capture_allowed(config))
@@ -3184,7 +3185,7 @@ impl PdfExtractor {
         let native_output = spawn_pdf_blocking(move || {
             extract_native_blocking(
                 blocking_content,
-                blocking_config,
+                *blocking_config,
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_images,
                 #[cfg(feature = "layout-detection")]
