@@ -126,11 +126,13 @@ impl Engine {
         config: &ExtractionConfig,
     ) -> Result<ExtractionResult> {
         #[cfg(feature = "tokio-runtime")]
-        return seams::scope_progress(
-            Arc::clone(&self.inner.progress),
-            None,
-            extract_impl::extract(&self.inner, input, config),
-        )
+        return crate::core::runtime::pin_boxed(|| {
+            seams::scope_progress(
+                Arc::clone(&self.inner.progress),
+                None,
+                extract_impl::extract(&self.inner, input, config),
+            )
+        })
         .await;
 
         #[cfg(not(feature = "tokio-runtime"))]

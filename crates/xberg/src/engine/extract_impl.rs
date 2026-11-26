@@ -96,7 +96,7 @@ pub(crate) async fn extract(
     input: ExtractInput,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
-    cacheability::scope(extract_scoped(inner, input, config)).await
+    crate::core::runtime::pin_boxed(|| cacheability::scope(extract_scoped(inner, input, config))).await
 }
 
 async fn extract_scoped(
