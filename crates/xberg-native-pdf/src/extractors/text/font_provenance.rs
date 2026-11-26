@@ -182,6 +182,8 @@ mod tests {
         procedural.base_font = "Procedural".into();
         let mut named = (*type3_font("A")).clone();
         named.base_font = "Named".into();
+        // A parsed `/Differences` entry fills the encoding too; the bare helper sets only the name. ~keep
+        named.encoding = crate::fonts::Encoding::Custom(HashMap::from([(2, 'A')]));
         let mut extractor = TextExtractor::new();
         extractor.add_font_shared("F1".into(), Arc::new(procedural));
         extractor.add_font_shared("F2".into(), Arc::new(named));
