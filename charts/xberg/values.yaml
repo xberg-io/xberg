@@ -176,8 +176,11 @@ cache:
   # -- Copy what the image ships under /app/.xberg into the cache volume before the server
   # starts. The volume is mounted over /app/.xberg, so without this it hides the models the
   # full image pre-downloads and the first OCR or layout request downloads them again. Files
-  # the volume already holds are kept. The copy runs on every pod start; with the emptyDir
-  # (cache.enabled=false) it copies the full set each time and needs that much node disk.
+  # the volume already holds are skipped (cp --update=none), so with the PVC only the first
+  # start copies. With the emptyDir (cache.enabled=false) the volume starts empty on every
+  # pod, so each start copies the full image's ~1 GB of models and needs that much node
+  # ephemeral storage: keep cache.enabled=true with the full image, or set this to false
+  # with the core image, which ships no models.
   seedFromImage: true
 
 # -- Disable Kubernetes service-discovery environment variable injection.

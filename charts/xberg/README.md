@@ -75,9 +75,11 @@ mounts a PVC to keep them across restarts. With `ReadWriteOnce` storage, keep
 The cache volume is mounted at `/app/.xberg`, where the full image ships its pre-downloaded
 PaddleOCR and layout models. `cache.seedFromImage=true` (the default) runs a `seed-cache` init
 container from the same image that copies those files into the volume, keeping files the volume
-already holds, so the models are not downloaded again. Without a PVC the copy repeats on every
-pod start and needs the models' size in node disk; set `cache.seedFromImage=false` to skip it,
-for example with the core image, which ships no models.
+already holds, so the models are not downloaded again and a PVC is only filled on its first
+start. Without a PVC (`cache.enabled=false`) the emptyDir starts empty on every pod, so each
+start copies the full image's ~1 GB of models and needs that much ephemeral storage on the node.
+Use the PVC (the default) with the full image; with the core image, which ships no models, set
+`cache.seedFromImage=false`.
 
 ## Documentation
 
