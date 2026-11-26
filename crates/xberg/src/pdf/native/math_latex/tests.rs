@@ -330,6 +330,20 @@ fn should_keep_the_source_when_axis_glyphs_collide() {
     assert!(rewrite_math_spans(&spans).is_none());
 }
 
+/// A raised script with no glyph of the row in reach keeps its place on an empty base; the
+/// formula is still written rather than left as loose source glyphs.
+#[test]
+fn should_write_a_script_with_no_base_on_an_empty_base() {
+    let spans = vec![
+        span("2", "CMR7", 7.0, 204.0, 4.0, 703.6),
+        span("x", "CMMI10", 10.0, 210.0, 5.0, 700.0),
+        span("=", "CMR10", 10.0, 218.0, 7.8, 700.0),
+        span("y", "CMMI10", 10.0, 229.0, 5.0, 700.0),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("formula with a baseless script is rewritten");
+    assert_eq!(texts(&rewritten), ["$${}^{2}x=y$$"]);
+}
+
 /// Two aligned equations put their scripts at the same x; each script's raw baseline is the
 /// one recorded at its own row, not the first row's.
 #[test]

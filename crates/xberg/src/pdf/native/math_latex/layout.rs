@@ -71,6 +71,8 @@ enum ItemKind<'p, 'a> {
     Base(&'p Piece<'a>),
     Fraction(Vec<&'p Piece<'a>>, Vec<&'p Piece<'a>>),
     Limits(Vec<&'p Piece<'a>>, Vec<&'p Piece<'a>>),
+    /// The empty base `{}` of a script cluster no glyph of the row is near enough to carry.
+    Orphan,
 }
 
 /// One element of a formula row with the scripts it carries.
@@ -100,9 +102,13 @@ impl<'p, 'a> Item<'p, 'a> {
     }
 }
 
-/// Spell a group of pieces as one LaTeX expression, or `None` when its layout does not
-/// resolve: glyphs left over with no base, axis glyphs drawn over each other, a fraction
-/// missing a part. The caller then keeps the source text rather than emit broken TeX.
+/// Spell a group of pieces as one LaTeX expression, or `None` when axis glyphs are drawn
+/// over each other: two rows mixed into one, which the caller keeps as source text.
+///
+/// A script cluster with no base in reach is written on an empty base (`{}^{2}`) where it
+/// stands, and a fraction part that spells to nothing stays an empty group: keeping the
+/// source text for those left whole display formulas (arXiv 1602.03238's, whose integral
+/// signs and limits sit off the axis with no base) as a scatter of loose glyphs. ~keep
 pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
     let visible: Vec<&Piece<'_>> = pieces.iter().copied().filter(|piece| !piece.is_blank()).collect();
     if visible.is_empty() {
@@ -153,10 +159,7 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
         size,
     );
     let (above, below) = pair_stacks(&mut items, above, below, &axis, base, size);
-    let leftovers = attach_scripts(&mut items, above, below, size);
-    if !leftovers.is_empty() {
-        return None;
-    }
+    attach_scripts(&mut items, above, below, size);
     write_items(&items, depth)
 }
 
@@ -316,14 +319,10 @@ fn stacks_with(
     x0 - left_edge >= size * FRACTION_LEFT_GAP_EM
 }
 
-/// Hang each unpaired cluster on the item it scripts; returns clusters with no base.
-fn attach_scripts<'p, 'a>(
-    items: &mut [Item<'p, 'a>],
-    above: Clusters<'p, 'a>,
-    below: Clusters<'p, 'a>,
-    size: f32,
-) -> Clusters<'p, 'a> {
-    let mut leftovers = Vec::new();
+/// Hang each unpaired cluster on the item it scripts; a cluster with no base in reach gets an
+/// [`ItemKind::Orphan`] base at its own position.
+fn attach_scripts<'p, 'a>(items: &mut Vec<Item<'p, 'a>>, above: Clusters<'p, 'a>, below: Clusters<'p, 'a>, size: f32) {
+    let mut orphans = Vec::new();
     let sides = above
         .into_iter()
         .map(|cluster| (cluster, true))
@@ -344,10 +343,21 @@ fn attach_scripts<'p, 'a>(
                 };
                 side.extend(cluster);
             }
-            _ => leftovers.push(cluster),
+            _ => {
+                let mut orphan = Item::new(x0, x1, ItemKind::Orphan);
+                if superscript {
+                    orphan.superscripts = cluster;
+                } else {
+                    orphan.subscripts = cluster;
+                }
+                orphans.push(orphan);
+            }
         }
     }
-    leftovers
+    if !orphans.is_empty() {
+        items.extend(orphans);
+        items.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+    }
 }
 
 fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
@@ -376,15 +386,13 @@ fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
             }
             ItemKind::Fraction(upper, lower) => {
                 let (numerator, denominator) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
-                if numerator.is_empty() || denominator.is_empty() {
-                    return None;
-                }
                 tex.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
             }
             ItemKind::Limits(upper, lower) => {
                 let (upper, lower) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
                 tex.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
             }
+            ItemKind::Orphan => tex.raw("{}"),
         }
         write_scripts(&mut tex, &subscript, &superscript);
     }
