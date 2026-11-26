@@ -587,6 +587,32 @@ pub(crate) fn decode_standard_luma8_with_security_limits(
         .map(image::DynamicImage::into_luma8)
 }
 
+/// Decode to RGB8 an image of at most `max_pixels` pixels, refusing a larger one from its header.
+///
+/// The decoder may allocate four bytes per admitted pixel: the widest 8-bit layout (RGBA8) the
+/// caller's former inline decode admitted.
+#[cfg(feature = "captioning-onnx")]
+pub(crate) fn decode_standard_rgb8_within_pixels(bytes: &[u8], max_pixels: u32) -> Result<image::RgbImage> {
+    let budget = ImageDecodeBudget {
+        max_decoded_bytes: u64::from(max_pixels).saturating_mul(4),
+    };
+    let probe = probe_standard_image(bytes, budget, None)?;
+    if decoded_byte_count(probe.width, probe.height, 1)? > u64::from(max_pixels) {
+        return Err(image_dimension_error(
+            probe.width,
+            probe.height,
+            probe.decoded_bytes,
+            budget.max_decoded_bytes,
+        ));
+    }
+    let mut reader = ImageReader::with_format(Cursor::new(bytes), probe.format);
+    reader.limits(image_decode_limits(budget));
+    reader
+        .decode()
+        .map_err(map_image_decode_error)
+        .map(image::DynamicImage::into_rgb8)
+}
+
 #[cfg(feature = "qr-codes")]
 pub(crate) fn decode_standard_luma8_with_default_security_limits(bytes: &[u8]) -> Result<image::GrayImage> {
     decode_standard_luma8_with_security_limits(bytes, &SecurityLimits::default())

@@ -79,7 +79,8 @@ pub(crate) async fn try_replace_standalone(
         skip(original, StandaloneSkip::Density(dpi));
         return Ok(false);
     }
-    let Some(samples) = decode_gray(bytes, bounds.dimensions) else {
+    let security_limits = config.security_limits.clone().unwrap_or_default();
+    let Some(samples) = decode_gray(bytes, bounds.dimensions, &security_limits) else {
         skip(original, StandaloneSkip::UnsupportedSource);
         return Ok(false);
     };
@@ -292,24 +293,25 @@ fn standalone_budget(config: &ExtractionConfig, ocr: &OcrConfig, bounds: &Standa
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-fn decode_gray(bytes: &[u8], (width, height): (u32, u32)) -> Option<Vec<u8>> {
+fn decode_gray(
+    bytes: &[u8],
+    (width, height): (u32, u32),
+    limits: &crate::extractors::security::SecurityLimits,
+) -> Option<Vec<u8>> {
     use image::ImageFormat;
-    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()?;
     if !matches!(
-        reader.format()?,
+        image::guess_format(bytes).ok()?,
         ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::WebP | ImageFormat::Bmp
     ) {
         return None;
     }
-    if reader.into_dimensions().ok()? != (width, height) {
+    let (probed_width, probed_height, _) =
+        crate::extraction::image_decode::probe_standard_image_with_security_limits(bytes, limits).ok()?;
+    if (probed_width, probed_height) != (width, height) {
         return None;
     }
-    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()?;
-    Some(reader.decode().ok()?.into_luma8().into_raw())
+    let gray = crate::extraction::image_decode::decode_standard_luma8_with_security_limits(bytes, limits).ok()?;
+    Some(gray.into_raw())
 }
 
 /// The downscaled read's frame, as recorded by OCR preprocessing.
@@ -395,6 +397,39 @@ impl StandaloneFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    fn png(color: image::ExtendedColorType, (width, height): (u32, u32), samples: &[u8]) -> Vec<u8> {
+        use image::ImageEncoder;
+        let mut encoded = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut encoded)
+            .write_image(samples, width, height, color)
+            .expect("encode test PNG");
+        encoded
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn decode_gray_returns_the_source_luma_samples() {
+        let limits = crate::extractors::security::SecurityLimits::default();
+        let gray = png(image::ExtendedColorType::L8, (3, 2), &[0, 64, 128, 192, 255, 7]);
+        assert_eq!(decode_gray(&gray, (3, 2), &limits), Some(vec![0, 64, 128, 192, 255, 7]));
+        let rgb = png(image::ExtendedColorType::Rgb8, (1, 2), &[255, 255, 255, 0, 0, 0]);
+        assert_eq!(decode_gray(&rgb, (1, 2), &limits), Some(vec![255, 0]));
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn decode_gray_refuses_a_mismatched_frame_or_an_over_budget_source() {
+        let gray = png(image::ExtendedColorType::L8, (3, 2), &[0; 6]);
+        let limits = crate::extractors::security::SecurityLimits::default();
+        assert_eq!(decode_gray(&gray, (2, 3), &limits), None);
+        let tight = crate::extractors::security::SecurityLimits {
+            max_content_size: 5,
+            ..Default::default()
+        };
+        assert_eq!(decode_gray(&gray, (3, 2), &tight), None);
+    }
 
     #[test]
     fn a_long_blank_margin_offers_cuts_inside_the_plan_lookback() {

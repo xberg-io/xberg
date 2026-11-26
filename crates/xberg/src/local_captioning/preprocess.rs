@@ -326,19 +326,8 @@ fn split_tiles(image: &image::RgbImage, rows: u32, cols: u32) -> Vec<image::RgbI
 }
 
 pub(super) fn decode_png_or_common(bytes: &[u8], max_pixels: u32) -> crate::Result<image::RgbImage> {
-    let side = (f64::from(max_pixels).sqrt() as u32).max(1);
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(|error| invalid(format!("Local captioning image format: {error}")))?;
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(side);
-    limits.max_image_height = Some(side);
-    limits.max_alloc = Some(u64::from(max_pixels).saturating_mul(4));
-    reader.limits(limits);
-    let image = reader
-        .decode()
-        .map_err(|error| invalid(format!("Local captioning image decode: {error}")))?;
-    Ok(image.to_rgb8())
+    crate::extraction::image_decode::decode_standard_rgb8_within_pixels(bytes, max_pixels)
+        .map_err(|error| invalid(format!("Local captioning image decode: {error}")))
 }
 
 pub(super) fn preprocess(
