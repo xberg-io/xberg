@@ -15,12 +15,14 @@ use rayon::prelude::*;
 
 #[cfg(test)]
 use super::assembly::assemble_internal_document;
+#[cfg(test)]
+use super::classify::is_body_size_bold_heading_candidate;
 use super::classify::{
-    classify_formula_paragraphs, classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings,
-    demote_unnumbered_subsections, is_body_size_bold_heading_candidate, is_body_size_bold_signal,
-    is_numbered_section_heading, is_short_body_size_section_title, level_numbered_headings_by_depth, mark_arxiv_noise,
-    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, paragraph_plain_text, reads_vertically,
-    refine_heading_hierarchy,
+    body_size_bold_signal_text, classify_formula_paragraphs, classify_paragraphs, demote_heading_runs,
+    demote_structure_annotation_headings, demote_unnumbered_subsections, is_body_size_bold_signal,
+    is_numbered_section_heading, level_numbered_headings_by_depth, mark_arxiv_noise,
+    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, paragraph_plain_text,
+    reads_as_body_size_bold_heading, reads_as_short_section_title, reads_vertically, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{crosses_visual_line_break, is_cjk_char, segments_need_space};
@@ -402,18 +404,19 @@ fn is_explicit_numbered_body_size_section(text: &str) -> bool {
             .all(char::is_uppercase)
 }
 
+/// `candidates[page][index]` says whether that paragraph is a heading candidate.
 fn body_size_heading_eligibility(
     all_pages: &[Vec<PdfParagraph>],
     body_font_size: f32,
-    is_heading_candidate: impl Fn(&PdfParagraph) -> bool,
+    candidates: &[Vec<bool>],
 ) -> Vec<Vec<bool>> {
     let mut next_content: Option<(usize, &PdfParagraph)> = None;
     let mut eligibility = Vec::with_capacity(all_pages.len());
     for (page_index, page) in all_pages.iter().enumerate().rev() {
         let mut page_eligibility = Vec::with_capacity(page.len());
-        for paragraph in page.iter().rev() {
-            let is_candidate = is_heading_candidate(paragraph);
-            let is_explicit_section = is_explicit_numbered_body_size_section(paragraph_text_raw(paragraph).trim());
+        for (index, paragraph) in page.iter().enumerate().rev() {
+            let is_candidate = candidates[page_index][index];
+            let is_explicit_section = || is_explicit_numbered_body_size_section(paragraph_text_raw(paragraph).trim());
             let has_non_finite_geometry = paragraph
                 .block_bbox
                 .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
@@ -425,7 +428,7 @@ fn body_size_heading_eligibility(
             page_eligibility.push(
                 is_candidate
                     && !has_non_finite_geometry
-                    && if is_explicit_section {
+                    && if is_explicit_section() {
                         !next_content.is_some_and(|(following_page_index, following)| {
                             shares_same_text_row(paragraph, following, page_index == following_page_index)
                         })
@@ -501,19 +504,35 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
     // count too: 1004.1028 and 2026-14578 emitted no heading at all without them.
     // Where another heading system exists the short form stays a label. ~keep
     let headingless = other_heading_count == 0;
-    let short_title_counts = if headingless {
-        short_body_size_title_counts(all_pages, body_font_size)
-    } else {
-        ahash::AHashMap::new()
-    };
-    let eligible = body_size_heading_eligibility(all_pages, body_font_size, |paragraph| {
-        is_body_size_bold_heading_candidate(paragraph, body_font_size)
-            || (headingless
-                && is_short_body_size_section_title(paragraph, body_font_size)
-                && short_title_counts
-                    .get(paragraph_text_raw(paragraph).trim())
-                    .is_some_and(|&count| count <= MAX_SHORT_TITLE_REPEATS))
-    });
+    let titles: Vec<Vec<BodySizeTitle>> = all_pages
+        .iter()
+        .map(|page| {
+            page.iter()
+                .map(|paragraph| body_size_title(paragraph, body_font_size, headingless))
+                .collect()
+        })
+        .collect();
+    // A short bold line repeated on many pages (`Federal Register` atop rotated table pages)
+    // is a running label, not a section; a real title repeats at most per rule or chapter.
+    let mut short_title_counts = ahash::AHashMap::<&str, usize>::new();
+    for key in titles.iter().flatten().filter_map(|title| title.short_title.as_deref()) {
+        *short_title_counts.entry(key).or_default() += 1;
+    }
+    let candidates: Vec<Vec<bool>> = titles
+        .iter()
+        .map(|page| {
+            page.iter()
+                .map(|title| {
+                    title.candidate
+                        || title
+                            .short_title
+                            .as_deref()
+                            .is_some_and(|key| short_title_counts[key] <= MAX_SHORT_TITLE_REPEATS)
+                })
+                .collect()
+        })
+        .collect();
+    let eligible = body_size_heading_eligibility(all_pages, body_font_size, &candidates);
     let signal_count = eligible.iter().flatten().filter(|&&is_eligible| is_eligible).count();
     if signal_count >= MIN_BODY_SIZE_BOLD_SIGNALS
         && signal_count > other_heading_count.saturating_mul(MAX_OTHER_HEADING_RATIO)
@@ -627,22 +646,27 @@ fn joined_paragraph(title: &PdfParagraph, next: &PdfParagraph) -> PdfParagraph {
     joined
 }
 
-/// How often each short body-size bold title occurs in the document. A short bold
-/// line repeated on many pages (`Federal Register` atop rotated table pages) is a
-/// running label, not a section; a real title repeats at most per rule or chapter.
-fn short_body_size_title_counts(
-    all_pages: &[Vec<PdfParagraph>],
-    body_font_size: f32,
-) -> ahash::AHashMap<String, usize> {
-    let mut counts = ahash::AHashMap::new();
-    for paragraph in all_pages.iter().flatten() {
-        if is_short_body_size_section_title(paragraph, body_font_size) {
-            *counts
-                .entry(paragraph_text_raw(paragraph).trim().to_string())
-                .or_default() += 1;
-        }
+/// What one paragraph offers the bold body-size heading convention, judged once.
+struct BodySizeTitle {
+    /// A body-size bold signal that reads as a heading on its own evidence.
+    candidate: bool,
+    /// In a headingless document, the count key of a one- or two-word section title.
+    short_title: Option<String>,
+}
+
+fn body_size_title(paragraph: &PdfParagraph, body_font_size: f32, headingless: bool) -> BodySizeTitle {
+    let Some(text) = body_size_bold_signal_text(paragraph, body_font_size) else {
+        return BodySizeTitle {
+            candidate: false,
+            short_title: None,
+        };
+    };
+    let trimmed = text.trim();
+    BodySizeTitle {
+        candidate: reads_as_body_size_bold_heading(paragraph, trimmed),
+        short_title: (headingless && reads_as_short_section_title(paragraph, trimmed))
+            .then(|| paragraph_text_raw(paragraph).trim().to_string()),
     }
-    counts
 }
 
 /// Build a heading map from structure-tree-assigned roles on segments.

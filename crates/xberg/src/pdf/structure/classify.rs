@@ -1801,6 +1801,12 @@ fn is_set_in_body_title_type(para: &PdfParagraph, body_font_size: f32) -> bool {
 }
 
 pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32) -> bool {
+    body_size_bold_signal_text(para, body_font_size).is_some()
+}
+
+/// The plain text of a body-size bold signal paragraph (see [`is_body_size_bold_signal`]),
+/// or `None` when the paragraph is not one, so callers judging the text further join it once.
+pub(super) fn body_size_bold_signal_text(para: &PdfParagraph, body_font_size: f32) -> Option<String> {
     if para.heading_level.is_some()
         || !para.is_bold
         || para.is_list_item
@@ -1814,17 +1820,18 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
         || para.word_count > body_size_bold_title_word_cap(para)
         || !reads_as_one_title_block(para, body_font_size)
     {
-        return false;
+        return None;
     }
 
     let text = paragraph_plain_text(para);
     let trimmed = text.trim();
-    !trimmed.is_empty()
+    let is_signal = !trimmed.is_empty()
         && (!ends_with_sentence_period(trimmed) || is_section_pattern(trimmed))
         && (!trimmed.ends_with(':') || is_all_caps_text(trimmed))
         && !looks_like_figure_label(trimmed)
         && !looks_like_bare_url(trimmed)
-        && !super::layout_classify::is_separator_text(trimmed)
+        && !super::layout_classify::is_separator_text(trimmed);
+    is_signal.then_some(text)
 }
 
 /// On typography alone a bold body-size line needs at least this many words to read
@@ -1832,10 +1839,14 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
 /// run-in lead. See [`is_body_size_bold_heading_candidate`] for the exemption. ~keep
 const MIN_BOLD_HEADING_WORD_COUNT: usize = 3;
 
+#[cfg(test)]
 pub(super) fn is_body_size_bold_heading_candidate(para: &PdfParagraph, body_font_size: f32) -> bool {
-    if !is_body_size_bold_signal(para, body_font_size) {
-        return false;
-    }
+    body_size_bold_signal_text(para, body_font_size)
+        .is_some_and(|text| reads_as_body_size_bold_heading(para, text.trim()))
+}
+
+/// Whether a body-size bold signal paragraph with plain text `trimmed` is a heading candidate.
+pub(super) fn reads_as_body_size_bold_heading(para: &PdfParagraph, trimmed: &str) -> bool {
     // A numbered section heading carries its own evidence and does not need to clear
     // the word-count floor. Requiring three words silently excluded every two-word
     // numbered title -- `3. PRIJZEN`, `1. INTRODUCTION` -- from heading promotion, so
@@ -1844,7 +1855,7 @@ pub(super) fn is_body_size_bold_heading_candidate(para: &PdfParagraph, body_font
     // Measured on GH#1611: `ARTIKEL 1. TOEPASSELIJKHEID` (3 words) was promoted and
     // `1. TOEPASSELIJKHEID` (2 words) was not, at identical font, weight and body
     // size -- the keyword contributed nothing but the third word. See #1611. ~keep
-    para.word_count >= MIN_BOLD_HEADING_WORD_COUNT || is_numbered_section_heading(paragraph_plain_text(para).trim())
+    para.word_count >= MIN_BOLD_HEADING_WORD_COUNT || is_numbered_section_heading(trimmed)
 }
 
 /// A one- or two-word section title must carry a word of at least this many letters:
@@ -1856,27 +1867,18 @@ const MIN_SHORT_TITLE_WORD_LETTERS: usize = 3;
 /// two short words on one line as well. ~keep
 const SHORT_TITLE_MAX_SEGMENT_GAP_EM: f32 = 2.0;
 
-/// Whether a one- or two-word bold body-size line reads as a section title
-/// (`Introduction`, `Background`, `Small Numbers`) rather than a label.
+/// Whether a one- or two-word body-size bold signal paragraph, with plain text `trimmed`,
+/// reads as a section title (`Introduction`, `Background`, `Small Numbers`) rather than a
+/// label.
 ///
 /// Below [`MIN_BOLD_HEADING_WORD_COUNT`] typography alone cannot tell a title from
 /// emphasis, so callers admit these only where bold body-size lines are the
 /// document's sole heading convention. The text guards reject the label shapes that
 /// convention still contains: `Note:` and `Total: 5` (a colon), `C)` (a panel
-/// label), `Rauch III,` (a signature), and a bold table header row (a gutter-wide
-/// gap between its segments).
-pub(super) fn is_short_body_size_section_title(para: &PdfParagraph, body_font_size: f32) -> bool {
-    if !is_body_size_bold_signal(para, body_font_size) || !(1..MIN_BOLD_HEADING_WORD_COUNT).contains(&para.word_count) {
-        return false;
-    }
-    let text = paragraph_plain_text(para);
-    let trimmed = text.trim();
-    let has_gutter_gap = para.lines.iter().any(|line| {
-        line.segments
-            .windows(2)
-            .any(|pair| pair[1].x - (pair[0].x + pair[0].width) > body_font_size * SHORT_TITLE_MAX_SEGMENT_GAP_EM)
-    });
-    !has_gutter_gap
+/// label) and `Rauch III,` (a signature); a bold table header row (a gutter-wide gap
+/// between its segments) is no signal at all (see [`reads_as_one_title_block`]).
+pub(super) fn reads_as_short_section_title(para: &PdfParagraph, trimmed: &str) -> bool {
+    (1..MIN_BOLD_HEADING_WORD_COUNT).contains(&para.word_count)
         && trimmed.chars().next().is_some_and(char::is_uppercase)
         && !trimmed.contains(':')
         && !trimmed.ends_with([')', ',', ';', '.'])
