@@ -2420,6 +2420,9 @@ pub struct TextExtractor<'doc> {
     pub(crate) invisible_text_page: Option<usize>,
     /// Sequence number and bounds of each emitted white span.
     invisible_spans: Vec<(usize, Rect)>,
+    /// Painted regions of `invisible_text_page`, read at the first white glyph of a char run
+    /// (`None` until then).
+    char_painted_regions: Option<Option<Arc<Vec<Rect>>>>,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
     /// Whether the last glyph that was not a space stood for more than one letter (a ligature).

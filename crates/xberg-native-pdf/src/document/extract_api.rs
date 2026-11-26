@@ -1842,6 +1842,9 @@ impl PdfDocument {
 
         let mut extractor = TextExtractor::new();
         extractor.set_page_index(page_index as u32);
+        // Drop the white glyphs the span layer drops, so table and script passes reading chars
+        // see the page text extraction does. ~keep
+        extractor.invisible_text_page = Some(page_index);
         if !excluded_layers.is_empty() {
             extractor.set_excluded_layers(excluded_layers);
         }

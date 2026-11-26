@@ -162,6 +162,21 @@ impl<'doc> TextExtractor<'doc> {
         });
     }
 
+    /// The painted regions a char run checks white glyphs against, or `None` when it keeps them.
+    /// A white glyph over none of them is dropped, as [`Self::drop_unpainted_invisible_text`]
+    /// drops such spans, so the char and span layers agree; the char layer decides glyph by glyph.
+    pub(super) fn char_drop_regions(&mut self) -> Option<Arc<Vec<Rect>>> {
+        if self.extract_spans || self.verdict_run {
+            return None;
+        }
+        let (Some(page), Some(document)) = (self.invisible_text_page, self.document) else {
+            return None;
+        };
+        self.char_painted_regions
+            .get_or_insert_with(|| document.painted_regions(page))
+            .clone()
+    }
+
     /// Emit a character, unless the current state suppresses it.
     pub(super) fn push_char(&mut self, ch: TextChar) {
         if let Some(hold) = self.emit_hold() {

@@ -423,6 +423,7 @@ impl<'doc> TextExtractor<'doc> {
                                         let font_name = state.font_name.clone();
                                         let font_size = state.font_size;
                                         let fill_color_rgb = state.fill_color_rgb;
+                                        let white = super::paints_invisible_text(state);
 
                                         let combined = ctm.multiply(&text_matrix);
                                         let effective_font_size =
@@ -477,7 +478,13 @@ impl<'doc> TextExtractor<'doc> {
                                                 final_matrix.f,
                                             ]),
                                         };
-                                        self.push_char(space_char);
+                                        let unpainted_white = white
+                                            && self.char_drop_regions().is_some_and(|painted| {
+                                                !painted.iter().any(|region| region.intersects(&space_char.bbox))
+                                            });
+                                        if !unpainted_white {
+                                            self.push_char(space_char);
+                                        }
                                     }
 
                                     // Route through advance_text_matrix so the

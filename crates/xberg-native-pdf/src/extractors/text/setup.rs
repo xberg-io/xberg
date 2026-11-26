@@ -50,6 +50,7 @@ impl<'doc> TextExtractor<'doc> {
             skip_nonpainting_text: false,
             invisible_text_page: None,
             invisible_spans: Vec::new(),
+            char_painted_regions: None,
             chars: Vec::new(),
             after_ligature: false,
             resources: None,

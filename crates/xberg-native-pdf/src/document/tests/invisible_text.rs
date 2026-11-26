@@ -172,3 +172,25 @@ fn painted_regions_are_read_once_per_page_during_the_page_passes() {
     assert!(std::sync::Arc::ptr_eq(&first, &second));
     assert_eq!(*first, *outside.0.unwrap());
 }
+
+fn char_text(content: &str) -> String {
+    let doc = PdfDocument::from_bytes(build_minimal_pdf_with_font(content.as_bytes())).expect("fixture PDF parses");
+    doc.extract_chars(0)
+        .expect("fixture page extracts")
+        .iter()
+        .map(|character| character.char)
+        .collect()
+}
+
+/// Table and script passes read the char layer, which kept the white glyphs the span layer drops.
+#[test]
+fn char_layer_drops_the_white_text_the_span_layer_drops() {
+    let hidden = format!("{VISIBLE_LINE}BT /F1 10 Tf 1 g 1 0 0 1 50 600 Tm (Hidden) Tj ET\n");
+    let labelled =
+        format!("{VISIBLE_LINE}0 0 0.5 rg 40 590 200 30 re f\nBT /F1 10 Tf 1 g 1 0 0 1 50 600 Tm (Label) Tj ET\n");
+
+    let chars = char_text(&hidden);
+    assert!(chars.contains("Visible") && !chars.contains("Hidden"), "{chars:?}");
+    let chars = char_text(&labelled);
+    assert!(chars.contains("Visible") && chars.contains("Label"), "{chars:?}");
+}

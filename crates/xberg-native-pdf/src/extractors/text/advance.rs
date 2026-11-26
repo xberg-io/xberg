@@ -1012,6 +1012,11 @@ impl<'doc> TextExtractor<'doc> {
             text
         };
 
+        let drop_regions = if super::paints_invisible_text(self.state_stack.current()) {
+            self.char_drop_regions()
+        } else {
+            None
+        };
         let state = self.state_stack.current();
         let font_size = state.font_size;
         let horizontal_scaling = state.horizontal_scaling;
@@ -1201,7 +1206,12 @@ impl<'doc> TextExtractor<'doc> {
                         ]),
                     };
 
-                    if let Some(hold) = self.emit_hold() {
+                    let unpainted_white = drop_regions
+                        .as_ref()
+                        .is_some_and(|painted| !painted.iter().any(|region| region.intersects(&text_char.bbox)));
+                    if let Some(hold) = self.emit_hold()
+                        && !unpainted_white
+                    {
                         super::marked_content::push_held(&mut self.chars, &mut self.char_holds, text_char, hold);
                     }
                 }
