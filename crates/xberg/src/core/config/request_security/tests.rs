@@ -480,12 +480,35 @@ fn should_reject_caller_tessdata_path() {
 }
 
 #[test]
-fn should_reject_caller_tessdata_model() {
-    let config = serde_json::json!({"ocr": {"tessdata_model": "best"}});
+fn should_reject_only_a_caller_tessdata_model_that_differs_from_the_operators() {
+    use super::super::{OcrConfig, TessdataModel};
 
-    assert_eq!(
-        validate_caller_extraction_config(&config),
-        Err("Caller extraction config may not set ocr.tessdata_model".to_string())
+    let fast_operator = super::super::ExtractionConfig::default();
+    let best_operator = super::super::ExtractionConfig {
+        ocr: Some(OcrConfig {
+            tessdata_model: TessdataModel::Best,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let caller = |model: &str| serde_json::json!({"ocr": {"tessdata_model": model}});
+    let rejected = Err("Caller extraction config may not set ocr.tessdata_model".to_string());
+
+    assert_eq!(check_caller_tessdata_model(&fast_operator, &caller("best")), rejected);
+    assert_eq!(check_caller_tessdata_model(&best_operator, &caller("fast")), rejected);
+    assert_eq!(check_caller_tessdata_model(&best_operator, &caller("Best")), rejected);
+    assert_eq!(check_caller_tessdata_model(&fast_operator, &caller("fast")), Ok(()));
+    assert_eq!(check_caller_tessdata_model(&best_operator, &caller("best")), Ok(()));
+    assert!(resolve_caller_extraction_config(&fast_operator, Some(&caller("best"))).is_err());
+
+    let serialized = serde_json::json!({"ocr": serde_json::to_value(OcrConfig::default()).unwrap()});
+    assert!(
+        resolve_caller_extraction_config(&fast_operator, Some(&serialized)).is_ok(),
+        "a caller that serializes a default OCR config must not be rejected"
+    );
+    assert!(
+        resolve_caller_extraction_config(&best_operator, Some(&serialized)).is_ok(),
+        "an omitted default set keeps the operator's set"
     );
 }
 

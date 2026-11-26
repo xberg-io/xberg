@@ -194,7 +194,7 @@ impl ModelSelection {
         if !(image || pdf || mime.is_none_or(str::is_empty) || config.runs_ocr_on_embedded_images()) {
             return None;
         }
-        let default_ocr = crate::core::config::OcrConfig::default();
+        let default_ocr = crate::core::config::OcrConfig::implicit();
         let ocr = config.ocr.as_ref().unwrap_or(&default_ocr);
         if ocr.backend != "tesseract" || ocr.pipeline.is_some() {
             return None;

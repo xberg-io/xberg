@@ -3125,7 +3125,10 @@ fn single_block_table_config(
     if mime_type.to_lowercase().contains("tiff") {
         return None;
     }
-    let mut ocr = config.ocr.clone().unwrap_or_default();
+    let mut ocr = config
+        .ocr
+        .clone()
+        .unwrap_or_else(crate::core::config::OcrConfig::implicit);
     if !is_implicit_horizontal_tesseract(&ocr)
         || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
         || ocr.pipeline.is_some()
@@ -3317,7 +3320,7 @@ impl ImageExtractor {
         let ocr_config = match config.ocr.as_ref() {
             Some(c) => c,
             None => {
-                default_ocr_config = crate::core::config::OcrConfig::default();
+                default_ocr_config = crate::core::config::OcrConfig::implicit();
                 &default_ocr_config
             }
         };

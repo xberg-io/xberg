@@ -110,7 +110,7 @@ pub(crate) async fn process_images_with_ocr(
         return Ok(images);
     }
 
-    let default_ocr_config = crate::core::config::OcrConfig::default();
+    let default_ocr_config = crate::core::config::OcrConfig::implicit();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
     let max_tasks = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
     let mut pending = build_pending_ocr_tasks(&images, ocr_config, config);

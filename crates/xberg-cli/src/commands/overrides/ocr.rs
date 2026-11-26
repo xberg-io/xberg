@@ -138,6 +138,10 @@ impl ExtractionOverrides {
             }
             if let Some(ocr) = config.ocr.as_mut() {
                 self.apply_ocr_fields(ocr);
+            } else if let Some(model) = self.ocr_tessdata_model {
+                // ~keep An `ocr` section created for the set alone would change whether OCR runs;
+                // the set applies to the implicit OCR config instead.
+                xberg::core::config::ocr::set_implicit_tessdata_model(model.into());
             }
         }
 
@@ -172,7 +176,7 @@ impl ExtractionOverrides {
     }
 
     /// Whether any `--ocr-*` field flag (backend, backend options, auto-rotate,
-    /// language, tessdata model) was given, independent of `--ocr`/`--ocr true`.
+    /// language) was given, independent of `--ocr`/`--ocr true`.
     ///
     /// Deliberately excludes `--ocr-no-cache`: `apply_ocr_no_cache` only ever mutates an
     /// already-materialised `tesseract_config` (see its doc comment), so naming
@@ -188,7 +192,6 @@ impl ExtractionOverrides {
             || self.ocr_backend_options.is_some()
             || self.ocr_auto_rotate.is_some()
             || self.ocr_language.is_some()
-            || self.ocr_tessdata_model.is_some()
     }
 
     /// Mutate the individual OCR fields that have a CLI flag, in place.

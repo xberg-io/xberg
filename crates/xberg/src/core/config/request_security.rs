@@ -109,7 +109,6 @@ const OPERATOR_OWNED_FIELDS: &[&str] = &[
     "/html_output/css_file",
     "/tree_sitter/cache_dir",
     "/ocr/tessdata_path",
-    "/ocr/tessdata_model",
     "/chunking/embedding/cache_dir",
     "/chunking/embedding/model/model_id",
     "/chunking/sparse_embedding/cache_dir",
@@ -202,6 +201,7 @@ pub(crate) fn resolve_caller_extraction_config(
     }
     let caller_json = caller
         .map(|caller| {
+            check_caller_tessdata_model(operator, caller)?;
             let mut caller = caller.clone();
             merge_html_override(operator, &mut caller)?;
             Ok::<_, String>(caller.to_string())
@@ -290,11 +290,31 @@ pub(crate) fn adopt_file_operator_policy(
     }
 }
 
+/// The Tesseract model set `operator` runs: its `ocr` section's, else the implicit one.
+fn operator_tessdata_model(operator: Option<&super::OcrConfig>) -> super::TessdataModel {
+    operator.map_or_else(super::ocr::implicit_tessdata_model, |ocr| ocr.tessdata_model)
+}
+
+/// Reject a caller `ocr.tessdata_model` that differs from the operator's: the set decides what the
+/// server downloads and caches. Restating the operator's value is allowed, so a client that
+/// serializes a whole config is not rejected.
+pub(crate) fn check_caller_tessdata_model(operator: &super::ExtractionConfig, caller: &Value) -> Result<(), String> {
+    let Some(value) = caller.pointer("/ocr/tessdata_model").filter(|value| !value.is_null()) else {
+        return Ok(());
+    };
+    let requested = serde_json::from_value::<super::TessdataModel>(value.clone()).ok();
+    if requested == Some(operator_tessdata_model(operator.ocr.as_ref())) {
+        Ok(())
+    } else {
+        Err("Caller extraction config may not set ocr.tessdata_model".to_string())
+    }
+}
+
 /// A caller `ocr` object replaces the operator's, so restore the operator's Tesseract model set:
 /// it selects what the server downloads and caches.
 fn adopt_operator_tessdata_model(ocr: Option<&mut super::OcrConfig>, operator: Option<&super::OcrConfig>) {
     if let Some(ocr) = ocr {
-        ocr.tessdata_model = operator.map(|operator| operator.tessdata_model).unwrap_or_default();
+        ocr.tessdata_model = operator_tessdata_model(operator);
     }
 }
 

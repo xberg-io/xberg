@@ -1519,6 +1519,8 @@ mod feature_profile_tests {
                 "xberg",
                 "extract",
                 "scan.pdf",
+                "--ocr",
+                "true",
                 "--ocr-tessdata-model",
                 value,
                 "--no-config-discovery",

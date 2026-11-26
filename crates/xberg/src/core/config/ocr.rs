@@ -924,6 +924,30 @@ pub const DEFAULT_TESSDATA_MODEL: TessdataModel = TessdataModel::Fast;
 #[cfg(target_arch = "wasm32")]
 const _: () = assert!(matches!(DEFAULT_TESSDATA_MODEL, TessdataModel::Fast));
 
+static IMPLICIT_TESSDATA_MODEL: std::sync::OnceLock<TessdataModel> = std::sync::OnceLock::new();
+
+/// Set the model set used when OCR runs for a config with no `ocr` section (a scanned PDF under
+/// the automatic strategy). The first call in a process wins; returns whether this one did.
+///
+/// `XBERG_OCR_TESSDATA_MODEL` and `--ocr-tessdata-model` use it instead of creating an `ocr`
+/// section, which would change whether OCR runs.
+#[cfg_attr(alef, alef(skip))]
+#[doc(hidden)]
+pub fn set_implicit_tessdata_model(model: TessdataModel) -> bool {
+    IMPLICIT_TESSDATA_MODEL.set(model).is_ok()
+}
+
+/// The model set for a config with no `ocr` section; see [`set_implicit_tessdata_model`].
+#[cfg_attr(alef, alef(skip))]
+#[doc(hidden)]
+pub fn implicit_tessdata_model() -> TessdataModel {
+    IMPLICIT_TESSDATA_MODEL.get().copied().unwrap_or_default()
+}
+
+fn is_default_tessdata_model(model: &TessdataModel) -> bool {
+    *model == TessdataModel::default()
+}
+
 impl TessdataModel {
     /// The wire name: `"fast"` or `"best"`.
     #[must_use]
@@ -1178,7 +1202,7 @@ pub struct OcrConfig {
     /// The `XBERG_OCR_TESSDATA_MODEL` environment variable sets the same key for env-configured
     /// servers. REST and MCP callers cannot set it. WebAssembly refuses `best` unless the model
     /// bytes come in `tessdata_bytes`.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_tessdata_model")]
     pub tessdata_model: TessdataModel,
 
     /// Repair OCR tokens that are clearly numeric but mis-punctuated: a dropped thousands
@@ -1239,6 +1263,19 @@ impl Default for OcrConfig {
 }
 
 impl OcrConfig {
+    /// The OCR config used when an extraction config has no `ocr` section: the defaults, with the
+    /// process's [`implicit_tessdata_model`].
+    pub(crate) fn implicit() -> Self {
+        Self::implicit_with(implicit_tessdata_model())
+    }
+
+    fn implicit_with(tessdata_model: TessdataModel) -> Self {
+        Self {
+            tessdata_model,
+            ..Self::default()
+        }
+    }
+
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     pub(crate) fn select_public_elements(
         &self,
@@ -1741,6 +1778,17 @@ mod tests {
 
         let json = serde_json::to_value(&config).unwrap();
         assert_eq!(json["tessdata_model"], "best");
+        let default_json = serde_json::to_value(OcrConfig::default()).unwrap();
+        assert!(
+            default_json.get("tessdata_model").is_none(),
+            "the default set is not serialized"
+        );
+        let round_trip: OcrConfig = serde_json::from_value(default_json).unwrap();
+        assert_eq!(round_trip.tessdata_model, TessdataModel::Fast);
+        assert_eq!(
+            OcrConfig::implicit_with(TessdataModel::Best).tessdata_model,
+            TessdataModel::Best
+        );
         assert_eq!("best".parse::<TessdataModel>(), Ok(TessdataModel::Best));
         assert_eq!("fast".parse::<TessdataModel>(), Ok(TessdataModel::Fast));
         assert!(

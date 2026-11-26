@@ -968,6 +968,8 @@ fn parse_extract_input(
     if let Some(config) = value.get_mut("config") {
         crate::core::config::request_security::validate_caller_extraction_config(config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        crate::core::config::request_security::check_caller_tessdata_model(operator, config)
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
         crate::core::config::request_security::merge_html_override(operator, config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
     }

@@ -121,7 +121,14 @@ impl ExtractionConfig {
                 message: format!("Invalid value for XBERG_OCR_TESSDATA_MODEL: {message}"),
                 source: None,
             })?;
-            self.ocr.get_or_insert_with(OcrConfig::default).tessdata_model = model;
+            // ~keep Creating an `ocr` section would change whether OCR runs; without one, the set
+            // applies to the implicit OCR config instead.
+            match self.ocr.as_mut() {
+                Some(ocr) => ocr.tessdata_model = model,
+                None => {
+                    super::super::ocr::set_implicit_tessdata_model(model);
+                }
+            }
         }
         Ok(())
     }

@@ -53,7 +53,7 @@ fn audit_ocr_capabilities_from(
             .or_default()
             .push(EffectiveProbeConfig {
                 ordinal: 1,
-                config: OcrConfig::default(),
+                config: OcrConfig::implicit(),
             });
     }
 
@@ -136,7 +136,7 @@ fn probe_registered_backend(
 
     let default_config = [EffectiveProbeConfig {
         ordinal: 1,
-        config: backend_config(OcrConfig::default(), name),
+        config: backend_config(OcrConfig::implicit(), name),
     }];
     let probe_configs = configured.map_or(default_config.as_slice(), Vec::as_slice);
     let mut check = aggregate_probes(backend, probe_configs);

@@ -1005,7 +1005,7 @@ fn record_implausible_text_pages(
     boundaries: Option<&[crate::types::PageBoundary]>,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) {
-    let default_ocr_config = crate::core::config::OcrConfig::default();
+    let default_ocr_config = crate::core::config::OcrConfig::implicit();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
     let thresholds = ocr_config.effective_thresholds();
 
@@ -1155,7 +1155,7 @@ fn scanned_pages_to_ocr(
         // Thresholds come from the caller's `ocr` block when there is one; the gate can now
         // be switched on without one, and then reads the same defaults every other
         // no-explicit-block OCR route reads. ~keep
-        let default_ocr_config = crate::core::config::OcrConfig::default();
+        let default_ocr_config = crate::core::config::OcrConfig::implicit();
         let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
         let decision = ocr::evaluate_per_page_ocr(
             native_text,
@@ -1532,7 +1532,7 @@ async fn run_ocr_with_layout_pages(
         hints
     };
 
-    let default_ocr_config = crate::core::config::OcrConfig::default();
+    let default_ocr_config = crate::core::config::OcrConfig::implicit();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
     #[cfg(all(
         paddle_ocr,

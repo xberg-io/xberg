@@ -667,16 +667,36 @@ fn test_ocr_tessdata_model_flag_sets_only_the_model_set() {
 }
 
 #[cfg(feature = "ocr-surface")]
+const TESSDATA_MODEL_CHILD: &str =
+    "commands::overrides::tests::ocr_basics::tessdata_model_flag_alone_sets_the_implicit_set_child";
+
+#[cfg(feature = "ocr-surface")]
 #[test]
-fn test_ocr_tessdata_model_flag_alone_materialises_the_ocr_config() {
+fn test_ocr_tessdata_model_flag_alone_keeps_the_ocr_section_unset() {
+    crate::commands::env_test::run_child_test(
+        TESSDATA_MODEL_CHILD,
+        crate::commands::env_test::CASE,
+        "flag-alone",
+        |_| {},
+    );
+}
+
+#[cfg(feature = "ocr-surface")]
+#[test]
+#[ignore = "run in an isolated subprocess: it sets the process-wide implicit model set"]
+fn tessdata_model_flag_alone_sets_the_implicit_set_child() {
+    if crate::commands::env_test::child_test_root(crate::commands::env_test::CASE).is_none() {
+        return;
+    }
     let mut config = ExtractionConfig::default();
     let overrides = ExtractionOverrides {
         ocr_tessdata_model: Some(TessdataModelArg::Best),
         ..default_overrides()
     };
     overrides.apply(&mut config);
+    assert!(config.ocr.is_none(), "the set alone must not change whether OCR runs");
     assert_eq!(
-        config.ocr.map(|ocr| ocr.tessdata_model),
-        Some(xberg::TessdataModel::Best)
+        xberg::core::config::ocr::implicit_tessdata_model(),
+        xberg::TessdataModel::Best
     );
 }
