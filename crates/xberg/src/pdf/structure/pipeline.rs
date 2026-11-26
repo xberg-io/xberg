@@ -582,13 +582,17 @@ fn join_wrapped_bold_titles(all_pages: &mut [Vec<PdfParagraph>], body_font_size:
             if let Some(joined) = joined {
                 let title = std::mem::replace(&mut page[index], joined);
                 let follower = page.remove(index + 1);
-                match joins.last_mut() {
-                    Some(join) if join.page == page_index && join.index == index => join.originals.push(follower),
-                    _ => joins.push(WrappedTitleJoin {
+                let extends_last_join = joins
+                    .last()
+                    .is_some_and(|join| join.page == page_index && join.index == index);
+                if extends_last_join && let Some(join) = joins.last_mut() {
+                    join.originals.push(follower);
+                } else {
+                    joins.push(WrappedTitleJoin {
                         page: page_index,
                         index,
                         originals: vec![title, follower],
-                    }),
+                    });
                 }
             } else {
                 index += 1;
