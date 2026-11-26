@@ -5066,9 +5066,9 @@ fn build_document_structure_with_native(
         let candidates: Vec<_> = bounds
             .iter()
             .filter_map(|((left, bottom, right, top), text, offset)| {
-                (text == &element.text
-                    && [*left, *bottom, *right, *top].map(f64::from) == [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
-                .then_some(*offset)
+                ([*left, *bottom, *right, *top].map(f64::from) == [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
+                    .then(|| glyph_offset_in_element(text, *offset, &element.text))
+                    .flatten()
             })
             .collect();
         super::assembly::annotate_native_volume_limit(&mut element.text, &mut element.annotations, candidates);
@@ -5108,6 +5108,21 @@ fn build_document_structure_with_native(
     );
 
     Ok(doc)
+}
+
+/// `offset` into a paragraph's assembled source `text`, moved onto `element_text`: the same
+/// text after assembly resolved its formula sentinels, into `$` delimiters for prose or to
+/// nothing elsewhere.
+#[cfg(feature = "formula-recognition")]
+fn glyph_offset_in_element(text: &str, offset: usize, element_text: &str) -> Option<usize> {
+    use crate::pdf::native::math_latex::sentinels;
+    if !sentinels::contains_sentinel(text) {
+        return (text == element_text).then_some(offset);
+    }
+    [true, false].into_iter().find_map(|delimit| {
+        let resolved = sentinels::resolve(text, delimit);
+        (resolved.text == element_text).then(|| resolved.remap(offset))
+    })
 }
 
 fn normalize_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
@@ -5259,6 +5274,26 @@ mod annotation_text_repair_tests {
             };
             assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), expected);
         }
+    }
+
+    #[cfg(feature = "formula-recognition")]
+    #[test]
+    fn a_glyph_offset_follows_its_paragraph_through_sentinel_resolution() {
+        use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+        let source = format!("so {INLINE_OPEN}x^{{2}}{INLINE_CLOSE} and V(\u{03c8}m) \u{2192} +\u{221e}.");
+        let offset = source.find('V').unwrap();
+        for element_text in [
+            "so $x^{2}$ and V(\u{03c8}m) \u{2192} +\u{221e}.",
+            "so x^{2} and V(\u{03c8}m) \u{2192} +\u{221e}.",
+        ] {
+            let moved = super::glyph_offset_in_element(&source, offset, element_text).expect("same paragraph");
+            assert_eq!(&element_text[moved..moved + 1], "V");
+        }
+        assert_eq!(
+            super::glyph_offset_in_element(&source, offset, "another paragraph"),
+            None
+        );
+        assert_eq!(super::glyph_offset_in_element("plain V", 6, "plain V"), Some(6));
     }
 
     #[test]
