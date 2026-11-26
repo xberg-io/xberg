@@ -1795,7 +1795,7 @@ impl<'a> MixedOcrContext<'a> {
                     .config
                     .ocr
                     .as_ref()
-                    .is_some_and(|ocr| ocr.backend_options.is_none())
+                    .is_some_and(|ocr| !ocr.has_tuning_backend_options())
                 && self
                     .number_layers
                     .as_ref()

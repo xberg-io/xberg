@@ -21,7 +21,7 @@ pub(super) fn eligible(config: &OcrConfig) -> bool {
         && config.auto_rotate.is_none()
         && !language_selects_vertical_psm(config)
         && config.pipeline.is_none()
-        && config.backend_options.is_none()
+        && !config.has_tuning_backend_options()
         && config.output_format.is_none()
         && config.tesseract_config.as_ref().is_none_or(|tess| {
             tess.psm.is_none()

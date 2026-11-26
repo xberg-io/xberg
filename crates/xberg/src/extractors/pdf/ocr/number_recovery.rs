@@ -404,7 +404,7 @@ fn eligible(config: &ExtractionConfig, index: usize) -> bool {
                 .eq(["eng"])
                 && ocr.tesseract_config.is_none()
                 && ocr.element_config.is_none()
-                && ocr.backend_options.is_none()
+                && !ocr.has_tuning_backend_options()
                 && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
         })
 }

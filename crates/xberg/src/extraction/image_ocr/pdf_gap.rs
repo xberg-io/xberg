@@ -150,7 +150,7 @@ fn eligible_tesseract(ocr: &OcrConfig) -> bool {
             .tesseract_config
             .as_ref()
             .is_none_or(|config| config.preprocessing.is_none())
-        && ocr.backend_options.is_none()
+        && !ocr.has_tuning_backend_options()
         && ocr.pipeline.is_none()
         && ocr.quality_thresholds.is_none()
         && ocr.tessdata_bytes.is_none()

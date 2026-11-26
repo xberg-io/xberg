@@ -1281,6 +1281,19 @@ impl OcrConfig {
         effective_tesseract_language_for(&self.language, self.tesseract_config.as_ref())
     }
 
+    /// Whether [`OcrConfig::backend_options`] tunes the backend: any key besides the result-cache
+    /// switch (`use_cache`). The stock-profile recovery lanes opt out of caller tuning, but turning
+    /// the cache off for a cold read (as `use_cache: false` requests and benchmarks do) changes no
+    /// recognition, so it must not move a request off the default route.
+    #[cfg(feature = "ocr")]
+    pub(crate) fn has_tuning_backend_options(&self) -> bool {
+        self.backend_options.as_ref().is_some_and(|options| {
+            options
+                .as_object()
+                .is_none_or(|fields| fields.keys().any(|key| key != "use_cache"))
+        })
+    }
+
     /// Returns the effective quality thresholds, using configured values or defaults.
     ///
     /// The native Tesseract backend reads the noise threshold of the script retry from it, so
