@@ -41,18 +41,26 @@ Chosen option: "A model-set option with a cache directory per set", because
 directory identity alone then keeps the sets apart in every resolver, probe
 and cache key that already works per directory.
 
-`OcrConfig.tessdata_model` (`"fast"` or `"best"`, lowercase everywhere;
-`XBERG_OCR_TESSDATA_MODEL` for `xberg serve`, `xberg mcp` and `xberg doctor`;
-CLI `--ocr-tessdata-model`) selects the set. The name sits beside
-`tessdata_path` and `tessdata_bytes`, and the values are the upstream
-repository suffixes. The environment variable and the flag never create an
-`ocr` section, which would change whether OCR runs: without one they set a
-process-wide set for the OCR config used when OCR runs anyway. The default set
-is not serialized.
+`ExtractionConfig.tessdata_model` (`"fast"` or `"best"`, lowercase everywhere)
+selects the set for every OCR an extraction performs, automatic and fallback
+OCR included, and never enables OCR: creating an `ocr` section would change
+whether OCR runs. `OcrConfig.tessdata_model` overrides it for one section;
+`None` inherits, and a per-file `ocr` section that names none keeps the base
+section's set. `XBERG_OCR_TESSDATA_MODEL` (for `xberg serve`, `xberg mcp` and
+`xberg doctor`) and `--ocr-tessdata-model` set the top-level field. The name
+sits beside `tessdata_path` and `tessdata_bytes`, and the values are the
+upstream repository suffixes. An unset set is not serialized.
+
+Every fallback to a default `OcrConfig` goes through
+`ExtractionConfig::ocr_or_default`, which fills in the effective set, and
+`extract_file`/`extract_bytes` copy the inherited set into an `ocr` section
+that names none, so code that only receives the `OcrConfig` sees it. A
+process-wide default was rejected: it did not reach every fallback site and
+made results depend on what else ran in the process.
 
 On a server the set is operator-owned: a REST or MCP request may restate the
-operator's set but is rejected when it names another, and a request's `ocr`
-object keeps the operator's set. Unlike PaddleOCR's `model_tier`, which callers
+operator's effective set in either field but is rejected when it names another,
+and both fields are restored from the operator's config after a merge. Unlike PaddleOCR's `model_tier`, which callers
 may still choose, a set change makes the server download and keep a second copy
 of every language (1.15 GB for all of `best`); whether Paddle model selection
 should become operator-owned too is a follow-up.
@@ -119,19 +127,22 @@ latency measurement, not by this record.
   as many bytes per language on first use.
 * Bad, because new `fast` packs land in `tessdata/fast` while the flat
   directory stays, so an upgraded cache can hold a pack twice.
-* Bad, because the implicit set for configs without an `ocr` section is
-  process-wide state, set once by the environment variable or the CLI flag.
+* Bad, because the set lives in two fields, and code building a fresh
+  `OcrConfig` from defaults must take it from `ocr_or_default` to keep it.
 
 ### Confirmation
 
 Unit tests cover config, environment and CLI parsing (including the flag and
-the variable leaving `ocr` unset), the operator check, the per-set search order
+the variable leaving `ocr` unset), the set reaching the main PDF OCR config,
+the ink probe and the Tesseract engine config with and without an `ocr`
+section, per-file inheritance, the operator check, the per-set search order
 with injected system directories
 (`test_best_search_dirs_hold_no_fast_only_directory`,
 `test_best_request_never_resolves_to_a_fast_only_directory`), override and
 `TESSDATA_PREFIX` precedence, a hand-placed flat-cache pack still serving
-`fast`, verified adoption through injected pins inside resolution (including
-shared packs arriving after a first attempt), the offline `best` probe, the
+`fast`, verified adoption through injected pins and a downloader that fails
+the test if called (including shared packs arriving after a first attempt and a
+`fast` request split between the flat and `fast` caches), the offline `best` probe, the
 doctor warning, the unchanged `fast` cache key, both pin tables, and the
 WebAssembly refusal of `best` without caller bytes. Downloads themselves are
 covered against local test servers, not against GitHub. The pin generator
