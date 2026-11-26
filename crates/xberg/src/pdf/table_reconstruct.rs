@@ -1353,6 +1353,9 @@ fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
         .iter()
         .position(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
         .unwrap_or(0);
+    if first_numeric_row > MAX_MERGED_HEADER_ROWS && starts_with_complete_label_row(table) {
+        return 1;
+    }
     let first_numeric_row = earliest_data_row_before(table, first_numeric_row);
     if !layout_guided
         && first_numeric_row > 0
@@ -1417,6 +1420,18 @@ fn earliest_data_row_before(table: &[Vec<String>], first_numeric_row: usize) -> 
                 >= required
         })
         .unwrap_or(first_numeric_row)
+}
+
+/// Whether the first row labels every column and holds no digit, as a column header row does.
+///
+/// When the first row with enough digit cells sits deeper than the header can reach, the rows in
+/// between are body rows (section labels, wrapped descriptions), not more header rows: a
+/// complete label row above them is the whole header (the `Security | Shares | Value` row of
+/// pb_fqr-retail-blackrock-global-allocation-fund-inc_page8). ~keep
+fn starts_with_complete_label_row(table: &[Vec<String>]) -> bool {
+    table.first().is_some_and(|row| {
+        !row.is_empty() && row.iter().all(|cell| !cell.trim().is_empty()) && digit_cell_count(row) == 0
+    })
 }
 
 fn cell_has_digit(cell: &str) -> bool {
@@ -3752,6 +3767,24 @@ mod tests {
 
         assert_eq!(find_data_start(&table, true), 2);
         assert_eq!(find_data_start(&table, false), 2);
+    }
+
+    #[test]
+    fn complete_label_row_is_the_whole_header_above_section_rows() {
+        let table: Vec<Vec<String>> = [
+            ["Security", "Shares", "Value"],
+            ["Kazakhstan - 0.0%(c)", "", ""],
+            ["Halyk Savings Bank of Kazakhstan", "", ""],
+            ["JSC, GDR", "28,078", "$ 697,332"],
+            ["Teya Services Ltd., Series C, (Acquired", "", ""],
+            ["06/03/24, cost $10,172,087)(d)(f)(j)", "5,237", "1,557,536"],
+        ]
+        .iter()
+        .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+        .collect();
+
+        assert_eq!(find_data_start(&table, true), 1);
+        assert_eq!(find_data_start(&table, false), 1);
     }
 
     #[test]

@@ -141,6 +141,14 @@ fn holdings_rows_keep_source_order_around_a_label_with_digits() {
         "body rows lifted into the header: {:?}",
         table.cells[0]
     );
+    for holdings in &document.tables {
+        assert_eq!(
+            holdings.cells[0],
+            ["Security", "Shares", "Value"],
+            "{:?}",
+            &holdings.cells[..2]
+        );
+    }
     let vopak = row_index(&table.cells, "Koninklijke Vopak");
     let nxp = row_index(&table.cells, "NXP");
     let teya = row_index(&table.cells, "Teya");

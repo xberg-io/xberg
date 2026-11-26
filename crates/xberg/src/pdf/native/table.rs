@@ -950,7 +950,15 @@ pub(crate) fn extract_tables_heuristic(
             continue;
         }
 
-        let mut regions = cluster_words_into_vertical_regions(&words);
+        let paths = page_paths.take(doc, page_idx);
+        // Rules are attributed to word rows in page space, which a lifted
+        // rotation frame does not share (see `region_rules` below). ~keep
+        let label_rules = if source_frame {
+            header_rules(&paths, page_height)
+        } else {
+            Vec::new()
+        };
+        let mut regions = cluster_words_into_vertical_regions_with_rules(&words, &label_rules);
         if regions.len() > MAX_REGIONS_PER_PAGE {
             tracing::debug!(
                 page = page_number,
@@ -962,7 +970,6 @@ pub(crate) fn extract_tables_heuristic(
         }
 
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
-        let paths = page_paths.take(doc, page_idx);
         // A lifted rotation frame gives `HocrWord`s advance/cross coordinates,
         // not page x/y, so a page-space rule cannot be attributed to its region.
         // Falling back to zero rules keeps the geometric gate (and its
@@ -2902,6 +2909,15 @@ fn row_center(word: &crate::pdf::table_reconstruct::HocrWord) -> f32 {
 fn cluster_words_into_vertical_regions(
     words: &[crate::pdf::table_reconstruct::HocrWord],
 ) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {
+    cluster_words_into_vertical_regions_with_rules(words, &[])
+}
+
+/// [`cluster_words_into_vertical_regions`], also joining a ruled label header row to the region
+/// whose columns it heads (see [`attach_ruled_label_headers`]).
+fn cluster_words_into_vertical_regions_with_rules(
+    words: &[crate::pdf::table_reconstruct::HocrWord],
+    rules: &[HeaderRule],
+) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {
     if words.len() < 4 {
         return Vec::new();
     }
@@ -2951,6 +2967,8 @@ fn cluster_words_into_vertical_regions(
     split_regions_at_column_corridors(&mut regions, median_height);
 
     attach_aligned_numeric_headers(&mut regions, median_height, row_tolerance);
+
+    attach_ruled_label_headers(&mut regions, rules, median_height, row_tolerance);
 
     regions.retain(|r| {
         if r.len() < 4 {
@@ -3177,6 +3195,141 @@ fn has_mixed_label_value_evidence(side: &[crate::pdf::table_reconstruct::HocrWor
     let descriptor_count = side.iter().filter(|word| is_descriptor_cell(&word.text)).count();
     let numeric_count = side.iter().filter(|word| is_numeric_word(&word.text)).count();
     descriptor_count >= COLUMN_BLOCK_MIN_SEMANTIC_WORDS && numeric_count >= COLUMN_BLOCK_MIN_SEMANTIC_WORDS
+}
+
+/// A horizontal rule in image space: its vertical centre and horizontal extent.
+#[derive(Debug, Clone, Copy)]
+struct HeaderRule {
+    y: f32,
+    left: f32,
+    right: f32,
+}
+
+/// The page's horizontal rules ([`band_horizontal_rule`]) in the image space of the page's words.
+fn header_rules(paths: &[PathContent], page_height: f32) -> Vec<HeaderRule> {
+    paths
+        .iter()
+        .filter(|path| band_horizontal_rule(path))
+        .map(|path| HeaderRule {
+            y: page_height - (path.bbox.y + path.bbox.height / 2.0),
+            left: path.bbox.x,
+            right: path.bbox.x + path.bbox.width,
+        })
+        .collect()
+}
+
+/// Largest gap, in median word heights, between a ruled header row and the first row below it.
+const RULED_HEADER_MAX_GAP_HEIGHTS: u32 = 2;
+/// Fewest words a ruled header row must hold.
+const RULED_HEADER_MIN_WORDS: usize = 2;
+/// Fewest separate labels (words more than two heights apart) each table under a ruled header
+/// row must take; a heading over one column is not a header row.
+const RULED_HEADER_MIN_LABELS_PER_TABLE: usize = 2;
+
+/// Join a lone row of column labels to the table regions it heads.
+///
+/// A schedule sets its `Security | Shares | Value` labels one rule above the first body row, and
+/// that row's own spacing puts the labels more than [`ROW_GAP_SPLIT_HEIGHT_FACTOR`] heights
+/// above it (pb_fqr-retail-blackrock-global-allocation-fund-inc_page8). The label row then forms
+/// a one-row region, which is dropped as too small, and its words are left as a paragraph above
+/// the table. A single text row, separated from the region below only by a rule and a gap of at
+/// most [`RULED_HEADER_MAX_GAP_HEIGHTS`] heights, whose every word stands over words of that
+/// region and whose words form at least two separate labels, is its header. When two
+/// side-by-side regions sit under one label row, each takes the labels over its own columns. ~keep
+fn attach_ruled_label_headers(
+    regions: &mut Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>,
+    rules: &[HeaderRule],
+    median_height: u32,
+    row_tolerance: u32,
+) {
+    if rules.is_empty() {
+        return;
+    }
+    let mut index = 0;
+    while index < regions.len() {
+        let Some(targets) = ruled_label_header_targets(regions, index, rules, median_height, row_tolerance) else {
+            index += 1;
+            continue;
+        };
+        let header = regions.remove(index);
+        for (word, target) in header.into_iter().zip(targets) {
+            let target = if target > index { target - 1 } else { target };
+            regions[target].push(word);
+        }
+        tracing::trace!(index, "attached ruled label header row to the table region below it");
+    }
+}
+
+/// The region each word of `regions[index]` heads, when that region is a ruled label header row.
+fn ruled_label_header_targets(
+    regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
+    index: usize,
+    rules: &[HeaderRule],
+    median_height: u32,
+    row_tolerance: u32,
+) -> Option<Vec<usize>> {
+    let header = &regions[index];
+    let labels = header
+        .iter()
+        .filter(|word| word.text.chars().any(char::is_alphabetic))
+        .count();
+    if header.len() < RULED_HEADER_MIN_WORDS
+        || numeric_rows(header, row_tolerance).len() != 1
+        || labels.saturating_mul(3) < header.len().saturating_mul(2)
+    {
+        return None;
+    }
+    let header_bottom = header.iter().map(|word| word.top + word.height).max()?;
+    let header_center = header.iter().map(|word| word.top + word.height / 2).min()?;
+    let max_gap = median_height.saturating_mul(RULED_HEADER_MAX_GAP_HEIGHTS);
+    let candidates: Vec<(usize, u32)> = regions
+        .iter()
+        .enumerate()
+        .filter(|(candidate, _)| *candidate != index)
+        .filter_map(|(candidate, region)| {
+            let top = region.iter().map(|word| word.top).min()?;
+            (top >= header_bottom && top - header_bottom <= max_gap).then_some((candidate, top))
+        })
+        .collect();
+    let overlaps = |word: &crate::pdf::table_reconstruct::HocrWord, left: f32, right: f32| {
+        (word.left as f32) < right && left < word.right() as f32
+    };
+    let mut targets = Vec::with_capacity(header.len());
+    for word in header {
+        let (target, _) = candidates
+            .iter()
+            .filter(|(candidate, _)| {
+                regions[*candidate]
+                    .iter()
+                    .any(|below| overlaps(below, word.left as f32, word.right() as f32))
+            })
+            .min_by_key(|(_, top)| *top)?;
+        targets.push(*target);
+    }
+    let mut distinct = targets.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    let ruled_off = distinct.iter().all(|&target| {
+        let words = header.iter().zip(&targets).filter(|(_, owner)| **owner == target);
+        let top = regions[target]
+            .iter()
+            .map(|word| word.top)
+            .min()
+            .unwrap_or(header_bottom) as f32;
+        let mut spans: Vec<(u32, u32)> = words.clone().map(|(word, _)| (word.left, word.right())).collect();
+        spans.sort_unstable();
+        let labels = 1 + spans
+            .windows(2)
+            .filter(|pair| pair[1].0.saturating_sub(pair[0].1) > median_height.saturating_mul(2))
+            .count();
+        labels >= RULED_HEADER_MIN_LABELS_PER_TABLE
+            && rules.iter().any(|rule| {
+                rule.y > header_center as f32
+                    && rule.y <= top
+                    && words.clone().any(|(word, _)| overlaps(word, rule.left, rule.right))
+            })
+    });
+    ruled_off.then_some(targets)
 }
 
 fn attach_aligned_numeric_headers(
@@ -8516,3 +8669,6 @@ mod tests {
 
 #[cfg(test)]
 mod ruled_tier_tests;
+
+#[cfg(test)]
+mod ruled_label_header_tests;
