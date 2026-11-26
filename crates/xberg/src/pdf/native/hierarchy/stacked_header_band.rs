@@ -173,34 +173,14 @@ mod tests {
     use xberg_native_pdf::geometry::Rect;
 
     use super::*;
+    use crate::pdf::native::hierarchy::test_spans::{rows, texts};
 
     const GLYPH_HEIGHT: f32 = 4.3;
     const BAND_STEP: f32 = 2.8;
     const BAND_TOP: f32 = 704.5;
 
     fn span(text: &str, x: f32, y: f32, width: f32) -> TextSpan {
-        TextSpan {
-            text: text.to_string(),
-            bbox: Rect::new(x, y, width, GLYPH_HEIGHT),
-            font_size: GLYPH_HEIGHT,
-            ..TextSpan::default()
-        }
-    }
-
-    /// Top to bottom, then left to right: the order the extractor hands over.
-    fn rows(mut spans: Vec<TextSpan>) -> Vec<TextSpan> {
-        spans.sort_by(|left, right| {
-            right
-                .bbox
-                .y
-                .total_cmp(&left.bbox.y)
-                .then(left.bbox.x.total_cmp(&right.bbox.x))
-        });
-        spans
-    }
-
-    fn texts(spans: &[TextSpan]) -> Vec<&str> {
-        spans.iter().map(|span| span.text.as_str()).collect()
+        super::super::test_spans::span(text, x, y, width, GLYPH_HEIGHT)
     }
 
     /// The pb_sample_page_16 header band: two-line, three-line and one-line cells, each centred

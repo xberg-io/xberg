@@ -22,6 +22,8 @@ mod reading_order_memo;
 mod repeated_header_columns;
 pub(crate) mod script_evidence;
 mod stacked_header_band;
+#[cfg(test)]
+mod test_spans;
 
 pub(crate) use reading_order_memo::ReadingOrderMemoScope;
 
@@ -2175,14 +2177,7 @@ mod tests {
             .enumerate()
             .map(|(sequence, span)| TextSpan { sequence, ..span })
             .collect();
-        spans.sort_by(|left, right| {
-            right
-                .bbox
-                .y
-                .total_cmp(&left.bbox.y)
-                .then(left.bbox.x.total_cmp(&right.bbox.x))
-        });
-        (spans, expected)
+        (super::test_spans::rows(spans), expected)
     }
 
     #[test]
@@ -2363,14 +2358,7 @@ mod tests {
                 9.9,
             ));
         }
-        spans.sort_by(|left, right| {
-            right
-                .bbox
-                .y
-                .total_cmp(&left.bbox.y)
-                .then(left.bbox.x.total_cmp(&right.bbox.x))
-        });
-        spans
+        super::test_spans::rows(spans)
     }
 
     /// Four rows of a landscape table whose middle corridor is uncrossed and 100pt wide;
@@ -2708,11 +2696,8 @@ mod tests {
 
     fn positioned_span(text: &str, x: f32, y: f32, width: f32, font_size: f32, char_x_offsets: Vec<f32>) -> TextSpan {
         TextSpan {
-            text: text.to_string(),
-            bbox: Rect::new(x, y, width, font_size),
-            font_size,
             char_x_offsets,
-            ..TextSpan::default()
+            ..super::test_spans::span(text, x, y, width, font_size)
         }
     }
 

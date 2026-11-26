@@ -122,9 +122,8 @@ fn widest_empty_corridor_mid(spans: &[&TextSpan], start: f32, end: f32) -> Optio
 
 #[cfg(test)]
 mod tests {
-    use xberg_native_pdf::geometry::Rect;
-
     use super::*;
+    use crate::pdf::native::hierarchy::test_spans::{rows, texts};
 
     const ROW_LEADING: f32 = 9.8;
     const HEADER_Y: f32 = 700.0;
@@ -133,24 +132,7 @@ mod tests {
     const RIGHT_HALF_OFFSET: f32 = 291.0;
 
     fn span(text: &str, x: f32, y: f32, width: f32) -> TextSpan {
-        TextSpan {
-            text: text.to_string(),
-            bbox: Rect::new(x, y, width, 9.0),
-            font_size: 9.0,
-            ..TextSpan::default()
-        }
-    }
-
-    /// Top to bottom, then left to right: the order the extractor hands over.
-    fn rows(mut spans: Vec<TextSpan>) -> Vec<TextSpan> {
-        spans.sort_by(|left, right| {
-            right
-                .bbox
-                .y
-                .total_cmp(&left.bbox.y)
-                .then(left.bbox.x.total_cmp(&right.bbox.x))
-        });
-        spans
+        super::super::test_spans::span(text, x, y, width, 9.0)
     }
 
     /// One half of a schedule of investments: its header row, then holdings whose name wraps
@@ -185,10 +167,6 @@ mod tests {
             ));
         }
         spans
-    }
-
-    fn texts(spans: &[TextSpan]) -> Vec<&str> {
-        spans.iter().map(|span| span.text.as_str()).collect()
     }
 
     #[test]
