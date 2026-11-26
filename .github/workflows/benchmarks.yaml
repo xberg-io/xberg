@@ -1638,6 +1638,16 @@ jobs:
           cargo install liteparse --version 2.21.2 --locked
           lit --version
 
+      # lit downloads tessdata for a language on first use; fetch every language the OCR cohorts
+      # declare before the timed run, so no download is measured as extraction time. ~keep
+      - name: Pre-warm liteparse OCR languages
+        run: |
+          set -euo pipefail
+          for language in eng deu; do
+            lit parse test_documents/pdf/non_searchable.pdf --format text --ocr-backend tesseract \
+              --ocr-language "$language" --quiet > /dev/null
+          done
+
       - name: Run benchmark
         env:
           FRAMEWORK: liteparse
