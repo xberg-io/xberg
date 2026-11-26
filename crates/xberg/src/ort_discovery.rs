@@ -32,17 +32,12 @@ pub(crate) fn execution_provider_override() -> Option<crate::core::config::accel
         .and_then(|value| parse_execution_provider_override(&value))
 }
 
-/// Prepare the runtime before callers that may create their own session builders.
+/// Note how this build obtains ONNX Runtime. A dynamic build loads it in [`ort_environment`],
+/// which every session builder goes through first and which returns the cached load failure.
 #[cfg(any(ort_session_providers, feature = "ner-onnx"))]
 pub(crate) fn ensure_ort_available() {
     #[cfg(all(feature = "ort-bundled", not(feature = "ort-dynamic")))]
     tracing::debug!("ONNX Runtime is linked; skipping system library discovery");
-
-    // `ort_environment` returns the same cached failure, so it is only noted here. ~keep
-    #[cfg(ort_dynamic_discovery)]
-    if let Err(error) = preload_ort_runtime() {
-        tracing::debug!(%error, "ONNX Runtime is not loadable");
-    }
 }
 
 /// Explicit ONNX Runtime library override; the name is ort's own.
@@ -396,7 +391,15 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
 /// not require it. The load is checked before [`ort_environment`]: building any `ort::Error`
 /// calls into the runtime, so on a failed dynamic load ort falls back to a bare-name `dlopen`
 /// and panics.
-#[cfg(all(test, any(ort_session_providers, feature = "ner-onnx")))]
+#[cfg(all(
+    test,
+    any(ort_session_providers, feature = "ner-onnx"),
+    any(
+        feature = "onnx-runtime",
+        feature = "paddle-ocr-ort",
+        all(inference_ort, any(layout_detection, auto_rotate), model_download, unix)
+    )
+))]
 pub(crate) fn test_ort_environment(test: &str) -> Option<&'static ort::environment::Environment> {
     #[cfg(ort_dynamic_discovery)]
     if let Err(error) = preload_ort_runtime() {
@@ -471,11 +474,33 @@ pub(crate) fn apply_execution_providers(
     Ok(builder)
 }
 
+/// Whether `auto` can register a GPU execution provider in this build: CoreML on macOS, CUDA on
+/// Linux builds with the `cuda` feature. Elsewhere `auto` is the CPU provider alone.
+/// `register_auto_providers` makes the same choice with `cfg` blocks; keep the two in step.
+#[cfg(any(
+    all(feature = "pdf", feature = "layout-detection"),
+    all(
+        ort_session_providers,
+        inference_ort,
+        any(layout_detection, auto_rotate),
+        model_download,
+        unix
+    )
+))]
+pub(crate) const fn auto_may_register_gpu() -> bool {
+    cfg!(any(target_os = "macos", all(target_os = "linux", feature = "cuda")))
+}
+
 /// Whether a session built with `apply_execution_providers(builder, accel)` (or without it, when
 /// `with_eps` is false) runs on the CPU execution provider alone. Mirrors the provider choice in
-/// `apply_execution_providers` and `register_auto_providers`: `Auto` registers CoreML on macOS
-/// and CUDA on Linux builds with the `cuda` feature, and nothing elsewhere.
-#[cfg(all(ort_session_providers, model_download, unix))]
+/// `apply_execution_providers` and `register_auto_providers` (`auto_may_register_gpu`).
+#[cfg(all(
+    ort_session_providers,
+    inference_ort,
+    any(layout_detection, auto_rotate),
+    model_download,
+    unix
+))]
 pub(crate) fn session_is_cpu_only(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     with_eps: bool,
@@ -487,7 +512,7 @@ pub(crate) fn session_is_cpu_only(
     }
     match resolve_execution_provider(accel) {
         ExecutionProviderType::Cpu => true,
-        ExecutionProviderType::Auto => !cfg!(any(target_os = "macos", all(target_os = "linux", feature = "cuda"))),
+        ExecutionProviderType::Auto => !auto_may_register_gpu(),
         ExecutionProviderType::CoreMl | ExecutionProviderType::Cuda | ExecutionProviderType::TensorRt => false,
     }
 }
@@ -608,7 +633,8 @@ fn register_tensorrt_strict(
 }
 
 /// `auto`: try the platform GPU provider best-effort and fall back to CPU with an info-level log
-/// when it is unavailable or fails to load. ~keep
+/// when it is unavailable or fails to load. The platforms with a GPU branch here are exactly
+/// those where `auto_may_register_gpu` is true. ~keep
 #[cfg(ort_session_providers)]
 fn register_auto_providers(
     builder: ort::session::builder::SessionBuilder,

@@ -1220,7 +1220,7 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
     }
 
     let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for checksum: {e}"))?;
-    #[cfg(all(unix, inference_ort))]
+    #[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
     let identity_before = file.metadata().ok().map(|metadata| FileIdentity::of(&metadata));
     let mut hasher = Sha256::new();
 
@@ -1244,7 +1244,7 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
     }
 
     // Only a file that did not change while it was hashed is recorded as holding the hashed bytes.
-    #[cfg(all(unix, inference_ort))]
+    #[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
     if let Some(identity) = identity_before
         && file
             .metadata()
@@ -1259,7 +1259,7 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
 
 /// Device, inode, size and nanosecond modification and change times of a file. A write,
 /// truncation, or rename over the path changes it; ctime cannot be set from userland.
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FileIdentity {
     dev: u64,
@@ -1269,7 +1269,7 @@ pub(crate) struct FileIdentity {
     ctime: (i64, i64),
 }
 
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 impl FileIdentity {
     pub(crate) fn of(metadata: &std::fs::Metadata) -> Self {
         use std::os::unix::fs::MetadataExt;
@@ -1285,7 +1285,7 @@ impl FileIdentity {
 }
 
 /// A file this process hashed and found equal to the digest its caller required.
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PinnedFile {
     /// Lowercase hex SHA-256 of the verified contents.
@@ -1293,7 +1293,7 @@ pub(crate) struct PinnedFile {
     identity: FileIdentity,
 }
 
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 impl PinnedFile {
     /// Whether `path` still resolves to the file whose contents were verified, unchanged.
     pub(crate) fn still_at(&self, path: &Path) -> bool {
@@ -1301,14 +1301,14 @@ impl PinnedFile {
     }
 }
 
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 static PINNED_FILES: std::sync::Mutex<Vec<PinnedFile>> = std::sync::Mutex::new(Vec::new());
 
 /// Distinct verified files remembered per process; the oldest is forgotten first.
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 const MAX_PINNED_FILES: usize = 256;
 
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 fn record_pinned_file(sha256: &str, identity: FileIdentity) {
     let mut files = PINNED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     files.retain(|file| file.identity != identity);
@@ -1324,14 +1324,14 @@ fn record_pinned_file(sha256: &str, identity: FileIdentity) {
 /// The digest `path` was verified against by [`verify_sha256`] in this process, if the file has
 /// not changed since. The record lives in memory only: a record on disk could be written by
 /// whoever can write the cache, which is why every process still hashes a model before using it.
-#[cfg(all(unix, inference_ort, model_download))]
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 pub(crate) fn pinned_file(path: &Path) -> Option<PinnedFile> {
     let identity = FileIdentity::of(&std::fs::metadata(path).ok()?);
     let files = PINNED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     files.iter().rev().find(|file| file.identity == identity).cloned()
 }
 
-#[cfg(all(test, unix, inference_ort, model_download))]
+#[cfg(all(test, unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
 mod pinned_file_tests {
     use super::*;
 

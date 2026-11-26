@@ -585,11 +585,8 @@ impl LayoutEngine {
                 |AccelerationConfig { provider, .. }| provider,
             )
         });
-        // `Auto` registers a GPU provider only for CoreML on macOS and CUDA on Linux builds with the
-        // `cuda` feature (`register_auto_providers`); elsewhere it is plain CPU.
-        let auto_may_use_gpu = cfg!(target_os = "macos") || cfg!(all(target_os = "linux", feature = "cuda"));
-        let on_cpu =
-            provider == ExecutionProviderType::Cpu || (provider == ExecutionProviderType::Auto && !auto_may_use_gpu);
+        let on_cpu = provider == ExecutionProviderType::Cpu
+            || (provider == ExecutionProviderType::Auto && !crate::ort_discovery::auto_may_register_gpu());
         if is_rtdetr && on_cpu {
             LAYOUT_INFERENCE_MAX_BATCH
         } else {
