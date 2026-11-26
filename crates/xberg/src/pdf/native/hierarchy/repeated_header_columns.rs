@@ -11,8 +11,8 @@ use xberg_native_pdf::layout::TextSpan;
 
 use super::super::text::widest_gap_midpoint;
 use super::{
-    MIN_COLUMN_GUTTER_PTS, MIN_TWO_COLUMN_CONTENT_WIDTH_PTS, PROSE_LINE_Y_TOLERANCE_PTS, content_bounds,
-    group_spans_into_lines, has_balanced_vertical_support, is_usable_span, side_support,
+    MIN_COLUMN_GUTTER_PTS, MIN_TWO_COLUMN_CONTENT_WIDTH_PTS, PROSE_LINE_Y_TOLERANCE_PTS, SideSupport, content_bounds,
+    group_spans_into_lines, has_balanced_vertical_support, is_usable_span, prose_like,
 };
 
 /// Fewest alphabetic words each half of the header row repeats.
@@ -46,8 +46,8 @@ pub(super) fn read_repeated_header_halves(spans: &mut Vec<TextSpan>) -> bool {
 
 /// The top of the header row and the gutter x of a page whose header row repeats its left
 /// half's text in its right half, with an empty corridor between the halves that no span on
-/// or below that row crosses, near the middle of the content, and running text on both sides.
-/// The running-text test keeps out one wide table with repeated column groups ("2 Years ...
+/// or below that row crosses, near the middle of the content, and row labels on both sides.
+/// The row-label test keeps out one wide table with repeated column groups ("2 Years ...
 /// Life | 2 Years ... Life"), whose right half holds only amounts.
 fn repeated_header_gutter(spans: &[TextSpan]) -> Option<(f32, f32)> {
     let usable: Vec<&TextSpan> = spans.iter().filter(|span| is_usable_span(span)).collect();
@@ -72,8 +72,36 @@ fn repeated_header_gutter(spans: &[TextSpan]) -> Option<(f32, f32)> {
         let (left, right): (Vec<&TextSpan>, Vec<&TextSpan>) = body
             .into_iter()
             .partition(|span| span.bbox.x + span.bbox.width <= gutter_x);
-        has_balanced_vertical_support(&side_support(left), &side_support(right)).then_some((header_top, gutter_x))
+        has_balanced_vertical_support(&label_support(&left), &label_support(&right)).then_some((header_top, gutter_x))
     })
+}
+
+/// The rows of one half that open with a text label: the line's spans up to its first gap of
+/// `MIN_COLUMN_GUTTER_PTS`, the label cell, read as running text. Each holding of a schedule
+/// sets its name, shares and value on one row, so whole rows never read as running text: a
+/// half of one-line holdings (pb_fqr-retail-blackrock page 8) offered only its wrapped names,
+/// too few to count, and the page was read across both halves row by row.
+fn label_support(spans: &[&TextSpan]) -> SideSupport {
+    let mut prose_line_ys: Vec<f32> = group_spans_into_lines(spans)
+        .iter()
+        .filter_map(|line| {
+            let label_end = line
+                .windows(2)
+                .position(|pair| pair[1].bbox.x - (pair[0].bbox.x + pair[0].bbox.width) >= MIN_COLUMN_GUTTER_PTS)
+                .map_or(line.len(), |gap| gap + 1);
+            let label = &line[..label_end];
+            let text = label
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let monospace = label.iter().filter(|span| span.is_monospace).count();
+            prose_like(&text, monospace, label.len()).then(|| label[0].bbox.y)
+        })
+        .collect();
+    prose_line_ys.sort_by(f32::total_cmp);
+    prose_line_ys.dedup_by(|left, right| (*left - *right).abs() <= PROSE_LINE_Y_TOLERANCE_PTS);
+    SideSupport { prose_line_ys }
 }
 
 /// The empty x-range between the halves of `line` (left to right) when its words, split in
@@ -215,6 +243,45 @@ mod tests {
 
         assert_eq!(texts(&text_flow), halves);
         assert_ne!(texts(&structure), halves);
+    }
+
+    /// pb_fqr-retail-blackrock page 8: every holding sets its name, dot leaders, shares and
+    /// value on one row, so no row of either half reads as running text as a whole.
+    #[test]
+    fn halves_of_one_line_holdings_are_read_one_after_the_other() {
+        let half = |offset: f32, label: &str| {
+            let mut spans = vec![
+                span("Security", HALF_COLUMNS[0] + offset, HEADER_Y, 24.0),
+                span("Shares", HALF_COLUMNS[1] + offset, HEADER_Y, 21.0),
+                span("Value", HALF_COLUMNS[2] + 16.0 + offset, HEADER_Y, 16.0),
+            ];
+            for holding in 0..8 {
+                let y = HEADER_Y - (holding + 1) as f32 * ROW_LEADING;
+                spans.extend([
+                    span(
+                        &format!("{label} Industries Holdings Ltd."),
+                        HALF_COLUMNS[0] + offset,
+                        y,
+                        80.0,
+                    ),
+                    span("..........", HALF_COLUMNS[0] + 82.0 + offset, y, 26.0),
+                    span(&format!("{},521", 20 + holding), HALF_COLUMNS[1] + offset, y, 20.0),
+                    span(&format!("2,646,13{holding}"), HALF_COLUMNS[2] + offset, y, 29.0),
+                ]);
+            }
+            spans
+        };
+        let (left, right) = (half(0.0, "Left"), half(RIGHT_HALF_OFFSET, "Right"));
+        let expected: Vec<String> = rows(left.clone())
+            .iter()
+            .chain(rows(right.clone()).iter())
+            .map(|span| span.text.clone())
+            .collect();
+        let mut spans = rows(left.into_iter().chain(right).collect());
+
+        assert!(read_repeated_header_halves(&mut spans));
+
+        assert_eq!(texts(&spans), expected);
     }
 
     #[test]
