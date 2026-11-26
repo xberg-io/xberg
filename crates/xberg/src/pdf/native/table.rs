@@ -2166,8 +2166,9 @@ fn reconstruct_wrapped_side_by_side_child(
     }
     let col_gap = side_by_side_child_gap(region)?;
     let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
-    let geometry = grid_row_geometry(region, grid.len())?;
-    let indent_tolerance = median_word_height(region) / 2;
+    let median_height = median_word_height(region);
+    let geometry = grid_row_geometry(region, grid.len(), median_height)?;
+    let indent_tolerance = median_height / 2;
     let collapsed = collapse_wrapped_financial_records(&grid, &geometry, indent_tolerance)?;
     admit_region_grid(
         region,
@@ -2191,12 +2192,15 @@ struct GridRowGeometry {
 }
 
 /// Geometry of each grid row, or `None` when the region's rows do not map one to one onto
-/// the grid's (a merged header fragment or a dropped row), so no row is misread.
+/// the grid's (a merged header fragment or a dropped row), so no row is misread. The rows are
+/// the grid's own, a stacked header band read as one; `median_height` is the region's
+/// [`median_word_height`].
 fn grid_row_geometry(
     region: &[crate::pdf::table_reconstruct::HocrWord],
     grid_rows: usize,
+    median_height: u32,
 ) -> Option<Vec<GridRowGeometry>> {
-    let positions = crate::table_core::detect_rows(region, REGION_ROW_THRESHOLD_RATIO);
+    let positions = crate::table_core::table_row_positions(region, REGION_ROW_THRESHOLD_RATIO, median_height);
     let mut lefts: Vec<Option<u32>> = vec![None; positions.len()];
     for word in region {
         let Some(index) = crate::table_core::find_row_index(&positions, word) else {
@@ -4779,6 +4783,51 @@ mod tests {
             "an internal multi-space run inside one span's own text must collapse to a single \
              space, not stack with the join separator; got: {text:?}"
         );
+    }
+
+    /// A grid whose header cells stack one to three label lines 7 units apart at a 10-unit
+    /// word height is built on one header row; row geometry must count that row once, or the
+    /// wrapped-record rescue sees a row-count mismatch and silently gives up.
+    #[test]
+    fn grid_row_geometry_reads_a_stacked_header_band_as_one_row() {
+        let band = [
+            ("Minimum", 180, 200, 45),
+            ("Maximum", 238, 200, 48),
+            ("UW", 62, 207, 12),
+            ("Tier", 82, 207, 20),
+            ("Comp", 378, 207, 22),
+            ("Auto", 405, 207, 22),
+            ("Vehicle", 185, 214, 35),
+            ("Vehicle", 245, 214, 35),
+            ("BI", 315, 214, 10),
+            ("Group", 67, 221, 28),
+            ("Loan", 375, 221, 20),
+            ("/Lease", 398, 221, 28),
+            ("Miles", 188, 228, 22),
+            ("Miles", 248, 228, 22),
+        ];
+        let mut words: Vec<_> = band
+            .iter()
+            .map(|&(text, left, top, width)| make_word(text, left, top, width))
+            .collect();
+        for row in 0..6 {
+            let top = 250 + row * 15;
+            words.extend([
+                make_word("002", 75, top, 15),
+                make_word(&format!("{}000", row + 1), 190, top, 22),
+                make_word(&format!("{}999", row + 1), 248, top, 22),
+                make_word("1.000", 305, top, 28),
+                make_word("1.000", 388, top, 28),
+            ]);
+        }
+        let median_height = median_word_height(&words);
+        let (grid, _) = reconstruct_region_grid(&words, side_by_side_child_gap(&words).expect("gap"));
+        assert_eq!(grid.len(), 7, "one header row above six data rows: {grid:?}");
+
+        let geometry = grid_row_geometry(&words, grid.len(), median_height).expect("one geometry row per grid row");
+
+        assert_eq!(geometry[0].left, 62, "the header row starts at its leftmost band word");
+        assert!(geometry[1..].iter().all(|row| row.left == 75));
     }
 
     /// Build a synthetic `HocrWord` for the clustering tests.

@@ -623,6 +623,13 @@ fn collapse_stacked_header_band(
     (row_positions, collapsed)
 }
 
+/// The row centres [`reconstruct_table_with_columns`] builds its grid on: the detected rows,
+/// with a leading stacked header band read as one row. `median_height` is
+/// [`median_word_height`] of `words`.
+pub(crate) fn table_row_positions(words: &[HocrWord], row_threshold_ratio: f64, median_height: u32) -> Vec<u32> {
+    collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height).0
+}
+
 /// The number of leading rows of `row_positions` that form a stacked header band, or 0.
 fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_height: u32) -> usize {
     if median_height == 0 || row_positions.len() <= STACKED_BAND_MIN_ROWS {
