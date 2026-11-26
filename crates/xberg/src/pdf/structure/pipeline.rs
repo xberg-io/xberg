@@ -4769,6 +4769,8 @@ fn build_document_structure_with_native(
     // Native semantic roles are finalized in source order before the
     // independent layout geometry projection controls final reading order.
     reorder_pages_by_layout_region(&mut all_page_paragraphs);
+    // After layout projection, which addresses paragraphs by position; this pass folds some. ~keep
+    super::references::mark_author_year_bibliography_entries(&mut all_page_paragraphs);
     #[cfg(feature = "formula-recognition")]
     let mut inline_math_glyphs = if ocr_text {
         Vec::new()
