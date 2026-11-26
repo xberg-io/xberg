@@ -79,13 +79,50 @@ fn build_runtime(workers: usize) -> crate::Result<tokio::runtime::Runtime> {
 /// exhaustion).
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
+    global_runtime_for(None)
+}
+
+/// As [`global_runtime`], but a first call made before the thread pools are initialized sizes
+/// the runtime from `concurrency` rather than the automatic budget.
+///
+/// A host that drives extraction itself (see [`block_on_shared_runtime`]) builds the runtime before
+/// `init_thread_pools` installs its budget, so without its config a `max_threads` of 4 would still
+/// get a worker per default-cap thread. Extraction entry points keep the automatic budget: a
+/// server's first request must not fix the worker count for every later one.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn global_runtime_for(
+    concurrency: Option<&crate::core::config::ConcurrencyConfig>,
+) -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
         build_runtime(resolve_worker_threads(
             std::env::var("TOKIO_WORKER_THREADS").ok().as_deref(),
-            crate::core::config::concurrency::active_thread_budget(),
+            crate::core::config::concurrency::active_thread_budget_for(concurrency),
             num_cpus::get(),
         ))
     })
+}
+
+/// Drive `future` to completion on the shared 16 MiB-stack runtime from a thread outside any runtime.
+///
+/// For a host that would otherwise build a runtime only to await the task `run_on_large_stack`
+/// spawns, as the CLI does: the calling thread parks in `block_on` and the extraction runs on a
+/// worker of this same runtime, so no second runtime or worker thread exists. The runtime is
+/// multi-thread, so `block_in_place` stays available to the polled future. A first call sizes it
+/// from `concurrency` (see `global_runtime_for`).
+///
+/// # Errors
+///
+/// Returns an error if the runtime cannot be created.
+///
+/// # Panics
+///
+/// Panics when called from inside a Tokio runtime, as [`tokio::runtime::Runtime::block_on`] does.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub fn block_on_shared_runtime<F: std::future::Future>(
+    future: F,
+    concurrency: Option<&crate::core::config::ConcurrencyConfig>,
+) -> crate::Result<F::Output> {
+    Ok(global_runtime_for(concurrency)?.block_on(future))
 }
 
 /// Keep direct calls on foreign runtimes inline: they may already hold the only blocking worker.
@@ -366,19 +403,50 @@ mod large_stack_tests {
         assert_eq!(run_on_large_stack(async { 7 }).await.unwrap(), 7);
     }
 
+    #[inline(never)]
+    fn deep(depth: usize) -> usize {
+        let frame = [depth as u8; 4096];
+        if depth == 0 {
+            0
+        } else {
+            deep(depth - 1) + usize::from(std::hint::black_box(frame)[0] & 1)
+        }
+    }
+
     #[tokio::test]
     async fn task_runs_on_a_thread_with_the_large_stack() {
-        #[inline(never)]
-        fn deep(depth: usize) -> usize {
-            let frame = [depth as u8; 4096];
-            if depth == 0 {
-                0
-            } else {
-                deep(depth - 1) + usize::from(std::hint::black_box(frame)[0] & 1)
-            }
-        }
         // 4 MiB of frames: overflows a 2 MB worker, fits the 16 MiB runtime.
         assert!(run_on_large_stack(async { deep(1024) }).await.is_ok());
+    }
+
+    // The CLI drives extraction through this; a current-thread driver would panic in `block_in_place`. ~keep
+    #[test]
+    fn shared_runtime_driver_allows_block_in_place() {
+        let value = super::block_on_shared_runtime(async { tokio::task::block_in_place(|| 7) }, None).unwrap();
+        assert_eq!(value, 7);
+    }
+
+    #[test]
+    fn shared_runtime_driver_and_large_stack_task_share_one_runtime() {
+        let (outer, inner) = super::block_on_shared_runtime(
+            async {
+                let outer = tokio::runtime::Handle::current().id();
+                let inner = run_on_large_stack(async {
+                    deep(1024);
+                    tokio::runtime::Handle::current().id()
+                })
+                .await
+                .unwrap();
+                (outer, inner)
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            outer, inner,
+            "the driver and the extraction task must share one runtime"
+        );
+        assert_eq!(super::global_runtime().unwrap().handle().id(), outer);
     }
 
     // Reverting to `.instrument(Span::current())` alone drops the event: the worker has no thread-local

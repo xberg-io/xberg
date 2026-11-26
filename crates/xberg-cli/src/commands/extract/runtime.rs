@@ -1,4 +1,4 @@
-//! Tokio runtime construction for extraction work.
+//! Driving extraction work from the synchronous extract and batch commands.
 
 use xberg::{
     ExtractInput, ExtractInputWithOptions, ExtractionConfig, ExtractionResult, extract,
@@ -12,80 +12,69 @@ use xberg::{
 /// panic. `crates/xberg-node/src/lib.rs:62-64` hit this first and raised its pool to 16 MB;
 /// the CLI's own runtimes were never given the same budget, so the API and MCP servers ran
 /// every request on a 2 MB worker.
+#[cfg(any(
+    feature = "api",
+    feature = "mcp",
+    all(test, feature = "pdf-surface", any(feature = "pdf-ocr", feature = "ocr"))
+))]
 pub(crate) const RUNTIME_WORKER_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
-#[cfg(test)]
-thread_local! {
-    static RUNTIMES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// Build the single runtime that drives one extraction call.
+/// Drive one extraction call on the core library's shared runtime.
 ///
-/// `xberg::extract*` hands the whole extraction to the core library's process-global
-/// multi-thread runtime (`core::runtime::run_on_large_stack`), so this runtime only
-/// awaits that task's `JoinHandle`. One large-stack worker is enough; a full second pool
-/// would add startup cost for nothing. It stays multi-thread so the core's fallback, which
-/// runs the extraction inline when the global runtime cannot be built, still gets a 16 MB
-/// stack and `block_in_place`. `concurrency.max_threads` keeps capping the Rayon and ONNX
-/// pools inside the core.
-fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
-    #[cfg(test)]
-    RUNTIMES_BUILT.with(|built| built.set(built.get() + 1));
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .thread_stack_size(RUNTIME_WORKER_STACK_SIZE_BYTES)
-        .build()
+/// `xberg::extract*` runs the whole extraction as a task on that process-global 16 MiB-stack
+/// multi-thread runtime (`core::runtime::run_on_large_stack`). A runtime of the CLI's own would
+/// only await that task's `JoinHandle`, at the cost of one more worker thread, so the calling thread
+/// blocks on the shared runtime instead. `block_in_place` stays available because that runtime is
+/// multi-thread, and its first use sizes it from `concurrency.max_threads`.
+fn block_on_shared<F: std::future::Future>(future: F, config: &ExtractionConfig) -> xberg::Result<F::Output> {
+    xberg::core::runtime::block_on_shared_runtime(future, config.concurrency.as_ref())
 }
 
 pub(super) fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    build_runtime()?
-        .block_on(extract(input, config))
-        .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
+    block_on_shared(extract(input, config), config)?.map_err(xberg::XbergError::into_cli_extraction_diagnostic)
 }
 
 pub(super) fn block_on_extract_batch(
     inputs: Vec<ExtractInputWithOptions>,
     config: &ExtractionConfig,
 ) -> xberg::Result<ExtractionResult> {
-    build_runtime()?.block_on(extract_batch_with_input_options(inputs, config))
+    block_on_shared(extract_batch_with_input_options(inputs, config), config)?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn runtimes_built() -> usize {
-        RUNTIMES_BUILT.with(std::cell::Cell::get)
+    #[test]
+    fn repeated_single_extractions_reuse_the_shared_runtime() {
+        for _ in 0..2 {
+            let input = ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None);
+            let output = block_on_extract(input, &ExtractionConfig::default()).unwrap();
+            assert_eq!(output.results.len(), 1);
+            assert!(output.results[0].content.contains("hello"));
+        }
     }
 
     #[test]
-    fn build_runtime_has_one_large_stack_worker() {
-        let runtime = build_runtime().unwrap();
-
-        assert_eq!(
-            runtime.handle().runtime_flavor(),
-            tokio::runtime::RuntimeFlavor::MultiThread
-        );
-        assert_eq!(runtime.metrics().num_workers(), 1);
+    fn batch_extraction_runs_on_the_shared_runtime() {
+        let inputs = ["first", "second"]
+            .map(|text| {
+                ExtractInputWithOptions::new(ExtractInput::from_bytes(text.as_bytes().to_vec(), "text/plain", None))
+            })
+            .to_vec();
+        let output = block_on_extract_batch(inputs, &ExtractionConfig::default()).unwrap();
+        assert_eq!(output.results.len(), 2);
+        assert!(output.results[0].content.contains("first"));
+        assert!(output.results[1].content.contains("second"));
     }
 
     #[test]
-    fn single_extraction_builds_exactly_one_cli_runtime() {
-        let before = runtimes_built();
-        let input = ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None);
-
-        let _ = block_on_extract(input, &ExtractionConfig::default());
-
-        assert_eq!(runtimes_built() - before, 1);
-    }
-
-    #[test]
-    fn batch_extraction_builds_exactly_one_cli_runtime() {
-        let before = runtimes_built();
-
-        let _ = block_on_extract_batch(Vec::new(), &ExtractionConfig::default());
-
-        assert_eq!(runtimes_built() - before, 1);
+    fn the_driver_allows_block_in_place() {
+        let value = block_on_shared(
+            async { tokio::task::block_in_place(|| 7) },
+            &ExtractionConfig::default(),
+        )
+        .unwrap();
+        assert_eq!(value, 7);
     }
 }

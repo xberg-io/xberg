@@ -45,7 +45,9 @@ pub(crate) mod layout_pages;
 pub mod mime;
 pub(crate) mod path_resolver;
 pub mod pipeline;
-pub(crate) mod runtime;
+/// Shared runtime plumbing; public only for the CLI and outside the alef-scanned binding surface.
+#[doc(hidden)]
+pub mod runtime;
 #[cfg(feature = "api-types")]
 pub mod server_config;
 /// Split-and-extract for multi-document PDFs. Core-only, not part of the
