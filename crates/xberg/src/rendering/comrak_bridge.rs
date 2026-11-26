@@ -1309,8 +1309,10 @@ fn build_comrak_ast_with_table_mode<'a>(
 
     // The bullet list closed last and whether only page breaks have followed it: a list the
     // pages split is one list, and a second sibling would make the writer emit a
-    // `<!-- end list -->` comment between the halves.
+    // `<!-- end list -->` comment between the halves. Only PDF assembly closes its lists at
+    // every page end; elsewhere two lists around a page break are two authored lists.
     let mut paged_list: Option<(&'a AstNode<'a>, bool)> = None;
+    let lists_close_at_page_ends = doc.source_format == "pdf";
 
     for consolidated_elem in &consolidated {
         let orig_idx = consolidated_elem.original_index();
@@ -1331,6 +1333,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                                     .iter()
                                     .rev()
                                     .find(|entry| matches!(entry.kind, ContainerKind::List))
+                                    .filter(|_| lists_close_at_page_ends)
                                     .map(|entry| (entry.node, false));
                                 pop_container(&mut container_stack, ContainerKind::List);
                             }
@@ -2273,6 +2276,24 @@ mod tests {
         let out = render(&b.build());
         assert_eq!(out.matches("<!-- end list -->").count(), 0, "got: {out}");
         assert!(out.contains("- Docker Forensics\n- Browser Artifacts"), "got: {out}");
+    }
+
+    /// EPUB and DocTags close a list where the author did; a page break between two bullet
+    /// lists there does not make them one.
+    #[test]
+    fn a_page_break_joins_bullet_lists_only_in_pdf_output() {
+        for source_format in ["epub", "doctags"] {
+            let mut b = InternalDocumentBuilder::new(source_format);
+            b.push_list(false);
+            b.push_list_item("Docker Forensics", false, vec![], Some(1), None);
+            b.end_list();
+            b.push_page_break();
+            b.push_list(false);
+            b.push_list_item("Browser Artifacts", false, vec![], Some(2), None);
+            b.end_list();
+            let out = render(&b.build());
+            assert_eq!(out.matches("<!-- end list -->").count(), 1, "{source_format}: {out}");
+        }
     }
 
     /// Without a page break between them, or for numbered lists, two lists stay two lists.
