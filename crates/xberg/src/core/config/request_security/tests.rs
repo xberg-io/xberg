@@ -537,6 +537,74 @@ fn should_reject_only_a_caller_tessdata_model_that_differs_from_the_operators() 
 }
 
 #[test]
+fn should_keep_the_operator_section_set_when_a_caller_drops_the_ocr_section() {
+    use super::super::{OcrConfig, TessdataModel};
+
+    let operator = super::super::ExtractionConfig {
+        ocr: Some(OcrConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let caller = serde_json::json!({"ocr": null});
+
+    for resolved in [
+        resolve_caller_extraction_config(&operator, Some(&caller)).unwrap(),
+        resolve_remote_caller_extraction_config(&operator, Some(&caller), false).unwrap(),
+    ] {
+        assert!(resolved.ocr.is_none(), "the caller may drop the section itself");
+        assert_eq!(resolved.effective_tessdata_model(), TessdataModel::Best);
+    }
+}
+
+#[test]
+fn should_accept_a_caller_echoing_a_mixed_operator_config() {
+    use super::super::{OcrConfig, TessdataModel};
+
+    let operator = super::super::ExtractionConfig {
+        tessdata_model: Some(TessdataModel::Best),
+        ocr: Some(OcrConfig {
+            tessdata_model: Some(TessdataModel::Fast),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let echo = serde_json::json!({"tessdata_model": "best", "ocr": {"tessdata_model": "fast"}});
+    let swapped = serde_json::json!({"tessdata_model": "fast", "ocr": {"tessdata_model": "best"}});
+
+    assert_eq!(check_caller_tessdata_model(&operator, &echo), Ok(()));
+    assert!(check_caller_tessdata_model(&operator, &swapped).is_err());
+    assert_eq!(
+        resolve_caller_extraction_config(&operator, Some(&echo))
+            .unwrap()
+            .effective_tessdata_model(),
+        TessdataModel::Fast
+    );
+}
+
+#[test]
+fn should_explain_a_per_input_top_level_tessdata_model() {
+    use super::super::TessdataModel;
+
+    let request = super::super::ExtractionConfig {
+        tessdata_model: Some(TessdataModel::Best),
+        ..Default::default()
+    };
+    let mut differing = serde_json::json!({"tessdata_model": "fast", "force_ocr": true});
+    let mut restated = serde_json::json!({"tessdata_model": "best", "force_ocr": true});
+
+    let error = strip_per_input_tessdata_model(&request, &mut differing).unwrap_err();
+    assert!(
+        error.starts_with("Per-input config may not set tessdata_model"),
+        "{error}"
+    );
+    strip_per_input_tessdata_model(&request, &mut restated).unwrap();
+    assert_eq!(restated, serde_json::json!({"force_ocr": true}));
+    assert!(serde_json::from_value::<super::super::FileExtractionConfig>(restated).is_ok());
+}
+
+#[test]
 fn should_keep_operator_tessdata_model_when_caller_sends_an_ocr_object() {
     use super::super::{OcrConfig, TessdataModel};
 
