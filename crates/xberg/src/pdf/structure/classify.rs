@@ -1984,7 +1984,29 @@ fn looks_like_title_continuation(prev: &PdfParagraph, next: &PdfParagraph) -> bo
     }
     let prev_wc = prev_text.split_whitespace().count();
     let next_wc = next_text.split_whitespace().count();
-    prev_wc <= 4 && next_wc <= 4
+    (prev_wc <= 4 && next_wc <= 4) || wraps_onto_next_line(prev, next, prev_wc + next_wc)
+}
+
+/// Baseline pitch, in multiples of the font size, up to which two stacked title-size
+/// lines are one wrapped title. Display titles are set with loose leading: 1602.03238
+/// wraps its 17pt title at a 1.66 pitch, and its two halves were emitted as two H1s. ~keep
+const WRAPPED_TITLE_MAX_PITCH_EM: f32 = 2.0;
+
+/// Whether `next` is the following physical line of a title that ran out of room:
+/// it sits directly below `prev`, within a line pitch, and the two together stay
+/// heading-sized. Longer first lines are only admitted on this geometric evidence;
+/// lines sharing a baseline or set far apart keep the four-word rule.
+fn wraps_onto_next_line(prev: &PdfParagraph, next: &PdfParagraph, word_count: usize) -> bool {
+    let (Some(prev_baseline), Some(next_baseline)) = (
+        prev.lines.last().and_then(|line| line.baseline_y),
+        next.lines.first().and_then(|line| line.baseline_y),
+    ) else {
+        return false;
+    };
+    let pitch = prev_baseline - next_baseline;
+    word_count <= MAX_HEADING_WORD_COUNT
+        && pitch > 0.0
+        && pitch <= prev.dominant_font_size.max(1.0) * WRAPPED_TITLE_MAX_PITCH_EM
 }
 
 /// Return the effective plain text for a paragraph, preferring `para.text` (the
@@ -3451,6 +3473,47 @@ mod tests {
         );
         assert_eq!(page[0].text, "The Quick Brown Fox Jumped");
         assert_eq!(page[1].text, "Over");
+    }
+
+    fn make_h1_at_baseline(font_size: f32, text: &str, baseline: f32) -> PdfParagraph {
+        let mut p = make_h1_with_text(font_size, text);
+        p.lines[0].baseline_y = Some(baseline);
+        for segment in &mut p.lines[0].segments {
+            segment.baseline_y = baseline;
+            segment.y = baseline;
+        }
+        p
+    }
+
+    /// 1602.03238 sets its 17pt title on two lines at a 1.66 line pitch; the first line
+    /// holds seven words, so the four-word rule kept them as two H1s.
+    #[test]
+    fn merge_h1s_joins_a_long_title_wrapped_onto_the_next_line() {
+        let mut page = vec![
+            make_h1_at_baseline(17.2, "Valuation of Variable Annuities with Guaranteed Minimum", 750.0),
+            make_h1_at_baseline(17.2, "Withdrawal Benefit under Stochastic Interest Rate", 721.5),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            1,
+            "a long title wrapped within one line pitch is one heading"
+        );
+        assert!(page[0].text.ends_with("Interest Rate"), "got {:?}", page[0].text);
+    }
+
+    #[test]
+    fn merge_h1s_keeps_long_titles_set_far_apart() {
+        let mut page = vec![
+            make_h1_at_baseline(17.2, "Valuation of Variable Annuities with Guaranteed Minimum", 750.0),
+            make_h1_at_baseline(17.2, "Withdrawal Benefit under Stochastic Interest Rate", 650.0),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            2,
+            "long lines several line pitches apart are separate headings"
+        );
     }
 
     #[test]

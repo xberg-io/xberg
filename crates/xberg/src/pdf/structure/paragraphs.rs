@@ -120,7 +120,7 @@ pub(super) fn merge_continuation_paragraphs_with_gaps(paragraphs: &mut Vec<PdfPa
             .is_some_and(|prev_segment| super::pipeline::heading_fills_column(prev_segment, next_right_edge));
         let heading_wrap_exempt =
             boundary_is_heading_wrap || (starts_with_lowercase_continuation(&next) && heading_fills_column);
-        let should_merge = both_body
+        let should_merge = (both_body || continues_heading_line(&current, &next))
             && fonts_compatible
             && bold_compatible
             && continuation_signal
@@ -145,6 +145,31 @@ pub(super) fn merge_continuation_paragraphs_with_gaps(paragraphs: &mut Vec<PdfPa
     }
 
     paragraphs.push(current);
+}
+
+/// Font-size tolerance within which a lowercase line is set in its heading's own tier.
+const HEADING_WRAP_FONT_TOLERANCE: f32 = 0.5;
+/// A heading's wrapped remainder is a phrase, not a paragraph.
+const MAX_HEADING_WRAP_WORDS: usize = 12;
+
+/// Whether `next` is the wrapped remainder of the heading `current`: a short body line in
+/// the heading's own size and weight that resumes in lowercase after an unterminated
+/// heading. Classification refuses a lowercase opener as a heading, so the remainder of a
+/// title wrapped at a loose pitch (1710.02091's `... for extreme` / `precipitation in Great
+/// Britain`) or a hyphenated section title (2310.02163's `Prefer-` / `ence`) was emitted as
+/// a stray paragraph under a truncated heading. Body text below a heading is set smaller,
+/// or lighter for a body-size bold heading, so it does not meet the tier test.
+fn continues_heading_line(current: &PdfParagraph, next: &PdfParagraph) -> bool {
+    current.heading_level.is_some()
+        && next.heading_level.is_none()
+        && !next.is_list_item
+        && !next.is_code_block
+        && !next.is_formula
+        && current.is_bold == next.is_bold
+        && (current.dominant_font_size - next.dominant_font_size).abs() < HEADING_WRAP_FONT_TOLERANCE
+        && next.word_count <= MAX_HEADING_WRAP_WORDS
+        && starts_with_lowercase_continuation(next)
+        && !ends_with_sentence_terminator(current)
 }
 
 fn page_number_before_gap(current: &PdfParagraph, next: &PdfParagraph, paragraph_gaps: &[f32]) -> bool {
@@ -987,6 +1012,41 @@ mod tests {
         ];
         merge_continuation_paragraphs(&mut paragraphs);
         assert_eq!(paragraphs.len(), 1, "lowercase continuation should be merged");
+    }
+
+    /// 1710.02091 wraps its 20.7pt title at a loose pitch; the lowercase remainder is no
+    /// heading on its own and was emitted as prose under a truncated title.
+    #[test]
+    fn should_merge_a_lowercase_remainder_into_its_heading() {
+        let mut title = make_body_paragraph_at("A Bayesian spatial hierarchical model for extreme", 20.7, 700.0);
+        title.heading_level = Some(1);
+        let remainder = make_body_paragraph_at("precipitation in Great Britain", 20.7, 666.0);
+        let mut paragraphs = vec![title, remainder];
+        merge_continuation_paragraphs(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 1, "the wrapped remainder belongs to the heading");
+        assert_eq!(paragraphs[0].heading_level, Some(1));
+        assert_eq!(paragraphs[0].lines.len(), 2);
+    }
+
+    #[test]
+    fn should_keep_body_text_below_a_heading_separate() {
+        let mut heading = make_body_paragraph_at("Results and discussion", 14.0, 700.0);
+        heading.heading_level = Some(2);
+        let smaller_body = make_body_paragraph_at("where the model is fitted to each site", 11.0, 684.0);
+        let mut paragraphs = vec![heading.clone(), smaller_body];
+        merge_continuation_paragraphs(&mut paragraphs);
+        assert_eq!(
+            paragraphs.len(),
+            2,
+            "body text in a smaller tier is not the heading's remainder"
+        );
+
+        let mut terminated = heading;
+        terminated.lines[0].segments[0].text = "Results and discussion.".to_string();
+        let same_tier = make_body_paragraph_at("where the model is fitted", 14.0, 684.0);
+        let mut paragraphs = vec![terminated, same_tier];
+        merge_continuation_paragraphs(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 2, "a terminated heading has no remainder");
     }
 
     #[test]
