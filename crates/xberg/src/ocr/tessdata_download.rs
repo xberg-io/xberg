@@ -15,8 +15,7 @@ use std::time::Duration;
 
 mod pins;
 
-pub(super) use pins::TESSDATA_FAST_PACKS;
-use pins::{PinnedPack, TESSDATA_BEST_PACKS, TESSDATA_BEST_REVISION, TESSDATA_FAST_REVISION};
+use pins::{PinnedPack, TESSDATA_BEST_PACKS, TESSDATA_BEST_REVISION, TESSDATA_FAST_PACKS, TESSDATA_FAST_REVISION};
 
 const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);

@@ -20,10 +20,12 @@ use crate::core::config::TessdataModel;
 pub struct TessdataManager {
     cache_dir: PathBuf,
     model: TessdataModel,
+    #[cfg(paddle_ocr)]
     adopt_from: Vec<PathBuf>,
 }
 
 /// The local directories a manager writing into `set_dir` may copy verified packs from.
+#[cfg(paddle_ocr)]
 fn adoption_sources(set_dir: &Path, model: TessdataModel) -> Vec<PathBuf> {
     let Some(flat) = set_dir
         .parent()
@@ -60,11 +62,11 @@ impl TessdataManager {
     pub fn for_model(cache_dir: Option<PathBuf>, model: TessdataModel) -> Self {
         let cache_dir =
             cache_dir.unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("tessdata").join(model.as_str()));
-        let adopt_from = adoption_sources(&cache_dir, model);
         Self {
+            #[cfg(paddle_ocr)]
+            adopt_from: adoption_sources(&cache_dir, model),
             cache_dir,
             model,
-            adopt_from,
         }
     }
 
@@ -285,6 +287,7 @@ mod tests {
         assert_eq!(downloaded, 0);
     }
 
+    #[cfg(paddle_ocr)]
     #[test]
     fn a_set_directory_adopts_from_the_flat_cache_and_best_also_from_fast() {
         let root = Path::new("/cache/tessdata");
