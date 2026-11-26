@@ -71,7 +71,9 @@ fn parse_parenthesized_marker(text: &str) -> Option<(usize, Option<u16>)> {
 /// letter, a roman numeral, or a doubled letter (`(aa)`, as statutes continue past `(z)`).
 /// An acronym or a year in parentheses opens a wrapped line of prose as often as an item:
 /// 2026-14578 turned `(SEFSC) performed an analysis`, `(IHA) is provided` and `(1981)
-/// documented` into list items, each splitting its sentence in two. ~keep
+/// documented` into list items, each splitting its sentence in two. An uppercase run of
+/// roman letters is an acronym (`(XML)`, `(CDC)`, `(MD)`, `(CLI)`) unless it is a numeral
+/// a section would reach. ~keep
 fn is_parenthesized_enumerator(marker: &str) -> bool {
     let mut chars = marker.chars();
     let (Some(first), second) = (chars.next(), chars.next()) else {
@@ -79,7 +81,8 @@ fn is_parenthesized_enumerator(marker: &str) -> bool {
     };
     numeric_marker_value(marker).is_some()
         || (first.is_alphabetic() && second.is_none())
-        || is_roman_marker(marker)
+        || (is_roman_marker(marker)
+            && (marker.chars().all(char::is_lowercase) || super::classify::is_valid_roman(marker)))
         || (first.is_alphabetic() && second == Some(first) && chars.next().is_none())
 }
 
@@ -206,6 +209,11 @@ mod tests {
             "(SEFSC) performed an analysis",
             "(IHA) is provided",
             "(1981) documented",
+            "(XML) schema",
+            "(CDC) guidance",
+            "(MD) degree",
+            "(CLI) tool",
+            "(Mix) design",
         ] {
             assert!(parse_ordered_list_marker(prose).is_none(), "source: {prose}");
         }
@@ -213,6 +221,9 @@ mod tests {
             "(a) Enforcement",
             "(D) Definitions",
             "(iv) Fourth",
+            "(xxiv) Twenty-fourth",
+            "(IV) Fourth",
+            "(XII) Twelfth",
             "(12) Twelfth",
             "(aa) Continued",
         ] {

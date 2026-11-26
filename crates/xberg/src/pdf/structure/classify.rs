@@ -1469,7 +1469,7 @@ pub(super) fn starts_with_section_number(text: &str) -> bool {
 }
 
 /// Check if a string is a valid roman numeral (I-XX range, covers most section numbering).
-fn is_valid_roman(s: &str) -> bool {
+pub(super) fn is_valid_roman(s: &str) -> bool {
     matches!(
         s,
         "I" | "II"
