@@ -1190,10 +1190,8 @@ fn push_paragraph_element_by_kind(
         "emitting element"
     );
 
-    let get_text = |para: &PdfParagraph| -> String {
-        if paragraph_has_scripts(para) {
-            extract_text_and_annotations(para, hyphen_witnesses).0
-        } else if !para.text.is_empty() {
+    let unscripted_text = |para: &PdfParagraph| -> String {
+        if !para.text.is_empty() {
             para.text.clone()
         } else {
             join_line_texts_plain(&para.lines, hyphen_witnesses)
@@ -1202,15 +1200,28 @@ fn push_paragraph_element_by_kind(
 
     let get_annotated_text = |para: &PdfParagraph| extract_text_and_annotations(para, hyphen_witnesses);
 
+    let get_text = |para: &PdfParagraph| -> String {
+        if paragraph_has_scripts(para) {
+            get_annotated_text(para).0
+        } else {
+            unscripted_text(para)
+        }
+    };
+
     if let Some(level) = para.heading_level {
-        let text = get_text(para);
+        let (text, annotations) = if paragraph_has_scripts(para) {
+            let (text, annotations) = get_annotated_text(para);
+            (text, Some(annotations))
+        } else {
+            (unscripted_text(para), None)
+        };
         let index = if para.layout_region_path.is_some() {
             builder.push_heading_in_current_container(level, &text, page, bbox)
         } else {
             builder.push_heading(level, &text, page, bbox)
         };
-        if paragraph_has_scripts(para) {
-            builder.set_annotations(index, get_annotated_text(para).1);
+        if let Some(annotations) = annotations {
+            builder.set_annotations(index, annotations);
         }
         return index;
     }
@@ -1238,23 +1249,28 @@ fn push_paragraph_element_by_kind(
 
     if para.is_list_item {
         let ordered = list_item_is_ordered(para);
-        let text = get_text(para);
-        let annotations = if para.text.is_empty() || paragraph_has_scripts(para) {
-            let (annotated_text, annotations) = get_annotated_text(para);
-            if annotated_text == text {
-                annotations
-            } else {
-                Vec::new()
-            }
+        let (text, annotations) = if paragraph_has_scripts(para) {
+            get_annotated_text(para)
         } else {
-            para.is_bold
-                .then_some(TextAnnotation {
-                    start: 0,
-                    end: text.len() as u32,
-                    kind: AnnotationKind::Bold,
-                })
-                .into_iter()
-                .collect()
+            let text = unscripted_text(para);
+            let annotations = if para.text.is_empty() {
+                let (annotated_text, annotations) = get_annotated_text(para);
+                if annotated_text == text {
+                    annotations
+                } else {
+                    Vec::new()
+                }
+            } else {
+                para.is_bold
+                    .then_some(TextAnnotation {
+                        start: 0,
+                        end: text.len() as u32,
+                        kind: AnnotationKind::Bold,
+                    })
+                    .into_iter()
+                    .collect()
+            };
+            (text, annotations)
         };
         let (normalized, removed_prefix_len) = normalize_list_text(&text);
         let annotations = shift_annotations_after_prefix_removal(annotations, removed_prefix_len, normalized.len());
