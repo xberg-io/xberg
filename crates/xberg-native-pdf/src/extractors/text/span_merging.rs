@@ -457,8 +457,9 @@ impl<'doc> TextExtractor<'doc> {
                     // stock font's, not the scan's, so the gap between two such strings carries no
                     // kerning signal. Acrobat Paper Capture leaves gaps of 0.03 to 0.18 em between
                     // separately shown words (scanned.pdf), under the 0.14 em space threshold. A
-                    // following string that does not overlap the previous one is a new word. A
-                    // layer that shows each glyph on its own keeps its one-letter strings joined. ~keep
+                    // following string at least `OCR_LAYER_MIN_WORD_GAP_EM` clear of the previous one
+                    // is a new word. A layer that shows each glyph on its own keeps its one-letter
+                    // strings joined. ~keep
                     if !space_decision.insert_space
                         && matches!(
                             space_decision.source,
@@ -467,7 +468,7 @@ impl<'doc> TextExtractor<'doc> {
                         && preceding_is_ocr_layer
                         && span_is_ocr_layer
                         && same_line
-                        && gap >= -edge_rounding_error(current_end_x.abs().max(span.bbox.x.abs()))
+                        && gap >= OCR_LAYER_MIN_WORD_GAP_EM * font_size_ref
                         && breaks_ocr_layer_word(&current.text, &span.text)
                     {
                         space_decision = SpaceDecision::insert(SpaceSource::GeometricGap, 0.85);
@@ -745,6 +746,12 @@ impl<'doc> TextExtractor<'doc> {
         });
     }
 }
+
+/// Smallest gap between two OCR-layer strings, in em of the larger font, that separates words.
+/// Separately shown words measured 0.03 to 0.18 em apart (scanned.pdf); one word that a producer
+/// split into abutting strings (`(wor)` `(ld)`) sits at 0 up to coordinate rounding. Half the
+/// smallest measured word gap stays clear of both. ~keep
+const OCR_LAYER_MIN_WORD_GAP_EM: f32 = 0.015;
 
 /// Vertical size of one [`InkRows`] bucket, in points: about half a body line, so a gap query
 /// reads only the few buckets its band overlaps.

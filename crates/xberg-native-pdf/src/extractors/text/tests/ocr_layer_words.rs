@@ -73,3 +73,17 @@ fn an_ocr_layer_that_shows_each_glyph_alone_keeps_its_words() {
     let glyphs = text(&positioned_line(3, &["w", "o", "r", "d"], 0.01));
     assert_eq!(glyphs, "word");
 }
+
+#[test]
+fn an_ocr_layer_word_split_into_abutting_strings_stays_one_word() {
+    for gap_em in [0.0, 0.005] {
+        let abutting = text(&positioned_line(3, &["wor", "ld"], gap_em));
+        assert_eq!(abutting, "world", "gap {gap_em} em");
+    }
+    let apart = text(&positioned_line(3, &["wor", "ld"], 0.03));
+    assert_eq!(
+        apart.split(['|', ' ']).filter(|w| !w.is_empty()).collect::<Vec<_>>(),
+        ["wor", "ld"],
+        "{apart:?}"
+    );
+}
