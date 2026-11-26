@@ -8339,6 +8339,57 @@ fn test_finalize_paragraph_suppresses_heading_for_lowercase_start_fragment() {
     );
 }
 
+/// 1710.02091: a 20.7pt display title over a 12pt body opens with the article `A`, which the
+/// continuation-word guard read as a stranded fragment, so the title became prose.
+#[test]
+fn finalize_paragraph_keeps_a_display_title_that_opens_with_an_article() {
+    let heading_map = vec![(18.9, Some(1)), (12.0, None), (6.5, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let title = seg_at(
+        "A Bayesian spatial hierarchical model for extreme",
+        100.0,
+        700.0,
+        20.7,
+        false,
+    );
+    let para = finalize_paragraph(&[&title], &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, Some(1));
+
+    let lowercase = seg_at("precipitation in Great Britain", 100.0, 666.0, 20.7, false);
+    let para = finalize_paragraph(&[&lowercase], &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, None, "a lowercase opener is still a fragment");
+
+    let heading_tier = seg_at("The results of the hierarchical model", 100.0, 600.0, 15.0, false);
+    let heading_tier_map = vec![(15.0, Some(2)), (12.0, None)];
+    let heading_tier_gaps = crate::pdf::structure::classify::precompute_gap_info(&heading_tier_map);
+    let para = finalize_paragraph(&[&heading_tier], &heading_tier_map, &heading_tier_gaps).expect("paragraph");
+    assert_eq!(
+        para.heading_level, None,
+        "below display scale a capitalized article opener keeps the fragment guard"
+    );
+}
+
+/// 2212.11694 sets each word of its 14pt bold title as its own run on one baseline; the
+/// bold-title test counted runs, not visual lines, and the title stayed bold prose.
+#[test]
+fn finalize_paragraph_promotes_a_bold_title_set_one_run_per_word() {
+    let heading_map = vec![(20.0, Some(1)), (10.0, None), (6.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let words: Vec<SegmentData> = ["Timestamp-Supervised", "Action", "Segmentation", "from", "Clustering"]
+        .iter()
+        .enumerate()
+        .map(|(index, word)| {
+            let mut segment = seg_at(word, 60.0 + 90.0 * index as f32, 700.0, 14.3, false);
+            segment.width = 80.0;
+            segment.is_bold = true;
+            segment
+        })
+        .collect();
+    let refs: Vec<&SegmentData> = words.iter().collect();
+    let para = finalize_paragraph(&refs, &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, Some(2));
+}
+
 /// A bold heading whose section number and title are separate segments on one
 /// baseline, as LaTeX emits `\section` titles, over a 10pt body.
 fn finalize_bold_numbered_heading(number: &str, title: &str, font_size: f32) -> PdfParagraph {

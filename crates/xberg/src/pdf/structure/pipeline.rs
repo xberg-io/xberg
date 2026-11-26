@@ -3565,6 +3565,12 @@ fn finalize_paragraph(
     let page_number_like =
         word_count <= MAX_PAGE_NUMBER_WORD_COUNT && super::page_number::classify_page_number_text(trimmed).is_some();
 
+    let body_font_size = heading_map
+        .iter()
+        .find(|(_, level)| level.is_none())
+        .map(|(centroid, _)| *centroid)
+        .unwrap_or(0.0);
+
     let mut heading_level = super::classify::find_heading_level(first.font_size, heading_map, gap_info);
     if heading_level.is_some()
         && (word_count > 20
@@ -3578,16 +3584,12 @@ fn finalize_paragraph(
             // judgement, plus the case where the line runs on past an interior full stop. GH#1599.
             // ~keep
             || super::classify::reads_as_body_content(trimmed, word_count)
-            || (SUPPRESS_LOWERCASE_START_HEADINGS && super::classify::starts_with_lowercase_or_continuation(trimmed)))
+            || (SUPPRESS_LOWERCASE_START_HEADINGS
+                && super::classify::starts_with_lowercase_or_continuation(trimmed)
+                && !is_title_scale_capitalized_opener(trimmed, first.font_size, body_font_size)))
     {
         heading_level = None;
     }
-
-    let body_font_size = heading_map
-        .iter()
-        .find(|(_, level)| level.is_none())
-        .map(|(centroid, _)| *centroid)
-        .unwrap_or(0.0);
 
     // A bold, short, single-line paragraph is only a heading candidate when
     // its font is also meaningfully larger than the document's body font
@@ -3601,11 +3603,14 @@ fn finalize_paragraph(
         && first.font_size >= body_font_size * super::constants::MIN_HEADING_FONT_RATIO
         && first.font_size >= body_font_size + super::constants::MIN_HEADING_FONT_GAP;
 
+    // One visual line, not only one segment: a producer that sets each word as its own run
+    // (2212.11694's 14pt bold title) never met a one-segment test. A multi-run line that
+    // opens with a list marker keeps to the numbered-heading rules below. ~keep
     if heading_level.is_none()
         && is_bold
         && clears_bold_font_gate
         && (1..=8).contains(&word_count)
-        && lines.len() == 1
+        && (lines.len() == 1 || (reconstructed_lines.len() == 1 && !is_list_candidate))
         && !trimmed.ends_with('.')
         && !trimmed.ends_with(':')
         && !trimmed.ends_with(',')
@@ -3872,6 +3877,20 @@ fn is_structural_heading_word(text: &str) -> bool {
             | "Results"
             | "Methodology"
     )
+}
+
+/// Font ratio over body at which a line is set at display-title scale.
+const TITLE_SCALE_FONT_RATIO: f32 = 1.5;
+
+/// Whether a capitalized opener (`A`, `The`, `In`) belongs to a display-scale title rather
+/// than to a sentence fragment. The continuation-word guard exists for fragments a column
+/// break strands at heading size, but a line set at least half again above body size that
+/// opens with a capital is a title: 1710.02091's `A Bayesian spatial hierarchical model ...`
+/// was emitted as prose for its leading article. A lowercase opener is still a fragment.
+fn is_title_scale_capitalized_opener(text: &str, font_size: f32, body_font_size: f32) -> bool {
+    body_font_size > 0.0
+        && font_size >= body_font_size * TITLE_SCALE_FONT_RATIO
+        && text.trim_start().chars().next().is_some_and(char::is_uppercase)
 }
 
 /// Build a structured `InternalDocument` from pre-extracted per-page segments.
