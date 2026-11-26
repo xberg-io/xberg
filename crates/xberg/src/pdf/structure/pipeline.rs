@@ -8785,37 +8785,75 @@ pub(crate) enum WrapHyphen {
 /// dehyphenation and annotated assembly. `left` is the text ending at the break, `right`
 /// the text after it; callers apply their own geometry gates before asking.
 ///
-/// A wrap needs a stem of at least [`MIN_WRAPPED_STEM_LETTERS`] non-CJK letters before the
+/// A weld needs a stem of at least [`MIN_WRAPPED_STEM_LETTERS`] non-CJK letters before the
 /// hyphen and a lowercase continuation that is not a conjunction completing a suspended
-/// hyphen. The hyphen survives for an uncased or uppercase stem (`COVID-` / `related`), a
-/// known compound, or a pair the document writes hyphenated mid-line.
+/// hyphen. The hyphen survives, and only the break goes, for an uncased or uppercase stem
+/// (`COVID-` / `related`), a known compound, a pair the document writes hyphenated mid-line,
+/// a word hyphen after a digit, a closing bracket or a lone letter (`24-` / `hour`,
+/// `(m − n)-` / `dimensional`, `k-` / `th`), and an all-caps word on both sides
+/// (`INTER-` / `ACTIONS`).
 pub(crate) fn classify_wrap(left: &str, right: &str, witnesses: &HyphenWitnesses) -> WrapHyphen {
     let mut left_chars = left.chars();
-    if !left_chars.next_back().is_some_and(is_wrap_hyphen) {
-        return WrapHyphen::NotApplicable;
-    }
-    let stem = left_chars.as_str();
-    let stem_letters = trailing_letters(stem);
-    let Some(last_letter) = stem_letters.chars().next_back() else {
+    let Some(hyphen) = left_chars.next_back().filter(|&c| is_wrap_hyphen(c)) else {
         return WrapHyphen::NotApplicable;
     };
-    if stem_letters.chars().count() < MIN_WRAPPED_STEM_LETTERS || is_cjk_char(last_letter) {
-        return WrapHyphen::NotApplicable;
-    }
+    let stem = left_chars.as_str();
+    let stem_word = stem.rsplit(char::is_whitespace).next().unwrap_or(stem);
     let right = right.trim_start();
     let right_letters = leading_letters(right);
-    if !right_letters.chars().next().is_some_and(char::is_lowercase)
-        || SUSPENDED_HYPHEN_CONTINUATIONS.contains(&right_letters)
-    {
+    // A word hyphen joining a compound keeps its hyphen; a soft hyphen never does, and a
+    // token the hyphen also opens (a form's `-0-`) is a dash pair, not a compound. ~keep
+    let compound = if is_word_hyphen(hyphen) && !stem_word.starts_with(is_wrap_hyphen) {
+        WrapHyphen::KeepHyphen
+    } else {
+        WrapHyphen::NotApplicable
+    };
+    let stem_letters = trailing_letters(stem);
+    let Some(last_letter) = stem_letters.chars().next_back() else {
+        let numeric_or_bracketed = stem.ends_with(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']'));
+        return if numeric_or_bracketed && starts_lowercase_word(right_letters) {
+            compound
+        } else {
+            WrapHyphen::NotApplicable
+        };
+    };
+    if is_cjk_char(last_letter) {
         return WrapHyphen::NotApplicable;
     }
-    let stem_word = stem.rsplit(char::is_whitespace).next().unwrap_or(stem);
+    if is_all_caps_word(stem_letters) && is_all_caps_word(right_letters) {
+        return compound;
+    }
+    if !starts_lowercase_word(right_letters) {
+        return WrapHyphen::NotApplicable;
+    }
+    if stem_letters.chars().count() < MIN_WRAPPED_STEM_LETTERS {
+        return compound;
+    }
     let right_word = right.split_whitespace().next().unwrap_or("");
     if !last_letter.is_lowercase() || should_preserve_lexical_hyphen(stem_word, right_word, witnesses) {
         WrapHyphen::KeepHyphen
     } else {
         WrapHyphen::Weld
     }
+}
+
+/// A lowercase continuation that does not complete a suspended hyphen (`pre-` / `and`).
+fn starts_lowercase_word(letters: &str) -> bool {
+    letters.chars().next().is_some_and(char::is_lowercase) && !completes_suspended_hyphen(letters)
+}
+
+/// At least [`MIN_WRAPPED_STEM_LETTERS`] letters, all uppercase, and no `AND`/`OR`/`NOR`
+/// completing a suspended hyphen: a word set in capitals.
+fn is_all_caps_word(letters: &str) -> bool {
+    letters.chars().count() >= MIN_WRAPPED_STEM_LETTERS
+        && letters.chars().all(char::is_uppercase)
+        && !completes_suspended_hyphen(letters)
+}
+
+fn completes_suspended_hyphen(letters: &str) -> bool {
+    SUSPENDED_HYPHEN_CONTINUATIONS
+        .iter()
+        .any(|conjunction| conjunction.eq_ignore_ascii_case(letters))
 }
 
 fn trailing_letters(text: &str) -> &str {

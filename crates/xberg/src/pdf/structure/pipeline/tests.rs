@@ -7301,8 +7301,17 @@ fn wrap_classifier_welds_keeps_or_declines_by_one_policy() {
         ("a price-", "determining step", WrapHyphen::KeepHyphen),
         ("pre-", "and post-processing", WrapHyphen::NotApplicable),
         ("first-", "or second-order", WrapHyphen::NotApplicable),
-        ("item a-", "label", WrapHyphen::NotApplicable),
-        ("pages 12-", "fourteen", WrapHyphen::NotApplicable),
+        ("item a-", "label", WrapHyphen::KeepHyphen),
+        ("a k-", "dimensional space", WrapHyphen::KeepHyphen),
+        ("the 24-", "hour requirement", WrapHyphen::KeepHyphen),
+        ("an (m − n)-", "dimensional sphere", WrapHyphen::KeepHyphen),
+        ("HISTORICAL INTER-", "ACTIONS WITH", WrapHyphen::KeepHyphen),
+        ("work on MU\u{2011}", "NIT.", WrapHyphen::KeepHyphen),
+        ("BOTH PRE-", "AND POST-PROCESSING", WrapHyphen::NotApplicable),
+        ("pages 12-", "14", WrapHyphen::NotApplicable),
+        ("a k\u{00ad}", "th", WrapHyphen::NotApplicable),
+        ("value 3\u{00ad}", "year", WrapHyphen::NotApplicable),
+        ("if less than zero, enter -0-", "line 28", WrapHyphen::NotApplicable),
         ("some text--", "more words", WrapHyphen::NotApplicable),
         ("co-", "Worker", WrapHyphen::NotApplicable),
         ("some \u{4E00}\u{4E01}-", "text", WrapHyphen::NotApplicable),
@@ -7317,6 +7326,8 @@ fn markdown_dehyphenation_keeps_a_suspended_hyphen_and_an_uppercase_stem_hyphen(
     for (trailing, leading, expected) in [
         ("both pre-", "and post-processing", "both pre- and post-processing"),
         ("many COVID-", "related cases", "many COVID-related cases"),
+        ("The 24-", "hour requirement", "The 24-hour requirement"),
+        ("HISTORICAL INTER-", "ACTIONS WITH", "HISTORICAL INTER-ACTIONS WITH"),
     ] {
         let mut p = para(vec![
             line(vec![full_line_seg(trailing)]),

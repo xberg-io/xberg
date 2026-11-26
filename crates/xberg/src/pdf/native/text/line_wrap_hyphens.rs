@@ -155,14 +155,32 @@ mod tests {
     }
 
     #[test]
-    fn single_letter_stem_keeps_the_break() {
-        assert_eq!(rejoin("item a-\nlabel"), "item a-\nlabel");
+    fn single_letter_stem_keeps_its_hyphen_but_loses_the_break() {
+        assert_eq!(rejoin("a k-\ndimensional space"), "a k-dimensional space");
     }
 
     #[test]
-    fn dash_minus_and_digit_ends_keep_the_break() {
+    fn digit_and_bracket_stems_keep_their_hyphen_but_lose_the_break() {
+        assert_eq!(rejoin("The 24- \nhour requirement"), "The 24-hour requirement");
+        assert_eq!(
+            rejoin("an (m − n)-\ndimensional sphere"),
+            "an (m − n)-dimensional sphere"
+        );
+    }
+
+    #[test]
+    fn all_caps_halves_keep_the_hyphen_but_lose_the_break() {
+        assert_eq!(
+            rejoin("HISTORICAL INTER-\nACTIONS WITH"),
+            "HISTORICAL INTER-ACTIONS WITH"
+        );
+        assert_eq!(rejoin("work on MU\u{2011}\nNIT."), "work on MU-NIT.");
+    }
+
+    #[test]
+    fn dash_minus_and_number_continuations_keep_the_break() {
         assert_eq!(rejoin("value \u{2212}\nx"), "value \u{2212}\nx");
-        assert_eq!(rejoin("pages 12-\nfourteen"), "pages 12-\nfourteen");
+        assert_eq!(rejoin("pages 12-\n14"), "pages 12-\n14");
         assert_eq!(rejoin("a pause \u{2014}\nthen"), "a pause \u{2014}\nthen");
     }
 
