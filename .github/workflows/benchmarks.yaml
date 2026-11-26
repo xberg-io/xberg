@@ -1951,23 +1951,20 @@ jobs:
           echo "prepare-release-assets=${{ steps.prepare-release-assets.outcome }}"
 
       - name: Create GitHub Release with benchmark results
-        # Publication gates on the required producer jobs (setup + bench-rust; xberg is required in
-        # every cohort) AND on validate-artifacts, which enforces the full contract. The validator
-        # is the real gate for competitors: the PDF cohorts' competitor cells (docling, liteparse,
-        # tika, markitdown, unstructured, pymupdf4llm) are REQUIRED, so a missing one fails
-        # validate-artifacts and blocks the release even though we dropped the per-competitor
-        # `needs.*.result` gates. Only the competitor cells on the heterogeneous family cohorts are
-        # best-effort (optional in the contract): a framework that cannot read one member format of
-        # a family fails its own job without blocking the baseline, and its partial results still
-        # flow into the aggregate as non-gating data.
+        # Publication gates on setup and on validate-artifacts, which enforces the full contract:
+        # every required cell (all xberg pipelines except auto-ocr, and the PDF cohorts' docling,
+        # liteparse, tika, markitdown, unstructured and pymupdf4llm cells) must be present with no
+        # failed document, or the release is blocked. No producer job's `needs.*.result` is a gate,
+        # bench-rust's included: it also runs the optional auto-ocr legs, so its result would let a
+        # best-effort cell block publication. Optional cells' partial results still flow into the
+        # aggregate as non-gating data.
         if: >-
           ${{
             always() &&
             steps.validate-artifacts.outcome == 'success' &&
             steps.validate-aggregates.outcome == 'success' &&
             steps.prepare-release-assets.outcome == 'success' &&
-            needs.setup.result == 'success' &&
-            needs.bench-rust.result == 'success'
+            needs.setup.result == 'success'
           }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
