@@ -2762,46 +2762,155 @@ fn horizontal_rules_for_regions(
     let bands: Vec<Option<RuleBand>> = regions.iter().map(|region| RuleBand::for_region(region)).collect();
     let mut counts = vec![0usize; regions.len()];
     for path in paths {
-        let mut best: Option<f32> = None;
-        let mut owners: Vec<usize> = Vec::new();
-        for (index, band) in bands.iter().enumerate() {
-            let Some(band) = band else {
-                continue;
-            };
-            let Some(rule_y) = crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1) else {
-                continue;
-            };
-            let Some(distance) = band.distance(page_height - rule_y) else {
-                continue;
-            };
-            match best {
-                None => {
-                    best = Some(distance);
-                    owners.clear();
-                    owners.push(index);
-                }
-                Some(best_distance) if distance < best_distance => {
-                    best = Some(distance);
-                    owners.clear();
-                    owners.push(index);
-                }
-                Some(best_distance) if distance == best_distance => owners.push(index),
-                Some(_) => {}
-            }
-        }
-        // A rule inside a region's word band belongs to it; a wide table split
-        // into side-by-side regions shares its own row rules. A rule out in the
-        // gutter is credited only when exactly one region is nearest, so two
-        // stacked candidates cannot both claim a single framing rule.
-        if best == Some(0.0) {
-            for index in owners {
-                counts[index] += 1;
-            }
-        } else if let [index] = owners.as_slice() {
-            counts[*index] += 1;
-        }
+        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |band| {
+            crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1)
+        });
+    }
+    for rule in segmented_horizontal_rules(paths) {
+        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |band| {
+            (rule.covers(band) && !paths_span_band_at(paths, band, rule.y)).then_some(rule.y)
+        });
     }
     counts
+}
+
+/// Longest gap, in points, between two collinear horizontal segments that still continue one
+/// row rule. A form that boxes each field draws a row of boxes a few points apart, and their
+/// top (or bottom) edges together rule the row; a wider gap is a gutter between two tables.
+const SEGMENTED_RULE_MAX_GAP_PTS: f32 = 12.0;
+
+/// Smallest share of a region's width that a segmented rule must cover. The boxes rule the
+/// value cells, and a header label above them may overhang the last box by a few points.
+const SEGMENTED_RULE_MIN_COVERAGE: f32 = 0.9;
+
+/// A row rule drawn as several collinear horizontal segments: the shared edge of a row of
+/// boxes, each box stroked as four separate lines (pdfa_001's form fields).
+struct SegmentedRule {
+    x0: f32,
+    x1: f32,
+    y: f32,
+    covered: f32,
+}
+
+impl SegmentedRule {
+    fn covers(&self, band: &RuleBand) -> bool {
+        let width = band.x1 - band.x0;
+        let tolerance = crate::pdf::rules::GRID_EDGE_ALIGN_TOLERANCE_PTS;
+        width > 0.0
+            && self.x0 <= band.x0 + tolerance
+            && self.x1 >= band.x0 + width * SEGMENTED_RULE_MIN_COVERAGE
+            && self.covered >= width * SEGMENTED_RULE_MIN_COVERAGE
+    }
+}
+
+/// Chains of two or more collinear horizontal rules, each gap at most
+/// [`SEGMENTED_RULE_MAX_GAP_PTS`]. A single rule is not a chain: it is counted on its own.
+fn segmented_horizontal_rules(paths: &[PathContent]) -> Vec<SegmentedRule> {
+    let tolerance = crate::pdf::rules::GRID_EDGE_ALIGN_TOLERANCE_PTS;
+    let mut segments: Vec<(f32, f32, f32)> = paths
+        .iter()
+        .filter_map(crate::pdf::rules::horizontal_rule_extent)
+        .filter(|(x0, x1, y)| x0.is_finite() && x1.is_finite() && y.is_finite())
+        .collect();
+    segments.sort_by(|left, right| left.2.total_cmp(&right.2).then(left.0.total_cmp(&right.0)));
+    let mut rules = Vec::new();
+    let mut start = 0;
+    while start < segments.len() {
+        let mut end = start + 1;
+        while end < segments.len() && segments[end].2 - segments[start].2 <= tolerance {
+            end += 1;
+        }
+        let mut row = segments[start..end].to_vec();
+        row.sort_by(|left, right| left.0.total_cmp(&right.0));
+        let mut chain: Option<(SegmentedRule, usize)> = None;
+        for (x0, x1, y) in row {
+            match chain.as_mut() {
+                Some((rule, members)) if x0 <= rule.x1 + SEGMENTED_RULE_MAX_GAP_PTS => {
+                    rule.covered += (x1 - rule.x1.max(x0)).max(0.0);
+                    rule.x1 = rule.x1.max(x1);
+                    *members += 1;
+                }
+                _ => {
+                    if let Some((rule, members)) = chain.take()
+                        && members >= 2
+                    {
+                        rules.push(rule);
+                    }
+                    chain = Some((
+                        SegmentedRule {
+                            x0,
+                            x1,
+                            y,
+                            covered: x1 - x0,
+                        },
+                        1,
+                    ));
+                }
+            }
+        }
+        if let Some((rule, members)) = chain
+            && members >= 2
+        {
+            rules.push(rule);
+        }
+        start = end;
+    }
+    rules
+}
+
+/// Whether one drawn rule at `y` already spans `band` on its own, and so is already counted.
+fn paths_span_band_at(paths: &[PathContent], band: &RuleBand, y: f32) -> bool {
+    paths.iter().any(|path| {
+        crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1)
+            .is_some_and(|rule_y| (rule_y - y).abs() <= crate::pdf::rules::GRID_EDGE_ALIGN_TOLERANCE_PTS)
+    })
+}
+
+/// Credit one rule to the band it sits in, or else to the single band nearest to it.
+fn credit_rule_to_nearest_band(
+    bands: &[Option<RuleBand>],
+    page_height: f32,
+    counts: &mut [usize],
+    rule_y_for: impl Fn(&RuleBand) -> Option<f32>,
+) {
+    let mut best: Option<f32> = None;
+    let mut owners: Vec<usize> = Vec::new();
+    for (index, band) in bands.iter().enumerate() {
+        let Some(band) = band else {
+            continue;
+        };
+        let Some(rule_y) = rule_y_for(band) else {
+            continue;
+        };
+        let Some(distance) = band.distance(page_height - rule_y) else {
+            continue;
+        };
+        match best {
+            None => {
+                best = Some(distance);
+                owners.clear();
+                owners.push(index);
+            }
+            Some(best_distance) if distance < best_distance => {
+                best = Some(distance);
+                owners.clear();
+                owners.push(index);
+            }
+            Some(best_distance) if distance == best_distance => owners.push(index),
+            Some(_) => {}
+        }
+    }
+    // A rule inside a region's word band belongs to it; a wide table split
+    // into side-by-side regions shares its own row rules. A rule out in the
+    // gutter is credited only when exactly one region is nearest, so two
+    // stacked candidates cannot both claim a single framing rule.
+    if best == Some(0.0) {
+        for index in owners {
+            counts[index] += 1;
+        }
+    } else if let [index] = owners.as_slice() {
+        counts[*index] += 1;
+    }
 }
 
 /// Horizontal rules that span this candidate's own bbox, in PDF user space.
@@ -8162,6 +8271,116 @@ mod tests {
             tables.len(),
             1,
             "a grid framed by two rules is a table; got {:?}",
+            gh1760_table_texts(&tables)
+        );
+    }
+
+    /// pdfa_001 page 6: a header band over two rows of form fields, each field stroked as four
+    /// separate lines, so no single segment spans the row; one thick rule under the header.
+    /// Image-space tops, PDF-space paths on a 792pt page.
+    fn boxed_form_region() -> Vec<crate::pdf::table_reconstruct::HocrWord> {
+        vec![
+            framed_word("Building Number", 92, 110, 43),
+            framed_word("Building Name", 178, 110, 43),
+            framed_word("Building to be Removed / Replaced / Rebuilt", 459, 110, 124),
+            framed_word("BLD-01072", 89, 145, 51),
+            framed_word("Main Tower", 169, 145, 52),
+            framed_word("Remain", 473, 145, 34),
+            framed_word("BLD-01073", 89, 168, 51),
+            framed_word("McAuley Wing", 169, 168, 64),
+            framed_word("Retrofit", 473, 168, 32),
+        ]
+    }
+
+    fn boxed_form_paths(box_gap: f32) -> Vec<PathContent> {
+        let widths = [71.64, 299.35, 103.13];
+        let mut paths = vec![PathContent::line(
+            62.76,
+            FRAMED_PAGE_HEIGHT - 136.75,
+            599.46,
+            FRAMED_PAGE_HEIGHT - 136.75,
+        )];
+        for (top, bottom) in [(142.24_f32, 161.49_f32), (164.75, 184.0)] {
+            let (top, bottom) = (FRAMED_PAGE_HEIGHT - top, FRAMED_PAGE_HEIGHT - bottom);
+            let mut left = 87.76;
+            for width in widths {
+                let right = left + width;
+                paths.push(PathContent::line(left, top, right, top));
+                paths.push(PathContent::line(left, bottom, right, bottom));
+                paths.push(PathContent::line(left, top, left, bottom));
+                paths.push(PathContent::line(right, top, right, bottom));
+                left = right + box_gap;
+            }
+        }
+        paths
+    }
+
+    #[test]
+    fn a_row_of_boxed_fields_rules_its_row() {
+        let region = boxed_form_region();
+        assert_eq!(
+            horizontal_rules_for_regions(
+                &boxed_form_paths(6.0),
+                std::slice::from_ref(&region),
+                FRAMED_PAGE_HEIGHT
+            ),
+            vec![5],
+            "the header rule plus the top and bottom edge of each row of boxes"
+        );
+        assert_eq!(
+            horizontal_rules_for_regions(
+                &boxed_form_paths(30.0),
+                std::slice::from_ref(&region),
+                FRAMED_PAGE_HEIGHT
+            ),
+            vec![1],
+            "boxes a gutter apart do not rule one row together"
+        );
+
+        let rules = horizontal_rules_for_regions(
+            &boxed_form_paths(6.0),
+            std::slice::from_ref(&region),
+            FRAMED_PAGE_HEIGHT,
+        )[0];
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            rules,
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert_eq!(
+            tables.len(),
+            1,
+            "a ruled form grid is a table; got {:?}",
+            gh1760_table_texts(&tables)
+        );
+        assert!(
+            tables[0]
+                .cells
+                .iter()
+                .flatten()
+                .any(|cell| cell.contains("McAuley Wing"))
+        );
+    }
+
+    /// A box drawn around a short block of text carries two rules whatever its rows; it is not a
+    /// table on that evidence, even when the text falls into columns.
+    #[test]
+    fn a_framed_short_block_is_not_ruled_on_every_row() {
+        let region = boxed_form_region();
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            2,
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert!(
+            tables.is_empty(),
+            "two rules around three rows are a frame; got {:?}",
             gh1760_table_texts(&tables)
         );
     }

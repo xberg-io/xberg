@@ -2188,7 +2188,7 @@ pub(crate) fn is_well_formed_borderless_table(
     if !well_formed {
         return false;
     }
-    if !short_grid_has_positive_table_evidence(grid) {
+    if !short_grid_has_positive_table_evidence(grid) && !rules_every_row(grid, horizontal_rules) {
         return false;
     }
     if looks_like_numbered_reference_list(grid) || looks_like_bulleted_list(grid) {
@@ -2298,6 +2298,15 @@ fn short_grid_has_positive_table_evidence(grid: &[Vec<String>]) -> bool {
     grid.len() >= MIN_ROWS_FOR_PROSE_FLOW_TESTS
         || is_predominantly_numeric_short_grid(grid)
         || has_label_like_header_row(grid)
+}
+
+/// Whether the candidate's own rules outnumber its rows, so at least one rule falls between
+/// every pair of rows as well as above and below them. Region rule counts are credited to the
+/// nearest candidate only, so a rule drawn for another table cannot supply them; a box around a
+/// short prose block carries two rules whatever its row count and is not enough. pdfa_001's
+/// form table (a header band over two rows of boxed fields) has five against three rows.
+fn rules_every_row(grid: &[Vec<String>], horizontal_rules: usize) -> bool {
+    horizontal_rules > grid.len()
 }
 
 /// Whether every column of the grid carries a short header label of its own.
