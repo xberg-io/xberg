@@ -38,10 +38,14 @@ impl<'doc> TextExtractor<'doc> {
         // Whether the last run folded into `current_span` is a ligature that the decoder expanded to
         // letters. The flag on the span itself is cleared at a merge, so the fold keeps the tail here. ~keep
         let mut tail_is_expanded_ligature = false;
+        // Whether the last run folded into `current_span` is OCR-layer text (`ocr_layer_spans`). ~keep
+        let mut tail_is_ocr_layer = false;
 
         for (span_idx, span) in spans.into_iter().enumerate() {
             let preceding_is_expanded_ligature =
                 std::mem::replace(&mut tail_is_expanded_ligature, span.is_expanded_ligature());
+            let span_is_ocr_layer = self.ocr_layer_spans.contains(&SpanKey::of(&span));
+            let preceding_is_ocr_layer = std::mem::replace(&mut tail_is_ocr_layer, span_is_ocr_layer);
             if current_span.is_none() {
                 current_span = Some(span);
                 continue;
@@ -448,6 +452,27 @@ impl<'doc> TextExtractor<'doc> {
                         }
                     }
 
+                    // OCR text layer (render mode 3): the producer shows each recognised word as its
+                    // own string at the position of its box on the scan, and its glyph widths are a
+                    // stock font's, not the scan's, so the gap between two such strings carries no
+                    // kerning signal. Acrobat Paper Capture leaves gaps of 0.03 to 0.18 em between
+                    // separately shown words (scanned.pdf), under the 0.14 em space threshold. A
+                    // following string that does not overlap the previous one is a new word. A
+                    // layer that shows each glyph on its own keeps its one-letter strings joined. ~keep
+                    if !space_decision.insert_space
+                        && matches!(
+                            space_decision.source,
+                            SpaceSource::IntraWordKerning | SpaceSource::NoSpace
+                        )
+                        && preceding_is_ocr_layer
+                        && span_is_ocr_layer
+                        && same_line
+                        && gap >= -edge_rounding_error(current_end_x.abs().max(span.bbox.x.abs()))
+                        && breaks_ocr_layer_word(&current.text, &span.text)
+                    {
+                        space_decision = SpaceDecision::insert(SpaceSource::GeometricGap, 0.85);
+                    }
+
                     // ReversedChars Arabic word-shatter guard (ISO 32000-1
                     // §14.8.2.3.3). On a page that draws RTL glyphs individually
                     // under /ReversedChars, real word boundaries are marked with
@@ -811,4 +836,24 @@ impl InkRows {
             .flatten()
             .any(is_script)
     }
+}
+
+/// Whether two strings of an OCR text layer meet at a word boundary: each side shows a run of at
+/// least two letters or digits next to the seam, and the seam joins Latin, Greek or Cyrillic text,
+/// digits or closing and opening punctuation, never an e-mail or URL part. Scripts written without
+/// spaces or with joining marks keep the merge's own decision. ~keep
+fn breaks_ocr_layer_word(preceding: &str, following: &str) -> bool {
+    let tail = preceding.rsplit(char::is_whitespace).next().unwrap_or("");
+    let head = following.split(char::is_whitespace).next().unwrap_or("");
+    let word_chars = |token: &str| token.chars().filter(|c| c.is_alphanumeric()).count();
+    let spaced_script = |c: char| c.is_ascii_digit() || (c.is_alphabetic() && u32::from(c) < 0x0530);
+    let (Some(last), Some(first)) = (tail.chars().next_back(), head.chars().next()) else {
+        return false;
+    };
+    word_chars(tail) >= 2
+        && word_chars(head) >= 2
+        && (spaced_script(last) || matches!(last, '.' | ',' | ';' | ':' | ')'))
+        && (spaced_script(first) || first == '(')
+        && !tail.contains(['@', '/'])
+        && !head.contains(['@', '/'])
 }

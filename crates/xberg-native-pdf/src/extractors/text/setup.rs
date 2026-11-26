@@ -70,6 +70,7 @@ impl<'doc> TextExtractor<'doc> {
             span_sequence_counter: 0,
             pen_seam: None,
             pen_continuations: HashSet::new(),
+            ocr_layer_spans: HashSet::new(),
             marked_content_stack: Vec::new(),
             saw_reversed_chars: false,
             inside_artifact: false,
@@ -242,6 +243,7 @@ impl<'doc> TextExtractor<'doc> {
         self.pen_seam = None;
         self.forget_drawn_end();
         self.pen_continuations.clear();
+        self.ocr_layer_spans.clear();
     }
 
     pub(crate) fn density_probe_font_height(&self) -> f32 {

@@ -125,6 +125,9 @@ impl<'doc> TextExtractor<'doc> {
             if invisible {
                 self.invisible_spans.push((span.sequence, span.bbox));
             }
+            if render_mode == 3 && self.xobject_depth == 0 {
+                self.ocr_layer_spans.insert(SpanKey::of(&span));
+            }
             push_held(&mut self.spans, &mut self.span_holds, span, hold);
         }
     }

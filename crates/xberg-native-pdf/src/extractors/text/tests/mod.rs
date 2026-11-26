@@ -15,6 +15,7 @@ mod font_name_sharing;
 mod leading_offset;
 mod ligature_decode;
 mod ligature_glyph;
+mod ocr_layer_words;
 mod pen_continuation;
 mod primary_lead_classification;
 mod run_continuation_bounds;

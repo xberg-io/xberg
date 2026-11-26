@@ -156,9 +156,13 @@ impl<'doc> TextExtractor<'doc> {
                         .push((span.bbox.x, span.font_size, base_y, span.bbox.y));
                 }
                 let marked = moves_marks && self.pen_continuations.remove(&SpanKey::of(span));
+                let ocr_layer = moves_marks && self.ocr_layer_spans.remove(&SpanKey::of(span));
                 span.bbox.y = base_y;
                 if marked {
                     self.pen_continuations.insert(SpanKey::of(span));
+                }
+                if ocr_layer {
+                    self.ocr_layer_spans.insert(SpanKey::of(span));
                 }
             }
         }

@@ -2562,6 +2562,11 @@ pub struct TextExtractor<'doc> {
     /// The spans that start where the previous `TJ` array left the pen. The merge reads their gap
     /// raw, without the fallback-width correction. Reset with `span_sequence_counter`. ~keep
     pen_continuations: HashSet<SpanKey>,
+    /// The page-level spans drawn in render mode 3, the invisible text an OCR layer is drawn in. The
+    /// merge breaks words between such spans (see `merge_adjacent_spans`). Form XObject text is not
+    /// noted, so a cached form replays the same merge as its first walk. Reset with
+    /// `span_sequence_counter`. ~keep
+    ocr_layer_spans: HashSet<SpanKey>,
     /// History of TJ array offsets for statistical analysis
     ///
     /// Tracks TJ offset values to detect justified vs. normal text through
