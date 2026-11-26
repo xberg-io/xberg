@@ -1854,6 +1854,8 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// Whether the run is white text ([`paints_invisible_text`]).
+    invisible: bool,
     /// How far, in text-space units, the pen sits left of the right edge of the last glyph
     /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
     pullback: f32,
@@ -2068,6 +2070,7 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            invisible: paints_invisible_text(state),
             pullback: 0.0,
             ligature_tail: false,
             pen_continuation: false,
@@ -2108,6 +2111,7 @@ impl TjBuffer {
             && self.word_space == state.word_space
             && self.horizontal_scaling == state.horizontal_scaling
             && self.render_mode == state.render_mode
+            && self.invisible == paints_invisible_text(state)
             && self.text_rise == text_rise
     }
 
@@ -2408,6 +2412,11 @@ pub struct TextExtractor<'doc> {
     spans: Vec<TextSpan>,
     pub(crate) preserve_script_baselines: bool,
     pub(crate) skip_nonpainting_text: bool,
+    /// The page whose white text ([`paints_invisible_text`]) is dropped unless painted content lies
+    /// under it; `None` keeps all text.
+    pub(crate) invisible_text_page: Option<usize>,
+    /// Sequence number and bounds of each emitted white span.
+    invisible_spans: Vec<(usize, Rect)>,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
     /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
@@ -2621,6 +2630,30 @@ pub struct TextExtractor<'doc> {
 /// silently move from `xberg_native_pdf::extractors::text` to
 /// `…::text::<child>`, breaking consumer `EnvFilter`s that name the old target. ~keep
 pub(super) const LOG_TARGET: &str = module_path!();
+
+/// Smallest channel value of a white fill. ~keep
+const WHITE_FILL_MIN: f32 = 0.999;
+/// Largest CMYK component of a white fill.
+const WHITE_CMYK_MAX: f32 = 0.001;
+
+/// Whether text shown under `state` is filled white in a device or calibrated colour space with a
+/// fill-only render mode, so it paints no ink on a white page. White in another space (ICCBased,
+/// Indexed, Separation, DeviceN, a named resource) is not resolved here and never counts. Render
+/// modes 3 and 7 do not count either: an OCR text layer is drawn that way and is the page's text
+/// even where its scan is drawn by means this check cannot see. ~keep
+pub(super) fn paints_invisible_text(state: &crate::content::graphics_state::GraphicsState) -> bool {
+    if !matches!(state.render_mode, 0 | 4) {
+        return false;
+    }
+    let (r, g, b) = state.fill_color_rgb;
+    match state.fill_color_space.as_str() {
+        "DeviceCMYK" => state
+            .fill_color_cmyk
+            .is_some_and(|(c, m, y, k)| [c, m, y, k].iter().all(|component| *component <= WHITE_CMYK_MAX)),
+        "DeviceGray" | "DeviceRGB" | "CalGray" | "CalRGB" => [r, g, b].iter().all(|channel| *channel >= WHITE_FILL_MIN),
+        _ => false,
+    }
+}
 
 impl<'doc> TextExtractor<'doc> {
     fn capture_cmsy_witness(&mut self, span: &TextSpan, buffer: &TjBuffer, resource: Option<&str>) {

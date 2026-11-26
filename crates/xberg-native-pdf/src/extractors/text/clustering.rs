@@ -132,7 +132,8 @@ impl<'doc> TextExtractor<'doc> {
         };
 
         self.span_sequence_counter += 1;
-        self.push_span(span, state.render_mode);
+        let invisible = super::paints_invisible_text(state);
+        self.push_span(span, state.render_mode, invisible);
 
         Ok(())
     }

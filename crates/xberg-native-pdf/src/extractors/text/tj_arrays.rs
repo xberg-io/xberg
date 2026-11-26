@@ -122,7 +122,7 @@ impl<'doc> TextExtractor<'doc> {
         self.capture_cmsy_witness(&span, &buffer, resource.as_deref());
         self.span_sequence_counter += 1;
 
-        self.push_span(span, buffer.render_mode);
+        self.push_span(span, buffer.render_mode, buffer.invisible);
         Ok(())
     }
 

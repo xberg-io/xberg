@@ -1968,6 +1968,7 @@ mod objects;
 mod open;
 mod pages;
 mod pagination_separators;
+pub(crate) mod painted;
 mod paths;
 mod picture_text;
 mod reading_order;

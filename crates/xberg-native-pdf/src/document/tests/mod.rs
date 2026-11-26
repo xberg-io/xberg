@@ -23,6 +23,7 @@ mod form_cache_depth;
 mod form_cache_page_context;
 mod form_cache_pen_continuation;
 mod images;
+mod invisible_text;
 mod key_value_rows;
 mod objects;
 mod open;

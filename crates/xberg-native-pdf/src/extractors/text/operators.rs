@@ -623,7 +623,11 @@ impl<'doc> TextExtractor<'doc> {
             Operator::SetFillRgb { r, g, b } => {
                 // rg operator implicitly sets DeviceRGB — a process color. ~keep
                 self.inside_excluded_ink = false;
-                self.state_stack.current_mut().fill_color_rgb = (r, g, b);
+                let state = self.state_stack.current_mut();
+                if state.fill_color_space != "DeviceRGB" {
+                    state.fill_color_space = "DeviceRGB".to_string();
+                }
+                state.fill_color_rgb = (r, g, b);
             }
             Operator::SetStrokeRgb { r, g, b } => {
                 self.state_stack.current_mut().stroke_color_rgb = (r, g, b);
@@ -632,7 +636,11 @@ impl<'doc> TextExtractor<'doc> {
                 // g operator implicitly sets DeviceGray — a process color,
                 // so clear any active ink exclusion. ~keep
                 self.inside_excluded_ink = false;
-                self.state_stack.current_mut().fill_color_rgb = (gray, gray, gray);
+                let state = self.state_stack.current_mut();
+                if state.fill_color_space != "DeviceGray" {
+                    state.fill_color_space = "DeviceGray".to_string();
+                }
+                state.fill_color_rgb = (gray, gray, gray);
             }
             Operator::SetStrokeGray { gray } => {
                 self.state_stack.current_mut().stroke_color_rgb = (gray, gray, gray);
@@ -641,6 +649,9 @@ impl<'doc> TextExtractor<'doc> {
                 // k operator implicitly sets DeviceCMYK — a process color. ~keep
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
+                if state.fill_color_space != "DeviceCMYK" {
+                    state.fill_color_space = "DeviceCMYK".to_string();
+                }
                 state.fill_color_cmyk = Some((c, m, y, k));
                 state.fill_color_rgb = cmyk_to_rgb(c, m, y, k);
             }

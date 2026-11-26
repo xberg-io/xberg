@@ -47,6 +47,8 @@ impl<'doc> TextExtractor<'doc> {
             spans: Vec::new(),
             preserve_script_baselines: false,
             skip_nonpainting_text: false,
+            invisible_text_page: None,
+            invisible_spans: Vec::new(),
             chars: Vec::new(),
             after_ligature: false,
             resources: None,

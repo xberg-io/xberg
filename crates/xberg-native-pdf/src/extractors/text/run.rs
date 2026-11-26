@@ -84,6 +84,7 @@ impl<'doc> TextExtractor<'doc> {
 
         self.flush_tj_span_buffer()?;
         self.settle_span_holds();
+        self.drop_unpainted_invisible_text();
 
         // Detect RTL glyph DRAW DIRECTION on the raw stream order, BEFORE the
         // reading-order sort destroys it (ISO 32000-1 §14.8.2.3.3 method 1). ~keep

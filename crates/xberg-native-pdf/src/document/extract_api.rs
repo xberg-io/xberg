@@ -536,6 +536,10 @@ impl PdfDocument {
         let mut extractor = TextExtractor::with_config(config);
         extractor.preserve_script_baselines = matches!(script_geometry, ScriptGeometry::Preserve);
         extractor.skip_nonpainting_text = skip_nonpainting_text;
+        // The OCR bridge drops non-painting text itself and reads the rest as painted. ~keep
+        if !skip_nonpainting_text {
+            extractor.invisible_text_page = Some(page_index);
+        }
         // Stamp the page index so spans carry McidScope::Page(page_index)
         // by default; Form XObject Do invocations push their own scope
         // on top of the stack inside the extractor. ~keep ~keep

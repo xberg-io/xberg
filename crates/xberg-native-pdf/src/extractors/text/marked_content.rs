@@ -112,12 +112,56 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// Emit a span, unless the current state suppresses it.
-    pub(super) fn push_span(&mut self, span: TextSpan, render_mode: u8) {
+    ///
+    /// `invisible` says the span paints no ink of its own ([`super::paints_invisible_text`]); such a
+    /// span is noted so [`Self::drop_unpainted_invisible_text`] can drop it unless painted content
+    /// lies under it.
+    pub(super) fn push_span(&mut self, span: TextSpan, render_mode: u8, invisible: bool) {
         if (!self.skip_nonpainting_text || !matches!(render_mode, 3 | 7))
             && let Some(hold) = self.emit_hold()
         {
+            if invisible && self.invisible_text_page.is_some() {
+                self.invisible_spans.push((span.sequence, span.bbox));
+            }
             push_held(&mut self.spans, &mut self.span_holds, span, hold);
         }
+    }
+
+    /// Drop white text ([`super::paints_invisible_text`]) unless painted content lies under it.
+    /// Text over a filled shape, a stroke or an image of another colour stays, so white labels on
+    /// a dark box or a photo are kept. Only a page with such a span reads its painted content. ~keep
+    pub(super) fn drop_unpainted_invisible_text(&mut self) {
+        let invisible = std::mem::take(&mut self.invisible_spans);
+        let (Some(page), Some(document)) = (self.invisible_text_page, self.document) else {
+            return;
+        };
+        if invisible.is_empty() || self.verdict_run {
+            return;
+        }
+        let Some(painted) = document.painted_regions(page) else {
+            return;
+        };
+        let unpainted: HashSet<usize> = invisible
+            .iter()
+            .filter(|(_, bbox)| {
+                !painted
+                    .iter()
+                    .any(|region| crate::document::painted::overlaps(region, bbox))
+            })
+            .map(|(sequence, _)| *sequence)
+            .collect();
+        if unpainted.is_empty() {
+            return;
+        }
+        tracing::debug!(
+            target: super::LOG_TARGET,
+            page,
+            dropped = unpainted.len(),
+            "dropping white text over unpainted page area"
+        );
+        retain_held_from(&mut self.spans, &mut self.span_holds, 0, |span| {
+            !unpainted.contains(&span.sequence)
+        });
     }
 
     /// Emit a character, unless the current state suppresses it.
