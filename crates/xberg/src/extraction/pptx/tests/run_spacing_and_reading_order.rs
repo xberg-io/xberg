@@ -49,6 +49,33 @@ fn test_runs_splitting_a_word_join_without_a_space() {
     assert!(content.contains("I1 and more"), "{content:?}");
 }
 
+fn text_run(text: &str, formatting: elements::Formatting) -> Run {
+    Run {
+        text: text.to_string(),
+        formatting,
+        hyperlink_id: None,
+        math_latex: None,
+    }
+}
+
+fn math_run(latex: &str) -> Run {
+    Run {
+        math_latex: Some((latex.to_string(), false)),
+        ..text_run("", elements::Formatting::default())
+    }
+}
+
+/// An empty run between a math run and text leaves the math run the one the text follows.
+#[test]
+fn test_an_empty_run_after_math_keeps_the_space_before_text() {
+    let runs = [
+        math_run("x"),
+        text_run("", elements::Formatting::default()),
+        text_run("b", elements::Formatting::default()),
+    ];
+    assert_eq!(join_runs_with_spacing(&runs, Run::extract), "x b");
+}
+
 /// A table cell renders on one line, so its paragraphs still need a separator once
 /// runs stop being spaced apart.
 #[test]

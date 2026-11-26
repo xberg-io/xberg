@@ -171,8 +171,10 @@ fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> Str
                 result.push(' ');
             }
         }
-        result.push_str(&text);
-        previous_is_math = is_math;
+        if !text.is_empty() {
+            result.push_str(&text);
+            previous_is_math = is_math;
+        }
     }
     result
 }
