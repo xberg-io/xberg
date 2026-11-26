@@ -696,22 +696,25 @@ mod tessdata_model {
     }
 
     #[test]
-    fn best_tessdata_model_reaches_the_rewritten_tesseract_config() {
+    fn best_tessdata_model_stays_on_argv_when_the_tesseract_config_is_rewritten() {
         let adapter = tesseract_adapter(false).with_tessdata_model(xberg::TessdataModel::Best);
 
         let rewritten = apply_tesseract_ocr_override_to_args(&adapter.single_file_request_args(false), Some("deu"))
             .expect("tesseract OCR config to rewrite");
 
+        assert!(has_best_flag(&rewritten));
         assert_eq!(
             config_json(&rewritten).pointer("/ocr/tessdata_model"),
-            Some(&serde_json::json!("best"))
+            None,
+            "the ocr section inherits the top-level set the flag selects"
         );
     }
 
     #[test]
-    fn best_tessdata_model_reaches_per_file_batch_ocr_overrides() {
+    fn per_file_batch_ocr_overrides_inherit_the_flagged_tessdata_model() {
         let adapter = tesseract_adapter(true).with_tessdata_model(xberg::TessdataModel::Best);
-        let base_ocr = effective_ocr_config_from_args(&adapter.request_args(false));
+        let request_args = adapter.request_args(false);
+        let base_ocr = effective_ocr_config_from_args(&request_args);
 
         let cwd = Path::new("docs");
         let input = Path::new("a.pdf");
@@ -721,7 +724,8 @@ mod tessdata_model {
             .get(&cwd.join(input).to_string_lossy().into_owned())
             .expect("file config");
 
-        assert_eq!(config.pointer("/ocr/tessdata_model"), Some(&serde_json::json!("best")));
+        assert!(has_best_flag(&request_args));
+        assert_eq!(config.pointer("/ocr/tessdata_model"), None);
     }
 
     #[test]

@@ -504,16 +504,6 @@ fn apply_ocr_language(ocr: &mut xberg::OcrConfig, language: &str) {
     }
 }
 
-/// The `ocr` section added for a fixture language when the config has none. It keeps the
-/// implicit model set xberg would have used without the section, so a run's
-/// `--tessdata-model` survives the language override.
-fn implicit_ocr_config() -> xberg::OcrConfig {
-    xberg::OcrConfig {
-        tessdata_model: xberg::core::config::ocr::implicit_tessdata_model(),
-        ..Default::default()
-    }
-}
-
 impl NativeAdapter {
     /// Create a new native adapter with default configuration
     ///
@@ -537,7 +527,7 @@ impl NativeAdapter {
         let mut config = self.config.clone();
         config.force_ocr |= force_ocr;
         if let Some(language) = ocr_language {
-            apply_ocr_language(config.ocr.get_or_insert_with(implicit_ocr_config), language);
+            apply_ocr_language(config.ocr.get_or_insert_with(Default::default), language);
         }
         config
     }
@@ -598,11 +588,11 @@ impl NativeAdapter {
         }
     }
 
-    /// Sets the Tesseract model set on the adapter's existing `ocr` section, never adding one, and
-    /// on its cold subprocess probe.
+    /// Sets the Tesseract model set for every OCR pass, without adding an `ocr` section, and on
+    /// the cold subprocess probe. The default set leaves the config untouched.
     pub fn with_tessdata_model(mut self, model: xberg::TessdataModel) -> Self {
-        if let Some(ocr) = self.config.ocr.as_mut() {
-            ocr.tessdata_model = model;
+        if model != xberg::TessdataModel::Fast {
+            self.config.tessdata_model = Some(model);
         }
         self.cold_adapter = self.cold_adapter.map(|adapter| adapter.with_tessdata_model(model));
         self
@@ -618,6 +608,11 @@ impl NativeAdapter {
     #[cfg(test)]
     pub(crate) fn rejects_layout_failures(&self) -> bool {
         self.reject_layout_failures
+    }
+
+    #[cfg(test)]
+    pub(crate) fn extraction_config(&self) -> &ExtractionConfig {
+        &self.config
     }
 
     #[cfg(test)]
@@ -861,13 +856,7 @@ impl FrameworkAdapter for NativeAdapter {
     }
 
     fn configured_tessdata_model(&self) -> Option<xberg::TessdataModel> {
-        let model = self
-            .config
-            .ocr
-            .as_ref()
-            .map_or_else(xberg::core::config::ocr::implicit_tessdata_model, |ocr| {
-                ocr.tessdata_model
-            });
+        let model = self.config.effective_tessdata_model();
         (model != xberg::TessdataModel::Fast).then_some(model)
     }
 
@@ -925,7 +914,7 @@ fn build_batch_input(
             ..Default::default()
         };
         if let Some(language) = ocr_language {
-            let mut ocr = base.ocr.clone().unwrap_or_else(implicit_ocr_config);
+            let mut ocr = base.ocr.clone().unwrap_or_default();
             apply_ocr_language(&mut ocr, language);
             file_config.ocr = Some(ocr);
         }
@@ -982,17 +971,16 @@ mod tests {
     }
 
     #[test]
-    fn tessdata_model_sets_an_existing_ocr_section() {
+    fn tessdata_model_sets_the_top_level_set_and_leaves_the_ocr_section_alone() {
         let config = ExtractionConfig {
             ocr: Some(xberg::OcrConfig::default()),
             ..Default::default()
         };
         let adapter = NativeAdapter::with_config(config).with_tessdata_model(xberg::TessdataModel::Best);
 
-        assert_eq!(
-            adapter.config.ocr.as_ref().map(|ocr| ocr.tessdata_model),
-            Some(xberg::TessdataModel::Best)
-        );
+        assert_eq!(adapter.config.tessdata_model, Some(xberg::TessdataModel::Best));
+        assert_eq!(adapter.config.ocr.as_ref().and_then(|ocr| ocr.tessdata_model), None);
+        assert_eq!(adapter.config.effective_tessdata_model(), xberg::TessdataModel::Best);
         assert_eq!(adapter.configured_tessdata_model(), Some(xberg::TessdataModel::Best));
     }
 
@@ -1002,6 +990,16 @@ mod tests {
             NativeAdapter::with_config(ExtractionConfig::default()).with_tessdata_model(xberg::TessdataModel::Best);
 
         assert!(adapter.config.ocr.is_none());
+        assert_eq!(adapter.config.tessdata_model, Some(xberg::TessdataModel::Best));
+    }
+
+    #[test]
+    fn fast_tessdata_model_leaves_the_config_unchanged() {
+        let adapter =
+            NativeAdapter::with_config(ExtractionConfig::default()).with_tessdata_model(xberg::TessdataModel::Fast);
+
+        assert_eq!(adapter.config.tessdata_model, None);
+        assert_eq!(adapter.configured_tessdata_model(), None);
     }
 
     #[test]

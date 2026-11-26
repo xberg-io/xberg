@@ -49,24 +49,31 @@ fn candidate_tessdata_dirs(model: xberg::TessdataModel) -> Vec<PathBuf> {
     candidate_tessdata_dirs_for(model, prefix, cache_base)
 }
 
-/// The search chain for `model` from the given `TESSDATA_PREFIX` and cache base. `fast` reads
-/// `<cache>/tessdata/fast`, the flat `<cache>/tessdata` older releases filled and the system
-/// packages; `best` reads only `<cache>/tessdata/best` and the read-only image directory, so a
-/// `best` run whose packs are missing fails here instead of downloading inside timed rows.
+/// The search chain for `model` from the given `TESSDATA_PREFIX` and cache base, in the order of
+/// xberg's `tessdata_search_dirs` (`crates/xberg/src/ocr/processor/validation.rs`, crate-private,
+/// so mirrored here): `fast` reads the flat `<cache>/tessdata` older releases filled,
+/// `<cache>/tessdata/fast` and the system packages; `best` reads only `<cache>/tessdata/best` and,
+/// on Unix, the read-only image directory, so a `best` run whose packs are missing fails here
+/// instead of downloading inside timed rows.
 fn candidate_tessdata_dirs_for(
     model: xberg::TessdataModel,
     prefix: Option<PathBuf>,
     cache_base: Option<PathBuf>,
 ) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = prefix.into_iter().collect();
-    if let Some(cache_base) = &cache_base {
-        dirs.push(cache_base.join("tessdata").join(model.as_str()));
-    }
     match model {
-        xberg::TessdataModel::Best => dirs.push(PathBuf::from("/usr/share/xberg/tessdata/best")),
+        xberg::TessdataModel::Best => {
+            if let Some(cache_base) = &cache_base {
+                dirs.push(cache_base.join("tessdata").join(model.as_str()));
+            }
+            if cfg!(unix) {
+                dirs.push(PathBuf::from("/usr/share/xberg/tessdata/best"));
+            }
+        }
         xberg::TessdataModel::Fast => {
             if let Some(cache_base) = &cache_base {
                 dirs.push(cache_base.join("tessdata"));
+                dirs.push(cache_base.join("tessdata").join(model.as_str()));
             }
             dirs.extend(
                 [
@@ -314,18 +321,13 @@ mod tests {
         let best = candidate_tessdata_dirs_for(xberg::TessdataModel::Best, None, base.clone());
         let fast = candidate_tessdata_dirs_for(xberg::TessdataModel::Fast, None, base);
 
-        assert_eq!(
-            best,
-            [
-                cache.path().join("tessdata").join("best"),
-                PathBuf::from("/usr/share/xberg/tessdata/best"),
-            ]
-        );
+        assert_eq!(best[0], cache.path().join("tessdata").join("best"));
+        assert_eq!(best.len(), if cfg!(unix) { 2 } else { 1 });
         assert_eq!(
             fast[..2],
             [
-                cache.path().join("tessdata").join("fast"),
-                cache.path().join("tessdata")
+                cache.path().join("tessdata"),
+                cache.path().join("tessdata").join("fast")
             ]
         );
 

@@ -673,9 +673,6 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
 
     let config = build_config(args);
     config.validate()?;
-    // The in-process steady-state adapters see the selected set through the implicit OCR config
-    // when their config has no `ocr` section, as the CLI's `--ocr-tessdata-model` does.
-    xberg::core::config::ocr::set_implicit_tessdata_model(config.tessdata_model);
 
     let parsed_format = OutputFormat::from_str(&args.output_format).map_err(benchmark_harness::Error::Config)?;
     let batch_mode = matches!(config.benchmark_mode, BenchmarkMode::Batch);

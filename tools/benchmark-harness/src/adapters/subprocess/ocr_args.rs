@@ -21,11 +21,6 @@ pub(super) fn effective_ocr_config_from_args(args: &[String]) -> Option<serde_js
         .rev()
         .find(|pair| pair[0] == "--ocr-backend")
         .map(|pair| pair[1].as_str());
-    let cli_tessdata_model = args
-        .windows(2)
-        .rev()
-        .find(|pair| pair[0] == "--ocr-tessdata-model")
-        .map(|pair| pair[1].as_str());
     let cli_enabled = args.iter().enumerate().rev().find_map(|(index, arg)| {
         if arg == "--no-ocr" {
             return Some(false);
@@ -56,37 +51,19 @@ pub(super) fn effective_ocr_config_from_args(args: &[String]) -> Option<serde_js
                 serde_json::Value::String(cli_backend.to_string()),
             );
         }
-        insert_tessdata_model(object, cli_tessdata_model);
         return Some(ocr);
     }
 
-    (cli_enabled == Some(true)).then(|| {
-        let mut ocr = match cli_backend {
-            Some("tesseract") | None => serde_json::json!({
-                "enabled": true,
-                "backend": "tesseract"
-            }),
-            Some(backend) => serde_json::json!({
-                "enabled": true,
-                "backend": backend
-            }),
-        };
-        if let Some(object) = ocr.as_object_mut() {
-            insert_tessdata_model(object, cli_tessdata_model);
-        }
-        ocr
+    (cli_enabled == Some(true)).then(|| match cli_backend {
+        Some("tesseract") | None => serde_json::json!({
+            "enabled": true,
+            "backend": "tesseract"
+        }),
+        Some(backend) => serde_json::json!({
+            "enabled": true,
+            "backend": backend
+        }),
     })
-}
-/// Carries `--ocr-tessdata-model` into the effective `ocr` object, so the rewritten
-/// `--config-json` and every per-file batch override (which replaces the whole `ocr` section)
-/// keep the selected model set.
-fn insert_tessdata_model(object: &mut serde_json::Map<String, serde_json::Value>, model: Option<&str>) {
-    if let Some(model) = model {
-        object.insert(
-            "tessdata_model".to_string(),
-            serde_json::Value::String(model.to_string()),
-        );
-    }
 }
 /// True if a JSON `ocr` object's backend — or any stage of a multi-stage `ocr.pipeline` — is
 /// `"tesseract"`. Used to gate the Tesseract result-cache override below: only
