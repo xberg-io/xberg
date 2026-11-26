@@ -37,33 +37,37 @@ fn holds_display_formula(paragraph: &PdfParagraph) -> bool {
             .any(|line| line.segments.iter().any(is_display_formula))
 }
 
-fn split_paragraph(paragraph: PdfParagraph, out: &mut Vec<PdfParagraph>) {
+fn split_paragraph(mut paragraph: PdfParagraph, out: &mut Vec<PdfParagraph>) {
     if !holds_display_formula(&paragraph) {
         out.push(paragraph);
         return;
     }
+    // Every piece is shaped like `paragraph`; without its lines, so shaping one clones none.
+    let source_lines = std::mem::take(&mut paragraph.lines);
     let mut pending: Vec<PdfLine> = Vec::new();
-    for line in &paragraph.lines {
+    for mut line in source_lines {
+        let segments = std::mem::take(&mut line.segments);
         let mut partial: Vec<SegmentData> = Vec::new();
-        for segment in &line.segments {
-            if !is_display_formula(segment) {
-                partial.push(segment.clone());
+        for segment in segments {
+            if !is_display_formula(&segment) {
+                partial.push(segment);
                 continue;
             }
             if !partial.is_empty() {
-                pending.push(with_segments(line, std::mem::take(&mut partial)));
+                pending.push(with_segments(&line, std::mem::take(&mut partial)));
             }
             flush(&paragraph, &mut pending, false, out);
-            pending.push(with_segments(line, vec![segment.clone()]));
+            pending.push(with_segments(&line, vec![segment]));
             flush(&paragraph, &mut pending, true, out);
         }
         if !partial.is_empty() {
-            pending.push(with_segments(line, partial));
+            pending.push(with_segments(&line, partial));
         }
     }
     flush(&paragraph, &mut pending, false, out);
 }
 
+/// `line`'s metadata around `segments`; `line` itself has had its segments taken.
 fn with_segments(line: &PdfLine, segments: Vec<SegmentData>) -> PdfLine {
     PdfLine {
         segments,
