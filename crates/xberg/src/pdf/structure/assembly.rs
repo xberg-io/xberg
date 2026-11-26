@@ -1832,10 +1832,11 @@ fn classify_line_break_hyphen(
     next_seg: &crate::pdf::hierarchy::SegmentData,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> LineBreakHyphen {
-    if prev.len() < 2 || !prev.ends_with('-') {
+    let mut prev_chars = prev.chars();
+    if !prev_chars.next_back().is_some_and(super::pipeline::is_word_hyphen) {
         return LineBreakHyphen::NotApplicable;
     }
-    let before_hyphen = prev[..prev.len() - 1].chars().next_back();
+    let before_hyphen = prev_chars.next_back();
     if !before_hyphen.is_some_and(|c| c.is_alphabetic()) {
         return LineBreakHyphen::NotApplicable;
     }
@@ -1852,7 +1853,11 @@ fn classify_line_break_hyphen(
     // (xberg-io/xberg#1613). Arguments are prepared exactly as `dehyphenate_paragraph_lines`
     // prepares them -- the guard trims non-lexical characters but deliberately keeps `-`, so
     // the trailing hyphen must come off here. ~keep
-    let trailing_word = prev.trim_end_matches('-').split_whitespace().last().unwrap_or("");
+    let trailing_word = prev
+        .trim_end_matches(super::pipeline::is_word_hyphen)
+        .split_whitespace()
+        .last()
+        .unwrap_or("");
     let leading_word = next.split_whitespace().next().unwrap_or("");
     if super::pipeline::should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
         LineBreakHyphen::KeepHyphen
@@ -4106,6 +4111,57 @@ mod tests {
 
         let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
         assert_eq!(paragraph_text(&document), "adjuvant Montanide was used");
+    }
+
+    // Some producers write every hyphen as U+2011 NON-BREAKING HYPHEN, wrap hyphens included
+    // (`mem‑` / `ory`). An ASCII-only check left `mem- ory` in the output, splitting the word.
+    #[test]
+    fn a_unicode_wrap_hyphen_at_a_line_break_is_joined_and_a_compound_keeps_it() {
+        for (trailing, leading, is_list_item, expected) in [
+            (
+                "the volatile mem\u{2011}",
+                "ory of a host",
+                false,
+                "the volatile memory of a host",
+            ),
+            ("Android and An\u{2010}", "droid apps", true, "Android and Android apps"),
+            ("a long\u{2011}", "term contract", false, "a long-term contract"),
+        ] {
+            let first = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y: 700.0,
+                    ..plain_segment(trailing)
+                }],
+                baseline_y: Some(700.0),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let second = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y: 685.0,
+                    ..plain_segment(leading)
+                }],
+                baseline_y: Some(685.0),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let mut para = make_paragraph("", None);
+            para.lines = vec![first, second];
+            para.is_list_item = is_list_item;
+
+            let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
+            let text = document
+                .elements
+                .iter()
+                .find(|e| matches!(e.kind, ElementKind::Paragraph | ElementKind::ListItem { .. }))
+                .map(|e| e.text.clone())
+                .expect("the paragraph should be emitted");
+            assert_eq!(text, expected);
+        }
     }
 
     // Same defect via `join_line_texts_plain` (list items get their text from that path,

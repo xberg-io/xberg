@@ -8332,7 +8332,7 @@ fn collect_hyphen_witnesses(all_page_segments: &[Vec<SegmentData>]) -> HyphenWit
             continue;
         }
         for position in 1..characters.len() - 1 {
-            if characters[position] != '-' {
+            if !is_word_hyphen(characters[position]) {
                 continue;
             }
             let left: String = characters[..position]
@@ -8400,6 +8400,14 @@ fn collect_word_witnesses(all_page_segments: &[Vec<SegmentData>]) -> WordWitness
         }
     }
     witnesses
+}
+
+/// A hyphen that can end a wrapped line: ASCII `-`, U+2010 HYPHEN and U+2011
+/// NON-BREAKING HYPHEN. Some PDF producers write every hyphen, wrap hyphens included,
+/// as U+2011 (`mem‑` + `ory`), so the line-wrap checks must not key on ASCII alone.
+/// En and em dashes are punctuation, not word hyphens, and stay excluded.
+pub(crate) fn is_word_hyphen(character: char) -> bool {
+    matches!(character, '-' | '\u{2010}' | '\u{2011}')
 }
 
 pub(crate) fn should_preserve_lexical_hyphen(
@@ -8482,7 +8490,7 @@ fn dehyphenate_paragraph_lines(para: &mut PdfParagraph, hyphen_witnesses: &Hyphe
             _ => continue,
         };
 
-        let has_trailing_hyphen = trailing_text.ends_with('-');
+        let has_trailing_hyphen = trailing_text.ends_with(is_word_hyphen);
         if !has_trailing_hyphen {
             continue;
         }
@@ -8493,7 +8501,7 @@ fn dehyphenate_paragraph_lines(para: &mut PdfParagraph, hyphen_witnesses: &Hyphe
         }
 
         let trailing_word = trailing_text
-            .trim_end_matches('-')
+            .trim_end_matches(is_word_hyphen)
             .split_whitespace()
             .last()
             .unwrap_or("");
@@ -8544,7 +8552,7 @@ fn dehyphenate_hyphen_only(para: &mut PdfParagraph, hyphen_witnesses: &HyphenWit
         }
 
         let trailing_text = match para.lines[i].segments.last() {
-            Some(s) if s.text.ends_with('-') => s.text.clone(),
+            Some(s) if s.text.ends_with(is_word_hyphen) => s.text.clone(),
             _ => continue,
         };
         let leading_text = match para.lines[i + 1].segments.first() {
@@ -8558,7 +8566,7 @@ fn dehyphenate_hyphen_only(para: &mut PdfParagraph, hyphen_witnesses: &HyphenWit
         }
 
         let trailing_word = trailing_text
-            .trim_end_matches('-')
+            .trim_end_matches(is_word_hyphen)
             .split_whitespace()
             .last()
             .unwrap_or("");

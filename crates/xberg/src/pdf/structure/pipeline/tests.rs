@@ -6854,6 +6854,19 @@ fn test_heuristic_path_dehyphenates_wrapped_word() {
 }
 
 #[test]
+fn test_heuristic_path_dehyphenates_a_word_wrapped_at_a_unicode_hyphen() {
+    for hyphen in ['\u{2010}', '\u{2011}'] {
+        let output = process_heuristic_segments(vec![
+            heuristic_segment(&format!("Reliable soft{hyphen}"), 700.0, 490.0, false),
+            heuristic_segment("ware handles load", 680.0, 200.0, false),
+        ]);
+
+        assert_eq!(output.len(), 1);
+        assert_eq!(paragraph_text(&output[0]), "Reliable software handles load");
+    }
+}
+
+#[test]
 fn test_heuristic_path_preserves_compound_and_code_hyphens() {
     let compound = process_heuristic_segments(vec![
         heuristic_segment("A cost-", 700.0, 490.0, false),
@@ -7186,6 +7199,22 @@ fn collect_hyphen_witnesses_finds_a_mid_run_compound() {
         witnesses.contains(&("price".to_string(), "determining".to_string())),
         "a mid-run hyphen must witness its own compound: got {witnesses:?}"
     );
+}
+
+/// A producer that writes every hyphen as U+2010/U+2011 witnesses its compounds with
+/// those characters; an ASCII-only scan would let a wrapped `cross‑` / `account` weld.
+#[test]
+fn collect_hyphen_witnesses_finds_a_unicode_hyphen_compound() {
+    let pages = vec![vec![seg(
+        "allow cross\u{2011}account and long\u{2010}lived roles",
+        0.0,
+        0.0,
+    )]];
+
+    let witnesses = collect_hyphen_witnesses(&pages);
+
+    assert!(witnesses.contains(&("cross".to_string(), "account".to_string())));
+    assert!(witnesses.contains(&("long".to_string(), "lived".to_string())));
 }
 
 /// The load-bearing negative for #1543: a hyphen at the END of a segment's text is,
