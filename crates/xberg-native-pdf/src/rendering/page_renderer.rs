@@ -1152,7 +1152,7 @@ impl PageRenderer {
         let mut st = OpLoopState::new(gs_stack, excluded_layers, ext_g_states);
         // Depth 0 carries the caller's clip; `Q` never pops below it.
         if let Some(clip) = entry.and_then(|e| e.clip) {
-            st.clip_stack[0] = Some(clip);
+            st.clip_stack[0] = Some(Arc::new(clip));
         }
         for op in operators {
             if self.image_selection.is_some_and(|(_, include)| include) {
@@ -8773,7 +8773,7 @@ fn form_bbox_clip(
 
 fn apply_pending_clip(
     pending_clip: &mut Option<(tiny_skia::Path, tiny_skia::FillRule)>,
-    clip_stack: &mut Vec<Option<tiny_skia::Mask>>,
+    clip_stack: &mut Vec<Option<Arc<tiny_skia::Mask>>>,
     pixmap: &Pixmap,
     base_transform: Transform,
     gs_stack: &GraphicsStateStack,
@@ -8798,7 +8798,7 @@ fn apply_pending_clip(
                 );
                 if let Some(empty) = tiny_skia::Mask::new(pixmap.width(), pixmap.height()) {
                     if let Some(slot) = clip_stack.last_mut() {
-                        *slot = Some(empty);
+                        *slot = Some(Arc::new(empty));
                     }
                 }
                 return;
@@ -8811,23 +8811,19 @@ fn apply_pending_clip(
             return;
         };
         match slot {
-            // Intersect the new clip path into the current scope's mask in
-            // place. tiny_skia::Mask::intersect_path allocates one submask,
+            // Intersect the new clip path into the current scope's mask.
+            // tiny_skia::Mask::intersect_path allocates one submask,
             // rasterizes the path into it, then folds it into `self` via the
-            // library's rounded `(a*b)/255` premultiply — replacing the
-            // previous code path which additionally cloned the current mask
-            // (a full page-sized memcpy) before running an equivalent scalar
-            // multiply loop. The clone was redundant: every `q` already pushes
-            // a cloned mask onto `clip_stack`, so the top-of-stack mask at the
-            // current depth is already this scope's private copy and may be
-            // mutated in place. ~keep
+            // library's rounded `(a*b)/255` premultiply. `q` shares the
+            // parent's mask rather than copying it, so `make_mut` copies it
+            // only here, when a scope that still shares it narrows it. ~keep
             Some(existing_mask) => {
-                existing_mask.intersect_path(&path, fill_rule, true, transform);
+                Arc::make_mut(existing_mask).intersect_path(&path, fill_rule, true, transform);
             }
             None => {
                 let mut new_mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height()).unwrap();
                 new_mask.fill_path(&path, fill_rule, true, transform);
-                *slot = Some(new_mask);
+                *slot = Some(Arc::new(new_mask));
             }
         }
     }
@@ -9915,7 +9911,7 @@ mod tests {
         // with no pending clip. Only the first call should materialize. ~keep
         const K: usize = 100;
         APC_MATERIALIZED.store(0, Ordering::Relaxed);
-        let mut clip_stack: Vec<Option<tiny_skia::Mask>> = vec![None];
+        let mut clip_stack: Vec<Option<Arc<tiny_skia::Mask>>> = vec![None];
         let mut pending: Option<(tiny_skia::Path, FillRule)> = Some((make_clip_path(), FillRule::Winding));
         for _ in 0..K {
             apply_pending_clip(&mut pending, &mut clip_stack, &pixmap, base_transform, &gs_stack);
@@ -9931,7 +9927,7 @@ mod tests {
         // Materialization count must equal N, not K*N. ~keep
         const N: usize = 5;
         APC_MATERIALIZED.store(0, Ordering::Relaxed);
-        let mut clip_stack: Vec<Option<tiny_skia::Mask>> = vec![None];
+        let mut clip_stack: Vec<Option<Arc<tiny_skia::Mask>>> = vec![None];
         for _ in 0..N {
             let mut pending: Option<(tiny_skia::Path, FillRule)> = Some((make_clip_path(), FillRule::Winding));
             for _ in 0..K {
@@ -9944,6 +9940,64 @@ mod tests {
             "{N} W operators each followed by {K} paint ops must materialize \
              exactly {N} times (got {after_n_clips})"
         );
+    }
+
+    #[test]
+    fn save_state_shares_the_clip_until_the_new_level_narrows_it() {
+        use crate::content::GraphicsStateStack;
+        use tiny_skia::{FillRule, PathBuilder, Pixmap, Rect, Transform};
+
+        let _guard = APC_PROBE_LOCK.lock().unwrap();
+
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let excluded = HashSet::new();
+        let mut st = OpLoopState::new(GraphicsStateStack::new(), &excluded, None);
+        let pixmap = Pixmap::new(64, 64).expect("pixmap");
+        let rect_clip = |left: f32| {
+            let mut pb = PathBuilder::new();
+            pb.push_rect(Rect::from_xywh(left, 0.0, 32.0, 32.0).unwrap());
+            Some((pb.finish().unwrap(), FillRule::Winding))
+        };
+        let coverage = |st: &OpLoopState<'_>, level: usize, x: usize| {
+            st.clip_stack[level].as_deref().expect("clip mask").data()[10 * 64 + x]
+        };
+
+        st.pending_clip = rect_clip(0.0);
+        apply_pending_clip(
+            &mut st.pending_clip,
+            &mut st.clip_stack,
+            &pixmap,
+            Transform::identity(),
+            &st.gs_stack,
+        );
+        renderer.op_save_state(&mut st);
+        assert!(
+            Arc::ptr_eq(
+                st.clip_stack[0].as_ref().expect("outer clip"),
+                st.clip_stack[1].as_ref().expect("inner clip"),
+            ),
+            "q must share the page-sized clip mask, not copy it"
+        );
+
+        st.pending_clip = rect_clip(16.0);
+        apply_pending_clip(
+            &mut st.pending_clip,
+            &mut st.clip_stack,
+            &pixmap,
+            Transform::identity(),
+            &st.gs_stack,
+        );
+        assert_eq!(coverage(&st, 1, 5), 0, "the inner level is narrowed to x >= 16");
+        assert_eq!(coverage(&st, 1, 20), 255);
+        assert_eq!(
+            coverage(&st, 0, 5),
+            255,
+            "narrowing the inner level must not touch the outer clip"
+        );
+
+        renderer.op_restore_state(&mut st);
+        assert_eq!(st.clip_stack.len(), 1);
+        assert_eq!(coverage(&st, 0, 5), 255);
     }
 
     /// `type3_font_matrix` returns the explicit `/FontMatrix` when well-formed,

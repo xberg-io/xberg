@@ -22,7 +22,10 @@ impl PageRenderer {
                 // clip — never widened past it. ~keep
                 if let Some(slot) = st.clip_stack.last_mut() {
                     let existing = slot.take();
-                    *slot = Some(intersect_with_inherited(text_mask, existing.as_ref()));
+                    *slot = Some(std::sync::Arc::new(intersect_with_inherited(
+                        text_mask,
+                        existing.as_deref(),
+                    )));
                 }
             }
         }
@@ -157,7 +160,7 @@ impl PageRenderer {
             resources,
         } = env;
         let gs = st.gs_stack.current();
-        let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+        let clip = st.clip_stack.last().and_then(|c| c.as_deref());
         let transform = combine_transforms(base_transform, &gs.ctm);
         if let Some(label) = trace_label {
             tracing::trace!(

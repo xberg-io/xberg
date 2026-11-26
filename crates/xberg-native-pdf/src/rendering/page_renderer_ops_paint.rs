@@ -37,7 +37,7 @@ impl PageRenderer {
                 base_transform,
                 &st.gs_stack,
             );
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             // ISO 32000-1 §8.5.3.2 Table 60: `s` is exactly `h S`. ~keep
             if matches!(op, Operator::CloseStroke) {
                 st.current_path.close();
@@ -107,7 +107,7 @@ impl PageRenderer {
                 base_transform,
                 &st.gs_stack,
             );
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             if let Some(path) = std::mem::replace(&mut st.current_path, PathBuilder::new()).finish() {
                 let gs_clone = st.gs_stack.current().clone();
                 // Resolve the active fill colour through the
@@ -163,7 +163,7 @@ impl PageRenderer {
                 base_transform,
                 &st.gs_stack,
             );
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             // ISO 32000-1 §8.5.3.1 Table 60: `b` and `b*` close
             // the path before fill+stroke. Neither parser
             // decomposes them, so the dispatcher must perform the
@@ -235,7 +235,7 @@ impl PageRenderer {
                 base_transform,
                 &st.gs_stack,
             );
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             if let Some(path) = std::mem::replace(&mut st.current_path, PathBuilder::new()).finish() {
                 let gs_clone = st.gs_stack.current().clone();
                 let transform = combine_transforms(base_transform, &gs_clone.ctm);
