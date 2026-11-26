@@ -319,6 +319,10 @@ struct BoundedObjectCache {
     /// Synthetic recovery objects have no byte offset to re-read from, so
     /// evicting one makes it permanently unreachable. ~keep
     pinned: HashSet<ObjectRef>,
+    /// Address range of the document's source bytes. A stream payload sliced from them costs the
+    /// cache nothing, since the document holds those bytes anyway; charging it let large images
+    /// evict the dictionaries and fonts the cache exists to keep.
+    shared_source: std::ops::Range<usize>,
 }
 
 /// Byte-accounted FIFO cache for decoded object-stream maps.
@@ -449,13 +453,21 @@ impl BoundedObjectStreamCache {
 }
 
 impl BoundedObjectCache {
+    #[cfg(test)]
     fn new(max_bytes: usize) -> Self {
+        Self::sharing(max_bytes, &[])
+    }
+
+    /// A cache that does not charge stream payloads sliced from `source`.
+    fn sharing(max_bytes: usize, source: &[u8]) -> Self {
+        let source = source.as_ptr_range();
         Self {
             map: HashMap::new(),
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,
             pinned: HashSet::new(),
+            shared_source: source.start as usize..source.end as usize,
         }
     }
 
@@ -482,14 +494,14 @@ impl BoundedObjectCache {
 
     /// Cache `value` without copying it, so the caller and the cache share one allocation.
     fn insert_shared(&mut self, key: ObjectRef, value: Arc<Object>) {
-        let entry_size = Self::estimate_size(&value);
+        let entry_size = self.estimate_size(&value);
 
         if entry_size > self.max_bytes {
             return;
         }
 
         if let Some(old_val) = self.map.get(&key) {
-            self.current_bytes = self.current_bytes.saturating_sub(Self::estimate_size(old_val));
+            self.current_bytes = self.current_bytes.saturating_sub(self.estimate_size(old_val));
         }
 
         // Evict oldest entries until under budget. If the front of the
@@ -518,7 +530,7 @@ impl BoundedObjectCache {
                         continue;
                     }
                     if let Some(old_val) = self.map.remove(&old_key) {
-                        self.current_bytes = self.current_bytes.saturating_sub(Self::estimate_size(&old_val));
+                        self.current_bytes = self.current_bytes.saturating_sub(self.estimate_size(&old_val));
                     }
                 }
                 None => break,
@@ -543,18 +555,18 @@ impl BoundedObjectCache {
         let pinned = std::mem::take(&mut self.pinned);
         self.map.retain(|k, _| pinned.contains(k));
         self.insertion_order.clear();
-        self.current_bytes = self.map.values().map(|v| Self::estimate_size(v)).sum();
+        self.current_bytes = self.map.values().map(|v| self.estimate_size(v)).sum();
         self.pinned = pinned;
     }
 
-    fn estimate_size(obj: &Object) -> usize {
-        Self::estimate_size_depth(obj, 8)
+    fn estimate_size(&self, obj: &Object) -> usize {
+        self.estimate_size_depth(obj, 8)
     }
 
     /// Rough estimate of an Object's heap size in bytes.
     /// Recurses into nested containers up to `depth` levels to avoid
     /// both underestimation and stack overflow on adversarial input.
-    fn estimate_size_depth(obj: &Object, depth: u8) -> usize {
+    fn estimate_size_depth(&self, obj: &Object, depth: u8) -> usize {
         if depth == 0 {
             return 64;
         }
@@ -562,19 +574,23 @@ impl BoundedObjectCache {
             Object::Stream { dict, data } => {
                 let dict_size: usize = dict
                     .iter()
-                    .map(|(k, v)| k.len() + 32 + Self::estimate_size_depth(v, depth - 1))
+                    .map(|(k, v)| k.len() + 32 + self.estimate_size_depth(v, depth - 1))
                     .sum();
-                data.len() + dict_size + 64
+                let payload = data.as_ptr_range();
+                let shared = self.shared_source.start <= payload.start as usize
+                    && payload.end as usize <= self.shared_source.end;
+                let charged = if shared { 0 } else { data.len() };
+                charged + dict_size + 64
             }
             Object::Dictionary(d) => {
                 let inner: usize = d
                     .iter()
-                    .map(|(k, v)| k.len() + 32 + Self::estimate_size_depth(v, depth - 1))
+                    .map(|(k, v)| k.len() + 32 + self.estimate_size_depth(v, depth - 1))
                     .sum();
                 inner + 64
             }
             Object::Array(a) => {
-                let inner: usize = a.iter().map(|v| Self::estimate_size_depth(v, depth - 1)).sum();
+                let inner: usize = a.iter().map(|v| self.estimate_size_depth(v, depth - 1)).sum();
                 inner + 64
             }
             Object::String(s) => s.len() + 32,

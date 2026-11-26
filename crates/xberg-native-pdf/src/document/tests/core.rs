@@ -564,14 +564,14 @@ fn test_bounded_object_cache_byte_budget_eviction() {
 #[test]
 fn test_bounded_object_cache_evicts_every_entry_a_large_insert_needs() {
     let small = Object::Integer(1);
-    let unit = BoundedObjectCache::estimate_size(&small);
+    let unit = BoundedObjectCache::new(0).estimate_size(&small);
     let mut c = BoundedObjectCache::new(unit * 8);
     for n in 1..=8 {
         c.insert(ObjectRef::new(n, 0), small.clone());
     }
     assert_eq!(c.len(), 8);
     let big = Object::String(vec![0u8; unit * 6]);
-    let big_size = BoundedObjectCache::estimate_size(&big);
+    let big_size = c.estimate_size(&big);
     c.insert(ObjectRef::new(99, 0), big);
     assert!(
         c.current_bytes <= unit * 8,
@@ -660,8 +660,42 @@ fn test_estimate_size_depth_bottoms_out() {
         obj = Object::Array(vec![obj]);
     }
     // Should return a finite value without panicking ~keep
-    let size = BoundedObjectCache::estimate_size(&obj);
+    let size = BoundedObjectCache::new(0).estimate_size(&obj);
     assert!(size > 0);
+}
+
+/// A stream payload sliced from the document's bytes costs the cache nothing, so a large image
+/// cannot evict the small objects the cache keeps; a copied payload is still charged in full.
+#[test]
+fn object_cache_does_not_charge_payloads_shared_with_the_source() {
+    let source = bytes::Bytes::from(vec![0xABu8; 1 << 20]);
+    let mut cache = BoundedObjectCache::sharing(4096, &source);
+    let small = ObjectRef::new(1, 0);
+    cache.insert(small, Object::Integer(7));
+    let stream = |data: bytes::Bytes| Object::Stream {
+        dict: HashMap::new(),
+        data,
+    };
+
+    let shared = stream(source.slice(1024..));
+    assert!(cache.estimate_size(&shared) < 4096);
+    cache.insert(ObjectRef::new(2, 0), shared);
+    assert!(
+        cache.get(&ObjectRef::new(2, 0)).is_some(),
+        "a shared payload must fit the budget"
+    );
+    assert!(
+        cache.get(&small).is_some(),
+        "a shared payload must not evict other objects"
+    );
+
+    let copied = stream(bytes::Bytes::copy_from_slice(&source[1024..]));
+    assert!(cache.estimate_size(&copied) > source.len() - 1024);
+    cache.insert(ObjectRef::new(3, 0), copied);
+    assert!(
+        cache.get(&ObjectRef::new(3, 0)).is_none(),
+        "a copied payload is charged in full"
+    );
 }
 
 #[test]

@@ -284,12 +284,13 @@ impl PdfDocument {
     ) -> Self {
         let (source_bytes, version, xref, trailer) = parsed;
         let (header_offset, xref_reconstructed, prepopulated_scan) = recovery;
+        let object_cache = BoundedObjectCache::sharing(DEFAULT_OBJECT_CACHE_MAX_BYTES, &source_bytes);
         Self {
             source_bytes,
             version,
             xref,
             trailer,
-            object_cache: Mutex::new(BoundedObjectCache::new(DEFAULT_OBJECT_CACHE_MAX_BYTES)),
+            object_cache: Mutex::new(object_cache),
             object_recovery_epoch: AtomicUsize::new(0),
             object_stream_cache: Mutex::new(BoundedObjectStreamCache::new(DEFAULT_OBJECT_STREAM_CACHE_MAX_BYTES)),
             object_stream_telemetry_seen: Mutex::new(BoundedRecoveryTelemetry::new(
