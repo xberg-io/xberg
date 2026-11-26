@@ -25,7 +25,9 @@ use xberg::ExtractionConfig;
 
 #[cfg(feature = "analysis")]
 pub use self::analysis::ReductionLevelArg;
-pub use self::general::{AccelerationArg, TessdataModelArg};
+pub use self::general::AccelerationArg;
+#[cfg(feature = "ocr-surface")]
+pub use self::general::TessdataModelArg;
 pub use self::output::JupyterCellRenderingArg;
 use crate::ContentOutputFormatArg;
 
