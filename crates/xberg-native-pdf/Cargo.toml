@@ -70,6 +70,9 @@ crate-type = ["rlib"]
 default = []
 cjk-form-fonts = []
 cjk-render-fallback = []
+# Exposes `rendering::budget_probe` to tests/image_budget_peak.rs, which holds the image budget's
+# charges against a counting allocator. Test-only: no dependent enables it. ~keep
+budget-probe = []
 
 [dependencies]
 aes = "0.9"
@@ -145,6 +148,10 @@ xberg-child-test = { workspace = true }
 [[bench]]
 name = "text_extraction"
 harness = false
+
+[[test]]
+name = "image_budget_peak"
+required-features = ["budget-probe"]
 
 [lints]
 workspace = true

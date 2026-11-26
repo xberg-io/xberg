@@ -8001,7 +8001,7 @@ fn blit_rgba(
     let (blit_w, blit_h, blit_data, blit_transform) = match (fast_resize_target(image_transform, (src_w, src_h)), blit)
     {
         (Some((dst_w, dst_h)), image_budget::Blit::PreResize) => {
-            if let Some(pixels) = resize_rgba(&mut image, src_w, src_h, dst_w, dst_h) {
+            if let Some(pixels) = resize_rgba(&image, src_w, src_h, dst_w, dst_h) {
                 // SIMD pre-resize produced the exact output dimensions —
                 // the subsequent blit is 1:1, so override to Nearest to
                 // skip a second resampling pass. ~keep
@@ -10326,6 +10326,7 @@ mod tests {
 /// Allocation probes for `tests/image_budget_peak.rs`: each pairs an operation `render_image` runs
 /// with the bytes the image budget charges for it, so a counting allocator can hold one against the
 /// other.
+#[cfg(feature = "budget-probe")]
 #[doc(hidden)]
 pub mod budget_probe {
     /// What the image budget charges an in-place decode of `bytes` beyond the caller's encoded
@@ -10348,7 +10349,7 @@ pub mod budget_probe {
 
     /// Pre-resize the RGBA `pixels` of a `source` raster to `target` as `render_image` does,
     /// returning the length of the resized raster.
-    pub fn resize(pixels: &mut [u8], source: (u32, u32), target: (u32, u32)) -> Option<usize> {
+    pub fn resize(pixels: &[u8], source: (u32, u32), target: (u32, u32)) -> Option<usize> {
         super::raster_budget::resize_rgba(pixels, source.0, source.1, target.0, target.1).map(|resized| resized.len())
     }
 

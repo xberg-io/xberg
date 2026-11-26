@@ -167,11 +167,26 @@ impl ImageBudget {
         retained_canvas: u64,
         device: (f32, f32),
     ) -> Result<u8> {
-        self.admit_jpeg_decode(image, retained_canvas, Placement::extent(device.0, device.1), false)
-            .map(|paint| match paint.decode {
+        self.admit_jpeg_ladder(image, retained_canvas, device, false)
+            .map(|decode| match decode {
                 JpegDecode::Reduced(denominator) => denominator,
-                JpegDecode::Full | JpegDecode::InPlace => 1,
+                JpegDecode::Full => 1,
+                JpegDecode::InPlace => unreachable!("a masked image is never decoded in place"),
             })
+    }
+
+    /// The decode [`Self::admit_jpeg_decode`] admits for an image painted upright over `device`
+    /// pixels; `unmasked` opens the in-place rung.
+    #[cfg(test)]
+    pub(super) fn admit_jpeg_ladder(
+        &mut self,
+        image: &PdfImage,
+        retained_canvas: u64,
+        device: (f32, f32),
+        unmasked: bool,
+    ) -> Result<JpegDecode> {
+        self.admit_jpeg_decode(image, retained_canvas, Placement::extent(device.0, device.1), unmasked)
+            .map(|paint| paint.decode)
     }
 
     /// Admit `image`, or a decode that keeps its rasters within the budget when the full-size decode
@@ -628,6 +643,7 @@ pub(super) fn resize_samples_working_bytes(source: (u32, u32), target: (u32, u32
 /// charges, which is what the RGBA path holds and the JPEG charges count: the source is at most
 /// the RGBA raster, the native resize allocates at most the RGBA one, and the widened target is at
 /// most the source in RGBA plus the target in RGBA.
+#[cfg(any(test, feature = "budget-probe"))]
 pub(super) fn native_downscale_peak_bytes(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
     let pixel_bytes = u64::from(components);
     let source_bytes = u64::from(source.0)
@@ -696,6 +712,7 @@ fn in_place_frame(bytes: &[u8]) -> std::result::Result<((u32, u32), u64, u64), S
 /// Bytes [`decode_jpeg_into_rgba`] itself allocates, the share of [`in_place_jpeg_image_bytes`]
 /// beside the caller's encoded buffer and canvas: the RGBA raster, the decoder's row buffers, its
 /// copy of the encoded bytes and the metadata it may copy out of them (at most the input).
+#[cfg(feature = "budget-probe")]
 pub(super) fn in_place_decode_bytes(bytes: &[u8]) -> std::result::Result<u64, String> {
     let (_, raster, rows) = in_place_frame(bytes)?;
     Ok(raster + rows + bytes.len() as u64 * 2)

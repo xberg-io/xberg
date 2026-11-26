@@ -39,7 +39,7 @@ impl PageRenderer {
 /// The resize only reads the source: the caller lends its raster rather than holding a copy beside
 /// it. `image_budget::resize_working_bytes` bounds what this allocates: the output, the
 /// intermediate and the coefficient tables.
-pub(super) fn resize_rgba(src: &mut [u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
+pub(super) fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
     resize_samples(src, (src_w, src_h), (dst_w, dst_h), 4)
 }
 
@@ -50,7 +50,7 @@ pub(super) fn resize_rgba(src: &mut [u8], src_w: u32, src_h: u32, dst_w: u32, ds
 /// table per axis whatever the pixel type and the vertical pass first for every `u8` type. A gray
 /// or RGB raster resized here and then widened to opaque RGBA is therefore byte-identical to the
 /// same raster widened first and resized by [`resize_rgba`]; the constant 255 alpha resizes to 255.
-/// `samples` must hold exactly `source` pixels. `image_budget::native_resize_working_bytes` bounds
+/// `samples` must hold exactly `source` pixels. `image_budget::resize_samples_working_bytes` bounds
 /// what this allocates. ~keep
 pub(super) fn resize_samples(
     samples: &[u8],

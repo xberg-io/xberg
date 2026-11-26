@@ -46,6 +46,11 @@ fn a_tall_scan_that_no_reduction_covers_renders_from_an_in_place_decode() {
         ImageBudget::new(LIMIT).admit_jpeg_reducing(&image, 0, EXTENT).is_err(),
         "no reduced decode covers the painted extent"
     );
+    assert_eq!(
+        ImageBudget::new(LIMIT).admit_jpeg_ladder(&image, 0, EXTENT, true).ok(),
+        Some(JpegDecode::InPlace),
+        "the unmasked ladder ends at the in-place rung"
+    );
     let ImageData::Jpeg(jpeg) = image.data() else {
         unreachable!()
     };

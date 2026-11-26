@@ -157,9 +157,9 @@ fn in_place_decodes_and_pre_resizes_stay_within_their_charges() {
 
     let source = (2_048u32, 1_024u32);
     for target in [(1_600, 800), (2_048, 700), (1_200, 1_024), (300, 150)] {
-        let mut pixels: Vec<u8> = (0..source.0 * source.1 * 4).map(|index| (index % 251) as u8).collect();
+        let pixels: Vec<u8> = (0..source.0 * source.1 * 4).map(|index| (index % 251) as u8).collect();
         let bound = budget_probe::resize_bound(source, target);
-        let (peak, resized) = measured_peak(|| budget_probe::resize(&mut pixels, source, target));
+        let (peak, resized) = measured_peak(|| budget_probe::resize(&pixels, source, target));
         assert_eq!(resized, Some(target.0 as usize * target.1 as usize * 4), "{target:?}");
         println!("pre-resize to {target:?}: peak {peak}, charge {bound}");
         assert!(

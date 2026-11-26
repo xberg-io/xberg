@@ -48,6 +48,7 @@ pub mod sidecar;
 mod text_contrast_probe;
 mod text_rasterizer;
 
+#[cfg(feature = "budget-probe")]
 #[doc(hidden)]
 pub use page_renderer::budget_probe;
 pub use page_renderer::{ImageFormat, PageRenderer, RenderOptions, RenderedImage};
