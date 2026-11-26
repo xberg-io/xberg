@@ -1118,16 +1118,20 @@ pub struct OcrConfig {
     #[serde(default)]
     pub numeric_repair: bool,
 
-    /// Read a standalone image again with the built-in PaddleOCR backend when the default
-    /// Tesseract read of it is unreliable, and keep the PaddleOCR read when it reads more.
+    /// Read a standalone photo again with the built-in PaddleOCR backend when the default
+    /// Tesseract read of it is sparse and unreliable, and keep the PaddleOCR read when it reads
+    /// clearly more text.
     ///
-    /// Defaults to `true`. It applies only to a standalone image (not a PDF page) read with
-    /// `backend = "tesseract"` and no PSM, preprocessing or backend tuning, no `pipeline`, no
-    /// `vlm_fallback`, no layout detection, one language that PaddleOCR supports, and a
-    /// Tesseract read whose word confidences fail the sparse-text robustness check. It needs a
-    /// build with PaddleOCR and models already in the local cache: this re-read never downloads
-    /// a model. Set it to `false` to keep Tesseract's read on every image. A backend other than
-    /// `tesseract` is never replaced.
+    /// Defaults to `true`. It applies only to a standalone image (not a PDF page or TIFF) read
+    /// with `backend = "tesseract"`, every `tesseract_config` setting at its default (only
+    /// `use_cache` may differ), no `tessdata_path`, `tessdata_bytes`, `numeric_repair`, backend
+    /// tuning, `pipeline`, `vlm_fallback` or layout detection, and one language PaddleOCR
+    /// supports; and only when Tesseract read between 1 and 80 words with word confidences that
+    /// fail the sparse-text robustness check. It needs a build with PaddleOCR and models already
+    /// in the local cache: this re-read never downloads a model. An explicit
+    /// `backend = "tesseract"` with default settings cannot be told apart from the default, so set
+    /// this to `false` to keep Tesseract's read on every image. A backend other than `tesseract`
+    /// is never replaced.
     #[serde(default = "default_image_paddle_fallback")]
     pub image_paddle_fallback: bool,
 }

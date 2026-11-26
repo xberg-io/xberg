@@ -52,6 +52,8 @@ mod tract_parity;
 
 #[cfg(paddle_ocr)]
 pub use backend::PaddleOcrBackend;
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) use backend::RequiredModelSet;
 #[cfg(feature = "paddle-ocr-ort")]
 pub(crate) use backend::clear_paddle_engine_caches;
 pub use config::{PaddleInferenceBackend, PaddleLanguage, PaddleOcrConfig};

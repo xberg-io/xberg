@@ -603,7 +603,37 @@ impl ModelManager {
         tier: &str,
         include_doc_ori: bool,
     ) -> Result<Vec<(String, bool)>, XbergError> {
-        let mut artifacts: Vec<(String, String, &str)> = Vec::new();
+        Ok(Self::required_artifacts(version, family, tier, include_doc_ori)?
+            .into_iter()
+            .map(|(label, remote, sha)| (label, self.cached_artifact_ok(&remote, sha)))
+            .collect())
+    }
+
+    /// Whether every artifact [`Self::check_models_cached`] lists is in the local cache, judged
+    /// from the cache's snapshot entries alone: no checksum, no download.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn models_present(
+        &self,
+        version: &str,
+        family: &str,
+        tier: &str,
+        include_doc_ori: bool,
+    ) -> Result<bool, XbergError> {
+        Ok(Self::required_artifacts(version, family, tier, include_doc_ori)?
+            .iter()
+            .all(|(_, remote, _)| self.cached_artifact_path(remote).is_some()))
+    }
+
+    /// The `(label, remote file, sha256)` of every artifact a run with the given version,
+    /// script family and tier loads.
+    #[cfg(paddle_ocr)]
+    fn required_artifacts(
+        version: &str,
+        family: &str,
+        tier: &str,
+        include_doc_ori: bool,
+    ) -> Result<Vec<(String, String, &'static str)>, XbergError> {
+        let mut artifacts: Vec<(String, String, &'static str)> = Vec::new();
 
         let invalid_tier = |tier: &str| XbergError::Plugin {
             message: format!("Invalid model_tier \"{tier}\". Valid values: \"server\", \"mobile\""),
@@ -705,23 +735,26 @@ impl ModelManager {
             ));
         }
 
-        Ok(artifacts
-            .into_iter()
-            .map(|(label, remote, sha)| (label, self.cached_artifact_ok(&remote, sha)))
-            .collect())
+        Ok(artifacts)
     }
 
     /// Whether a pinned artifact is present in the local HF cache and passes
     /// its checksum. Never downloads.
     #[cfg(paddle_ocr)]
     fn cached_artifact_ok(&self, remote_filename: &str, sha256: &str) -> bool {
-        let Ok(api) = model_download::hf_client(Some(&self.cache_dir)) else {
-            return false;
-        };
+        self.cached_artifact_path(remote_filename)
+            .is_some_and(|path| model_download::verify_sha256(&path, sha256, remote_filename).is_ok())
+    }
+
+    /// The local path of a pinned artifact's cache entry, without checking its contents. Never
+    /// downloads.
+    #[cfg(paddle_ocr)]
+    fn cached_artifact_path(&self, remote_filename: &str) -> Option<PathBuf> {
+        let api = model_download::hf_client(Some(&self.cache_dir)).ok()?;
         model_download::hf_cached_revision_with_client(&api, HF_REPO_ID, remote_filename, Some(HF_REPO_REVISION))
             .ok()
             .flatten()
-            .is_some_and(|path| model_download::verify_sha256(&path, sha256, remote_filename).is_ok())
+            .filter(|path| path.is_file())
     }
 
     /// Returns the manifest of all PaddleOCR model files with checksums and sizes.
