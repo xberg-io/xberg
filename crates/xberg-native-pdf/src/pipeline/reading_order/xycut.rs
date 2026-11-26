@@ -394,6 +394,22 @@ fn script_fills_gap(
     })
 }
 
+/// Whether a run's text is a table number: at least one digit, and otherwise only signs,
+/// separators, a percent sign or the parentheses of a negative amount.
+fn is_numeric_cell_run<'a>(texts: impl Iterator<Item = &'a str>) -> bool {
+    let mut has_digit = false;
+    for character in texts.flat_map(str::chars) {
+        if character.is_ascii_digit() {
+            has_digit = true;
+        } else if !(character.is_whitespace()
+            || matches!(character, '.' | ',' | '+' | '-' | '\u{2212}' | '%' | '(' | ')'))
+        {
+            return false;
+        }
+    }
+    has_digit
+}
+
 const MIN_STEPPED_PROSE_LINES: usize = 4;
 const MIN_PROSE_WORDS_PER_LINE: usize = 4;
 const MAX_STEPPED_PROSE_SLOPE: f32 = 0.05;
@@ -2270,6 +2286,10 @@ impl XYCutStrategy {
             return None;
         }
 
+        if self.cuts_numeric_table_rows(all_spans, indices, split_x) {
+            return None;
+        }
+
         Some((left, right))
     }
 
@@ -2335,6 +2355,46 @@ impl XYCutStrategy {
         paired_rows >= MIN_LABEL_VALUE_ROWS
             && short_rows * 5 >= paired_rows * 3
             && paired_rows * 2 >= left_lines.min(right_lines)
+    }
+
+    /// True when the cut at `split_x` would run between the cells of a numeric table's rows:
+    /// at least `MIN_LABEL_VALUE_ROWS` rows have a number just right of the cut and, on the
+    /// same baseline just left of it, another number or a short label, and such rows are most
+    /// of the rows the cut separates. `cuts_label_value_rows` leaves exact-baseline rows alone
+    /// because two prose columns share baselines; a prose line is neither a number nor short,
+    /// so it never counts here. Cutting would read a table column by column (1602.03238 page
+    /// 24 read the first value column before the second), so the caller falls back to a row
+    /// cut. ~keep
+    fn cuts_numeric_table_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
+        let lines = group_indices_into_lines(all_spans, indices);
+        let run = |line: &[usize]| -> (f32, f32, f32, f32, bool) {
+            let (left, right, y, font) = line.iter().fold((f32::MAX, f32::MIN, f32::MIN, 0.0f32), |acc, &i| {
+                let span = &all_spans[i];
+                (
+                    acc.0.min(span.bbox.left()),
+                    acc.1.max(span.bbox.right()),
+                    acc.2.max(span.bbox.y),
+                    acc.3.max(span.font_size),
+                )
+            });
+            let numeric = is_numeric_cell_run(line.iter().map(|&i| all_spans[i].text.as_str()));
+            (left, right, y, font, numeric)
+        };
+        let mut paired_rows = 0usize;
+        let mut numeric_rows = 0usize;
+        for pair in lines.windows(2) {
+            let (left_min, left_max, left_y, left_font, left_numeric) = run(&pair[0]);
+            let (right_min, _, right_y, _, right_numeric) = run(&pair[1]);
+            if left_max > split_x || right_min < split_x || (left_y - right_y).abs() > XYCUT_LINE_Y_TOLERANCE_PTS {
+                continue;
+            }
+            paired_rows += 1;
+            let left_is_cell = left_numeric || left_max - left_min < LABEL_RUN_MAX_EM * left_font;
+            if right_numeric && left_is_cell {
+                numeric_rows += 1;
+            }
+        }
+        numeric_rows >= MIN_LABEL_VALUE_ROWS && numeric_rows * 5 >= paired_rows * 3
     }
 
     /// Fallback column split: find the deepest trough between the two
@@ -5765,6 +5825,40 @@ mod tests {
         assert!(
             cut_of(&spans).is_none(),
             "label and value cells must not become two columns"
+        );
+    }
+
+    /// 1602.03238 page 24: a fee column and two price columns under their headers, every row
+    /// on one baseline. The empty corridor between the price columns is a valid valley, but
+    /// the cut separates a number from the number beside it on every row, so it is refused
+    /// and the table reads row by row.
+    #[test]
+    fn a_numeric_table_on_exact_baselines_is_not_cut_between_its_value_columns() {
+        let mut spans = vec![
+            make_span_text(223.6, 654.6, 5.9, 9.0, "α", 9.0),
+            make_span_text(245.4, 652.5, 74.1, 9.0, "GHQC (ρ = −0.3)", 9.0),
+            make_span_text(331.6, 652.5, 66.8, 9.0, "GHQC (ρ = 0.3)", 9.0),
+        ];
+        let rows = [
+            ("0", "1.08348", "1.10173"),
+            ("25", "1.06651", "1.08367"),
+            ("50", "1.05107", "1.06707"),
+            ("75", "1.03719", "1.05184"),
+            ("100", "1.02484", "1.03804"),
+            ("125", "1.01389", "1.02558"),
+            ("150", "1.00408", "1.01446"),
+            ("175", "0.995356", "1.00463"),
+            ("200", "0.987673", "0.996057"),
+        ];
+        for (i, (fee, negative, positive)) in rows.into_iter().enumerate() {
+            let y = 634.8 - i as f32 * 14.25;
+            spans.push(make_span_text(222.0, y, 9.2, 9.0, fee, 9.0));
+            spans.push(make_span_text(267.4, y, 29.9, 9.0, negative, 9.0));
+            spans.push(make_span_text(349.9, y, 29.9, 9.0, positive, 9.0));
+        }
+        assert!(
+            cut_of(&spans).is_none(),
+            "the value columns of a numeric table must not become two columns"
         );
     }
 
