@@ -47,19 +47,30 @@ start.
 `crate::lh`, which with the feature is `src/dynamic.rs`: the types and
 constants of `libheif-sys` and a wrapper with the `libheif-sys` signature for
 each of the 173 functions the crate calls. The wrappers shadow the linked
-declarations, so the binary references no libheif symbol. `HeifContext::new`,
-`LibHeif::new` and `LibHeif::new_checked` load the library once per process and
-cache the outcome; a missing library is a `PluginLoadingError` from the first
-context, and `LibHeif::new` then skips `heif_init`. Resolution mirrors ADR-0017:
+declarations, so the binary references no libheif symbol. The first entry point
+that needs libheif loads it once per process and caches the outcome. Every
+public entry point that reaches libheif without a context or an image checks
+that outcome first, so a missing library is a `PluginLoadingError` (or an empty
+list, `None`, or `FileTypeResult::No` where the signature has no error), never
+a panic; `LibHeif::new` skips `heif_init`. `xberg_libheif::ensure_available`
+exposes the outcome, and xberg reports it as a missing dependency rather than a
+malformed file. Resolution mirrors ADR-0017's strict policy:
 
-1. `XBERG_LIBHEIF_PATH` when set and non-empty, the only candidate.
+1. `XBERG_LIBHEIF_PATH` when set and non-empty, the only candidate; a relative
+   value is refused.
 2. `libheif.1.dylib`/`libheif.dylib` or `libheif.so.1`/`libheif.so` in the
    directory of the running executable with symlinks resolved, then in
-   `<exe dir>/../lib`.
+   `<prefix>/lib` when that directory is `<prefix>/bin`.
 3. Fixed system paths (`/opt/homebrew/lib`, `/usr/local/lib`, the Debian
    multiarch directories, `/usr/lib64`, `/usr/lib`).
-4. Otherwise an error naming every path searched. A candidate that exists but
-   does not load, or lacks one of the functions, is an error, not a fallback.
+4. Otherwise an error naming every path searched and every file skipped. A
+   discovered candidate that fails the owner check, does not load, or lacks one
+   of the functions is skipped for the next; the first load failure is
+   reported when none loads.
+
+The feature is for executables that ship libheif beside themselves; no language
+binding enables it, so there is no fallback to the platform loader's search
+path.
 
 `libheif-sys` still emits `cargo:rustc-link-lib=heif`. Linux's `--as-needed`
 drops an unused entry, but macOS records every `-l` as a load command. The
@@ -78,8 +89,10 @@ HEIC), the Docker images, the Homebrew formula and every language binding.
 
 As ADR-0017: candidates other than the explicit override are absolute paths,
 so neither the current directory nor `DYLD_*`/`LD_LIBRARY_PATH` can supply the
-library, and a library beside the executable is writable by whoever can replace
-the executable.
+library, and a discovered file is opened, from its resolved path, only when it
+and its directory are owned by root or the effective user and not writable by
+group or others. `dynamic::trusted_library` and xberg's
+`ort_discovery::library::trusted_library` implement the same check.
 
 ### Consequences
 
@@ -90,16 +103,18 @@ the executable.
 * Bad, because a `xberg-libheif` call to a libheif function without a wrapper
   fails to link on macOS release builds instead of compiling; the
   `dynamic` test leg catches it on Linux and macOS CI first.
-* Bad, because a libheif public entry point that needs no context, such as
-  `check_file_type`, panics in a `dynamic` build when the library is missing;
-  xberg does not call one.
+* Bad, because `SecurityLimits::default` still panics in a `dynamic` build when
+  the library is missing, and `check_file_type` answers `No`; xberg calls
+  neither before a context.
 
 ### Confirmation
 
-`crates/xberg-libheif/src/dynamic.rs` tests pin the resolution order, that a
-missing path reports every path searched, that a broken library is an error
-rather than a fallback, and that the installed libheif exports every wrapped
-function. `scripts/ci/rust/run-unit-tests.sh` runs the xberg-libheif suite with
+`crates/xberg-libheif/src/dynamic.rs` tests pin the resolution order, the
+`bin`-only `<prefix>/lib` rule, the refused relative override and the owner
+check, that a missing path reports every path searched, that a broken library
+is skipped for a working one, that the installed libheif exports every wrapped
+function, and, in a child process with no loadable library, that the public
+entry points return errors instead of panicking. `scripts/ci/rust/run-unit-tests.sh` runs the xberg-libheif suite with
 `--features dynamic` on Linux and macOS. `test_unix_cli_opens_a_shipped_libheif_instead_of_linking_it`
 in `scripts/ci/test_publish_workflow_contracts.py` pins the feature on exactly
 the Unix legs, the link override before the build, the link check, the shipped

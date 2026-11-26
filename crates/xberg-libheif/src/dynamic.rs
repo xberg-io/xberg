@@ -5,17 +5,19 @@
 //! calls. A wrapper shadows the `libheif-sys` declaration of the same name, so no libheif symbol
 //! is referenced at link time and the dynamic loader does not map libheif and its codecs at
 //! process start. The library is opened, and every function below resolved, the first time
-//! [`load`] runs: [`crate::HeifContext::new`], [`crate::LibHeif::new`] and
-//! [`crate::LibHeif::new_checked`] call it, and every other entry point needs a context or a
-//! `LibHeif` first. A wrapper called while the library is not loadable panics.
+//! [`load`] runs. Every public entry point that reaches libheif without a context or an image
+//! checks it first (`crate::ensure_libheif`), so a missing library is returned as an error; a
+//! wrapper called while the library is not loadable panics.
+//!
+//! The search is the one `xberg`'s `ort_discovery::library` uses for ONNX Runtime: an absolute
+//! override, the executable's directory, `<prefix>/lib` for a `<prefix>/bin` executable, fixed
+//! system paths, each discovered file passing [`trusted_library`]. The feature exists for the
+//! release CLI, which ships libheif beside the binary, so there is no fallback to the platform
+//! loader's search path.
 #![allow(unsafe_code)]
 #![allow(
     non_snake_case,
     reason = "wrappers keep libheif's names, such as heif_context_add_XMP_metadata"
-)]
-#![allow(
-    dead_code,
-    reason = "the wrapper set covers every feature combination; each build calls a subset"
 )]
 
 use std::ffi::{CString, OsStr};
@@ -77,10 +79,26 @@ fn api() -> &'static Api {
 }
 
 fn open_library() -> Result<Api, String> {
-    let explicit = std::env::var_os(LIBHEIF_PATH_ENV_VAR);
+    if let Some(explicit) = explicit_library(std::env::var_os(LIBHEIF_PATH_ENV_VAR).as_deref()) {
+        return open_path(&explicit?);
+    }
     let executable = running_executable();
-    let candidates = library_candidates(explicit.as_deref(), executable.as_deref(), SYSTEM_CANDIDATES);
-    open_first(&candidates)
+    open_first(&library_candidates(executable.as_deref(), SYSTEM_CANDIDATES))
+}
+
+/// `XBERG_LIBHEIF_PATH` when set and non-empty: the only library tried, so a mistyped override
+/// fails instead of loading another libheif. A relative value is refused, since the loader would
+/// resolve it against the current directory.
+fn explicit_library(explicit: Option<&OsStr>) -> Option<Result<PathBuf, String>> {
+    let path = PathBuf::from(explicit.filter(|value| !value.is_empty())?);
+    Some(if path.is_absolute() {
+        Ok(path)
+    } else {
+        Err(format!(
+            "{LIBHEIF_PATH_ENV_VAR} is the relative path `{}`; set it to the absolute path of libheif",
+            path.display()
+        ))
+    })
 }
 
 /// The running executable with symlinks resolved, so a symlinked install still finds the
@@ -90,23 +108,18 @@ fn running_executable() -> Option<PathBuf> {
     Some(std::fs::canonicalize(&executable).unwrap_or(executable))
 }
 
-/// The libraries to try, in order, without touching the file system.
-///
-/// 1. `XBERG_LIBHEIF_PATH`, when set and non-empty, is the only candidate, so a mistyped
-///    override fails instead of loading another libheif.
-/// 2. [`LIBRARY_NAMES`] in the executable's directory, then in `<executable dir>/../lib`.
-/// 3. `system`, the fixed install locations.
-///
-/// Every candidate but an explicit one is absolute, so neither the current directory nor the
-/// loader's search path (`DYLD_*`, `LD_LIBRARY_PATH`) can supply the library.
-fn library_candidates(explicit: Option<&OsStr>, executable: Option<&Path>, system: &[&str]) -> Vec<PathBuf> {
-    if let Some(explicit) = explicit.filter(|value| !value.is_empty()) {
-        return vec![PathBuf::from(explicit)];
-    }
+/// The libraries to look for, in order, without touching the file system: [`LIBRARY_NAMES`] in
+/// the executable's directory, then in `<prefix>/lib` when that directory is `<prefix>/bin`,
+/// then `system`. The parent of any other directory may be shared, as `/tmp` is for
+/// `/tmp/x/xberg`, and is not searched. Every candidate is absolute, so neither the current
+/// directory nor the loader's search path (`DYLD_*`, `LD_LIBRARY_PATH`) can supply the library.
+fn library_candidates(executable: Option<&Path>, system: &[&str]) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(directory) = executable.and_then(Path::parent) {
         let mut directories = vec![directory.to_path_buf()];
-        if let Some(prefix) = directory.parent() {
+        if directory.file_name() == Some(OsStr::new("bin"))
+            && let Some(prefix) = directory.parent()
+        {
             directories.push(prefix.join("lib"));
         }
         for directory in &directories {
@@ -117,18 +130,77 @@ fn library_candidates(explicit: Option<&OsStr>, executable: Option<&Path>, syste
     candidates
 }
 
-/// Load the first candidate that exists. A candidate that exists but does not load, or lacks a
-/// function, is an error: the search does not continue past a broken library.
+/// Load the first candidate that exists, passes [`trusted_library`] and opens with every wrapped
+/// function. A candidate that fails either check is skipped; when none loads, the first load
+/// failure is reported, else every path searched and every file skipped.
 fn open_first(candidates: &[PathBuf]) -> Result<Api, String> {
-    if let Some(found) = candidates.iter().find(|candidate| candidate.is_file()) {
-        return open_path(found);
+    let mut skipped = Vec::new();
+    let mut first_failure = None;
+    for candidate in candidates.iter().filter(|candidate| candidate.is_file()) {
+        let real = match trusted_library(candidate) {
+            Ok(real) => real,
+            Err(reason) => {
+                skipped.push(format!("`{}` ({reason})", candidate.display()));
+                continue;
+            }
+        };
+        match open_path(&real) {
+            Ok(api) => return Ok(api),
+            Err(failure) => {
+                if first_failure.is_none() {
+                    first_failure = Some(failure);
+                }
+            }
+        }
+    }
+    if let Some(failure) = first_failure {
+        return Err(failure);
     }
     let searched: Vec<String> = candidates.iter().map(|path| format!("`{}`", path.display())).collect();
+    let skipped = if skipped.is_empty() {
+        String::new()
+    } else {
+        format!("; skipped {}, which another user could have placed", skipped.join(", "))
+    };
     Err(format!(
-        "libheif not found; searched {}. Reinstall the release archive, which ships libheif next to the \
-         xberg executable, or set {LIBHEIF_PATH_ENV_VAR} to the absolute path of libheif",
+        "libheif not found; searched {}{skipped}. Reinstall the release archive, which ships libheif next to \
+         the xberg executable, or set {LIBHEIF_PATH_ENV_VAR} to the absolute path of libheif",
         searched.join(", ")
     ))
+}
+
+/// The library at `path` with symlinks resolved, if another local user cannot have placed or
+/// replaced it: the file and the directory that holds it must be owned by root or the effective
+/// user and not writable by group or others. The resolved path is what gets opened, so a
+/// symlink swapped after this check is not followed. Ancestor directories are not checked; a
+/// shared one such as `/tmp` is sticky, so another user cannot rename what is below it.
+///
+/// `xberg`'s `ort_discovery::library::trusted_library` applies the same rule; keep the two in
+/// step. ~keep
+fn trusted_library(path: &Path) -> Result<PathBuf, String> {
+    use std::os::unix::fs::MetadataExt;
+
+    let real = std::fs::canonicalize(path).map_err(|error| format!("cannot resolve it: {error}"))?;
+    // SAFETY: geteuid takes no arguments, cannot fail and has no side effects.
+    let euid = unsafe { libc::geteuid() };
+    for subject in [Some(real.as_path()), real.parent()].into_iter().flatten() {
+        let metadata = std::fs::metadata(subject).map_err(|error| format!("`{}`: {error}", subject.display()))?;
+        if metadata.uid() != 0 && metadata.uid() != euid {
+            return Err(format!(
+                "`{}` is owned by uid {}, not root or uid {euid}",
+                subject.display(),
+                metadata.uid()
+            ));
+        }
+        if metadata.mode() & 0o022 != 0 {
+            return Err(format!(
+                "`{}` is writable by group or others (mode {:o})",
+                subject.display(),
+                metadata.mode() & 0o777
+            ));
+        }
+    }
+    Ok(real)
 }
 
 fn open_path(path: &Path) -> Result<Api, String> {
@@ -146,9 +218,11 @@ fn open_path(path: &Path) -> Result<Api, String> {
             last_dl_error()
         ));
     }
-    // The handle is never closed: the resolved functions stay valid for the process. ~keep
+    // A loaded handle is never closed: the resolved functions stay valid for the process. ~keep
     // SAFETY: `handle` is the live handle just opened.
     unsafe { Api::resolve(handle) }.map_err(|missing| {
+        // SAFETY: Nothing resolved from `handle` outlives this failed resolution.
+        unsafe { libc::dlclose(handle) };
         format!(
             "libheif `{}` lacks `{missing}`; xberg needs a libheif at least as new as the one it was built against",
             path.display()
@@ -174,6 +248,7 @@ fn last_dl_error() -> String {
 /// `libheif-sys` bindings; each is gated on the first libheif version that declares it.
 macro_rules! libheif_functions {
     ($( $(#[$attr:meta])* fn $name:ident($($arg:ident: $ty:ty),* $(,)?) $(-> $ret:ty)?; )*) => {
+        #[allow(dead_code, reason = "the wrapper set covers every feature combination; each build calls a subset")]
         struct Api {
             $( $(#[$attr])* $name: unsafe extern "C" fn($($ty),*) $(-> $ret)?, )*
         }
@@ -208,6 +283,7 @@ macro_rules! libheif_functions {
         $(
             $(#[$attr])*
             #[allow(clippy::too_many_arguments)]
+            #[allow(dead_code, reason = "the wrapper set covers every feature combination; each build calls a subset")]
             #[inline]
             pub unsafe fn $name($($arg: $ty),*) $(-> $ret)? {
                 // SAFETY: The caller upholds the contract of the libheif function of this name.
@@ -815,71 +891,4 @@ libheif_functions! {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A fresh directory under the system temporary directory, unique to this process and test.
-    fn scratch_directory(test: &str) -> PathBuf {
-        let directory = std::env::temp_dir().join(format!("xberg-libheif-{}-{test}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("create a scratch directory");
-        directory
-    }
-
-    #[test]
-    fn explicit_path_is_the_only_candidate() {
-        let candidates = library_candidates(
-            Some(OsStr::new("/opt/custom/libheif.so.1")),
-            Some(Path::new("/opt/xberg/bin/xberg")),
-            &["/usr/lib/libheif.so.1"],
-        );
-        assert_eq!(candidates, vec![PathBuf::from("/opt/custom/libheif.so.1")]);
-    }
-
-    #[test]
-    fn empty_explicit_path_falls_back_to_the_release_layout_then_the_system() {
-        let candidates = library_candidates(
-            Some(OsStr::new("")),
-            Some(Path::new("/opt/xberg/bin/xberg")),
-            &["/usr/lib/libheif.so.1"],
-        );
-        let mut expected: Vec<PathBuf> = LIBRARY_NAMES
-            .iter()
-            .map(|name| Path::new("/opt/xberg/bin").join(name))
-            .collect();
-        expected.extend(LIBRARY_NAMES.iter().map(|name| Path::new("/opt/xberg/lib").join(name)));
-        expected.push(PathBuf::from("/usr/lib/libheif.so.1"));
-        assert_eq!(candidates, expected);
-    }
-
-    #[test]
-    fn missing_libraries_report_every_path_searched() {
-        let directory = scratch_directory("missing");
-        let absent = directory.join("libheif.absent");
-        let result = open_first(std::slice::from_ref(&absent));
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-        let Err(message) = result else {
-            panic!("an absent library must not load");
-        };
-        assert!(message.contains(&absent.display().to_string()), "{message}");
-        assert!(message.contains(LIBHEIF_PATH_ENV_VAR), "{message}");
-    }
-
-    #[test]
-    fn a_library_that_does_not_load_is_an_error_not_a_fallback() {
-        let directory = scratch_directory("broken");
-        let broken = directory.join(LIBRARY_NAMES[0]);
-        std::fs::write(&broken, b"not a shared library").expect("write a broken library");
-        let result = open_first(&[broken.clone(), PathBuf::from(SYSTEM_CANDIDATES[0])]);
-        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
-        let Err(message) = result else {
-            panic!("a broken library must not load");
-        };
-        assert!(message.starts_with("could not load libheif"), "{message}");
-        assert!(message.contains(&broken.display().to_string()), "{message}");
-    }
-
-    #[test]
-    fn the_installed_libheif_provides_every_wrapped_function() {
-        load().expect("libheif should load and export every function xberg-libheif calls");
-    }
-}
+mod tests;

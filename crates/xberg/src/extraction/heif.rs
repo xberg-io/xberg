@@ -17,6 +17,14 @@ use crate::extractors::security::SecurityLimits;
 #[cfg(feature = "heic")]
 const HEIF_TO_PNG_BUFFER_COUNT: u64 = 3;
 
+/// A missing libheif (`heic-dynamic` without the library) as a missing dependency, so it is not
+/// reported as a malformed file.
+#[cfg(feature = "heic")]
+pub(crate) fn require_libheif() -> Result<()> {
+    xberg_libheif::ensure_available()
+        .map_err(|error| XbergError::MissingDependency(format!("HEIF decoding needs libheif: {}", error.message)))
+}
+
 #[cfg(feature = "heic")]
 fn validate_heif_encoded_input_budget(bytes: &[u8], limits: &SecurityLimits) -> Result<()> {
     ImageDecodeBudget::from_security_limits(limits).validate(1, 1, u64::try_from(bytes.len()).unwrap_or(u64::MAX))
@@ -73,6 +81,7 @@ pub(crate) fn decode_heic_to_png(bytes: &[u8], limits: &SecurityLimits) -> Resul
     use image::codecs::png::PngEncoder;
     use xberg_libheif::{ColorSpace, HeifContext, LibHeif, RgbChroma};
 
+    require_libheif()?;
     let lib = LibHeif::new();
     validate_heif_encoded_input_budget(bytes, limits)?;
     let ctx = HeifContext::read_from_bytes(bytes)
@@ -192,5 +201,44 @@ mod tests {
             .expect_err("encoded HEIF bytes must remain live with decode and PNG buffers");
 
         assert!(matches!(error, XbergError::Validation { .. }));
+    }
+
+    #[cfg(feature = "heic-dynamic")]
+    #[test]
+    fn a_missing_libheif_is_a_missing_dependency_not_a_parsing_error() {
+        let test = "a_missing_libheif_is_a_missing_dependency_not_a_parsing_error";
+        let child = "XBERG_HEIF_MISSING_LIBRARY_CHILD";
+        if std::env::var(child).as_deref() == Ok(test) {
+            let heif = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic";
+            let error = decode_heic_to_png(heif, &SecurityLimits::default()).expect_err("no libheif to decode with");
+            assert!(
+                matches!(&error, XbergError::MissingDependency(message) if message.contains("XBERG_LIBHEIF_PATH")),
+                "decode: {error:?}"
+            );
+            #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
+            {
+                let error = crate::extraction::image::extract_image_metadata_with_security_limits(
+                    heif,
+                    &SecurityLimits::default(),
+                )
+                .expect_err("no libheif to read the container with");
+                assert!(matches!(error, XbergError::MissingDependency(_)), "metadata: {error:?}");
+            }
+            return;
+        }
+
+        let directory = tempfile::tempdir().expect("create a directory for the missing library");
+        let output = std::process::Command::new(std::env::current_exe().expect("locate the test executable"))
+            .args(["--exact", &format!("extraction::heif::tests::{test}"), "--nocapture"])
+            .env("XBERG_LIBHEIF_PATH", directory.path().join("libheif-missing"))
+            .env(child, test)
+            .output()
+            .expect("run the isolated missing-libheif test");
+        assert!(
+            output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"),
+            "isolated missing-libheif test failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
     }
 }

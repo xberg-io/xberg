@@ -12,6 +12,10 @@ pub struct SecurityLimits {
 
 #[allow(unsafe_code)]
 impl Default for SecurityLimits {
+    /// # Panics
+    ///
+    /// When libheif cannot be loaded (`dynamic` feature); create a context first, which reports
+    /// why.
     #[allow(unsafe_code)]
     fn default() -> Self {
         // SAFETY: This takes no Rust pointers and returns libheif's immutable global limits.

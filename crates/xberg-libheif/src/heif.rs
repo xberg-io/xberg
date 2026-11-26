@@ -28,9 +28,8 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn new() -> Self {
         // Without the library there is nothing to initialise; Drop then skips deinit, and the
-        // first context reports why libheif is unavailable. ~keep
-        #[cfg(feature = "dynamic")]
-        if crate::dynamic::load().is_err() {
+        // methods that need libheif report why it is unavailable. ~keep
+        if !crate::libheif_available() {
             return Self(());
         }
         let mut init_params = lh::heif_init_params { version: 0 };
@@ -48,8 +47,7 @@ impl LibHeif {
     /// changed with help of environment variable `LIBHEIF_PLUGIN_PATH`.
     #[allow(unsafe_code)]
     pub fn new_checked() -> Result<Self> {
-        #[cfg(feature = "dynamic")]
-        crate::dynamic::ensure_loaded()?;
+        crate::ensure_libheif()?;
         let mut init_params = lh::heif_init_params { version: 0 };
         // SAFETY: The local version-zero parameter block stays live through initialization.
         let error = unsafe { lh::heif_init(&mut init_params as _) };
@@ -63,8 +61,7 @@ impl Drop for LibHeif {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
         // The load outcome is cached, so this matches the skip in `new`. ~keep
-        #[cfg(feature = "dynamic")]
-        if crate::dynamic::load().is_err() {
+        if !crate::libheif_available() {
             return;
         }
         // SAFETY: Deinitialization balances a successful initialization.
@@ -87,9 +84,13 @@ impl Default for LibHeif {
 impl LibHeif {
     /// Version of linked `libheif` as an array of numbers in format:
     ///
-    /// `[<major>, <minor>, <maintenance>]`
+    /// `[<major>, <minor>, <maintenance>]`, or all zeros when libheif cannot be loaded
+    /// (`dynamic` feature).
     #[allow(unsafe_code)]
     pub fn version(&self) -> [u8; 3] {
+        if !crate::libheif_available() {
+            return [0; 3];
+        }
         // SAFETY: The version query takes no pointers and returns a value.
         let version: u32 = unsafe { lh::heif_get_version_number() };
         let parts = version.to_be_bytes();
@@ -106,6 +107,7 @@ impl LibHeif {
 
     #[allow(unsafe_code)]
     fn _load_plugins(&self, dir_path: &Path) -> Result<usize> {
+        crate::ensure_libheif()?;
         let dir_path = path_to_cstring(dir_path);
         let mut plugins_loaded: libc::c_int = 0;
         // SAFETY: The directory CString and count out slot live for the call. Passing
@@ -128,6 +130,7 @@ impl LibHeif {
         color_space: ColorSpace,
         decoding_options: Option<DecodingOptions>,
     ) -> Result<Image> {
+        crate::ensure_libheif()?;
         let mut c_image: *mut lh::heif_image = ptr::null_mut();
         // SAFETY: The image handle and optional decoding settings outlive the call,
         // and c_image is a writable slot for the owned native result.
@@ -148,13 +151,16 @@ impl LibHeif {
     /// You can filter the decoders by compression format.
     ///
     /// The returned list of decoders is sorted by their priority
-    /// (which is a plugin property).
+    /// (which is a plugin property). It is empty when libheif cannot be loaded.
     #[allow(unsafe_code)]
     pub fn decoder_descriptors(
         &self,
         max_count: usize,
         format_filter: Option<CompressionFormat>,
     ) -> Vec<DecoderDescriptor<'_>> {
+        if !crate::libheif_available() {
+            return Vec::new();
+        }
         let format_filter = format_filter.unwrap_or(CompressionFormat::Undefined);
         let max_count = max_count.min(libc::c_int::MAX as usize);
 
@@ -179,7 +185,7 @@ impl LibHeif {
     /// You can filter the encoders by compression format and name.
     ///
     /// The returned list of encoders is sorted by their priority
-    /// (which is a plugin property).
+    /// (which is a plugin property). It is empty when libheif cannot be loaded.
     ///
     /// Note: to get the actual encoder from the descriptors returned here,
     /// use [`LibHeif::encoder`] method.
@@ -190,6 +196,9 @@ impl LibHeif {
         format_filter: Option<CompressionFormat>,
         name_filter: Option<&str>,
     ) -> Vec<EncoderDescriptor<'_>> {
+        if !crate::libheif_available() {
+            return Vec::new();
+        }
         let format_filter = format_filter.unwrap_or(CompressionFormat::Undefined);
         let max_count = max_count.min(libc::c_int::MAX as usize);
         let name_filter = name_filter.map(|s| CString::new(s).ok()).unwrap_or_default();
@@ -220,6 +229,7 @@ impl LibHeif {
     /// encode images from a descriptor.
     #[allow(unsafe_code)]
     pub fn encoder(&self, descriptor: EncoderDescriptor) -> Result<Encoder<'_>> {
+        crate::ensure_libheif()?;
         let mut c_encoder: *mut lh::heif_encoder = ptr::null_mut();
         // SAFETY: Libheif accepts a null context for this registry operation. The
         // descriptor is borrowed and c_encoder is a writable out slot.
@@ -235,6 +245,7 @@ impl LibHeif {
     /// the encoder with the highest plugin priority will be returned.
     #[allow(unsafe_code)]
     pub fn encoder_for_format(&self, format: CompressionFormat) -> Result<Encoder<'_>> {
+        crate::ensure_libheif()?;
         let mut c_encoder: *mut lh::heif_encoder = ptr::null_mut();
         // SAFETY: Libheif accepts a null context for this registry operation and
         // can initialize the caller-owned out slot.

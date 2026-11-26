@@ -21,7 +21,11 @@ pub struct DecodingOptions {
 
 #[allow(unsafe_code)]
 impl DecodingOptions {
+    /// `None` when libheif cannot allocate the options or cannot be loaded (`dynamic` feature).
     pub fn new() -> Option<Self> {
+        if !crate::libheif_available() {
+            return None;
+        }
         // SAFETY: The allocator returns a `new` struct filled with defaults, including
         // `version`, which this wrapper owns until Drop once the result is non-null.
         let inner_ptr = unsafe { lh::heif_decoding_options_alloc() };
@@ -253,8 +257,9 @@ impl Default for ColorConversionOptions {
             preferred_chroma_upsampling_algorithm: 0,
             only_use_preferred_chroma_algorithm: 0,
         };
+        // Without a loadable libheif (`dynamic` feature) the zeroed fields stand. ~keep
         #[cfg(feature = "v1_19")]
-        {
+        if crate::libheif_available() {
             // SAFETY: cc_options is a writable, initialized version-1 structure that
             // stays live while libheif sets its default fields.
             unsafe { lh::heif_color_conversion_options_set_defaults(&mut cc_options) };

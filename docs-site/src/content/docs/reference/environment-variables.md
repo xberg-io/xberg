@@ -1014,6 +1014,26 @@ building from source to link pdfium statically instead of loading it at run time
 See [Pdfium PDF backend](/getting-started/installation/#pdfium-pdf-backend) for the full
 setup and the platforms it is unavailable on.
 
+## HEIF Library Configuration
+
+### XBERG_LIBHEIF_PATH
+
+**Type**: `String` (absolute file path)
+**Default**: Not set (the library shipped beside `xberg`, then the system locations)
+
+Absolute path of the libheif shared library the Linux glibc and macOS CLI release archives open on the first HEIF / HEIC / AVIF decode. Other builds link libheif and ignore this variable.
+
+```bash title="Use Another libheif"
+export XBERG_LIBHEIF_PATH=/opt/homebrew/lib/libheif.1.dylib
+```
+
+When set and non-empty it is the only library tried: a relative path is refused, and a path that does not load is an error rather than a fallback. When not set, the CLI loads the first of:
+
+1. `libheif.1.dylib` / `libheif.dylib` (macOS) or `libheif.so.1` / `libheif.so` (Linux) in the directory of the `xberg` executable (symlinks resolved), then in `<prefix>/lib` when that directory is `<prefix>/bin`.
+2. The system locations `/opt/homebrew/lib`, `/usr/local/lib` (macOS) or `/usr/lib/{x86_64,aarch64}-linux-gnu`, `/usr/lib64`, `/usr/lib`, `/usr/local/lib` (Linux).
+
+A discovered file is opened only if it and its directory are owned by root or the current user and are not writable by group or others; a file that fails this check, does not load or lacks a libheif function is skipped. If nothing loads, HEIF decoding fails with a missing-dependency error listing every path searched; other formats are unaffected. The current directory and the dynamic loader's search path are never consulted.
+
 ## See Also
 
 - [Configuration Guide](/reference/configuration/) - Detailed configuration file format and options

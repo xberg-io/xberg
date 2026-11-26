@@ -809,6 +809,7 @@ pub(crate) fn extract_image_metadata_for_processing(
         {
             use xberg_libheif::HeifContext;
 
+            crate::extraction::heif::require_libheif()?;
             let context = HeifContext::read_from_bytes(bytes)
                 .map_err(|error| XbergError::parsing(format!("Failed to read HEIF container: {error}")))?;
             let handle = context

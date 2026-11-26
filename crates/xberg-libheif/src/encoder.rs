@@ -241,6 +241,7 @@ pub struct EncodingOptions {
 #[allow(unsafe_code)]
 impl EncodingOptions {
     pub fn new() -> Result<Self> {
+        crate::ensure_libheif()?;
         // SAFETY: The allocator returns a fully defaulted struct, including `version`,
         // which this wrapper owns once the result is non-null.
         let inner_ptr = unsafe { lh::heif_encoding_options_alloc() };

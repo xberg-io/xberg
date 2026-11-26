@@ -44,6 +44,7 @@ impl Image {
     /// [`Image::create_plane()`] method to add image planes required by your colorspace.
     #[allow(unsafe_code)]
     pub fn new(width: u32, height: u32, color_space: ColorSpace) -> Result<Image> {
+        crate::ensure_libheif()?;
         if width > MAX_IMAGE_SIZE || height > MAX_IMAGE_SIZE {
             return Err(HeifError {
                 code: HeifErrorCode::UsageError,

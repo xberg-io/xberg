@@ -35,6 +35,35 @@ use dynamic as lh;
 #[cfg(not(feature = "dynamic"))]
 use libheif_sys as lh;
 
+/// Fails with why libheif cannot be loaded (`dynamic` feature); always succeeds when linked.
+/// Every public entry point that reaches libheif without a context or image calls this first,
+/// so a missing library is an error rather than a panic in a wrapper.
+#[inline]
+pub(crate) fn ensure_libheif() -> Result<()> {
+    #[cfg(feature = "dynamic")]
+    {
+        dynamic::ensure_loaded()
+    }
+    #[cfg(not(feature = "dynamic"))]
+    {
+        Ok(())
+    }
+}
+
+/// `Ok` when libheif can be called: always with a linked libheif; with the `dynamic` feature,
+/// once it loads, else the cached error naming every path searched
+/// ([`HeifErrorCode::PluginLoadingError`]). Lets a caller tell a missing library from a file
+/// libheif rejects.
+pub fn ensure_available() -> Result<()> {
+    ensure_libheif()
+}
+
+/// [`ensure_libheif`] for entry points with no error to return.
+#[inline]
+pub(crate) fn libheif_available() -> bool {
+    ensure_libheif().is_ok()
+}
+
 mod color_profile;
 mod context;
 mod decoder;
