@@ -734,23 +734,34 @@ const MIN_SCRIPT_GAP_COVERAGE: f32 = 0.35;
 /// A script is clearly shorter than the runs it sits between.
 const MAX_SCRIPT_HEIGHT_RATIO: f32 = 0.9;
 
+/// Buckets one [`InkRows`] box or query band may span. A taller box (a hostile `1e9 Tf` run) goes
+/// to the linear oversized list, and a taller band scans every stored box once, so neither loops
+/// over a saturated bucket range.
+const MAX_INK_ROW_BUCKETS: u64 = 64;
+
 /// Drawn glyph-run boxes bucketed by vertical position, so the merge fold can ask whether a
 /// sub/superscript sits in a gap without scanning every run on the page for every pair.
 struct InkRows {
     rows: HashMap<i64, Vec<Rect>>,
+    oversized: Vec<Rect>,
 }
 
 impl InkRows {
     fn new(boxes: &[Rect]) -> Self {
         let mut rows: HashMap<i64, Vec<Rect>> = HashMap::new();
+        let mut oversized = Vec::new();
         for ink in boxes {
             if let Some((first, last)) = Self::bucket_range(ink.y, ink.y + ink.height) {
+                if last.abs_diff(first) >= MAX_INK_ROW_BUCKETS {
+                    oversized.push(*ink);
+                    continue;
+                }
                 for bucket in first..=last {
                     rows.entry(bucket).or_default().push(*ink);
                 }
             }
         }
-        Self { rows }
+        Self { rows, oversized }
     }
 
     fn bucket_range(bottom: f32, top: f32) -> Option<(i64, i64)> {
@@ -781,16 +792,23 @@ impl InkRows {
         let Some((first, last)) = Self::bucket_range(band_bottom, band_top) else {
             return false;
         };
+        let is_script = |ink: &Rect| {
+            let overlap = (ink.x + ink.width).min(gap_end) - ink.x.max(gap_start);
+            let centre = ink.y + ink.height * 0.5;
+            overlap > gap_width * MIN_SCRIPT_GAP_COVERAGE
+                && ink.height < max_script_height
+                && centre > band_bottom
+                && centre < band_top
+        };
+        if self.oversized.iter().any(is_script) {
+            return true;
+        }
+        if last.abs_diff(first) >= MAX_INK_ROW_BUCKETS {
+            return self.rows.values().flatten().any(is_script);
+        }
         (first..=last)
             .filter_map(|bucket| self.rows.get(&bucket))
             .flatten()
-            .any(|ink| {
-                let overlap = (ink.x + ink.width).min(gap_end) - ink.x.max(gap_start);
-                let centre = ink.y + ink.height * 0.5;
-                overlap > gap_width * MIN_SCRIPT_GAP_COVERAGE
-                    && ink.height < max_script_height
-                    && centre > band_bottom
-                    && centre < band_top
-            })
+            .any(is_script)
     }
 }
