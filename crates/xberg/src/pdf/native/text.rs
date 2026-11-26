@@ -2542,8 +2542,8 @@ const STORY_BREAK_MIN_STEP_EM: f32 = 4.0;
 /// each boundary line becomes its own single-line `Boundary` band in place,
 /// so it stays between the band above it and the band below it.
 ///
-/// A content band also ends at a story break: an empty band across both columns
-/// (`STORY_BREAK_MIN_STEP_EM`) between two blocks of columns, each read column by
+/// A content band also ends at a story break (`opens_story`): an empty band across both
+/// columns, which both end above and resume below, between two blocks of columns, each read column by
 /// column before the next. Read as one band, the columns ran down the whole page,
 /// so 2209.05611's references opened inside its conclusion and its acknowledgments
 /// followed the first column of references. A story too small to reorder on its own
@@ -2556,12 +2556,12 @@ fn build_bands(
 ) -> Vec<Band> {
     let mut bands = Vec::new();
     let mut current: Vec<usize> = Vec::new();
-    let mut last_inked_line: Option<&SpanLine> = None;
-    for line in lines {
+    let mut last_inked_line: Option<usize> = None;
+    for (line_index, line) in lines.iter().enumerate() {
         let inked = line.iter().any(|&index| span_has_ink(&spans[index]));
         if !line_is_boundary(spans, line, furniture_width, split_x) {
             if inked
-                && last_inked_line.is_some_and(|above| opens_story(spans, above, line))
+                && last_inked_line.is_some_and(|above| opens_story(spans, lines, above, line_index, split_x))
                 && can_reorder_alone(spans, &current, split_x)
             {
                 bands.push(Band::Content(std::mem::take(&mut current)));
@@ -2574,7 +2574,7 @@ fn build_bands(
             bands.push(Band::Boundary(line.clone()));
         }
         if inked {
-            last_inked_line = Some(line);
+            last_inked_line = Some(line_index);
         }
     }
     if !current.is_empty() {
@@ -2583,27 +2583,76 @@ fn build_bands(
     merge_starved_stories(spans, bands, split_x)
 }
 
-/// Whether `line` opens below a story break under `above`: see [`STORY_BREAK_MIN_STEP_EM`].
-fn opens_story(spans: &[xberg_native_pdf::layout::TextSpan], above: &SpanLine, line: &SpanLine) -> bool {
-    let type_size = |line: &SpanLine| {
-        line.iter()
-            .map(|&index| {
-                let span = &spans[index];
-                if span.font_size.is_finite() && span.font_size > 0.0 {
-                    span.font_size
-                } else {
-                    span.bbox.height
-                }
-            })
-            .filter(|size| size.is_finite())
-            .fold(0.0_f32, f32::max)
-    };
-    let (Some(&above_first), Some(&line_first)) = (above.first(), line.first()) else {
+/// Largest distance, in ems, from a story break at which both columns must show text on each
+/// side of it.
+const STORY_EDGE_EM: f32 = 2.0;
+
+fn line_type_size(spans: &[xberg_native_pdf::layout::TextSpan], line: &SpanLine) -> f32 {
+    line.iter()
+        .map(|&index| {
+            let span = &spans[index];
+            if span.font_size.is_finite() && span.font_size > 0.0 {
+                span.font_size
+            } else {
+                span.bbox.height
+            }
+        })
+        .filter(|size| size.is_finite())
+        .fold(0.0_f32, f32::max)
+}
+
+/// Whether `lines[below]` opens a story under `lines[above]`, the inked line before it: the
+/// baseline step is at least [`STORY_BREAK_MIN_STEP_EM`], and both columns end within
+/// [`STORY_EDGE_EM`] above the break and resume within it below. A column that only pauses
+/// beside a figure on the other side (2303.08597's abstract beside its Fig. 1) leaves one side
+/// empty at the break, and its column keeps reading down.
+fn opens_story(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    above: usize,
+    below: usize,
+    split_x: f32,
+) -> bool {
+    let (Some(above_y), Some(below_y)) = (line_y_of(spans, &lines[above]), line_y_of(spans, &lines[below])) else {
         return false;
     };
-    let em = type_size(above).max(type_size(line));
-    let step = spans[above_first].bbox.y - spans[line_first].bbox.y;
-    em > 0.0 && step.is_finite() && step >= STORY_BREAK_MIN_STEP_EM * em
+    let em = line_type_size(spans, &lines[above]).max(line_type_size(spans, &lines[below]));
+    let step = above_y - below_y;
+    if !(em > 0.0 && step.is_finite() && step >= STORY_BREAK_MIN_STEP_EM * em) {
+        return false;
+    }
+    let window = STORY_EDGE_EM * em;
+    let ends_above = lines[..=above]
+        .iter()
+        .rev()
+        .take_while(|line| line_y_of(spans, line).is_some_and(|y| y - above_y <= window));
+    let resumes_below = lines[below..]
+        .iter()
+        .take_while(|line| line_y_of(spans, line).is_some_and(|y| below_y - y <= window));
+    fills_both_columns(spans, ends_above, split_x) && fills_both_columns(spans, resumes_below, split_x)
+}
+
+fn line_y_of(spans: &[xberg_native_pdf::layout::TextSpan], line: &SpanLine) -> Option<f32> {
+    line.first().map(|&index| spans[index].bbox.y)
+}
+
+/// Whether `lines` hold inked spans on both sides of `split_x`.
+fn fills_both_columns<'a>(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: impl Iterator<Item = &'a SpanLine>,
+    split_x: f32,
+) -> bool {
+    let (mut left, mut right) = (false, false);
+    for &index in lines.flatten() {
+        if span_has_ink(&spans[index]) {
+            if spans[index].bbox.x < split_x {
+                left = true;
+            } else {
+                right = true;
+            }
+        }
+    }
+    left && right
 }
 
 /// Whether `band` holds enough inked spans on each side of `split_x` for
@@ -4806,6 +4855,42 @@ mod tests {
             .chain((0..8).map(|row| line("Right", row)))
             .collect();
         assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// 2303.08597 page 1: the left column pauses over an empty band while the right column
+    /// beside it holds a figure, so no text stands on the right at the break. The columns keep
+    /// reading down the page as one band.
+    #[test]
+    fn a_gap_beside_a_figure_is_no_story_break() {
+        let mut spans = dense_two_column_spans();
+        let story_top = 816.0 - 7.0 * 14.0 - 5.0 * 11.0;
+        for row in 0..8 {
+            let y = story_top - row as f32 * 14.0;
+            spans.push(span_with_width(
+                &format!("Left abstract line {row} continues below the gap"),
+                60.0,
+                y,
+                200.0,
+                11.0,
+                11.0,
+            ));
+            if row >= 2 {
+                spans.push(span_with_width(
+                    &format!("Right body line {row} resumes under the figure"),
+                    320.0,
+                    y,
+                    190.0,
+                    11.0,
+                    11.0,
+                ));
+            }
+        }
+        spans.retain(|span| !(span.bbox.x > 300.0 && span.bbox.y < 816.0 - 4.0 * 14.0 && span.bbox.y > story_top));
+        let lines = group_into_lines(&spans, &spans_sorted_top_to_bottom(&spans));
+
+        let bands = build_bands(&spans, &lines, NO_WIDTH_FURNITURE, 300.0);
+
+        assert!(matches!(bands.as_slice(), [Band::Content(indices)] if indices.len() == spans.len()));
     }
 
     /// A story break above a story too small to reorder alone keeps it in the band above.
