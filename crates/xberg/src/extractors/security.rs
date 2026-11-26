@@ -636,6 +636,11 @@ impl TableValidator {
             Ok(())
         }
     }
+
+    /// Cells charged so far.
+    pub(crate) fn current_cells(&self) -> usize {
+        self.current_cells
+    }
 }
 
 /// Bundle of the four hostile-input validators tied to a single document

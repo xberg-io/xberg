@@ -129,7 +129,12 @@ fn process_xlsx_workbook<RS: Read + Seek>(
             sheets.push(sheet);
             continue;
         }
-        match process_xlsx_sheet_safe(&mut workbook, name, warnings) {
+        let truncated = skipped.truncated(index);
+        let sheet = match truncated {
+            Some(truncated) => table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, warnings),
+            None => process_xlsx_sheet_safe(&mut workbook, name, warnings),
+        };
+        match sheet {
             Ok(sheet) => sheets.push(sheet),
             Err(e) => {
                 tracing::warn!("Failed to process sheet '{}': {}", name, e);
@@ -141,7 +146,10 @@ fn process_xlsx_workbook<RS: Read + Seek>(
             }
         }
 
-        if let Some(formulas) = collect_sheet_formulas(&mut workbook, name) {
+        // A truncated sheet's formula range would be built in full, past the cell budget.
+        if truncated.is_none()
+            && let Some(formulas) = collect_sheet_formulas(&mut workbook, name)
+        {
             extra_metadata.insert(format!("formulas_{name}"), formulas);
         }
         if let Some(hyperlinks) = collect_sheet_hyperlinks(&mut workbook, name) {

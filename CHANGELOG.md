@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [Unreleased]
+
+### Fixed
+
+- **excel:** an XLSX, XLSM, XLTM or XLAM worksheet whose cells exceed the remaining `security_limits.max_table_cells` budget keeps its leading rows that fit instead of extracting as an empty sheet; a processing warning names the kept and total row counts and the limit to raise. A later sheet with no budget left for even its first row is still skipped with a warning, and a truncated sheet's formulas are not collected. XLSB, XLS and ODS sheets over the budget are still skipped whole. (#3417)
+
 ## [1.5.4] - 2026-11-25
 
 ### Added
