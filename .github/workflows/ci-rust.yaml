@@ -1148,12 +1148,13 @@ jobs:
               --features "layout-detection,auto-rotate,tract" \
               --lib \
               -- inference::tract_backend inference::ort_optimized --nocapture 2>&1 | tee "/tmp/tract-backend-attempt-${attempt}.log" \
-              && grep -qE '^test result: ok\. [1-9][0-9]* passed' "/tmp/tract-backend-attempt-${attempt}.log"; then
+              && grep -qE '^test result: ok\. [1-9][0-9]* passed' "/tmp/tract-backend-attempt-${attempt}.log" \
+              && grep -qxF 'test inference::ort_optimized::tests::saved_layout_graphs_reproduce_online_outputs_bit_for_bit ... ok' "/tmp/tract-backend-attempt-${attempt}.log"; then
               exit 0
             fi
           done
 
-          echo "::error::tract parity tests failed or matched 0 tests after 3 attempts -- inference::tract_backend is the sole tract/ORT parity enforcement in CI, and XBERG_REQUIRE_TRACT_PARITY only guards against missing models, not a zero-match filter"
+          echo "::error::tract parity tests failed, matched 0 tests, or did not run the saved-graph bit-identity test after 3 attempts -- inference::tract_backend is the sole tract/ORT parity enforcement in CI, and XBERG_REQUIRE_TRACT_PARITY only guards against missing models, not a zero-match filter"
           exit 1
         shell: bash
         env:

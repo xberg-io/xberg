@@ -1856,6 +1856,17 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
 
 
+def test_tract_parity_step_requires_the_saved_graph_bit_identity_test_by_name() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    step = workflow.split("- name: Run tract/ORT parity tests", 1)[1].split("\n      - ", 1)[0]
+    test = "saved_layout_graphs_reproduce_online_outputs_bit_for_bit"
+    source = Path(__file__).parents[2] / "crates/xberg/src/inference/ort_optimized/tests.rs"
+    assert f"fn {test}()" in source.read_text(), "the required test must exist under this name"
+    assert "inference::ort_optimized" in step, "the step must select the saved-graph tests"
+    required = f"grep -qxF 'test inference::ort_optimized::tests::{test} ... ok'"
+    assert required in step, "a passing count alone cannot show the bit-identity test ran"
+
+
 def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
     workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
     feature = r'--features "?(\$\{\{ matrix\.(\w+) \}\}|[^"\s]+)'
