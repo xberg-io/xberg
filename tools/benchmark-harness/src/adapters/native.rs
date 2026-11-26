@@ -589,10 +589,13 @@ impl NativeAdapter {
     }
 
     /// Sets the Tesseract model set for every OCR pass, without adding an `ocr` section, and on
-    /// the cold subprocess probe. The default set leaves the config untouched.
+    /// the cold subprocess probe.
     pub fn with_tessdata_model(mut self, model: xberg::TessdataModel) -> Self {
-        if model != xberg::TessdataModel::Fast {
-            self.config.tessdata_model = Some(model);
+        // ~keep Mirrors `--ocr-tessdata-model`: the run's set replaces an `ocr` section's own one.
+        // Fast is stored as `None` so a fast config serializes as before.
+        self.config.tessdata_model = (model != xberg::TessdataModel::Fast).then_some(model);
+        if let Some(ocr) = self.config.ocr.as_mut() {
+            ocr.tessdata_model = None;
         }
         self.cold_adapter = self.cold_adapter.map(|adapter| adapter.with_tessdata_model(model));
         self
@@ -991,6 +994,27 @@ mod tests {
 
         assert!(adapter.config.ocr.is_none());
         assert_eq!(adapter.config.tessdata_model, Some(xberg::TessdataModel::Best));
+    }
+
+    #[test]
+    fn the_run_set_replaces_both_fields_like_the_cli_flag() {
+        let config = ExtractionConfig {
+            tessdata_model: Some(xberg::TessdataModel::Best),
+            ocr: Some(xberg::OcrConfig {
+                tessdata_model: Some(xberg::TessdataModel::Best),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let fast = NativeAdapter::with_config(config.clone()).with_tessdata_model(xberg::TessdataModel::Fast);
+        assert_eq!(fast.config.tessdata_model, None);
+        assert_eq!(fast.config.ocr.as_ref().and_then(|ocr| ocr.tessdata_model), None);
+        assert_eq!(fast.config.effective_tessdata_model(), xberg::TessdataModel::Fast);
+
+        let mut section_fast = config;
+        section_fast.ocr.as_mut().unwrap().tessdata_model = Some(xberg::TessdataModel::Fast);
+        let best = NativeAdapter::with_config(section_fast).with_tessdata_model(xberg::TessdataModel::Best);
+        assert_eq!(best.config.effective_tessdata_model(), xberg::TessdataModel::Best);
     }
 
     #[test]
