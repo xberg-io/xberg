@@ -608,12 +608,19 @@ const STACKED_BAND_MIN_STACKED_COLUMNS: usize = 2;
 /// below, so each band word is nearest to it, and [`order_cell_words_in_reading_order`] still
 /// reads each cell's lines top to bottom. The same pass reorders such a band in the native
 /// reading order (`pdf::native::hierarchy::stacked_header_band`). ~keep
-fn collapse_stacked_header_band(words: &[HocrWord], mut row_positions: Vec<u32>, median_height: u32) -> Vec<u32> {
+///
+/// Returns the row positions and whether a band was collapsed.
+fn collapse_stacked_header_band(
+    words: &[HocrWord],
+    mut row_positions: Vec<u32>,
+    median_height: u32,
+) -> (Vec<u32>, bool) {
     let band = stacked_header_band_rows(words, &row_positions, median_height);
-    if band >= STACKED_BAND_MIN_ROWS {
+    let collapsed = band >= STACKED_BAND_MIN_ROWS;
+    if collapsed {
         row_positions.drain(..band - 1);
     }
-    row_positions
+    (row_positions, collapsed)
 }
 
 /// The number of leading rows of `row_positions` that form a stacked header band, or 0.
@@ -1052,7 +1059,8 @@ pub(crate) fn reconstruct_table_with_columns(
     }
 
     let median_height = median_word_height(words);
-    let row_positions = collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height);
+    let (row_positions, stacked_header) =
+        collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height);
     let groups = group_words_into_cell_tokens(words, &row_positions);
     let cell_tokens: Vec<HocrWord> = groups.iter().map(|(token, _)| token.clone()).collect();
     let columns = detect_columns(&cell_tokens, &row_positions, column_threshold);
@@ -1061,7 +1069,7 @@ pub(crate) fn reconstruct_table_with_columns(
         return (Vec::new(), Vec::new());
     }
 
-    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, median_height, &columns);
+    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, median_height, &columns, stacked_header);
     let mut col_positions: Vec<u32> = columns.iter().map(|column| column.left).collect();
     merge_header_fragments_by_geometry(&mut result, &mut col_positions);
 
@@ -1389,11 +1397,20 @@ fn assign_grouped_words_to_cells<'a>(
     row_positions: &[u32],
     median_height: u32,
     columns: &[ColumnTrack],
+    stacked_header: bool,
 ) -> Vec<Vec<String>> {
     let num_rows = row_positions.len();
     let num_cols = columns.len();
     let mut table: Vec<Vec<Vec<&'a HocrWord>>> = vec![vec![vec![]; num_cols]; num_rows];
     let data_supported = columns_with_data_support(groups, row_positions, median_height, columns);
+    let mut labelled = vec![false; num_cols];
+    for (token, _) in groups {
+        if find_row_index_by_overlap(row_positions, token, median_height) == Some(0)
+            && let Some(col) = find_column_index(columns, token).filter(|&col| col < num_cols)
+        {
+            labelled[col] = true;
+        }
+    }
 
     for (token, members) in groups {
         let Some(row) = find_row_index_by_overlap(row_positions, token, median_height) else {
@@ -1411,7 +1428,16 @@ fn assign_grouped_words_to_cells<'a>(
             // `merge_header_fragments_by_geometry` reconcile it (#2219). ~keep
             let token_column = find_column_index(columns, token);
             if let Some(col) = token_column.filter(|&col| col < num_cols && data_supported[col]) {
-                table[row][col].extend(members.iter().copied());
+                let spanned = if stacked_header {
+                    unlabelled_columns_under(token, col, columns, &data_supported, &labelled)
+                } else {
+                    Vec::new()
+                };
+                if spanned.is_empty() {
+                    table[row][col].extend(members.iter().copied());
+                } else {
+                    split_header_token(&mut table[row], members, col, &spanned, columns);
+                }
             } else {
                 assign_words_to_row(&mut table[row], members, columns);
             }
@@ -1423,6 +1449,57 @@ fn assign_grouped_words_to_cells<'a>(
     }
 
     finish_cell_assignment(table)
+}
+
+/// The data columns, other than `col`, whose left edge lies under a header token and which have no
+/// header token of their own. Read only for a collapsed stacked header band, where every column
+/// carries its own label stack; elsewhere a token over two columns is usually a spanning group
+/// header.
+///
+/// Labels set side by side can reach the header row as one token: the native PDF path merges a
+/// line's spans into one segment and places its words proportionally, which narrows the 4.4pt
+/// gap between `UW Tier` and `Vehicle Type` (pb_sample_page_16) below the cell-merge gap. The
+/// token then sits over two data columns, one of which would be left without a header. ~keep
+fn unlabelled_columns_under(
+    token: &HocrWord,
+    col: usize,
+    columns: &[ColumnTrack],
+    data_supported: &[bool],
+    labelled: &[bool],
+) -> Vec<usize> {
+    columns
+        .iter()
+        .enumerate()
+        .filter(|&(index, column)| {
+            index != col
+                && data_supported[index]
+                && !labelled[index]
+                && column.left > token.left
+                && column.left < token.right()
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
+/// Place each word of a header token that spans unlabelled data columns in whichever of `col` and
+/// `spanned` has its centre nearest the word's centre. A column's own left edge cannot decide it:
+/// a label set over a right-aligned or narrow column starts left of the column.
+fn split_header_token<'a>(
+    row: &mut [Vec<&'a HocrWord>],
+    members: &[&'a HocrWord],
+    col: usize,
+    spanned: &[usize],
+    columns: &[ColumnTrack],
+) {
+    let center = |column: &ColumnTrack| u64::from(column.left) + u64::from(column.right);
+    for &word in members {
+        let word_center = u64::from(word.left) * 2 + u64::from(word.width);
+        let target = std::iter::once(col)
+            .chain(spanned.iter().copied())
+            .min_by_key(|&index| center(&columns[index]).abs_diff(word_center))
+            .unwrap_or(col);
+        row[target].push(word);
+    }
 }
 
 fn columns_with_data_support(
@@ -2477,6 +2554,46 @@ mod tests {
         );
         assert_eq!(table.len(), 1 + BAND_DATA_ROWS as usize);
         assert_eq!(table[1], ["002", "AO", "1000", "1999", "1.000", "1.000", "1.000"]);
+    }
+
+    /// The same band as the native PDF path projects it when each header line reaches it as one
+    /// segment: words placed in proportion to their characters, which narrows the gap between
+    /// side-by-side labels (`Tier` / `Vehicle`, `Auto` / `Coll`) below the cell-merge gap.
+    #[test]
+    fn stacked_header_band_splits_side_by_side_labels_merged_into_one_token() {
+        let mut words = stacked_header_band_table();
+        for word in &mut words {
+            let moved = match (word.text.as_str(), word.top, word.left) {
+                ("Tier", 89, _) => Some((32, 8)),
+                ("Vehicle", 89, _) => Some((42, 13)),
+                ("Type", 89, _) => Some((56, 8)),
+                ("Auto", 89, 162) => Some((161, 9)),
+                ("Coll", 89, _) => Some((172, 7)),
+                ("Auto", 89, 184) => Some((180, 9)),
+                ("Loan", 95, 174) => Some((172, 8)),
+                ("/Lease", 95, 183) => Some((181, 11)),
+                _ => None,
+            };
+            if let Some((left, width)) = moved {
+                word.left = left;
+                word.width = width;
+            }
+        }
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(
+            table[0],
+            [
+                "UW Tier Group",
+                "Vehicle Type Group",
+                "Minimum Vehicle Miles",
+                "Maximum Vehicle Miles",
+                "BI",
+                "Comp Auto Loan /Lease",
+                "Coll Auto Loan /Lease",
+            ]
+        );
     }
 
     #[test]
