@@ -152,10 +152,11 @@ enum PrimaryAttempt {
 }
 
 /// Return the part of a `reserved`-byte output buffer the stream did not fill, which a dictionary
-/// overstating its raster or a truncated stream leaves behind. An unreserved buffer is kept as the
-/// growth left it.
+/// overstating its raster or a truncated stream leaves behind, once it exceeds the filled part:
+/// smaller slack is not worth the copy a shrink makes. An unreserved buffer is kept as the growth
+/// left it.
 fn release_unfilled(output: &mut Vec<u8>, reserved: usize) {
-    if reserved > 0 && output.len() < output.capacity() {
+    if reserved > 0 && output.capacity() > output.len().saturating_mul(2) {
         output.shrink_to_fit();
     }
 }
@@ -281,17 +282,19 @@ impl FlateDecoder {
     }
 }
 
-/// Most output one deflate input byte can produce: a 258-byte match coded in 2 bits. ~keep
-const MAX_DEFLATE_EXPANSION: usize = 1032;
+/// Most output reserved up front per deflate input byte. Deflate can reach 1032 bytes per input
+/// byte, so a bound at that ratio let a hostile dictionary over a 1 MB stream reserve 1 GB before
+/// decoding a byte; a stream that inflates further grows past the reservation as it decodes.
+const MAX_PRESIZED_EXPANSION: usize = 64;
 
 /// The output capacity to reserve for a stream expected to decode to `expected_size` bytes: no
-/// more than the read `limit` allows or than `input` can inflate to, so an image dictionary that
-/// overstates its size cannot reserve memory its data could never fill.
+/// more than the read `limit` allows or than [`MAX_PRESIZED_EXPANSION`] times `input`, so an
+/// image dictionary that overstates its size cannot reserve memory its data is unlikely to fill.
 fn presized_capacity(input: &[u8], limit: u64, expected_size: usize) -> usize {
     let readable = usize::try_from(limit).unwrap_or(usize::MAX);
     expected_size
         .min(readable)
-        .min(input.len().saturating_mul(MAX_DEFLATE_EXPANSION))
+        .min(input.len().saturating_mul(MAX_PRESIZED_EXPANSION))
 }
 
 impl FlateDecoder {
@@ -634,8 +637,16 @@ mod tests {
         assert_eq!(decoded, original);
     }
 
+    /// A raster of noise, which deflate cannot shrink below [`MAX_PRESIZED_EXPANSION`] times, so
+    /// the reservation covers it.
     fn raster(length: usize) -> (Vec<u8>, Vec<u8>) {
-        let original: Vec<u8> = (0..length).map(|i| (i * 7 + i / 251) as u8).collect();
+        let mut state: u32 = 0x9e37_79b9;
+        let original: Vec<u8> = (0..length)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 24) as u8
+            })
+            .collect();
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&original).unwrap();
         (original, encoder.finish().unwrap())
@@ -680,13 +691,36 @@ mod tests {
     }
 
     #[test]
-    fn a_presized_reservation_never_exceeds_the_read_limit_or_what_the_input_can_inflate_to() {
+    fn a_presized_reservation_never_exceeds_the_read_limit_or_a_small_multiple_of_the_input() {
         assert_eq!(
             presized_capacity(&[0; 10], u64::MAX, usize::MAX),
-            10 * MAX_DEFLATE_EXPANSION
+            10 * MAX_PRESIZED_EXPANSION
         );
         assert_eq!(presized_capacity(&[0; 10_000], 100, 5_000), 100);
         assert_eq!(presized_capacity(&[0; 10_000], u64::MAX, 5_000), 5_000);
+        // A dictionary claiming 1 GB over a 1 MB stream once reserved all of it up front.
+        assert_eq!(presized_capacity(&vec![0; 1 << 20], u64::MAX, 1 << 30), 64 << 20);
+    }
+
+    /// A stream that inflates past the reservation grows to its full size, and a buffer whose
+    /// slack is no larger than its data is not copied by a shrink.
+    #[test]
+    fn a_presized_decode_grows_past_a_capped_reservation() {
+        let original = vec![0u8; 1 << 20];
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&original).unwrap();
+        let compressed = encoder.finish().unwrap();
+        assert!(
+            compressed.len() * MAX_PRESIZED_EXPANSION < original.len(),
+            "the fixture must outgrow the cap"
+        );
+
+        let decoded = FlateDecoder::default()
+            .decode_presized(&compressed, 0, original.len())
+            .unwrap();
+
+        assert_eq!(decoded, original);
+        assert!(decoded.capacity() <= 2 * original.len(), "{}", decoded.capacity());
     }
 
     #[test]
