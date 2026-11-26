@@ -166,11 +166,11 @@ fn release_unfilled(output: &mut Vec<u8>, reserved: usize) {
 /// behaviour accepted any non-empty buffer, which let strategies 2 and 3
 /// return misaligned-deflate garbage (`P\xffj!}` × 16) that the text
 /// extractor then emitted as zero bytes of output. ~keep
-fn try_zlib_decode(input: &[u8], limit: u64, capacity: usize) -> Result<PrimaryAttempt> {
+fn try_zlib_decode(input: &[u8], limit: u64, capacity: usize, expected: usize) -> Result<PrimaryAttempt> {
     let mut decoder = ZlibDecoder::new(input).take(limit);
     let mut output = Vec::with_capacity(capacity);
 
-    match decoder.read_to_end(&mut output) {
+    match read_toward_expected(&mut decoder, &mut output, expected) {
         Ok(_) => {
             check_limit(&output, limit)?;
             release_unfilled(&mut output, capacity);
@@ -190,6 +190,30 @@ fn try_zlib_decode(input: &[u8], limit: u64, capacity: usize) -> Result<PrimaryA
             Ok(PrimaryAttempt::Failed(e))
         }
     }
+}
+
+/// Reads `reader` to its end into `output`, whose capacity is the capped reservation. A stream
+/// that fills it grows in doubling steps that stop at `expected` bytes, so a raster larger than the
+/// cap ends in a buffer of exactly its size; plain doubling from the cap overshoots it by up to the
+/// raster's own size, which then stays allocated with the image. Past `expected`, growth is the
+/// usual doubling.
+fn read_toward_expected(reader: &mut impl Read, output: &mut Vec<u8>, expected: usize) -> std::io::Result<()> {
+    loop {
+        let reserved = output.capacity();
+        if reserved == 0 || output.len() >= expected {
+            break;
+        }
+        reader
+            .by_ref()
+            .take((reserved - output.len()) as u64)
+            .read_to_end(output)?;
+        if output.len() < reserved {
+            return Ok(());
+        }
+        let grown = output.len().saturating_mul(2).min(expected);
+        output.reserve_exact(grown.saturating_sub(output.len()));
+    }
+    reader.read_to_end(output).map(drop)
 }
 
 /// Strategy 2: try raw deflate (no zlib wrapper).
@@ -329,8 +353,9 @@ impl FlateDecoder {
                 .min((max_output_bytes as u64).saturating_add(1))
         };
         let capacity = expected_size.map_or(0, |expected| presized_capacity(input, limit, expected));
+        let expected = expected_size.map_or(0, |expected| expected.min(usize::try_from(limit).unwrap_or(usize::MAX)));
 
-        let zlib_err = match try_zlib_decode(input, limit, capacity)? {
+        let zlib_err = match try_zlib_decode(input, limit, capacity, expected)? {
             PrimaryAttempt::Recovered(output) => return Ok(output),
             PrimaryAttempt::Failed(e) => e,
         };
@@ -702,11 +727,11 @@ mod tests {
         assert_eq!(presized_capacity(&vec![0; 1 << 20], u64::MAX, 1 << 30), 64 << 20);
     }
 
-    /// A stream that inflates past the reservation grows to its full size, and a buffer whose
-    /// slack is no larger than its data is not copied by a shrink.
+    /// A stream that inflates past the capped reservation grows to exactly its expected size, not
+    /// to the next doubling of the cap (a 34.8 MB page raster once ended in a 47 MB buffer).
     #[test]
     fn a_presized_decode_grows_past_a_capped_reservation() {
-        let original = vec![0u8; 1 << 20];
+        let original = vec![0u8; 1_000_000];
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&original).unwrap();
         let compressed = encoder.finish().unwrap();
@@ -720,7 +745,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(decoded, original);
-        assert!(decoded.capacity() <= 2 * original.len(), "{}", decoded.capacity());
+        assert_eq!(decoded.capacity(), original.len(), "grown to the raster, not past it");
     }
 
     #[test]
