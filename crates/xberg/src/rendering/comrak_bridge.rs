@@ -1315,10 +1315,11 @@ fn build_comrak_ast_with_table_mode<'a>(
     // every page end; elsewhere two lists around a page break are two authored lists.
     let mut paged_list: Option<(&'a AstNode<'a>, bool)> = None;
     let lists_close_at_page_ends = doc.source_format == "pdf";
-    // Whether each open group is a record, and where the last record closed: its parent and
-    // that parent's last child then. A record opening right there follows it directly and is
-    // set apart by a thematic break.
-    let mut open_groups_are_records: Vec<bool> = Vec::new();
+    // For each open group, `Some(last child of its container when it opened)` when it is a
+    // record, and where the last record that appended a node closed: its parent and that
+    // parent's last child then. A record opening right there follows it directly and is set
+    // apart by a thematic break; an empty record sets nothing apart.
+    let mut open_records: Vec<Option<Option<&'a AstNode<'a>>>> = Vec::new();
     let mut closed_record: Option<(&'a AstNode<'a>, &'a AstNode<'a>)> = None;
 
     for consolidated_elem in &consolidated {
@@ -1348,9 +1349,12 @@ fn build_comrak_ast_with_table_mode<'a>(
                             ElementKind::GroupEnd => {
                                 pop_container(&mut container_stack, ContainerKind::Group);
                                 closed_record = None;
-                                if open_groups_are_records.pop() == Some(true) {
+                                if let Some(Some(last_at_open)) = open_records.pop() {
                                     let parent = current_parent(&root, &container_stack);
-                                    closed_record = parent.last_child().map(|last| (parent, last));
+                                    closed_record = parent
+                                        .last_child()
+                                        .filter(|last| !last_at_open.is_some_and(|open| std::ptr::eq(open, *last)))
+                                        .map(|last| (parent, last));
                                 }
                             }
                             _ => {}
@@ -1840,7 +1844,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                 if is_record && follows_record {
                     parent.append(mk(arena, NodeValue::ThematicBreak(Default::default())));
                 }
-                open_groups_are_records.push(is_record);
+                open_records.push(is_record.then(|| container.last_child()));
                 state.push_container(NestingKind::Group, elem_depth);
                 container_stack.push(ContainerEntry {
                     node: parent,
@@ -1972,6 +1976,21 @@ mod tests {
     fn consecutive_records_are_split_by_a_thematic_break() {
         let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
         assert_eq!(two_groups(record, record), "one\n\n-----\n\ntwo\n");
+    }
+
+    /// `{"a": [{}, {"x": "1"}]}`: the empty first record leaves nothing to set apart, so no
+    /// break follows the "a" heading.
+    #[test]
+    fn an_empty_record_sets_nothing_apart() {
+        let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
+        let mut b = InternalDocumentBuilder::new("json");
+        b.push_heading(1, "a", None, None);
+        b.push_group_start(record, None);
+        b.push_group_end();
+        b.push_group_start(record, None);
+        b.push_paragraph("x: 1", vec![], None, None);
+        b.push_group_end();
+        assert_eq!(render(&b.build()), "# a\n\nx: 1\n");
     }
 
     #[test]
