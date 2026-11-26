@@ -58,9 +58,13 @@ that names none, so code that only receives the `OcrConfig` sees it. A
 process-wide default was rejected: it did not reach every fallback site and
 made results depend on what else ran in the process.
 
-On a server the set is operator-owned: a REST or MCP request may restate the
-operator's effective set in either field but is rejected when it names another,
-and both fields are restored from the operator's config after a merge. Unlike PaddleOCR's `model_tier`, which callers
+On a server the set is operator-owned: a REST or MCP request may restate what
+the operator's config holds in either field (its effective set where it holds
+none) but is rejected when it names another, and both fields are restored from
+the operator's config after a merge. A request that drops the `ocr` section
+keeps the operator's section set on the top level. A per-input config has no
+top-level set: one that differs is rejected with a message saying the
+request's set applies, and a restated one is ignored. Unlike PaddleOCR's `model_tier`, which callers
 may still choose, a set change makes the server download and keep a second copy
 of every language (1.15 GB for all of `best`); whether Paddle model selection
 should become operator-owned too is a follow-up.
@@ -129,6 +133,11 @@ latency measurement, not by this record.
   directory stays, so an upgraded cache can hold a pack twice.
 * Bad, because the set lives in two fields, and code building a fresh
   `OcrConfig` from defaults must take it from `ocr_or_default` to keep it.
+* Bad, because routes whose thresholds were certified on `tessdata_fast`
+  output (`pdf_gap::eligible_tesseract`,
+  `symbol_noise_paint::recognition_matches`, the caption-grid and paint
+  certifiers) run with `best` unmeasured. The pending quality A/B that decides
+  the default covers them; no route is gated on the set until then.
 
 ### Confirmation
 
