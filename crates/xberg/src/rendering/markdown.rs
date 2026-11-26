@@ -223,21 +223,30 @@ fn keep_emphasis_asterisks<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
     }
 }
 
-/// ~keep Only constant tildes bypass escaping; code literals and every other text byte stay on their own AST paths.
+/// ~keep Only constant tildes and carets bypass escaping, so script markers in table-cell text (which carries them as
+/// plain characters, unlike body runs) survive; code literals and every other text byte stay on their own AST paths.
 fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+    const SCRIPT_MARKERS: [char; 2] = ['~', '^'];
     for node in root.descendants().collect::<Vec<_>>() {
         let text = match &node.data.borrow().value {
-            NodeValue::Text(text) if text.contains('~') => text.clone(),
+            NodeValue::Text(text) if text.contains(SCRIPT_MARKERS) => text.clone(),
             _ => continue,
         };
-        for (index, part) in text.split('~').enumerate() {
-            if index > 0 {
-                node.insert_before(arena.alloc(AstNode::from(NodeValue::Raw("~".into()))));
-            }
+        let mut part = String::new();
+        let mut flush = |part: &mut String| {
             if !part.is_empty() {
-                node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(part.to_string().into()))));
+                node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(std::mem::take(part).into()))));
+            }
+        };
+        for ch in text.chars() {
+            if SCRIPT_MARKERS.contains(&ch) {
+                flush(&mut part);
+                node.insert_before(arena.alloc(AstNode::from(NodeValue::Raw(ch.to_string().into()))));
+            } else {
+                part.push(ch);
             }
         }
+        flush(&mut part);
         node.detach();
     }
 }
@@ -492,6 +501,15 @@ mod tests {
         let mut doc = builder.build();
         doc.escape_markdown = false;
         assert_eq!(render_markdown(&doc), "| Value |\n| --- |\n| H~2~O |\n");
+    }
+
+    #[test]
+    fn should_keep_issue_2275_table_carets_when_escaping_disabled() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_table_from_cells(&[vec!["Value".into()], vec!["10^9^ H~2~O".into()]], None, None);
+        let mut doc = builder.build();
+        doc.escape_markdown = false;
+        assert_eq!(render_markdown(&doc), "| Value |\n| --- |\n| 10^9^ H~2~O |\n");
     }
 
     #[test]
