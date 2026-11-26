@@ -93,6 +93,11 @@ class ArchivePublicationTests(unittest.TestCase):
         ):
             self.module.dispatch_and_wait(self.root, self.root, "1.3.11", timeout=1, interval=1)
 
+    def test_wait_default_deadline_outlasts_a_queued_index_rebuild(self) -> None:
+        with patch.object(self.module, "dispatch_and_wait") as wait:
+            self.module.main(["wait", "--packages-dir", str(self.root), "--version", "1.3.11"])
+        assert wait.call_args.kwargs["timeout"] >= 2 * 60 * 60
+
     def test_verifier_process_receives_remaining_timeout(self) -> None:
         with patch.object(self.module.subprocess, "run", side_effect=subprocess.TimeoutExpired("verify", 2)) as run:
             assert self.module.verify_once(self.root, self.root, "1.3.11", 2) == (

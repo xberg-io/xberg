@@ -12,6 +12,7 @@ from types import ModuleType
 
 ARCHIVE_REPOSITORY = "xberg-io/python-wheels"
 INDEX_URL = "https://xberg-io.github.io/python-wheels/simple/"
+DEFAULT_INDEX_TIMEOUT = 3 * 60 * 60
 
 
 def shared_script(directory: Path, relative: str) -> ModuleType:
@@ -135,7 +136,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--packages-dir", type=Path, default=Path(os.environ.get("PYTHON_DIST_DIR", "dist")))
     parser.add_argument("--shared-actions-dir", type=Path, default=Path(".python-publication-actions"))
     parser.add_argument("--version", default=os.environ.get("RELEASE_VERSION", ""))
-    parser.add_argument("--timeout", type=float, default=900)
+    # The index rebuild in xberg-io/python-wheels waits for a runner like any other job; on 1.5.3
+    # it took 63 minutes, so a 15-minute deadline failed a release whose archive was correct. ~keep
+    parser.add_argument("--timeout", type=float, default=DEFAULT_INDEX_TIMEOUT)
     parser.add_argument("--interval", type=float, default=15)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
