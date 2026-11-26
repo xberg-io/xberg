@@ -107,10 +107,12 @@ jobs:
       - name: Validate benchmark scripts
         run: mise run benchmark:validate:scripts
 
-      # 16 GiB was not enough: the harness fat-LTO link was OOM-killed (exit 143). ~keep
+      # Three fat-LTO all-feature links run in this job (harness, instrumented CLI, CLI); a run with
+      # no swap was OOM-killed (exit 143). Take 32 GiB when the disk allows, never less than 16. ~keep
       - name: Provision swap for fat-LTO release links
         env:
           SWAP_SIZE_GIB: "32"
+          SWAP_MIN_GIB: "16"
         run: mise run benchmark:setup:swap
 
       - name: Cache benchmark harness
