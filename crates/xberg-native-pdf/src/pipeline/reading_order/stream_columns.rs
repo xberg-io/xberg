@@ -20,7 +20,8 @@ use crate::layout::TextSpan;
 const MIN_STREAM_COLUMNS: usize = 3;
 /// Fewest lines in a run for it to count as a column or a block.
 const MIN_RUN_LINES: usize = 3;
-/// Share of stream lines that must sit in runs of `MIN_RUN_LINES` or more.
+/// Share of stream lines, other than lines in secondary type, that must sit in runs of
+/// `MIN_RUN_LINES` or more.
 const MIN_RUN_COVERAGE: f32 = 0.7;
 /// Baseline difference, as a fraction of the smaller type size, within which two spans share a line.
 const LINE_Y_TOLERANCE: f32 = 0.5;
@@ -273,11 +274,14 @@ fn early_break_fraction(lines: &[StreamLine], group: &[usize]) -> f32 {
 /// A line opening a column's width or more left of the previous line starts a new run, and so
 /// does a body-size line after a run set mostly in note type: a column descends at one left
 /// edge, so a jump left is a full-width block (a table, its notes) or the next column's foot,
-/// and notes do not continue into body text. Federal Register pages write a table spanning the
-/// columns between the top of the last column and the foot of the first (2026-14578 page 9) or
-/// write the table's notes straight before the first column's text (page 7); merged into one
-/// run with the column text, neither column counted as prose and the page fell back to row
-/// order.
+/// and notes do not continue into body text. Nor does a run of body or larger type continue into
+/// notes: 2026-13845 writes the running head and then the first column's footnotes, which as one
+/// run in mostly note type stood above every column and so had no column to be read after; the
+/// footnotes opened the page and every table on it was placed before them. Federal Register
+/// pages write a table spanning the columns between the top of the last column and the foot of
+/// the first (2026-14578 page 9) or write the table's notes straight before the first column's
+/// text (page 7); merged into one run with the column text, neither column counted as prose and
+/// the page fell back to row order.
 fn stream_runs(lines: &[StreamLine]) -> Vec<StreamRun> {
     let content_left = lines.iter().map(|line| line.left).fold(f32::INFINITY, f32::min);
     let content_right = lines.iter().map(|line| line.right).fold(f32::NEG_INFINITY, f32::max);
@@ -294,7 +298,8 @@ fn stream_runs(lines: &[StreamLine]) -> Vec<StreamRun> {
             let overlaps = line.right.min(previous.right) > line.left.max(previous.left);
             let jumps_left = line.left < previous.left - max_left_jump;
             let leaves_notes = is_body_type(line.size) && note_lines_in_last_group > group.len() / 2;
-            if descends && overlaps && !jumps_left && !leaves_notes {
+            let enters_notes = is_note_type(line.size) && note_lines_in_last_group * 2 < group.len();
+            if descends && overlaps && !jumps_left && !leaves_notes && !enters_notes {
                 group.push(index);
                 note_lines_in_last_group += usize::from(is_note_type(line.size));
                 continue;
@@ -339,9 +344,21 @@ fn side_by_side(one: &StreamRun, other: &StreamRun) -> bool {
 }
 
 fn reads_column_by_column(lines: &[StreamLine], runs: &[StreamRun]) -> bool {
+    let Some(body_size) = body_size(lines) else {
+        return false;
+    };
+    // Lines in secondary type (table headers, footnotes) say nothing about the order of the body
+    // columns, as in `note_targets`, and they often stand as runs of one or two lines: counted,
+    // the table headers and footnotes of 2026-13845 page 4 alone took it under the coverage. ~keep
+    let counts = |line: usize| lines[line].size >= SECONDARY_TYPE_RATIO * body_size;
     let blocks: Vec<&StreamRun> = runs.iter().filter(|run| run.lines.len() >= MIN_RUN_LINES).collect();
-    let covered: usize = blocks.iter().map(|run| run.lines.len()).sum();
-    if (covered as f32) < MIN_RUN_COVERAGE * lines.len() as f32 {
+    let covered = blocks
+        .iter()
+        .flat_map(|run| &run.lines)
+        .filter(|&&line| counts(line))
+        .count();
+    let counted = (0..lines.len()).filter(|&line| counts(line)).count();
+    if (covered as f32) < MIN_RUN_COVERAGE * counted as f32 {
         return false;
     }
     column_count(lines, &blocks) >= MIN_STREAM_COLUMNS && !writes_a_block_out_of_order(&blocks)
@@ -692,6 +709,77 @@ mod tests {
         assert!(order_by_stream_columns(&mut spans));
 
         assert_eq!(texts(&spans), expected);
+    }
+
+    /// 2026-13845 page 4: the running head, then the first column's footnote, then the columns.
+    /// The footnote is read after the column above it, not between the head and the columns.
+    #[test]
+    fn footnote_written_after_the_running_head_is_read_after_its_column() {
+        let head = span(
+            "42402 Federal Register running head",
+            COLUMN_LEFTS[0],
+            TOP_Y + 30.0,
+            COLUMN_LEFTS[2] + COLUMN_WIDTH - COLUMN_LEFTS[0],
+            11.0,
+        );
+        let note = lines("footnote", COLUMN_LEFTS[0], COLUMN_WIDTH, 7.0, &[60.0, 52.0]);
+        let mut reading_order = vec![head.clone()];
+        reading_order.extend(note.clone());
+        for (label, &left) in ["first", "second", "third"].iter().zip(&COLUMN_LEFTS) {
+            reading_order.extend(column(label, left, 0, 8));
+        }
+        let mut spans = rows(written(reading_order));
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        let expected: Vec<String> = std::iter::once(head)
+            .chain(column("first", COLUMN_LEFTS[0], 0, 8))
+            .chain(note)
+            .chain(column("second", COLUMN_LEFTS[1], 0, 8))
+            .chain(column("third", COLUMN_LEFTS[2], 0, 8))
+            .map(|span| span.text)
+            .collect();
+        assert_eq!(texts(&spans), expected);
+    }
+
+    /// Three columns of six lines written in order after nine one-line runs above them: the
+    /// one-line runs leave two thirds of all lines in runs, under `MIN_RUN_COVERAGE`.
+    fn columns_under_one_line_runs(size: f32) -> Vec<TextSpan> {
+        let mut reading_order: Vec<TextSpan> = (0..9)
+            .map(|label| {
+                let y = TOP_Y + 20.0 + label as f32 * 8.0;
+                span(
+                    &format!("label {label}"),
+                    COLUMN_LEFTS[0] + label as f32 * 55.0,
+                    y,
+                    40.0,
+                    size,
+                )
+            })
+            .collect();
+        for (label, &left) in ["first", "second", "third"].iter().zip(&COLUMN_LEFTS) {
+            reading_order.extend(column(label, left, 0, 6));
+        }
+        reading_order
+    }
+
+    #[test]
+    fn one_line_runs_in_secondary_type_do_not_count_against_the_coverage() {
+        let reading_order = columns_under_one_line_runs(7.0);
+        let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
+        let mut spans = rows(written(reading_order));
+        assert_ne!(texts(&spans), expected, "the fixture must arrive in geometric order");
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), expected);
+    }
+
+    #[test]
+    fn one_line_runs_in_body_type_still_count_against_the_coverage() {
+        let mut spans = rows(written(columns_under_one_line_runs(BODY_SIZE)));
+
+        assert!(!order_by_stream_columns(&mut spans));
     }
 
     fn lines(label: &str, left: f32, width: f32, size: f32, ys: &[f32]) -> Vec<TextSpan> {
