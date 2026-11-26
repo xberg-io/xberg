@@ -29,7 +29,6 @@ pub struct HocrWord {
 
 impl HocrWord {
     /// Get the right edge position.
-    #[cfg(test)]
     #[inline]
     pub(crate) fn right(&self) -> u32 {
         self.left + self.width
