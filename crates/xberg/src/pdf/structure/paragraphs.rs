@@ -377,7 +377,7 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
                 )
             {
                 product_end = right + number_end;
-            } else if !glued {
+            } else if !glued && !(character == '·' && opens_symbolic_operand(&text[right..])) {
                 positions.push(position);
                 item_start = Some(right);
                 preceding_list_marker = is_explicit_list_marker(&text[..position], character, &text[right..]);
@@ -389,6 +389,23 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
         }
     }
     positions
+}
+
+/// Whether the text after a middle dot opens a symbolic operand: a Greek letter, a math
+/// symbol, or a lone single-letter variable. A middle dot before one is a product sign:
+/// 2310.02163's `b_i · Σ_M^-1 · µ_g,M` was split into the list items `Σ M -1` and `µ g,M`,
+/// some forty of them across its derivations. A list item opens with a word.
+fn opens_symbolic_operand(rest: &str) -> bool {
+    let Some(token) = rest.split_whitespace().next() else {
+        return false;
+    };
+    let Some(first) = token.chars().next() else {
+        return false;
+    };
+    let greek = matches!(first, '\u{0370}'..='\u{03FF}' | '\u{00B5}');
+    let math = matches!(first, '\u{2200}'..='\u{22FF}' | '\u{00B1}' | '\u{00D7}' | '\u{00F7}');
+    let single_letter = token.chars().count() == 1 && first.is_alphabetic();
+    greek || math || single_letter
 }
 
 // Repeated indented marker rows provide list evidence lost when the text is flattened. ~keep
@@ -1401,6 +1418,27 @@ mod tests {
             assert!(!paragraphs[0].is_list_item);
             assert_eq!(paragraphs[0].lines[0].segments[0].text, formula);
         }
+    }
+
+    /// 2310.02163: a middle dot between symbolic factors split a derivation into list items.
+    #[test]
+    fn middle_dots_between_symbols_do_not_split_a_formula() {
+        for formula in [
+            "X M = w i 1 \u{3a3} M (\u{b5} r) + 1 b i \u{b7} \u{3a3} M \u{2212}1 \u{b7} \u{b5}g,M (5.3)",
+            "a \u{b7} b \u{b7} c",
+            "the norm \u{b7} \u{2207}f \u{b7} \u{2202}x",
+        ] {
+            let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 1, "{formula}");
+            assert!(!paragraphs[0].is_list_item);
+        }
+        let mut paragraphs = vec![make_body_paragraph(
+            "Options \u{b7} Static analysis \u{b7} Dynamic analysis",
+            10.0,
+        )];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 3, "a middle dot before a word still opens an item");
     }
 
     #[test]
