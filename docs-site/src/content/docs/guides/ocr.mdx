@@ -143,13 +143,13 @@ which one xberg resolves and downloads. The default is `fast`. Values are lowerc
 | ------- | ----- |
 | Config file / JSON, every OCR the extraction runs | `tessdata_model = "best"` (top level) |
 | Config file / JSON, one OCR section | `ocr.tessdata_model = "best"` |
-| Environment (`xberg serve`, `xberg mcp`, `xberg doctor`) | `XBERG_OCR_TESSDATA_MODEL=best` |
+| Environment (`xberg extract`, `batch`, `serve`, `mcp`, `doctor`) | `XBERG_OCR_TESSDATA_MODEL=best` |
 | CLI | `--ocr-tessdata-model best` |
 
 The top-level `tessdata_model` applies to automatic and fallback OCR too (a scanned PDF without an
 `ocr` section, for example) and does not enable OCR. `ocr.tessdata_model` overrides it, and a
 per-file `ocr` section that names no set keeps the base one. The environment variable and the CLI
-flag set the top-level field. The set is the operator's choice on a server: a REST or MCP request
+flag set the top-level field; the flag wins over the variable, which wins over the config file. The set is the operator's choice on a server: a REST or MCP request
 may restate the server's set but not change it, and a request's `ocr` object keeps the server's
 set.
 
