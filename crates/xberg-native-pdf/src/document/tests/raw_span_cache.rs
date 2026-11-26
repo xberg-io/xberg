@@ -297,6 +297,40 @@ fn preserved_geometry_is_paired_only_when_announced_while_the_passes_run() {
     assert_eq!(page_span_interpretations() - before, 1, "release ends the pairing");
 }
 
+/// The span-only page reads are the page-text reads with an empty character list.
+#[test]
+fn span_only_page_reads_equal_page_text_reads_without_chars() {
+    let pdf = option_set_pdf();
+    for page in 0..5 {
+        for order in [ReadingOrder::TopToBottom, ReadingOrder::ColumnAware] {
+            let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
+            let mut text = doc.extract_page_text_with_options(page, order).unwrap();
+            assert!(!text.chars.is_empty(), "page {page} has characters");
+            let fresh = PdfDocument::from_bytes(pdf.clone()).unwrap();
+            let spans = fresh.extract_page_spans_with_options(page, order).unwrap();
+            assert!(spans.chars.is_empty());
+            text.chars.clear();
+            assert_eq!(format!("{spans:?}"), format!("{text:?}"), "page {page}");
+        }
+    }
+    for (pdf, page) in [(cmsy_witness_pdf(), 0), (option_set_pdf(), 1)] {
+        let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
+        let mut witnesses = Vec::new();
+        let mut text = doc
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .unwrap();
+        let fresh = PdfDocument::from_bytes(pdf).unwrap();
+        let mut span_witnesses = Vec::new();
+        let spans = fresh
+            .extract_page_spans_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut span_witnesses))
+            .unwrap();
+        assert!(spans.chars.is_empty());
+        text.chars.clear();
+        assert_eq!(format!("{spans:?}"), format!("{text:?}"), "page {page}");
+        assert_eq!(format!("{span_witnesses:?}"), format!("{witnesses:?}"), "page {page}");
+    }
+}
+
 #[test]
 fn the_fixture_exercises_script_geometry_and_actual_text() {
     let doc = PdfDocument::from_bytes(option_set_pdf()).expect("open document");

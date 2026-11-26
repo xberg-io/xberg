@@ -1191,15 +1191,30 @@ impl PdfDocument {
         page_index: usize,
         reading_order: ReadingOrder,
     ) -> Result<crate::layout::PageText> {
-        let spans = self.extract_spans_with_reading_order(page_index, reading_order)?;
+        let mut page = self.extract_page_spans_with_options(page_index, reading_order)?;
+        page.chars = page.spans.iter().flat_map(|s| s.to_chars()).collect();
+        Ok(page)
+    }
 
-        let chars: Vec<crate::layout::TextChar> = spans.iter().flat_map(|s| s.to_chars()).collect();
+    /// [`Self::extract_page_text_with_options`] without the per-character list:
+    /// `chars` is left empty and every other field is the same, for callers
+    /// that read only the spans and the page size.
+    ///
+    /// # Errors
+    /// Returns an error when the page, fonts or content cannot be decoded.
+    #[doc(hidden)]
+    pub fn extract_page_spans_with_options(
+        &self,
+        page_index: usize,
+        reading_order: ReadingOrder,
+    ) -> Result<crate::layout::PageText> {
+        let spans = self.extract_spans_with_reading_order(page_index, reading_order)?;
 
         let media_box = self.get_page_media_box(page_index)?;
 
         Ok(crate::layout::PageText {
             spans,
-            chars,
+            chars: Vec::new(),
             // GH#1653: MediaBox is (llx, lly, urx, ury); the page EXTENT is
             // (urx - llx, ury - lly), not the raw upper-right corner. A
             // non-zero-origin MediaBox (e.g. `[10 -100 622 692]`) previously
@@ -1235,13 +1250,29 @@ impl PdfDocument {
         reading_order: ReadingOrder,
         witnesses: Option<&mut Vec<crate::layout::TextSpan>>,
     ) -> Result<crate::layout::PageText> {
+        let mut page = self.extract_page_spans_with_cmsy_capture(page_index, reading_order, witnesses)?;
+        page.chars = page.spans.iter().flat_map(|span| span.to_chars()).collect();
+        Ok(page)
+    }
+
+    /// [`Self::extract_page_text_with_cmsy_capture`] without the per-character
+    /// list: `chars` is left empty and every other field is the same.
+    ///
+    /// # Errors
+    /// Returns an error when the page, fonts or content cannot be decoded.
+    #[doc(hidden)]
+    pub fn extract_page_spans_with_cmsy_capture(
+        &self,
+        page_index: usize,
+        reading_order: ReadingOrder,
+        witnesses: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<crate::layout::PageText> {
         let spans = self.cached_page_spans(page_index, ScriptGeometry::Preserve, witnesses)?;
         let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
-        let chars = spans.iter().flat_map(|span| span.to_chars()).collect();
         let media_box = self.get_page_media_box(page_index)?;
         Ok(crate::layout::PageText {
             spans,
-            chars,
+            chars: Vec::new(),
             page_width: media_box.2 - media_box.0,
             page_height: media_box.3 - media_box.1,
         })

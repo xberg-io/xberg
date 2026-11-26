@@ -1090,11 +1090,12 @@ fn extract_final_spans_from_page_with_primes(
     math: Option<super::math_latex::Delimiters>,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
+    // Only the spans and the page size are read below, so the per-character list is not built. ~keep
     let extracted = if script_geometry == ScriptGeometry::Preserve {
         doc.doc
-            .extract_page_text_with_cmsy_capture(page_index, reading_order, cmsy_witnesses)
+            .extract_page_spans_with_cmsy_capture(page_index, reading_order, cmsy_witnesses)
     } else {
-        doc.doc.extract_page_text_with_options(page_index, reading_order)
+        doc.doc.extract_page_spans_with_options(page_index, reading_order)
     };
     let mut page_text_data = match extracted {
         Ok(data) => data,
