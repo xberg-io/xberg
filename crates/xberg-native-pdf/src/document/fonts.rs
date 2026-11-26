@@ -48,10 +48,23 @@ impl PdfDocument {
         let resolved = self.deref_object_for_inks(font_obj)?;
         let info = crate::fonts::FontInfo::from_dict(&resolved, self)?;
         let arc = Arc::new(info);
-        if let Some(font_ref) = font_obj.as_reference() {
-            self.font_cache.lock_or_recover().insert(font_ref, Arc::clone(&arc));
+        Ok(match font_obj.as_reference() {
+            Some(font_ref) => self.store_font(font_ref, arc),
+            None => arc,
+        })
+    }
+
+    /// Store `font` as the cached font of `font_ref` and return the cached font. Two pages read on
+    /// different threads can both miss and parse one font; the first to store it wins, so every
+    /// reader of a cached font holds the same `Arc`. A single-threaded read finds the slot empty
+    /// and stores `font`.
+    fn store_font(&self, font_ref: ObjectRef, font: Arc<crate::fonts::FontInfo>) -> Arc<crate::fonts::FontInfo> {
+        let mut cache = self.font_cache.lock_or_recover();
+        if let Some(stored) = cache.get(&font_ref) {
+            return Arc::clone(stored);
         }
-        Ok(arc)
+        cache.insert(font_ref, Arc::clone(&font));
+        font
     }
 
     /// Compute a cheap content-based font identity hash from a loaded font object.
@@ -697,7 +710,7 @@ impl PdfDocument {
                             .then(|| self.font_identity_cache.lock_or_recover().get(&id_hash).cloned())
                             .flatten();
                         if let Some(cached) = cached_identity_opt {
-                            self.font_cache.lock_or_recover().insert(font_ref, Arc::clone(&cached));
+                            let cached = self.store_font(font_ref, cached);
                             resolved.push(((*name).clone(), Arc::clone(&cached)));
                             extractor.add_font_shared((*name).clone(), cached);
                             continue;
@@ -724,7 +737,7 @@ impl PdfDocument {
                                 identity_cache.insert(id_hash, Arc::clone(&cached));
                             }
                             drop(identity_cache);
-                            self.font_cache.lock_or_recover().insert(font_ref, Arc::clone(&cached));
+                            let cached = self.store_font(font_ref, cached);
                             resolved.push(((*name).clone(), Arc::clone(&cached)));
                             extractor.add_font_shared((*name).clone(), cached);
                             continue;
@@ -744,7 +757,7 @@ impl PdfDocument {
                                         .lock_or_recover()
                                         .insert(id_hash, Arc::clone(&arc));
                                 }
-                                self.font_cache.lock_or_recover().insert(font_ref, Arc::clone(&arc));
+                                let arc = self.store_font(font_ref, arc);
                                 resolved.push(((*name).clone(), Arc::clone(&arc)));
                                 extractor.add_font_shared((*name).clone(), arc);
                             }
