@@ -1195,6 +1195,9 @@ fn push_paragraph_element_by_kind(
         finalize_hyphens(&text).into_owned()
     };
 
+    let get_annotated_text =
+        |para: &PdfParagraph| finalize_hyphens_annotated(extract_text_and_annotations(para, hyphen_witnesses));
+
     if let Some(level) = para.heading_level {
         let text = get_text(para);
         let index = if para.layout_region_path.is_some() {
@@ -1203,7 +1206,7 @@ fn push_paragraph_element_by_kind(
             builder.push_heading(level, &text, page, bbox)
         };
         if paragraph_has_scripts(para) {
-            builder.set_annotations(index, extract_text_and_annotations(para, hyphen_witnesses).1);
+            builder.set_annotations(index, get_annotated_text(para).1);
         }
         return index;
     }
@@ -1221,7 +1224,7 @@ fn push_paragraph_element_by_kind(
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        return builder.push_code(&text, None, page, bbox);
+        return builder.push_code(&finalize_hyphens(&text), None, page, bbox);
     }
 
     if para.is_formula {
@@ -1233,7 +1236,7 @@ fn push_paragraph_element_by_kind(
         let ordered = list_item_is_ordered(para);
         let text = get_text(para);
         let annotations = if para.text.is_empty() || paragraph_has_scripts(para) {
-            let (annotated_text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
+            let (annotated_text, annotations) = get_annotated_text(para);
             if annotated_text == text {
                 annotations
             } else {
@@ -1285,16 +1288,40 @@ fn push_paragraph_element_by_kind(
     }
 
     if !para.text.is_empty() && !paragraph_has_scripts(para) {
+        let text = finalize_hyphens(&para.text);
         let annotations = para.is_bold.then_some(TextAnnotation {
             start: 0,
-            end: para.text.len() as u32,
+            end: text.len() as u32,
             kind: AnnotationKind::Bold,
         });
-        push_text_with_inline_math(builder, &para.text, annotations.into_iter().collect(), page, bbox)
+        push_text_with_inline_math(builder, &text, annotations.into_iter().collect(), page, bbox)
     } else {
-        let (text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
+        let (text, annotations) = get_annotated_text(para);
         push_text_with_inline_math(builder, &text, annotations, page, bbox)
     }
+}
+
+/// [`finalize_hyphens`] for text that carries byte-offset annotations. U+2010 and U+2011 are
+/// three UTF-8 bytes and their ASCII replacement one, so every offset past a replaced hyphen
+/// moves back two bytes per hyphen before it.
+fn finalize_hyphens_annotated((text, mut annotations): (String, Vec<TextAnnotation>)) -> (String, Vec<TextAnnotation>) {
+    let hyphen_starts: Vec<usize> = text
+        .match_indices(['\u{2010}', '\u{2011}'])
+        .map(|(start, _)| start)
+        .collect();
+    if hyphen_starts.is_empty() {
+        return (text, annotations);
+    }
+    let shrink_per_hyphen = '\u{2011}'.len_utf8() - 1;
+    let shift = |offset: u32| {
+        let replaced_before = hyphen_starts.partition_point(|&start| start < offset as usize);
+        offset.saturating_sub((replaced_before * shrink_per_hyphen) as u32)
+    };
+    for annotation in &mut annotations {
+        annotation.start = shift(annotation.start);
+        annotation.end = shift(annotation.end);
+    }
+    (finalize_hyphens(&text).into_owned(), annotations)
 }
 
 /// Push a paragraph, writing `$..$` around each inline math run in `text`.
@@ -1459,7 +1486,8 @@ fn emit_caption_elements(
                 .map(|s| s.text.as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
-            let trimmed = text.trim();
+            let finalized = finalize_hyphens(text.trim());
+            let trimmed = finalized.as_ref();
             if !trimmed.is_empty() {
                 let annotations = vec![TextAnnotation {
                     start: 0,
@@ -4115,6 +4143,36 @@ mod tests {
 
     // Some producers write every hyphen as U+2011 NON-BREAKING HYPHEN, wrap hyphens included
     // (`mem‑` / `ory`). An ASCII-only check left `mem- ory` in the output, splitting the word.
+    #[test]
+    fn finalizing_hyphens_moves_annotations_back_two_bytes_per_hyphen_before_them() {
+        let text = "a cross\u{2011}page \u{2010} bold".to_string();
+        let bold_start = text.find("bold").expect("fixture holds the bold word") as u32;
+        let annotations = vec![
+            TextAnnotation {
+                start: 2,
+                end: 14,
+                kind: AnnotationKind::Italic,
+            },
+            TextAnnotation {
+                start: bold_start,
+                end: bold_start + 4,
+                kind: AnnotationKind::Bold,
+            },
+        ];
+
+        let (text, annotations) = finalize_hyphens_annotated((text, annotations));
+
+        assert_eq!(text, "a cross-page - bold");
+        assert_eq!(
+            &text[annotations[0].start as usize..annotations[0].end as usize],
+            "cross-page"
+        );
+        assert_eq!(
+            &text[annotations[1].start as usize..annotations[1].end as usize],
+            "bold"
+        );
+    }
+
     #[test]
     fn a_unicode_wrap_hyphen_at_a_line_break_is_joined_and_a_compound_keeps_it() {
         for (trailing, leading, is_list_item, expected) in [

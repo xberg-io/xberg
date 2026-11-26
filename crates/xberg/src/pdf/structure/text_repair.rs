@@ -639,11 +639,11 @@ fn alphabetic_run_at(text: &str, start: usize) -> &str {
     &tail[..end]
 }
 
-/// Normalize Unicode characters commonly found in PDFs to their ASCII equivalents.
+/// Normalize curly quotes and the fraction slash to ASCII and the bullet to a middle dot.
 ///
-/// Matches the reference `sanitize_text()` normalizations for curly quotes, fraction
-/// slash, and bullet characters. This improves TF1 by ensuring extracted text
-/// matches ground truth tokenization.
+/// Matches the reference `sanitize_text()` normalizations so extracted text tokenizes like
+/// the ground truth. U+2010/U+2011 hyphens are left alone here: segment repair still needs to
+/// see them, and [`finalize_hyphens`] maps them when each element's text is emitted.
 pub(super) fn normalize_unicode_text(text: &str) -> Cow<'_, str> {
     normalize_unicode_text_mapped(text, false).text
 }
@@ -702,8 +702,8 @@ pub(super) fn finalize_hyphens(text: &str) -> Cow<'_, str> {
 /// ASCII `-`, en dashes, and em dashes are left untouched — a spaced ASCII
 /// hyphen can be a legitimate range or minus sign.
 ///
-/// Must run before [`normalize_unicode_text`] maps U+2010/U+2011 to ASCII `-`,
-/// while the artifact is still distinguishable.
+/// Must run before [`finalize_hyphens`] maps U+2010/U+2011 to ASCII `-`, while the
+/// artifact is still distinguishable from a spaced ASCII hyphen.
 pub(super) fn collapse_spaced_hyphens(text: &str) -> Cow<'_, str> {
     if !text.contains(['\u{2010}', '\u{2011}']) {
         return Cow::Borrowed(text);
