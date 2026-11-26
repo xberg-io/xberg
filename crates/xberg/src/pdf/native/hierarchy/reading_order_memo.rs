@@ -10,8 +10,12 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use xberg_native_pdf::extractors::text::{ArtifactType, PaginationSubtype};
+use xberg_native_pdf::fonts::MappingProvenance;
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::{Color, TextSpan};
+use xberg_native_pdf::object::ObjectRef;
+use xberg_native_pdf::structure::McidScope;
 
 /// Upper bound on the memo's estimated footprint, in bytes.
 const MEMO_MAX_BYTES: usize = 32 * 1024 * 1024;
@@ -91,11 +95,14 @@ pub(super) fn reorder(
         let Some(memo) = slot.as_ref() else {
             return (None, None);
         };
-        let stored = memo.pages.get(&page_index);
+        let stored = memo
+            .pages
+            .get(&page_index)
+            .filter(|page| page.page_width == width && page.page_height == height);
         let admits = memo.used < memo.budget;
         let input = (stored.is_some() || admits).then(|| fingerprint(spans));
         let served = stored
-            .filter(|page| page.page_width == width && page.page_height == height && Some(page.input) == input)
+            .filter(|page| Some(page.input) == input)
             .map(|page| page.ordered.clone());
         (served, input.filter(|_| admits))
     });
@@ -157,20 +164,108 @@ pub(super) struct SpansFingerprint {
     digest: [u8; 16],
 }
 
-pub(super) fn fingerprint(spans: &[TextSpan]) -> SpansFingerprint {
-    let mut hasher = blake3::Hasher::new();
-    for span in spans {
-        hash_span(&mut hasher, span);
+/// Bytes buffered before they are handed to the hasher, so BLAKE3 sees large contiguous inputs.
+const FLUSH_BYTES: usize = 64 * 1024;
+
+struct Digest {
+    hasher: blake3::Hasher,
+    buf: Vec<u8>,
+}
+
+impl Digest {
+    fn flush_if_full(&mut self) {
+        if self.buf.len() >= FLUSH_BYTES {
+            self.hasher.update(&self.buf);
+            self.buf.clear();
+        }
     }
-    let mut digest = [0; 16];
-    digest.copy_from_slice(&hasher.finalize().as_bytes()[..16]);
-    SpansFingerprint {
-        count: spans.len(),
-        digest,
+
+    fn u8(&mut self, value: u8) {
+        self.buf.push(value);
+    }
+
+    fn flags(&mut self, flags: &[bool]) {
+        self.buf.extend(flags.iter().map(|flag| u8::from(*flag)));
+    }
+
+    fn u32(&mut self, value: u32) {
+        self.buf.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn u64(&mut self, value: u64) {
+        self.buf.extend_from_slice(&value.to_le_bytes());
+    }
+
+    /// Length-prefixed, so adjacent variable-length fields cannot shift bytes between each other.
+    fn str(&mut self, value: &str) {
+        self.u64(value.len() as u64);
+        self.buf.extend_from_slice(value.as_bytes());
+    }
+
+    fn floats(&mut self, values: &[f32]) {
+        self.u64(values.len() as u64);
+        for value in values {
+            self.u32(value.to_bits());
+        }
+    }
+
+    fn object_ref(&mut self, value: ObjectRef) {
+        self.u32(value.id);
+        self.buf.extend_from_slice(&value.generation.to_le_bytes());
+    }
+
+    fn mcid_scope(&mut self, scope: Option<&McidScope>) {
+        match scope {
+            None => self.u8(0),
+            Some(McidScope::Page(page)) => {
+                self.u8(1);
+                self.u32(*page);
+            }
+            Some(McidScope::Form(object)) => {
+                self.u8(2);
+                self.object_ref(*object);
+            }
+            Some(McidScope::Pattern(object)) => {
+                self.u8(3);
+                self.object_ref(*object);
+            }
+        }
+    }
+
+    fn artifact_type(&mut self, artifact: Option<&ArtifactType>) {
+        self.u8(match artifact {
+            None => 0,
+            Some(ArtifactType::Layout) => 1,
+            Some(ArtifactType::Page) => 2,
+            Some(ArtifactType::Background) => 3,
+            Some(ArtifactType::Pagination(PaginationSubtype::Header)) => 4,
+            Some(ArtifactType::Pagination(PaginationSubtype::Footer)) => 5,
+            Some(ArtifactType::Pagination(PaginationSubtype::Watermark)) => 6,
+            Some(ArtifactType::Pagination(PaginationSubtype::PageNumber)) => 7,
+            Some(ArtifactType::Pagination(PaginationSubtype::Other)) => 8,
+        });
     }
 }
 
-fn hash_span(hasher: &mut blake3::Hasher, span: &TextSpan) {
+pub(super) fn fingerprint(spans: &[TextSpan]) -> SpansFingerprint {
+    let mut digest = Digest {
+        hasher: blake3::Hasher::new(),
+        buf: Vec::with_capacity(FLUSH_BYTES + 1024),
+    };
+    for span in spans {
+        hash_span(&mut digest, span);
+        digest.flush_if_full();
+    }
+    digest.hasher.update(&digest.buf);
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&digest.hasher.finalize().as_bytes()[..16]);
+    SpansFingerprint {
+        count: spans.len(),
+        digest: bytes,
+    }
+}
+
+fn hash_span(out: &mut Digest, span: &TextSpan) {
     // Destructured without `..`: a field added to `TextSpan` stops this compiling until it is
     // hashed, so the fingerprint keeps covering every input the ordering can read. ~keep
     let TextSpan {
@@ -206,62 +301,42 @@ fn hash_span(hasher: &mut blake3::Hasher, span: &TextSpan) {
     } = span;
     let Rect { x, y, width, height } = *bbox;
     let Color { r, g, b } = *color;
-    put_str(hasher, text);
-    put_floats(hasher, &[x, y, width, height]);
-    put_str(hasher, font_name);
-    put_floats(hasher, &[*font_size]);
-    hasher.update(&(*font_weight as u16).to_le_bytes());
-    put_flags(hasher, &[*is_italic, *is_monospace]);
-    put_floats(hasher, &[r, g, b]);
-    put_option(hasher, mcid.as_ref());
-    put_str(hasher, &format!("{mcid_scope:?}"));
-    hasher.update(&(*sequence as u64).to_le_bytes());
-    put_flags(hasher, &[*split_boundary_before, *offset_semantic]);
-    put_floats(hasher, &[*char_spacing, *word_spacing, *horizontal_scaling]);
-    put_flags(hasher, &[*primary_detected]);
-    put_str(hasher, &format!("{artifact_type:?}"));
-    put_floats(hasher, char_widths);
-    put_floats(hasher, char_x_offsets);
-    put_option(hasher, heading_level.as_ref());
-    put_floats(hasher, &[*rotation_degrees]);
-    hasher.update(&[*wmode]);
-    put_floats(hasher, &[*text_rise]);
-    put_flags(hasher, &[*rtl_draw_logical, *mirrored]);
-    hasher.update(&page_rotation_applied.to_le_bytes());
-    put_str(hasher, &format!("{provenance:?}"));
-    put_flags(hasher, &[*ligature_glyph]);
-}
-
-/// Length-prefixed, so adjacent variable-length fields cannot shift bytes between each other.
-fn put_str(hasher: &mut blake3::Hasher, value: &str) {
-    hasher.update(&(value.len() as u64).to_le_bytes());
-    hasher.update(value.as_bytes());
-}
-
-fn put_floats(hasher: &mut blake3::Hasher, values: &[f32]) {
-    hasher.update(&(values.len() as u64).to_le_bytes());
-    for value in values {
-        hasher.update(&value.to_bits().to_le_bytes());
-    }
-}
-
-fn put_flags(hasher: &mut blake3::Hasher, flags: &[bool]) {
-    for flag in flags {
-        hasher.update(&[u8::from(*flag)]);
-    }
-}
-
-fn put_option<T: Copy + Into<u64>>(hasher: &mut blake3::Hasher, value: Option<&T>) {
-    match value {
+    out.str(text);
+    out.floats(&[x, y, width, height]);
+    out.str(font_name);
+    out.floats(&[*font_size]);
+    out.buf.extend_from_slice(&(*font_weight as u16).to_le_bytes());
+    out.flags(&[*is_italic, *is_monospace]);
+    out.floats(&[r, g, b]);
+    match mcid {
         Some(value) => {
-            hasher.update(&[1]);
-            let wide: u64 = (*value).into();
-            hasher.update(&wide.to_le_bytes());
+            out.u8(1);
+            out.u32(*value);
         }
-        None => {
-            hasher.update(&[0]);
-        }
+        None => out.u8(0),
     }
+    out.mcid_scope(mcid_scope.as_ref());
+    out.u64(*sequence as u64);
+    out.flags(&[*split_boundary_before, *offset_semantic]);
+    out.floats(&[*char_spacing, *word_spacing, *horizontal_scaling]);
+    out.flags(&[*primary_detected]);
+    out.artifact_type(artifact_type.as_ref());
+    out.floats(char_widths);
+    out.floats(char_x_offsets);
+    match heading_level {
+        Some(level) => {
+            out.u8(1);
+            out.u8(*level);
+        }
+        None => out.u8(0),
+    }
+    out.floats(&[*rotation_degrees]);
+    out.u8(*wmode);
+    out.floats(&[*text_rise]);
+    out.flags(&[*rtl_draw_logical, *mirrored]);
+    out.buf.extend_from_slice(&page_rotation_applied.to_le_bytes());
+    out.u8(provenance.map_or(u8::MAX, MappingProvenance::rank));
+    out.flags(&[*ligature_glyph]);
 }
 
 #[cfg(test)]
