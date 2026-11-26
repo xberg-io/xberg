@@ -235,12 +235,14 @@ fn scan_phrases(text: &str, phrases: &[&str], mut emit: impl FnMut(usize, usize)
 }
 
 /// Shared driver: at each char boundary whose preceding char is not a word char, ask
-/// `end_at` for a match end that also satisfies the trailing boundary.
+/// `end_at` for a match end that also satisfies the trailing boundary. `end_at` must be pure:
+/// it runs first, so the leading-boundary test, a regex lookup for a non-ASCII char, runs
+/// only where a match ends.
 fn scan_with(text: &str, mut end_at: impl FnMut(usize) -> Option<usize>, emit: &mut impl FnMut(usize, usize)) {
     let mut i = 0;
     while i < text.len() {
         let Some(c) = char_at(text, i) else { break };
-        let end = if word_before(text, i) { None } else { end_at(i) };
+        let end = end_at(i).filter(|_| !word_before(text, i));
         match end {
             Some(end) => {
                 emit(i, end);
