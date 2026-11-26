@@ -109,7 +109,7 @@ pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
 /// Rewrite the math of one page as LaTeX delimited by `delimiters`, or `None` when nothing
 /// changes.
 pub(crate) fn rewrite_math_spans_with(spans: &[TextSpan], delimiters: Delimiters) -> Option<Vec<TextSpan>> {
-    rewrite_with_baselines(spans, delimiters, &RawBaselines::default())
+    rewrite_with_baselines(spans, delimiters, &RawBaselines::default()).map(|(rewritten, _)| rewritten)
 }
 
 /// [`rewrite_math_spans`] for spans read with flattened script geometry, which snaps a
@@ -120,11 +120,31 @@ pub(crate) fn rewrite_page_math(
     page_index: usize,
     spans: &[TextSpan],
 ) -> Option<Vec<TextSpan>> {
+    rewrite_page_math_indexed(doc, page_index, spans).map(|(rewritten, _)| rewritten)
+}
+
+/// Rewritten spans and, for each source span, its index among them; `None` for a span a
+/// formula absorbed. A formula takes its anchor span's index.
+pub(crate) type IndexedRewrite = (Vec<TextSpan>, Vec<Option<usize>>);
+
+/// [`rewrite_page_math`] with the source-to-rewritten index map, for a caller that holds
+/// an order over the source spans.
+pub(crate) fn rewrite_page_math_indexed(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[TextSpan],
+) -> Option<IndexedRewrite> {
     if !has_math_font(spans) {
         return None;
     }
     let baselines = RawBaselines::new(&doc.flattened_script_baselines(page_index));
     rewrite_with_baselines(spans, Delimiters::Dollars, &baselines)
+}
+
+/// [`rewrite_math_spans`] with the source-to-rewritten index map.
+#[cfg(all(test, feature = "layout-detection"))]
+pub(crate) fn rewrite_math_spans_indexed(spans: &[TextSpan]) -> Option<IndexedRewrite> {
+    rewrite_with_baselines(spans, Delimiters::Dollars, &RawBaselines::default())
 }
 
 fn has_math_font(spans: &[TextSpan]) -> bool {
@@ -159,7 +179,7 @@ fn rewrite_with_baselines(
     spans: &[TextSpan],
     delimiters: Delimiters,
     baselines: &RawBaselines,
-) -> Option<Vec<TextSpan>> {
+) -> Option<IndexedRewrite> {
     if !has_math_font(spans) {
         return None;
     }
@@ -188,16 +208,20 @@ fn rewrite_with_baselines(
         }
         replacement[formula.anchor_span] = Some(formula.to_span(&spans[formula.anchor_span], delimiters));
     }
-    let rewritten = spans
-        .iter()
-        .enumerate()
-        .filter_map(|(i, span)| match replacement[i].take() {
+    let mut rewritten = Vec::with_capacity(spans.len());
+    let mut index_map = Vec::with_capacity(spans.len());
+    for (i, span) in spans.iter().enumerate() {
+        let kept = match replacement[i].take() {
             Some(merged) => Some(merged),
             None if removed[i] => None,
             None => Some(span.clone()),
-        })
-        .collect();
-    Some(rewritten)
+        };
+        index_map.push(kept.map(|kept| {
+            rewritten.push(kept);
+            rewritten.len() - 1
+        }));
+    }
+    Some((rewritten, index_map))
 }
 
 /// `span` without its first `count` characters, its left edge moved to the next glyph;

@@ -29,6 +29,53 @@ const SUSPENDED_HYPHEN_CONTINUATIONS: [&str; 3] = ["and", "or", "nor"];
 /// (`COVID-` / `related`) keeps its hyphen. A kept hyphen is written as ASCII `-`, as the
 /// markdown path writes it. Either way the line break goes.
 pub(super) fn rejoin_line_wrap_hyphens(text: String) -> String {
+    rejoin_with(text, |_| {})
+}
+
+/// [`rejoin_line_wrap_hyphens`] with the map from source byte offsets to offsets in the
+/// rejoined text.
+#[cfg(feature = "layout-detection")]
+pub(super) fn rejoin_line_wrap_hyphens_mapped(text: String) -> (String, RejoinOffsets) {
+    let mut joins = Vec::new();
+    let joined = rejoin_with(text, |join| joins.push(join));
+    (joined, RejoinOffsets(joins))
+}
+
+/// One rejoined break: source bytes `start..end` (the hyphen and the line break) became
+/// `inserted` bytes (a kept `-`, or nothing).
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(feature = "layout-detection"), allow(dead_code))]
+struct Join {
+    start: usize,
+    end: usize,
+    inserted: usize,
+}
+
+/// Source-to-rejoined byte offsets of one [`rejoin_line_wrap_hyphens_mapped`] call.
+#[cfg(feature = "layout-detection")]
+pub(super) struct RejoinOffsets(Vec<Join>);
+
+#[cfg(feature = "layout-detection")]
+impl RejoinOffsets {
+    /// The rejoined offset of source byte `offset`; an offset inside a removed break maps
+    /// into what replaced it.
+    pub(super) fn map(&self, offset: usize) -> usize {
+        let (mut removed, mut inserted) = (0, 0);
+        for join in &self.0 {
+            if offset <= join.start {
+                break;
+            }
+            if offset < join.end {
+                return join.start - removed + inserted + (offset - join.start).min(join.inserted);
+            }
+            removed += join.end - join.start;
+            inserted += join.inserted;
+        }
+        offset - removed + inserted
+    }
+}
+
+fn rejoin_with(text: String, mut on_join: impl FnMut(Join)) -> String {
     if !text.contains(is_line_wrap_hyphen) {
         return text;
     }
@@ -42,9 +89,15 @@ pub(super) fn rejoin_line_wrap_hyphens(text: String) -> String {
             Some(wrap) => {
                 let witnesses = witnesses.get_or_insert_with(|| collect_mid_line_hyphen_pairs(&text));
                 joined.push_str(wrap.stem);
-                if wrap.keeps_hyphen(witnesses) {
+                let keeps_hyphen = wrap.keeps_hyphen(witnesses);
+                if keeps_hyphen {
                     joined.push('-');
                 }
+                on_join(Join {
+                    start: text.len() - rest.len() + wrap.stem.len(),
+                    end: text.len() - continuation.len(),
+                    inserted: usize::from(keeps_hyphen),
+                });
             }
             None => joined.push_str(&rest[..rest.len() - continuation.len()]),
         }
@@ -226,6 +279,26 @@ mod tests {
     fn text_without_line_final_hyphens_is_unchanged() {
         let text = "state-of-the-art solution\n\nnext paragraph\n";
         assert_eq!(rejoin(text), text);
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn mapped_offsets_follow_each_rejoined_break() {
+        let source = "the per-\nturbagens and a well-\n\nknown COVID-\nrelated end";
+        let (joined, offsets) = super::rejoin_line_wrap_hyphens_mapped(source.to_string());
+        assert_eq!(joined, "the perturbagens and a well-known COVID-related end");
+        let word = |start: &str, end: &str| {
+            let start = source.find(start).expect("start word");
+            let end = source.find(end).expect("end word") + end.len();
+            &joined[offsets.map(start)..offsets.map(end)]
+        };
+        assert_eq!(word("the", "the"), "the");
+        assert_eq!(word("per-", "turbagens"), "perturbagens");
+        assert_eq!(word("and", "and"), "and");
+        assert_eq!(word("well-", "known"), "well-known");
+        assert_eq!(word("COVID-", "related"), "COVID-related");
+        assert_eq!(word("end", "end"), "end");
+        assert_eq!(offsets.map(source.len()), joined.len());
     }
 
     #[test]

@@ -606,6 +606,12 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
     false
 }
 
+/// A glyph-fragmented page's text, rebuilt from span positions with its line-wrap hyphens
+/// rejoined as every other plain page's are.
+fn fragmented_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
+    line_wrap_hyphens::rejoin_line_wrap_hyphens(rebuild_text_from_fragmented_spans(spans))
+}
+
 /// Rebuild readable text from a glyph-fragmented span list (issue #962).
 ///
 /// Algorithm:
@@ -1033,14 +1039,86 @@ fn assemble_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     line_wrap_hyphens::rejoin_line_wrap_hyphens(assemble_ordered_page_text(spans, ordered, &notes, |_, _| {}))
 }
 
-/// Add native separators to the selected order without relocating inline fragments.
+/// Add native separators to the selected order without relocating inline fragments, with
+/// the page's math as LaTeX and its line-wrap hyphens rejoined, as the column-aware path
+/// writes them, so plain output does not depend on whether layout detection ran.
 #[cfg(feature = "layout-detection")]
-pub(crate) fn assemble_upright_layout_text(spans: &[xberg_native_pdf::layout::TextSpan], order: &[usize]) -> String {
-    assemble_upright_layout_text_observed(spans, order, |_, _| {})
+pub(crate) fn assemble_upright_layout_text(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+) -> String {
+    assemble_upright_layout_text_observed(doc, page_index, spans, order, |_, _| {})
+}
+
+/// [`assemble_upright_layout_text`], reporting each in-range `order` position's byte range
+/// in the returned text: an empty range, at the next written span, for a span a formula
+/// absorbed.
+#[cfg(feature = "layout-detection")]
+pub(crate) fn assemble_upright_layout_text_observed(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+    observe: impl FnMut(usize, usize),
+) -> String {
+    let math = super::math_latex::rewrite_page_math_indexed(doc, page_index, spans);
+    rewritten_layout_text(spans, order, math, observe)
 }
 
 #[cfg(feature = "layout-detection")]
-pub(crate) fn assemble_upright_layout_text_observed(
+fn rewritten_layout_text(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+    math: Option<super::math_latex::IndexedRewrite>,
+    mut observe: impl FnMut(usize, usize),
+) -> String {
+    let (spans, order, written): (&[TextSpan], Cow<'_, [usize]>, Option<Vec<bool>>) = match &math {
+        Some((rewritten, index_map)) => (
+            rewritten.as_slice(),
+            Cow::Owned(
+                order
+                    .iter()
+                    .filter_map(|&index| index_map.get(index).copied().flatten())
+                    .collect(),
+            ),
+            Some(
+                order
+                    .iter()
+                    .filter_map(|&index| index_map.get(index).map(Option::is_some))
+                    .collect(),
+            ),
+        ),
+        None => (spans, Cow::Borrowed(order), None),
+    };
+    let mut ranges = Vec::with_capacity(order.len());
+    let text = assemble_layout_order(spans, &order, |start, end| ranges.push((start, end)));
+    let (text, offsets) = line_wrap_hyphens::rejoin_line_wrap_hyphens_mapped(text);
+    let mut ranges = ranges
+        .into_iter()
+        .map(|(start, end)| (offsets.map(start), offsets.map(end)))
+        .peekable();
+    match written {
+        None => ranges.for_each(|(start, end)| observe(start, end)),
+        Some(written) => {
+            for written in written {
+                if written {
+                    if let Some((start, end)) = ranges.next() {
+                        observe(start, end);
+                    }
+                } else {
+                    let at = ranges.peek().map_or(text.len(), |&(start, _)| start);
+                    observe(at, at);
+                }
+            }
+        }
+    }
+    text
+}
+
+#[cfg(feature = "layout-detection")]
+fn assemble_layout_order(
     spans: &[xberg_native_pdf::layout::TextSpan],
     order: &[usize],
     observe: impl FnMut(usize, usize),
@@ -3372,7 +3450,7 @@ fn extract_page_text_column_aware(
             span_count = page_text_data.spans.len(),
             "glyph fragmentation detected — rebuilding text from span positions (#962)"
         );
-        rebuild_text_from_fragmented_spans(&with_math_as_latex(doc, page_index, &page_text_data.spans))
+        fragmented_page_text(&with_math_as_latex(doc, page_index, &page_text_data.spans))
     } else if financial_rows.is_none()
         && !producer_order_applied
         && !page_text_data.structure_ordered
@@ -3510,9 +3588,9 @@ mod tests {
             span_with_width("Other line", 72.0, 680.0, 44.0, 12.0, 12.0),
         ];
         assert_eq!(inline_fragment_anchors(&spans), [None, Some(0), None]);
-        assert_eq!(assemble_upright_layout_text(&spans, &[2, 0, 1]), "Other line\n\nword!");
-        assert_eq!(assemble_upright_layout_text(&spans, &[1, 0]), "!word");
-        assert_eq!(assemble_upright_layout_text(&spans, &[2, 1]), "Other line\n\n!");
+        assert_eq!(layout_text(&spans, &[2, 0, 1]), "Other line\n\nword!");
+        assert_eq!(layout_text(&spans, &[1, 0]), "!word");
+        assert_eq!(layout_text(&spans, &[2, 1]), "Other line\n\n!");
     }
 
     #[cfg(feature = "layout-detection")]
@@ -3521,7 +3599,7 @@ mod tests {
         let first = span_with_width("alpha", 72.0, 700.0, 24.0, 12.0, 12.0);
         let mut second = span_with_width("beta", 96.0, 700.0, 24.0, 12.0, 12.0);
         second.split_boundary_before = true;
-        assert_eq!(assemble_upright_layout_text(&[first, second], &[0, 1]), "alpha beta");
+        assert_eq!(layout_text(&[first, second], &[0, 1]), "alpha beta");
     }
 
     #[cfg(feature = "layout-detection")]
@@ -3533,8 +3611,74 @@ mod tests {
         let spans = [base, fragment];
 
         assert_eq!(inline_fragment_anchors(&spans), [None, Some(0)]);
-        assert_eq!(assemble_upright_layout_text(&spans, &[0, 1]), "word!");
-        assert_eq!(assemble_upright_layout_text(&spans, &[1, 0]), "! word");
+        assert_eq!(layout_text(&spans, &[0, 1]), "word!");
+        assert_eq!(layout_text(&spans, &[1, 0]), "! word");
+    }
+
+    #[cfg(feature = "layout-detection")]
+    fn layout_text(spans: &[TextSpan], order: &[usize]) -> String {
+        rewritten_layout_text(spans, order, None, |_, _| {})
+    }
+
+    #[cfg(feature = "layout-detection")]
+    fn observed_layout_text(
+        spans: &[TextSpan],
+        order: &[usize],
+        math: Option<super::super::math_latex::IndexedRewrite>,
+    ) -> (String, Vec<(usize, usize)>) {
+        let mut ranges = Vec::new();
+        let text = rewritten_layout_text(spans, order, math, |start, end| ranges.push((start, end)));
+        (text, ranges)
+    }
+
+    /// The layout path wrote line-wrap hyphens the column-aware path rejoins, so plain text
+    /// depended on whether layout detection ran.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn layout_order_rejoins_line_wrap_hyphens_and_maps_span_ranges() {
+        let spans = [
+            span_with_width("the per-", 72.0, 700.0, 40.0, 12.0, 12.0),
+            span_with_width("turbagens", 72.0, 686.0, 50.0, 12.0, 12.0),
+        ];
+        let (text, ranges) = observed_layout_text(&spans, &[0, 1], None);
+        assert_eq!(text, "the perturbagens");
+        let written: Vec<&str> = ranges.iter().map(|&(start, end)| &text[start..end]).collect();
+        assert_eq!(written, ["the per", "turbagens"]);
+    }
+
+    /// The layout path wrote a formula's glyphs as scattered prose, where the column-aware
+    /// path writes LaTeX; a span the formula absorbs reports an empty range.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn layout_order_writes_math_as_latex_and_keeps_order_positions() {
+        let math_span = |text: &str, font: &str, size: f32, x: f32, width: f32, baseline: f32| TextSpan {
+            text: text.to_string(),
+            bbox: Rect::new(x, baseline, width, size),
+            font_name: font.into(),
+            font_size: size,
+            ..TextSpan::default()
+        };
+        let spans = [
+            math_span("where", "CMR10", 10.0, 100.0, 25.0, 700.0),
+            math_span("δ", "CMMI10", 10.0, 128.0, 5.0, 700.0),
+            math_span("n,n", "CMMI7", 7.0, 133.0, 10.0, 698.5),
+            math_span("represents the Kronecker delta.", "CMR10", 10.0, 146.0, 130.0, 700.0),
+        ];
+        let math = super::super::math_latex::rewrite_math_spans_indexed(&spans);
+        assert_eq!(
+            math.as_ref().map(|(_, index_map)| index_map.clone()),
+            Some(vec![Some(0), Some(1), None, Some(2)])
+        );
+        let (text, ranges) = observed_layout_text(&spans, &[0, 1, 2, 3], math);
+        let written: Vec<&str> = ranges.iter().map(|&(start, end)| &text[start..end]).collect();
+        assert_eq!(
+            written,
+            ["where", "$\\delta_{n,n}$", "", "represents the Kronecker delta."]
+        );
+        assert_eq!(
+            ranges[2].0, ranges[3].0,
+            "an absorbed span sits at the next written span"
+        );
     }
 
     fn extract_fixture_page(relative: &str) -> Option<String> {
@@ -3768,6 +3912,18 @@ mod tests {
             span_with_width("lower", 164.8, 467.0, 30.0, 12.0, 12.0),
         ];
         assert_eq!(rebuild_text_from_fragmented_spans(&spans), "Name first\nSecond lower");
+    }
+
+    /// The fragmented-glyph branch wrote line-wrap hyphens every other plain branch rejoins.
+    #[test]
+    fn fragmented_page_text_rejoins_line_wrap_hyphens() {
+        let spans = vec![
+            span_with_width("the", 100.0, 500.0, 18.0, 12.0, 12.0),
+            span_with_width("per-", 121.0, 500.0, 22.0, 12.0, 12.0),
+            span_with_width("turbagens", 100.0, 470.0, 54.0, 12.0, 12.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "the per-\nturbagens");
+        assert_eq!(fragmented_page_text(&spans), "the perturbagens");
     }
 
     /// A quantity symbol with a lowered or raised index, such as `c` with subscript `B`, `I` with

@@ -64,22 +64,31 @@ fn strict_page_box(doc: &xberg_native_pdf::PdfDocument, object: &Object) -> Opti
     (left == 0.0 && bottom == 0.0 && right > 0.0 && top > 0.0).then_some([left, bottom, right, top])
 }
 
+/// The page's layout-ordered text and, when each detected region owns one contiguous run of
+/// whole words in it, the regions' byte ranges.
 pub(super) fn assemble(
-    page_number: u32,
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
     native_spans: &[xberg_native_pdf::layout::TextSpan],
     spans: &[TextSpan],
     order: &[usize],
     hints: &[LayoutHint],
     classes: &[crate::layout::LayoutClass],
-    area: f64,
 ) -> (String, Option<PageRegionRanges>) {
     use crate::pdf::native::text::{assemble_upright_layout_text, assemble_upright_layout_text_observed};
 
-    let Some(groups) = contiguous_groups(spans, order, hints) else {
-        return (assemble_upright_layout_text(native_spans, order), None);
+    let evidence = || {
+        let page_number = u32::try_from(page_index).ok()?.checked_add(1)?;
+        let area = page_area(doc, page_index, hints)?;
+        Some((page_number, area, contiguous_groups(spans, order, hints)?))
+    };
+    let Some((page_number, area, groups)) = evidence() else {
+        return (assemble_upright_layout_text(doc, page_index, native_spans, order), None);
     };
     let mut offsets = Vec::with_capacity(order.len());
-    let text = assemble_upright_layout_text_observed(native_spans, order, |start, end| offsets.push((start, end)));
+    let text = assemble_upright_layout_text_observed(doc, page_index, native_spans, order, |start, end| {
+        offsets.push((start, end))
+    });
     let regions: Vec<_> = groups
         .into_iter()
         .filter_map(|(owner, run)| {

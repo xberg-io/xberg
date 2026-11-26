@@ -1395,15 +1395,13 @@ fn apply_reading_order_reordering(
                 .detector_classes
                 .get(page_idx)
                 .filter(|classes| classes.len() == hints.len())
-            && let Some(page_number) = u32::try_from(page_idx).ok().and_then(|index| index.checked_add(1))
-            && let Some(area) = layout_region_text::page_area(&doc.doc, page_idx, hints)
         {
             let (text, pending) =
-                layout_region_text::assemble(page_number, &native_spans, &spans, &span_order, hints, classes, area);
+                layout_region_text::assemble(&doc.doc, page_idx, &native_spans, &spans, &span_order, hints, classes);
             region_evidence.extend(pending);
             text
         } else {
-            assemble_upright_layout_text(&native_spans, &span_order)
+            assemble_upright_layout_text(&doc.doc, page_idx, &native_spans, &span_order)
         };
         reordered_pages.push(text);
     }
