@@ -2136,10 +2136,47 @@ pub(crate) fn is_well_formed_borderless_table(
     if !short_grid_has_positive_table_evidence(grid) {
         return false;
     }
-    if looks_like_numbered_reference_list(grid) {
+    if looks_like_numbered_reference_list(grid) || looks_like_bulleted_list(grid) {
         return false;
     }
     ruled || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
+}
+
+/// Fewest rows a candidate must open with a bullet before it reads as a list.
+const BULLETED_LIST_MIN_ROWS: usize = 3;
+
+/// A bulleted list whose items wrap or carry a trailing qualifier: every row opens with a
+/// bullet or a dash and a word, and no cell holds a figure. 3562713 set a nested list of
+/// association types (`– has_many`, `– has_one :through`) with the qualifiers aligned in a
+/// second column, and it was admitted as a table. A table that indents its row labels with
+/// dashes still reports figures, which keeps it a table. ~keep
+fn looks_like_bulleted_list(grid: &[Vec<String>]) -> bool {
+    let rows: Vec<&Vec<String>> = grid
+        .iter()
+        .filter(|row| row.iter().any(|cell| !cell.trim().is_empty()))
+        .collect();
+    rows.len() >= BULLETED_LIST_MIN_ROWS
+        && rows.iter().all(|row| {
+            row.iter()
+                .map(|cell| cell.trim())
+                .find(|cell| !cell.is_empty())
+                .is_some_and(opens_bulleted_item)
+        })
+        && !rows
+            .iter()
+            .flat_map(|row| row.iter())
+            .any(|cell| cell.chars().any(|character| character.is_ascii_digit()))
+}
+
+fn opens_bulleted_item(cell: &str) -> bool {
+    let mut chars = cell.chars();
+    let marker = chars.next();
+    let is_marker = marker.is_some_and(|character| {
+        crate::pdf::structure::is_bullet_glyph(character) || matches!(character, '-' | '\u{2013}' | '\u{2014}')
+    });
+    is_marker
+        && chars.next().is_some_and(char::is_whitespace)
+        && chars.as_str().trim_start().starts_with(char::is_alphabetic)
 }
 
 /// Fewest rows, and smallest percentage of rows, that open a numbered bibliography entry
@@ -6610,6 +6647,31 @@ mod tests {
                 "rows opening `[n] Author` entries are a bibliography, not a table (rules={rules})"
             );
         }
+    }
+
+    /// 3562713: a nested list of association types with its qualifiers aligned in a
+    /// second column was admitted as a table.
+    #[test]
+    fn bulleted_list_with_aligned_qualifiers_is_not_a_table() {
+        let list = grid_of(&[
+            &["\u{2013} has_many", ""],
+            &["\u{2013} has_one", ":through"],
+            &["\u{2013} has_many", ":through"],
+            &["\u{2013} has_and_belongs_to_many", ""],
+        ]);
+        assert!(looks_like_bulleted_list(&list));
+        let region = gh1760_clean_two_column_region(list.len());
+        assert!(!is_well_formed_borderless_table(&list, &region, &[0, 200], 0));
+
+        let indented_ledger = grid_of(&[
+            &["\u{2013} Interest income", "1,250"],
+            &["\u{2013} Fee income", "420"],
+            &["\u{2013} Other income", "35"],
+        ]);
+        assert!(
+            !looks_like_bulleted_list(&indented_ledger),
+            "dash-indented row labels with figures are a table"
+        );
     }
 
     #[test]
