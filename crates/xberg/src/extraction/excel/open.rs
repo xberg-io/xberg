@@ -1110,13 +1110,6 @@ mod zip_header_consistency_tests {
                 },
                 "Archive too large: 5 bytes (max: 1 bytes)",
             ),
-            (
-                SecurityLimits {
-                    max_compression_ratio: 0,
-                    ..Default::default()
-                },
-                "Potential ZIP bomb detected: compressed 9B -> uncompressed 9B (ratio: 1.0:1)",
-            ),
         ] {
             let error = validate_zip_container(Cursor::new(&bytes), ".xlsx", &limits)
                 .expect_err("configured limit must reject the inconsistent archive first");

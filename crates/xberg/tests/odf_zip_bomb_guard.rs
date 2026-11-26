@@ -103,12 +103,12 @@ fn odp_zip_with_extra_entries(slide_text: &str, extra_entries: &[(&str, &[u8])])
 }
 
 /// A payload that compresses far past any sane ratio: one repeated byte,
-/// deflated. `max_compression_ratio` is lowered to 5 in these tests so the
-/// bomb only needs to be a few kilobytes, not the hundreds of megabytes a
-/// real attack would use -- the code path under test does not care about
-/// scale, only about the ratio comparison firing.
+/// deflated. 32 MiB is the smallest member the ratio cap applies to (GH#3416),
+/// far short of the hundreds of megabytes a real attack would use -- the code
+/// path under test does not care about scale beyond that, only about the ratio
+/// comparison firing.
 fn compressible_bomb_payload() -> Vec<u8> {
-    vec![0u8; 64 * 1024]
+    vec![0u8; 32 * 1024 * 1024]
 }
 
 fn low_ratio_limits() -> SecurityLimits {

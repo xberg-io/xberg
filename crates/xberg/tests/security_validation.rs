@@ -35,7 +35,7 @@ fn test_archive_zip_bomb_detection() {
         let options = FileOptions::<'_, '_, ()>::default();
 
         zip.start_file("large.txt", options).expect("Operation failed");
-        let zeros = vec![0u8; 10 * 1024 * 1024];
+        let zeros = vec![0u8; 32 * 1024 * 1024];
         zip.write_all(&zeros).expect("Operation failed");
 
         zip.finish().expect("Operation failed");
@@ -47,11 +47,11 @@ fn test_archive_zip_bomb_detection() {
     let result = extract_bytes_document_blocking(&bytes, "application/zip", &config);
 
     // The default `FileOptions` uses `CompressionMethod::Deflated` (the `deflate-flate2`
-    // Cargo feature is on), and 10MB of zero bytes deflates to a tiny fraction of that,
+    // Cargo feature is on), and 32 MiB of zero bytes deflates to a tiny fraction of that,
     // so `ZipBombValidator` (crates/xberg/src/extractors/security.rs) rejects this well
     // before the 500MB `max_archive_size` ceiling is ever reached: the 100:1
     // `max_compression_ratio` fires first.
-    let error = result.expect_err("a 10MB all-zero entry deflates far past the 100:1 ratio limit");
+    let error = result.expect_err("a 32 MiB all-zero entry deflates far past the 100:1 ratio limit");
     assert!(
         matches!(error, XbergError::Validation { .. }),
         "expected a Validation error carrying the ZipBombDetected message, got: {error:?}"

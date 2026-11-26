@@ -329,14 +329,18 @@ pub struct ZipBombValidator {
     feature = "excel-wasm"
 ))]
 impl ZipBombValidator {
-    /// Smallest uncompressed member size the per-member ratio cap applies to.
+    /// Smallest uncompressed size, of one member or of the whole archive, that the
+    /// compression-ratio cap applies to.
     ///
-    /// The ratio cap guards against one member that inflates to hundreds of
-    /// megabytes. A member measured in kilobytes cannot exhaust memory whatever
-    /// its ratio, and blank-page JPEGs, empty stylesheets and whitespace-padded
-    /// pages routinely deflate past 100:1 (GH#1496). The total-size cap and the
-    /// whole-archive ratio cap still bound the aggregate.
-    const MEMBER_RATIO_FLOOR: u64 = 1024 * 1024;
+    /// The ratio cap guards against output that inflates to hundreds of megabytes.
+    /// Below this size the ratio says nothing about memory use, and real documents
+    /// exceed 100:1 there: blank-page JPEGs, empty stylesheets and whitespace-padded
+    /// pages (GH#1496), and the EMF/WMF drawings Office embeds for charts, which reach
+    /// several MiB at 100-300:1 (GH#3416). Below the floor the output is bounded by
+    /// its size; `max_archive_size` bounds the declared total, and every extractor
+    /// bounds each member read with `Read::take`, so a member whose header lies about
+    /// its size cannot inflate past those caps either.
+    const RATIO_FLOOR: u64 = 32 * 1024 * 1024;
 
     /// Create a new ZIP bomb validator.
     pub(crate) fn new(limits: SecurityLimits) -> Self {
@@ -393,7 +397,7 @@ impl ZipBombValidator {
             total_uncompressed = total_uncompressed.saturating_add(uncompressed_size);
             total_compressed = total_compressed.saturating_add(compressed_size);
 
-            if uncompressed_size > 0 && (compressed_size == 0 || uncompressed_size >= Self::MEMBER_RATIO_FLOOR) {
+            if uncompressed_size > 0 && (compressed_size == 0 || uncompressed_size >= Self::RATIO_FLOOR) {
                 // A zero compressed size paired with a non-zero uncompressed size cannot be
                 // produced by any compressor; treating it as an unbounded ratio stops the
                 // entry from slipping past this check on a division it never performs. ~keep
@@ -419,7 +423,7 @@ impl ZipBombValidator {
             }
         }
 
-        if total_compressed > 0 {
+        if total_compressed > 0 && total_uncompressed >= Self::RATIO_FLOOR {
             let ratio = total_uncompressed as f64 / total_compressed as f64;
             if ratio > max_compression_ratio {
                 return Err(SecurityError::ZipBombDetected {

@@ -1371,7 +1371,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_hwpx_rejects_zip_bomb_default_limits() {
-        let zip_bytes = make_zip_with_ratio(256 * 1024);
+        let zip_bytes = make_zip_with_ratio(32 * 1024 * 1024);
         let extractor = HwpxExtractor::new();
         let result = extractor
             .extract_content(&zip_bytes, "application/haansofthwpx", &ExtractionConfig::default())
@@ -1387,7 +1387,7 @@ mod tests {
     #[tokio::test]
     async fn test_hwpx_rejects_zip_bomb() {
         use crate::extractors::security::SecurityLimits;
-        let zip_bytes = make_zip_with_ratio(8 * 1024);
+        let zip_bytes = make_zip_with_ratio(32 * 1024 * 1024);
         let config = ExtractionConfig {
             security_limits: Some(SecurityLimits {
                 max_compression_ratio: 1,

@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [Unreleased]
+
+### Fixed
+
+- **security:** DOCX, PPTX, XLSX and other ZIP-based documents with large EMF/WMF chart drawings are no longer rejected as ZIP bombs. These drawings reach several MiB at 100-300:1, past `max_compression_ratio` for the member and, in a short document, for the whole archive. The ratio limit now applies to a member or the archive total only from 32 MiB of uncompressed output, up from 1 MiB per member; `max_archive_size` and the per-member read caps still bound memory. (#3416)
+
 ## [1.5.4] - 2026-11-25
 
 ### Added

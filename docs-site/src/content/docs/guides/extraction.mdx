@@ -304,7 +304,10 @@ tighter of the two wins — lowering either one alone is enough to clamp nesting
 
 For ZIP, `ZipBombValidator` checks declared uncompressed size, compression
 ratio, and member count against the central directory before decoding any
-entries.
+entries. The compression-ratio limit applies to a member, or to the archive
+total, only once its uncompressed size reaches 32 MiB: smaller output cannot
+exhaust memory, and real documents exceed 100:1 there, such as the EMF chart
+drawings Office embeds. `max_archive_size` still bounds the total.
 
 The ZIP, TAR, 7z, and GZIP extractors also share one `max_archive_size` byte
 budget across member reads and recursive archive extraction. Each pass charges
