@@ -1,11 +1,12 @@
-//! A direct copy of an opaque, pre-resized image onto the canvas, replacing the tiny-skia
-//! pattern blit only where it computes the same bytes.
+//! A direct copy of an opaque, pre-resized gray or RGB image onto the canvas, replacing the
+//! tiny-skia pattern blit only where it computes the same bytes.
 //!
 //! `draw_pixmap` always samples through a pattern, which runs tiny-skia's f32 (`highp`) pipeline
 //! for every covered pixel: two thirds of rendering a full-page scan. For an opaque source drawn
 //! with nearest sampling, normal blending and full opacity at a translation within a quarter
 //! pixel of whole pixels, each covered pixel takes the source pixel at the same integer offset,
-//! and the clip mask blends it with the arithmetic reproduced here.
+//! and the clip mask blends it with the arithmetic reproduced here. The samples are widened to
+//! RGBA as they are copied, so no RGBA copy of the image is held beside the canvas.
 
 use tiny_skia::{BlendMode, FilterQuality, Mask, Pixmap, PixmapPaint, Transform};
 
@@ -16,12 +17,12 @@ const MAX_SUBPIXEL_OFFSET: f32 = 0.25;
 /// tiny-skia's `highp` 8-bit to float factor (`load_8888`).
 const UNIT_FACTOR: f32 = 1.0 / 255.0;
 
-/// Copy `rgba`, opaque premultiplied pixels of `size`, onto `pixmap` at `transform`, as
-/// `draw_pixmap(0, 0, .., paint, transform, clip_mask)` would. `false`, leaving `pixmap`
-/// untouched, when the draw is not one this copy reproduces.
+/// Copy `samples`, gray (`components` 1) or RGB (3) pixels of `size`, onto `pixmap` at
+/// `transform` as `draw_pixmap(0, 0, .., paint, transform, clip_mask)` draws their opaque RGBA
+/// widening. `false`, leaving `pixmap` untouched, when the draw is not one this copy reproduces.
 pub(super) fn blit_opaque_translated(
     pixmap: &mut Pixmap,
-    rgba: &[u8],
+    (samples, components): (&[u8], u8),
     (width, height): (u32, u32),
     paint: &PixmapPaint,
     transform: Transform,
@@ -30,10 +31,11 @@ pub(super) fn blit_opaque_translated(
     let Some((left, top)) = whole_pixel_offset(paint, transform) else {
         return false;
     };
+    let channels = usize::from(components);
     let expected = (width as usize)
         .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(4));
-    if expected != Some(rgba.len()) || rgba.chunks_exact(4).any(|pixel| pixel[3] != u8::MAX) {
+        .and_then(|pixels| pixels.checked_mul(channels));
+    if !matches!(components, 1 | 3) || expected != Some(samples.len()) {
         return false;
     }
     if clip_mask.is_some_and(|mask| (mask.width(), mask.height()) != (pixmap.width(), pixmap.height())) {
@@ -50,29 +52,36 @@ pub(super) fn blit_opaque_translated(
     let mask = clip_mask.map(Mask::data);
     let data = pixmap.data_mut();
     for y in y0..y1 {
-        let source_row = ((y - top) as usize * width as usize + (x0 - left) as usize) * 4;
+        let source_row = ((y - top) as usize * width as usize + (x0 - left) as usize) * channels;
         let target_row = (y * canvas_width + x0) as usize;
         let span = (x1 - x0) as usize;
-        let source = &rgba[source_row..source_row + span * 4];
+        let source = &samples[source_row..source_row + span * channels];
         let target = &mut data[target_row * 4..(target_row + span) * 4];
-        match mask {
-            None => target.copy_from_slice(source),
-            Some(mask) => blend_masked_span(target, source, &mask[target_row..target_row + span]),
-        }
+        let coverage = mask.map(|mask| &mask[target_row..target_row + span]);
+        blit_span(target, source, channels, coverage);
     }
     true
 }
 
-/// One row of the clipped draw: full coverage takes the source, none keeps the canvas, and a
-/// partial clip edge blends as tiny-skia does.
-fn blend_masked_span(target: &mut [u8], source: &[u8], coverage: &[u8]) {
-    for ((dst, src), &cover) in target.chunks_exact_mut(4).zip(source.chunks_exact(4)).zip(coverage) {
-        match cover {
+/// One row of the draw: full coverage (or no clip) takes the widened source, none keeps the
+/// canvas, and a partial clip edge blends as tiny-skia does.
+fn blit_span(target: &mut [u8], source: &[u8], channels: usize, coverage: Option<&[u8]>) {
+    for (index, (dst, src)) in target
+        .chunks_exact_mut(4)
+        .zip(source.chunks_exact(channels))
+        .enumerate()
+    {
+        let pixel = if channels == 1 {
+            [src[0], src[0], src[0], u8::MAX]
+        } else {
+            [src[0], src[1], src[2], u8::MAX]
+        };
+        match coverage.map_or(u8::MAX, |coverage| coverage[index]) {
             0 => {}
-            u8::MAX => dst.copy_from_slice(src),
-            _ => {
+            u8::MAX => dst.copy_from_slice(&pixel),
+            cover => {
                 for channel in 0..4 {
-                    dst[channel] = masked_source_over(src[channel], src[3], dst[channel], cover);
+                    dst[channel] = masked_source_over(pixel[channel], u8::MAX, dst[channel], cover);
                 }
             }
         }
@@ -116,14 +125,24 @@ mod tests {
     use super::*;
     use tiny_skia::{FillRule, IntSize, PathBuilder};
 
-    fn opaque_source(width: u32, height: u32, seed: u32) -> Vec<u8> {
+    fn samples(width: u32, height: u32, components: u8, seed: u32) -> Vec<u8> {
         let mut state = seed;
-        let mut next = || {
-            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            (state >> 24) as u8
-        };
-        (0..width * height)
-            .flat_map(|_| [next(), next(), next(), u8::MAX])
+        (0..width * height * u32::from(components))
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 24) as u8
+            })
+            .collect()
+    }
+
+    fn widened(samples: &[u8], components: u8) -> Vec<u8> {
+        samples
+            .chunks_exact(usize::from(components))
+            .flat_map(|pixel| match pixel {
+                [gray] => [*gray, *gray, *gray, u8::MAX],
+                [r, g, b] => [*r, *g, *b, u8::MAX],
+                _ => unreachable!(),
+            })
             .collect()
     }
 
@@ -163,48 +182,55 @@ mod tests {
     #[test]
     fn direct_copy_matches_draw_pixmap_bit_for_bit() {
         let (width, height) = (61, 37);
-        let source = opaque_source(width, height, 7);
         let masks = [
             None,
             Some(clip(80, 50, (2.3, 1.7, 57.6, 33.2))),
             Some(clip(80, 50, (-4.0, -3.0, 90.0, 60.0))),
         ];
-        for translate in [
-            (0.0, 0.0),
-            (3.0, 2.0),
-            (5.2, 7.9),
-            (-2.1, -1.0),
-            (30.0, 20.0),
-            (0.0, 3.3e-5),
-        ] {
-            for mask in &masks {
-                let mut expected = canvas(80, 50);
-                let image = Pixmap::from_vec(source.clone(), IntSize::from_wh(width, height).unwrap()).unwrap();
-                let transform = Transform::from_translate(translate.0, translate.1);
-                expected.draw_pixmap(0, 0, image.as_ref(), &nearest_paint(), transform, mask.as_ref());
-                let mut actual = canvas(80, 50);
-                assert!(blit_opaque_translated(
-                    &mut actual,
-                    &source,
-                    (width, height),
-                    &nearest_paint(),
-                    transform,
-                    mask.as_ref(),
-                ));
-                assert_eq!(actual.data(), expected.data(), "translate {translate:?}");
+        for components in [1, 3] {
+            let source = samples(width, height, components, 7);
+            for translate in [
+                (0.0, 0.0),
+                (3.0, 2.0),
+                (5.2, 7.9),
+                (-2.1, -1.0),
+                (30.0, 20.0),
+                (0.0, 3.3e-5),
+            ] {
+                for mask in &masks {
+                    let mut expected = canvas(80, 50);
+                    let rgba = widened(&source, components);
+                    let image = Pixmap::from_vec(rgba, IntSize::from_wh(width, height).unwrap()).unwrap();
+                    let transform = Transform::from_translate(translate.0, translate.1);
+                    expected.draw_pixmap(0, 0, image.as_ref(), &nearest_paint(), transform, mask.as_ref());
+                    let mut actual = canvas(80, 50);
+                    assert!(blit_opaque_translated(
+                        &mut actual,
+                        (&source, components),
+                        (width, height),
+                        &nearest_paint(),
+                        transform,
+                        mask.as_ref(),
+                    ));
+                    assert_eq!(
+                        actual.data(),
+                        expected.data(),
+                        "{components} channels, translate {translate:?}"
+                    );
+                }
             }
         }
     }
 
     #[test]
     fn draws_it_cannot_reproduce_are_declined() {
-        let source = opaque_source(4, 4, 3);
+        let source = samples(4, 4, 3, 3);
         let mut pixmap = canvas(8, 8);
         let untouched = pixmap.data().to_vec();
         let half = Transform::from_translate(0.5, 0.0);
         assert!(!blit_opaque_translated(
             &mut pixmap,
-            &source,
+            (&source, 3),
             (4, 4),
             &nearest_paint(),
             half,
@@ -214,22 +240,33 @@ mod tests {
             quality: FilterQuality::Bilinear,
             ..PixmapPaint::default()
         };
+        let identity = Transform::identity();
         assert!(!blit_opaque_translated(
             &mut pixmap,
-            &source,
+            (&source, 3),
             (4, 4),
             &bilinear,
-            Transform::identity(),
+            identity,
             None
         ));
-        let mut translucent = source.clone();
-        translucent[3] = 128;
+        let translucent = PixmapPaint {
+            opacity: 0.5,
+            ..nearest_paint()
+        };
         assert!(!blit_opaque_translated(
             &mut pixmap,
-            &translucent,
+            (&source, 3),
             (4, 4),
+            &translucent,
+            identity,
+            None
+        ));
+        assert!(!blit_opaque_translated(
+            &mut pixmap,
+            (&source, 4),
+            (3, 4),
             &nearest_paint(),
-            Transform::identity(),
+            identity,
             None
         ));
         assert_eq!(pixmap.data(), untouched.as_slice());

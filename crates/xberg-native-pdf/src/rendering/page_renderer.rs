@@ -8096,12 +8096,19 @@ fn blit_native_resized(
     mut paint: PixmapPaint,
     clip_mask: Option<&tiny_skia::Mask>,
 ) {
-    let rgba = widen_native(resized, components);
     paint.quality = tiny_skia::FilterQuality::Nearest;
     let translate = Transform::from_translate(image_transform.tx, image_transform.ty);
-    if opaque_blit::blit_opaque_translated(pixmap, &rgba, (width, height), &paint, translate, clip_mask) {
+    if opaque_blit::blit_opaque_translated(
+        pixmap,
+        (&resized, components),
+        (width, height),
+        &paint,
+        translate,
+        clip_mask,
+    ) {
         return;
     }
+    let rgba = widen_native(resized, components);
     if let Some(img_pixmap) = tiny_skia::IntSize::from_wh(width, height).and_then(|size| Pixmap::from_vec(rgba, size)) {
         pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, translate, clip_mask);
     }
