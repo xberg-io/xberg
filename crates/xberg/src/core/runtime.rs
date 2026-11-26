@@ -15,6 +15,17 @@
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use once_cell::sync::OnceCell;
 
+/// Box the future `make` builds, inside a frame of its own.
+///
+/// `Box::pin(f(..))` materialises the whole future in the caller's frame before moving it to the heap
+/// (rust-lang/rust#54628). In an async fn that frame is its `poll`, which stays on the stack under every
+/// deeper poll, and a frame above 4 KiB is probed page by page on entry, so the temporary is resident
+/// whether or not the branch that builds it runs. Here it lives in a frame popped before the first poll.
+#[inline(never)]
+pub fn pin_boxed<F: std::future::Future>(make: impl FnOnce() -> F) -> std::pin::Pin<Box<F>> {
+    Box::pin(make())
+}
+
 /// The shared runtime. Initialized on first use and intentionally never dropped
 /// (it lives for the remainder of the process), so it can never trigger the
 /// "drop a runtime in a blocking context" panic.
