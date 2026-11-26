@@ -2250,6 +2250,64 @@ def test_unix_cli_opens_a_shipped_libheif_instead_of_linking_it() -> None:
     assert smoke < run.index('tar -czf "${STAGE}.tar.gz" "$STAGE"'), "the HEIF smoke must run before the archive"
 
 
+BENCHMARKS_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "benchmarks.yaml"
+ORDER_FILE_GENERATE = "Generate the linker order file"
+ORDER_FILE_VERIFY = "Verify the linker applied the order file"
+
+
+def test_cli_order_file_is_trained_on_the_release_build_inputs_and_verified() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    entries = matrix_entries(block)
+    ordered = [entry for entry in entries if entry.get("order_file")]
+    assert {entry["target"] for entry in ordered} == {
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    }, "the order file needs fat LTO; the thin-LTO aarch64 gnu leg renames promoted locals per module"
+    for entry in ordered:
+        assert "cargo_features" not in entry, f"{entry['target']}: the generator reads extra_cargo_args only"
+        assert entry["extra_cargo_args"].startswith("--features ")
+
+    steps = block["steps"]
+    names = [step.get("name") for step in steps]
+    [generate] = [step for step in steps if step.get("name") == ORDER_FILE_GENERATE]
+    [verify] = [step for step in steps if step.get("name") == ORDER_FILE_VERIFY]
+    [build] = [step for step in steps if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")]
+    build_index = steps.index(build)
+    assert names.index("Keep libheif out of the CLI link (heic-dynamic)") < names.index(ORDER_FILE_GENERATE)
+    assert names.index(ORDER_FILE_GENERATE) < build_index < names.index(ORDER_FILE_VERIFY)
+    assert generate["if"] == verify["if"] == "matrix.order_file"
+
+    # Every input of cargo's -C metadata must equal the release build's, or no name matches. ~keep
+    assert generate["env"][LTO_ENV] == build["env"][LTO_ENV]
+    assert generate["env"]["TARGET"] == build["with"]["target"] == "${{ matrix.target }}"
+    assert generate["env"]["EXTRA_CARGO_ARGS"] == "${{ matrix.extra_cargo_args }}"
+    assert "matrix.extra_cargo_args" in build["with"]["extra-cargo-args"]
+    run = generate["run"]
+    assert "scripts/ci/rust/order_file.py generate" in run
+    assert '--target "$TARGET"' in run
+    assert '-- "${cargo_args[@]}"' in run
+    assert 'echo "XBERG_ORDER_FILE=$RUNNER_TEMP/xberg.order"' in run
+    assert 'echo "XBERG_LINK_MAP=$RUNNER_TEMP/xberg.map"' in run
+    assert "order_file.py verify-map" in verify["run"]
+    assert '"${XBERG_ORDER_FILE:?}"' in verify["run"] and '"${XBERG_LINK_MAP:?}"' in verify["run"]
+
+
+def test_benchmark_cli_order_file_is_trained_on_the_benchmark_build_inputs() -> None:
+    steps = workflow_job(BENCHMARKS_WORKFLOW, "setup")["steps"]
+    names = [step.get("name") for step in steps]
+    [generate] = [step for step in steps if step.get("name") == ORDER_FILE_GENERATE]
+    [build] = [step for step in steps if str(step.get("name", "")).startswith("Build xberg-cli (release")]
+    [verify] = [step for step in steps if step.get("name") == ORDER_FILE_VERIFY]
+    assert names.index(ORDER_FILE_GENERATE) < steps.index(build) < names.index(ORDER_FILE_VERIFY)
+    release_args = build["run"].split("cargo build --locked --release -p xberg-cli ", 1)[1].strip()
+    assert "--target" not in release_args, "a --target here must be passed to the generator too"
+    assert f"-- {release_args}" in " ".join(generate["run"].split())
+    assert build["env"]["XBERG_ORDER_FILE"] == "${{ runner.temp }}/xberg.order"
+    assert build["env"]["XBERG_LINK_MAP"] == "${{ runner.temp }}/xberg.map"
+    assert "order_file.py verify-map" in verify["run"]
+
+
 def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
     block = workflow_job(DOCKER_WORKFLOW, "build-docker")
     entries = matrix_entries(block)

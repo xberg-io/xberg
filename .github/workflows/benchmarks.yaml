@@ -109,10 +109,29 @@ jobs:
         with:
           build-profile: release
 
+      # Same cargo arguments as the build below, or the symbol names differ (ADR-0020). Neither
+      # passes --target, so the instrumentation also reaches build scripts; their profiles land
+      # in the build directory, which training ignores. ~keep
+      - name: Generate the linker order file
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR="$RUNNER_TEMP/order-file-target" python3 scripts/ci/rust/order_file.py generate \
+            --work-dir "$RUNNER_TEMP/order-file" --out "$RUNNER_TEMP/xberg.order" \
+            -- --features all,ort-dynamic,xberg/sceptre-ocr-tract
+          rm -rf "$RUNNER_TEMP/order-file-target"
+
       # `ort-dynamic` matches the released CLI: ONNX Runtime is not linked and loads on first
       # model use, from the ORT_DYLIB_PATH each benchmark job's setup-onnx-runtime exports. ~keep
       - name: Build xberg-cli (release, all features + Sceptre tract diagnostic)
+        env:
+          XBERG_ORDER_FILE: ${{ runner.temp }}/xberg.order
+          XBERG_LINK_MAP: ${{ runner.temp }}/xberg.map
         run: cargo build --locked --release -p xberg-cli --features all,ort-dynamic,xberg/sceptre-ocr-tract
+
+      - name: Verify the linker applied the order file
+        run: >-
+          python3 scripts/ci/rust/order_file.py verify-map
+          --order-file "$RUNNER_TEMP/xberg.order" --map "$RUNNER_TEMP/xberg.map"
 
       # Bench cohorts span pdf/office/markup/ebook/email/data/images across the
       # xberg + 6 competitor jobs -- no glob subset is safe here. ~keep
