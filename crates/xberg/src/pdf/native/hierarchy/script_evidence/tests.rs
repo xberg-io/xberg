@@ -676,3 +676,83 @@ fn should_attach_a_numeric_exponent_with_a_closing_bracket_edge_overlap() {
     spans[1].bbox.x = 109.983;
     assert!(page(spans).owners.is_empty());
 }
+
+/// An untagged Helvetica PDF of `pages` pages, each with prose lines and a raised `2` after `mc`.
+fn raised_mark_pages_pdf(pages: usize) -> Vec<u8> {
+    let font_object = 3 + 2 * pages;
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        format!(
+            "<< /Type /Pages /Kids [{}] /Count {pages} >>",
+            (0..pages)
+                .map(|page| format!("{} 0 R", 3 + 2 * page))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+    ];
+    for page in 0..pages {
+        let mut stream = String::new();
+        for line in 0..5 {
+            let y = 720.0 - line as f32 * 16.0;
+            stream.push_str(&format!(
+                "BT /F1 12 Tf 72 {y:.1} Td (Page {page} line {line} of prose) Tj ET\n"
+            ));
+        }
+        stream.push_str("BT /F1 12 Tf 72 600 Td (E = mc) Tj ET\nBT /F1 8 Tf 110 604 Td (2) Tj ET\n");
+        objects.push(format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R \
+             /Resources << /Font << /F1 {font_object} 0 R >> >> >>",
+            4 + 2 * page
+        ));
+        objects.push(format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len()));
+    }
+    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string());
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+#[test]
+fn should_read_every_page_as_a_page_by_page_loop_does() {
+    const PAGES: usize = 12;
+    let bytes = raised_mark_pages_pdf(PAGES);
+    let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("fixture must parse");
+    let (pages, used_tree) = extract_all_segment_carriers(&doc, ArtifactRetention::default()).expect("carriers");
+    assert!(!used_tree);
+    assert_eq!(pages.len(), PAGES);
+    assert!(
+        pages.iter().all(|page| !page.segments.is_empty()),
+        "every page must carry text"
+    );
+
+    let sequential_doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("fixture must parse");
+    let sequential: Vec<_> = (0..PAGES)
+        .map(|page| {
+            extract_page(
+                &sequential_doc,
+                page,
+                &HashMap::new(),
+                ArtifactRetention::default(),
+                ScriptGeometry::Preserve,
+            )
+            .expect("page")
+        })
+        .collect();
+    assert_eq!(format!("{pages:?}"), format!("{sequential:?}"));
+}

@@ -1084,7 +1084,7 @@ fn extract_final_spans_from_page(
 }
 
 fn extract_final_spans_from_page_with_primes(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     page_index: usize,
     script_geometry: ScriptGeometry,
     prime_witnesses: Option<&mut Vec<script_evidence::LiteralPrimeWitness>>,
@@ -1367,39 +1367,53 @@ fn extract_pages_with_structure_tree<T>(
     ) -> Result<T>,
     count_roles: impl Fn(&T) -> usize,
 ) -> Result<(Vec<T>, bool)> {
-    let Some(all_page_content) = reliable_heading_content(doc) else {
+    let Some(page_roles) = structure_tree_page_roles(doc)? else {
         return Ok((Vec::new(), false));
+    };
+
+    let mut all_pages: Vec<T> = Vec::with_capacity(page_roles.len());
+    for (page_idx, mcid_roles) in page_roles.iter().enumerate() {
+        all_pages.push(extract_page(doc, page_idx, mcid_roles, artifacts, script_geometry)?);
+    }
+    log_structure_tree_roles(&all_pages, count_roles);
+    Ok((all_pages, true))
+}
+
+/// Each page's MCID heading roles from a reliable structure tree, or `None` when the document
+/// has no structure tree its headings can be read from.
+pub(super) fn structure_tree_page_roles(doc: &NativeDocument) -> Result<Option<Vec<HashMap<u32, Option<u8>>>>> {
+    let Some(all_page_content) = reliable_heading_content(doc) else {
+        return Ok(None);
     };
 
     let page_count = doc.doc.page_count().map_err(|e| {
         crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
     })?;
 
-    let mut all_pages: Vec<T> = Vec::with_capacity(page_count);
-    let mut total_role_assigned = 0usize;
-
-    for page_idx in 0..page_count {
-        let mcid_roles: HashMap<u32, Option<u8>> = all_page_content
-            .get(&(page_idx as u32))
-            .map(|contents| {
-                contents
-                    .iter()
-                    .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
-                    .collect()
+    Ok(Some(
+        (0..page_count)
+            .map(|page_idx| {
+                all_page_content
+                    .get(&(page_idx as u32))
+                    .map(|contents| {
+                        contents
+                            .iter()
+                            .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
+                            .collect()
+                    })
+                    .unwrap_or_default()
             })
-            .unwrap_or_default();
+            .collect(),
+    ))
+}
 
-        let segments = extract_page(doc, page_idx, &mcid_roles, artifacts, script_geometry)?;
-        total_role_assigned += count_roles(&segments);
-        all_pages.push(segments);
-    }
-
+pub(super) fn log_structure_tree_roles<T>(pages: &[T], count_roles: impl Fn(&T) -> usize) {
+    let total_role_assigned: usize = pages.iter().map(count_roles).sum();
     tracing::debug!(
-        page_count,
+        page_count = pages.len(),
         total_role_assigned,
         "xberg_native_pdf: structure tree heading detection complete"
     );
-    Ok((all_pages, true))
 }
 
 fn reliable_heading_content(

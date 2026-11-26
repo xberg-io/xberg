@@ -625,27 +625,62 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
 }
 
 pub(crate) fn extract_all_segment_carriers(
-    doc: &mut super::NativeDocument,
+    doc: &super::NativeDocument,
     artifacts: ArtifactRetention,
 ) -> crate::pdf::error::Result<(Vec<NativePageSegments>, bool)> {
-    let (pages, used_tree) =
-        super::extract_pages_with_structure_tree(doc, artifacts, ScriptGeometry::Preserve, extract_page, |page| {
+    if let Some(page_roles) = super::structure_tree_page_roles(doc)? {
+        let pages = read_pages(page_roles.len(), |page| {
+            extract_page(doc, page, &page_roles[page], artifacts, ScriptGeometry::Preserve)
+        })?;
+        super::log_structure_tree_roles(&pages, |page| {
             page.segments
                 .iter()
                 .filter(|segment| segment.assigned_role.is_some())
                 .count()
-        })?;
-    if used_tree && !pages.is_empty() {
-        return Ok((pages, true));
+        });
+        if !pages.is_empty() {
+            return Ok((pages, true));
+        }
     }
     let count = doc
         .doc
         .page_count()
         .map_err(|error| crate::pdf::error::PdfError::TextExtractionFailed(error.to_string()))?;
-    let pages = (0..count)
-        .map(|index| extract_page(doc, index, &HashMap::new(), artifacts, ScriptGeometry::Preserve))
-        .collect::<crate::pdf::error::Result<Vec<_>>>()?;
+    let no_roles = HashMap::new();
+    let pages = read_pages(count, |page| {
+        extract_page(doc, page, &no_roles, artifacts, ScriptGeometry::Preserve)
+    })?;
     Ok((pages, false))
+}
+
+/// `read` of every page in `0..count`, in index order, run across the thread budget.
+///
+/// A page read here only reads the document: its caches sit behind locks and answer as an
+/// uncached read would, and its recovery counts are sums. Each read uses the calling thread's
+/// reading-order memo, also a cache. So the pages equal those of a page-by-page loop, and the
+/// first failed page by index fails the whole read, as it would have stopped that loop.
+fn read_pages<T: Send>(
+    count: usize,
+    read: impl Fn(usize) -> crate::pdf::error::Result<T> + Sync + Send,
+) -> crate::pdf::error::Result<Vec<T>> {
+    // rayon's work-stealing pool needs OS threads; wasm32 has none. ~keep
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        let memo = super::reading_order_memo::ReadingOrderMemoShare::of_current_thread();
+        let pages: Vec<crate::pdf::error::Result<T>> = (0..count)
+            .into_par_iter()
+            .map(|page| {
+                let _memo = memo.enter();
+                read(page)
+            })
+            .collect();
+        pages.into_iter().collect()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        (0..count).map(read).collect()
+    }
 }
 
 fn certified_prose_row_keys(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<Vec<SegmentKey>> {
@@ -665,7 +700,7 @@ fn certified_prose_row_keys(spans: &[TextSpan], projected: &[SegmentData]) -> Ve
 }
 
 fn extract_page(
-    doc: &mut super::NativeDocument,
+    doc: &super::NativeDocument,
     page: usize,
     roles: &HashMap<u32, Option<u8>>,
     artifacts: ArtifactRetention,

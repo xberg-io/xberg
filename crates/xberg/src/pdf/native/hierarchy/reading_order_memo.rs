@@ -10,6 +10,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, RandomState};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use xberg_native_pdf::extractors::text::{ArtifactType, PaginationSubtype};
 use xberg_native_pdf::fonts::MappingProvenance;
@@ -68,27 +69,38 @@ struct Memo {
     span_keys: RandomState,
 }
 
+type SharedMemo = Arc<Mutex<Memo>>;
+
 thread_local! {
-    static MEMO: RefCell<Option<Memo>> = const { RefCell::new(None) };
+    static MEMO: RefCell<Option<SharedMemo>> = const { RefCell::new(None) };
+}
+
+fn lock(memo: &SharedMemo) -> std::sync::MutexGuard<'_, Memo> {
+    memo.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]
+type ComputedOrders = Arc<std::sync::atomic::AtomicUsize>;
+
+#[cfg(test)]
 thread_local! {
-    static COMPUTED_ORDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPUTED_ORDERS: RefCell<ComputedOrders> = RefCell::new(ComputedOrders::default());
 }
 
-/// Page orders computed (not served from the memo) on this thread so far.
+/// Page orders computed (not served from the memo) on this thread, and on the threads that
+/// read its pages through a [`ReadingOrderMemoShare`], so far.
 #[cfg(test)]
 pub(super) fn computed_orders() -> usize {
-    COMPUTED_ORDERS.with(std::cell::Cell::get)
+    COMPUTED_ORDERS.with(|count| count.borrow().load(std::sync::atomic::Ordering::Relaxed))
 }
 
 /// Keeps page reading orders on this thread until dropped. The text, table and structure passes
-/// of one extraction run on the calling thread, so they share one memo; a nested scope gets its
+/// of one extraction run from the calling thread, so they share one memo, which a pass that reads
+/// its pages on other threads hands them as a [`ReadingOrderMemoShare`]; a nested scope gets its
 /// own and restores the outer one when it ends.
 #[must_use = "the memo lives only while the scope is held"]
 pub(crate) struct ReadingOrderMemoScope {
-    previous: Option<Memo>,
+    previous: Option<SharedMemo>,
 }
 
 impl ReadingOrderMemoScope {
@@ -102,8 +114,55 @@ impl ReadingOrderMemoScope {
             pages: HashMap::new(),
             span_keys: RandomState::new(),
         };
-        let previous = MEMO.with(|slot| slot.replace(Some(memo)));
+        let previous = MEMO.with(|slot| slot.replace(Some(Arc::new(Mutex::new(memo)))));
         Self { previous }
+    }
+}
+
+/// The calling thread's memo, handed to the threads that read its pages in parallel so a page
+/// another pass already ordered is still served there.
+#[derive(Clone)]
+pub(super) struct ReadingOrderMemoShare {
+    memo: Option<SharedMemo>,
+    #[cfg(test)]
+    computed: ComputedOrders,
+}
+
+impl ReadingOrderMemoShare {
+    pub(super) fn of_current_thread() -> Self {
+        Self {
+            memo: MEMO.with(|slot| slot.borrow().clone()),
+            #[cfg(test)]
+            computed: COMPUTED_ORDERS.with(|count| Arc::clone(&count.borrow())),
+        }
+    }
+
+    /// Use the shared memo on this thread until the guard drops.
+    pub(super) fn enter(&self) -> ReadingOrderMemoShareGuard {
+        ReadingOrderMemoShareGuard {
+            previous: MEMO.with(|slot| slot.replace(self.memo.clone())),
+            #[cfg(test)]
+            previous_computed: COMPUTED_ORDERS.with(|count| count.replace(Arc::clone(&self.computed))),
+        }
+    }
+}
+
+#[must_use = "the shared memo is used only while the guard is held"]
+pub(super) struct ReadingOrderMemoShareGuard {
+    previous: Option<SharedMemo>,
+    #[cfg(test)]
+    previous_computed: ComputedOrders,
+}
+
+impl Drop for ReadingOrderMemoShareGuard {
+    fn drop(&mut self) {
+        let previous = self.previous.take();
+        let _ = MEMO.try_with(|slot| slot.replace(previous));
+        #[cfg(test)]
+        {
+            let previous_computed = std::mem::take(&mut self.previous_computed);
+            let _ = COMPUTED_ORDERS.try_with(|count| count.replace(previous_computed));
+        }
     }
 }
 
@@ -123,11 +182,9 @@ pub(super) fn reorder(
     order: impl FnOnce(&mut Vec<TextSpan>),
 ) {
     let (width, height) = (page_width.to_bits(), page_height.to_bits());
-    let (served, input) = MEMO.with(|slot| {
-        let slot = slot.borrow();
-        let Some(memo) = slot.as_ref() else {
-            return (false, None);
-        };
+    let shared = MEMO.with(|slot| slot.borrow().clone());
+    let (served, input) = shared.as_ref().map_or((false, None), |shared| {
+        let memo = lock(shared);
         let stored = memo
             .pages
             .get(&page_index)
@@ -150,7 +207,7 @@ pub(super) fn reorder(
     let input_encodings = input.as_ref().map(|_| SpanEncodings::of(spans));
     order(spans);
     #[cfg(test)]
-    COMPUTED_ORDERS.with(|count| count.set(count.get() + 1));
+    COMPUTED_ORDERS.with(|count| count.borrow().fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let (Some((input, keys)), Some(input_encodings)) = (input, input_encodings) else {
         return;
     };
@@ -161,11 +218,8 @@ pub(super) fn reorder(
         None => StoredOrder::Spans(spans.clone()),
     };
     let bytes = size_of::<SpansFingerprint>() + ordered.bytes();
-    MEMO.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        let Some(memo) = slot.as_mut() else {
-            return;
-        };
+    if let Some(shared) = shared {
+        let mut memo = lock(&shared);
         let released = memo.pages.get(&page_index).map_or(0, |page| page.bytes);
         let used = memo.used - released + bytes;
         if used > memo.budget {
@@ -182,7 +236,7 @@ pub(super) fn reorder(
                 bytes,
             },
         );
-    });
+    }
 }
 
 fn spans_bytes(spans: &[TextSpan]) -> usize {
@@ -372,11 +426,10 @@ pub(super) fn output_positions(
 
 #[cfg(test)]
 fn stored_positions(page_index: usize) -> Option<bool> {
-    MEMO.with(|slot| {
-        let slot = slot.borrow();
-        let page = slot.as_ref()?.pages.get(&page_index)?;
-        Some(matches!(page.ordered, StoredOrder::Positions(_)))
-    })
+    let shared = MEMO.with(|slot| slot.borrow().clone())?;
+    let memo = lock(&shared);
+    let page = memo.pages.get(&page_index)?;
+    Some(matches!(page.ordered, StoredOrder::Positions(_)))
 }
 
 fn hash_span(out: &mut Digest, span: &TextSpan) {
