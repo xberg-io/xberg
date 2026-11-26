@@ -369,7 +369,6 @@ struct SlideProcessingContext<'a> {
     section_names: &'a std::collections::HashMap<u32, String>,
     config: &'a ParserConfig,
     page_config: Option<&'a crate::core::config::PageConfig>,
-    plain: bool,
     content_builder: &'a mut ContentBuilder,
     doc_builder: &'a mut Option<DocumentStructureBuilder>,
     image_index_counter: &'a mut u32,
@@ -409,19 +408,9 @@ fn process_one_slide<R: std::io::Read + std::io::Seek>(
     } else {
         Vec::new()
     };
-    let mut internal_elements = slide.to_internal_elements(ctx.config, &image_indices);
-    if let Some(ref note_text) = slide_notes
-        && !note_text.trim().is_empty()
-    {
-        let mut note_content = String::new();
-        if ctx.plain {
-            note_content.push_str("Notes:\n");
-        } else {
-            note_content.push_str("### Notes:\n");
-        }
-        note_content.push_str(note_text);
-        internal_elements.push(PptxInternalSlideElement::Markdown(note_content));
-    }
+    // Speaker notes reach `pages[].speaker_notes` through `content_builder`, never the slide's
+    // elements: an element would need its text sniffed to be told apart from authored slide text.
+    let internal_elements = slide.to_internal_elements(ctx.config, &image_indices);
     ctx.slide_contents.push(PptxInternalSlide {
         slide_number: slide.slide_number,
         elements: internal_elements,
@@ -522,7 +511,6 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
         section_names: &section_names,
         config: &config,
         page_config,
-        plain: options.plain,
         content_builder: &mut content_builder,
         doc_builder: &mut doc_builder,
         image_index_counter: &mut image_index_counter,

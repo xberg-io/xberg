@@ -265,20 +265,13 @@ impl PptxExtractor {
         saw_title: &mut bool,
         budget: &mut SecurityBudget,
     ) -> Result<()> {
-        let mut in_notes = false;
         for block in content.split("\n\n") {
             budget.step()?;
             let trimmed = block.trim();
             if trimmed.is_empty() {
                 continue;
             }
-            // Plain output writes the notes header and body as one block, "Notes:\n<body>".
-            if trimmed.starts_with("### Notes:") || trimmed.lines().next() == Some("Notes:") {
-                in_notes = true;
-                continue;
-            }
             if let Some(title_text) = trimmed.strip_prefix("# ") {
-                in_notes = false;
                 *saw_title = true;
                 let (title_text, title_formulas) =
                     Self::split_line_math(title_text, context.forms, context.formulas, context.plain_output);
@@ -289,9 +282,6 @@ impl PptxExtractor {
                     builder.push_heading(2, title, Some(slide_num), None);
                 }
                 continue;
-            }
-            if in_notes {
-                in_notes = false;
             }
             if trimmed.starts_with('|') {
                 let cells = Self::parse_markdown_table(trimmed);
@@ -1544,6 +1534,28 @@ mod tests {
             assert!(!result.content.contains("Notes:"), "{:?}", result.content);
             let pages = result.pages.as_ref().expect("pages should be populated");
             assert_eq!(pages[0].speaker_notes.as_deref(), Some("Intro notes."));
+        }
+    }
+
+    /// Slide text that begins with "Notes:" is authored content, not speaker notes.
+    #[test]
+    fn test_build_internal_document_keeps_authored_text_starting_with_notes() {
+        let content = "# Agenda\n\nNotes:\nBring the signed forms.\n\n### Notes: on scope\n";
+        for plain_output in [true, false] {
+            let mut budget = SecurityBudget::with_defaults();
+            let slides = markdown_slides(vec![(1, content.to_string())]);
+            let doc =
+                PptxExtractor::build_internal_document(&slides, 1, &[], plain_output, false, &mut budget).unwrap();
+            let texts: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+            assert!(texts.contains(&"Notes:"), "plain_output={plain_output}: {texts:?}");
+            assert!(
+                texts.contains(&"Bring the signed forms."),
+                "plain_output={plain_output}: {texts:?}"
+            );
+            assert!(
+                texts.iter().any(|t| t.contains("Notes: on scope")),
+                "plain_output={plain_output}: {texts:?}"
+            );
         }
     }
 
