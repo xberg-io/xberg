@@ -816,7 +816,8 @@ fn assemble_page_elements_with_tables(
         .map(|&(top, table)| table_reading_top(top, table, &positioned))
         .collect();
     let mut positioned: Vec<_> = positioned.into_iter().zip(reading_tops).collect();
-    positioned.sort_by(|a, b| b.1.total_cmp(&a.1));
+    // Tables nested in one table's upper half share its reading top; their own tops order them.
+    positioned.sort_by(|a, b| b.1.total_cmp(&a.1).then(b.0.0.total_cmp(&a.0.0)));
 
     let table_token_counts: Vec<(&crate::types::Table, std::collections::HashMap<String, usize>)> = tables
         .iter()
@@ -3169,6 +3170,37 @@ mod tests {
             })
             .collect();
         assert_eq!(labels, ["Before", "| Header band |", "| Rates |", "After"]);
+    }
+
+    #[test]
+    fn test_tables_nested_at_the_top_of_one_table_read_top_down() {
+        let pages = vec![vec![
+            make_paragraph_in_box("Before", 900.0, 40.0, 560.0),
+            make_paragraph_in_box("After", 300.0, 40.0, 560.0),
+        ]];
+        let mut rates = make_table_in_box("| Rates |", 40.0, 560.0, 800.0);
+        if let Some(bbox) = rates.bounding_box.as_mut() {
+            bbox.y0 = 400.0;
+        }
+        let lower_band = make_table_in_box("| Lower band |", 90.0, 500.0, 760.0);
+        let upper_band = make_table_in_box("| Upper band |", 90.0, 500.0, 799.3);
+        let tables = vec![rates, lower_band, upper_band];
+
+        let document = assemble_internal_document(pages, &tables, None, &[], &Default::default());
+
+        let labels: Vec<&str> = document
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                ElementKind::Paragraph => Some(element.text.as_str()),
+                ElementKind::Table { table_index } => Some(document.tables[*table_index as usize].markdown.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            ["Before", "| Upper band |", "| Lower band |", "| Rates |", "After"]
+        );
     }
 
     #[test]
