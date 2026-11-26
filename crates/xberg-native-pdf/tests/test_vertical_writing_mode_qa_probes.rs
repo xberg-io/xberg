@@ -193,7 +193,7 @@ fn span_with_wmode(text: &str, x: f32, y: f32, wmode: u8) -> TextSpan {
     TextSpan {
         text: text.to_string(),
         bbox: Rect::new(x, y, 12.0, 12.0),
-        font_name: "TestFont".to_string(),
+        font_name: "TestFont".into(),
         font_size: 12.0,
         wmode,
         ..TextSpan::default()

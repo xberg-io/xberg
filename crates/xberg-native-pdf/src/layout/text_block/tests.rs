@@ -30,7 +30,7 @@ fn mock_char(c: char, x: f32, y: f32) -> TextChar {
     TextChar {
         char: c,
         bbox,
-        font_name: "Times".to_string(),
+        font_name: "Times".into(),
         font_size: 12.0,
         font_weight: FontWeight::Normal,
         is_italic: false,
@@ -58,12 +58,12 @@ fn dominant_font_tie_resolves_to_lexicographically_smaller_name() {
     let mut chars = Vec::new();
     for (i, c) in "abcd".chars().enumerate() {
         let mut ch = mock_char(c, i as f32 * 10.0, 0.0);
-        ch.font_name = "Times".to_string();
+        ch.font_name = "Times".into();
         chars.push(ch);
     }
     for (i, c) in "efgh".chars().enumerate() {
         let mut ch = mock_char(c, 40.0 + i as f32 * 10.0, 0.0);
-        ch.font_name = "Courier".to_string();
+        ch.font_name = "Courier".into();
         chars.push(ch);
     }
     let block = TextBlock::from_chars(chars);
@@ -78,12 +78,12 @@ fn dominant_font_unique_winner_is_unaffected_by_tie_break() {
     let mut chars = Vec::new();
     for (i, c) in "abcdef".chars().enumerate() {
         let mut ch = mock_char(c, i as f32 * 10.0, 0.0);
-        ch.font_name = "Times".to_string();
+        ch.font_name = "Times".into();
         chars.push(ch);
     }
     for (i, c) in "gh".chars().enumerate() {
         let mut ch = mock_char(c, 60.0 + i as f32 * 10.0, 0.0);
-        ch.font_name = "Courier".to_string();
+        ch.font_name = "Courier".into();
         chars.push(ch);
     }
     let block = TextBlock::from_chars(chars);
@@ -132,7 +132,7 @@ fn test_text_char_is_monospace() {
     let c = TextChar {
         char: 'A',
         bbox: Rect::new(0.0, 0.0, 10.0, 12.0),
-        font_name: "Courier".to_string(),
+        font_name: "Courier".into(),
         font_size: 12.0,
         font_weight: FontWeight::Normal,
         is_italic: false,
@@ -310,5 +310,42 @@ fn text_rise_zero_serde_omitted() {
     assert!(
         json.contains("text_rise"),
         "non-zero text_rise must be serialized: {json}"
+    );
+}
+
+#[test]
+fn to_chars_shares_the_span_font_name() {
+    let span = TextSpan {
+        text: "abc".to_string(),
+        font_name: "ABCDEF+CMR10".into(),
+        bbox: Rect::new(0.0, 0.0, 30.0, 10.0),
+        ..TextSpan::default()
+    };
+    let chars = span.to_chars();
+    assert_eq!(chars.len(), 3);
+    for ch in &chars {
+        assert_eq!(ch.font_name, "ABCDEF+CMR10");
+        assert!(std::ptr::eq(
+            ch.font_name.as_str().as_ptr(),
+            span.font_name.as_str().as_ptr()
+        ));
+    }
+    let block = TextBlock::from_chars(chars);
+    assert!(std::ptr::eq(
+        block.dominant_font.as_str().as_ptr(),
+        span.font_name.as_str().as_ptr()
+    ));
+}
+
+#[test]
+fn font_name_serializes_as_a_plain_string() {
+    let span = TextSpan {
+        font_name: "Helvetica-Bold".into(),
+        ..TextSpan::default()
+    };
+    let json = serde_json::to_value(&span).unwrap();
+    assert_eq!(
+        json["font_name"],
+        serde_json::Value::String("Helvetica-Bold".to_string())
     );
 }

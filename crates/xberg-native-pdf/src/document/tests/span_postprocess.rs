@@ -463,7 +463,7 @@ fn random_stamp_page(rng: &mut Xorshift) -> (Vec<crate::layout::TextChar>, Vec<c
         chars.push(crate::layout::TextChar {
             char: rng.pick(GLYPHS),
             bbox: crate::geometry::Rect::new(x, 0.0, 1.0, 4.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 4.0,
             font_weight: crate::layout::FontWeight::Normal,
             color: crate::layout::Color::black(),

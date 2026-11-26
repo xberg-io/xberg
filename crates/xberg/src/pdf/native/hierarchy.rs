@@ -2904,7 +2904,7 @@ mod tests {
     #[test]
     fn should_normalize_hierarchy_metadata_to_the_base() {
         let mut base = positioned_span("H SO", 100.0, 200.0, 20.0, 10.0, vec![100.0, 105.0, 110.0, 115.0]);
-        base.font_name = "BaseFont".to_string();
+        base.font_name = "BaseFont".into();
         base.font_weight = xberg_native_pdf::layout::text_block::FontWeight::Bold;
         base.is_italic = true;
         base.is_monospace = true;

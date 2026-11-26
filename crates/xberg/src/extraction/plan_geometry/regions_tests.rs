@@ -79,7 +79,7 @@ fn span(text: &str, x: f32, y: f32, width: f32, height: f32) -> xberg_native_pdf
         artifact_type: None,
         text: text.to_string(),
         bbox: xberg_native_pdf::geometry::Rect::new(x, y, width, height),
-        font_name: String::new(),
+        font_name: Default::default(),
         font_size: 12.0,
         font_weight: xberg_native_pdf::layout::FontWeight::Normal,
         is_italic: false,

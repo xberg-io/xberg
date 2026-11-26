@@ -113,7 +113,10 @@ fn field_mutations() -> Vec<Mutation> {
         ("bbox.y", Box::new(|s: &mut TextSpan| s.bbox.y += 0.5)),
         ("bbox.width", Box::new(|s: &mut TextSpan| s.bbox.width += 0.5)),
         ("bbox.height", Box::new(|s: &mut TextSpan| s.bbox.height += 0.5)),
-        ("font_name", Box::new(|s: &mut TextSpan| s.font_name.push('x'))),
+        (
+            "font_name",
+            Box::new(|s: &mut TextSpan| s.font_name = format!("{}x", s.font_name).into()),
+        ),
         ("font_size", Box::new(|s: &mut TextSpan| s.font_size += 1.0)),
         (
             "font_weight",
@@ -194,7 +197,11 @@ fn equal_spans_share_a_fingerprint_and_any_changed_field_breaks_it() {
         ..TextSpan::default()
     };
     let reference = fingerprint(std::slice::from_ref(&base));
-    assert_eq!(reference, fingerprint(std::slice::from_ref(&base)), "equal spans must match");
+    assert_eq!(
+        reference,
+        fingerprint(std::slice::from_ref(&base)),
+        "equal spans must match"
+    );
 
     let mutations = field_mutations();
     for (field, mutate) in &mutations {

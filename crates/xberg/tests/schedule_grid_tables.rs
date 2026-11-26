@@ -19,7 +19,7 @@ fn span(text: &str, left: f32, bottom: f32, width: f32, height: f32, rotation: f
         artifact_type: None,
         text: text.to_string(),
         bbox: xberg_native_pdf::geometry::Rect::new(left, bottom, width, height),
-        font_name: "ScheduleFont".to_string(),
+        font_name: "ScheduleFont".into(),
         font_size: 8.0,
         font_weight: FontWeight::Normal,
         is_italic: false,

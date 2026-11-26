@@ -147,7 +147,7 @@ fn spans_bytes(spans: &[TextSpan]) -> usize {
         .map(|span| {
             size_of::<TextSpan>()
                 + span.text.capacity()
-                + span.font_name.capacity()
+                + span.font_name.len()
                 + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
         })
         .sum()

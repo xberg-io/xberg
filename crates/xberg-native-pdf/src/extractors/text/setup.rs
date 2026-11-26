@@ -93,6 +93,8 @@ impl<'doc> TextExtractor<'doc> {
             lead_threshold: None,
             word_boundary_mode,
             cached_current_font: None,
+            glyph_font_name: FontName::default(),
+            font_names: HashSet::new(),
             extraction_width_tables: HashMap::new(),
             cached_extraction_widths: None,
             // Default to Page(0); `set_page_index` overrides before
@@ -127,6 +129,9 @@ impl<'doc> TextExtractor<'doc> {
                 .or_insert_with(|| (font.clone(), Arc::new(font.build_extraction_byte_widths())))
                 .1
                 .clone()
+        });
+        self.glyph_font_name = font.as_ref().map_or_else(FontName::default, |font| {
+            intern_font_name(&mut self.font_names, &font.base_font)
         });
         self.cached_current_font = font;
     }

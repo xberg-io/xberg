@@ -80,7 +80,7 @@ impl<'doc> TextExtractor<'doc> {
                 width: total_width,
                 height: effective_font_size,
             },
-            font_name: font_name_span,
+            font_name: font_name_span.into(),
             font_size: effective_font_size,
             font_weight,
             color: Color::new(

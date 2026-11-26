@@ -88,7 +88,7 @@ fn an_unclaimed_source_glyph_in_the_decimal_gap_prevents_ownership() {
         .unwrap()
         .clone();
     extra.char = 'x';
-    extra.advance_width = authority.fonts[&point.font_name]
+    extra.advance_width = authority.fonts[point.font_name.as_str()]
         .as_ref()
         .unwrap()
         .get_glyph_width(u16::from(b'x'))
@@ -218,7 +218,7 @@ fn uncertain_font_or_source_context_preserves_the_unassociated_original() {
         let index = unsigned_point(&spans);
         let mut authority = Authority::load(&doc.doc, 0).unwrap();
         if uncertain_font {
-            authority.fonts.insert(spans[index].font_name.clone(), None);
+            authority.fonts.insert(spans[index].font_name.to_string(), None);
         } else {
             spans[index].mcid = Some(1);
         }
@@ -338,7 +338,7 @@ fn unclaimed_source_text_after_the_operand_cannot_be_hidden_by_its_span_width() 
     glyph.char = 'x';
     glyph.origin_x += 10.0;
     glyph.bbox.x += 10.0;
-    glyph.advance_width = authority.fonts[&base.font_name]
+    glyph.advance_width = authority.fonts[base.font_name.as_str()]
         .as_ref()
         .unwrap()
         .get_glyph_width(u16::from(b'x'))

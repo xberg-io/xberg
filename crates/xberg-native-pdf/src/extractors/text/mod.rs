@@ -22,7 +22,8 @@ use crate::fonts::unicode_decode::{
     without_symbol_marker,
 };
 use crate::geometry::Rect;
-use crate::layout::{Color, FontWeight, TextChar, TextSpan};
+use crate::layout::font_name::intern_font_name;
+use crate::layout::{Color, FontName, FontWeight, TextChar, TextSpan};
 use crate::object::{Object, ObjectRef};
 use crate::pipeline::config::WordBoundaryMode;
 use crate::text::{BoundaryContext, CharacterInfo, DocumentScript, WordBoundaryDetector};
@@ -2589,6 +2590,10 @@ pub struct TextExtractor<'doc> {
     /// Cached current font (updated on Tf). Avoids per-Tj HashMap lookup
     /// in advance_position_for_string.
     cached_current_font: Option<Arc<FontInfo>>,
+    /// `/BaseFont` of `cached_current_font`, shared by every glyph drawn in it. ~keep
+    glyph_font_name: FontName,
+    /// Font names this extractor handed out, so glyphs and spans of one font share an allocation. ~keep
+    font_names: HashSet<FontName>,
     /// Extraction-only simple-font width tables, keyed by stable `Arc` identity.
     /// Each embedded font is parsed at most once per extractor. ~keep
     extraction_width_tables: HashMap<usize, (Arc<FontInfo>, Arc<[f32; 256]>)>,
@@ -2683,7 +2688,7 @@ impl<'doc> TextExtractor<'doc> {
         if let Some(witnesses) = &mut self.cmsy_witnesses {
             let mut witness = span.clone();
             // Retained spans resolve the resource alias to /BaseFont after merging. ~keep
-            witness.font_name = base.to_owned();
+            witness.font_name = base.into();
             witnesses.push(witness);
         }
     }

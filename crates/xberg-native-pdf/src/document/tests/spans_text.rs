@@ -339,7 +339,7 @@ mod soft_hyphen_seam {
         TextSpan {
             text: text.to_string(),
             bbox: crate::geometry::Rect::new(x, y, width, font_size),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size,
             ..Default::default()
         }

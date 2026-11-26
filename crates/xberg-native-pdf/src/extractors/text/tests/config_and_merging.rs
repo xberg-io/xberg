@@ -783,7 +783,7 @@ fn snap_span(text: &str, x: f32, y: f32, w: f32, fs: f32, seq: usize) -> TextSpa
         artifact_type: None,
         text: text.to_string(),
         bbox: Rect::new(x, y, w, fs),
-        font_name: "F1".to_string(),
+        font_name: "F1".into(),
         font_size: fs,
         font_weight: FontWeight::Normal,
         color: Color::black(),

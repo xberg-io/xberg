@@ -100,7 +100,7 @@ pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usiz
             .iter()
             .map(|span| {
                 span.text.capacity()
-                    + span.font_name.capacity()
+                    + span.font_name.len()
                     + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
             })
             .sum::<usize>()

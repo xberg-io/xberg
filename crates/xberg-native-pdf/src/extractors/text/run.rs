@@ -147,13 +147,16 @@ impl<'doc> TextExtractor<'doc> {
     /// `extract_text_spans_impl` for readability only — same single pass over
     /// `self.spans`, same lookup keyed by the raw resource alias. ~keep
     fn resolve_span_font_provenance(&mut self) {
-        let resolved: Vec<(Option<String>, Option<crate::fonts::MappingProvenance>)> = self
+        let font_names = &mut self.font_names;
+        let resolved: Vec<(Option<FontName>, Option<crate::fonts::MappingProvenance>)> = self
             .spans
             .iter()
             .map(|s| {
-                self.fonts.get(&s.font_name).map_or((None, None), |f| {
+                self.fonts.get(s.font_name.as_str()).map_or((None, None), |f| {
                     (
-                        Some(f.base_font.clone()).filter(|b| !b.is_empty()),
+                        Some(f.base_font.as_str())
+                            .filter(|b| !b.is_empty())
+                            .map(|b| intern_font_name(font_names, b)),
                         Some(self.font_provenance_cache.resolve(f)),
                     )
                 })

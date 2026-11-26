@@ -454,7 +454,7 @@ impl<'doc> TextExtractor<'doc> {
                                         let space_char = TextChar {
                                             char: ' ',
                                             bbox: Rect::new(pos.x, pos.y, tx.abs(), effective_font_size),
-                                            font_name: font_name_str,
+                                            font_name: font_name_str.into(),
                                             font_size: effective_font_size,
                                             font_weight,
                                             color: Color::new(r, g, b),

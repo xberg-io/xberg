@@ -51,7 +51,7 @@ mod tests {
             artifact_type: None,
             text: text.to_string(),
             bbox: Rect::new(x, y, 50.0, 12.0),
-            font_name: "Test".to_string(),
+            font_name: "Test".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             is_italic: false,

@@ -7,7 +7,7 @@ fn span(text: &str, font: &str, size: f32, x: f32, width: f32, baseline: f32) ->
     TextSpan {
         text: text.to_string(),
         bbox: Rect::new(x, baseline, width, size),
-        font_name: font.to_string(),
+        font_name: font.into(),
         font_size: size,
         ..TextSpan::default()
     }

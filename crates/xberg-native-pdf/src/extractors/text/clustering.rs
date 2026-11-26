@@ -99,7 +99,7 @@ impl<'doc> TextExtractor<'doc> {
             provenance: None,
             text: unicode_text,
             bbox,
-            font_name: state.font_name.clone().unwrap_or_else(|| "Unknown".to_string()),
+            font_name: state.font_name.as_deref().unwrap_or("Unknown").into(),
             font_size: cluster[0].font_size,
             font_weight,
             color: Color::new(state.fill_color_rgb.0, state.fill_color_rgb.1, state.fill_color_rgb.2),

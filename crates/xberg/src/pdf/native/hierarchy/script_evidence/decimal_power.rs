@@ -74,7 +74,7 @@ impl Authority {
     }
 
     fn matches(&self, glyph: &TextChar, span: &TextSpan) -> bool {
-        let Some(font) = self.fonts.get(&span.font_name).and_then(Option::as_ref) else {
+        let Some(font) = self.fonts.get(span.font_name.as_str()).and_then(Option::as_ref) else {
             return false;
         };
         font.has_explicit_widths()

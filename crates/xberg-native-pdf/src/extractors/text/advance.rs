@@ -623,7 +623,7 @@ impl<'doc> TextExtractor<'doc> {
                 width: space_width,
                 height: space_height,
             },
-            font_name: font_name_space,
+            font_name: font_name_space.into(),
             font_size: effective_font_size,
             font_weight: FontWeight::Normal,
             color: Color::new(state.fill_color_rgb.0, state.fill_color_rgb.1, state.fill_color_rgb.2),
@@ -943,7 +943,7 @@ impl<'doc> TextExtractor<'doc> {
                     width: total_width,
                     height: effective_font_size,
                 },
-                font_name: font_name_buf,
+                font_name: font_name_buf.into(),
                 font_size: effective_font_size,
                 font_weight,
                 color: Color::new(
@@ -1176,7 +1176,7 @@ impl<'doc> TextExtractor<'doc> {
                     let text_char = TextChar {
                         char: unicode_char,
                         bbox: Rect::new(char_origin_x, char_origin_y, char_width_device, height_device_space),
-                        font_name: font.map(|f| f.base_font.clone()).unwrap_or_default(),
+                        font_name: self.glyph_font_name.clone(),
                         font_size: effective_font_size,
                         font_weight,
                         color,

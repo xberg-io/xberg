@@ -7485,7 +7485,7 @@ mod tests {
             artifact_type: None,
             text: text.to_string(),
             bbox: Rect::new(x, y, width, height),
-            font_name: "TestFont".to_string(),
+            font_name: "TestFont".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             is_italic: false,
@@ -9213,7 +9213,7 @@ mod tests {
                         );
                         if matches!(paint, HeaderPaint::BoldGroup) && row <= 1 && column == 1 {
                             span.font_weight = crate::layout::FontWeight::Bold;
-                            span.font_name = "Helvetica-Bold".to_string();
+                            span.font_name = "Helvetica-Bold".into();
                         }
                         if glyph_widths && value.contains('.') && is_data_value(value) {
                             span.char_widths = vec![width / value.len() as f32; value.len()];
@@ -11663,7 +11663,7 @@ mod tests {
             text: text.to_string(),
             bbox: Rect::new(x, y, width, fs),
             font_size: fs,
-            font_name: String::new(),
+            font_name: Default::default(),
             font_weight: crate::layout::text_block::FontWeight::Normal,
             color: Color::black(),
             mcid: None,

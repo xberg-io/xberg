@@ -423,7 +423,7 @@ mod tests {
         TextChar {
             char: 'x',
             bbox,
-            font_name: "Times".to_string(),
+            font_name: "Times".into(),
             font_size,
             font_weight: FontWeight::Normal,
             color: Color::black(),

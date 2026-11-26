@@ -13,7 +13,7 @@ fn test_detect_span_columns_single_column() {
             artifact_type: None,
             text: format!("Line {}", i),
             bbox: Rect::new(50.0, 700.0 - (i as f32 * 14.0), 200.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -51,7 +51,7 @@ fn test_sort_by_reading_order() {
         TextChar {
             char: 'B',
             bbox: Rect::new(100.0, 680.0, 6.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -70,7 +70,7 @@ fn test_sort_by_reading_order() {
         TextChar {
             char: 'A',
             bbox: Rect::new(100.0, 700.0, 6.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -102,7 +102,7 @@ fn test_sort_by_reading_order_same_line() {
         TextChar {
             char: 'B',
             bbox: Rect::new(200.0, 700.0, 6.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -121,7 +121,7 @@ fn test_sort_by_reading_order_same_line() {
         TextChar {
             char: 'A',
             bbox: Rect::new(100.0, 700.0, 6.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -151,7 +151,7 @@ fn test_sort_by_reading_order_nan_values() {
         TextChar {
             char: 'A',
             bbox: Rect::new(f32::NAN, f32::NAN, 6.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -170,7 +170,7 @@ fn test_sort_by_reading_order_nan_values() {
         TextChar {
             char: 'B',
             bbox: Rect::new(100.0, 700.0, 6.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -204,7 +204,7 @@ fn test_merge_adjacent_spans_same_line() {
             artifact_type: None,
             text: "Hello".to_string(),
             bbox: Rect::new(100.0, 700.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -235,7 +235,7 @@ fn test_merge_adjacent_spans_same_line() {
             artifact_type: None,
             text: "World".to_string(),
             bbox: Rect::new(131.0, 700.0, 30.0, 12.0), // 1pt gap ~keep
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -289,7 +289,7 @@ fn test_merge_adjacent_spans_180_degree_runs_never_merge() {
         TextSpan {
             text: "Hello".to_string(),
             bbox: Rect::new(100.0, 700.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             sequence: 0,
             rotation_degrees: 180.0,
             ..TextSpan::default()
@@ -297,7 +297,7 @@ fn test_merge_adjacent_spans_180_degree_runs_never_merge() {
         TextSpan {
             text: "World".to_string(),
             bbox: Rect::new(131.0, 700.0, 30.0, 12.0), // 1pt gap ~keep
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             sequence: 1,
             rotation_degrees: 180.0,
             ..TextSpan::default()
@@ -325,7 +325,7 @@ fn test_merge_adjacent_spans_different_lines() {
             artifact_type: None,
             text: "Hello".to_string(),
             bbox: Rect::new(100.0, 700.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -356,7 +356,7 @@ fn test_merge_adjacent_spans_different_lines() {
             artifact_type: None,
             text: "World".to_string(),
             bbox: Rect::new(100.0, 680.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -406,7 +406,7 @@ fn test_merge_adjacent_spans_column_boundary() {
             artifact_type: None,
             text: "Left".to_string(),
             bbox: Rect::new(50.0, 700.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -437,7 +437,7 @@ fn test_merge_adjacent_spans_column_boundary() {
             artifact_type: None,
             text: "Right".to_string(),
             bbox: Rect::new(300.0, 700.0, 30.0, 12.0), // Large gap (column boundary) ~keep
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -484,14 +484,14 @@ fn test_merge_whitespace_only_span() {
         TextSpan {
             text: "Hello".to_string(),
             bbox: Rect::new(100.0, 700.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             sequence: 0,
             ..TextSpan::default()
         },
         TextSpan {
             text: " ".to_string(),
             bbox: Rect::new(130.0, 700.0, 2.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             sequence: 1,
             offset_semantic: true,
             ..TextSpan::default()
@@ -499,7 +499,7 @@ fn test_merge_whitespace_only_span() {
         TextSpan {
             text: "World".to_string(),
             bbox: Rect::new(132.0, 700.0, 30.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             sequence: 2,
             ..TextSpan::default()
         },

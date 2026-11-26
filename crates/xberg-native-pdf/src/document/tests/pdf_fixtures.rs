@@ -180,7 +180,7 @@ pub(super) fn corridor_span(text: &str, x: f32, y: f32, w: f32) -> crate::layout
         text: text.to_string(),
         bbox: Rect::new(x, y, w, 10.0),
         font_size: 10.0,
-        font_name: "Test".to_string(),
+        font_name: "Test".into(),
         font_weight: FontWeight::Normal,
         is_italic: false,
         is_monospace: false,

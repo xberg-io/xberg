@@ -22,7 +22,7 @@ fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> Text
         artifact_type: None,
         text: text.to_string(),
         bbox: Rect::new(x, y, width, height),
-        font_name: "Times".to_string(),
+        font_name: "Times".into(),
         font_size: height,
         font_weight: FontWeight::Normal,
         is_italic: false,

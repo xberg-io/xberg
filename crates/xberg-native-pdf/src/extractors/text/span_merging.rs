@@ -125,7 +125,7 @@ impl<'doc> TextExtractor<'doc> {
             let reliable_widths = continues_pen
                 || self
                     .fonts
-                    .get(&current.font_name)
+                    .get(current.font_name.as_str())
                     .map(|f| f.has_explicit_widths())
                     .unwrap_or(true);
             let space_gap = corrected_space_gap(

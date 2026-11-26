@@ -368,7 +368,7 @@ impl StructuredExtractor {
             .unwrap_or((0.0, 0.0, 0.0));
 
         TextStyle {
-            font_family: block.dominant_font.clone(),
+            font_family: block.dominant_font.to_string(),
             font_size: block.avg_font_size,
             bold,
             italic,

@@ -15,7 +15,7 @@ fn create_char_with_transform(c: char, x: f32, y: f32, rotation: f32, matrix: Op
     TextChar {
         char: c,
         bbox,
-        font_name: "Helvetica".to_string(),
+        font_name: "Helvetica".into(),
         font_size: 12.0,
         font_weight: FontWeight::Normal,
         is_italic: false,
@@ -112,7 +112,7 @@ fn test_textchar_advance_width() {
     let char = TextChar {
         char: 'W',
         bbox,
-        font_name: "Helvetica".to_string(),
+        font_name: "Helvetica".into(),
         font_size: 12.0,
         font_weight: FontWeight::Normal,
         is_italic: false,
@@ -158,7 +158,7 @@ fn test_textchar_with_matrix_builder() {
     let char = TextChar {
         char: 'A',
         bbox,
-        font_name: "Helvetica".to_string(),
+        font_name: "Helvetica".into(),
         font_size: 12.0,
         font_weight: FontWeight::Normal,
         is_italic: false,

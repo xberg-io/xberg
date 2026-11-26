@@ -911,7 +911,7 @@ mod script_geometry_tests {
             text: text.to_string(),
             bbox: crate::geometry::Rect::new(x, y, width, font_size),
             font_size,
-            font_name: format!("source-{text}"),
+            font_name: format!("source-{text}").into(),
             is_italic: text == "caption",
             primary_detected: text == "figure label",
             mirrored: text == "caption",

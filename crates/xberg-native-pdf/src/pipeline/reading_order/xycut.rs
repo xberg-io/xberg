@@ -2816,7 +2816,7 @@ mod tests {
             text: text.to_string(),
             bbox: Rect::new(x, y, width, height),
             font_size,
-            font_name: "Arial".to_string(),
+            font_name: "Arial".into(),
             font_weight: FontWeight::Normal,
             is_italic: false,
             is_monospace: false,

@@ -6,7 +6,7 @@ fn base_line_run(text: &str, x: f32, width: f32) -> TextSpan {
     TextSpan {
         text: text.to_string(),
         bbox: Rect::new(x, 700.0, width, 12.0),
-        font_name: "F1".to_string(),
+        font_name: "F1".into(),
         font_size: 12.0,
         ..TextSpan::default()
     }
@@ -20,7 +20,7 @@ fn h2so4_runs(with_subscript: bool) -> Vec<TextSpan> {
         runs.push(TextSpan {
             text: "2".to_string(),
             bbox: Rect::new(130.0, 698.0, 4.0, 8.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 8.0,
             ..TextSpan::default()
         });
@@ -52,7 +52,7 @@ fn test_merge_adjacent_spans_ignores_a_full_size_neighbour_line_clipping_the_gap
     runs.push(TextSpan {
         text: "below".to_string(),
         bbox: Rect::new(120.0, 689.0, 40.0, 12.0),
-        font_name: "F1".to_string(),
+        font_name: "F1".into(),
         font_size: 12.0,
         ..TextSpan::default()
     });

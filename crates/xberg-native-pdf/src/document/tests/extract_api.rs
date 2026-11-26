@@ -259,7 +259,7 @@ fn test_apply_intelligent_text_processing_ocr_font() {
     let pdf = build_minimal_pdf(b"");
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     let mut span = make_test_span("Test  Text", 0.0, 0.0, 100.0, 12.0);
-    span.font_name = "OCR".to_string();
+    span.font_name = "OCR".into();
     let result = doc.apply_intelligent_text_processing(vec![span]);
     assert!(!result[0].text.contains("  "));
 }
