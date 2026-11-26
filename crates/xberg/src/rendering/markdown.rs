@@ -233,7 +233,7 @@ fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
             _ => continue,
         };
         let mut part = String::new();
-        let mut flush = |part: &mut String| {
+        let flush = |part: &mut String| {
             if !part.is_empty() {
                 node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(std::mem::take(part).into()))));
             }
