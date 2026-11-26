@@ -38,41 +38,173 @@ pub(crate) fn ensure_ort_available() {
     #[cfg(all(feature = "ort-bundled", not(feature = "ort-dynamic")))]
     tracing::debug!("ONNX Runtime is linked; skipping system library discovery");
 
+    // `ort_environment` returns the same cached failure, so it is only noted here. ~keep
     #[cfg(ort_dynamic_discovery)]
     if let Err(error) = preload_ort_runtime() {
-        tracing::warn!(%error, "Could not preload the discovered ONNX Runtime");
+        tracing::debug!(%error, "ONNX Runtime is not loadable");
+    }
+}
+
+/// Explicit ONNX Runtime library override; the name and its semantics are ort's own.
+#[cfg(ort_dynamic_discovery)]
+const ORT_DYLIB_PATH_ENV_VAR: &str = "ORT_DYLIB_PATH";
+
+/// Why the dynamically loaded ONNX Runtime library is unavailable.
+#[cfg(ort_dynamic_discovery)]
+#[derive(Debug)]
+pub(crate) enum OrtRuntimeError {
+    /// No library exists at any location the search order names.
+    NotFound { tried: Vec<std::path::PathBuf> },
+    /// The resolved library exists (or was named explicitly) but could not be loaded.
+    Load {
+        path: std::path::PathBuf,
+        source: ort::LoadDynamicError,
+    },
+}
+
+#[cfg(ort_dynamic_discovery)]
+impl std::fmt::Display for OrtRuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound { tried } => {
+                write!(f, "ONNX Runtime library not found; searched:")?;
+                for path in tried {
+                    write!(f, " `{}`", path.display())?;
+                }
+                write!(
+                    f,
+                    ". Reinstall the release archive, which ships the library next to the xberg \
+                     executable, or set {ORT_DYLIB_PATH_ENV_VAR} to the absolute path of an ONNX \
+                     Runtime 1.{}+ library",
+                    ort::MINOR_VERSION
+                )
+            }
+            Self::Load { path, source } => write!(
+                f,
+                "could not load the ONNX Runtime library `{}`: {source}. Point \
+                 {ORT_DYLIB_PATH_ENV_VAR} at a working ONNX Runtime 1.{}+ library",
+                path.display(),
+                ort::MINOR_VERSION
+            ),
+        }
     }
 }
 
 #[cfg(ort_dynamic_discovery)]
-pub(crate) fn preload_ort_runtime() -> Result<(), ort::LoadDynamicError> {
-    static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
-    INIT.get_or_try_init(|| {
-        let explicit = std::env::var("ORT_DYLIB_PATH").ok();
-        preload_ort_runtime_from(
-            explicit.as_deref().map(std::path::Path::new),
-            platform_candidates().iter().map(std::path::Path::new),
-        )
-    })
-    .copied()
+impl std::error::Error for OrtRuntimeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::NotFound { .. } => None,
+            Self::Load { source, .. } => Some(source),
+        }
+    }
 }
 
+/// Load ONNX Runtime the first time a model needs it, exactly once per process.
+///
+/// The outcome, success or failure, is cached: later callers get the same result instead of
+/// a second `dlopen`, and a failure never falls through to ort's own name-based loader search.
 #[cfg(ort_dynamic_discovery)]
-fn preload_ort_runtime_from<'a>(
-    explicit: Option<&std::path::Path>,
-    mut candidates: impl Iterator<Item = &'a std::path::Path>,
-) -> Result<(), ort::LoadDynamicError> {
-    // Leave explicit existing paths and the default search to ort. A bare library
-    // name may resolve through the executable directory or the system loader. ~keep
-    if explicit.is_some_and(std::path::Path::exists) {
-        return Ok(());
-    }
-    if let Some(path) = candidates.find(|path| path.exists()) {
-        // Load the library and leave environment creation to the caller. ~keep
-        let _builder = ort::init_from(path)?;
-    }
-    Ok(())
+pub(crate) fn preload_ort_runtime() -> Result<(), std::sync::Arc<OrtRuntimeError>> {
+    static RUNTIME: std::sync::OnceLock<Result<(), std::sync::Arc<OrtRuntimeError>>> = std::sync::OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            let explicit = std::env::var_os(ORT_DYLIB_PATH_ENV_VAR);
+            let executable = running_executable();
+            let system: Vec<&std::path::Path> = platform_candidates().iter().map(std::path::Path::new).collect();
+            let path = preload_ort_runtime_from(explicit.as_deref(), executable.as_deref(), &system)
+                .map_err(std::sync::Arc::new)?;
+            tracing::debug!(path = %path.display(), "Loaded ONNX Runtime");
+            Ok(())
+        })
+        .clone()
 }
+
+/// The running executable with symlinks resolved, so a symlinked install (a package manager's
+/// `bin/` link) still finds the library shipped beside the real binary.
+#[cfg(ort_dynamic_discovery)]
+fn running_executable() -> Option<std::path::PathBuf> {
+    let executable = std::env::current_exe().ok()?;
+    // Windows canonical paths take the verbatim `\\?\` form; the loader needs no symlink pass. ~keep
+    #[cfg(unix)]
+    let executable = std::fs::canonicalize(&executable).unwrap_or(executable);
+    Some(executable)
+}
+
+/// Resolve the library with [`resolve_ort_library`] and load it; uncached.
+#[cfg(ort_dynamic_discovery)]
+fn preload_ort_runtime_from(
+    explicit: Option<&std::ffi::OsStr>,
+    executable: Option<&std::path::Path>,
+    system: &[&std::path::Path],
+) -> Result<std::path::PathBuf, OrtRuntimeError> {
+    let path =
+        resolve_ort_library(explicit, executable, system).map_err(|tried| OrtRuntimeError::NotFound { tried })?;
+    // Load the library and leave environment creation to the caller. ~keep
+    match ort::init_from(&path) {
+        Ok(_builder) => Ok(path),
+        Err(source) => Err(OrtRuntimeError::Load { path, source }),
+    }
+}
+
+/// Decide which ONNX Runtime library to load, without loading it.
+///
+/// 1. `ORT_DYLIB_PATH`, when set and non-empty, is authoritative: it is returned even when it
+///    does not exist, so a mistyped override fails loudly instead of loading another runtime.
+///    ort resolves a relative value against the executable's directory first.
+/// 2. The release layout: [`ORT_LIBRARY_NAMES`] in the executable's directory, then in
+///    `<executable dir>/../lib`.
+/// 3. The documented system install locations (`platform_candidates`).
+///
+/// Every candidate is an absolute path, so the current directory and the loader's name search
+/// are never consulted. Returns every path searched when none exists.
+#[cfg(any(test, ort_dynamic_discovery))]
+fn resolve_ort_library(
+    explicit: Option<&std::ffi::OsStr>,
+    executable: Option<&std::path::Path>,
+    system: &[&std::path::Path],
+) -> Result<std::path::PathBuf, Vec<std::path::PathBuf>> {
+    if let Some(explicit) = explicit.filter(|value| !value.is_empty()) {
+        return Ok(std::path::PathBuf::from(explicit));
+    }
+    let mut tried = executable_relative_candidates(executable);
+    tried.extend(system.iter().map(|path| path.to_path_buf()));
+    match tried.iter().find(|path| path.is_file()) {
+        Some(found) => Ok(found.clone()),
+        None => Err(tried),
+    }
+}
+
+#[cfg(any(test, ort_dynamic_discovery))]
+fn executable_relative_candidates(executable: Option<&std::path::Path>) -> Vec<std::path::PathBuf> {
+    let Some(directory) = executable.and_then(std::path::Path::parent) else {
+        return Vec::new();
+    };
+    let mut directories = vec![directory.to_path_buf()];
+    if let Some(prefix) = directory.parent() {
+        directories.push(prefix.join("lib"));
+    }
+    directories
+        .iter()
+        .flat_map(|directory| ORT_LIBRARY_NAMES.iter().map(move |name| directory.join(name)))
+        .collect()
+}
+
+/// File names the runtime ships under, searched in this order within each directory.
+#[cfg(all(any(test, ort_dynamic_discovery), target_os = "macos"))]
+const ORT_LIBRARY_NAMES: &[&str] = &["libonnxruntime.dylib"];
+
+#[cfg(all(any(test, ort_dynamic_discovery), target_os = "linux"))]
+const ORT_LIBRARY_NAMES: &[&str] = &["libonnxruntime.so", "libonnxruntime.so.1"];
+
+#[cfg(all(any(test, ort_dynamic_discovery), target_os = "windows"))]
+const ORT_LIBRARY_NAMES: &[&str] = &["onnxruntime.dll"];
+
+#[cfg(all(
+    any(test, ort_dynamic_discovery),
+    not(any(target_os = "macos", target_os = "linux", target_os = "windows"))
+))]
+const ORT_LIBRARY_NAMES: &[&str] = &[];
 
 #[cfg(all(ort_dynamic_discovery, target_os = "macos"))]
 fn platform_candidates() -> &'static [&'static str] {
@@ -224,6 +356,11 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
         return Ok(environment);
     }
     ensure_ort_available();
+    // A failed dynamic load must stop here: any ort call would otherwise make ort retry with
+    // its own name-based loader search. ~keep
+    #[cfg(ort_dynamic_discovery)]
+    preload_ort_runtime()
+        .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     let environment = ort::init().build()?;
     #[cfg(feature = "sceptre-ocr-ort")]
@@ -625,6 +762,10 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "ort_discovery/resolution_tests.rs"]
+mod resolution_tests;
 
 #[cfg(all(
     test,

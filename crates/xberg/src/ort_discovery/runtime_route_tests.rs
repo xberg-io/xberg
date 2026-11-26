@@ -4,21 +4,19 @@ const CHILD: &str = "XBERG_ORT_ROUTE_TEST_CHILD";
 
 fn isolated(test: &str, run: impl FnOnce()) {
     if std::env::var(CHILD).as_deref() == Ok(test) {
-        let explicit = std::env::var_os("ORT_DYLIB_PATH").expect("missing explicit runtime path");
-        assert!(!std::path::Path::new(&explicit).exists());
+        assert_eq!(std::env::var_os("ORT_DYLIB_PATH"), None);
         run();
-        assert_eq!(std::env::var_os("ORT_DYLIB_PATH"), Some(explicit));
+        assert_eq!(std::env::var_os("ORT_DYLIB_PATH"), None);
         return;
     }
 
-    let temp = tempfile::tempdir().expect("create isolated runtime directory");
     let output = Command::new(std::env::current_exe().expect("locate route test executable"))
         .args([
             "--exact",
             &format!("ort_discovery::runtime_route_tests::{test}"),
             "--include-ignored",
         ])
-        .env("ORT_DYLIB_PATH", temp.path().join("missing-onnx-runtime"))
+        .env_remove("ORT_DYLIB_PATH")
         .env(CHILD, test)
         .output()
         .expect("run isolated runtime route test");
