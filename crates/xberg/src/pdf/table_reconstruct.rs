@@ -2661,6 +2661,70 @@ pub(crate) fn looks_like_code_listing(table_cells: &[Vec<String>]) -> bool {
         .count();
     (brace_count as f64) / (non_empty.len() as f64) >= CODE_BRACE_CELL_FRACTION
         || looks_like_declaration_grid(table_cells)
+        || looks_like_line_numbered_listing(table_cells)
+}
+
+/// Fewest rows a line-numbered listing must open with consecutive line numbers.
+const LINE_NUMBERED_LISTING_MIN_ROWS: usize = 3;
+
+/// A code listing printed with line numbers: its gutter reads as a first column of
+/// consecutive integers, and its indentation as further columns, so 3562713 (a Ruby gem's
+/// README) emitted three listings as tables. A genuine table may number its rows too, so
+/// the rows must also read as code: at least half carry a code token, and one a token no
+/// prose or figure carries (`::`, `=>`, a `:symbol`, a `snake_case` name, `def`, a comment).
+fn looks_like_line_numbered_listing(table_cells: &[Vec<String>]) -> bool {
+    let rows: Vec<(u32, String)> = table_cells
+        .iter()
+        .filter_map(|row| {
+            let text = row
+                .iter()
+                .map(|cell| cell.trim())
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let (number, rest) = text.split_once(' ').unwrap_or((text.as_str(), ""));
+            let number = number.parse::<u32>().ok()?;
+            Some((number, rest.to_string()))
+        })
+        .collect();
+    let numbered_rows = table_cells
+        .iter()
+        .filter(|row| row.iter().any(|cell| !cell.trim().is_empty()))
+        .count();
+    if rows.len() < LINE_NUMBERED_LISTING_MIN_ROWS
+        || rows.len() != numbered_rows
+        || rows.windows(2).any(|pair| pair[1].0 != pair[0].0 + 1)
+    {
+        return false;
+    }
+    let code_rows = rows.iter().filter(|(_, code)| has_code_token(code, false)).count();
+    code_rows * 2 >= rows.len() && rows.iter().any(|(_, code)| has_code_token(code, true))
+}
+
+/// Whether `text` carries a programming-language token. `strong_only` keeps to tokens that
+/// do not occur in prose or in a figure: path and pair operators, a `:symbol`, a
+/// `snake_case` identifier, `def`, and a comment marker.
+fn has_code_token(text: &str, strong_only: bool) -> bool {
+    const STRONG_OPERATORS: [&str; 5] = ["::", "=>", "->", "//", " #"];
+    const WEAK_KEYWORDS: [&str; 7] = ["end", "do", "class", "return", "import", "self", "nil"];
+    let padded = format!(" {text}");
+    let strong = STRONG_OPERATORS.iter().any(|operator| padded.contains(operator))
+        || text.split_whitespace().any(|word| {
+            word == "def"
+                || word
+                    .strip_prefix(':')
+                    .and_then(|rest| rest.chars().next())
+                    .is_some_and(char::is_alphabetic)
+                || word
+                    .split('_')
+                    .filter(|part| part.chars().next().is_some_and(char::is_alphabetic))
+                    .count()
+                    >= 2
+        });
+    strong
+        || (!strong_only
+            && (text.split_whitespace().any(|word| WEAK_KEYWORDS.contains(&word))
+                || text.contains(['=', '<', '>', '(', ';'])))
 }
 
 fn looks_like_declaration_grid(table_cells: &[Vec<String>]) -> bool {
@@ -5034,6 +5098,40 @@ mod tests {
         let cleaned = post_process_table(grid, true, false).expect("declaration grid should survive table cleanup");
 
         assert!(looks_like_code_listing(&cleaned));
+    }
+
+    /// 3562713: Ruby listings printed with a line-number gutter were emitted as tables.
+    #[test]
+    fn line_numbered_listing_is_rejected_as_code() {
+        let ruby = grid_of(&[
+            &["1", "class Post < ActiveRecord::Base", ""],
+            &["2", "", "amoeba do"],
+            &["3", "", "set :state_tracker => \"open_for_editing\""],
+            &["4", "", "end"],
+            &["5", "end", ""],
+        ]);
+        assert!(looks_like_code_listing(&ruby));
+        let fused = grid_of(&[
+            &["19", "author.amoeba_dup"],
+            &["20", ""],
+            &["21", "author.save # this will pass validation"],
+        ]);
+        assert!(looks_like_code_listing(&fused));
+    }
+
+    #[test]
+    fn numbered_rows_of_a_genuine_table_are_not_code() {
+        let ranked = grid_of(&[
+            &["1", "Water (fresh)", "0", "32"],
+            &["2", "Water (salt)", "-2", "28"],
+            &["3", "Body temperature", "37", "98.6"],
+        ]);
+        assert!(
+            !looks_like_code_listing(&ranked),
+            "a rank column with figures is a table"
+        );
+        let gapped = grid_of(&[&["1", "def first", ""], &["3", "def third", ""], &["4", "end", ""]]);
+        assert!(!looks_like_code_listing(&gapped), "line numbers count up one at a time");
     }
 
     #[test]
