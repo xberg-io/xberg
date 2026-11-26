@@ -2442,6 +2442,7 @@ jobs:
               env -u LD_LIBRARY_PATH "$STAGE/xberg" --version
             fi
             bash scripts/ci/smoke-cli-heif.sh "$STAGE"
+            bash scripts/ci/smoke-cli-ort.sh "$STAGE"
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 

@@ -2216,6 +2216,22 @@ def test_unix_cli_loads_a_shipped_onnx_runtime_instead_of_linking_it() -> None:
         assert f'cp -L "${{ORT_VENDOR_LIB:?}}" {shipped}' in run, f"the archive must ship {shipped}"
     assert 'grep -qi onnxruntime <<<"$linked"' in run, "the archive must prove xberg does not link ONNX Runtime"
     assert names.index("Select ONNX Runtime library to ship") < names.index("Package CLI artifact")
+    smoke = run.index('bash scripts/ci/smoke-cli-ort.sh "$STAGE"')
+    for shipped in ('"$STAGE/libonnxruntime.dylib"', '"$STAGE/libonnxruntime.so"'):
+        assert run.index(f'cp -L "${{ORT_VENDOR_LIB:?}}" {shipped}') < smoke, "the smoke must run on the staged runtime"
+    assert smoke < run.index('tar -czf "${STAGE}.tar.gz" "$STAGE"'), (
+        "the ONNX Runtime smoke must run before the archive"
+    )
+
+
+def test_ort_smoke_builds_a_session_without_any_loader_override_and_proves_the_shipped_library() -> None:
+    script = (Path(__file__).parent / "smoke-cli-ort.sh").read_text(encoding="utf-8")
+    for variable in ("ORT_DYLIB_PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"):
+        assert f"-u {variable}" in script, f"the smoke must unset {variable}"
+    assert "embed --text" in script, "the smoke must build and run a real ONNX Runtime session"
+    assert 'grep -qF "$real_stage/libonnxruntime."' in script, "the session must load the staged library"
+    assert 'rm -f "$without"/libonnxruntime.*' in script, "the negative control must remove only the runtime"
+    assert "grep -q 'ONNX Runtime library not found'" in script, "the negative control must fail in the resolver"
 
 
 def test_unix_cli_opens_a_shipped_libheif_instead_of_linking_it() -> None:
