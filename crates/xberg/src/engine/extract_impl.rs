@@ -157,10 +157,10 @@ async fn extract_scoped(
     // the bound there — mirrors the `extract_batch` split below. ~keep
     #[cfg(not(target_arch = "wasm32"))]
     let uncached: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + Send>> =
-        Box::pin(extract_uncached(input, config));
+        crate::core::runtime::pin_boxed(|| extract_uncached(input, config));
     #[cfg(target_arch = "wasm32")]
     let uncached: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>>>> =
-        Box::pin(extract_uncached(input, config));
+        crate::core::runtime::pin_boxed(|| extract_uncached(input, config));
     let result = uncached.await;
 
     match &result {
@@ -250,7 +250,7 @@ fn resolve_explicit_layout_page_config(input: &ExtractInput, config: &Extraction
 async fn extract_uncached(input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractionResult> {
     let mut seen = initial_seen_urls(std::slice::from_ref(&input));
     let seed_hosts = initial_seed_hosts(std::slice::from_ref(&input));
-    let mut output = Box::pin(extract_one(input, config, 0)).await?;
+    let mut output = crate::core::runtime::pin_boxed(|| extract_one(input, config, 0)).await?;
 
     follow_recursive_document_urls(&mut output, config, &mut seen, &seed_hosts).await?;
 
@@ -1328,14 +1328,14 @@ async fn extract_one_resolved(
     #[cfg(not(target_arch = "wasm32"))]
     let resolved: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + Send + '_>> =
         match input.kind {
-            ExtractInputKind::Bytes => Box::pin(extract_bytes_input(input, config, index)),
-            ExtractInputKind::Uri => Box::pin(extract_uri_input(input, config, index)),
+            ExtractInputKind::Bytes => crate::core::runtime::pin_boxed(|| extract_bytes_input(input, config, index)),
+            ExtractInputKind::Uri => crate::core::runtime::pin_boxed(|| extract_uri_input(input, config, index)),
         };
     #[cfg(target_arch = "wasm32")]
     let resolved: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + '_>> = match input.kind
     {
-        ExtractInputKind::Bytes => Box::pin(extract_bytes_input(input, config, index)),
-        ExtractInputKind::Uri => Box::pin(extract_uri_input(input, config, index)),
+        ExtractInputKind::Bytes => crate::core::runtime::pin_boxed(|| extract_bytes_input(input, config, index)),
+        ExtractInputKind::Uri => crate::core::runtime::pin_boxed(|| extract_uri_input(input, config, index)),
     };
     resolved.await
 }
@@ -1405,10 +1405,10 @@ async fn extract_uri_input(input: ExtractInput, config: &ExtractionConfig, index
         // wasm futures, and wasm32 has no `tokio::spawn` that would need the bound. ~keep
         #[cfg(not(target_arch = "wasm32"))]
         let remote: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + Send + '_>> =
-            Box::pin(extract_remote_uri(&uri, config, index));
+            crate::core::runtime::pin_boxed(|| extract_remote_uri(&uri, config, index));
         #[cfg(target_arch = "wasm32")]
         let remote: std::pin::Pin<Box<dyn std::future::Future<Output = Result<ExtractionResult>> + '_>> =
-            Box::pin(extract_remote_uri(&uri, config, index));
+            crate::core::runtime::pin_boxed(|| extract_remote_uri(&uri, config, index));
         return remote.await;
     }
 
@@ -1434,7 +1434,8 @@ async fn extract_uri_input(input: ExtractInput, config: &ExtractionConfig, index
         PathBuf::from(&uri)
     };
 
-    let mut result = Box::pin(extract_file(&path, input.mime_type.as_deref(), config)).await?;
+    let mut result =
+        crate::core::runtime::pin_boxed(|| extract_file(&path, input.mime_type.as_deref(), config)).await?;
     annotate_source(&mut result, "uri", &uri, path.to_string_lossy().as_ref(), index);
     Ok(ExtractionResult::single(result))
 }
