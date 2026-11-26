@@ -288,7 +288,7 @@ pub(super) struct TruncatedRange {
     sheet: TruncatedSheet,
     cells: Vec<calamine::Cell<calamine::Data>>,
     kept: SheetBounds,
-    /// First row seen in the sheet.
+    /// Lowest kept row seen; rows can arrive out of order.
     first_row: Option<u32>,
 }
 
@@ -308,7 +308,7 @@ impl TruncatedRange {
         if row >= self.sheet.row_end {
             return false;
         }
-        self.first_row.get_or_insert(row);
+        self.first_row = Some(self.first_row.map_or(row, |first| first.min(row)));
         if matches!(value, DataRef::Empty) {
             return true;
         }
@@ -329,7 +329,9 @@ impl TruncatedRange {
         let range = calamine::Range::from_sparse(self.cells);
         let sheet = super::process_sheet(name, &range, warnings);
         let first = u64::from(self.first_row.unwrap_or_default());
-        let kept = range.end().map_or(0, |(row, _)| u64::from(row) - first + 1);
+        let kept = range
+            .end()
+            .map_or(0, |(row, _)| (u64::from(row) + 1).saturating_sub(first));
         let message = format!(
             "Sheet '{name}' was truncated to its first {kept} {}: the remaining rows did not fit in the \
              remaining table-cell budget (`security_limits.max_table_cells` is {}); raise the limit to extract \

@@ -1205,6 +1205,30 @@ fn should_keep_the_leading_rows_of_a_sheet_over_the_table_budget_gh3417() {
 }
 
 #[test]
+fn should_count_kept_rows_when_a_truncated_sheet_lists_rows_out_of_order_gh3417() {
+    let bytes = make_xlsx_with_worksheet(
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetData><row r="5"><c r="A5"/></row><row r="1"><c r="A1"><v>1</v></c></row>
+        <row r="10"><c r="A10"><v>2</v></c></row></sheetData></worksheet>"#,
+    );
+    let limits = SecurityLimits {
+        max_table_cells: 1,
+        ..Default::default()
+    };
+
+    let (workbook, warnings) = read_excel_bytes(&bytes, ".xlsx", &limits).expect("out-of-order rows must not fail");
+
+    assert_eq!(workbook.sheets.len(), 1);
+    let messages: Vec<&str> = warnings.iter().map(|warning| warning.message.as_ref()).collect();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("Sheet 'Sheet1' was truncated to its first 1 row:")),
+        "{messages:?}"
+    );
+}
+
+#[test]
 fn should_allow_the_exact_xlsx_table_budget_gh2296() {
     let bytes = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
