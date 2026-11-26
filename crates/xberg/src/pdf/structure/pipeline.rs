@@ -6230,12 +6230,49 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
         return segments;
     }
     let split_numbers = carried_split_numbers(&segments, tables);
+    let split_words = carried_split_words(&segments, tables);
     segments
         .into_iter()
         .enumerate()
-        .filter(|(index, seg)| !split_numbers[*index] && !segment_is_carried(seg, tables))
+        .filter(|(index, seg)| !split_numbers[*index] && !split_words[*index] && !segment_is_carried(seg, tables))
         .map(|(_, seg)| seg)
         .collect()
+}
+
+/// Segments that print one word in two runs because a kerning pair split it: `Body T` +
+/// `emperature`, the `Te` pair pulled `e` back under the `T`. The grid holds `Body Temperature`;
+/// the long piece matches its row, but the short one ends in `T`, which is no cell word, so it
+/// survived as a prose copy after the table. A pair is carried together when the two runs touch
+/// on one baseline, the seam falls between letters or digits, and a covering table carries the
+/// joined word. ~keep
+fn carried_split_words(segments: &[SegmentData], tables: &[TableCoverage]) -> Vec<bool> {
+    const MAX_KERN_OVERLAP_EM: f32 = 0.3;
+    const MAX_TOUCH_GAP_EM: f32 = 0.1;
+    let mut carried = vec![false; segments.len()];
+    for start in 0..segments.len().saturating_sub(1) {
+        let [left, right] = [&segments[start], &segments[start + 1]];
+        let font_size = left.font_size.max(right.font_size).max(1.0);
+        let gap = right.x - (left.x + left.width);
+        let splits_a_word = left.text.ends_with(char::is_alphanumeric) && right.text.starts_with(char::is_alphanumeric);
+        if !splits_a_word
+            || !left.is_unrotated()
+            || !right.is_unrotated()
+            || (left.baseline_y - right.baseline_y).abs() > font_size * MAX_TOUCH_GAP_EM
+            || gap < -font_size * MAX_KERN_OVERLAP_EM
+            || gap > font_size * MAX_TOUCH_GAP_EM
+        {
+            continue;
+        }
+        let joined = SegmentData {
+            text: format!("{}{}", left.text, right.text),
+            width: right.x + right.width - left.x,
+            ..left.clone()
+        };
+        if segment_is_carried(&joined, tables) {
+            carried[start..start + 2].fill(true);
+        }
+    }
+    carried
 }
 
 /// Segments that print one number in three font runs, `8` `.` `63%`: TeX sets a math-mode

@@ -4647,6 +4647,43 @@ fn should_suppress_a_number_printed_as_touching_integer_point_and_fraction_runs(
     );
 }
 
+/// tiny.pdf: the `Te` kerning pair splits `Body Temperature` into `Body T` and `emperature`,
+/// `e` starting 1.2pt before `T` ends. The long piece matched its row, but `Body T` ends in a
+/// letter that is no cell word and was emitted again as prose after the table.
+#[test]
+fn should_suppress_a_cell_word_split_by_a_kerning_pair() {
+    let coverage = vec![TableCoverage::from_rows(
+        crate::types::BoundingBox {
+            x0: 72.5,
+            y0: 537.5,
+            x1: 540.5,
+            y1: 632.5,
+        },
+        [
+            vec!["Name", "Celsius", "Fahrenheit"],
+            vec!["Body Temperature", "37", "98.6"],
+        ],
+    )];
+    let segments = vec![
+        column_seg("Body T", 77.25, 34.83, 545.0),
+        column_seg("emperature", 110.85, 56.2, 545.0),
+        column_seg("37", 233.25, 12.2, 545.0),
+        column_seg("Body T", 77.25, 34.83, 600.0),
+        column_seg("ail", 130.0, 15.0, 600.0),
+    ];
+
+    let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+        .into_iter()
+        .map(|seg| seg.text)
+        .collect();
+
+    assert_eq!(
+        kept,
+        vec!["Body T".to_string(), "ail".to_string()],
+        "a kerning-split cell word is carried as a whole; a piece with a word gap after it is not"
+    );
+}
+
 /// A form's line-item cells: every word of the printed instruction on lines 43 and 44 of IRS
 /// Form 8829 occurs in them, but no row holds the instruction, as a run or as its words.
 fn form_line_coverage() -> Vec<TableCoverage> {
