@@ -83,6 +83,43 @@ fn stacked_header_band_is_one_header_row() {
     assert_eq!(&table.cells[1][..4], ["002", "AO", "1000", "1999"]);
 }
 
+/// `pb_SERFF_TX_random_pages_1_page1075`: two unruled multiplier columns beside a ruled rate grid.
+#[test]
+fn unruled_multiplier_columns_join_the_ruled_rate_table() {
+    let Some(document) = extract(".corpus-cache/pdf/pb_SERFF_TX_random_pages_1_page1075.pdf") else {
+        return;
+    };
+    let table = document
+        .tables
+        .iter()
+        .find(|table| {
+            table
+                .cells
+                .iter()
+                .any(|row| row.first().is_some_and(|cell| cell == "18-29"))
+        })
+        .unwrap_or_else(|| panic!("no rate table: {}", document.content));
+
+    assert!(
+        table
+            .cells
+            .iter()
+            .any(|row| row.iter().any(|cell| cell == "2-10yr BP") && row.iter().any(|cell| cell == "LifeBP")),
+        "multiplier header missing: {:?}",
+        &table.cells[..3]
+    );
+    let first = &table.cells[row_index(&table.cells, "18-29")];
+    assert_eq!(&first[first.len() - 3..], ["57.00", "1.44", "1.00"]);
+    let age_91 = &table.cells[row_index(&table.cells, "91+")];
+    assert_eq!(&age_91[age_91.len() - 2..], ["1.08", "1.00"]);
+    let table_start = document.content.find("18-29").expect("rate rows rendered");
+    assert!(
+        !document.content[..table_start].contains("1.44"),
+        "multipliers must not precede the table: {}",
+        &document.content[..table_start]
+    );
+}
+
 /// `pb_fqr-retail-blackrock-global-allocation-fund-inc_page8`: a holdings table whose only row
 /// with a digit in every cell is a label continuation deep in the body.
 #[test]

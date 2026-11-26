@@ -22,6 +22,7 @@ use std::mem::size_of;
 use xberg_native_pdf::elements::{PathContent, PathOperation};
 
 mod definition_grid;
+mod open_columns;
 pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
@@ -381,6 +382,11 @@ fn append_extracted_table(
     let recovered_sources = restore_open_year_columns(&mut extracted_table, &context.source_spans.spans, || {
         (characters(), context.source_paths)
     });
+    open_columns::restore_open_trailing_columns(
+        &mut extracted_table,
+        &context.source_spans.spans,
+        context.source_paths,
+    );
     let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
     if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
         return;
