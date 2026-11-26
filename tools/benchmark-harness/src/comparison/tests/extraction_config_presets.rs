@@ -1,4 +1,4 @@
-//! Timed-cache disabling, PSM finalization, and Paddle/Sceptre/Tesseract preset tests.
+//! Timed-cache disabling and Paddle/Sceptre/Tesseract preset tests.
 
 use super::*;
 use crate::comparison::extraction_config::{
@@ -76,10 +76,9 @@ fn timed_xberg_pipeline_configs_disable_extraction_cache() {
         let Some(ocr) = config.ocr.as_ref() else {
             continue;
         };
-        // A `tesseract_config` that already existed (explicit PSM presets, e.g.
-        // that leaves `tesseract_config` implicit (auto-PSM) must keep it absent — xberg only
-        // auto-selects PSM when `ocr.tesseract_config` is absent, so materializing one here
-        // to force `use_cache = false` would silently pin PSM to the default (3).
+        // An explicit preset's `tesseract_config` must disable its result cache; a pipeline that
+        // leaves it implicit (auto-PSM) must keep it absent, since its presence switches xberg
+        // off the default OCR route.
         if let Some(ocr_pipeline) = ocr.pipeline.as_ref() {
             for stage in &ocr_pipeline.stages {
                 if stage.backend == "tesseract"
@@ -105,7 +104,7 @@ fn timed_xberg_pipeline_configs_disable_extraction_cache() {
 }
 
 #[test]
-fn finalize_disables_cache_and_materializes_correct_psm_for_implicit_tesseract_stages() {
+fn finalize_disables_cache_without_materializing_implicit_tesseract_stages() {
     let ocr = serde_json::from_value(serde_json::json!({
         "pipeline": {
             "stages": [
@@ -123,6 +122,7 @@ fn finalize_disables_cache_and_materializes_correct_psm_for_implicit_tesseract_s
 
     finalize_timed_ocr_result_cache(&mut config);
 
+    assert!(!config.use_cache, "request-level use_cache=false keeps OCR cold");
     let stages = &config.ocr.unwrap().pipeline.unwrap().stages;
     let explicit = stages[0].tesseract_config.as_ref().unwrap();
     assert!(
@@ -134,51 +134,27 @@ fn finalize_disables_cache_and_materializes_correct_psm_for_implicit_tesseract_s
         Some(6),
         "disabling the cache must not touch an explicit PSM"
     );
-
-    let implicit = stages[1]
-        .tesseract_config
-        .as_ref()
-        .expect("an implicit stage must be materialized so its result cache is genuinely disabled");
-    assert!(!implicit.use_cache);
-    assert_eq!(
-        implicit.psm,
-        Some(crate::adapter::XBERG_WHOLE_IMAGE_TESSERACT_PSM),
-        "an implicit stage's materialized PSM must match xberg's own auto-selection for the \
-         default language, or it would silently regress to PSM 3"
+    assert!(
+        stages[1].tesseract_config.is_none() && stages[1].backend_options.is_none(),
+        "an implicit stage must stay on xberg's default OCR route"
     );
-    assert_eq!(implicit.language, ["eng"]);
-
     assert!(stages[2].tesseract_config.is_none());
 }
 
 #[test]
-fn finalize_materializes_whole_image_psm_for_implicit_ocr_with_default_language() {
+fn finalize_keeps_implicit_ocr_on_the_default_route() {
     let mut config = xberg::ExtractionConfig::default();
     materialize_implicit_ocr_config(&mut config);
 
     finalize_timed_ocr_result_cache(&mut config);
 
+    assert!(!config.use_cache);
     let ocr = config.ocr.expect("materialize_implicit_ocr_config must configure OCR");
     assert_eq!(ocr.backend, "tesseract");
-    assert_eq!(
-        ocr.language,
-        ["eng"],
-        "the parent OcrConfig.language must also read 'eng'"
-    );
-    let tesseract = ocr
-        .tesseract_config
-        .expect("implicit timed OCR must materialize a tesseract_config to genuinely disable its cache");
-    assert!(!tesseract.use_cache);
-    assert_eq!(
-        tesseract.psm,
-        Some(crate::adapter::XBERG_WHOLE_IMAGE_TESSERACT_PSM),
-        "materialized PSM must match xberg's own auto-selection, or it would silently \
-         regress to PSM 3"
-    );
-    assert_eq!(
-        tesseract.language,
-        ["eng"],
-        "language must land on both ocr.language and the materialized tesseract_config.language"
+    assert_eq!(ocr.language, ["eng"]);
+    assert!(
+        ocr.tesseract_config.is_none() && ocr.backend_options.is_none(),
+        "either field would switch xberg off its default OCR route"
     );
 }
 
@@ -201,6 +177,7 @@ fn finalize_preserves_explicit_bare_tesseract_psm() {
 
     finalize_timed_ocr_result_cache(&mut config);
 
+    assert!(!config.use_cache);
     let tesseract = config.ocr.unwrap().tesseract_config.unwrap();
     assert!(!tesseract.use_cache);
     assert_eq!(
@@ -208,7 +185,6 @@ fn finalize_preserves_explicit_bare_tesseract_psm() {
         Some(6),
         "disabling the cache must not touch an explicit PSM"
     );
-    assert_eq!(tesseract.language, ["eng"], "language must still be refreshed");
 }
 
 #[test]

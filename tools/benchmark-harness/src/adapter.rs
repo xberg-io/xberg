@@ -220,42 +220,6 @@ const SCEPTRE_LANGUAGE_GROUPS: &[&[&str]] = &[
     SCEPTRE_CYRILLIC_LANGUAGES,
 ];
 
-/// PSM xberg auto-selects for standalone (whole-image) Tesseract OCR when no explicit `psm` is
-/// configured — the documented production value of the private `WHOLE_IMAGE_TESSERACT_PSM` in
-/// `crates/xberg/src/extractors/image.rs`.
-///
-/// ~keep: `crates/xberg`'s constant is a private `const`, not `pub`, so it cannot be imported
-/// here — this is a hand-maintained mirror, NOT verified against xberg's source at build or test
-/// time. It MUST be kept in sync by hand whenever `crates/xberg/src/extractors/image.rs` changes
-/// `WHOLE_IMAGE_TESSERACT_PSM`. A benchmark that materializes `tesseract_config` to disable the
-/// OCR result cache (see `comparison.rs::finalize_timed_ocr_result_cache` and
-/// `batch_diagnostic.rs::disable_ocr_result_caches`) must pin PSM to this same value, or it
-/// silently regresses to `TesseractConfig::default()`'s PSM 3 and stops measuring xberg's real
-/// production default.
-pub(crate) const XBERG_WHOLE_IMAGE_TESSERACT_PSM: i32 = 11;
-
-/// PSM xberg auto-selects for a vertical-script Tesseract language (any `*_vert` code, e.g.
-/// `jpn_vert`) — the documented production value of the private `VERTICAL_BLOCK_TESSERACT_PSM` in
-/// `crates/xberg/src/extractors/image.rs`. ~keep, same hand-maintained-mirror rationale as
-/// [`XBERG_WHOLE_IMAGE_TESSERACT_PSM`].
-pub(crate) const XBERG_VERTICAL_BLOCK_TESSERACT_PSM: i32 = 5;
-
-/// Mirrors `apply_default_whole_image_tesseract_psm`'s vertical-language detection in
-/// `crates/xberg/src/extractors/image.rs`: PSM 5 if any `+`-joined language code ends in
-/// `_vert` (case-insensitive), else PSM 11. ~keep: MUST track that function by hand — it is not
-/// `pub`, so this is not shared-source-backed either.
-pub(crate) fn xberg_default_tesseract_psm(languages: &[String]) -> i32 {
-    let has_vertical_language = languages
-        .iter()
-        .flat_map(|language| language.split('+'))
-        .any(|language| language.trim().to_ascii_lowercase().ends_with("_vert"));
-    if has_vertical_language {
-        XBERG_VERTICAL_BLOCK_TESSERACT_PSM
-    } else {
-        XBERG_WHOLE_IMAGE_TESSERACT_PSM
-    }
-}
-
 /// Unified interface for document extraction frameworks
 ///
 /// Implementations of this trait can extract content from documents using
@@ -445,9 +409,8 @@ pub trait FrameworkAdapter: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        OcrLanguagePolicy, XBERG_VERTICAL_BLOCK_TESSERACT_PSM, XBERG_WHOLE_IMAGE_TESSERACT_PSM,
-        canonical_ocr_language_arg, canonicalize_ocr_languages, declared_ocr_language_policy,
-        is_valid_ocr_language_code, xberg_default_tesseract_psm,
+        OcrLanguagePolicy, canonical_ocr_language_arg, canonicalize_ocr_languages, declared_ocr_language_policy,
+        is_valid_ocr_language_code,
     };
 
     #[test]
@@ -519,42 +482,5 @@ mod tests {
         assert!(is_valid_ocr_language_code("chi_sim"));
         assert!(!is_valid_ocr_language_code("../deu"));
         assert!(!is_valid_ocr_language_code(""));
-    }
-
-    #[test]
-    fn xberg_psm_constants_are_the_documented_production_values() {
-        // ~keep: this asserts the documented literals, NOT that they still match
-        // `crates/xberg/src/extractors/image.rs`'s private `WHOLE_IMAGE_TESSERACT_PSM` /
-        // `VERTICAL_BLOCK_TESSERACT_PSM` — those constants are not `pub`, so nothing in this repo
-        // can import and compare against xberg's real source. This test only guards against an
-        // accidental typo/edit of the values below; it CANNOT catch upstream drift. If xberg ever
-        // changes those constants, `XBERG_WHOLE_IMAGE_TESSERACT_PSM` /
-        // `XBERG_VERTICAL_BLOCK_TESSERACT_PSM` above (and this test) must be updated by hand.
-        assert_eq!(XBERG_WHOLE_IMAGE_TESSERACT_PSM, 11);
-        assert_eq!(XBERG_VERTICAL_BLOCK_TESSERACT_PSM, 5);
-    }
-
-    #[test]
-    fn selects_vertical_psm_only_for_vert_suffixed_languages() {
-        assert_eq!(
-            xberg_default_tesseract_psm(&["eng".to_string()]),
-            XBERG_WHOLE_IMAGE_TESSERACT_PSM
-        );
-        assert_eq!(
-            xberg_default_tesseract_psm(&["deu".to_string(), "eng".to_string()]),
-            XBERG_WHOLE_IMAGE_TESSERACT_PSM
-        );
-        assert_eq!(
-            xberg_default_tesseract_psm(&["jpn_vert".to_string()]),
-            XBERG_VERTICAL_BLOCK_TESSERACT_PSM
-        );
-        assert_eq!(
-            xberg_default_tesseract_psm(&["JPN_VERT".to_string()]),
-            XBERG_VERTICAL_BLOCK_TESSERACT_PSM
-        );
-        assert_eq!(
-            xberg_default_tesseract_psm(&["deu+jpn_vert".to_string()]),
-            XBERG_VERTICAL_BLOCK_TESSERACT_PSM
-        );
     }
 }

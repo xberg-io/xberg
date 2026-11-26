@@ -33,20 +33,17 @@ fn fixture_language_applies_to_materialized_implicit_ocr_without_forcing_it() {
         let ocr = config.ocr.expect("timed extraction must materialize fallback OCR");
         assert_eq!(ocr.language, ["deu", "eng"]);
         assert_eq!(ocr.backend, "tesseract");
-        // `tesseract_config` must be materialized (only) once the fixture's language is
-        // final, so its PSM matches what xberg's own auto-selection would have picked for
-        let tesseract = ocr
-            .tesseract_config
-            .expect("finalize_timed_ocr_result_cache must materialize a tesseract_config");
-        assert!(!tesseract.use_cache);
-        assert_eq!(tesseract.psm, Some(crate::adapter::XBERG_WHOLE_IMAGE_TESSERACT_PSM));
-        assert_eq!(tesseract.language, ["deu", "eng"]);
+        assert!(
+            ocr.tesseract_config.is_none() && ocr.backend_options.is_none(),
+            "either field would switch xberg off its default OCR route"
+        );
+        assert!(!config.use_cache, "request-level use_cache=false keeps OCR cold");
         assert!(!config.force_ocr, "{} must retain fallback-only OCR", pipeline.name());
     }
 }
 
 #[test]
-fn fixture_language_materializes_vertical_psm_for_implicit_tesseract_pipeline() {
+fn fixture_language_keeps_implicit_tesseract_pipeline_on_auto_psm() {
     let mut metadata = HashMap::new();
     metadata.insert("ocr_language".to_string(), serde_json::json!("jpn_vert"));
     let doc = CorpusDocument {
@@ -67,23 +64,18 @@ fn fixture_language_materializes_vertical_psm_for_implicit_tesseract_pipeline() 
 
     let ocr = config.ocr.expect("Tesseract pipeline must configure OCR");
     assert_eq!(ocr.language, ["jpn_vert"]);
-    // the timed result cache must materialize one with the vertical-language PSM 5 xberg
-    // selects for `*_vert` languages, not the default PSM 3.
-    let tesseract = ocr
-        .tesseract_config
-        .expect("finalize_timed_ocr_result_cache must materialize a tesseract_config");
-    assert!(!tesseract.use_cache);
-    assert_eq!(tesseract.psm, Some(crate::adapter::XBERG_VERTICAL_BLOCK_TESSERACT_PSM));
-    assert_eq!(tesseract.language, ["jpn_vert"]);
+    assert!(
+        ocr.tesseract_config.is_none(),
+        "xberg must pick the vertical PSM itself from the language"
+    );
+    assert!(!config.use_cache);
 }
 
 #[test]
-fn fixture_language_refreshes_stale_implicit_stage_language_before_finalizing_psm() {
+fn fixture_language_refreshes_stale_implicit_stage_language() {
     // BLOCKER 2 regression: a Tesseract pipeline stage that already pins its own `language`
-    // must NOT stay stale after `apply_fixture_ocr_language` runs. If it did,
-    // `finalize_timed_ocr_result_cache` would prefer that stale per-stage language over the
-    // fixture's real one (matching xberg's own "stage language wins over parent" semantics)
-    // and materialize the wrong PSM.
+    // must NOT stay stale after `apply_fixture_ocr_language` runs: xberg prefers a present
+    // stage language over the parent's.
     let mut metadata = HashMap::new();
     metadata.insert("ocr_language".to_string(), serde_json::json!("jpn_vert"));
     let doc = CorpusDocument {
@@ -120,17 +112,11 @@ fn fixture_language_refreshes_stale_implicit_stage_language_before_finalizing_ps
         Some(vec!["jpn_vert".to_string()]),
         "the stale per-stage language override must be refreshed to the fixture's language"
     );
-    let tesseract = stages[0]
-        .tesseract_config
-        .as_ref()
-        .expect("finalize_timed_ocr_result_cache must materialize a tesseract_config");
-    assert!(!tesseract.use_cache);
-    assert_eq!(
-        tesseract.psm,
-        Some(crate::adapter::XBERG_VERTICAL_BLOCK_TESSERACT_PSM),
-        "must materialize PSM 5 for jpn_vert, not PSM 11 from the stale stage language"
+    assert!(
+        stages[0].tesseract_config.is_none(),
+        "an implicit stage keeps xberg's automatic PSM and default route"
     );
-    assert_eq!(tesseract.language, ["jpn_vert"]);
+    assert!(!config.use_cache);
 }
 
 #[test]
