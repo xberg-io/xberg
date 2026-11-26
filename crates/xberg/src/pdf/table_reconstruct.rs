@@ -2785,7 +2785,7 @@ fn looks_like_line_numbered_listing(table_cells: &[Vec<String>]) -> bool {
         .count();
     if rows.len() < LINE_NUMBERED_LISTING_MIN_ROWS
         || rows.len() != numbered_rows
-        || rows.windows(2).any(|pair| pair[1].0 != pair[0].0 + 1)
+        || rows.windows(2).any(|pair| pair[0].0.checked_add(1) != Some(pair[1].0))
     {
         return false;
     }
@@ -2794,29 +2794,64 @@ fn looks_like_line_numbered_listing(table_cells: &[Vec<String>]) -> bool {
 }
 
 /// Whether `text` carries a programming-language token. `strong_only` keeps to tokens that
-/// do not occur in prose or in a figure: path and pair operators, a `:symbol`, a
-/// `snake_case` identifier, `def`, and a comment marker.
+/// do not occur in prose, in a figure or in a parameter or link table: path and pair
+/// operators (a `//` comment, not a URL's `://`), a `:symbol`, `def`, and a `snake_case`
+/// identifier used as code: beside a keyword, or carrying a call, assignment or member
+/// access. A bare `snake_case` key heads a parameter table's rows, and a `#` is a numero
+/// sign as often as a comment, so neither is strong on its own.
 fn has_code_token(text: &str, strong_only: bool) -> bool {
-    const STRONG_OPERATORS: [&str; 5] = ["::", "=>", "->", "//", " #"];
+    const STRONG_OPERATORS: [&str; 3] = ["::", "=>", "->"];
     const WEAK_KEYWORDS: [&str; 7] = ["end", "do", "class", "return", "import", "self", "nil"];
-    let padded = format!(" {text}");
-    let strong = STRONG_OPERATORS.iter().any(|operator| padded.contains(operator))
-        || text.split_whitespace().any(|word| {
-            word == "def"
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let has_keyword = words.iter().any(|word| WEAK_KEYWORDS.contains(word));
+    let strong = STRONG_OPERATORS.iter().any(|operator| text.contains(operator))
+        || has_line_comment_slashes(text)
+        || words.iter().enumerate().any(|(index, word)| {
+            *word == "def"
                 || word
                     .strip_prefix(':')
                     .and_then(|rest| rest.chars().next())
                     .is_some_and(char::is_alphabetic)
-                || word
-                    .split('_')
-                    .filter(|part| part.chars().next().is_some_and(char::is_alphabetic))
-                    .count()
-                    >= 2
+                || (is_snake_case_word(word)
+                    && (has_keyword
+                        || word.contains(['(', '=', ';'])
+                        || is_member_access(word)
+                        || words.get(index + 1).is_some_and(|next| next.starts_with('='))))
         });
     strong
         || (!strong_only
-            && (text.split_whitespace().any(|word| WEAK_KEYWORDS.contains(&word))
-                || text.contains(['=', '<', '>', '(', ';'])))
+            && (has_keyword
+                || text.contains(['=', '<', '>', '(', ';'])
+                || words.iter().any(|word| word.starts_with('#') || is_member_access(word))))
+}
+
+/// A `//` that is not the `://` of a URL scheme.
+fn has_line_comment_slashes(text: &str) -> bool {
+    text.match_indices("//").any(|(index, _)| !text[..index].ends_with(':'))
+}
+
+/// A word of two or more `_`-joined alphabetic-led parts, outside a path or URL.
+fn is_snake_case_word(word: &str) -> bool {
+    !word.contains('/')
+        && word
+            .split('_')
+            .filter(|part| part.chars().next().is_some_and(char::is_alphabetic))
+            .count()
+            >= 2
+}
+
+/// `receiver.member`: dot-joined identifiers, none empty, outside a path or URL. An
+/// abbreviation such as `e.g.` ends in an empty part and does not count.
+fn is_member_access(word: &str) -> bool {
+    let word = word.trim_end_matches([',', ';']);
+    !word.contains('/')
+        && word.contains('.')
+        && word.split('.').all(|part| {
+            part.chars().next().is_some_and(char::is_alphabetic)
+                && part
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || matches!(c, '_' | '(' | ')'))
+        })
 }
 
 fn looks_like_declaration_grid(table_cells: &[Vec<String>]) -> bool {
@@ -5315,6 +5350,42 @@ mod tests {
         );
         let gapped = grid_of(&[&["1", "def first", ""], &["3", "def third", ""], &["4", "end", ""]]);
         assert!(!looks_like_code_listing(&gapped), "line numbers count up one at a time");
+    }
+
+    #[test]
+    fn numbered_link_table_is_not_code() {
+        let links = grid_of(&[
+            &["1", "https://example.com/docs?page_size=10"],
+            &["2", "https://api.example.org/v2/items?page_size=20"],
+            &["3", "http://cdn.example.net/assets?page_size=50"],
+        ]);
+        assert!(
+            !looks_like_code_listing(&links),
+            "a URL's :// is not a // comment, nor a query key a code identifier"
+        );
+    }
+
+    #[test]
+    fn numbered_parameter_table_is_not_code() {
+        let parameters = grid_of(&[
+            &["1", "max_retries", "3"],
+            &["2", "connect_timeout", "30 (seconds)"],
+            &["3", "log_level", "info"],
+        ]);
+        assert!(
+            !looks_like_code_listing(&parameters),
+            "a bare snake_case key is a parameter name, not code"
+        );
+    }
+
+    #[test]
+    fn row_number_at_u32_max_does_not_overflow() {
+        let wrapped = grid_of(&[
+            &["4294967295", "author.amoeba_dup"],
+            &["0", "author.save # done"],
+            &["1", "end"],
+        ]);
+        assert!(!looks_like_code_listing(&wrapped), "u32::MAX is not followed by 0");
     }
 
     #[test]
