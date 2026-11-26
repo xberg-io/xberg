@@ -108,6 +108,7 @@ suppression and dispersion contract (v2.10.0+):
   "timeouts": 3,
   "empty_content": 0,       // framework produced no content at all
   "zero_overlap": 0,        // framework produced non-empty output with zero token overlap vs a non-empty ground truth
+  "layout_failures": 0,     // a layout-bearing variant extracted without its requested layout pass
   "error_details": {
     "error message": 2
   },
@@ -222,7 +223,7 @@ The batch dedup that collapses a native batch to one `performance_sample_count` 
   "quality_score": 0.85,
   "correct": true,
   "success": true,
-  "error_kind": null, // "FrameworkError", "HarnessError", "Timeout", "EmptyContent", "ZeroOverlap", etc. if !success
+  "error_kind": null, // "FrameworkError", "HarnessError", "Timeout", "EmptyContent", "ZeroOverlap", "LayoutFailed", etc. if !success
   "file_size": 45210, // v2.8.0+
   "throughput_bytes_per_sec": 361280.5, // v2.8.0+
   "avg_cpu_percent": 42.1, // v2.8.0+
@@ -299,8 +300,9 @@ Each `FailureCounts` object:
   "framework_errors": 0,     // framework hit a hard error on a supported document
   "empty_content": 0,        // framework produced no content at all for a supported document
   "zero_overlap": 0,         // framework produced non-empty output with zero token overlap vs a non-empty ground truth
+  "layout_failures": 0,      // a layout-bearing variant produced text without its requested layout pass
   "timeouts": 0,             // framework exceeded the timeout on a supported document
-  "framework_fault_total": 0, // sum of the four above; these penalize quality + success rate
+  "framework_fault_total": 0, // sum of the five above; these penalize quality + success rate
   "harness_errors": 0,       // our harness failed (process crash, bad JSON): never penalizes
   "config_setup_errors": 0,  // our config/setup failed (missing deps): never penalizes
   "infra_total": 0           // sum of the two infrastructure kinds above
@@ -320,6 +322,12 @@ a non-empty ground truth (set by the runner's post-scoring reclassification — 
 reclassification" below). Both are excluded from quality percentiles and both still contribute
 their duration/throughput/memory/cpu_seconds/pages_per_sec measurements to `PerformancePercentiles`
 — see "Timing eligibility" below.
+
+`layout_failures` counts rows of a layout-bearing variant (for example `layout`, `layout-paddle`)
+whose layout pass failed or was skipped, so the text came from the plain path rather than the
+requested detector. Scoring such a row as the variant's output would credit the detector with
+work it did not do, so it is a framework-fault failure (`error_kind = "LayoutFailed"`), counted and
+scored like `empty_content`. Older aggregates without the field read it as `0`.
 
 ### Zero-overlap reclassification
 
