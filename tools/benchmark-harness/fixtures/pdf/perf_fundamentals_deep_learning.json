@@ -1,0 +1,12 @@
+{
+  "document": "../../../../test_documents/pdf/fundamentals_of_deep_learning_2014.pdf",
+  "file_type": "pdf",
+  "file_size": 56715281,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "Fundamentals of Deep Learning (2014): 61-page, 57 MB image-heavy document",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 61
+  }
+}

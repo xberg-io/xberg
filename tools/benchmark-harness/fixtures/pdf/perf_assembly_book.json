@@ -1,0 +1,12 @@
+{
+  "document": "../../../../test_documents/pdf/assembly_language_for_beginners_al4_b_en.pdf",
+  "file_type": "pdf",
+  "file_size": 9068750,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "Assembly Language for Beginners: 1082-page XeTeX book with code listings",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 1082
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "document": "../../../../test_documents/pdf/algebra_topology_differential_calculus_and_optimization_theory_for_computer_science_and_machine_learning_2019_math_deep.pdf",
+  "file_type": "pdf",
+  "file_size": 20812100,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "Gallier and Quaintance math textbook: 1962 pages of pdfTeX math",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 1962
+  }
+}

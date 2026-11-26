@@ -1,0 +1,12 @@
+{
+  "document": "../../../../test_documents/pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf",
+  "file_type": "pdf",
+  "file_size": 2636899,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "A Course in Machine Learning v0.9: 193-page pdfTeX book with math",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 193
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "document": "../../../../test_documents/pdf/a_comprehensive_study_of_convergent_and_commutative_replicated_data_types.pdf",
+  "file_type": "pdf",
+  "file_size": 1537629,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "Shapiro et al. CRDT study: 50-page report, math and many vector figures",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 50
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "document": "../../../../test_documents/pdf/iso_21111_10_2021_road_vehicles_in_vehicle_ethernet_conformance_test_plans.pdf",
+  "file_type": "pdf",
+  "file_size": 2343170,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "ISO 21111-10:2021 conformance test plans: 214-page standard, dense tables",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 214
+  }
+}

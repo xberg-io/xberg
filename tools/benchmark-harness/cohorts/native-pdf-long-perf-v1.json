@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "native-pdf-long-perf-v1",
+  "batch_size": 1,
+  "ocr_enabled": false,
+  "fixtures": [
+    "pdf/perf_intel_sdm.json",
+    "pdf/perf_math_ml_textbook.json",
+    "pdf/perf_assembly_book.json",
+    "pdf/perf_bda3.json",
+    "pdf/perf_xerox_manual.json",
+    "pdf/perf_islr.json",
+    "pdf/perf_iso_21111_10.json",
+    "pdf/perf_ciml.json",
+    "pdf/perf_poc_gtfo_13.json",
+    "pdf/perf_fundamentals_deep_learning.json",
+    "pdf/perf_crdt_study.json",
+    "pdf/perf_100g_slides.json"
+  ]
+}
