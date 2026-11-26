@@ -1,94 +1,9 @@
-//! Build grayscale Leptonica images and read their pixel values.
+//! Read grayscale pixel values from Leptonica images.
 
-use super::{Pix, pixCreate, pixGetPixel, pixSetResolution};
+use super::{Pix, pixGetPixel};
 use crate::error::{Result, TesseractError};
-use std::ffi::c_void;
-
-ffi_extern! {
-    /// Combines the `dw` x `dh` rectangle of `pixs` at (`sx`, `sy`) into `pixd` at (`dx`, `dy`)
-    /// under the raster operation `op`. Both images must have the same depth.
-    ///
-    /// Returns 0 on success, non-zero on error.
-    fn pixRasterop(
-        pixd: *mut c_void,
-        dx: i32,
-        dy: i32,
-        dw: i32,
-        dh: i32,
-        op: i32,
-        pixs: *mut c_void,
-        sx: i32,
-        sy: i32,
-    ) -> i32;
-}
 
 impl Pix {
-    /// Rows converted per 32 bpp band by [`Pix::gray_from_raw_rgb`].
-    pub(super) const GRAY_CONVERSION_STRIP_ROWS: usize = 64;
-    /// Leptonica's `PIX_SRC` raster operation (`0xc << 1` in `pix.h`): copy the source.
-    const PIX_SRC: i32 = 0xc << 1;
-
-    /// Creates the 8 bpp grayscale Pix that `Pix::from_raw_rgb(data, width, height)?.to_grayscale()`
-    /// returns, without ever holding the full-page 32 bpp Pix.
-    ///
-    /// Each band of [`Self::GRAY_CONVERSION_STRIP_ROWS`] rows goes through that same pair of calls,
-    /// so every gray value comes from Leptonica's own `pixConvertRGBToGray`, and `pixRasterop`
-    /// copies the band into place. The DPI is 300 x 300, as on that conversion's output.
-    ///
-    /// # Errors
-    ///
-    /// Returns `TesseractError::InvalidImageData` for the inputs [`Pix::from_raw_rgb`] rejects or
-    /// when a band cannot be copied, and `TesseractError::NullPointerError` when Leptonica fails
-    /// to allocate or convert.
-    pub fn gray_from_raw_rgb(data: &[u8], width: u32, height: u32) -> Result<Pix> {
-        let row_bytes = (width as usize)
-            .checked_mul(3)
-            .ok_or(TesseractError::InvalidImageData)?;
-        let expected = row_bytes
-            .checked_mul(height as usize)
-            .ok_or(TesseractError::InvalidImageData)?;
-        if data.len() != expected || width == 0 || height == 0 {
-            return Err(TesseractError::InvalidImageData);
-        }
-
-        // SAFETY: only scalar arguments cross FFI. Leptonica rejects nonpositive signed
-        // dimensions, including u32 values that cast to negative, and allocates an 8 bpp Pix. ~keep
-        let pix_ptr = unsafe { pixCreate(width as i32, height as i32, 8) };
-        if pix_ptr.is_null() {
-            return Err(TesseractError::NullPointerError);
-        }
-        let gray = Pix { ptr: pix_ptr };
-
-        let band_bytes = row_bytes.saturating_mul(Self::GRAY_CONVERSION_STRIP_ROWS);
-        for (band, rgb) in data.chunks(band_bytes).enumerate() {
-            let rows = rgb.len() / row_bytes;
-            let band_gray = Pix::from_raw_rgb(rgb, width, rows as u32)?.to_grayscale()?;
-            let top = band * Self::GRAY_CONVERSION_STRIP_ROWS;
-            // SAFETY: both Pix values are live 8 bpp images owned here. The band is `width` x
-            // `rows`, and rows `top..top + rows` lie inside the destination's `height`. ~keep
-            let status = unsafe {
-                pixRasterop(
-                    gray.ptr,
-                    0,
-                    top as i32,
-                    width as i32,
-                    rows as i32,
-                    Self::PIX_SRC,
-                    band_gray.ptr,
-                    0,
-                    0,
-                )
-            };
-            if status != 0 {
-                return Err(TesseractError::InvalidImageData);
-            }
-        }
-
-        // SAFETY: gray holds a live Pix no other wrapper shares; the setter updates DPI fields. ~keep
-        unsafe { pixSetResolution(gray.ptr, 300, 300) };
-        Ok(gray)
-    }
-
     /// Estimates the mean pixel value and the fraction of "light" pixels of
     /// an 8 bpp grayscale image, by sampling a regular grid in a single pass.
     ///
