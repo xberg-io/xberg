@@ -107,6 +107,9 @@ pub fn order_by_stream_columns(spans: &mut [TextSpan]) -> bool {
 /// read after the last such run. Federal Register pages write every column's footnotes ahead of
 /// the body (2026-13845), so in stream order they open the page; read where they stand, each
 /// column's notes follow that column's text.
+///
+/// A target is never itself in secondary type, so no target is moved and every note lands after a
+/// span that keeps its place.
 fn note_targets(lines: &[StreamLine], runs: &[StreamRun]) -> Vec<Option<usize>> {
     let Some(body_size) = body_size(lines) else {
         return vec![None; runs.len()];
@@ -121,7 +124,8 @@ fn note_targets(lines: &[StreamLine], runs: &[StreamRun]) -> Vec<Option<usize>> 
                 .enumerate()
                 .skip(index + 1)
                 .filter(|(_, run)| {
-                    (run.size - body_size).abs() <= BODY_SIZE_TOLERANCE * body_size
+                    run.size >= SECONDARY_TYPE_RATIO * body_size
+                        && run.size - body_size <= BODY_SIZE_TOLERANCE * body_size
                         && run.right.min(note.right) > run.left.max(note.left)
                         && note.top <= run.bottom
                 })
@@ -164,6 +168,7 @@ fn defer_notes_written_ahead_of_their_column(
             order.extend_from_slice(&deferred_after[position]);
         }
     }
+    debug_assert_eq!(order.len(), spans.len(), "a deferred run lost its anchor span");
     let mut taken: Vec<TextSpan> = spans.iter_mut().map(std::mem::take).collect();
     for (slot, &position) in spans.iter_mut().zip(&order) {
         *slot = std::mem::take(&mut taken[position]);
@@ -683,6 +688,49 @@ mod tests {
 
         assert!(order_by_stream_columns(&mut spans));
 
+        assert_eq!(texts(&spans), expected);
+    }
+
+    fn lines(label: &str, left: f32, width: f32, size: f32, ys: &[f32]) -> Vec<TextSpan> {
+        ys.iter()
+            .enumerate()
+            .map(|(line, &y)| span(&format!("{label} line {line} of prose"), left, y, width, size))
+            .collect()
+    }
+
+    /// A note under column two whose last target stands in type between 0.8 and 0.9 of the body
+    /// size: once both a note and a target, that run was moved after its own target, and the
+    /// first note, anchored on it, was dropped from the page.
+    #[test]
+    fn note_whose_target_is_itself_a_note_keeps_its_spans() {
+        let note = lines("note", COLUMN_LEFTS[1], 60.0, 6.0, &[500.0, 492.0, 484.0]);
+        let middle = lines("middle", COLUMN_LEFTS[1], COLUMN_WIDTH, 7.5, &[540.0, 532.0, 524.0]);
+        let right_part = lines(
+            "aside",
+            300.0,
+            COLUMN_LEFTS[1] + COLUMN_WIDTH - 300.0,
+            BODY_SIZE,
+            &[560.0, 549.0],
+        );
+        let mut reading_order = note.clone();
+        reading_order.extend(column("first", COLUMN_LEFTS[0], 0, 20));
+        reading_order.extend(column("second", COLUMN_LEFTS[1], 0, 14));
+        reading_order.extend(column("third", COLUMN_LEFTS[2], 0, 14));
+        reading_order.extend(middle.clone());
+        reading_order.extend(right_part.clone());
+        let mut spans = rows(written(reading_order));
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        let expected: Vec<String> = column("first", COLUMN_LEFTS[0], 0, 20)
+            .into_iter()
+            .chain(column("second", COLUMN_LEFTS[1], 0, 14))
+            .chain(note)
+            .chain(column("third", COLUMN_LEFTS[2], 0, 14))
+            .chain(right_part)
+            .chain(middle)
+            .map(|span| span.text)
+            .collect();
         assert_eq!(texts(&spans), expected);
     }
 
