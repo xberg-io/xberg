@@ -174,3 +174,27 @@ fn other_requests_pass_the_plaintext_layout_check() {
     .to_vec();
     assert!(reject_plaintext_layout_requests(&accepted).is_ok());
 }
+
+#[test]
+fn build_config_carries_the_selected_tessdata_model() {
+    use clap::Parser as _;
+
+    let parse = |extra: &[&str]| {
+        let cli = crate::cli::Cli::try_parse_from(
+            ["benchmark-harness", "run", "--fixtures", "fixtures"]
+                .into_iter()
+                .chain(extra.iter().copied()),
+        )
+        .unwrap();
+        let crate::cli::Commands::Run(args) = cli.command else {
+            panic!("expected run command");
+        };
+        build_config(&args)
+    };
+
+    assert_eq!(parse(&[]).tessdata_model, xberg::TessdataModel::Fast);
+    assert_eq!(
+        parse(&["--tessdata-model", "best"]).tessdata_model,
+        xberg::TessdataModel::Best
+    );
+}

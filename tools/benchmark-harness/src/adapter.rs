@@ -364,6 +364,11 @@ pub trait FrameworkAdapter: Send + Sync {
         None
     }
 
+    /// Return the Tesseract model set the adapter selects, when it is not the default set.
+    fn configured_tessdata_model(&self) -> Option<xberg::TessdataModel> {
+        None
+    }
+
     /// Perform any necessary setup before benchmarking
     async fn setup(&self) -> Result<()> {
         Ok(())

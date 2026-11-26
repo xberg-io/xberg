@@ -560,6 +560,23 @@ fn warm_batch_adapter_has_no_misleading_single_file_cold_probe() {
 }
 
 #[test]
+fn steady_tesseract_adapter_selects_the_requested_tessdata_model() {
+    let adapter = create_xberg_steady_adapter(
+        XbergPipeline::Baseline,
+        OutputFormat::Markdown,
+        true,
+        true,
+        XbergPdfBackend::Native,
+        None,
+        default_run_timeout(),
+    )
+    .unwrap()
+    .with_tessdata_model(xberg::TessdataModel::Best);
+
+    assert_eq!(adapter.configured_tessdata_model(), Some(xberg::TessdataModel::Best));
+}
+
+#[test]
 fn steady_and_cold_probe_share_forced_tesseract_config() {
     let steady = steady_extraction_config(
         XbergPipeline::Layout,

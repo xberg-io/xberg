@@ -178,6 +178,7 @@ fn configure_subprocess_adapter(
             Some(max_threads) => adapter.with_xberg_max_threads(max_threads),
             None => adapter,
         })
+        .map(|adapter| adapter.with_tessdata_model(context.config.tessdata_model))
         .map(|adapter| Arc::new(adapter) as Arc<dyn FrameworkAdapter>)
 }
 
@@ -216,6 +217,7 @@ fn build_planned_adapter(
             context.config.xberg_max_threads,
             context.config.timeout,
         )
+        .map(|adapter| adapter.with_tessdata_model(context.config.tessdata_model))
         .map(|adapter| Arc::new(adapter) as Arc<dyn FrameworkAdapter>),
     }
 }

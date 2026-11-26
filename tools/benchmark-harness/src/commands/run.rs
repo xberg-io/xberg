@@ -1,6 +1,6 @@
 //! `run`: executes benchmarks across one or more registered framework adapters.
 
-use crate::cli::CliMode;
+use crate::cli::{CliMode, CliTessdataModel};
 use benchmark_harness::provenance::{CoverageGateProvenance, FrameworkCoverageProvenance};
 use benchmark_harness::types::ErrorKind;
 use benchmark_harness::{
@@ -51,6 +51,11 @@ pub(crate) struct RunArgs {
     /// otherwise defaults to --max-concurrent. Does not affect other frameworks.
     #[arg(long)]
     pub(crate) xberg_max_threads: Option<usize>,
+
+    /// Tesseract model set for Xberg's OCR. Sets the model on OCR configs Xberg already
+    /// uses, never enabling OCR itself. Does not affect other frameworks.
+    #[arg(long, value_enum, default_value = "fast")]
+    pub(crate) tessdata_model: CliTessdataModel,
 
     /// Timeout in seconds
     #[arg(short = 't', long)]
@@ -640,6 +645,7 @@ fn build_config(args: &RunArgs) -> BenchmarkConfig {
         output_dir: args.output.clone(),
         max_concurrent: args.max_concurrent.unwrap_or_else(num_cpus::get),
         xberg_max_threads: args.xberg_max_threads,
+        tessdata_model: args.tessdata_model.into(),
         timeout: std::time::Duration::from_secs(args.timeout.unwrap_or(1800)),
         benchmark_mode: args.mode.into(),
         warmup_iterations: args.warmup,
@@ -667,6 +673,9 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
 
     let config = build_config(args);
     config.validate()?;
+    // The in-process steady-state adapters see the selected set through the implicit OCR config
+    // when their config has no `ocr` section, as the CLI's `--ocr-tessdata-model` does.
+    xberg::core::config::ocr::set_implicit_tessdata_model(config.tessdata_model);
 
     let parsed_format = OutputFormat::from_str(&args.output_format).map_err(benchmark_harness::Error::Config)?;
     let batch_mode = matches!(config.benchmark_mode, BenchmarkMode::Batch);
@@ -707,9 +716,7 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
         args.cohort.as_deref(),
         args.ocr,
         selected_frameworks_use_tesseract(&frameworks),
-        // ~keep The harness builds its OCR configs without a tessdata_model, so xberg resolves the
-        // default set; pass the set here when a run selects another one.
-        xberg::TessdataModel::default(),
+        args.tessdata_model.into(),
     )?;
 
     let fixed_batch_size = resolve_fixed_batch_size(batch_mode, args.batch_size, cohort_manifest.as_ref())?;

@@ -116,6 +116,9 @@ pub struct FrameworkProvenance {
     /// [`Self::requested_workers`] and is unavailable for other frameworks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configured_thread_budget: Option<usize>,
+    /// Non-default Tesseract model set of an Xberg run; absent for `fast` and other frameworks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tessdata_model: Option<xberg::TessdataModel>,
     pub worker_semantics: String,
     pub effective_warmup_iterations: usize,
     pub eligible_documents: usize,
@@ -277,6 +280,7 @@ fn capture_framework(
             requested_workers,
             effective_workers,
             configured_thread_budget,
+            tessdata_model: adapter.configured_tessdata_model(),
             worker_semantics: worker_semantics(inputs.config.benchmark_mode, capability).to_string(),
             effective_warmup_iterations: capability.map_or(inputs.config.warmup_iterations, |value| {
                 if value.timing_scope == crate::types::BatchTimingScope::ColdEndToEndSubprocess {

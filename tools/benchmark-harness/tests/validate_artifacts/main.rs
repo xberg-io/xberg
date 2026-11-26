@@ -286,6 +286,7 @@ fn build_provenance(
             requested_workers: None,
             effective_workers: None,
             configured_thread_budget: None,
+            tessdata_model: None,
             worker_semantics: "test".to_string(),
             effective_warmup_iterations: 0,
             eligible_documents,
