@@ -158,12 +158,14 @@ ARG XBERG_BUILD_ID
 # The publish workflow passes thin for arm64, where fat LTO exhausts the runner's memory.
 ARG CARGO_PROFILE_RELEASE_LTO=fat
 
+# `ort-dynamic`: xberg does not link ONNX Runtime; it loads the digest-verified
+# /usr/local/lib/libonnxruntime.so staged below (`<exe dir>/../lib`) on first model use. ~keep
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
     : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
     export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO:?}" && \
-    cargo build --release --package xberg-cli --features all && \
+    cargo build --release --package xberg-cli --features all,ort-dynamic && \
     cp target/release/xberg /build/xberg && \
     strip /build/xberg
 

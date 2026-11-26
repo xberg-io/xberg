@@ -2182,6 +2182,42 @@ def test_cli_arm64_gnu_builds_with_thin_lto() -> None:
     assert_thin_only_on_arm64(selector, [({"matrix": entry}, entry["target"] == arm) for entry in entries])
 
 
+def test_unix_cli_loads_a_shipped_onnx_runtime_instead_of_linking_it() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    entries = matrix_entries(block)
+    unix = [entry for entry in entries if "windows" not in entry["target"]]
+    assert {entry["target"] for entry in unix} == {
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    }
+    for entry in entries:
+        features = entry.get("cargo_features") or entry.get("extra_cargo_args", "").removeprefix("--features ")
+        dynamic = "ort-dynamic" in features.split(",")
+        assert dynamic == (entry in unix), f"{entry['target']}: ort-dynamic={dynamic}"
+
+    steps = block["steps"]
+    names = [step.get("name") for step in steps]
+    [setup] = [step for step in steps if step.get("name") == "Setup ONNX Runtime (ort-dynamic CLI)"]
+    assert setup["uses"] == "./.github/actions/setup-onnx-runtime"
+    assert setup["if"] == "runner.os != 'Windows'"
+    assert setup["with"]["verify-linux-archive"] == "true", "the shipped runtime must be digest-verified on Linux"
+    build = next(
+        index
+        for index, step in enumerate(steps)
+        if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    )
+    assert build < names.index(setup["name"]), "staging the runtime must not change the ort-dynamic compile"
+
+    [package] = [step for step in steps if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    for shipped in ('"$STAGE/libonnxruntime.dylib"', '"$STAGE/libonnxruntime.so"'):
+        assert f'cp -L "${{ORT_VENDOR_LIB:?}}" {shipped}' in run, f"the archive must ship {shipped}"
+    assert 'grep -qi onnxruntime <<<"$linked"' in run, "the archive must prove xberg does not link ONNX Runtime"
+    assert names.index("Select ONNX Runtime library to ship") < names.index("Package CLI artifact")
+
+
 def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
     block = workflow_job(DOCKER_WORKFLOW, "build-docker")
     entries = matrix_entries(block)

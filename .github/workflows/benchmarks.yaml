@@ -109,8 +109,10 @@ jobs:
         with:
           build-profile: release
 
+      # `ort-dynamic` matches the released CLI: ONNX Runtime is not linked and loads on first
+      # model use, from the ORT_DYLIB_PATH each benchmark job's setup-onnx-runtime exports. ~keep
       - name: Build xberg-cli (release, all features + Sceptre tract diagnostic)
-        run: cargo build --locked --release -p xberg-cli --features all,xberg/sceptre-ocr-tract
+        run: cargo build --locked --release -p xberg-cli --features all,ort-dynamic,xberg/sceptre-ocr-tract
 
       # Bench cohorts span pdf/office/markup/ebook/email/data/images across the
       # xberg + 6 competitor jobs -- no glob subset is safe here. ~keep
