@@ -994,6 +994,10 @@ pub struct PdfDocument {
     /// and caches the page's preserved-geometry spans, else 0. Set by
     /// `expect_preserved_script_geometry`, cleared by `release_page_caches`.
     paired_geometry_pages: AtomicUsize,
+    /// Painted regions of the last pages a white-text drop read
+    /// (`PdfDocument::painted_regions`). `None` outside
+    /// `begin_page_passes`/`release_page_caches`.
+    painted_regions_cache: Mutex<Option<BoundedEntryCache<usize, Option<Arc<Vec<crate::geometry::Rect>>>>>>,
     /// Small-text density evidence for a single-page document.
     small_painted_text: std::sync::OnceLock<bool>,
     /// Per-page lightweight search index (page text + span bounding boxes,

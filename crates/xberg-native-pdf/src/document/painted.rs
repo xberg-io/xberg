@@ -5,8 +5,9 @@
 //! (`TextExtractor::invisible_text_page`).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use super::PdfDocument;
+use super::{MutexExt, PdfDocument};
 use crate::content::Operator;
 use crate::geometry::Rect;
 use crate::layout::Color;
@@ -19,6 +20,9 @@ const MAX_AUDIT_OPERATORS: usize = 1_000_000;
 const MAX_AUDIT_FORM_BYTES: usize = 64 * 1024 * 1024;
 /// Deepest Form nesting the audit follows; a deeper paint is not resolved.
 const MAX_AUDIT_FORM_DEPTH: usize = 16;
+/// Pages whose painted regions stay memoized during the page passes. A page is interpreted a few
+/// times in a row (per script geometry, per filter set), not again pages later.
+pub(super) const PAINTED_REGIONS_CACHE_PAGES: usize = 8;
 /// Smallest channel value of a white fill or stroke, for paths and for text alike.
 pub(crate) const WHITE_PAINT_MIN: f32 = 0.999;
 
@@ -52,8 +56,21 @@ impl PdfDocument {
     /// paths of any other colour and every image. `None` when the page or a Form it paints draws
     /// content whose colour the path walker does not resolve (a shading, a fill colour space other
     /// than a device or calibrated one, or a path painted in a colour set by `cs`, `sc` or `scn`)
-    /// or the page cannot be read, so the caller keeps all text.
-    pub(crate) fn painted_regions(&self, page_index: usize) -> Option<Vec<Rect>> {
+    /// or the page cannot be read, so the caller keeps all text. Memoized during the page passes.
+    pub(crate) fn painted_regions(&self, page_index: usize) -> Option<Arc<Vec<Rect>>> {
+        if let Some(cache) = self.painted_regions_cache.lock_or_recover().as_mut()
+            && let Some(regions) = cache.get(&page_index)
+        {
+            return regions.clone();
+        }
+        let regions = self.read_painted_regions(page_index).map(Arc::new);
+        if let Some(cache) = self.painted_regions_cache.lock_or_recover().as_mut() {
+            cache.insert(page_index, regions.clone());
+        }
+        regions
+    }
+
+    fn read_painted_regions(&self, page_index: usize) -> Option<Vec<Rect>> {
         let content = self.cached_page_content(page_index).ok()?;
         let page = self.get_page(page_index).ok()?;
         let resources = page

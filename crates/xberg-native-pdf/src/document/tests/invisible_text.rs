@@ -151,3 +151,24 @@ fn white_text_on_a_white_box_a_form_fills_is_dropped() {
 
     assert!(shown(&texts, "Visible") && !shown(&texts, "Hidden"), "{texts:?}");
 }
+
+#[test]
+fn painted_regions_are_read_once_per_page_during_the_page_passes() {
+    let content = format!("{VISIBLE_LINE}0 0 0.5 rg 40 590 200 30 re f\n");
+    let document =
+        PdfDocument::from_bytes(build_minimal_pdf_with_font(content.as_bytes())).expect("fixture PDF parses");
+    let outside = (document.painted_regions(0), document.painted_regions(0));
+    assert!(!std::sync::Arc::ptr_eq(
+        outside.0.as_ref().unwrap(),
+        outside.1.as_ref().unwrap()
+    ));
+
+    document.begin_page_passes();
+    let first = document.painted_regions(0).expect("the page resolves");
+    let second = document.painted_regions(0).expect("the page resolves");
+    document.release_page_caches();
+
+    assert_eq!(first.len(), 1);
+    assert!(std::sync::Arc::ptr_eq(&first, &second));
+    assert_eq!(*first, *outside.0.unwrap());
+}

@@ -271,6 +271,9 @@ impl PdfDocument {
                 .saturating_mul(PAGE_PASS_CACHE_BYTES_PER_SOURCE_BYTE),
         );
         *self.raw_page_spans_cache.lock_or_recover() = Some(crate::cache::AdmissionBudgetCache::new(budget));
+        *self.painted_regions_cache.lock_or_recover() = Some(super::BoundedEntryCache::new(
+            super::painted::PAINTED_REGIONS_CACHE_PAGES,
+        ));
     }
 
     /// Announce that the running page passes will also read preserved script
@@ -290,6 +293,7 @@ impl PdfDocument {
     pub fn release_page_caches(&self) {
         *self.raw_page_spans_cache.lock_or_recover() = None;
         self.paired_geometry_pages.store(0, Ordering::Relaxed);
+        *self.painted_regions_cache.lock_or_recover() = None;
         self.page_spans_cache.lock_or_recover().clear();
         self.page_chars_cache.lock_or_recover().clear();
         self.page_content_cache.lock_or_recover().clear();

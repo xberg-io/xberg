@@ -339,6 +339,7 @@ impl PdfDocument {
             page_spans_cache: Mutex::new(BoundedEntryCache::new(8)),
             raw_page_spans_cache: Mutex::new(None),
             paired_geometry_pages: AtomicUsize::new(0),
+            painted_regions_cache: Mutex::new(None),
             small_painted_text: std::sync::OnceLock::new(),
             search_index: Mutex::new(HashMap::new()),
             page_chars_cache: Mutex::new(BoundedEntryCache::new(PAGE_CHARS_CACHE_ENTRIES)),
@@ -723,6 +724,9 @@ impl PdfDocument {
             // Every per-page result read before authentication came from
             // undecrypted streams or an empty encrypted-page read. ~keep
             if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
+                cache.clear();
+            }
+            if let Some(cache) = self.painted_regions_cache.lock_or_recover().as_mut() {
                 cache.clear();
             }
             self.page_content_cache.lock_or_recover().clear();
