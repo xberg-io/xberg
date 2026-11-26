@@ -70,7 +70,7 @@ pub enum PageRotation {
 /// future file-backed variant can be re-introduced without touching call
 /// sites.
 enum PdfReader {
-    Memory(BufReader<Cursor<Vec<u8>>>),
+    Memory(BufReader<Cursor<bytes::Bytes>>),
 }
 
 impl Read for PdfReader {
@@ -724,7 +724,7 @@ pub struct PdfDocument {
     /// by absolute offset (see `bytes_at`), so the document carries no shared
     /// read cursor and a page read never depends on what another page read
     /// first. ~keep
-    pub source_bytes: Vec<u8>,
+    pub source_bytes: bytes::Bytes,
     /// PDF version (major, minor)
     version: (u8, u8),
     /// Cross-reference table mapping object IDs to byte offsets

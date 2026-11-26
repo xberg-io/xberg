@@ -434,7 +434,7 @@ fn the_page_pass_budget_is_proportional_to_the_source_and_capped() {
         .budget_bytes();
     assert_eq!(budget, 32 * doc.source_bytes.len());
     let mut large = PdfDocument::from_bytes(many_pages_pdf(2)).expect("open document");
-    large.source_bytes.resize(1024 * 1024, b' ');
+    large.source_bytes = bytes::Bytes::from(vec![b' '; 1024 * 1024]);
     large.begin_page_passes();
     let budget = large
         .raw_page_spans_cache

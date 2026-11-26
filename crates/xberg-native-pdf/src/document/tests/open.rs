@@ -699,3 +699,21 @@ fn test_authentication_drops_page_caches_filled_before_it() {
     );
     assert_eq!(reads(&doc), expected);
 }
+
+#[test]
+fn from_bytes_shares_the_callers_buffer_without_copying() {
+    let buffer = bytes::Bytes::from(build_nested_xobject_do_with_orphaned_operands_pdf());
+    let doc = PdfDocument::from_bytes(buffer.clone()).expect("parse pdf");
+
+    assert_eq!(doc.source_bytes.as_ptr(), buffer.as_ptr());
+    assert_eq!(doc.source_bytes.len(), buffer.len());
+}
+
+#[test]
+fn from_bytes_adopts_a_vec_allocation_without_copying() {
+    let vec = build_nested_xobject_do_with_orphaned_operands_pdf();
+    let ptr = vec.as_ptr();
+    let doc = PdfDocument::from_bytes(vec).expect("parse pdf");
+
+    assert_eq!(doc.source_bytes.as_ptr(), ptr);
+}

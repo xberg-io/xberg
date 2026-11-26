@@ -391,7 +391,7 @@ fn extract_lopdf_compatibility_data(content: &[u8]) -> LopdfCompatibilityData {
 
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
-    source: Vec<u8>,
+    source: bytes::Bytes,
     #[cfg(feature = "tokio-runtime")]
     may_have_embedded_files: bool,
     extraction: extraction::PdfExtractionPhaseResult,
@@ -503,7 +503,8 @@ fn extract_native_blocking(
         .unwrap_or(&[]);
     let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
     let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
-    let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
+    let mut native_document =
+        crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(bytes::Bytes::from(content), passwords)?;
     let compatibility_data = match compatibility_data {
         Some(data) => Some(data),
         None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {

@@ -553,7 +553,7 @@ mod tests {
     fn rejects_stream_when_declared_length_would_hide_an_invalid_tail() {
         let original = custom_page(SMALL_TEXT, "/Font << /F1 5 0 R >>", &[HELVETICA.into()]);
         assert!(original.has_small_painted_text_for_ocr());
-        let bytes = original.source_bytes.as_slice();
+        let bytes = &original.source_bytes[..];
         let mut content = bytes.to_vec();
         let old = format!("/Length {}", SMALL_TEXT.len());
         let new = format!("/Length {}", SMALL_TEXT.len() - 1);

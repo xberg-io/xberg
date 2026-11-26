@@ -21,11 +21,20 @@ impl PdfDocument {
     /// the PDF data is already fully loaded in memory. This parses the PDF by
     /// wrapping the bytes in a memory reader and delegating to internal parsers.
     ///
+    /// `data` is anything convertible into [`bytes::Bytes`]: a `Vec<u8>` is
+    /// adopted without copying and a `Bytes` shares the caller's buffer, so the
+    /// document never holds a second copy of the file.
+    ///
     /// # Errors
     ///
     /// Returns an error if the PDF data is invalid, unsupported, or cannot be parsed.
+    pub fn from_bytes(data: impl Into<bytes::Bytes>) -> Result<Self> {
+        let data = data.into();
+        Self::from_shared_bytes(data)
+    }
+
     #[tracing::instrument(name = "pdf.from_bytes", skip_all, fields(bytes = data.len()))]
-    pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
+    fn from_shared_bytes(data: bytes::Bytes) -> Result<Self> {
         let warning_sink = crate::extractors::warnings::WarningSink::new();
         let _warnings = warning_sink.enter();
         match Self::open_from_bytes_inner(data, warning_sink) {
@@ -90,7 +99,10 @@ impl PdfDocument {
     /// Parse `data` into a document. The reader built here lives only for the
     /// header, xref and trailer parse; the finished document keeps the bytes and
     /// reads them by offset instead. ~keep
-    fn open_from_bytes_inner(data: Vec<u8>, warning_sink: crate::extractors::warnings::WarningSink) -> Result<Self> {
+    fn open_from_bytes_inner(
+        data: bytes::Bytes,
+        warning_sink: crate::extractors::warnings::WarningSink,
+    ) -> Result<Self> {
         let mut reader = PdfReader::Memory(BufReader::new(Cursor::new(data)));
         // Parse header with lenient mode by default (handle PDFs with binary prefixes) ~keep
         let (major, minor, header_offset) = parse_header(&mut reader, true)?;
@@ -266,7 +278,7 @@ impl PdfDocument {
     }
 
     fn build_document(
-        parsed: (Vec<u8>, (u8, u8), CrossRefTable, Object),
+        parsed: (bytes::Bytes, (u8, u8), CrossRefTable, Object),
         recovery: (u64, bool, Option<HashMap<u32, u64>>),
         warning_sink: crate::extractors::warnings::WarningSink,
     ) -> Self {

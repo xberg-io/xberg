@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking (native-pdf):** In the Rust-only `xberg-native-pdf` crate, `PdfDocument::source_bytes` is now `bytes::Bytes` instead of `Vec<u8>`, and `PdfDocument::from_bytes` accepts `impl Into<Bytes>`. A `Vec<u8>` is adopted without copying and a `Bytes` shares the caller's buffer, so the document no longer holds a second copy of the file. Callers that mutated or took ownership of the field as a `Vec` use `.to_vec()`.
+
 ## [1.5.4] - 2026-11-25
 
 ### Added

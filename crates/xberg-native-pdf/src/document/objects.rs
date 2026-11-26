@@ -155,10 +155,7 @@ impl PdfDocument {
         {
             return None;
         }
-        let tail = self
-            .source_bytes
-            .as_slice()
-            .get(usize::try_from(entry.offset).ok()?..)?;
+        let tail = self.source_bytes.get(usize::try_from(entry.offset).ok()?..)?;
         Some((entry.offset, tail))
     }
 
@@ -1174,7 +1171,7 @@ impl PdfDocument {
         // legitimate header line while still bounding the pathological case.
         // ~keep
         const MAX_HEADER_LINE_BYTES: u64 = 64 * 1024; // 64 KB safety limit per header line ~keep
-        let mut cursor = Cursor::new(self.source_bytes.as_slice());
+        let mut cursor = Cursor::new(&self.source_bytes[..]);
         let (header_bytes, full_header) = {
             let reader = &mut cursor;
             reader.seek(SeekFrom::Start(offset))?;
