@@ -455,6 +455,7 @@ fn compute_page_reading_order(
         preserve_inline_prose_symbol_order(spans);
         return;
     };
+    tracing::debug!(target: "xberg::pdf::column_split", page = page_index, gutter_x, "two-up page split at its gutter");
     let (mut left, mut right): (Vec<_>, Vec<_>) = spans
         .drain(..)
         .partition(|span| span.bbox.x + span.bbox.width * 0.5 < gutter_x);
@@ -503,6 +504,7 @@ fn reorder_single_page_reading_order(
     page_index: usize,
 ) {
     if xberg_native_pdf::pipeline::reading_order::order_by_stream_columns(spans) {
+        tracing::debug!(target: "xberg::pdf::column_split", page = page_index, "page kept its stream column order");
         return;
     }
     let margin_runs = take_rotated_margin_runs(spans);
@@ -516,7 +518,9 @@ fn reorder_upright_columns(
     page_height: f32,
     page_index: usize,
 ) {
-    super::text::reorder_sparse_two_column_page(spans, page_width);
+    if super::text::reorder_sparse_two_column_page(spans, page_width) {
+        tracing::debug!(target: "xberg::pdf::column_split", page = page_index, "sparse two-column page reordered");
+    }
     if super::text::reorder_dense_two_column_page(spans, page_width) {
         return;
     }
@@ -584,7 +588,15 @@ fn apply_xy_cut_if_column_aware(
         context = context.with_column_gutter(gutter_x);
     }
     match XYCutStrategy::new().apply(spans.clone(), &context) {
-        Ok(ordered) => *spans = ordered.into_iter().map(|item| item.span).collect(),
+        Ok(ordered) => {
+            tracing::debug!(
+                target: "xberg::pdf::column_split",
+                page = page_index,
+                gutter_x = ?context.column_gutter,
+                "column-aware XY-cut ordered the page"
+            );
+            *spans = ordered.into_iter().map(|item| item.span).collect();
+        }
         Err(error) => tracing::debug!(
             page = page_index,
             "xberg_native_pdf column-aware hierarchy ordering failed; retaining top-to-bottom order: {error}"
