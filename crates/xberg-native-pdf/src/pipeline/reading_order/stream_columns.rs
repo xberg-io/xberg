@@ -742,6 +742,32 @@ mod tests {
         assert_eq!(texts(&spans), expected);
     }
 
+    /// A column that sets a block of four lines in small type between its paragraphs splits into
+    /// three runs where the type changes. The body runs on either side stay three lines or more,
+    /// so they still count toward the coverage, and the page still reads in stream order.
+    #[test]
+    fn a_small_type_block_inside_a_column_keeps_the_page_in_stream_order() {
+        let mut reading_order = column("first", COLUMN_LEFTS[0], 0, 3);
+        reading_order.extend(lines(
+            "aside",
+            COLUMN_LEFTS[0],
+            COLUMN_WIDTH,
+            7.0,
+            &[688.0, 680.0, 672.0, 664.0],
+        ));
+        reading_order.extend(column("first resumed", COLUMN_LEFTS[0], 6, 4));
+        for (label, &left) in ["second", "third"].iter().zip(&COLUMN_LEFTS[1..]) {
+            reading_order.extend(column(label, left, 0, 10));
+        }
+        let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
+        let mut spans = rows(written(reading_order));
+        assert_ne!(texts(&spans), expected, "the fixture must arrive in geometric order");
+
+        assert!(order_by_stream_columns(&mut spans));
+
+        assert_eq!(texts(&spans), expected);
+    }
+
     /// Three columns of six lines written in order after nine one-line runs above them: the
     /// one-line runs leave two thirds of all lines in runs, under `MIN_RUN_COVERAGE`.
     fn columns_under_one_line_runs(size: f32) -> Vec<TextSpan> {
