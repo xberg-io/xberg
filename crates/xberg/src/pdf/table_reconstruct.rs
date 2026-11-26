@@ -51,7 +51,7 @@ const NUMERIC_COLUMN_MIN_NUMERIC_PERCENT: usize = 60;
 #[cfg(feature = "pdf")]
 use super::hierarchy::SegmentData;
 #[cfg(feature = "pdf")]
-use super::structure::lines::segments_are_touching;
+use super::structure::lines::{segments_are_touching, trailing_marker_touches};
 
 /// Convert a PDF `SegmentData` to an `HocrWord` for table reconstruction, adding
 /// `advance_offset`/`top_offset` to the segment's upright-frame position before
@@ -322,12 +322,11 @@ fn merge_touching_segment_boundaries(
             per_segment_words[boundary].last(),
             per_segment_words[boundary + 1].first(),
         ) {
-            (Some(prev_word), Some(next_word)) => segments_are_touching(
-                &segments[boundary],
-                &prev_word.text,
-                &segments[boundary + 1],
-                &next_word.text,
-            ),
+            (Some(prev_word), Some(next_word)) => {
+                let (prev_seg, next_seg) = (&segments[boundary], &segments[boundary + 1]);
+                segments_are_touching(prev_seg, &prev_word.text, next_seg, &next_word.text)
+                    || trailing_marker_touches(prev_seg, &prev_word.text, next_seg, &next_word.text)
+            }
             _ => false,
         };
         if !is_touching {
@@ -3225,6 +3224,43 @@ mod tests {
         let words = segments_to_words(&[seg_a, seg_b], 800.0);
         let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
         assert_eq!(texts, vec!["100", "5"]);
+    }
+
+    /// A BlackRock schedule of investments prints `01/15/38(c)` with the footnote marker in a
+    /// 4.66pt run raised over the 8pt date, and `SE,` with the comma as its own run. Both reached
+    /// the cell as two words and rendered `01/15/38 (c)` and `SE ,`.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn a_touching_trailing_marker_joins_the_word_before_it() {
+        let date = make_seg("5.53%, 01/15/38", 340.0, 500.0, 72.65, 8.0);
+        let marker = make_seg("(c)", 412.65, 501.9, 4.46, 4.664);
+        let words = segments_to_words(&[date, marker], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["5.53%,", "01/15/38(c)"]);
+
+        let name = make_seg("Argenx SE", 309.0, 500.0, 31.36, 8.0);
+        let comma = make_seg(",", 340.36, 500.0, 1.82, 8.0);
+        let words = segments_to_words(&[name, comma], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["Argenx", "SE,"]);
+    }
+
+    /// The marker join must not reach digits: a touching `(1,234)` or a word-spaced `(c)` stays
+    /// its own word.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn a_digit_run_or_a_spaced_marker_is_not_joined_as_a_trailing_marker() {
+        let label = make_seg("Total", 100.0, 500.0, 20.0, 8.0);
+        let amount = make_seg("(1,234)", 120.0, 500.0, 25.0, 8.0);
+        let words = segments_to_words(&[label, amount], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["Total", "(1,234)"]);
+
+        let date = make_seg("01/15/38", 100.0, 500.0, 30.0, 8.0);
+        let marker = make_seg("(c)", 132.0, 500.0, 4.5, 4.664);
+        let words = segments_to_words(&[date, marker], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["01/15/38", "(c)"]);
     }
 
     #[test]

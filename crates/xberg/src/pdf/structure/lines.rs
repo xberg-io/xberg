@@ -122,6 +122,47 @@ fn punctuation_boundary_touches(
             .is_some_and(|gap| gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO)
 }
 
+/// Highest a trailing marker's baseline may sit above the word it follows, in ems of that word's
+/// font: a superscript footnote marker such as `(c)` is raised about a quarter em.
+const TRAILING_MARKER_MAX_RAISE_EM_RATIO: f32 = 0.5;
+
+/// A trailing comma, semicolon, colon, bracket or footnote marker printed against the word
+/// before it, as in `38` + `(c)` (a smaller raised marker) or `SE` + `,`. Table word merging
+/// runs before column assignment, so the marker must carry no digit: a digit-bearing run such
+/// as `(1,234)` or `.804` can be the next column touching the last one (GH#2122), while a cell
+/// never starts with a bare `,` or a letter marker in parentheses. ~keep
+pub(crate) fn trailing_marker_touches(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    let (Some(prev_last_char), Some(next_first_char)) = (prev_word.chars().last(), next_word.chars().next()) else {
+        return false;
+    };
+    if !prev_last_char.is_alphanumeric()
+        || !matches!(next_first_char, ',' | ';' | ':' | ')' | ']' | '(')
+        || next_word.chars().any(|character| character.is_ascii_digit())
+        || prev_seg.text.chars().last().is_some_and(char::is_whitespace)
+        || next_seg.text.chars().next().is_some_and(char::is_whitespace)
+        || !prev_seg.has_same_rotation(next_seg)
+    {
+        return false;
+    }
+    let font_size = prev_seg.font_size.max(1.0);
+    if next_seg.font_size > font_size * (1.0 + TOUCHING_SPAN_FONT_SIZE_TOLERANCE_RATIO) {
+        return false;
+    }
+    let raise = next_seg.upright_baseline() - prev_seg.upright_baseline();
+    if !(-TOUCHING_SPAN_BASELINE_TOLERANCE..=font_size * TRAILING_MARKER_MAX_RAISE_EM_RATIO).contains(&raise) {
+        return false;
+    }
+    let (_, prev_end) = prev_seg.upright_advance_extent();
+    let (next_start, _) = next_seg.upright_advance_extent();
+    let gap = (next_start - prev_end) / font_size;
+    gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO
+}
+
 /// Signed advance-axis gap between two runs, in ems of the larger font, when they share a
 /// rotation, baseline and font size and no explicit space separates them.
 fn same_line_gap_in_em(prev_seg: &SegmentData, next_seg: &SegmentData) -> Option<f32> {
