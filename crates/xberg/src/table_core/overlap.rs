@@ -45,6 +45,7 @@ impl Coordinate for u32 {
 
 /// One column of overlapping extents: its span and the indices of its members.
 pub(crate) struct OverlapColumn<T> {
+    #[cfg_attr(not(feature = "pdf"), allow(dead_code))]
     pub(crate) left: T,
     pub(crate) right: T,
     pub(crate) members: Vec<usize>,
