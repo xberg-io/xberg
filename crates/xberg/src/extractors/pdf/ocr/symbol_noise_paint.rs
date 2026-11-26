@@ -278,6 +278,7 @@ fn recognition_matches(
     let recognition = crate::ocr::types::TesseractConfig {
         language: "eng".into(),
         tessdata_path: ocr.tessdata_path.clone(),
+        tessdata_model: ocr.tessdata_model,
         psm: 7,
         output_format: "text".into(),
         use_cache: false,

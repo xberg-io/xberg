@@ -423,6 +423,7 @@ fn reference_reader(probe: &Probe<'_>) -> ExtractionConfig {
             quality_thresholds: probe.thresholds.clone(),
         }),
         tessdata_path: configured.tessdata_path,
+        tessdata_model: configured.tessdata_model,
         security_limits: configured.security_limits,
         ..latin
     });

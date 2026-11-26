@@ -24,6 +24,7 @@ impl ExtractionConfig {
     /// - `XBERG_OCR_BACKEND`: OCR backend ("tesseract", "paddleocr", "paddle-ocr", or "vlm")
     /// - `XBERG_OCR_MODEL_VERSION`: PaddleOCR model generation ("pp-ocrv6" or "pp-ocrv5")
     /// - `XBERG_OCR_MODEL_TIER`: PaddleOCR model tier (e.g. "medium"/"small"/"tiny" for v6, "mobile"/"server" for v5)
+    /// - `XBERG_OCR_TESSDATA_MODEL`: Tesseract model set ("fast" or "best")
     /// - `XBERG_CHUNKING_MAX_CHARS`: Maximum characters per chunk (positive integer)
     /// - `XBERG_CHUNKING_MAX_OVERLAP`: Maximum overlap between chunks (non-negative integer)
     /// - `XBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")
@@ -113,6 +114,14 @@ impl ExtractionConfig {
             if let Some(ref mut ocr) = self.ocr {
                 ocr.backend = backend;
             }
+        }
+
+        if let Ok(model) = std::env::var("XBERG_OCR_TESSDATA_MODEL") {
+            let model = model.parse().map_err(|message: String| XbergError::Validation {
+                message: format!("Invalid value for XBERG_OCR_TESSDATA_MODEL: {message}"),
+                source: None,
+            })?;
+            self.ocr.get_or_insert_with(OcrConfig::default).tessdata_model = model;
         }
         Ok(())
     }

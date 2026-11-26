@@ -53,7 +53,7 @@ impl ModelContext {
             .split('+')
             .map(|lang| lang.trim().to_string())
             .collect::<Vec<_>>();
-        let env = TessdataEnv::from_process();
+        let env = TessdataEnv::from_process().for_model(config.tessdata_model);
         let override_path = config.tessdata_path.as_deref();
         let directory = resolve_tessdata_path_in(&languages, override_path, &env).inspect_err(|_| {
             if matches!(config.psm, 0 | 1 | 12) {

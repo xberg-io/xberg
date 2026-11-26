@@ -12,6 +12,9 @@
 //!
 //! Without either, this backend returns a `MissingDependency` error explaining
 //! how to provide tessdata.
+//!
+//! WebAssembly stays on `tessdata_fast`: the bundled model is never used for an
+//! `OcrConfig::tessdata_model` of `best`, which needs caller-supplied bytes.
 
 use crate::Result;
 use crate::core::config::OcrConfig;
@@ -86,7 +89,9 @@ impl TesseractWasmBackend {
         if language == "eng"
             && let Some(bundled) = bundled_eng_traineddata()
         {
-            self.cache_tessdata(language, bundled.to_vec());
+            // ~keep Not cached: the cache is keyed by language alone, and a later `best` request
+            // must not be served the bundled tessdata_fast bytes.
+            require_bundled_model(config)?;
             return Ok(bundled.to_vec());
         }
 
@@ -196,6 +201,21 @@ impl OcrBackend for TesseractWasmBackend {
     }
 
     // Rotation handling stays on the trait's `RequiresUpright` default, matching the native backend. ~keep
+}
+
+/// Refuse the bundled `tessdata_fast` English model for a `tessdata_best` request.
+///
+/// WebAssembly does not bundle or download `tessdata_best`; a caller who wants it supplies the
+/// bytes through `OcrConfig::tessdata_bytes`.
+fn require_bundled_model(config: &OcrConfig) -> Result<()> {
+    if config.tessdata_model == crate::core::config::TessdataModel::Fast {
+        return Ok(());
+    }
+    Err(crate::XbergError::MissingDependency(format!(
+        "tessdata_model '{}' is not bundled on WebAssembly, which ships only tessdata_fast English. \
+         Provide the model bytes via OcrConfig::tessdata_bytes, or use tessdata_model 'fast'.",
+        config.tessdata_model
+    )))
 }
 
 /// Returns the compile-time-bundled English tessdata when the
@@ -414,6 +434,40 @@ mod tests {
 
         assert_eq!(resolve_psm(&config), DEFAULT_WASM_PSM);
         assert_eq!(DEFAULT_WASM_PSM, TessPageSegMode::PSM_SINGLE_BLOCK);
+    }
+
+    #[test]
+    fn should_refuse_the_bundled_fast_model_for_a_best_request() {
+        let best = OcrConfig {
+            tessdata_model: crate::core::config::TessdataModel::Best,
+            ..Default::default()
+        };
+
+        assert!(require_bundled_model(&OcrConfig::default()).is_ok());
+        assert!(matches!(
+            require_bundled_model(&best),
+            Err(crate::XbergError::MissingDependency(message)) if message.contains("tessdata_bytes")
+        ));
+        assert!(matches!(
+            TesseractWasmBackend::new().unwrap().resolve_tessdata("eng", &best),
+            Err(crate::XbergError::MissingDependency(_))
+        ));
+    }
+
+    #[test]
+    fn should_use_caller_supplied_bytes_for_a_best_request() {
+        let best = OcrConfig {
+            tessdata_model: crate::core::config::TessdataModel::Best,
+            tessdata_bytes: Some(HashMap::from([("eng".to_string(), vec![7_u8; 3])])),
+            ..Default::default()
+        };
+
+        let bytes = TesseractWasmBackend::new()
+            .unwrap()
+            .resolve_tessdata("eng", &best)
+            .unwrap();
+
+        assert_eq!(bytes, [7, 7, 7]);
     }
 
     #[test]

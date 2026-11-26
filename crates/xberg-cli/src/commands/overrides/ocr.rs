@@ -172,7 +172,7 @@ impl ExtractionOverrides {
     }
 
     /// Whether any `--ocr-*` field flag (backend, backend options, auto-rotate,
-    /// language) was given, independent of `--ocr`/`--ocr true`.
+    /// language, tessdata model) was given, independent of `--ocr`/`--ocr true`.
     ///
     /// Deliberately excludes `--ocr-no-cache`: `apply_ocr_no_cache` only ever mutates an
     /// already-materialised `tesseract_config` (see its doc comment), so naming
@@ -188,6 +188,7 @@ impl ExtractionOverrides {
             || self.ocr_backend_options.is_some()
             || self.ocr_auto_rotate.is_some()
             || self.ocr_language.is_some()
+            || self.ocr_tessdata_model.is_some()
     }
 
     /// Mutate the individual OCR fields that have a CLI flag, in place.
@@ -204,6 +205,9 @@ impl ExtractionOverrides {
         }
         if let Some(rotate) = self.ocr_auto_rotate {
             ocr.auto_rotate = Some(rotate);
+        }
+        if let Some(model) = self.ocr_tessdata_model {
+            ocr.tessdata_model = model;
         }
         if let Some(no_cache) = self.ocr_no_cache {
             apply_ocr_no_cache(ocr, no_cache);
@@ -254,6 +258,7 @@ impl ExtractionOverrides {
                 security_limits: None,
                 tessdata_bytes: None,
                 tessdata_path: None,
+                tessdata_model: Default::default(),
                 numeric_repair: false,
                 backend_options,
             });

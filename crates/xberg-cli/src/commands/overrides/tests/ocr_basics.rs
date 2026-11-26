@@ -214,6 +214,7 @@ fn test_ocr_language_without_ocr_flag_existing_config() {
             security_limits: None,
             tessdata_bytes: None,
             tessdata_path: None,
+            tessdata_model: Default::default(),
             numeric_repair: false,
             backend_options: None,
         }),
@@ -256,6 +257,7 @@ fn test_ocr_language_updates_existing_nested_tesseract_config() {
             security_limits: None,
             tessdata_bytes: None,
             tessdata_path: None,
+            tessdata_model: Default::default(),
             numeric_repair: false,
             backend_options: None,
         }),
@@ -402,6 +404,7 @@ fn test_ocr_no_cache_changes_only_use_cache_when_tesseract_config_already_set() 
             security_limits: None,
             tessdata_bytes: None,
             tessdata_path: None,
+            tessdata_model: Default::default(),
             numeric_repair: false,
             backend_options: None,
         }),
@@ -550,6 +553,7 @@ fn test_ocr_no_cache_false_re_enables_an_already_disabled_cache() {
             security_limits: None,
             tessdata_bytes: None,
             tessdata_path: None,
+            tessdata_model: Default::default(),
             numeric_repair: false,
             backend_options: None,
         }),
@@ -638,4 +642,41 @@ fn test_ocr_disabled_ignores_language() {
     };
     overrides.apply(&mut config);
     assert!(config.ocr.is_none());
+}
+
+#[cfg(feature = "ocr-surface")]
+#[test]
+fn test_ocr_tessdata_model_flag_sets_only_the_model_set() {
+    let mut config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            language: vec!["deu".to_string()],
+            tessdata_path: Some(std::path::PathBuf::from("/opt/tessdata")),
+            ..OcrConfig::default()
+        }),
+        ..Default::default()
+    };
+    let overrides = ExtractionOverrides {
+        ocr_tessdata_model: Some(xberg::TessdataModel::Best),
+        ..default_overrides()
+    };
+    overrides.apply(&mut config);
+    let ocr = config.ocr.unwrap();
+    assert_eq!(ocr.tessdata_model, xberg::TessdataModel::Best);
+    assert_eq!(ocr.language, vec!["deu".to_string()]);
+    assert_eq!(ocr.tessdata_path, Some(std::path::PathBuf::from("/opt/tessdata")));
+}
+
+#[cfg(feature = "ocr-surface")]
+#[test]
+fn test_ocr_tessdata_model_flag_alone_materialises_the_ocr_config() {
+    let mut config = ExtractionConfig::default();
+    let overrides = ExtractionOverrides {
+        ocr_tessdata_model: Some(xberg::TessdataModel::Best),
+        ..default_overrides()
+    };
+    overrides.apply(&mut config);
+    assert_eq!(
+        config.ocr.map(|ocr| ocr.tessdata_model),
+        Some(xberg::TessdataModel::Best)
+    );
 }

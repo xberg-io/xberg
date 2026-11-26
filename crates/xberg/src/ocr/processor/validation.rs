@@ -3,6 +3,7 @@
 //! This module handles validation of images, language files, and Tesseract configuration
 //! before OCR processing begins.
 
+use crate::core::config::TessdataModel;
 use crate::ocr::error::OcrError;
 use crate::ocr::validation::TESSERACT_SUPPORTED_LANGUAGE_CODES;
 use std::borrow::Cow;
@@ -59,28 +60,40 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 /// every requested language wins:
 /// 1. `OcrConfig.tessdata_path` override (`override_path` argument)
 /// 2. `TESSDATA_PREFIX` environment variable
-/// 3. `XBERG_CACHE_DIR/tessdata`
-/// 4. `crate::cache_dir::resolve_cache_base().join("tessdata")`
-/// 5. System fallback paths (macOS, Linux, Windows), unless `XBERG_TESSDATA_SYSTEM_PATHS`
-///    is `0` or `false`
-/// 6. If languages are still missing, materialize bundled `eng` bytes and
-///    download any others from the GitHub `tessdata_fast` repo into the cache
+/// 3. xberg's cache for `model`: `<cache>/tessdata/<model>`, where `<cache>` is `XBERG_CACHE_DIR`
+///    or [`crate::cache_dir::cache_base_for`]'s platform default
+/// 4. For [`TessdataModel::Fast`] only: the flat `<cache>/tessdata` older releases downloaded
+///    into, then the system fallback paths (macOS, Linux, Windows) unless
+///    `XBERG_TESSDATA_SYSTEM_PATHS` is `0` or `false`. Both hold tessdata_fast data, so they never
+///    satisfy a [`TessdataModel::Best`] request.
+/// 5. If languages are still missing, materialize them into `<cache>/tessdata/<model>`: for
+///    `fast`, from a flat-cache file that matches its pin or the bundled `eng`, otherwise by a
+///    pinned, SHA-256 verified download from the model's GitHub repository.
+///
+/// The override and `TESSDATA_PREFIX` are the caller's choice and are used whichever model set
+/// they hold; `model` applies only to the directories xberg manages.
 ///
 /// # Arguments
 ///
 /// * `languages` - List of language codes to resolve (e.g., `["eng", "fra"]`)
 /// * `override_path` - Optional explicit tessdata directory from `OcrConfig.tessdata_path`,
 ///   checked before any environment or system location.
+/// * `model` - The model set xberg's own directories are searched and filled for.
 ///
 /// # Returns
 ///
 /// `Ok(String)` with the path to a valid tessdata directory containing all
 /// requested languages, or `Err(OcrError)` if resolution fails.
-pub(crate) fn resolve_tessdata_path(languages: &[String], override_path: Option<&Path>) -> Result<String, OcrError> {
-    resolve_tessdata_path_in(languages, override_path, &TessdataEnv::from_process())
+pub(crate) fn resolve_tessdata_path(
+    languages: &[String],
+    override_path: Option<&Path>,
+    model: TessdataModel,
+) -> Result<String, OcrError> {
+    resolve_tessdata_path_in(languages, override_path, &TessdataEnv::from_process().for_model(model))
 }
 
-/// The environment values the tessdata search order reads.
+/// The environment values the tessdata search order reads, plus the model set xberg's own
+/// directories are resolved for.
 #[derive(Debug)]
 pub(crate) struct TessdataEnv {
     /// The `TESSDATA_PREFIX` value.
@@ -90,10 +103,12 @@ pub(crate) struct TessdataEnv {
     /// Whether the system tessdata locations are searched: false when
     /// `XBERG_TESSDATA_SYSTEM_PATHS` is `0` or `false`, true otherwise.
     pub(crate) system_paths: bool,
+    /// The model set (`OcrConfig.tessdata_model`); not read from the environment.
+    pub(crate) model: TessdataModel,
 }
 
 impl TessdataEnv {
-    /// Read the values from the process environment.
+    /// Read the values from the process environment, for the default model set.
     pub(crate) fn from_process() -> Self {
         Self::from_lookup(|name| env::var(name).ok())
     }
@@ -107,8 +122,21 @@ impl TessdataEnv {
                 let value = value.trim();
                 value == "0" || value.eq_ignore_ascii_case("false")
             }),
+            model: TessdataModel::default(),
         }
     }
+
+    /// The same values, resolving xberg's own directories for `model`.
+    #[must_use]
+    pub(crate) fn for_model(mut self, model: TessdataModel) -> Self {
+        self.model = model;
+        self
+    }
+}
+
+/// xberg's cache directory for `model`: `<cache_base>/tessdata/<model>`.
+pub(crate) fn model_cache_dir(cache_base: &Path, model: TessdataModel) -> PathBuf {
+    cache_base.join("tessdata").join(model.as_str())
 }
 
 /// [`resolve_tessdata_path`] with the environment values given as arguments.
@@ -119,11 +147,13 @@ pub(crate) fn resolve_tessdata_path_in(
 ) -> Result<String, OcrError> {
     for dir in tessdata_search_dirs(override_path, tessdata_env) {
         if all_languages_exist(&dir, languages)? {
+            log_resolved(&dir, override_path, tessdata_env);
             return Ok(dir);
         }
     }
 
-    let download_dest = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref()).join("tessdata");
+    let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
+    let download_dest = model_cache_dir(&cache_base, tessdata_env.model);
     std::fs::create_dir_all(&download_dest).map_err(|e| {
         OcrError::TesseractInitializationFailed(format!(
             "Failed to create tessdata cache directory '{}': {}",
@@ -132,13 +162,15 @@ pub(crate) fn resolve_tessdata_path_in(
         ))
     })?;
 
-    materialize_missing_languages(&download_dest, languages)?;
+    let legacy = (tessdata_env.model == TessdataModel::Fast).then(|| cache_base.join("tessdata"));
+    materialize_missing_languages(&download_dest, languages, tessdata_env.model, legacy.as_deref())?;
 
     let dest_str = download_dest
         .to_str()
         .ok_or_else(|| OcrError::TesseractInitializationFailed("Tessdata path is not valid UTF-8".to_string()))?;
 
     if all_languages_exist(dest_str, languages)? {
+        log_resolved(dest_str, override_path, tessdata_env);
         Ok(dest_str.to_string())
     } else {
         Err(OcrError::TesseractInitializationFailed(format!(
@@ -146,6 +178,17 @@ pub(crate) fn resolve_tessdata_path_in(
             languages
         )))
     }
+}
+
+fn log_resolved(directory: &str, override_path: Option<&Path>, tessdata_env: &TessdataEnv) {
+    let explicit = override_path.and_then(Path::to_str) == Some(directory)
+        || tessdata_env.tessdata_prefix.as_deref() == Some(directory);
+    tracing::debug!(
+        directory,
+        model = %tessdata_env.model,
+        model_applies = !explicit,
+        "Resolved tessdata directory"
+    );
 }
 
 /// The first candidate directory that already holds a `.traineddata` for every one of
@@ -174,9 +217,9 @@ pub(crate) fn first_directory_holding(directories: &[String], languages: &[Strin
 }
 
 /// Candidate tessdata directories in the resolver's priority order:
-/// `override_path` (`OcrConfig.tessdata_path`), `TESSDATA_PREFIX`,
-/// `XBERG_CACHE_DIR/tessdata`, the xberg cache base, then system paths unless
-/// [`TessdataEnv::system_paths`] is false.
+/// `override_path` (`OcrConfig.tessdata_path`), `TESSDATA_PREFIX`, `<cache>/tessdata/<model>`,
+/// then, for [`TessdataModel::Fast`] only, the flat `<cache>/tessdata` and the system paths
+/// unless [`TessdataEnv::system_paths`] is false.
 ///
 /// Shared by [`resolve_tessdata_path_in`] and doctor's check-only probe so both
 /// report on the same search chain.
@@ -196,19 +239,20 @@ pub(crate) fn tessdata_search_dirs(override_path: Option<&Path>, tessdata_env: &
         dirs.push(path.clone());
     }
 
-    if let Some(cache_dir) = &tessdata_env.cache_dir {
-        dirs.push(cache_dir.join("tessdata").to_string_lossy().into_owned());
-    }
-
+    let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
     dirs.push(
-        crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref())
-            .join("tessdata")
+        model_cache_dir(&cache_base, tessdata_env.model)
             .to_string_lossy()
             .into_owned(),
     );
 
-    if tessdata_env.system_paths {
-        dirs.extend(SYSTEM_TESSDATA_PATHS.iter().map(|path| (*path).to_string()));
+    // ~keep The flat cache and system packages hold tessdata_fast; searching them for `best` would
+    // silently serve fast models and make results depend on what happens to be installed.
+    if tessdata_env.model == TessdataModel::Fast {
+        dirs.push(cache_base.join("tessdata").to_string_lossy().into_owned());
+        if tessdata_env.system_paths {
+            dirs.extend(SYSTEM_TESSDATA_PATHS.iter().map(|path| (*path).to_string()));
+        }
     }
 
     dirs
@@ -247,10 +291,19 @@ fn all_languages_exist(tessdata_path: &str, languages: &[String]) -> Result<bool
     Ok(true)
 }
 
-/// Materialize missing language files by attempting to use bundled 'eng' or download from GitHub.
+/// Materialize missing `model` language files into `tessdata_path`.
+///
+/// For [`TessdataModel::Fast`], a file in the flat `legacy` cache that matches its pin is adopted
+/// and `eng` can come from the bundled bytes; everything else is a pinned, verified download.
+/// A `best` request never uses either, both being tessdata_fast.
 #[cfg(not(target_arch = "wasm32"))]
-fn materialize_missing_languages(tessdata_path: &Path, languages: &[String]) -> Result<(), OcrError> {
-    use crate::ocr::tessdata_download::download_language_pack;
+fn materialize_missing_languages(
+    tessdata_path: &Path,
+    languages: &[String],
+    model: TessdataModel,
+    legacy: Option<&Path>,
+) -> Result<(), OcrError> {
+    use crate::ocr::tessdata_download::{download_language_pack, matches_pinned_pack};
 
     for lang in languages {
         let traineddata_path = tessdata_path.join(format!("{}.traineddata", lang));
@@ -258,7 +311,16 @@ fn materialize_missing_languages(tessdata_path: &Path, languages: &[String]) -> 
             continue;
         }
 
-        if lang == "eng"
+        if let Some(legacy) = legacy {
+            let legacy_path = legacy.join(format!("{lang}.traineddata"));
+            if matches_pinned_pack(lang, model, &legacy_path) && adopt_file(&legacy_path, &traineddata_path).is_ok() {
+                tracing::debug!(lang, from = %legacy_path.display(), "Adopted verified tessdata from the flat cache");
+                continue;
+            }
+        }
+
+        if model == TessdataModel::Fast
+            && lang == "eng"
             && let Some(bundled_bytes) = xberg_tesseract::bundled_eng_traineddata()
         {
             std::fs::write(&traineddata_path, bundled_bytes).map_err(|e| {
@@ -272,15 +334,43 @@ fn materialize_missing_languages(tessdata_path: &Path, languages: &[String]) -> 
             continue;
         }
 
-        download_language_pack(lang, tessdata_path)?;
+        download_language_pack(lang, model, tessdata_path)?;
     }
 
     Ok(())
 }
 
+/// Publish `source` at `target` without replacing an existing file: a hard link when the two
+/// share a file system, otherwise a copy.
+#[cfg(not(target_arch = "wasm32"))]
+fn adopt_file(source: &Path, target: &Path) -> std::io::Result<()> {
+    use std::io::ErrorKind;
+
+    match std::fs::hard_link(source, target) {
+        Ok(()) => return Ok(()),
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => return Ok(()),
+        Err(error) => tracing::debug!(%error, "Cannot hard-link the tessdata file; copying it instead"),
+    }
+    let directory = target
+        .parent()
+        .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidInput, "missing tessdata directory"))?;
+    let temporary = tempfile::NamedTempFile::new_in(directory)?;
+    std::fs::copy(source, temporary.path())?;
+    match temporary.persist_noclobber(target) {
+        Ok(_) => Ok(()),
+        Err(error) if error.error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error.error),
+    }
+}
+
 /// WASM stub: no network access, no file writes.
 #[cfg(target_arch = "wasm32")]
-fn materialize_missing_languages(_tessdata_path: &Path, languages: &[String]) -> Result<(), OcrError> {
+fn materialize_missing_languages(
+    _tessdata_path: &Path,
+    languages: &[String],
+    _model: TessdataModel,
+    _legacy: Option<&Path>,
+) -> Result<(), OcrError> {
     Err(OcrError::TesseractInitializationFailed(format!(
         "Cannot download language packs on WASM. Requested: {:?}",
         languages
@@ -481,8 +571,10 @@ mod tests {
         std::fs::write(dir.path().join("eng.traineddata"), b"x").unwrap();
 
         let langs = vec!["eng".to_string()];
-        let resolved = resolve_tessdata_path(&langs, Some(dir.path())).unwrap();
-        assert_eq!(resolved, dir.path().to_str().unwrap());
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let resolved = resolve_tessdata_path(&langs, Some(dir.path()), model).unwrap();
+            assert_eq!(resolved, dir.path().to_str().unwrap(), "{model}");
+        }
     }
 
     #[test]
@@ -491,34 +583,150 @@ mod tests {
         std::fs::write(dir.path().join("eng.traineddata"), b"x").unwrap();
 
         let langs = vec!["deu".to_string()];
-        let result = resolve_tessdata_path(&langs, Some(dir.path()));
+        let result = resolve_tessdata_path(&langs, Some(dir.path()), TessdataModel::default());
         if let Ok(path) = result {
             assert_ne!(path, dir.path().to_str().unwrap());
         }
     }
 
-    #[test]
-    fn test_tessdata_search_dirs_uses_only_the_given_environment_values() {
-        let tessdata_env = TessdataEnv {
+    fn given_env(model: TessdataModel, system_paths: bool) -> TessdataEnv {
+        TessdataEnv {
             tessdata_prefix: Some("/given/prefix".to_string()),
             cache_dir: Some(PathBuf::from("/given/cache")),
-            system_paths: true,
-        };
+            system_paths,
+            model,
+        }
+    }
 
-        let dirs = tessdata_search_dirs(Some(Path::new("/given/override")), &tessdata_env);
-
-        let cache_tessdata = PathBuf::from("/given/cache")
-            .join("tessdata")
+    fn given_cache(parts: &[&str]) -> String {
+        parts
+            .iter()
+            .fold(PathBuf::from("/given/cache"), |path, part| path.join(part))
             .to_string_lossy()
-            .into_owned();
+            .into_owned()
+    }
+
+    #[test]
+    fn test_tessdata_search_dirs_uses_only_the_given_environment_values() {
+        let dirs = tessdata_search_dirs(
+            Some(Path::new("/given/override")),
+            &given_env(TessdataModel::Fast, true),
+        );
+
         let mut expected = vec![
             "/given/override".to_string(),
             "/given/prefix".to_string(),
-            cache_tessdata.clone(),
-            cache_tessdata,
+            given_cache(&["tessdata", "fast"]),
+            given_cache(&["tessdata"]),
         ];
         expected.extend(SYSTEM_TESSDATA_PATHS.iter().map(|path| (*path).to_string()));
         assert_eq!(dirs, expected);
+    }
+
+    #[test]
+    fn test_best_search_dirs_hold_no_fast_only_directory() {
+        let dirs = tessdata_search_dirs(
+            Some(Path::new("/given/override")),
+            &given_env(TessdataModel::Best, true),
+        );
+
+        assert_eq!(
+            dirs,
+            [
+                "/given/override".to_string(),
+                "/given/prefix".to_string(),
+                given_cache(&["tessdata", "best"]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_each_model_has_its_own_cache_directory() {
+        let base = Path::new("/given/cache");
+        let fast = model_cache_dir(base, TessdataModel::Fast);
+        let best = model_cache_dir(base, TessdataModel::Best);
+
+        assert_eq!(fast, base.join("tessdata").join("fast"));
+        assert_eq!(best, base.join("tessdata").join("best"));
+        assert!(!best.starts_with(&fast) && !fast.starts_with(&best));
+    }
+
+    #[test]
+    fn test_best_request_never_resolves_to_a_fast_only_directory() {
+        let cache = tempfile::tempdir().unwrap();
+        let system = tempfile::tempdir().unwrap();
+        for directory in [
+            cache.path().join("tessdata"),
+            cache.path().join("tessdata").join("fast"),
+            system.path().to_path_buf(),
+        ] {
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(directory.join("eng.traineddata"), b"fast").unwrap();
+        }
+        let env = |model| TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().to_path_buf()),
+            system_paths: true,
+            model,
+        };
+        let langs = vec!["eng".to_string()];
+
+        let fast = existing_tessdata_dir_for(&langs, None, &env(TessdataModel::Fast));
+        let best = existing_tessdata_dir_for(&langs, None, &env(TessdataModel::Best));
+
+        assert_eq!(fast.as_deref(), cache.path().join("tessdata").join("fast").to_str());
+        assert_eq!(best, None, "a best request must not be served fast data");
+    }
+
+    #[test]
+    fn test_fast_request_still_resolves_the_flat_cache() {
+        let cache = tempfile::tempdir().unwrap();
+        let flat = cache.path().join("tessdata");
+        std::fs::create_dir_all(&flat).unwrap();
+        std::fs::write(flat.join("eng.traineddata"), b"fast").unwrap();
+        let env = TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().to_path_buf()),
+            system_paths: false,
+            model: TessdataModel::Fast,
+        };
+
+        let resolved = existing_tessdata_dir_for(&["eng".to_string()], None, &env);
+
+        assert_eq!(resolved.as_deref(), flat.to_str());
+    }
+
+    #[test]
+    fn test_override_and_tessdata_prefix_win_for_every_model() {
+        let explicit = tempfile::tempdir().unwrap();
+        let prefix = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        for directory in [explicit.path(), prefix.path()] {
+            std::fs::write(directory.join("eng.traineddata"), b"x").unwrap();
+        }
+        let langs = vec!["eng".to_string()];
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let model_cache = model_cache_dir(cache.path(), model);
+            std::fs::create_dir_all(&model_cache).unwrap();
+            std::fs::write(model_cache.join("eng.traineddata"), b"x").unwrap();
+            let env = TessdataEnv {
+                tessdata_prefix: Some(prefix.path().to_str().unwrap().to_string()),
+                cache_dir: Some(cache.path().to_path_buf()),
+                system_paths: false,
+                model,
+            };
+
+            assert_eq!(
+                resolve_tessdata_path_in(&langs, Some(explicit.path()), &env).unwrap(),
+                explicit.path().to_str().unwrap(),
+                "{model}"
+            );
+            assert_eq!(
+                resolve_tessdata_path_in(&langs, None, &env).unwrap(),
+                prefix.path().to_str().unwrap(),
+                "{model}"
+            );
+        }
     }
 
     #[test]
@@ -538,20 +746,22 @@ mod tests {
             ["TESSDATA_PREFIX", "XBERG_CACHE_DIR", "XBERG_TESSDATA_SYSTEM_PATHS"]
         );
         assert!(tessdata_env.system_paths);
-        let cache_tessdata = PathBuf::from("/looked/up/cache")
-            .join("tessdata")
-            .to_string_lossy()
-            .into_owned();
-        let dirs = tessdata_search_dirs(None, &tessdata_env);
+        assert_eq!(tessdata_env.model, TessdataModel::default());
+        let cache_tessdata = PathBuf::from("/looked/up/cache").join("tessdata");
+        let dirs = tessdata_search_dirs(None, &tessdata_env.for_model(TessdataModel::Fast));
         assert_eq!(
             dirs[..3],
-            ["/looked/up/prefix".to_string(), cache_tessdata.clone(), cache_tessdata]
+            [
+                "/looked/up/prefix".to_string(),
+                cache_tessdata.join("fast").to_string_lossy().into_owned(),
+                cache_tessdata.to_string_lossy().into_owned(),
+            ]
         );
     }
 
     #[test]
     fn test_tessdata_search_dirs_ends_with_system_paths_when_the_switch_is_unset() {
-        let tessdata_env = TessdataEnv::from_lookup(|_| None);
+        let tessdata_env = TessdataEnv::from_lookup(|_| None).for_model(TessdataModel::Fast);
 
         let dirs = tessdata_search_dirs(None, &tessdata_env);
 
@@ -561,25 +771,18 @@ mod tests {
 
     #[test]
     fn test_tessdata_search_dirs_omits_system_paths_when_the_switch_is_off() {
-        let tessdata_env = TessdataEnv {
-            tessdata_prefix: Some("/given/prefix".to_string()),
-            cache_dir: Some(PathBuf::from("/given/cache")),
-            system_paths: false,
-        };
+        let dirs = tessdata_search_dirs(
+            Some(Path::new("/given/override")),
+            &given_env(TessdataModel::Fast, false),
+        );
 
-        let dirs = tessdata_search_dirs(Some(Path::new("/given/override")), &tessdata_env);
-
-        let cache_tessdata = PathBuf::from("/given/cache")
-            .join("tessdata")
-            .to_string_lossy()
-            .into_owned();
         assert_eq!(
             dirs,
             [
                 "/given/override".to_string(),
                 "/given/prefix".to_string(),
-                cache_tessdata.clone(),
-                cache_tessdata,
+                given_cache(&["tessdata", "fast"]),
+                given_cache(&["tessdata"]),
             ]
         );
     }
@@ -599,13 +802,29 @@ mod tests {
         assert!(parse(""));
     }
 
+    #[test]
+    fn test_adopt_file_never_replaces_an_existing_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source.traineddata");
+        let target = directory.path().join("target.traineddata");
+        std::fs::write(&source, b"source").unwrap();
+        std::fs::write(&target, b"target").unwrap();
+
+        adopt_file(&source, &target).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"target");
+
+        std::fs::remove_file(&target).unwrap();
+        adopt_file(&source, &target).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"source");
+    }
+
     #[cfg(feature = "bundle-tessdata-eng")]
     #[test]
     fn test_materialize_eng_from_bundled_bytes() {
         let dir = tempfile::tempdir().unwrap();
         let langs = vec!["eng".to_string()];
 
-        materialize_missing_languages(dir.path(), &langs).unwrap();
+        materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, None).unwrap();
         assert!(dir.path().join("eng.traineddata").exists());
         assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
     }

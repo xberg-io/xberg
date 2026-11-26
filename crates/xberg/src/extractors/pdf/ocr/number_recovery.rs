@@ -414,7 +414,7 @@ fn model_directory(config: &ExtractionConfig) -> Option<String> {
     let directory = existing_tessdata_dir_for(
         &ocr.effective_tesseract_language(),
         ocr.tessdata_path.as_deref(),
-        &TessdataEnv::from_process(),
+        &TessdataEnv::from_process().for_model(ocr.tessdata_model),
     )?;
     // An auxiliary model must accompany the selected primary model; never search or download it. ~keep
     std::path::Path::new(&directory)

@@ -291,3 +291,30 @@ isolated_env_test! {
         assert!(matches!(err, XbergError::Validation { .. }));
     }
 }
+
+isolated_env_test! {
+    fn tessdata_model_env_var_selects_the_model_set [
+        "XBERG_OCR_TESSDATA_MODEL" => "best",
+    ] {
+        let mut config = ExtractionConfig::default();
+        config
+            .apply_env_overrides()
+            .expect("a valid tessdata model should apply");
+        assert_eq!(
+            config.ocr.as_ref().map(|ocr| ocr.tessdata_model),
+            Some(crate::core::config::TessdataModel::Best)
+        );
+    }
+}
+
+isolated_env_test! {
+    fn tessdata_model_env_var_rejects_an_unknown_model_set [
+        "XBERG_OCR_TESSDATA_MODEL" => "medium",
+    ] {
+        let mut config = ExtractionConfig::default();
+        let err = config
+            .apply_env_overrides()
+            .expect_err("an unknown tessdata model must be rejected");
+        assert!(err.to_string().contains("XBERG_OCR_TESSDATA_MODEL"), "{err}");
+    }
+}

@@ -889,6 +889,86 @@ impl OcrStrategy {
     }
 }
 
+/// Which upstream Tesseract model set (`tessdata_fast` or `tessdata_best`) xberg resolves and
+/// downloads language data from.
+///
+/// The set only selects among the directories xberg manages: an explicit
+/// [`OcrConfig::tessdata_path`] or the `TESSDATA_PREFIX` environment variable is used as given,
+/// whatever this says. Each set has its own cache directory (`<cache>/tessdata/fast`,
+/// `<cache>/tessdata/best`), so a request for one set never reads the other's files. System
+/// tessdata directories (apt, Homebrew, the Docker images) ship `tessdata_fast` and are searched
+/// only for [`TessdataModel::Fast`].
+///
+/// WebAssembly ignores this setting: it reads caller-supplied `tessdata_bytes` or the bundled
+/// `tessdata_fast` English model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TessdataModel {
+    /// `tessdata_fast`: integer LSTM models, the smallest and fastest set.
+    Fast,
+    /// `tessdata_best`: float LSTM models, about three times larger and slower than `fast`.
+    Best,
+}
+
+/// The model set used when a config does not name one.
+///
+/// Mobile and WebAssembly targets stay on [`TessdataModel::Fast`] whatever the native default is:
+/// their packages bundle or download size-capped data.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub const DEFAULT_TESSDATA_MODEL: TessdataModel = TessdataModel::Fast;
+/// The model set used when a config does not name one.
+#[cfg(any(target_arch = "wasm32", target_os = "android", target_os = "ios"))]
+pub const DEFAULT_TESSDATA_MODEL: TessdataModel = TessdataModel::Fast;
+
+// ~keep WebAssembly bundles tessdata_fast English, and a bundled tessdata_best model would push the
+// published module over the npm/jsDelivr size caps, so a wasm build must never default to best.
+#[cfg(target_arch = "wasm32")]
+const _: () = assert!(matches!(DEFAULT_TESSDATA_MODEL, TessdataModel::Fast));
+
+impl Default for TessdataModel {
+    fn default() -> Self {
+        DEFAULT_TESSDATA_MODEL
+    }
+}
+
+impl TessdataModel {
+    /// The wire name: `"fast"` or `"best"`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Fast => "fast",
+            Self::Best => "best",
+        }
+    }
+
+    /// The upstream `tesseract-ocr` repository this set is downloaded from.
+    #[must_use]
+    pub fn repository(self) -> &'static str {
+        match self {
+            Self::Fast => "tessdata_fast",
+            Self::Best => "tessdata_best",
+        }
+    }
+}
+
+impl std::fmt::Display for TessdataModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for TessdataModel {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "fast" => Ok(Self::Fast),
+            "best" => Ok(Self::Best),
+            other => Err(format!("Invalid tessdata model '{other}'. Must be 'fast' or 'best'")),
+        }
+    }
+}
+
 /// OCR configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1090,6 +1170,19 @@ pub struct OcrConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tessdata_path: Option<PathBuf>,
 
+    /// Tesseract model set xberg resolves and downloads: `"fast"` (default) or `"best"`.
+    ///
+    /// Applies only to the directories xberg manages. An explicit `tessdata_path` or
+    /// `TESSDATA_PREFIX` that holds every requested language is used as given, whichever set it
+    /// contains. Otherwise `fast` searches `<cache>/tessdata/fast`, the older flat
+    /// `<cache>/tessdata` and the system tessdata directories, and downloads into
+    /// `<cache>/tessdata/fast`; `best` searches and downloads only `<cache>/tessdata/best`, because
+    /// system packages ship `tessdata_fast`. Every download is pinned and SHA-256 verified.
+    /// The `XBERG_OCR_TESSDATA_MODEL` environment variable sets the same key. Ignored on
+    /// WebAssembly.
+    #[serde(default)]
+    pub tessdata_model: TessdataModel,
+
     /// Repair OCR tokens that are clearly numeric but mis-punctuated: a dropped thousands
     /// separator, a decimal point misread for a grouping comma, or one number split into two
     /// tokens at a rendering gap (GH#1789).
@@ -1141,6 +1234,7 @@ impl Default for OcrConfig {
             security_limits: None,
             tessdata_bytes: None,
             tessdata_path: None,
+            tessdata_model: TessdataModel::default(),
             numeric_repair: false,
         }
     }
@@ -1628,6 +1722,32 @@ fn default_eng() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_parse_both_tessdata_models_and_default_to_fast() {
+        let parse = |json: &str| serde_json::from_str::<OcrConfig>(json).map(|config| config.tessdata_model);
+
+        assert_eq!(parse(r#"{"tessdata_model":"fast"}"#).unwrap(), TessdataModel::Fast);
+        assert_eq!(parse(r#"{"tessdata_model":"best"}"#).unwrap(), TessdataModel::Best);
+        assert_eq!(parse("{}").unwrap(), TessdataModel::default());
+        assert_eq!(OcrConfig::default().tessdata_model, DEFAULT_TESSDATA_MODEL);
+        assert_eq!(DEFAULT_TESSDATA_MODEL, TessdataModel::Fast);
+        assert!(parse(r#"{"tessdata_model":"medium"}"#).is_err());
+    }
+
+    #[test]
+    fn should_parse_tessdata_model_from_toml_and_round_trip_through_json() {
+        let config: OcrConfig = toml::from_str("tessdata_model = \"best\"").unwrap();
+        assert_eq!(config.tessdata_model, TessdataModel::Best);
+
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["tessdata_model"], "best");
+        assert_eq!("best".parse::<TessdataModel>(), Ok(TessdataModel::Best));
+        assert_eq!(" FAST ".parse::<TessdataModel>(), Ok(TessdataModel::Fast));
+        assert!("medium".parse::<TessdataModel>().is_err());
+        assert_eq!(TessdataModel::Best.to_string(), "best");
+        assert_eq!(TessdataModel::Best.repository(), "tessdata_best");
+    }
 
     fn tesseract_config_with(psm: i32, oem: i32) -> crate::types::TesseractConfig {
         crate::types::TesseractConfig {

@@ -1,10 +1,12 @@
 //! Tessdata language pack download utilities for runtime language pack materialization.
 //!
 //! Provides functions to download `.traineddata` files from the official Tesseract
-//! tessdata_fast repository on GitHub, with fallback URLs for redundancy.
+//! tessdata_fast and tessdata_best repositories on GitHub, pinned to one revision each and
+//! SHA-256 verified, with fallback URLs for redundancy.
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::core::config::TessdataModel;
 use crate::ocr::error::OcrError;
 use sha2::{Digest as _, Sha256};
 use std::io::{ErrorKind, Write as _};
@@ -14,7 +16,7 @@ use std::time::Duration;
 mod pins;
 
 pub(super) use pins::TESSDATA_FAST_PACKS;
-use pins::{PinnedPack, TESSDATA_FAST_REVISION};
+use pins::{PinnedPack, TESSDATA_BEST_PACKS, TESSDATA_BEST_REVISION, TESSDATA_FAST_REVISION};
 
 const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
@@ -50,40 +52,79 @@ impl DownloadError {
     }
 }
 
-fn pinned_pack(lang: &str) -> Option<&'static PinnedPack> {
-    let index = TESSDATA_FAST_PACKS.binary_search_by(|entry| entry.0.cmp(lang)).ok()?;
-    Some(&TESSDATA_FAST_PACKS[index])
+/// The pinned language packs of `model`, sorted by language code.
+pub(crate) fn pinned_packs(model: TessdataModel) -> &'static [PinnedPack] {
+    match model {
+        TessdataModel::Fast => TESSDATA_FAST_PACKS,
+        TessdataModel::Best => TESSDATA_BEST_PACKS,
+    }
+}
+
+fn pinned_revision(model: TessdataModel) -> &'static str {
+    match model {
+        TessdataModel::Fast => TESSDATA_FAST_REVISION,
+        TessdataModel::Best => TESSDATA_BEST_REVISION,
+    }
+}
+
+fn pinned_pack(lang: &str, model: TessdataModel) -> Option<&'static PinnedPack> {
+    let packs = pinned_packs(model);
+    let index = packs.binary_search_by(|entry| entry.0.cmp(lang)).ok()?;
+    Some(&packs[index])
 }
 
 fn source_language(lang: &str) -> &str {
-    // ~keep Upstream frk.traineddata is a Git symlink. Fetch its actual model bytes.
+    // ~keep Upstream frk.traineddata is a Git symlink in tessdata_fast and absent from
+    // tessdata_best; both publish the same Fraktur model as deu_latf.
     if lang == "frk" { "deu_latf" } else { lang }
 }
 
-pub(super) fn pinned_source_url(lang: &str) -> String {
+pub(super) fn pinned_source_url(lang: &str, model: TessdataModel) -> String {
     format!(
-        "https://github.com/tesseract-ocr/tessdata_fast/raw/{TESSDATA_FAST_REVISION}/{}.traineddata",
+        "https://github.com/tesseract-ocr/{}/raw/{}/{}.traineddata",
+        model.repository(),
+        pinned_revision(model),
         source_language(lang)
     )
 }
 
-pub(crate) fn download_language_pack(lang: &str, output_dir: &Path) -> Result<(), OcrError> {
-    download_missing_language_pack(lang, output_dir).map(|_| ())
+pub(crate) fn download_language_pack(lang: &str, model: TessdataModel, output_dir: &Path) -> Result<(), OcrError> {
+    download_missing_language_pack(lang, model, output_dir).map(|_| ())
+}
+
+/// Whether the file at `path` is exactly the pinned `model` pack for `lang`.
+///
+/// Reads and hashes the whole file, so callers use it once to adopt an existing file into a
+/// per-model cache, never on every resolution.
+pub(crate) fn matches_pinned_pack(lang: &str, model: TessdataModel, path: &Path) -> bool {
+    let Some(&(_, sha256, size)) = pinned_pack(lang, model) else {
+        return false;
+    };
+    if std::fs::metadata(path).map(|metadata| metadata.len()).ok() != Some(size) {
+        return false;
+    }
+    std::fs::read(path).is_ok_and(|bytes| hex::encode(Sha256::digest(&bytes)) == sha256)
 }
 
 /// Returns whether this call published a newly downloaded pack.
-pub(super) fn download_missing_language_pack(lang: &str, output_dir: &Path) -> Result<bool, OcrError> {
-    let &(_, sha256, size) = pinned_pack(lang)
-        .ok_or_else(|| OcrError::InvalidLanguageCode(format!("No pinned tessdata_fast language pack for '{lang}'")))?;
+pub(super) fn download_missing_language_pack(
+    lang: &str,
+    model: TessdataModel,
+    output_dir: &Path,
+) -> Result<bool, OcrError> {
+    let repository = model.repository();
+    let &(_, sha256, size) = pinned_pack(lang, model)
+        .ok_or_else(|| OcrError::InvalidLanguageCode(format!("No pinned {repository} language pack for '{lang}'")))?;
     let output_path = output_dir.join(format!("{lang}.traineddata"));
     if output_path.is_file() {
         return Ok(false);
     }
 
     let urls = [
-        pinned_source_url(lang),
+        pinned_source_url(lang, model),
         format!(
-            "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/{TESSDATA_FAST_REVISION}/{}.traineddata",
+            "https://raw.githubusercontent.com/tesseract-ocr/{repository}/{}/{}.traineddata",
+            pinned_revision(model),
             source_language(lang)
         ),
     ];
@@ -97,7 +138,7 @@ pub(super) fn download_missing_language_pack(lang: &str, output_dir: &Path) -> R
     )
     .map_err(|error| {
         OcrError::TesseractInitializationFailed(format!(
-            "Failed to download pinned tessdata_fast language pack '{lang}': {error}"
+            "Failed to download pinned {repository} language pack '{lang}': {error}"
         ))
     })
 }
@@ -205,25 +246,73 @@ mod tests {
 
     #[test]
     fn pinned_packs_cover_all_supported_languages() {
-        use super::{TESSDATA_FAST_PACKS, pinned_pack};
+        use super::{TessdataModel, pinned_pack, pinned_packs};
         use crate::core::config_validation::TESSERACT_LANGUAGE_CODES;
 
         let extra = ["chi_sim_vert", "chi_tra_vert", "deu_latf", "jpn_vert", "kor_vert"];
-        assert!(TESSDATA_FAST_PACKS.windows(2).all(|pair| pair[0].0 < pair[1].0));
-        for lang in TESSERACT_LANGUAGE_CODES.iter().copied().chain(extra) {
-            let (_, digest, size) = pinned_pack(lang).unwrap_or_else(|| panic!("missing pinned pack for {lang}"));
-            assert_eq!(digest.len(), 64, "{lang}");
-            assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()), "{lang}");
-            assert!(*size > 0 && *size <= super::MAX_TRAINEDDATA_BYTES, "{lang}");
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let packs = pinned_packs(model);
+            assert!(packs.windows(2).all(|pair| pair[0].0 < pair[1].0), "{model}");
+            for lang in TESSERACT_LANGUAGE_CODES.iter().copied().chain(extra) {
+                let (_, digest, size) =
+                    pinned_pack(lang, model).unwrap_or_else(|| panic!("missing pinned {model} pack for {lang}"));
+                assert_eq!(digest.len(), 64, "{model} {lang}");
+                assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()), "{model} {lang}");
+                assert!(*size > 0 && *size <= super::MAX_TRAINEDDATA_BYTES, "{model} {lang}");
+            }
         }
+        let languages = |model| pinned_packs(model).iter().map(|pack| pack.0).collect::<Vec<_>>();
+        assert_eq!(languages(TessdataModel::Fast), languages(TessdataModel::Best));
         assert_eq!(
-            pinned_pack("eng"),
+            pinned_pack("eng", TessdataModel::Fast),
             Some(&(
                 "eng",
                 "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
                 4_113_088
             ))
         );
+        assert_eq!(
+            pinned_pack("eng", TessdataModel::Best),
+            Some(&(
+                "eng",
+                "8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba",
+                15_400_601
+            ))
+        );
+        assert_eq!(
+            pinned_pack("frk", TessdataModel::Best).map(|pack| (pack.1, pack.2)),
+            pinned_pack("deu_latf", TessdataModel::Best).map(|pack| (pack.1, pack.2))
+        );
+    }
+
+    #[test]
+    fn each_model_downloads_from_its_own_pinned_repository() {
+        use super::{TessdataModel, pinned_source_url};
+
+        assert_eq!(
+            pinned_source_url("eng", TessdataModel::Fast),
+            "https://github.com/tesseract-ocr/tessdata_fast/raw/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata"
+        );
+        assert_eq!(
+            pinned_source_url("frk", TessdataModel::Best),
+            "https://github.com/tesseract-ocr/tessdata_best/raw/e12c65a915945e4c28e237a9b52bc4a8f39a0cec/deu_latf.traineddata"
+        );
+    }
+
+    #[test]
+    fn a_file_matches_only_the_pin_of_its_own_model() {
+        use super::{TessdataModel, matches_pinned_pack};
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("eng.traineddata");
+        std::fs::write(&path, b"not a pinned model").unwrap();
+        assert!(!matches_pinned_pack("eng", TessdataModel::Fast, &path));
+        assert!(!matches_pinned_pack("eng", TessdataModel::Best, &path));
+        assert!(!matches_pinned_pack(
+            "eng",
+            TessdataModel::Fast,
+            &directory.path().join("missing")
+        ));
     }
 
     #[test]
@@ -231,7 +320,9 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("jpn_vert.traineddata");
         std::fs::write(&output, b"locally supplied vertical model").unwrap();
-        assert!(!super::download_missing_language_pack("jpn_vert", directory.path()).unwrap());
+        assert!(
+            !super::download_missing_language_pack("jpn_vert", super::TessdataModel::Best, directory.path()).unwrap()
+        );
         assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
     }

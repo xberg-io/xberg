@@ -712,6 +712,16 @@ enum CacheCommands {
         #[cfg(feature = "classification-onnx")]
         #[arg(long, value_name = "BACKEND")]
         classification_backend: Option<String>,
+
+        /// Tesseract model sets to download (comma-separated: fast,best); default: the default set
+        #[cfg(feature = "paddle-ocr")]
+        #[arg(long, value_name = "SETS", value_delimiter = ',')]
+        tessdata_model: Vec<xberg::TessdataModel>,
+
+        /// Tesseract languages to download (comma-separated, e.g. eng,deu); default: all 126 pinned
+        #[cfg(feature = "paddle-ocr")]
+        #[arg(long, value_name = "LANGUAGES", value_delimiter = ',')]
+        tessdata_languages: Vec<String>,
     },
 }
 
@@ -1170,6 +1180,10 @@ fn main() -> Result<()> {
                 classification_precision,
                 #[cfg(feature = "classification-onnx")]
                 classification_backend,
+                #[cfg(feature = "paddle-ocr")]
+                tessdata_model,
+                #[cfg(feature = "paddle-ocr")]
+                tessdata_languages,
             } => {
                 let options = WarmOptions {
                     #[cfg(feature = "embeddings")]
@@ -1207,6 +1221,10 @@ fn main() -> Result<()> {
                         #[cfg(feature = "classification-onnx")]
                         classification_backend,
                     },
+                    #[cfg(feature = "paddle-ocr")]
+                    tessdata_models: tessdata_model,
+                    #[cfg(feature = "paddle-ocr")]
+                    tessdata_languages,
                 };
                 warm_command(cache_dir.clone(), format, options)?;
             }
@@ -1493,6 +1511,41 @@ mod feature_profile_tests {
         assert!(config.ocr.is_none(), "--ocr false should clear OCR backend settings");
     }
 
+    #[cfg(feature = "ocr-surface")]
+    #[test]
+    fn should_map_ocr_tessdata_model_flag_onto_the_ocr_config() {
+        let parse = |value: &str| {
+            Cli::try_parse_from([
+                "xberg",
+                "extract",
+                "scan.pdf",
+                "--ocr-tessdata-model",
+                value,
+                "--no-config-discovery",
+            ])
+        };
+        let cli = parse("best").expect("clap should parse --ocr-tessdata-model best");
+        let Commands::Extract {
+            config: config_path,
+            no_config_discovery,
+            overrides,
+            ..
+        } = cli.command
+        else {
+            panic!("expected Commands::Extract");
+        };
+        let mut config = load_config(config_path, !no_config_discovery)
+            .expect("built-in extraction config should load without discovery");
+        overrides.apply(&mut config);
+
+        assert_eq!(
+            config.ocr.map(|ocr| ocr.tessdata_model),
+            Some(xberg::TessdataModel::Best)
+        );
+        assert!(parse("fast").is_ok());
+        assert!(parse("medium").is_err(), "an unknown model set must be rejected");
+    }
+
     #[cfg(not(feature = "pdf-surface"))]
     #[test]
     fn non_pdf_profile_omits_pdf_overrides() {
@@ -1671,6 +1724,36 @@ mod tree_sitter_cli_tests {
         assert!(!all);
         assert_eq!(groups, None);
         assert_eq!(format, WireFormat::Text);
+    }
+
+    #[cfg(feature = "paddle-ocr")]
+    #[test]
+    fn should_parse_cache_warm_tessdata_model_and_language_filters() {
+        let cli = Cli::try_parse_from([
+            "xberg",
+            "cache",
+            "warm",
+            "--tessdata-model",
+            "fast,best",
+            "--tessdata-languages",
+            "eng,deu",
+        ])
+        .expect("clap should parse cache warm tessdata filters");
+
+        let Commands::Cache {
+            command:
+                CacheCommands::Warm {
+                    tessdata_model,
+                    tessdata_languages,
+                    ..
+                },
+        } = cli.command
+        else {
+            panic!("expected CacheCommands::Warm");
+        };
+
+        assert_eq!(tessdata_model, [xberg::TessdataModel::Fast, xberg::TessdataModel::Best]);
+        assert_eq!(tessdata_languages, ["eng", "deu"]);
     }
 
     /// `xberg tree-sitter download go zig --groups web,systems` must parse the

@@ -139,6 +139,9 @@ fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, re
     }
     hasher.update(&[config.known_full_page_scan as u8]);
     hash_bytes(hasher, resolved_tessdata_path.as_bytes());
+    // ~keep The resolved directory already differs per model set for xberg's own caches; the set
+    // is hashed too so the key never depends on how a directory was chosen.
+    hash_bytes(hasher, config.tessdata_model.as_str().as_bytes());
     hasher.update(&config.page_number.to_le_bytes());
 }
 
@@ -318,6 +321,31 @@ mod tests {
             hash_config(&config, "/tessdata/best"),
             "two different resolved tessdata directories must not collide, \
              or a comparison across models silently reads the first model's cached text"
+        );
+    }
+
+    #[test]
+    fn should_distinguish_cache_keys_by_tessdata_model() {
+        use crate::core::config::TessdataModel;
+        use crate::ocr::processor::validation::model_cache_dir;
+
+        let base = std::path::Path::new("/cache");
+        let config_for = |tessdata_model| TesseractConfig {
+            tessdata_model,
+            ..create_test_config()
+        };
+        let fast_dir = model_cache_dir(base, TessdataModel::Fast);
+        let best_dir = model_cache_dir(base, TessdataModel::Best);
+
+        assert_ne!(
+            hash_config(&config_for(TessdataModel::Fast), fast_dir.to_str().unwrap()),
+            hash_config(&config_for(TessdataModel::Best), best_dir.to_str().unwrap()),
+            "fast and best resolve different cache directories and must not share an entry"
+        );
+        assert_ne!(
+            hash_config(&config_for(TessdataModel::Fast), TEST_TESSDATA_PATH),
+            hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
+            "the model set is part of the key even when an explicit directory serves both"
         );
     }
 

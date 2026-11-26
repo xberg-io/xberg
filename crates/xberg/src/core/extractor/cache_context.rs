@@ -128,7 +128,6 @@ fn script_retry_cache_context(
 ) -> crate::Result<Option<String>> {
     use crate::ocr::processor::{script_retry, validation::TessdataEnv};
 
-    let env = TessdataEnv::from_process();
     let mut checked = std::collections::HashSet::new();
     let mut vertical = blake3::Hasher::new();
     for model in dependencies
@@ -139,6 +138,7 @@ fn script_retry_cache_context(
         if !checked.insert(model) {
             continue;
         }
+        let env = TessdataEnv::from_process().for_model(model.tessdata_model);
         let languages = model.languages.join("+");
         let directory = model.directory.as_deref();
         if checked.len() > MAX_MODEL_SELECTIONS
@@ -170,6 +170,7 @@ fn script_retry_cache_context(
 struct ModelSelection {
     languages: Vec<String>,
     directory: Option<std::path::PathBuf>,
+    tessdata_model: crate::core::config::TessdataModel,
     mixed_pdf_khmer: bool,
     vertical_japanese_retry: bool,
 }
@@ -226,6 +227,7 @@ impl ModelSelection {
         Some(Self {
             languages,
             directory: ocr.tessdata_path.clone(),
+            tessdata_model: ocr.tessdata_model,
             mixed_pdf_khmer,
             vertical_japanese_retry: ocr
                 .tesseract_config
@@ -270,6 +272,7 @@ impl ModelSelection {
         Some(Self {
             languages: ocr.effective_tesseract_language(),
             directory: ocr.tessdata_path.clone(),
+            tessdata_model: ocr.tessdata_model,
             mixed_pdf_khmer: false,
             vertical_japanese_retry: false,
         })
@@ -337,7 +340,7 @@ fn model_fingerprint_with_reader(
     let Some(directory) = existing_tessdata_dir_for(
         &model.languages,
         model.directory.as_deref(),
-        &TessdataEnv::from_process(),
+        &TessdataEnv::from_process().for_model(model.tessdata_model),
     ) else {
         super::cacheability::invalidate_current();
         hash.update(b"primary-language-unavailable");
@@ -412,6 +415,7 @@ impl CacheDependency {
             let model = ModelSelection {
                 languages: inputs.languages(),
                 directory: inputs.directory().map(std::path::Path::to_path_buf),
+                tessdata_model: inputs.tessdata_model(),
                 mixed_pdf_khmer: false,
                 vertical_japanese_retry: false,
             };

@@ -38,18 +38,23 @@ fn candidate_tessdata_dirs() -> Vec<PathBuf> {
     }
 
     // XBERG_CACHE_DIR, else the platform cache dir under `xberg`, else
-    // `~/.cache/xberg`, else `./.xberg` — each with a `tessdata` suffix. This is
-    // where xberg downloads packs to, so a previously-materialized pack resolves.
-    if let Ok(cache) = std::env::var("XBERG_CACHE_DIR")
+    // `~/.cache/xberg`, else `./.xberg`. xberg downloads the default (fast) model set into
+    // `<cache>/tessdata/fast` and still reads the flat `<cache>/tessdata` older releases
+    // filled, so a previously-materialized pack resolves from either.
+    let cache_base = if let Ok(cache) = std::env::var("XBERG_CACHE_DIR")
         && !cache.is_empty()
     {
-        dirs.push(PathBuf::from(cache).join("tessdata"));
+        Some(PathBuf::from(cache))
     } else if let Some(cache) = dirs::cache_dir() {
-        dirs.push(cache.join("xberg").join("tessdata"));
+        Some(cache.join("xberg"))
     } else if let Some(home) = dirs::home_dir() {
-        dirs.push(home.join(".cache").join("xberg").join("tessdata"));
-    } else if let Ok(cwd) = std::env::current_dir() {
-        dirs.push(cwd.join(".xberg").join("tessdata"));
+        Some(home.join(".cache").join("xberg"))
+    } else {
+        std::env::current_dir().ok().map(|cwd| cwd.join(".xberg"))
+    };
+    if let Some(cache_base) = cache_base {
+        dirs.push(cache_base.join("tessdata").join("fast"));
+        dirs.push(cache_base.join("tessdata"));
     }
 
     for path in [

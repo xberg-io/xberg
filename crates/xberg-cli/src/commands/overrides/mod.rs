@@ -128,6 +128,13 @@ pub struct ExtractionOverrides {
     #[arg(long)]
     pub ocr_no_cache: Option<bool>,
 
+    /// Tesseract model set to resolve and download: fast or best.
+    ///
+    /// Ignored for a tessdata directory given by `ocr.tessdata_path` or `TESSDATA_PREFIX`.
+    #[cfg(feature = "ocr-surface")]
+    #[arg(long, value_name = "SET")]
+    pub ocr_tessdata_model: Option<xberg::TessdataModel>,
+
     /// JSON object of per-backend OCR options (e.g. `{"layout_mode":"whole_page"}`).
     #[cfg(feature = "ocr-surface")]
     #[arg(long, value_name = "JSON")]

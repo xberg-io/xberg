@@ -63,8 +63,8 @@ pub use llm::{
     LlmRateLimitConfig, MergeMode, StructuredExtractionConfig,
 };
 pub use ocr::{
-    DEFAULT_SCANNED_MIN_CONFIDENCE, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds, OcrStrategy,
-    VlmFallbackPolicy,
+    DEFAULT_SCANNED_MIN_CONFIDENCE, DEFAULT_TESSDATA_MODEL, OcrConfig, OcrPipelineConfig, OcrPipelineStage,
+    OcrQualityThresholds, OcrStrategy, TessdataModel, VlmFallbackPolicy,
 };
 // Crate-internal only: the best-effort pipeline selection policy is derived from `OcrConfig`
 // and threaded through OCR internals, deliberately not part of the public/binding-facing API (#1341).

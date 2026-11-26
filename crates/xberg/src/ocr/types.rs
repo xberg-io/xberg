@@ -150,6 +150,12 @@ pub struct TesseractConfig {
     /// before consulting `TESSDATA_PREFIX`, cache, or system locations.
     pub tessdata_path: Option<std::path::PathBuf>,
 
+    /// Tesseract model set the directories xberg manages are resolved for; copied from
+    /// `OcrConfig::tessdata_model`. Does not apply to a directory found through `tessdata_path`
+    /// or `TESSDATA_PREFIX`.
+    #[serde(default)]
+    pub tessdata_model: crate::core::config::TessdataModel,
+
     /// True resolution, in DPI, of the image bytes accompanying this config, when the caller
     /// knows it.
     ///
@@ -284,6 +290,7 @@ impl Default for TesseractConfig {
             thresholding_method: 0,
             auto_rotate: false,
             tessdata_path: None,
+            tessdata_model: crate::core::config::TessdataModel::default(),
             source_dpi: None,
             known_full_page_scan: false,
             page_number: default_page_number(),
@@ -345,6 +352,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             thresholding_method: config.thresholding_method as u8,
             auto_rotate: config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false),
             tessdata_path: None,
+            tessdata_model: crate::core::config::TessdataModel::default(),
             // The public config is a user-supplied document-wide setting and cannot know the
             // resolution of any one image; only the per-call `backend_options` hint can.
             source_dpi: None,

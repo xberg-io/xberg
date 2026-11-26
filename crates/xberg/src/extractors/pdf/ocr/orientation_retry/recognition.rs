@@ -56,7 +56,7 @@ pub(super) fn restore_elements(mut result: ExtractedDocument, requested: &OcrCon
 }
 
 pub(super) fn existing_osd_directory(config: &OcrConfig) -> Option<String> {
-    existing_osd_directory_in(config, &TessdataEnv::from_process())
+    existing_osd_directory_in(config, &TessdataEnv::from_process().for_model(config.tessdata_model))
 }
 
 fn existing_osd_directory_in(config: &OcrConfig, environment: &TessdataEnv) -> Option<String> {
@@ -1075,6 +1075,7 @@ mod tests {
             tessdata_prefix: Some(fallback.to_str().unwrap().into()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         assert!(existing_osd_directory_in(&config, &environment).is_none());
         assert_eq!(
