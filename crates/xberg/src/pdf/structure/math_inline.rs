@@ -287,7 +287,8 @@ fn is_math_relation(ch: char) -> bool {
     )
 }
 
-/// Operator and grouping characters a math token may hold.
+/// Operator and grouping characters a math token may hold. U+2010 and U+2011 read as `-`:
+/// assembled text keeps them until `pipeline::finalize_element_hyphens` maps them.
 fn is_math_punctuation(ch: char) -> bool {
     matches!(
         ch,
@@ -298,6 +299,8 @@ fn is_math_punctuation(ch: char) -> bool {
             | '}'
             | '+'
             | '-'
+            | '\u{2010}'
+            | '\u{2011}'
             | '*'
             | '/'
             | '|'
@@ -333,6 +336,14 @@ mod tests {
             spans("The area of a circle is A = pi r^2 for a radius r."),
             ["A = pi r^2"]
         );
+    }
+
+    #[test]
+    fn unicode_hyphens_read_as_a_minus_like_the_ascii_hyphen() {
+        for hyphen in ['-', '\u{2010}', '\u{2011}'] {
+            let equation = format!("x{hyphen}1 = y");
+            assert_eq!(spans(&format!("so {equation} holds")), [equation.as_str()]);
+        }
     }
 
     #[test]

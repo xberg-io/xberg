@@ -11,7 +11,6 @@ use super::lines::{
     crosses_visual_line_break, needs_space_between, raised_numeric_prefix_has_word_gap, segments_need_space,
 };
 use super::pipeline::{WrapHyphen, classify_wrap};
-use super::text_repair::finalize_hyphens;
 use super::types::{LayoutHintClass, LayoutRegionPath, LayoutRegionTag, PdfParagraph};
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
 use crate::types::extraction::BoundingBox;
@@ -36,7 +35,13 @@ pub(crate) fn assemble_internal_document(
     image_positions: &[(u32, u32)],
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> InternalDocument {
-    assemble_internal_document_with_inline_math(pages, tables, images, image_positions, hyphen_witnesses, false)
+    let mut document =
+        assemble_internal_document_with_inline_math(pages, tables, images, image_positions, hyphen_witnesses, false);
+    // The native route finalizes hyphens in `normalize_element_text`; OCR has no such pass.
+    for element in &mut document.elements {
+        super::pipeline::finalize_element_hyphens(element);
+    }
+    document
 }
 
 /// [`assemble_internal_document`] with inline math written into native paragraph text.
@@ -1186,18 +1191,16 @@ fn push_paragraph_element_by_kind(
     );
 
     let get_text = |para: &PdfParagraph| -> String {
-        let text = if paragraph_has_scripts(para) {
+        if paragraph_has_scripts(para) {
             extract_text_and_annotations(para, hyphen_witnesses).0
         } else if !para.text.is_empty() {
             para.text.clone()
         } else {
             join_line_texts_plain(&para.lines, hyphen_witnesses)
-        };
-        finalize_hyphens(&text).into_owned()
+        }
     };
 
-    let get_annotated_text =
-        |para: &PdfParagraph| finalize_hyphens_annotated(extract_text_and_annotations(para, hyphen_witnesses));
+    let get_annotated_text = |para: &PdfParagraph| extract_text_and_annotations(para, hyphen_witnesses);
 
     if let Some(level) = para.heading_level {
         let text = get_text(para);
@@ -1225,7 +1228,7 @@ fn push_paragraph_element_by_kind(
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        return builder.push_code(&finalize_hyphens(&text), None, page, bbox);
+        return builder.push_code(&text, None, page, bbox);
     }
 
     if para.is_formula {
@@ -1289,40 +1292,17 @@ fn push_paragraph_element_by_kind(
     }
 
     if !para.text.is_empty() && !paragraph_has_scripts(para) {
-        let text = finalize_hyphens(&para.text);
+        let text = &para.text;
         let annotations = para.is_bold.then_some(TextAnnotation {
             start: 0,
             end: text.len() as u32,
             kind: AnnotationKind::Bold,
         });
-        push_text_with_inline_math(builder, &text, annotations.into_iter().collect(), page, bbox)
+        push_text_with_inline_math(builder, text, annotations.into_iter().collect(), page, bbox)
     } else {
         let (text, annotations) = get_annotated_text(para);
         push_text_with_inline_math(builder, &text, annotations, page, bbox)
     }
-}
-
-/// [`finalize_hyphens`] for text that carries byte-offset annotations. U+2010 and U+2011 are
-/// three UTF-8 bytes and their ASCII replacement one, so every offset past a replaced hyphen
-/// moves back two bytes per hyphen before it.
-fn finalize_hyphens_annotated((text, mut annotations): (String, Vec<TextAnnotation>)) -> (String, Vec<TextAnnotation>) {
-    let hyphen_starts: Vec<usize> = text
-        .match_indices(['\u{2010}', '\u{2011}'])
-        .map(|(start, _)| start)
-        .collect();
-    if hyphen_starts.is_empty() {
-        return (text, annotations);
-    }
-    let shrink_per_hyphen = '\u{2011}'.len_utf8() - 1;
-    let shift = |offset: u32| {
-        let replaced_before = hyphen_starts.partition_point(|&start| start < offset as usize);
-        offset.saturating_sub((replaced_before * shrink_per_hyphen) as u32)
-    };
-    for annotation in &mut annotations {
-        annotation.start = shift(annotation.start);
-        annotation.end = shift(annotation.end);
-    }
-    (finalize_hyphens(&text).into_owned(), annotations)
 }
 
 /// Push a paragraph, writing `$..$` around each inline math run in `text`.
@@ -1530,8 +1510,7 @@ fn emit_caption_elements(
                 .map(|s| s.text.as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
-            let finalized = finalize_hyphens(text.trim());
-            let trimmed = finalized.as_ref();
+            let trimmed = text.trim();
             if !trimmed.is_empty() {
                 let annotations = vec![TextAnnotation {
                     start: 0,
@@ -1716,6 +1695,8 @@ pub(super) fn extract_text_with_glyph_offset(
             match classify_line_break_hyphen(prev_last, next_first, prev_seg, next_seg, hyphen_witnesses) {
                 WrapHyphen::Weld => {
                     text.pop();
+                    // The previous run's annotations closed over the hyphen just removed.
+                    clamp_annotations_to(&mut annotations, text.len());
                 }
                 WrapHyphen::KeepHyphen => {}
                 WrapHyphen::NotApplicable => {
@@ -1804,6 +1785,15 @@ pub(super) fn extract_text_with_glyph_offset(
 
     let glyph_offset = glyph_offset.filter(|&offset| text.as_bytes().get(offset) == Some(&b'V'));
     ((text, annotations), glyph_offset)
+}
+
+fn clamp_annotations_to(annotations: &mut Vec<TextAnnotation>, len: usize) {
+    let len = len as u32;
+    annotations.retain_mut(|annotation| {
+        annotation.start = annotation.start.min(len);
+        annotation.end = annotation.end.min(len);
+        annotation.start < annotation.end
+    });
 }
 
 /// Join line texts into a single plain string (no markup).
@@ -1956,13 +1946,18 @@ fn normalize_list_text(text: &str) -> (&str, usize) {
         normalized = stripped.trim_start();
         return (normalized, text.len() - normalized.len());
     }
-    if let Some(stripped) = trimmed.strip_prefix("- ") {
+    // U+2010/U+2011 are still unmapped here (`pipeline::finalize_element_hyphens`) and
+    // bullet like `-`.
+    if let Some(stripped) = trimmed
+        .strip_prefix(super::pipeline::is_word_hyphen)
+        .and_then(|rest| rest.strip_prefix(' '))
+    {
         normalized = stripped;
         return (normalized, text.len() - normalized.len());
     }
     // Dashes only: the bullet glyphs this list used to also carry now come from
     // `list_marker::BULLET_GLYPHS`, handled by the loop above. ~keep
-    const DASH_BULLETS: &[char] = &['–', '—', '−', '‐', '‑', '‒', '―'];
+    const DASH_BULLETS: &[char] = &['–', '—', '−', '‒', '―'];
     for &ch in DASH_BULLETS {
         if trimmed.starts_with(ch) {
             normalized = trimmed[ch.len_utf8()..].trim_start();
@@ -4139,8 +4134,6 @@ mod tests {
         assert_eq!(paragraph_text(&document), "adjuvant Montanide was used");
     }
 
-    // Some producers write every hyphen as U+2011 NON-BREAKING HYPHEN, wrap hyphens included
-    // (`mem‑` / `ory`). An ASCII-only check left `mem- ory` in the output, splitting the word.
     #[test]
     fn finalizing_hyphens_moves_annotations_back_two_bytes_per_hyphen_before_them() {
         let text = "a cross\u{2011}page \u{2010} bold".to_string();
@@ -4158,9 +4151,27 @@ mod tests {
             },
         ];
 
-        let (text, annotations) = finalize_hyphens_annotated((text, annotations));
+        let mut element = crate::types::internal::InternalElement::text(ElementKind::Paragraph, text.as_str(), 0);
+        element.annotations = annotations;
+        element.attributes = Some(
+            [(
+                crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE.to_string(),
+                text.clone(),
+            )]
+            .into_iter()
+            .collect(),
+        );
 
+        super::super::pipeline::finalize_element_hyphens(&mut element);
+
+        let (text, annotations) = (element.text.clone(), element.annotations.clone());
         assert_eq!(text, "a cross-page - bold");
+        assert_eq!(
+            element.attributes.as_ref().and_then(|attributes| attributes
+                .get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE)
+                .map(String::as_str)),
+            Some("a cross-page - bold")
+        );
         assert_eq!(
             &text[annotations[0].start as usize..annotations[0].end as usize],
             "cross-page"
@@ -4171,6 +4182,8 @@ mod tests {
         );
     }
 
+    // Some producers write every hyphen as U+2011 NON-BREAKING HYPHEN, wrap hyphens included
+    // (`mem‑` / `ory`). An ASCII-only check left `mem- ory` in the output, splitting the word.
     #[test]
     fn a_unicode_wrap_hyphen_at_a_line_break_is_joined_and_a_compound_keeps_it() {
         for (trailing, leading, is_list_item, expected) in [
@@ -4279,6 +4292,52 @@ mod tests {
 
         let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
         assert_eq!(paragraph_text(&document), "Zie de installatiehandleiding voor details");
+    }
+
+    #[test]
+    fn a_unicode_hyphen_bullet_is_stripped_like_an_ascii_one() {
+        for hyphen in ["-", "\u{2010}", "\u{2011}"] {
+            assert_eq!(normalize_list_text(&format!("{hyphen} item")).0, "item");
+            assert_eq!(normalize_list_text(&format!("{hyphen}  item")).0, " item");
+            assert_eq!(normalize_list_text(&format!("{hyphen}item")).0, format!("{hyphen}item"));
+        }
+    }
+
+    #[test]
+    fn a_weld_at_a_style_run_boundary_ends_the_previous_run_before_the_continuation() {
+        for hyphen in ["-", "\u{2011}"] {
+            let first = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![bold_segment(&format!("bold mem{hyphen}"))],
+                baseline_y: Some(700.0),
+                dominant_font_size: 12.0,
+                is_bold: true,
+                is_monospace: false,
+            };
+            let second = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y: 686.0,
+                    ..plain_segment("ory follows")
+                }],
+                baseline_y: Some(686.0),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let mut para = make_paragraph("", None);
+            para.lines = vec![first, second];
+
+            let (text, annotations) = extract_text_and_annotations(&para, &Default::default());
+
+            assert_eq!(text, "bold memory follows");
+            let bold: Vec<&str> = annotations
+                .iter()
+                .filter(|annotation| annotation.kind == AnnotationKind::Bold)
+                .map(|annotation| &text[annotation.start as usize..annotation.end as usize])
+                .collect();
+            assert_eq!(bold, ["bold mem"], "hyphen {hyphen:?}");
+        }
     }
 
     #[test]

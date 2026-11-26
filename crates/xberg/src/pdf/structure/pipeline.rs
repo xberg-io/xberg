@@ -29,8 +29,8 @@ use super::paragraphs::{
 };
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
-    collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
-    normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
+    collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, finalize_hyphens, finalize_hyphens_mapped,
+    normalize_text_encoding, normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
     repair_contextual_ligatures_mapped, repair_ligature_spaces,
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
@@ -5061,10 +5061,38 @@ fn build_document_structure_with_native(
 }
 
 fn normalize_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
+    finalize_element_hyphens(elem);
     if elem.annotations.is_empty() {
         normalize_unannotated_element_text(elem, ocr_text);
+    } else {
+        normalize_annotated_element_text(elem, ocr_text);
+    }
+}
+
+/// Map U+2010/U+2011 to ASCII `-` in one assembled element, moving its annotations with the
+/// text and keeping its Markdown plain-text projection in step. The one place assembled text
+/// loses its Unicode hyphens: dehyphenation and segment repair need to see them until here.
+/// An image element carries its OCR result verbatim.
+pub(super) fn finalize_element_hyphens(elem: &mut crate::types::internal::InternalElement) {
+    if matches!(elem.kind, crate::types::internal::ElementKind::Image { .. }) {
         return;
     }
+    let repaired = finalize_hyphens_mapped(&elem.text, !elem.annotations.is_empty());
+    remap_repaired_annotations(&mut elem.annotations, &repaired.replacements);
+    if let Cow::Owned(finalized) = repaired.text {
+        elem.text = finalized;
+    }
+    if let Some(plain) = elem
+        .attributes
+        .as_mut()
+        .and_then(|attributes| attributes.get_mut(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
+        && plain.contains(['\u{2010}', '\u{2011}'])
+    {
+        *plain = finalize_hyphens(plain).into_owned();
+    }
+}
+
+fn normalize_annotated_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
     for step in 0..3 {
         let repaired = match step {
             0 => repair_contextual_ligatures_mapped(&elem.text, true),
@@ -5181,6 +5209,28 @@ mod annotation_text_repair_tests {
             };
             assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), expected);
         }
+    }
+
+    #[test]
+    fn unicode_hyphens_map_to_ascii_with_annotations_on_both_repair_paths() {
+        let source = "a cross\u{2011}page \u{2010} ﬁ bold";
+        let expected = "a cross-page - fi bold";
+        assert_eq!(normalized(source, Vec::new()).text, expected);
+        let result = normalized(
+            source,
+            vec![
+                annotation(source, "cross\u{2011}page", AnnotationKind::Italic),
+                annotation(source, "bold", AnnotationKind::Bold),
+            ],
+        );
+        assert_eq!(result.text, expected);
+        assert_eq!(
+            result.annotations,
+            vec![
+                annotation(expected, "cross-page", AnnotationKind::Italic),
+                annotation(expected, "bold", AnnotationKind::Bold),
+            ]
+        );
     }
 
     #[test]

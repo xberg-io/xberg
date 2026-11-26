@@ -643,7 +643,7 @@ fn alphabetic_run_at(text: &str, start: usize) -> &str {
 ///
 /// Matches the reference `sanitize_text()` normalizations so extracted text tokenizes like
 /// the ground truth. U+2010/U+2011 hyphens are left alone here: segment repair still needs to
-/// see them, and [`finalize_hyphens`] maps them when each element's text is emitted.
+/// see them, and [`finalize_hyphens`] maps them once each element's text is assembled.
 pub(super) fn normalize_unicode_text(text: &str) -> Cow<'_, str> {
     normalize_unicode_text_mapped(text, false).text
 }
@@ -679,7 +679,7 @@ pub(super) fn normalize_unicode_text_mapped(text: &str, record: bool) -> Repaire
     }
 }
 
-/// Final hyphen polish applied to assembled paragraph text: maps U+2010/U+2011
+/// Final hyphen polish applied to assembled element text: maps U+2010/U+2011
 /// to ASCII `-` to match ground-truth tokenization.
 ///
 /// Spacing around the hyphen is left alone. Once segments are joined, a space the
@@ -687,10 +687,33 @@ pub(super) fn normalize_unicode_text_mapped(text: &str, record: bool) -> Repaire
 /// from one the join inserted, and the drawn kind is the common one. Spaces inside
 /// one segment are still handled by [`collapse_spaced_hyphens`] during text repair.
 pub(super) fn finalize_hyphens(text: &str) -> Cow<'_, str> {
+    finalize_hyphens_mapped(text, false).text
+}
+
+pub(super) fn finalize_hyphens_mapped(text: &str, record: bool) -> RepairedText<'_> {
     if !text.contains(['\u{2010}', '\u{2011}']) {
-        return Cow::Borrowed(text);
+        return RepairedText::unchanged(text);
     }
-    Cow::Owned(text.replace(['\u{2010}', '\u{2011}'], "-"))
+    let mut result = String::with_capacity(text.len());
+    let mut replacements = Vec::new();
+    for (offset, ch) in text.char_indices() {
+        if matches!(ch, '\u{2010}' | '\u{2011}') {
+            let output_start = result.len();
+            result.push('-');
+            record_replacement(
+                &mut replacements,
+                record,
+                offset..offset + ch.len_utf8(),
+                output_start..result.len(),
+            );
+        } else {
+            result.push(ch);
+        }
+    }
+    RepairedText {
+        text: Cow::Owned(result),
+        replacements,
+    }
 }
 
 /// Collapse spacing artifacts around Unicode hyphens between alphanumerics.
