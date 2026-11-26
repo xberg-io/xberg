@@ -142,6 +142,11 @@ pub(crate) use scoring::{mean_text_conf_of, page_ocr_confidence, word_count_of};
 #[cfg(feature = "ocr")]
 pub(crate) use scoring::{ocr_content_is_repairable_prose, repair_ocr_numeric_tokens};
 
+// ~keep The standalone-image PaddleOCR fallback judges its candidate with the same text-quality
+// score a PDF pipeline stage must clear.
+#[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) use scoring::compute_quality_score;
+
 // ~keep These three are reachable only from `extractors::pdf`'s own `#[cfg(test)]` unit tests,
 // so a non-test build of this crate never exercises the re-export itself (the underlying items
 // are not dead code -- `scoring` uses `NativeTextStats` and `evaluate_native_text_for_ocr`

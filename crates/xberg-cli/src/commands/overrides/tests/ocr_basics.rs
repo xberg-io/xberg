@@ -215,6 +215,7 @@ fn test_ocr_language_without_ocr_flag_existing_config() {
             tessdata_bytes: None,
             tessdata_path: None,
             numeric_repair: false,
+            image_paddle_fallback: true,
             backend_options: None,
         }),
         ..Default::default()
@@ -257,6 +258,7 @@ fn test_ocr_language_updates_existing_nested_tesseract_config() {
             tessdata_bytes: None,
             tessdata_path: None,
             numeric_repair: false,
+            image_paddle_fallback: true,
             backend_options: None,
         }),
         ..Default::default()
@@ -403,6 +405,7 @@ fn test_ocr_no_cache_changes_only_use_cache_when_tesseract_config_already_set() 
             tessdata_bytes: None,
             tessdata_path: None,
             numeric_repair: false,
+            image_paddle_fallback: true,
             backend_options: None,
         }),
         ..Default::default()
@@ -551,6 +554,7 @@ fn test_ocr_no_cache_false_re_enables_an_already_disabled_cache() {
             tessdata_bytes: None,
             tessdata_path: None,
             numeric_repair: false,
+            image_paddle_fallback: true,
             backend_options: None,
         }),
         ..Default::default()

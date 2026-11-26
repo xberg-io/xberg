@@ -1117,6 +1117,19 @@ pub struct OcrConfig {
     /// `"tsv"`, because it would re-punctuate the bare coordinate integers in that markup.
     #[serde(default)]
     pub numeric_repair: bool,
+
+    /// Read a standalone image again with the built-in PaddleOCR backend when the default
+    /// Tesseract read of it is unreliable, and keep the PaddleOCR read when it reads more.
+    ///
+    /// Defaults to `true`. It applies only to a standalone image (not a PDF page) read with
+    /// `backend = "tesseract"` and no PSM, preprocessing or backend tuning, no `pipeline`, no
+    /// `vlm_fallback`, no layout detection, one language that PaddleOCR supports, and a
+    /// Tesseract read whose word confidences fail the sparse-text robustness check. It needs a
+    /// build with PaddleOCR and models already in the local cache: this re-read never downloads
+    /// a model. Set it to `false` to keep Tesseract's read on every image. A backend other than
+    /// `tesseract` is never replaced.
+    #[serde(default = "default_image_paddle_fallback")]
+    pub image_paddle_fallback: bool,
 }
 
 impl Default for OcrConfig {
@@ -1142,6 +1155,7 @@ impl Default for OcrConfig {
             tessdata_bytes: None,
             tessdata_path: None,
             numeric_repair: false,
+            image_paddle_fallback: default_image_paddle_fallback(),
         }
     }
 }
@@ -1572,6 +1586,10 @@ fn default_ocr_enabled() -> bool {
 
 fn default_tesseract_backend() -> String {
     "tesseract".to_string()
+}
+
+fn default_image_paddle_fallback() -> bool {
+    true
 }
 
 /// Default OCR language (Tesseract/ISO 639 naming): English.

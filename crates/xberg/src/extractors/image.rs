@@ -2572,6 +2572,9 @@ mod image_ocr_budget;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_color_threshold.rs"]
 mod image_color_threshold;
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "image_paddle_fallback.rs"]
+mod image_paddle_fallback;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
@@ -3125,6 +3128,11 @@ fn single_block_table_config(
     if mime_type.to_lowercase().contains("tiff") {
         return None;
     }
+    // A Tesseract re-read must not replace the PaddleOCR read the first pass selected. ~keep
+    #[cfg(all(paddle_ocr, feature = "pdf"))]
+    if image_paddle_fallback::read_by_paddle(first) {
+        return None;
+    }
     let mut ocr = config.ocr.clone().unwrap_or_default();
     if !is_implicit_horizontal_tesseract(&ocr)
         || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
@@ -3341,7 +3349,7 @@ impl ImageExtractor {
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let (standalone_tesseract, table_tesseract, psm6_tesseract);
         #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-        let builtin_paddle;
+        let (builtin_paddle, fallback_paddle);
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
@@ -3350,6 +3358,7 @@ impl ImageExtractor {
             #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
             {
                 builtin_paddle = backend.name() == "paddle-ocr" && registry.has_builtin_paddle();
+                fallback_paddle = image_paddle_fallback::backend(&registry, &backend, config, ocr_config, mime_type);
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
@@ -3477,8 +3486,20 @@ impl ImageExtractor {
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let ocr_result = image_color_threshold::retry(
             standalone_tesseract.as_deref(),
+            #[cfg(all(paddle_ocr, feature = "pdf"))]
+            std::sync::Arc::clone(&ocr_bytes),
+            #[cfg(not(all(paddle_ocr, feature = "pdf")))]
             ocr_bytes,
             mime_type,
+            (ocr_config, &ocr_config_with_format),
+            config.cancel_token.as_ref(),
+            ocr_result,
+        )
+        .await?;
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let (ocr_result, paddle_read) = image_paddle_fallback::retry(
+            fallback_paddle,
+            ocr_bytes,
             (ocr_config, &ocr_config_with_format),
             config.cancel_token.as_ref(),
             ocr_result,
@@ -3581,12 +3602,17 @@ impl ImageExtractor {
         // `ocr_confidence: None` rather than repeating a figure that was never measured for
         // them (#1568). Gated on `pdf` because the shared builder lives in that module.
         #[cfg(all(feature = "ocr", feature = "pdf"))]
-        let whole_image_ocr_confidence = crate::extractors::pdf::ocr::page_ocr_confidence(
-            backend.confidence_semantics(),
-            crate::extractors::pdf::ocr::mean_text_conf_of(&ocr_metadata.additional),
-            crate::extractors::pdf::ocr::word_count_of(&ocr_metadata.additional).unwrap_or(0),
-            backend.name(),
-        );
+        let whole_image_ocr_confidence = {
+            // The PaddleOCR fallback's read reports its own backend and confidence scale. ~keep
+            #[cfg(all(paddle_ocr, not(target_arch = "wasm32")))]
+            let backend = paddle_read.as_ref().unwrap_or(&backend);
+            crate::extractors::pdf::ocr::page_ocr_confidence(
+                backend.confidence_semantics(),
+                crate::extractors::pdf::ocr::mean_text_conf_of(&ocr_metadata.additional),
+                crate::extractors::pdf::ocr::word_count_of(&ocr_metadata.additional).unwrap_or(0),
+                backend.name(),
+            )
+        };
         #[cfg(all(feature = "ocr", not(feature = "pdf")))]
         let whole_image_ocr_confidence: Option<crate::types::page::PageOcrConfidence> = None;
 
@@ -3690,7 +3716,7 @@ impl ImageExtractor {
                     })
                 };
                 #[cfg(all(paddle_ocr, feature = "pdf", not(target_arch = "wasm32")))]
-                let table_text = if builtin_paddle && !has_public_ocr_structure {
+                let table_text = if (builtin_paddle || paddle_read.is_some()) && !has_public_ocr_structure {
                     table_text.or_else(|| paddle_table_page_text(raw, &doc, &config.output_format, mime_type))
                 } else {
                     table_text

@@ -255,6 +255,7 @@ impl ExtractionOverrides {
                 tessdata_bytes: None,
                 tessdata_path: None,
                 numeric_repair: false,
+                image_paddle_fallback: true,
                 backend_options,
             });
 
