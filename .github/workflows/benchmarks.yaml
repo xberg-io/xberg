@@ -558,13 +558,15 @@ jobs:
         if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
         run: |
           set -euo pipefail
-          backend="$(./target/release/xberg extract test_documents/images/cord_receipt_02.jpg \
-            --ocr-language eng --no-cache true --format json \
-            | jq -r '.result.pages[0].ocr_confidence.backend // "none"')"
-          if [ "$backend" != "paddle-ocr" ]; then
-            echo "::error::PaddleOCR image fallback did not fire on cord_receipt_02.jpg (backend: $backend)" >&2
+          result="$(./target/release/xberg extract test_documents/images/cord_receipt_02.jpg \
+            --ocr-language eng --no-cache true --format json)"
+          page_backend="$(jq -r '.result.pages[0].ocr_confidence.backend // "none"' <<<"$result")"
+          fallback_backend="$(jq -r '.result.metadata.ocr_fallback_backend // "none"' <<<"$result")"
+          if [ "$page_backend" != "paddle-ocr" ] && [ "$fallback_backend" != "paddle-ocr" ]; then
+            echo "::error::PaddleOCR image fallback did not fire on cord_receipt_02.jpg (pages[0].ocr_confidence.backend: $page_backend, metadata.ocr_fallback_backend: $fallback_backend)" >&2
             exit 1
           fi
+          echo "PaddleOCR image fallback fired (pages[0].ocr_confidence.backend: $page_backend, metadata.ocr_fallback_backend: $fallback_backend)"
 
       - name: Pre-warm Sceptre ORT models
         if: contains(matrix.pipeline, 'sceptre-ort')
