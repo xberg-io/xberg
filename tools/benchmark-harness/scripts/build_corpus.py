@@ -525,7 +525,18 @@ _STRIP = [
     (re.compile(r"```.*?```", re.DOTALL), " "),
     (re.compile(r"`[^`]*`"), " "),
     (re.compile(r"!?\[([^\]]*)\]\([^)]*\)"), r"\1"),
-    (re.compile(r"\$\$?[^$]*\$\$?"), " "),
+    # Pandoc tex_math_dollars: `$$..$$` display; inline `$` takes an unescaped opener with a non-space after
+    # it and a non-space before the closer; neither spans a blank line. Pandoc's no-digit-after-closer rule
+    # is left out: the READoc writer emits `$\sim$240`. A greedy `\$\$?[^$]*\$\$?` flips math/prose parity
+    # on a currency `$160` or on adjacent spans `$a$$b$`.
+    (
+        re.compile(
+            r"\$\$(?:(?!\n[ \t]*\n).)*?\$\$"
+            r"|(?<!\\)\$(?![\s$])(?:\\[^\n]|[^$\\\n]|\n(?![ \t]*\n))*?(?<!\s)\$",
+            re.DOTALL,
+        ),
+        " ",
+    ),
     (re.compile(r"^[#>\s]*\|?|[|>#]"), " "),
     (re.compile(r"[*_~`]+"), ""),
     (re.compile(r"[ \t]+"), " "),
