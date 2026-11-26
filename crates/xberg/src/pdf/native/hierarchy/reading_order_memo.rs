@@ -9,6 +9,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::{BuildHasher, RandomState};
 
 use xberg_native_pdf::extractors::text::{ArtifactType, PaginationSubtype};
 use xberg_native_pdf::fonts::MappingProvenance;
@@ -26,14 +27,45 @@ struct OrderedPage {
     page_width: u32,
     page_height: u32,
     input: SpansFingerprint,
-    ordered: Vec<TextSpan>,
+    ordered: StoredOrder,
     bytes: usize,
+}
+
+/// A page's computed order: the output position of each input span when the ordering only
+/// rearranged them, else the ordered spans themselves.
+enum StoredOrder {
+    Positions(Vec<u32>),
+    Spans(Vec<TextSpan>),
+}
+
+impl StoredOrder {
+    fn bytes(&self) -> usize {
+        match self {
+            Self::Positions(positions) => positions.len() * size_of::<u32>(),
+            Self::Spans(spans) => spans_bytes(spans),
+        }
+    }
+
+    /// Replace `spans`, an input equal to the stored one, with its stored order.
+    fn serve(&self, spans: &mut Vec<TextSpan>) {
+        match self {
+            Self::Positions(positions) => {
+                let mut placed: Vec<(u32, TextSpan)> = positions.iter().copied().zip(spans.drain(..)).collect();
+                placed.sort_unstable_by_key(|(position, _)| *position);
+                spans.extend(placed.into_iter().map(|(_, span)| span));
+            }
+            Self::Spans(ordered) => spans.clone_from(ordered),
+        }
+    }
 }
 
 struct Memo {
     budget: usize,
     used: usize,
     pages: HashMap<usize, OrderedPage>,
+    /// Keys the per-span hashes that match ordered spans back to their inputs. Random per memo,
+    /// so span content taken from a PDF cannot be crafted to collide two different spans.
+    span_keys: RandomState,
 }
 
 thread_local! {
@@ -68,6 +100,7 @@ impl ReadingOrderMemoScope {
             budget,
             used: 0,
             pages: HashMap::new(),
+            span_keys: RandomState::new(),
         };
         let previous = MEMO.with(|slot| slot.replace(Some(memo)));
         Self { previous }
@@ -93,7 +126,7 @@ pub(super) fn reorder(
     let (served, input) = MEMO.with(|slot| {
         let slot = slot.borrow();
         let Some(memo) = slot.as_ref() else {
-            return (None, None);
+            return (false, None);
         };
         let stored = memo
             .pages
@@ -101,22 +134,31 @@ pub(super) fn reorder(
             .filter(|page| page.page_width == width && page.page_height == height);
         let admits = memo.used < memo.budget;
         let input = (stored.is_some() || admits).then(|| fingerprint(spans));
-        let served = stored
-            .filter(|page| Some(page.input) == input)
-            .map(|page| page.ordered.clone());
-        (served, input.filter(|_| admits))
+        if let Some(page) = stored.filter(|page| Some(page.input) == input) {
+            page.ordered.serve(spans);
+            return (true, None);
+        }
+        (
+            false,
+            input.filter(|_| admits).map(|print| (print, memo.span_keys.clone())),
+        )
     });
-    if let Some(ordered) = served {
-        *spans = ordered;
+    if served {
         return;
     }
+    // Hashed only on a page the memo will keep, so a served page pays for the fingerprint alone. ~keep
+    let input_hashes = input.as_ref().map(|(_, keys)| span_hashes(spans, keys));
     order(spans);
     #[cfg(test)]
     COMPUTED_ORDERS.with(|count| count.set(count.get() + 1));
-    let Some(input) = input else {
+    let (Some((input, keys)), Some(input_hashes)) = (input, input_hashes) else {
         return;
     };
-    let bytes = size_of::<SpansFingerprint>() + spans_bytes(spans);
+    let ordered = match output_positions(&input_hashes, &span_hashes(spans, &keys)) {
+        Some(positions) => StoredOrder::Positions(positions),
+        None => StoredOrder::Spans(spans.clone()),
+    };
+    let bytes = size_of::<SpansFingerprint>() + ordered.bytes();
     MEMO.with(|slot| {
         let mut slot = slot.borrow_mut();
         let Some(memo) = slot.as_mut() else {
@@ -134,7 +176,7 @@ pub(super) fn reorder(
                 page_width: width,
                 page_height: height,
                 input,
-                ordered: spans.clone(),
+                ordered,
                 bytes,
             },
         );
@@ -263,6 +305,50 @@ pub(super) fn fingerprint(spans: &[TextSpan]) -> SpansFingerprint {
         count: spans.len(),
         digest: bytes,
     }
+}
+
+/// Each span's hash under `keys`, over the same encoding the fingerprint reads.
+fn span_hashes(spans: &[TextSpan], keys: &RandomState) -> Vec<u64> {
+    let mut digest = Digest {
+        hasher: blake3::Hasher::new(),
+        buf: Vec::new(),
+    };
+    spans
+        .iter()
+        .map(|span| {
+            digest.buf.clear();
+            hash_span(&mut digest, span);
+            keys.hash_one(&digest.buf[..])
+        })
+        .collect()
+}
+
+/// The output position of each input span, when the output is the input rearranged: every output
+/// hash claims a distinct input with the same hash. `None` when the ordering added, dropped or
+/// changed a span, or a page has more spans than a position can name.
+fn output_positions(input: &[u64], output: &[u64]) -> Option<Vec<u32>> {
+    if input.len() != output.len() || u32::try_from(input.len()).is_err() {
+        return None;
+    }
+    let mut unclaimed: HashMap<u64, Vec<usize>> = HashMap::with_capacity(input.len());
+    for (index, hash) in input.iter().enumerate().rev() {
+        unclaimed.entry(*hash).or_default().push(index);
+    }
+    let mut positions = vec![0u32; input.len()];
+    for (position, hash) in output.iter().enumerate() {
+        let index = unclaimed.get_mut(hash)?.pop()?;
+        positions[index] = u32::try_from(position).ok()?;
+    }
+    Some(positions)
+}
+
+#[cfg(test)]
+fn stored_positions(page_index: usize) -> Option<bool> {
+    MEMO.with(|slot| {
+        let slot = slot.borrow();
+        let page = slot.as_ref()?.pages.get(&page_index)?;
+        Some(matches!(page.ordered, StoredOrder::Positions(_)))
+    })
 }
 
 fn hash_span(out: &mut Digest, span: &TextSpan) {

@@ -1,7 +1,7 @@
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::TextSpan;
 
-use super::{ReadingOrderMemoScope, computed_orders, fingerprint};
+use super::{ReadingOrderMemoScope, computed_orders, fingerprint, output_positions, stored_positions};
 
 fn same_spans(left: &[TextSpan], right: &[TextSpan]) -> bool {
     fingerprint(left) == fingerprint(right)
@@ -309,4 +309,60 @@ fn each_page_is_ordered_once_across_the_table_and_structure_passes() {
     assert_eq!(computed, 2, "each page must be ordered once across both passes");
     assert_eq!(format!("{tables:?}"), format!("{fresh_tables:?}"));
     assert_eq!(format!("{structure:?}"), format!("{fresh_structure:?}"));
+}
+
+#[test]
+fn a_rearranging_order_is_kept_as_positions_and_served_identically() {
+    let spans = two_column_page();
+    let fresh = fresh_order(&spans, PAGE_WIDTH);
+    assert!(
+        !same_spans(&spans, &fresh),
+        "the fixture must need reordering, or the test proves nothing"
+    );
+    let _memo = ReadingOrderMemoScope::begin(usize::MAX);
+    let before = computed_orders();
+
+    let first = ordered(&spans, PAGE_WIDTH);
+    assert_eq!(
+        stored_positions(0),
+        Some(true),
+        "a pure rearrangement must be kept as positions"
+    );
+    let second = ordered(&spans, PAGE_WIDTH);
+
+    assert_eq!(
+        computed_orders() - before,
+        1,
+        "the second identical page must be served"
+    );
+    assert!(same_spans(&first, &fresh));
+    assert!(
+        same_spans(&second, &fresh),
+        "the positions must rebuild the fresh order exactly"
+    );
+}
+
+#[test]
+fn positions_name_where_each_input_went_and_refuse_anything_but_a_rearrangement() {
+    assert_eq!(output_positions(&[10, 20, 30], &[30, 10, 20]), Some(vec![1, 2, 0]));
+    assert_eq!(
+        output_positions(&[7, 7, 9], &[9, 7, 7]),
+        Some(vec![1, 2, 0]),
+        "equal spans keep their relative order"
+    );
+    assert_eq!(
+        output_positions(&[1, 2], &[1, 3]),
+        None,
+        "a changed span is not a rearrangement"
+    );
+    assert_eq!(
+        output_positions(&[1, 2], &[1, 1]),
+        None,
+        "a duplicated span is not a rearrangement"
+    );
+    assert_eq!(
+        output_positions(&[1, 2], &[1]),
+        None,
+        "a dropped span is not a rearrangement"
+    );
 }
