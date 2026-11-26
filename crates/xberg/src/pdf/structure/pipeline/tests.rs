@@ -8529,6 +8529,20 @@ fn finalize_paragraph_does_not_make_a_folio_or_a_table_title_a_heading() {
     assert_eq!(level(&folio), None, "a run of digits names no section");
     assert_eq!(level(&table_title), None, "a table title is a caption");
     assert_eq!(level(&section), Some(2), "a title in the same tier is still a heading");
+    for caption in [
+        "Figure 3: Revised budgets",
+        "Table 2. Results",
+        "Exhibit 4 \u{2013} Map",
+        "Plate 7",
+    ] {
+        assert_eq!(level(&seg_at(caption, 45.0, 300.0, 10.0, false)), None, "{caption:?}");
+    }
+    let exhibit = seg_at("Exhibit 10.1 Material Contracts", 45.0, 300.0, 10.0, false);
+    assert_eq!(
+        level(&exhibit),
+        Some(2),
+        "a label whose number runs straight into a title names a section"
+    );
 }
 
 /// 2212.11694 sets each word of its 14pt bold title as its own run on one baseline; the

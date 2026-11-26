@@ -4018,9 +4018,29 @@ fn opens_with_caption_label(text: &str) -> bool {
         lower
             .strip_prefix(label)
             .map(str::trim_start)
-            .and_then(|rest| rest.chars().next())
-            .is_some_and(|next| next.is_ascii_digit())
+            .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()) && caption_number_ends_label(rest))
     })
+}
+
+/// Whether the number opening `rest` (`1`, `10.1`, `3a`) is followed by a caption separator
+/// or ends the block: `TABLE 1—`, `Figure 3:`, `Table 2. Results`, `Figure 4`. A title that
+/// runs straight on after its number is a section (`Exhibit 10.1 Material Contracts`).
+fn caption_number_ends_label(rest: &str) -> bool {
+    let mut tail = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+    while let Some(fraction) = tail
+        .strip_prefix('.')
+        .filter(|fraction| fraction.starts_with(|c: char| c.is_ascii_digit()))
+    {
+        tail = fraction.trim_start_matches(|c: char| c.is_ascii_digit());
+    }
+    if let Some(after_suffix) = tail
+        .strip_prefix(char::is_alphabetic)
+        .filter(|after| !after.starts_with(char::is_alphabetic))
+    {
+        tail = after_suffix;
+    }
+    let tail = tail.trim_start();
+    tail.is_empty() || tail.starts_with(['\u{2014}', '\u{2013}', ':', '.', '-'])
 }
 
 /// Font ratio over body at which a line is set at display-title scale.
