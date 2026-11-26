@@ -834,7 +834,7 @@ fn test_snap_superscript_baselines_records_the_raw_baseline() {
         snap_span("2", 130.0, 704.0, 4.0, 6.0, 1),
     ];
     extractor.snap_superscript_baselines();
-    assert_eq!(extractor.raw_script_baselines, [(130.0, 6.0, 704.0)]);
+    assert_eq!(extractor.raw_script_baselines, [(130.0, 6.0, 700.0, 704.0)]);
 
     let mut preserving = TextExtractor::new();
     preserving.preserve_script_baselines = true;

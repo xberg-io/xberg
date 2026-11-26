@@ -53,8 +53,8 @@ pub(super) struct InterpretedPage {
     warnings: Vec<crate::extractors::warnings::Warning>,
     /// Recoveries the interpretation charged to the document.
     recovered: crate::extractors::recovery_tally::RecoverySnapshot,
-    /// `(origin x, font size, raw baseline)` of each script span the read snapped onto its base.
-    script_baselines: Vec<(f32, f32, f32)>,
+    /// `(origin x, font size, snapped baseline, raw baseline)` of each script span the read snapped onto its base.
+    script_baselines: Vec<(f32, f32, f32, f32)>,
     /// The preserved-geometry spans of a flattened read that finished both geometries from one
     /// content run; never kept in the cache.
     preserved: Option<Vec<crate::layout::TextSpan>>,
@@ -573,7 +573,7 @@ impl PdfDocument {
         &self,
         page_index: usize,
         script_geometry: ScriptGeometry,
-        baselines: &[(f32, f32, f32)],
+        baselines: &[(f32, f32, f32, f32)],
     ) {
         if script_geometry != ScriptGeometry::Flatten {
             return;
@@ -586,11 +586,11 @@ impl PdfDocument {
         }
     }
 
-    /// `(origin x, font size, raw baseline)` of each script span the page's last
+    /// `(origin x, font size, snapped baseline, raw baseline)` of each script span the page's last
     /// flattened-geometry read snapped onto its base's baseline: the script geometry that
     /// [`ScriptGeometry::Flatten`] spans no longer carry. Empty until such a read ran.
     #[doc(hidden)]
-    pub fn flattened_script_baselines(&self, page_index: usize) -> Vec<(f32, f32, f32)> {
+    pub fn flattened_script_baselines(&self, page_index: usize) -> Vec<(f32, f32, f32, f32)> {
         self.script_baselines
             .lock_or_recover()
             .get(&page_index)

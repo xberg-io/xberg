@@ -296,3 +296,56 @@ fn should_map_annotation_offsets_across_resolved_sentinels() {
     assert_eq!(resolve(&text, false).text, "a x^{2} b");
     assert_eq!(strip(&text), "a x^{2} b");
 }
+
+/// The definition `z ≡ 2r² − 1,` with every glyph run drawn twice, a fake-bold overdraw.
+#[test]
+fn should_write_an_overdrawn_formula_once() {
+    let mut spans = Vec::new();
+    for offset in [0.0, 0.3] {
+        spans.extend([
+            span("z", "CMMI10", 10.0, 200.0 + offset, 5.0, 700.0),
+            span("≡", "CMSY10", 10.0, 208.0 + offset, 8.0, 700.0),
+            span("2", "CMR10", 10.0, 219.0 + offset, 5.0, 700.0),
+            span("r", "CMMI10", 10.0, 224.0 + offset, 4.5, 700.0),
+            span("2", "CMR7", 7.0, 228.8 + offset, 4.0, 703.6),
+            span("−", "CMSY10", 10.0, 235.0 + offset, 7.8, 700.0),
+            span("1,", "CMR10", 10.0, 245.0 + offset, 7.0, 700.0),
+        ]);
+    }
+    let rewritten = rewrite_math_spans(&spans).expect("display equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$z\\equiv2r^{2}-1,$$"]);
+}
+
+/// Different glyphs drawn over each other on one baseline do not resolve into a formula, so
+/// the source text is kept rather than spelled as TeX.
+#[test]
+fn should_keep_the_source_when_axis_glyphs_collide() {
+    let spans = vec![
+        span("x", "CMMI10", 10.0, 200.0, 5.0, 700.0),
+        span("y", "CMMI10", 10.0, 200.5, 5.0, 700.0),
+        span("=", "CMR10", 10.0, 208.0, 7.8, 700.0),
+        span("a", "CMMI10", 10.0, 219.0, 5.0, 700.0),
+        span("2", "CMR7", 7.0, 224.0, 4.0, 703.6),
+    ];
+    assert!(rewrite_math_spans(&spans).is_none());
+}
+
+/// Two aligned equations put their scripts at the same x; each script's raw baseline is the
+/// one recorded at its own row, not the first row's.
+#[test]
+fn should_restore_each_row_its_own_script_baseline() {
+    let row = |baseline: f32| {
+        [
+            span("a", "CMMI10", 10.0, 200.0, 5.0, baseline),
+            span("=", "CMR10", 10.0, 208.0, 7.8, baseline),
+            span("r", "CMMI10", 10.0, 219.0, 4.5, baseline),
+            span("2", "CMR7", 7.0, 223.5, 4.0, baseline),
+        ]
+    };
+    let spans: Vec<TextSpan> = row(700.0).into_iter().chain(row(680.0)).collect();
+    let recorded = [(223.5, 7.0, 700.0, 703.6), (223.5, 7.0, 680.0, 683.6)];
+    let (rewritten, _) =
+        super::rewrite_with_baselines(&spans, Delimiters::Dollars, &super::RawBaselines::new(&recorded))
+            .expect("both rows are rewritten");
+    assert_eq!(texts(&rewritten), ["$$a=r^{2}$$", "$$a=r^{2}$$"]);
+}

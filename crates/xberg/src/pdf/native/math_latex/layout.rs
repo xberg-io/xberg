@@ -3,9 +3,9 @@
 
 use super::glyphs::{MathFont, spell_glyph};
 use super::{
-    ACCENT_SHARE, AXIS_OVERLAP_EM, BASE_REACH_EM, CLUSTER_GAP_EM, FRACTION_LEFT_GAP_EM, FRACTION_OFFSET_EM,
-    LIMIT_OFFSET_EM, LIMIT_SHARE, MAX_DEPTH, OFF_AXIS_EM, Piece, SAME_ROW_EM, SCRIPT_REACH_EM, SCRIPT_SIZE_RATIO,
-    STACK_SHARE, STRUCTURE_OFFSET_EM, axis_row, contains, glyphs,
+    ACCENT_SHARE, AXIS_OVERLAP_EM, BASE_REACH_EM, CLUSTER_GAP_EM, COLLISION_SHARE, FRACTION_LEFT_GAP_EM,
+    FRACTION_OFFSET_EM, LIMIT_OFFSET_EM, LIMIT_SHARE, MAX_DEPTH, OFF_AXIS_EM, Piece, SAME_ROW_EM, SCRIPT_REACH_EM,
+    SCRIPT_SIZE_RATIO, STACK_SHARE, STRUCTURE_OFFSET_EM, axis_row, contains, glyphs,
 };
 
 /// LaTeX writer that separates a command word from a following letter.
@@ -100,20 +100,25 @@ impl<'p, 'a> Item<'p, 'a> {
     }
 }
 
-/// Spell a group of pieces as one LaTeX expression.
-pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> String {
+/// Spell a group of pieces as one LaTeX expression, or `None` when its layout does not
+/// resolve: glyphs left over with no base, axis glyphs drawn over each other, a fraction
+/// missing a part. The caller then keeps the source text rather than emit broken TeX.
+pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
     let visible: Vec<&Piece<'_>> = pieces.iter().copied().filter(|piece| !piece.is_blank()).collect();
     if visible.is_empty() {
-        return String::new();
+        return Some(String::new());
     }
     if depth >= MAX_DEPTH {
-        return flat_tex(&visible);
+        return Some(flat_tex(&visible));
     }
     let size = visible.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
     let (accents, glyphs) = split_accents(&visible, size);
     let Some(axis) = axis_row(&glyphs) else {
-        return flat_tex(&visible);
+        return Some(flat_tex(&visible));
     };
+    if axis_glyphs_collide(&axis) {
+        return None;
+    }
     let base = axis[0].base;
     let rest: Vec<&Piece<'_>> = glyphs.iter().copied().filter(|piece| !contains(&axis, piece)).collect();
     let mut items: Vec<Item<'_, '_>> = axis
@@ -149,7 +154,18 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> String {
     );
     let (above, below) = pair_stacks(&mut items, above, below, &axis, base, size);
     let leftovers = attach_scripts(&mut items, above, below, size);
-    write_items(&items, &leftovers, depth)
+    if !leftovers.is_empty() {
+        return None;
+    }
+    write_items(&items, depth)
+}
+
+/// Two axis glyphs sharing most of their width: one row drawn over another, not a formula.
+fn axis_glyphs_collide(axis: &[&Piece<'_>]) -> bool {
+    axis.windows(2).any(|pair| {
+        let narrower = pair[0].width().min(pair[1].width());
+        narrower > 0.0 && pair[0].overlap(pair[1].x0, pair[1].x1) > narrower * COLLISION_SHARE
+    })
 }
 
 fn flat_tex(pieces: &[&Piece<'_>]) -> String {
@@ -334,12 +350,12 @@ fn attach_scripts<'p, 'a>(
     leftovers
 }
 
-fn write_items(items: &[Item<'_, '_>], leftovers: &[Vec<&Piece<'_>>], depth: usize) -> String {
+fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
     let mut tex = Tex::default();
     let mut open_radical = false;
     for item in items {
-        let subscript = group_tex(&item.subscripts, depth + 1);
-        let superscript = group_tex(&item.superscripts, depth + 1);
+        let subscript = group_tex(&item.subscripts, depth + 1)?;
+        let superscript = group_tex(&item.superscripts, depth + 1)?;
         match &item.kind {
             ItemKind::Base(piece) => {
                 let (mut spelled, command) = spell_piece(piece);
@@ -360,27 +376,23 @@ fn write_items(items: &[Item<'_, '_>], leftovers: &[Vec<&Piece<'_>>], depth: usi
                 open_radical = radical;
             }
             ItemKind::Fraction(upper, lower) => {
-                let (numerator, denominator) = (group_tex(upper, depth + 1), group_tex(lower, depth + 1));
+                let (numerator, denominator) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
                 if numerator.is_empty() || denominator.is_empty() {
-                    tex.raw(&format!("{numerator}{denominator}"));
-                } else {
-                    tex.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
+                    return None;
                 }
+                tex.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
             }
             ItemKind::Limits(upper, lower) => {
-                let (upper, lower) = (group_tex(upper, depth + 1), group_tex(lower, depth + 1));
+                let (upper, lower) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
                 tex.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
             }
         }
         write_scripts(&mut tex, &subscript, &superscript);
     }
-    for cluster in leftovers {
-        tex.raw(&group_tex(cluster, depth + 1));
-    }
     if open_radical {
         tex.raw("{}");
     }
-    tex.out
+    Some(tex.out)
 }
 
 fn write_scripts(tex: &mut Tex, subscript: &str, superscript: &str) {

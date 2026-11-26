@@ -2402,9 +2402,9 @@ struct MarkedContentContext {
 #[derive(Debug)]
 pub struct TextExtractor<'doc> {
     pub(crate) cmsy_witnesses: Option<Vec<TextSpan>>,
-    /// `(origin x, font size, raw baseline)` of each script span a flattened-geometry read
+    /// `(origin x, font size, snapped baseline, raw baseline)` of each script span a flattened-geometry read
     /// snapped onto its base's baseline.
-    pub(crate) raw_script_baselines: Vec<(f32, f32, f32)>,
+    pub(crate) raw_script_baselines: Vec<(f32, f32, f32, f32)>,
     cmsy_proof_budget: usize,
     /// Graphics state stack for handling q/Q operators
     state_stack: GraphicsStateStack,

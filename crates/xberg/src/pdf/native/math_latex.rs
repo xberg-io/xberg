@@ -77,6 +77,10 @@ const MAX_COMPONENT_PIECES: usize = 256;
 const MAX_NUMERIC_RUNS: usize = 3;
 /// Nesting depth past which a group is spelled flat.
 const MAX_DEPTH: usize = 6;
+/// Share of the narrower of two axis glyphs they overlap by when one is drawn over the other.
+const COLLISION_SHARE: f32 = 0.5;
+/// Distance, in ems, within which a glyph run with the same text is an overdraw of another.
+const OVERDRAW_EM: f32 = 0.1;
 
 /// How a rewritten formula is delimited in its span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,15 +149,61 @@ fn has_math_font(spans: &[TextSpan]) -> bool {
     spans.iter().any(|span| math_font(&span.font_name).is_some())
 }
 
-/// Raw baselines of snapped script spans, keyed by origin x and size.
+/// The pieces with each overdrawn copy removed (the same text drawn again at the same place,
+/// as fake bold does), and the removed copies as (copy span, original span). A formula takes
+/// its copies with it; a copy outside every formula keeps its text.
+fn without_overdraws(pieces: Vec<Piece<'_>>) -> (Vec<Piece<'_>>, Vec<(usize, usize)>) {
+    let mut order: Vec<usize> = (0..pieces.len()).collect();
+    order.sort_by(|&a, &b| {
+        pieces[a]
+            .base
+            .total_cmp(&pieces[b].base)
+            .then(pieces[a].x0.total_cmp(&pieces[b].x0))
+    });
+    let mut copy_of: Vec<Option<usize>> = vec![None; pieces.len()];
+    for (position, &i) in order.iter().enumerate() {
+        if copy_of[i].is_some() {
+            continue;
+        }
+        let reach = pieces[i].size * OVERDRAW_EM;
+        for &j in &order[position + 1..] {
+            if pieces[j].base - pieces[i].base > reach {
+                break;
+            }
+            let same = pieces[j].text.trim() == pieces[i].text.trim()
+                && pieces[j].size == pieces[i].size
+                && (pieces[j].x0 - pieces[i].x0).abs() <= reach;
+            if same && copy_of[j].is_none() {
+                copy_of[j] = Some(pieces[i].span);
+            }
+        }
+    }
+    let overdraws = pieces
+        .iter()
+        .zip(&copy_of)
+        .filter_map(|(piece, original)| original.map(|original| (piece.span, original)))
+        .collect();
+    let kept = pieces
+        .into_iter()
+        .zip(copy_of)
+        .filter_map(|(piece, original)| original.is_none().then_some(piece))
+        .collect();
+    (kept, overdraws)
+}
+
+/// Raw baselines of snapped script spans.
 #[derive(Default)]
-struct RawBaselines(std::collections::HashMap<(u32, u32), f32>);
+struct RawBaselines(std::collections::HashMap<(u32, u32, u32), f32>);
 
 impl RawBaselines {
-    fn new(recorded: &[(f32, f32, f32)]) -> Self {
+    /// Keyed by origin x, snapped baseline and size: aligned equations stacked on a page
+    /// share script x positions, so x and size alone would mix their rows.
+    fn new(recorded: &[(f32, f32, f32, f32)]) -> Self {
         let mut baselines = std::collections::HashMap::with_capacity(recorded.len());
-        for &(x, size, baseline) in recorded {
-            baselines.entry((x.to_bits(), size.to_bits())).or_insert(baseline);
+        for &(x, size, snapped, raw) in recorded {
+            baselines
+                .entry((x.to_bits(), snapped.to_bits(), size.to_bits()))
+                .or_insert(raw);
         }
         Self(baselines)
     }
@@ -163,7 +213,7 @@ impl RawBaselines {
             return span.bbox.y;
         }
         self.0
-            .get(&(span.bbox.x.to_bits(), span.font_size.to_bits()))
+            .get(&(span.bbox.x.to_bits(), span.bbox.y.to_bits(), span.font_size.to_bits()))
             .copied()
             .unwrap_or(span.bbox.y)
     }
@@ -177,11 +227,12 @@ fn rewrite_with_baselines(
     if !has_math_font(spans) {
         return None;
     }
-    let pieces: Vec<Piece<'_>> = spans
+    let all: Vec<Piece<'_>> = spans
         .iter()
         .enumerate()
         .filter_map(|(i, span)| Piece::new(i, span, baselines.of(span)))
         .collect();
+    let (pieces, overdraws) = without_overdraws(all);
     let mut formulas = find_formulas(&pieces);
     if formulas.is_empty() {
         return None;
@@ -199,6 +250,11 @@ fn rewrite_with_baselines(
         }
         for piece in &formula.members {
             removed[piece.span] = true;
+        }
+        for &(copy, original) in &overdraws {
+            if formula.members.iter().any(|piece| piece.span == original) {
+                removed[copy] = true;
+            }
         }
         replacement[formula.anchor_span] = Some(formula.to_span(&spans[formula.anchor_span], delimiters));
     }
@@ -678,7 +734,7 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
     }
     let axis = axis_row(&members)?;
     let anchor = axis.iter().min_by(|a, b| a.x0.total_cmp(&b.x0))?;
-    let tex = group_tex(&members, 0);
+    let tex = group_tex(&members, 0)?;
     if tex.is_empty() {
         return None;
     }
