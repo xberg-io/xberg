@@ -404,7 +404,8 @@ async fn read_without_pictures(
 /// caller's model directory and OCR limits are kept. ~keep
 fn reference_reader(probe: &Probe<'_>) -> ExtractionConfig {
     let mut reader = probe.config.clone();
-    let configured = reader.ocr.take().unwrap_or_default();
+    let configured = reader.ocr_or_default().into_owned();
+    reader.ocr = None;
     let latin = crate::core::config::OcrConfig::default();
     let stage = crate::core::config::OcrPipelineStage {
         backend: latin.backend.clone(),
@@ -664,5 +665,33 @@ mod tests {
         assert_eq!(stage.backend(), "tesseract");
         assert_eq!(stage.languages(), ["eng"]);
         assert!(pipeline.quality_thresholds.discard_suspected_ocr_noise);
+    }
+
+    #[test]
+    fn the_reference_read_keeps_the_extraction_model_set() {
+        for configured in [
+            ExtractionConfig {
+                tessdata_model: Some(crate::core::config::TessdataModel::Best),
+                ..Default::default()
+            },
+            ExtractionConfig {
+                tessdata_model: Some(crate::core::config::TessdataModel::Best),
+                ocr: Some(crate::OcrConfig::default()),
+                ..Default::default()
+            },
+        ] {
+            let (config, thresholds) = discarding_noise(&configured);
+            let probe = Probe {
+                layer: "",
+                boundaries: &[],
+                config: &config,
+                thresholds: &thresholds,
+            };
+            let reader = reference_reader(&probe);
+            assert_eq!(
+                reader.ocr.as_ref().map(crate::OcrConfig::effective_tessdata_model),
+                Some(crate::core::config::TessdataModel::Best)
+            );
+        }
     }
 }

@@ -139,6 +139,14 @@ impl ExtractionOverrides {
             if let Some(ocr) = config.ocr.as_mut() {
                 self.apply_ocr_fields(ocr);
             }
+            // ~keep The top-level set reaches every OCR the extraction performs without creating an
+            // `ocr` section, which would change whether OCR runs.
+            if let Some(model) = self.ocr_tessdata_model {
+                config.tessdata_model = Some(model.into());
+                if let Some(ocr) = config.ocr.as_mut() {
+                    ocr.tessdata_model = None;
+                }
+            }
         }
 
         if self.ocr != Some(false)
@@ -172,7 +180,7 @@ impl ExtractionOverrides {
     }
 
     /// Whether any `--ocr-*` field flag (backend, backend options, auto-rotate,
-    /// language, tessdata model) was given, independent of `--ocr`/`--ocr true`.
+    /// language) was given, independent of `--ocr`/`--ocr true`.
     ///
     /// Deliberately excludes `--ocr-no-cache`: `apply_ocr_no_cache` only ever mutates an
     /// already-materialised `tesseract_config` (see its doc comment), so naming
@@ -188,7 +196,6 @@ impl ExtractionOverrides {
             || self.ocr_backend_options.is_some()
             || self.ocr_auto_rotate.is_some()
             || self.ocr_language.is_some()
-            || self.ocr_tessdata_model.is_some()
     }
 
     /// Mutate the individual OCR fields that have a CLI flag, in place.
@@ -205,9 +212,6 @@ impl ExtractionOverrides {
         }
         if let Some(rotate) = self.ocr_auto_rotate {
             ocr.auto_rotate = Some(rotate);
-        }
-        if let Some(model) = self.ocr_tessdata_model {
-            ocr.tessdata_model = model;
         }
         if let Some(no_cache) = self.ocr_no_cache {
             apply_ocr_no_cache(ocr, no_cache);
@@ -258,7 +262,7 @@ impl ExtractionOverrides {
                 security_limits: None,
                 tessdata_bytes: None,
                 tessdata_path: None,
-                tessdata_model: Default::default(),
+                tessdata_model: None,
                 numeric_repair: false,
                 backend_options,
             });

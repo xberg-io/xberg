@@ -24,7 +24,8 @@ impl ExtractionConfig {
     /// - `XBERG_OCR_BACKEND`: OCR backend ("tesseract", "paddleocr", "paddle-ocr", or "vlm")
     /// - `XBERG_OCR_MODEL_VERSION`: PaddleOCR model generation ("pp-ocrv6" or "pp-ocrv5")
     /// - `XBERG_OCR_MODEL_TIER`: PaddleOCR model tier (e.g. "medium"/"small"/"tiny" for v6, "mobile"/"server" for v5)
-    /// - `XBERG_OCR_TESSDATA_MODEL`: Tesseract model set ("fast" or "best")
+    /// - `XBERG_OCR_TESSDATA_MODEL`: Tesseract model set ("fast" or "best"), applied to the
+    ///   top-level `tessdata_model` so it never creates an `ocr` section
     /// - `XBERG_CHUNKING_MAX_CHARS`: Maximum characters per chunk (positive integer)
     /// - `XBERG_CHUNKING_MAX_OVERLAP`: Maximum overlap between chunks (non-negative integer)
     /// - `XBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")
@@ -121,7 +122,13 @@ impl ExtractionConfig {
                 message: format!("Invalid value for XBERG_OCR_TESSDATA_MODEL: {message}"),
                 source: None,
             })?;
-            self.ocr.get_or_insert_with(OcrConfig::default).tessdata_model = model;
+            // ~keep The top-level set reaches every OCR this extraction performs without creating
+            // an `ocr` section, which would change whether OCR runs; an `ocr` section's own set
+            // is cleared so the environment wins over the config file.
+            self.tessdata_model = Some(model);
+            if let Some(ocr) = self.ocr.as_mut() {
+                ocr.tessdata_model = None;
+            }
         }
         Ok(())
     }

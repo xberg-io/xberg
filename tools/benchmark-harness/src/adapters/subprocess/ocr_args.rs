@@ -253,6 +253,11 @@ impl SubprocessAdapter {
     /// Build request arguments, upgrading an adapter configured with OCR disabled
     /// when the fixture explicitly requires OCR.
     pub(super) fn request_args_from(&self, base_args: &[String], force_ocr: bool) -> Vec<String> {
+        let mut args = self.ocr_request_args_from(base_args, force_ocr);
+        self.append_xberg_tessdata_model(&mut args);
+        args
+    }
+    fn ocr_request_args_from(&self, base_args: &[String], force_ocr: bool) -> Vec<String> {
         let mut args = base_args.to_vec();
         if !force_ocr || self.ignore_fixture_force_ocr {
             return args;

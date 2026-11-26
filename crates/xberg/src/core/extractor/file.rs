@@ -170,6 +170,9 @@ pub(crate) async fn extract_file(
 ) -> Result<ExtractedDocument> {
     let path = path.as_ref();
 
+    let config_with_tessdata_model = config.resolved_for_extraction();
+    let config: &ExtractionConfig = config_with_tessdata_model.as_deref().unwrap_or(config);
+
     #[cfg(feature = "otel")]
     {
         let span = tracing::Span::current();

@@ -136,31 +136,47 @@ tesseract --list-langs
 ### Tesseract model sets: fast and best
 
 Tesseract publishes two model sets under Apache-2.0: `tessdata_fast` (integer LSTM models) and
-`tessdata_best` (float LSTM models, about three times larger and slower). `ocr.tessdata_model`
-chooses which one xberg resolves and downloads. The default is `fast`.
+`tessdata_best` (float LSTM models, about three times larger and slower). `tessdata_model` chooses
+which one xberg resolves and downloads. The default is `fast`. Values are lowercase in every form.
 
 | Setting | Value |
 | ------- | ----- |
-| Config file / JSON | `ocr.tessdata_model = "fast"` or `"best"` |
-| Environment | `XBERG_OCR_TESSDATA_MODEL=best` |
+| Config file / JSON, every OCR the extraction runs | `tessdata_model = "best"` (top level) |
+| Config file / JSON, one OCR section | `ocr.tessdata_model = "best"` |
+| Environment (`xberg serve`, `xberg mcp`, `xberg doctor`) | `XBERG_OCR_TESSDATA_MODEL=best` |
 | CLI | `--ocr-tessdata-model best` |
+
+The top-level `tessdata_model` applies to automatic and fallback OCR too (a scanned PDF without an
+`ocr` section, for example) and does not enable OCR. `ocr.tessdata_model` overrides it, and a
+per-file `ocr` section that names no set keeps the base one. The environment variable and the CLI
+flag set the top-level field. The set is the operator's choice on a server: a REST or MCP request
+may restate the server's set but not change it, and a request's `ocr` object keeps the server's
+set.
 
 xberg looks for every requested language in one directory, in this order:
 
 1. `ocr.tessdata_path`, then `TESSDATA_PREFIX`. These are your choice and are used as given,
-   whichever model set they hold; `tessdata_model` does not apply to them.
-2. xberg's cache for the chosen set: `XBERG_CACHE_DIR/tessdata/fast/` or `XBERG_CACHE_DIR/tessdata/best/`.
-3. For `fast` only: the flat `XBERG_CACHE_DIR/tessdata/` that earlier releases downloaded into, then
-   the system directories (Homebrew, `apt`, the Docker images). Those hold `tessdata_fast`, so they
-   never serve a `best` request.
-4. Otherwise xberg downloads the missing languages into the set's cache directory, pinned to one
-   upstream revision per set and checked against a SHA-256 digest.
+   whichever model set they hold. With `best`, xberg logs a warning once per directory, and
+   `xberg doctor` warns when `TESSDATA_PREFIX`, or a `tessdata_path` naming a system package
+   directory, serves a `best` request.
+2. For `fast`: the flat `XBERG_CACHE_DIR/tessdata/` that earlier releases downloaded into, then
+   `XBERG_CACHE_DIR/tessdata/fast/`, then the system directories (Homebrew, `apt`). For `best`:
+   `XBERG_CACHE_DIR/tessdata/best/`, then, on Unix, the read-only `/usr/share/xberg/tessdata/best/`
+   an image can ship. The flat cache and system directories hold `tessdata_fast`, so they never
+   serve a `best` request. `XBERG_TESSDATA_SYSTEM_PATHS=0` skips the system and image directories.
+3. Otherwise xberg fills a cache directory: for `fast`, the flat cache when it already holds some of
+   the requested languages (so a pack you placed there keeps being used), else
+   `XBERG_CACHE_DIR/tessdata/fast/`; for `best`, `XBERG_CACHE_DIR/tessdata/best/`. It copies a pack
+   from a local directory when the file matches the set's SHA-256 pin (the flat and `fast` caches,
+   and for `best` also the image directory and the system paths, which serves `osd` and `equ`,
+   identical in both sets), and downloads the rest, pinned to one upstream revision per set.
 
-Each set keeps its own files, so a request never mixes sets and the OCR result cache keeps separate
-entries per set. `xberg cache warm --tessdata-model best --tessdata-languages eng,deu` prefetches
-`best` models for an offline host. WebAssembly and mobile builds always default to `fast`; the Wasm
-package bundles only `tessdata_fast` English and rejects `best` unless you pass the model bytes in
-`tessdata_bytes`.
+Each set keeps its own files, so a request never mixes sets, and `best` results get their own OCR
+cache entries. With `best`, orientation detection and the Han, Khmer and vertical Japanese retries
+use only models in the `best` directories; put them there with `xberg cache warm --tessdata-model
+best --tessdata-languages eng,osd,chi_sim`, which also prefetches `best` models for an offline host.
+WebAssembly and mobile builds default to `fast`; the Wasm package bundles only `tessdata_fast`
+English and refuses `best` unless you pass the model bytes in `tessdata_bytes`.
 
 ### Tesseract in Wasm
 

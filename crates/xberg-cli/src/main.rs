@@ -716,7 +716,7 @@ enum CacheCommands {
         /// Tesseract model sets to download (comma-separated: fast,best); default: the default set
         #[cfg(feature = "paddle-ocr")]
         #[arg(long, value_name = "SETS", value_delimiter = ',')]
-        tessdata_model: Vec<xberg::TessdataModel>,
+        tessdata_model: Vec<commands::overrides::TessdataModelArg>,
 
         /// Tesseract languages to download (comma-separated, e.g. eng,deu); default: all 126 pinned
         #[cfg(feature = "paddle-ocr")]
@@ -1222,7 +1222,7 @@ fn main() -> Result<()> {
                         classification_backend,
                     },
                     #[cfg(feature = "paddle-ocr")]
-                    tessdata_models: tessdata_model,
+                    tessdata_models: tessdata_model.into_iter().map(Into::into).collect(),
                     #[cfg(feature = "paddle-ocr")]
                     tessdata_languages,
                 };
@@ -1519,6 +1519,8 @@ mod feature_profile_tests {
                 "xberg",
                 "extract",
                 "scan.pdf",
+                "--ocr",
+                "true",
                 "--ocr-tessdata-model",
                 value,
                 "--no-config-discovery",
@@ -1538,12 +1540,10 @@ mod feature_profile_tests {
             .expect("built-in extraction config should load without discovery");
         overrides.apply(&mut config);
 
-        assert_eq!(
-            config.ocr.map(|ocr| ocr.tessdata_model),
-            Some(xberg::TessdataModel::Best)
-        );
+        assert_eq!(config.effective_tessdata_model(), xberg::TessdataModel::Best);
         assert!(parse("fast").is_ok());
         assert!(parse("medium").is_err(), "an unknown model set must be rejected");
+        assert!(parse("Best").is_err(), "values are lowercase, as in config files");
     }
 
     #[cfg(not(feature = "pdf-surface"))]
@@ -1752,7 +1752,13 @@ mod tree_sitter_cli_tests {
             panic!("expected CacheCommands::Warm");
         };
 
-        assert_eq!(tessdata_model, [xberg::TessdataModel::Fast, xberg::TessdataModel::Best]);
+        assert_eq!(
+            tessdata_model,
+            [
+                commands::overrides::TessdataModelArg::Fast,
+                commands::overrides::TessdataModelArg::Best
+            ]
+        );
         assert_eq!(tessdata_languages, ["eng", "deu"]);
     }
 

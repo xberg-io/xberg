@@ -559,6 +559,55 @@ fn warm_batch_adapter_has_no_misleading_single_file_cold_probe() {
     assert!(!adapter.has_separate_cold_probe());
 }
 
+/// Both PDF-route shapes a `run` registers: OCR off (no `ocr` section) and Tesseract on (an `ocr`
+/// section whose own set is unset). ~keep
+#[test]
+fn best_run_pdf_route_config_carries_the_set_without_touching_ocr() {
+    for ocr_enabled in [false, true] {
+        let steady = |model| {
+            create_xberg_steady_adapter(
+                XbergPipeline::Baseline,
+                OutputFormat::Markdown,
+                true,
+                ocr_enabled,
+                XbergPdfBackend::Native,
+                None,
+                default_run_timeout(),
+            )
+            .unwrap()
+            .with_tessdata_model(model)
+        };
+        let fast = steady(xberg::TessdataModel::Fast);
+        let best = steady(xberg::TessdataModel::Best);
+        let ocr_json = |adapter: &NativeAdapter| serde_json::to_value(&adapter.extraction_config().ocr).unwrap();
+
+        assert_eq!(
+            best.extraction_config().effective_tessdata_model(),
+            xberg::TessdataModel::Best,
+            "ocr_enabled={ocr_enabled}"
+        );
+        assert_eq!(ocr_json(&best), ocr_json(&fast), "ocr_enabled={ocr_enabled}");
+        assert_eq!(best.extraction_config().ocr.is_some(), ocr_enabled);
+        assert_eq!(best.configured_tessdata_model(), Some(xberg::TessdataModel::Best));
+        assert_eq!(
+            serde_json::to_value(fast.extraction_config()).unwrap(),
+            serde_json::to_value(
+                steady_extraction_config(
+                    XbergPipeline::Baseline,
+                    OutputFormat::Markdown,
+                    ocr_enabled,
+                    XbergPdfBackend::Native,
+                    None,
+                    default_run_timeout(),
+                )
+                .unwrap()
+            )
+            .unwrap(),
+            "a fast run keeps the config byte-identical"
+        );
+    }
+}
+
 #[test]
 fn steady_and_cold_probe_share_forced_tesseract_config() {
     let steady = steady_extraction_config(

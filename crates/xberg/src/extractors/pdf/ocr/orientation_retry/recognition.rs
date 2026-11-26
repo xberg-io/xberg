@@ -56,7 +56,10 @@ pub(super) fn restore_elements(mut result: ExtractedDocument, requested: &OcrCon
 }
 
 pub(super) fn existing_osd_directory(config: &OcrConfig) -> Option<String> {
-    existing_osd_directory_in(config, &TessdataEnv::from_process().for_model(config.tessdata_model))
+    existing_osd_directory_in(
+        config,
+        &TessdataEnv::from_process().for_model(config.effective_tessdata_model()),
+    )
 }
 
 fn existing_osd_directory_in(config: &OcrConfig, environment: &TessdataEnv) -> Option<String> {

@@ -370,7 +370,7 @@ async fn revision(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>) -> Optio
     let config = identity.configs.1;
     let languages = config.effective_tesseract_language();
     let directory = config.tessdata_path.clone();
-    let tessdata_model = config.tessdata_model;
+    let tessdata_model = config.effective_tessdata_model();
     let reuse = Arc::clone(reuse);
     let model = super::super::spawn_pdf_blocking(move || {
         let Some(files) = ModelFiles::resolve(languages, directory.as_deref(), tessdata_model) else {

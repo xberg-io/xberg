@@ -61,6 +61,8 @@ pub struct SubprocessAdapter {
     /// When unset, single-file mode preserves Xberg's automatic budget while
     /// native batch mode falls back to [`Self::batch_workers`].
     xberg_max_threads: Option<usize>,
+    /// Tesseract model set passed to Xberg as `--ocr-tessdata-model` when it is not the default.
+    tessdata_model: xberg::TessdataModel,
     /// CLI flag an external wrapper uses to receive the fixture's OCR language,
     /// forwarded in canonical Tesseract form (e.g. `eng+kor`, `jpn_vert`). The
     /// wrapper maps it onto its own engine's codes. `None` means the framework
@@ -107,6 +109,7 @@ impl SubprocessAdapter {
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
             xberg_max_threads: None,
+            tessdata_model: xberg::TessdataModel::Fast,
             ocr_language_arg: None,
             ocr_language_policy: crate::adapter::OcrLanguagePolicy::DefaultOnly,
             executable_build_identity: None,
@@ -151,6 +154,7 @@ impl SubprocessAdapter {
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
             xberg_max_threads: None,
+            tessdata_model: xberg::TessdataModel::Fast,
             ocr_language_arg: None,
             ocr_language_policy: crate::adapter::OcrLanguagePolicy::DefaultOnly,
             executable_build_identity: None,
@@ -230,6 +234,11 @@ impl SubprocessAdapter {
     /// Set Xberg's configured thread budget independently of batch workers.
     pub fn with_xberg_max_threads(mut self, max_threads: usize) -> Self {
         self.xberg_max_threads = Some(max_threads.max(1));
+        self
+    }
+    /// Set the Tesseract model set Xberg resolves. Ignored by other frameworks.
+    pub fn with_tessdata_model(mut self, model: xberg::TessdataModel) -> Self {
+        self.tessdata_model = model;
         self
     }
     /// Set the working directory for subprocess execution

@@ -25,22 +25,16 @@ use crate::cohort::CohortManifest;
 use crate::error::{Error, Result};
 use crate::fixture::{Fixture, FixtureManager};
 
-/// Tessdata directories xberg searches, mirroring the fallback chain in
+/// Tessdata directories xberg searches for `model`, mirroring the fallback chain in
 /// `xberg`'s `resolve_tessdata_path` (minus the per-call `tessdata_path`
 /// override, which the benchmark never sets). Kept intentionally in sync.
-fn candidate_tessdata_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-
-    if let Ok(prefix) = std::env::var("TESSDATA_PREFIX")
-        && !prefix.is_empty()
-    {
-        dirs.push(PathBuf::from(prefix));
-    }
-
+fn candidate_tessdata_dirs(model: xberg::TessdataModel) -> Vec<PathBuf> {
+    let prefix = std::env::var("TESSDATA_PREFIX")
+        .ok()
+        .filter(|prefix| !prefix.is_empty())
+        .map(PathBuf::from);
     // XBERG_CACHE_DIR, else the platform cache dir under `xberg`, else
-    // `~/.cache/xberg`, else `./.xberg`. xberg downloads the default (fast) model set into
-    // `<cache>/tessdata/fast` and still reads the flat `<cache>/tessdata` older releases
-    // filled, so a previously-materialized pack resolves from either.
+    // `~/.cache/xberg`, else `./.xberg`.
     let cache_base = if let Ok(cache) = std::env::var("XBERG_CACHE_DIR")
         && !cache.is_empty()
     {
@@ -52,23 +46,49 @@ fn candidate_tessdata_dirs() -> Vec<PathBuf> {
     } else {
         std::env::current_dir().ok().map(|cwd| cwd.join(".xberg"))
     };
-    if let Some(cache_base) = cache_base {
-        dirs.push(cache_base.join("tessdata").join("fast"));
-        dirs.push(cache_base.join("tessdata"));
-    }
+    candidate_tessdata_dirs_for(model, prefix, cache_base)
+}
 
-    for path in [
-        "/opt/homebrew/share/tessdata",
-        "/opt/homebrew/opt/tesseract/share/tessdata",
-        "/usr/local/opt/tesseract/share/tessdata",
-        "/usr/share/tesseract-ocr/5/tessdata",
-        "/usr/share/tesseract-ocr/4/tessdata",
-        "/usr/share/tessdata",
-        "/usr/local/share/tessdata",
-    ] {
-        dirs.push(PathBuf::from(path));
+/// The search chain for `model` from the given `TESSDATA_PREFIX` and cache base, in the order of
+/// xberg's `tessdata_search_dirs` (`crates/xberg/src/ocr/processor/validation.rs`, crate-private,
+/// so mirrored here): `fast` reads the flat `<cache>/tessdata` older releases filled,
+/// `<cache>/tessdata/fast` and the system packages; `best` reads only `<cache>/tessdata/best` and,
+/// on Unix, the read-only image directory, so a `best` run whose packs are missing fails here
+/// instead of downloading inside timed rows.
+fn candidate_tessdata_dirs_for(
+    model: xberg::TessdataModel,
+    prefix: Option<PathBuf>,
+    cache_base: Option<PathBuf>,
+) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = prefix.into_iter().collect();
+    match model {
+        xberg::TessdataModel::Best => {
+            if let Some(cache_base) = &cache_base {
+                dirs.push(cache_base.join("tessdata").join(model.as_str()));
+            }
+            if cfg!(unix) {
+                dirs.push(PathBuf::from("/usr/share/xberg/tessdata/best"));
+            }
+        }
+        xberg::TessdataModel::Fast => {
+            if let Some(cache_base) = &cache_base {
+                dirs.push(cache_base.join("tessdata"));
+                dirs.push(cache_base.join("tessdata").join(model.as_str()));
+            }
+            dirs.extend(
+                [
+                    "/opt/homebrew/share/tessdata",
+                    "/opt/homebrew/opt/tesseract/share/tessdata",
+                    "/usr/local/opt/tesseract/share/tessdata",
+                    "/usr/share/tesseract-ocr/5/tessdata",
+                    "/usr/share/tesseract-ocr/4/tessdata",
+                    "/usr/share/tessdata",
+                    "/usr/local/share/tessdata",
+                ]
+                .map(PathBuf::from),
+            );
+        }
     }
-
     dirs
 }
 
@@ -107,11 +127,12 @@ pub fn ensure_ocr_languages_resolvable(
     fixtures: &[(PathBuf, Fixture)],
     ocr_enabled: bool,
     tesseract_selected: bool,
+    model: xberg::TessdataModel,
 ) -> Result<()> {
     if !tesseract_selected {
         return Ok(());
     }
-    ensure_resolvable_in(fixtures, ocr_enabled, &candidate_tessdata_dirs())
+    ensure_resolvable_in(fixtures, ocr_enabled, &candidate_tessdata_dirs(model))
 }
 
 /// Core check against an explicit set of tessdata dirs (dependency-injected so
@@ -193,13 +214,19 @@ fn split_pack_error(path: &Path, explicit: Option<&str>, languages: &[&str], dir
 /// `cohort` selects the exact cohort manifest when set; otherwise every fixture
 /// under `fixtures_path` is checked. This re-loads fixtures independently of the
 /// runner so it stays decoupled from execution wiring.
-pub fn run(fixtures_path: &Path, cohort: Option<&Path>, ocr_enabled: bool, tesseract_selected: bool) -> Result<()> {
+pub fn run(
+    fixtures_path: &Path,
+    cohort: Option<&Path>,
+    ocr_enabled: bool,
+    tesseract_selected: bool,
+    model: xberg::TessdataModel,
+) -> Result<()> {
     if !tesseract_selected {
         return Ok(());
     }
 
     let manager = load_effective_fixtures(fixtures_path, cohort)?;
-    ensure_ocr_languages_resolvable(manager.fixtures(), ocr_enabled, tesseract_selected)
+    ensure_ocr_languages_resolvable(manager.fixtures(), ocr_enabled, tesseract_selected, model)
 }
 
 /// Load the fixtures the runner would run, honoring an optional cohort manifest.
@@ -288,10 +315,38 @@ mod tests {
     }
 
     #[test]
+    fn a_best_run_never_counts_fast_directories() {
+        let cache = TempDir::new().unwrap();
+        let base = Some(cache.path().to_path_buf());
+        let best = candidate_tessdata_dirs_for(xberg::TessdataModel::Best, None, base.clone());
+        let fast = candidate_tessdata_dirs_for(xberg::TessdataModel::Fast, None, base);
+
+        assert_eq!(best[0], cache.path().join("tessdata").join("best"));
+        assert_eq!(best.len(), if cfg!(unix) { 2 } else { 1 });
+        assert_eq!(
+            fast[..2],
+            [
+                cache.path().join("tessdata"),
+                cache.path().join("tessdata").join("fast")
+            ]
+        );
+
+        let fast_cache = cache.path().join("tessdata").join("fast");
+        std::fs::create_dir_all(&fast_cache).unwrap();
+        std::fs::write(fast_cache.join("eng.traineddata"), b"stub").unwrap();
+        let fixtures = vec![fixture_with_language(None)];
+        assert!(ensure_resolvable_in(&fixtures, true, &fast).is_ok());
+        assert!(
+            ensure_resolvable_in(&fixtures, true, &best).is_err(),
+            "fast packs must not satisfy a best run"
+        );
+    }
+
+    #[test]
     fn should_pass_when_ocr_disabled_even_if_pack_missing() {
         let fixtures = vec![fixture_with_language(Some("zzz"))];
-        assert!(ensure_ocr_languages_resolvable(&fixtures, false, true).is_ok());
-        assert!(ensure_ocr_languages_resolvable(&fixtures, true, false).is_ok());
+        assert!(ensure_ocr_languages_resolvable(&fixtures, false, true, xberg::TessdataModel::Fast).is_ok());
+        assert!(ensure_ocr_languages_resolvable(&fixtures, true, false, xberg::TessdataModel::Fast).is_ok());
     }
 
     #[test]

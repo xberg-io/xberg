@@ -132,6 +132,9 @@ impl FrameworkAdapter for SubprocessAdapter {
             None => (Some(requested), Some(requested)),
         }
     }
+    fn configured_tessdata_model(&self) -> Option<xberg::TessdataModel> {
+        (self.is_xberg() && self.tessdata_model != xberg::TessdataModel::Fast).then_some(self.tessdata_model)
+    }
     fn configured_thread_budget(&self) -> Option<usize> {
         if !self.is_xberg() {
             return None;

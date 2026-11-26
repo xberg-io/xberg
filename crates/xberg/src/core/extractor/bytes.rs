@@ -77,6 +77,9 @@ pub(crate) async fn extract_bytes_with_layout_pages(
     config: &ExtractionConfig,
     pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
 ) -> Result<ExtractedDocument> {
+    let config_with_tessdata_model = config.resolved_for_extraction();
+    let config: &ExtractionConfig = config_with_tessdata_model.as_deref().unwrap_or(config);
+
     // `token.cancel()` below needs a token to signal, but `config.cancel_token` is
     // `None` on every binding-driven and CLI-driven call (see
     // `ExtractionConfig::ensure_cancel_token`) — install an internal fallback so a

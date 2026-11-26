@@ -190,6 +190,13 @@ pub struct BenchmarkConfig {
     #[serde(default)]
     pub xberg_max_threads: Option<usize>,
 
+    /// Tesseract model set Xberg's OCR configs resolve.
+    ///
+    /// Applies only to OCR configs that exist; it never adds an `ocr` section.
+    /// This setting does not affect other frameworks.
+    #[serde(default)]
+    pub tessdata_model: xberg::TessdataModel,
+
     /// Output directory for results
     pub output_dir: PathBuf,
 
@@ -220,6 +227,7 @@ impl Default for BenchmarkConfig {
             timeout: Duration::from_secs(1800),
             max_concurrent: num_cpus::get(),
             xberg_max_threads: None,
+            tessdata_model: xberg::TessdataModel::Fast,
             output_dir: PathBuf::from("results"),
             measure_quality: false,
             benchmark_mode: BenchmarkMode::Batch,
@@ -257,6 +265,7 @@ impl BenchmarkConfig {
             timeout,
             max_concurrent,
             xberg_max_threads: None,
+            tessdata_model: xberg::TessdataModel::Fast,
             output_dir,
             measure_quality: false,
             benchmark_mode,
@@ -395,6 +404,29 @@ mod tests {
         let config: BenchmarkConfig = serde_json::from_value(legacy).unwrap();
         assert_eq!(config.xberg_max_threads, None);
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_legacy_config_deserializes_without_tessdata_model() {
+        let mut legacy = serde_json::to_value(BenchmarkConfig::default()).unwrap();
+        legacy.as_object_mut().unwrap().remove("tessdata_model");
+
+        let config: BenchmarkConfig = serde_json::from_value(legacy).unwrap();
+        assert_eq!(config.tessdata_model, xberg::TessdataModel::Fast);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_tessdata_model_round_trips_as_lowercase_name() {
+        let config = BenchmarkConfig {
+            tessdata_model: xberg::TessdataModel::Best,
+            ..Default::default()
+        };
+        let value = serde_json::to_value(&config).unwrap();
+        assert_eq!(value["tessdata_model"], "best");
+
+        let restored: BenchmarkConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.tessdata_model, xberg::TessdataModel::Best);
     }
 
     #[test]
