@@ -324,7 +324,7 @@ fn parse_object_at_depth_with<'a>(
     }
 }
 
-fn declared_stream_end_at(input: &[u8], length: usize) -> bool {
+pub(crate) fn declared_stream_end_at(input: &[u8], length: usize) -> bool {
     let Some(remaining) = input.get(length..) else {
         return false;
     };

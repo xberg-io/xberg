@@ -73,6 +73,24 @@ fn stream_end(input: &[u8]) -> Option<&[u8]> {
     keyword_boundary(tail).then_some(tail)
 }
 
+/// Where the payload ends of the stream whose `stream` keyword closes `line`, a line ending at
+/// `line_end`, when the dictionary at `object_start` declares a direct /Length that lands on
+/// `endstream`. `None` for any other shape, which leaves the object to the line scan.
+fn declared_stream_payload_end(source: &[u8], object_start: usize, line: &[u8], line_end: usize) -> Option<usize> {
+    let keyword_line = line.trim_ascii_end();
+    if !keyword_line.ends_with(b"stream") || keyword_line.ends_with(b"endstream") {
+        return None;
+    }
+    let (payload, dict) = crate::parser::parse_stream_header(source.get(object_start..)?)?;
+    let payload_start = source.len() - payload.len();
+    if payload_start != line_end {
+        return None;
+    }
+    let length = stream_length(&dict)?;
+    let payload_end = payload_start.checked_add(length)?;
+    (payload_end <= source.len() && crate::parser::declared_stream_end_at(payload, length)).then_some(payload_end)
+}
+
 fn keyword_boundary(input: &[u8]) -> bool {
     input
         .first()
@@ -1439,6 +1457,7 @@ impl PdfDocument {
         let source: &[u8] = &self.source_bytes;
         let mut data_end = body_start;
         let mut line_start = body_start;
+        let mut payload_skipped = false;
         loop {
             let line_end = source[line_start..]
                 .iter()
@@ -1483,6 +1502,19 @@ impl PdfDocument {
 
             data_end = line_end;
             line_start = line_end;
+
+            // A stream whose direct /Length lands on `endstream` is stepped over rather than
+            // scanned: scanning it pages in every payload byte, an image nothing decodes
+            // included. The scan would stop early only on an `endobj` inside the payload. ~keep
+            if !payload_skipped
+                && prefix.is_empty()
+                && let Some(payload_end) = declared_stream_payload_end(source, data_start, chunk, line_end)
+                && payload_end - data_start <= MAX_BYTES
+            {
+                payload_skipped = true;
+                data_end = payload_end;
+                line_start = payload_end;
+            }
         }
 
         let data: bytes::Bytes = if prefix.is_empty() {
