@@ -514,12 +514,19 @@ impl PageOcrContext<'_> {
                     feature = "layout-detection",
                     not(target_arch = "wasm32")
                 ))]
-                let column_raster = (whole_page_raster
+                let column_raster = (has_layout_detections
+                    && whole_page_raster
                     && progress_total_pages == 1
                     && !has_stored_scan
                     && page_rotation_degrees == 0
                     && correction_degrees == 0
-                    && super::column_retry::request_admits_retry(config, base_ocr_config)
+                    && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+                    && !config.force_ocr
+                    && config.force_ocr_pages.is_none()
+                    && base_ocr_config.auto_rotate.is_none()
+                    && base_ocr_config.pipeline.is_none()
+                    && base_ocr_config.tesseract_config.as_ref().and_then(|t| t.psm).is_none()
+                    && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"]
                     && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
                     && xobject_document.is_none_or(|pdf| pdf.page_count().ok() == Some(1)))
                 .then(|| Arc::clone(&upright_data));

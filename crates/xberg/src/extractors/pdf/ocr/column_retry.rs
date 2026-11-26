@@ -199,25 +199,6 @@ fn adopt(
     Some(candidate)
 }
 
-/// Whether the request leaves the sparse (PSM 11) read's segmentation to xberg, so an
-/// automatic-segmentation retry may supply its column order.
-///
-/// Neither layout detection nor `force_ocr` is a condition: the retry reorders only lines both
-/// reads witnessed, and a forced whole-page read of a two-column scan interleaves its columns
-/// exactly as an automatic one does.
-pub(super) fn request_admits_retry(config: &crate::core::config::ExtractionConfig, ocr: &OcrConfig) -> bool {
-    config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-        && config.force_ocr_pages.is_none()
-        && ocr.auto_rotate.is_none()
-        && ocr.pipeline.is_none()
-        && ocr
-            .tesseract_config
-            .as_ref()
-            .and_then(|tesseract| tesseract.psm)
-            .is_none()
-        && ocr.effective_tesseract_language().as_slice() == ["eng"]
-}
-
 fn stop_retry(cancel: Option<&CancellationToken>) -> bool {
     explicitly_cancelled(cancel) || cancel.is_some_and(CancellationToken::time_limit_reached)
 }
