@@ -10,7 +10,7 @@ Both variants use **Debian 13 (Trixie) slim** - the latest stable Debian release
 
 ### 1. Core Image (`Dockerfile.core`)
 
-**Size:** ~1.0-1.3GB
+**Size:** ~239 MB compressed
 **Base:** debian:trixie-slim
 **Features:** PDF, DOCX, PPTX, images, HTML, XML, text, Excel, email, academic formats (LaTeX, EPUB, etc.)
 **OCR:** Tesseract (12 languages)
@@ -31,7 +31,7 @@ docker build -f docker/Dockerfile.core -t xberg:core .
 
 ### 2. Full Image (`Dockerfile.full`)
 
-**Size:** ~1.0-1.3GB
+**Size:** ~1179 MB compressed (includes the pre-downloaded PaddleOCR and layout models)
 **Base:** debian:trixie-slim
 **Features:** All core features with native legacy Office format support
 **OCR:** Tesseract (12 languages)
@@ -49,15 +49,35 @@ docker build -f docker/Dockerfile.core -t xberg:core .
 docker build -f docker/Dockerfile.full -t xberg:full .
 ```
 
+### 3. tessdata_best twins (`--target best`)
+
+Both Dockerfiles have a `best` target: the same image plus the `tessdata_best` Tesseract models for
+its OCR languages (the Debian set, `jpn_vert`, `kor`, and `osd`/`equ` for orientation and equation
+detection) in the read-only directory `/usr/share/xberg/tessdata/best`, with
+`XBERG_OCR_TESSDATA_MODEL=best`. The models are downloaded at the revision pinned in
+`crates/xberg/src/ocr/tessdata_download/pins.rs` and checked against
+`scripts/ci/tessdata/tessdata_best.sha256` (regenerate with
+`python3 scripts/ci/tessdata/generate_best_manifest.py`). `TESSDATA_PREFIX` is left unset: it is
+used as given for every model set and would replace the best models. Best OCR is more accurate,
+several times slower per page and needs more memory per request. The default target (`fast`) is
+the image without them.
+
+```bash
+docker build -f docker/Dockerfile.core --target best -t xberg:core-best .
+docker build -f docker/Dockerfile.full --target best -t xberg:full-best .
+```
+
 ## Size Comparison
 
-| Component            | Core           | Full           | Difference        |
-| -------------------- | -------------- | -------------- | ----------------- |
-| Base (trixie-slim)   | ~120MB         | ~120MB         | -                 |
-| Tesseract + 12 langs | ~250MB         | ~250MB         | -                 |
-| Rust binary          | ~80MB          | ~80MB          | -                 |
-| System libraries     | ~100MB         | ~100MB         | -                 |
-| **Total (approx)**   | **~1.0-1.3GB** | **~1.0-1.3GB** | **- (same size)** |
+Compressed (registry) sizes. The best figures add the ~124 MB of compressed `tessdata_best`
+models to the measured fast images and are estimates until the first published build.
+
+| Image     | Tag                             | Compressed size |
+| --------- | ------------------------------- | --------------- |
+| Core      | `VERSION-core`, `core`          | ~239 MB         |
+| Full      | `VERSION`, `latest`             | ~1179 MB        |
+| Core best | `VERSION-core-best`, `core-best` | ~363 MB (est.)  |
+| Full best | `VERSION-best`, `latest-best`   | ~1303 MB (est.) |
 
 ## Default Image
 
@@ -126,6 +146,8 @@ The `.github/workflows/publish-docker.yaml` workflow builds and publishes both v
 - `ghcr.io/xberg-io/xberg:core` - Latest core image
 - `ghcr.io/xberg-io/xberg:VERSION` - Full image (all optional dependencies)
 - `ghcr.io/xberg-io/xberg:latest` - Latest full image
+- `ghcr.io/xberg-io/xberg:VERSION-core-best` / `core-best` - Core image with `tessdata_best`
+- `ghcr.io/xberg-io/xberg:VERSION-best` / `latest-best` - Full image with `tessdata_best`
 
 For local development, use the local tags shown in the build commands above.
 
