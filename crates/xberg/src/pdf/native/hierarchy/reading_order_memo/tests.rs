@@ -1,7 +1,11 @@
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::TextSpan;
 
-use super::{ReadingOrderMemoScope, computed_orders, same_spans};
+use super::{ReadingOrderMemoScope, computed_orders, fingerprint};
+
+fn same_spans(left: &[TextSpan], right: &[TextSpan]) -> bool {
+    fingerprint(left) == fingerprint(right)
+}
 use crate::pdf::native::NativeDocument;
 use crate::pdf::native::hierarchy::{ArtifactRetention, extract_all_segments_for_tables, reorder_page_reading_order};
 
@@ -97,6 +101,131 @@ fn nothing_is_kept_outside_a_scope_or_past_the_budget() {
     let before = computed_orders();
     ordered(&spans, PAGE_WIDTH);
     assert_eq!(computed_orders() - before, 1, "an ended scope keeps no order");
+}
+
+type Mutation = (&'static str, Box<dyn Fn(&mut TextSpan)>);
+
+/// One mutation per `TextSpan` field, each changing only that field of the base span the fingerprint test builds.
+fn field_mutations() -> Vec<Mutation> {
+    vec![
+        ("text", Box::new(|s: &mut TextSpan| s.text.push('x'))),
+        ("bbox.x", Box::new(|s: &mut TextSpan| s.bbox.x += 0.5)),
+        ("bbox.y", Box::new(|s: &mut TextSpan| s.bbox.y += 0.5)),
+        ("bbox.width", Box::new(|s: &mut TextSpan| s.bbox.width += 0.5)),
+        ("bbox.height", Box::new(|s: &mut TextSpan| s.bbox.height += 0.5)),
+        ("font_name", Box::new(|s: &mut TextSpan| s.font_name.push('x'))),
+        ("font_size", Box::new(|s: &mut TextSpan| s.font_size += 1.0)),
+        (
+            "font_weight",
+            Box::new(|s: &mut TextSpan| s.font_weight = xberg_native_pdf::layout::FontWeight::Bold),
+        ),
+        ("is_italic", Box::new(|s: &mut TextSpan| s.is_italic = !s.is_italic)),
+        (
+            "is_monospace",
+            Box::new(|s: &mut TextSpan| s.is_monospace = !s.is_monospace),
+        ),
+        ("color.r", Box::new(|s: &mut TextSpan| s.color.r += 0.5)),
+        ("color.g", Box::new(|s: &mut TextSpan| s.color.g += 0.5)),
+        ("color.b", Box::new(|s: &mut TextSpan| s.color.b += 0.5)),
+        ("mcid", Box::new(|s: &mut TextSpan| s.mcid = Some(5))),
+        ("mcid_none", Box::new(|s: &mut TextSpan| s.mcid = None)),
+        (
+            "mcid_scope",
+            Box::new(|s: &mut TextSpan| s.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1))),
+        ),
+        ("sequence", Box::new(|s: &mut TextSpan| s.sequence += 1)),
+        (
+            "split_boundary_before",
+            Box::new(|s: &mut TextSpan| s.split_boundary_before = !s.split_boundary_before),
+        ),
+        (
+            "offset_semantic",
+            Box::new(|s: &mut TextSpan| s.offset_semantic = !s.offset_semantic),
+        ),
+        ("char_spacing", Box::new(|s: &mut TextSpan| s.char_spacing += 1.0)),
+        ("word_spacing", Box::new(|s: &mut TextSpan| s.word_spacing += 1.0)),
+        (
+            "horizontal_scaling",
+            Box::new(|s: &mut TextSpan| s.horizontal_scaling += 1.0),
+        ),
+        (
+            "primary_detected",
+            Box::new(|s: &mut TextSpan| s.primary_detected = !s.primary_detected),
+        ),
+        ("char_widths", Box::new(|s: &mut TextSpan| s.char_widths[1] = 3.0)),
+        ("char_widths_len", Box::new(|s: &mut TextSpan| s.char_widths.push(3.0))),
+        ("char_x_offsets", Box::new(|s: &mut TextSpan| s.char_x_offsets[1] = 2.0)),
+        ("heading_level", Box::new(|s: &mut TextSpan| s.heading_level = Some(3))),
+        (
+            "rotation_degrees",
+            Box::new(|s: &mut TextSpan| s.rotation_degrees += 90.0),
+        ),
+        ("wmode", Box::new(|s: &mut TextSpan| s.wmode = 1)),
+        ("text_rise", Box::new(|s: &mut TextSpan| s.text_rise += 1.0)),
+        (
+            "rtl_draw_logical",
+            Box::new(|s: &mut TextSpan| s.rtl_draw_logical = !s.rtl_draw_logical),
+        ),
+        ("mirrored", Box::new(|s: &mut TextSpan| s.mirrored = !s.mirrored)),
+        (
+            "page_rotation_applied",
+            Box::new(|s: &mut TextSpan| s.page_rotation_applied = 90),
+        ),
+        (
+            "provenance",
+            Box::new(|s: &mut TextSpan| s.provenance = Some(xberg_native_pdf::fonts::MappingProvenance::ToUnicode)),
+        ),
+        (
+            "ligature_glyph",
+            Box::new(|s: &mut TextSpan| s.ligature_glyph = !s.ligature_glyph),
+        ),
+    ]
+}
+
+#[test]
+fn equal_spans_share_a_fingerprint_and_any_changed_field_breaks_it() {
+    let base = TextSpan {
+        text: "alpha".into(),
+        font_name: "Helvetica".into(),
+        char_widths: vec![1.0, 2.0],
+        char_x_offsets: vec![0.0, 1.0],
+        mcid: Some(4),
+        heading_level: Some(2),
+        ..TextSpan::default()
+    };
+    let reference = fingerprint(std::slice::from_ref(&base));
+    assert_eq!(reference, fingerprint(&[base.clone()]), "equal spans must match");
+
+    let mutations = field_mutations();
+    for (field, mutate) in &mutations {
+        let mut changed = base.clone();
+        mutate(&mut changed);
+        assert_ne!(
+            reference,
+            fingerprint(&[changed]),
+            "changing {field} must change the fingerprint"
+        );
+    }
+
+    let negative_zero = TextSpan {
+        text: "alpha".into(),
+        font_size: -0.0,
+        ..TextSpan::default()
+    };
+    let positive_zero = TextSpan {
+        font_size: 0.0,
+        ..negative_zero.clone()
+    };
+    assert_ne!(
+        fingerprint(&[negative_zero]),
+        fingerprint(&[positive_zero]),
+        "floats compare by bit pattern"
+    );
+    assert_ne!(
+        fingerprint(&[base.clone()]),
+        fingerprint(&[base.clone(), base]),
+        "the span count is part of the fingerprint"
+    );
 }
 
 /// A two-page untagged 12pt Helvetica PDF of plain prose lines, with no raised marks.

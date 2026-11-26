@@ -4,9 +4,8 @@
 //! tables (`ScriptGeometry::Flatten`) and for the structure pass (`ScriptGeometry::Preserve`). On a
 //! page without raised marks, off-page text or RTL structure order all three hand
 //! `reorder_page_reading_order` the same spans. The ordering reads nothing but the spans, the page
-//! size and the page index, so a later call is served the stored order only when its spans equal
-//! the stored input field for field, bit for bit, at the same page size: equal inputs prove an
-//! equal result. Outside a [`ReadingOrderMemoScope`] every call orders its spans afresh.
+//! size and the page index, so a later call is served the stored order only when its spans hash to
+//! the stored input's fingerprint (every field, floats bit for bit) at the same page size. Outside a [`ReadingOrderMemoScope`] every call orders its spans afresh.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -22,7 +21,7 @@ const MEMO_BYTES_PER_SOURCE_BYTE: usize = 32;
 struct OrderedPage {
     page_width: u32,
     page_height: u32,
-    input: Vec<TextSpan>,
+    input: SpansFingerprint,
     ordered: Vec<TextSpan>,
     bytes: usize,
 }
@@ -87,30 +86,30 @@ pub(super) fn reorder(
     order: impl FnOnce(&mut Vec<TextSpan>),
 ) {
     let (width, height) = (page_width.to_bits(), page_height.to_bits());
-    let (served, admits) = MEMO.with(|slot| {
+    let (served, input) = MEMO.with(|slot| {
         let slot = slot.borrow();
         let Some(memo) = slot.as_ref() else {
-            return (None, false);
+            return (None, None);
         };
-        let served = memo
-            .pages
-            .get(&page_index)
-            .filter(|page| page.page_width == width && page.page_height == height && same_spans(&page.input, spans))
+        let stored = memo.pages.get(&page_index);
+        let admits = memo.used < memo.budget;
+        let input = (stored.is_some() || admits).then(|| fingerprint(spans));
+        let served = stored
+            .filter(|page| page.page_width == width && page.page_height == height && Some(page.input) == input)
             .map(|page| page.ordered.clone());
-        (served, memo.used < memo.budget)
+        (served, input.filter(|_| admits))
     });
     if let Some(ordered) = served {
         *spans = ordered;
         return;
     }
-    let input = admits.then(|| spans.clone());
     order(spans);
     #[cfg(test)]
     COMPUTED_ORDERS.with(|count| count.set(count.get() + 1));
     let Some(input) = input else {
         return;
     };
-    let bytes = spans_bytes(&input) + spans_bytes(spans);
+    let bytes = size_of::<SpansFingerprint>() + spans_bytes(spans);
     MEMO.with(|slot| {
         let mut slot = slot.borrow_mut();
         let Some(memo) = slot.as_mut() else {
@@ -147,13 +146,33 @@ fn spans_bytes(spans: &[TextSpan]) -> usize {
         .sum()
 }
 
-pub(super) fn same_spans(left: &[TextSpan], right: &[TextSpan]) -> bool {
-    left.len() == right.len() && left.iter().zip(right).all(|(left, right)| same_span(left, right))
+/// Identity of a page's input spans: their count and the first 128 bits of a BLAKE3 digest over
+/// every field, floats by bit pattern. A hit is served on equal fingerprints, so a false hit needs
+/// a 128-bit collision against the one stored digest of that page (probability 2^-128 per
+/// comparison); BLAKE3 is cryptographic, so span content taken from a PDF cannot be crafted to
+/// reach one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) struct SpansFingerprint {
+    count: usize,
+    digest: [u8; 16],
 }
 
-fn same_span(left: &TextSpan, right: &TextSpan) -> bool {
+pub(super) fn fingerprint(spans: &[TextSpan]) -> SpansFingerprint {
+    let mut hasher = blake3::Hasher::new();
+    for span in spans {
+        hash_span(&mut hasher, span);
+    }
+    let mut digest = [0; 16];
+    digest.copy_from_slice(&hasher.finalize().as_bytes()[..16]);
+    SpansFingerprint {
+        count: spans.len(),
+        digest,
+    }
+}
+
+fn hash_span(hasher: &mut blake3::Hasher, span: &TextSpan) {
     // Destructured without `..`: a field added to `TextSpan` stops this compiling until it is
-    // compared, so equality keeps covering every input the ordering can read. ~keep
+    // hashed, so the fingerprint keeps covering every input the ordering can read. ~keep
     let TextSpan {
         text,
         bbox,
@@ -184,58 +203,65 @@ fn same_span(left: &TextSpan, right: &TextSpan) -> bool {
         page_rotation_applied,
         provenance,
         ligature_glyph,
-    } = left;
-    [
-        *text == right.text,
-        same_rect(bbox, &right.bbox),
-        *font_name == right.font_name,
-        same_bits(*font_size, right.font_size),
-        *font_weight == right.font_weight,
-        *is_italic == right.is_italic,
-        *is_monospace == right.is_monospace,
-        same_color(color, &right.color),
-        *mcid == right.mcid,
-        *mcid_scope == right.mcid_scope,
-        *sequence == right.sequence,
-        *split_boundary_before == right.split_boundary_before,
-        *offset_semantic == right.offset_semantic,
-        same_bits(*char_spacing, right.char_spacing),
-        same_bits(*word_spacing, right.word_spacing),
-        same_bits(*horizontal_scaling, right.horizontal_scaling),
-        *primary_detected == right.primary_detected,
-        *artifact_type == right.artifact_type,
-        same_floats(char_widths, &right.char_widths),
-        same_floats(char_x_offsets, &right.char_x_offsets),
-        *heading_level == right.heading_level,
-        same_bits(*rotation_degrees, right.rotation_degrees),
-        *wmode == right.wmode,
-        same_bits(*text_rise, right.text_rise),
-        *rtl_draw_logical == right.rtl_draw_logical,
-        *mirrored == right.mirrored,
-        *page_rotation_applied == right.page_rotation_applied,
-        *provenance == right.provenance,
-        *ligature_glyph == right.ligature_glyph,
-    ]
-    .into_iter()
-    .all(std::convert::identity)
+    } = span;
+    let Rect { x, y, width, height } = *bbox;
+    let Color { r, g, b } = *color;
+    put_str(hasher, text);
+    put_floats(hasher, &[x, y, width, height]);
+    put_str(hasher, font_name);
+    put_floats(hasher, &[*font_size]);
+    hasher.update(&(*font_weight as u16).to_le_bytes());
+    put_flags(hasher, &[*is_italic, *is_monospace]);
+    put_floats(hasher, &[r, g, b]);
+    put_option(hasher, mcid.as_ref());
+    put_str(hasher, &format!("{mcid_scope:?}"));
+    hasher.update(&(*sequence as u64).to_le_bytes());
+    put_flags(hasher, &[*split_boundary_before, *offset_semantic]);
+    put_floats(hasher, &[*char_spacing, *word_spacing, *horizontal_scaling]);
+    put_flags(hasher, &[*primary_detected]);
+    put_str(hasher, &format!("{artifact_type:?}"));
+    put_floats(hasher, char_widths);
+    put_floats(hasher, char_x_offsets);
+    put_option(hasher, heading_level.as_ref());
+    put_floats(hasher, &[*rotation_degrees]);
+    hasher.update(&[*wmode]);
+    put_floats(hasher, &[*text_rise]);
+    put_flags(hasher, &[*rtl_draw_logical, *mirrored]);
+    hasher.update(&page_rotation_applied.to_le_bytes());
+    put_str(hasher, &format!("{provenance:?}"));
+    put_flags(hasher, &[*ligature_glyph]);
 }
 
-fn same_bits(left: f32, right: f32) -> bool {
-    left.to_bits() == right.to_bits()
+/// Length-prefixed, so adjacent variable-length fields cannot shift bytes between each other.
+fn put_str(hasher: &mut blake3::Hasher, value: &str) {
+    hasher.update(&(value.len() as u64).to_le_bytes());
+    hasher.update(value.as_bytes());
 }
 
-fn same_floats(left: &[f32], right: &[f32]) -> bool {
-    left.len() == right.len() && left.iter().zip(right).all(|(left, right)| same_bits(*left, *right))
+fn put_floats(hasher: &mut blake3::Hasher, values: &[f32]) {
+    hasher.update(&(values.len() as u64).to_le_bytes());
+    for value in values {
+        hasher.update(&value.to_bits().to_le_bytes());
+    }
 }
 
-fn same_rect(left: &Rect, right: &Rect) -> bool {
-    let Rect { x, y, width, height } = *left;
-    same_bits(x, right.x) && same_bits(y, right.y) && same_bits(width, right.width) && same_bits(height, right.height)
+fn put_flags(hasher: &mut blake3::Hasher, flags: &[bool]) {
+    for flag in flags {
+        hasher.update(&[u8::from(*flag)]);
+    }
 }
 
-fn same_color(left: &Color, right: &Color) -> bool {
-    let Color { r, g, b } = *left;
-    same_bits(r, right.r) && same_bits(g, right.g) && same_bits(b, right.b)
+fn put_option<T: Copy + Into<u64>>(hasher: &mut blake3::Hasher, value: Option<&T>) {
+    match value {
+        Some(value) => {
+            hasher.update(&[1]);
+            let wide: u64 = (*value).into();
+            hasher.update(&wide.to_le_bytes());
+        }
+        None => {
+            hasher.update(&[0]);
+        }
+    }
 }
 
 #[cfg(test)]
