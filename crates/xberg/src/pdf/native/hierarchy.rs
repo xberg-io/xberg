@@ -19,6 +19,7 @@ use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
 mod reading_order_memo;
+mod repeated_header_columns;
 pub(crate) mod script_evidence;
 
 pub(crate) use reading_order_memo::ReadingOrderMemoScope;
@@ -446,6 +447,9 @@ fn compute_page_reading_order(
 /// horizontal valley once a heading spans only some of the columns, so such a
 /// page used to fall back to row order and interleave its columns.
 ///
+/// A page set as two copies of one table side by side under a repeated header row reads its
+/// left half, then its right half (`repeated_header_columns`).
+///
 /// Otherwise applies the guarded sparse-column repair unconditionally, then attempts
 /// the dense two-column band-split repair
 /// (`super::text::reorder_dense_two_column_page`). That repair carries its
@@ -471,6 +475,9 @@ fn reorder_single_page_reading_order(
     page_index: usize,
 ) {
     if xberg_native_pdf::pipeline::reading_order::order_by_stream_columns(spans) {
+        return;
+    }
+    if repeated_header_columns::read_repeated_header_halves(spans) {
         return;
     }
     super::text::reorder_sparse_two_column_page(spans, page_width);
