@@ -256,14 +256,23 @@ fn only_the_library_consumer_search_falls_back_to_the_platform_loader() {
 #[cfg(unix)]
 #[test]
 fn a_library_in_a_group_or_world_writable_directory_is_skipped() {
+    use std::os::unix::fs::MetadataExt;
+
     for mode in [0o775, 0o757, 0o777] {
         let layout = layout();
         let planted = place(&layout.bin);
         set_mode(&layout.bin, mode);
         let system = place(&layout.system);
+        // Group write through the user's own private group (umask 002 hosts) is not shared.
+        let gid = std::fs::metadata(&layout.bin).unwrap().gid();
+        let shared = mode & 0o002 != 0 || !super::library::is_private_group(gid, super::library::effective_uid());
 
         let search = strict(Some(layout.executable.as_path()), &[system.as_path()]);
 
+        if !shared {
+            assert_eq!(search.found, vec![real(&planted), real(&system)], "{mode:o}");
+            continue;
+        }
         assert_eq!(search.found, vec![real(&system)], "{mode:o}");
         assert_eq!(search.untrusted.len(), 1, "{mode:o}: {:?}", search.untrusted);
         assert_eq!(search.untrusted[0].0, planted, "{mode:o}");
@@ -273,6 +282,33 @@ fn a_library_in_a_group_or_world_writable_directory_is_skipped() {
             search.untrusted[0].1
         );
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn only_a_user_private_group_may_have_write_access() {
+    use std::ffi::CStr;
+
+    use super::library::private_group;
+
+    let alice = CStr::from_bytes_with_nul(b"alice\0").unwrap();
+    let staff = CStr::from_bytes_with_nul(b"staff\0").unwrap();
+    assert!(
+        private_group(alice, 1000, alice, false, 1000),
+        "Debian-style private group"
+    );
+    assert!(
+        !private_group(alice, 20, staff, false, 20),
+        "a shared primary group such as macOS staff"
+    );
+    assert!(
+        !private_group(alice, 1000, alice, true, 1000),
+        "a same-named group with listed members"
+    );
+    assert!(
+        !private_group(alice, 1000, alice, false, 1001),
+        "not the user's primary group"
+    );
 }
 
 #[cfg(unix)]

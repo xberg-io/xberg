@@ -941,7 +941,7 @@ Builds that load ONNX Runtime dynamically (the Linux glibc and macOS CLI release
 3. The system locations `/usr/lib`, `/usr/local/lib`, `/usr/lib/{x86_64,aarch64}-linux-gnu` (Linux), `/opt/homebrew/lib`, `/usr/local/lib` (macOS), `C:\Program Files\onnxruntime\bin`, `C:\Windows\System32` (Windows).
 4. The Intel macOS packages only: the dynamic loader's own search for `libonnxruntime.dylib` (`DYLD_LIBRARY_PATH`, `DYLD_FALLBACK_LIBRARY_PATH`, rpaths).
 
-A file found in steps 2 and 3 is loaded only if it and its directory are owned by root or the current user and are not writable by group or others; a file that fails this check, or does not load, is skipped. If nothing loads, the model operation fails with an error listing every path searched and every file skipped. The CLI and Docker images never consult the current directory or the dynamic loader's search path.
+A file found in steps 2 and 3 is loaded only if it and its directory are owned by root or the current user and are not writable by other users (group write is accepted only through your own private group, as umask 002 systems create files); a file that fails this check, or does not load, is skipped. If nothing loads, the model operation fails with an error listing every path searched and every file skipped. The CLI and Docker images never consult the current directory or the dynamic loader's search path.
 
 ### XBERG_ORT_EP
 
@@ -1032,7 +1032,7 @@ When set and non-empty it is the only library tried: a relative path is refused,
 1. `libheif.1.dylib` / `libheif.dylib` (macOS) or `libheif.so.1` / `libheif.so` (Linux) in the directory of the `xberg` executable (symlinks resolved), then in `<prefix>/lib` when that directory is `<prefix>/bin`.
 2. The system locations `/opt/homebrew/lib`, `/usr/local/lib` (macOS) or `/usr/lib/{x86_64,aarch64}-linux-gnu`, `/usr/lib64`, `/usr/lib`, `/usr/local/lib` (Linux).
 
-A discovered file is opened only if it and its directory are owned by root or the current user and are not writable by group or others; a file that fails this check, does not load or lacks a libheif function is skipped. If nothing loads, HEIF decoding fails with a missing-dependency error listing every path searched; other formats are unaffected. The current directory and the dynamic loader's search path are never consulted.
+A discovered file is opened only if it and its directory are owned by root or the current user and are not writable by other users (group write is accepted only through your own private group, as umask 002 systems create files); a file that fails this check, does not load or lacks a libheif function is skipped. If nothing loads, HEIF decoding fails with a missing-dependency error listing every path searched; other formats are unaffected. The current directory and the dynamic loader's search path are never consulted.
 
 ## See Also
 

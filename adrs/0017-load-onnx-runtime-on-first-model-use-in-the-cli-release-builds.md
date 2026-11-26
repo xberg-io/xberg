@@ -100,7 +100,11 @@ still reach the loader's search path last.
 A discovered library runs with the privileges of the process that loads it, so
 a discovered file is loaded only when it, and the directory that holds it,
 both with symlinks resolved, are owned by root or the effective user and are
-not writable by group or others; the resolved path is what gets loaded. This
+not writable by others, nor by a group other than the user's private group;
+the resolved path is what gets loaded. A private group (named after the user,
+the user's primary group, no listed members) is how Debian, Ubuntu and Fedora
+pair umask 002 with safety, and pip, npm or `cp` there leave the library
+group-writable. This
 matters because the executable's directory says nothing about who controls its
 neighbours: a binary copied alone to `/tmp/x/xberg` would otherwise search
 `/tmp/lib`, which any local user can create. For the same reason `<prefix>/lib`

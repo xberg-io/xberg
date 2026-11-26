@@ -171,7 +171,8 @@ fn open_first(candidates: &[PathBuf]) -> Result<Api, String> {
 
 /// The library at `path` with symlinks resolved, if another local user cannot have placed or
 /// replaced it: the file and the directory that holds it must be owned by root or the effective
-/// user and not writable by group or others. The resolved path is what gets opened, so a
+/// user and not writable by others, nor by a group other than the user's private group
+/// ([`is_private_group`]). The resolved path is what gets opened, so a
 /// symlink swapped after this check is not followed. Ancestor directories are not checked; a
 /// shared one such as `/tmp` is sticky, so another user cannot rename what is below it.
 ///
@@ -192,7 +193,8 @@ fn trusted_library(path: &Path) -> Result<PathBuf, String> {
                 metadata.uid()
             ));
         }
-        if metadata.mode() & 0o022 != 0 {
+        let shared_group_writable = metadata.mode() & 0o020 != 0 && !is_private_group(metadata.gid(), euid);
+        if metadata.mode() & 0o002 != 0 || shared_group_writable {
             return Err(format!(
                 "`{}` is writable by group or others (mode {:o})",
                 subject.display(),
@@ -201,6 +203,58 @@ fn trusted_library(path: &Path) -> Result<PathBuf, String> {
         }
     }
     Ok(real)
+}
+
+/// Whether write access through group `gid` reaches no one but the user `euid`: the group is
+/// that user's primary group, is named after the user and lists no members. Debian, Ubuntu and
+/// Fedora create such a private group for every user and pair it with umask 002, so a library
+/// installed there by pip, npm or `cp` is group-writable without being shared. A group that
+/// cannot be looked up counts as shared.
+fn is_private_group(gid: u32, euid: u32) -> bool {
+    const BUFFER_BYTES: usize = 16 * 1024;
+    let mut buffer = vec![0 as libc::c_char; BUFFER_BYTES];
+    let mut user = std::mem::MaybeUninit::<libc::passwd>::zeroed();
+    let mut found: *mut libc::passwd = std::ptr::null_mut();
+    // SAFETY: `user` and `buffer` are writable for the sizes given and outlive the call; `found`
+    // receives null or `user`.
+    let status = unsafe { libc::getpwuid_r(euid, user.as_mut_ptr(), buffer.as_mut_ptr(), buffer.len(), &mut found) };
+    if status != 0 || found.is_null() {
+        return false;
+    }
+    // SAFETY: A non-null `found` means `user` was filled, its strings pointing into `buffer`.
+    let user = unsafe { user.assume_init() };
+    // SAFETY: `pw_name` is a NUL-terminated string in `buffer`, which is still live.
+    let user_name = unsafe { std::ffi::CStr::from_ptr(user.pw_name) }.to_owned();
+    let user_gid = user.pw_gid;
+
+    let mut group = std::mem::MaybeUninit::<libc::group>::zeroed();
+    let mut found: *mut libc::group = std::ptr::null_mut();
+    // SAFETY: As above; `buffer` is reused now that the user name has been copied out.
+    let status = unsafe { libc::getgrgid_r(gid, group.as_mut_ptr(), buffer.as_mut_ptr(), buffer.len(), &mut found) };
+    if status != 0 || found.is_null() {
+        return false;
+    }
+    // SAFETY: A non-null `found` means `group` was filled, its strings pointing into `buffer`.
+    let group = unsafe { group.assume_init() };
+    // SAFETY: `gr_name` is NUL-terminated and `gr_mem` a null-terminated array, both in `buffer`.
+    let (group_name, listed_members) = unsafe {
+        (
+            std::ffi::CStr::from_ptr(group.gr_name),
+            !group.gr_mem.is_null() && !(*group.gr_mem).is_null(),
+        )
+    };
+    private_group(&user_name, user_gid, group_name, listed_members, gid)
+}
+
+/// The decision of [`is_private_group`] once the user and group are looked up.
+fn private_group(
+    user_name: &std::ffi::CStr,
+    user_gid: u32,
+    group_name: &std::ffi::CStr,
+    listed_members: bool,
+    gid: u32,
+) -> bool {
+    user_gid == gid && group_name == user_name && !listed_members
 }
 
 fn open_path(path: &Path) -> Result<Api, String> {

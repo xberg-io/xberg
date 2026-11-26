@@ -109,20 +109,52 @@ fn a_broken_candidate_is_skipped_for_a_working_one() {
 
 #[test]
 fn a_library_another_user_could_write_is_skipped() {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     for mode in [0o775, 0o757, 0o777] {
         let directory = scratch_directory("untrusted");
         let planted = broken_library(&directory, LIBRARY_NAMES[0]);
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(mode)).unwrap();
+        // Group write through the user's own private group (umask 002 hosts) is not shared.
+        // SAFETY: geteuid takes no arguments, cannot fail and has no side effects.
+        let euid = unsafe { libc::geteuid() };
+        let shared = mode & 0o002 != 0 || !is_private_group(std::fs::metadata(&directory).unwrap().gid(), euid);
         let result = open_first(std::slice::from_ref(&planted));
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
         let Err(message) = result else {
-            panic!("an untrusted library must not load");
+            panic!("a broken library must not load");
         };
-        assert!(message.starts_with("libheif not found"), "{mode:o}: {message}");
-        assert!(message.contains("writable by group or others"), "{mode:o}: {message}");
+        if shared {
+            assert!(message.starts_with("libheif not found"), "{mode:o}: {message}");
+            assert!(message.contains("writable by group or others"), "{mode:o}: {message}");
+        } else {
+            assert!(message.starts_with("could not load libheif"), "{mode:o}: {message}");
+        }
     }
+}
+
+#[test]
+fn only_a_user_private_group_may_have_write_access() {
+    use std::ffi::CStr;
+
+    let alice = CStr::from_bytes_with_nul(b"alice\0").unwrap();
+    let staff = CStr::from_bytes_with_nul(b"staff\0").unwrap();
+    assert!(
+        private_group(alice, 1000, alice, false, 1000),
+        "Debian-style private group"
+    );
+    assert!(
+        !private_group(alice, 20, staff, false, 20),
+        "a shared primary group such as macOS staff"
+    );
+    assert!(
+        !private_group(alice, 1000, alice, true, 1000),
+        "a same-named group with listed members"
+    );
+    assert!(
+        !private_group(alice, 1000, alice, false, 1001),
+        "not the user's primary group"
+    );
 }
 
 #[test]

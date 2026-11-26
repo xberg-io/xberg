@@ -110,7 +110,7 @@ ort-bundled = ["legacy-base", "xberg/ort-bundled"]
 # the library on first model use from an absolute ORT_DYLIB_PATH, else from
 # beside the executable or, for `<prefix>/bin/xberg`, `<prefix>/lib`, which is
 # where the release archives and images ship Microsoft's pinned runtime; only
-# files owned by root or the user and not group/other-writable are loaded
+# files owned by root or the user and not writable by other users are loaded
 # (`ort-strict-discovery`, `ort_discovery::resolve_ort_library`). ~keep
 ort-dynamic = ["legacy-base", "xberg/ort-dynamic", "xberg/ort-strict-discovery"]
 

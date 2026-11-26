@@ -91,7 +91,8 @@ As ADR-0017: candidates other than the explicit override are absolute paths,
 so neither the current directory nor `DYLD_*`/`LD_LIBRARY_PATH` can supply the
 library, and a discovered file is opened, from its resolved path, only when it
 and its directory are owned by root or the effective user and not writable by
-group or others. `dynamic::trusted_library` and xberg's
+others or by a group other than the user's private group.
+`dynamic::trusted_library` and xberg's
 `ort_discovery::library::trusted_library` implement the same check.
 
 ### Consequences
