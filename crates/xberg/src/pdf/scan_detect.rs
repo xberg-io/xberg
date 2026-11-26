@@ -270,7 +270,8 @@ struct PageRaster {
     /// Fraction of the page covered by raster images, clamped to `[0, 1]`.
     coverage: f32,
     /// Density, in dots per inch, of the largest visible image.
-    // ~keep: read only by `full_page_raster_density`, which is gated on the OCR features.
+    // ~keep: read only by `full_page_raster_density`, which is gated on the OCR and
+    // layout-detection features.
     #[cfg_attr(
         not(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection")),
         allow(dead_code)

@@ -3284,7 +3284,7 @@ fn ruled_label_header_targets(
         return None;
     }
     let header_bottom = header.iter().map(|word| word.top + word.height).max()?;
-    let header_center = header.iter().map(|word| word.top + word.height / 2).min()?;
+    let topmost_header_center = header.iter().map(|word| word.top + word.height / 2).min()?;
     let max_gap = median_height.saturating_mul(RULED_HEADER_MAX_GAP_HEIGHTS);
     let candidates: Vec<(usize, u32)> = regions
         .iter()
@@ -3328,7 +3328,7 @@ fn ruled_label_header_targets(
             .count();
         labels >= RULED_HEADER_MIN_LABELS_PER_TABLE
             && rules.iter().any(|rule| {
-                rule.y > header_center as f32
+                rule.y > topmost_header_center as f32
                     && rule.y <= top
                     && words.clone().any(|(word, _)| overlaps(word, rule.left, rule.right))
             })
