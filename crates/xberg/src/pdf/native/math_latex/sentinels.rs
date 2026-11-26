@@ -63,26 +63,36 @@ impl Resolved {
 }
 
 /// Replace each sentinel with its `$`/`$$` delimiter (`delimit`) or remove it.
+///
+/// Only a matched pair, an opener whose next sentinel closes it, becomes delimiters: a lone
+/// `$` would open math that runs on through the rest of the text.
 pub(crate) fn resolve(text: &str, delimit: bool) -> Resolved {
+    let sentinels: Vec<(usize, char)> = text.char_indices().filter(|&(_, c)| is_sentinel(c)).collect();
+    let is_opener = |c: char| matches!(c, INLINE_OPEN | DISPLAY_OPEN);
     let mut out = String::with_capacity(text.len());
     let mut math = Vec::new();
-    let mut replacements = Vec::new();
+    let mut replacements = Vec::with_capacity(sentinels.len());
     let mut open: Option<(usize, bool)> = None;
-    for (offset, c) in text.char_indices() {
-        let delimiter = match c {
-            INLINE_OPEN | INLINE_CLOSE => "$",
-            DISPLAY_OPEN | DISPLAY_CLOSE => "$$",
-            _ => {
-                out.push(c);
-                continue;
-            }
+    let mut copied = 0;
+    for (index, &(offset, c)) in sentinels.iter().enumerate() {
+        out.push_str(&text[copied..offset]);
+        copied = offset + c.len_utf8();
+        let matched = if is_opener(c) {
+            sentinels.get(index + 1).is_some_and(|&(_, next)| !is_opener(next))
+        } else {
+            index > 0 && is_opener(sentinels[index - 1].1)
         };
-        let delimiter = if delimit { delimiter } else { "" };
-        if matches!(c, INLINE_OPEN | DISPLAY_OPEN) {
+        let delimiter = match c {
+            INLINE_OPEN | INLINE_CLOSE if delimit && matched => "$",
+            DISPLAY_OPEN | DISPLAY_CLOSE if delimit && matched => "$$",
+            _ => "",
+        };
+        if is_opener(c) && matched {
             open = Some((out.len(), c == DISPLAY_OPEN));
         }
         out.push_str(delimiter);
-        if matches!(c, INLINE_CLOSE | DISPLAY_CLOSE)
+        if !is_opener(c)
+            && matched
             && let Some((start, display)) = open.take()
         {
             math.push(MathRange {
@@ -93,6 +103,7 @@ pub(crate) fn resolve(text: &str, delimit: bool) -> Resolved {
         }
         replacements.push((offset, c.len_utf8(), delimiter.len()));
     }
+    out.push_str(&text[copied..]);
     Resolved {
         text: out,
         math,
@@ -135,5 +146,35 @@ pub(crate) fn strip_document(doc: &mut InternalDocument) {
     }
     for table in &mut doc.tables {
         strip_table(table);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unmatched_sentinels_resolve_to_nothing() {
+        for (source, expected) in [
+            (format!("a {INLINE_CLOSE}b"), "a b"),
+            (format!("a {INLINE_OPEN}b"), "a b"),
+            (
+                format!("a {DISPLAY_OPEN}b{DISPLAY_CLOSE}{DISPLAY_CLOSE} c"),
+                "a $$b$$ c",
+            ),
+            (format!("{INLINE_OPEN}a {INLINE_OPEN}x{INLINE_CLOSE} b"), "a $x$ b"),
+        ] {
+            let resolved = resolve(&source, true);
+            assert_eq!(resolved.text, expected, "{source:?}");
+            assert!(
+                resolved
+                    .math
+                    .iter()
+                    .all(|math| resolved.text[math.start..math.end].starts_with('$')
+                        && resolved.text[math.start..math.end].ends_with('$')),
+                "{source:?}"
+            );
+            assert_eq!(resolve(&source, false).text, strip(&source));
+        }
     }
 }
