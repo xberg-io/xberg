@@ -2683,7 +2683,9 @@ mod picture_ocr_text_rendering_tests {
 mod full_page_image_ocr_tests {
     use bytes::Bytes;
 
-    use super::{image_ocr_positions, should_skip_pdf_image_ocr};
+    use super::{image_ocr_positions, image_ocr_positions_with_a_reader, should_skip_pdf_image_ocr};
+    use crate::core::config::ExtractionConfig;
+    use crate::core::config::extraction::ImageExtractionConfig;
     use crate::types::ExtractedImage;
     use crate::types::extraction::BoundingBox;
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
@@ -2798,6 +2800,103 @@ mod full_page_image_ocr_tests {
 
         assert_eq!(image_ocr_positions(&document), Vec::<usize>::new());
         assert!(document.images[0].ocr_result.is_none());
+    }
+
+    fn small_box() -> BoundingBox {
+        BoundingBox {
+            x0: 10.0,
+            y0: 10.0,
+            x1: 40.0,
+            y1: 40.0,
+        }
+    }
+
+    fn page_ocr_document_with_unshown_picture() -> InternalDocument {
+        let mut document = pdf_document();
+        document.push_element(
+            InternalElement::text(
+                ElementKind::OcrText {
+                    level: OcrElementLevel::Block,
+                },
+                "page-level OCR text",
+                0,
+            )
+            .with_page(1),
+        );
+        document.images = vec![image(0, 1, small_box())];
+        document
+    }
+
+    #[test]
+    fn should_not_read_a_pdf_picture_that_nothing_shows() {
+        let document = page_ocr_document_with_unshown_picture();
+        let positions = image_ocr_positions(&document);
+        assert_eq!(
+            positions,
+            vec![0],
+            "the picture is not page-sized, so the page filter keeps it"
+        );
+
+        let read = image_ocr_positions_with_a_reader(&document, &ExtractionConfig::default(), positions);
+
+        assert_eq!(read, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn should_read_a_pdf_picture_that_an_image_element_shows() {
+        let mut document = page_ocr_document_with_unshown_picture();
+        document.push_element(InternalElement::text(ElementKind::Image { image_index: 0 }, "", 0).with_page(1));
+
+        let read = image_ocr_positions_with_a_reader(&document, &ExtractionConfig::default(), vec![0]);
+
+        assert_eq!(read, vec![0]);
+    }
+
+    #[cfg(any(feature = "pdf", feature = "office"))]
+    #[test]
+    fn should_read_a_pdf_picture_that_an_ocr_text_anchor_shows() {
+        let mut document = page_ocr_document_with_unshown_picture();
+        document.push_element(InternalElement::image_ocr_text_anchor(0, Some(1)));
+
+        let read = image_ocr_positions_with_a_reader(&document, &ExtractionConfig::default(), vec![0]);
+
+        assert_eq!(read, vec![0]);
+    }
+
+    #[test]
+    fn should_read_every_unshown_pdf_picture_when_an_inline_placeholder_may_pair_with_it() {
+        let mut document = page_ocr_document_with_unshown_picture();
+        document.push_element(InternalElement::text(ElementKind::Paragraph, "![figure](image-0.png)", 0).with_page(1));
+
+        let read = image_ocr_positions_with_a_reader(&document, &ExtractionConfig::default(), vec![0]);
+
+        assert_eq!(read, vec![0]);
+    }
+
+    #[test]
+    fn should_read_every_pdf_picture_when_the_result_keeps_the_images() {
+        let document = page_ocr_document_with_unshown_picture();
+        let config = ExtractionConfig {
+            images: Some(ImageExtractionConfig {
+                extract_images: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let read = image_ocr_positions_with_a_reader(&document, &config, vec![0]);
+
+        assert_eq!(read, vec![0]);
+    }
+
+    #[test]
+    fn should_read_every_picture_of_other_formats() {
+        let mut document = page_ocr_document_with_unshown_picture();
+        document.source_format = "docx".to_string();
+
+        let read = image_ocr_positions_with_a_reader(&document, &ExtractionConfig::default(), vec![0]);
+
+        assert_eq!(read, vec![0]);
     }
 
     #[test]

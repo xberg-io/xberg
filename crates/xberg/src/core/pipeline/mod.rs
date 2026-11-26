@@ -92,6 +92,65 @@ fn image_ocr_positions(doc: &InternalDocument) -> Vec<usize> {
         .collect()
 }
 
+/// The positions among `positions` whose OCR read reaches the result.
+///
+/// A read reaches it through an element that shows the picture (an image element or an OCR
+/// text anchor, which the fold and the renderers read), through an inline `![alt](url)`
+/// placeholder that the replace and append passes pair with the pictures no element shows,
+/// or through the images themselves when the result keeps them. A PDF picture with none of
+/// those leaves with `drop_ocr_only_images`, its read unread: an image-only scan spent half
+/// its extraction reading the stencil masks its page OCR had already read. Other formats
+/// keep every position, because the same pass also reports their metafile text warnings. ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn image_ocr_positions_with_a_reader(
+    doc: &InternalDocument,
+    config: &ExtractionConfig,
+    positions: Vec<usize>,
+) -> Vec<usize> {
+    if doc.source_format != "pdf" || image_ocr_reads_reach_the_result(config) || has_inline_image_placeholder(doc) {
+        return positions;
+    }
+    let unshown = images_without_an_element(doc);
+    positions
+        .into_iter()
+        .filter(|position| unshown.binary_search(position).is_err())
+        .collect()
+}
+
+/// Whether the result carries the embedded images, their elements or a redaction pass that
+/// reads their OCR documents, so every read counts whether or not an element shows it.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn image_ocr_reads_reach_the_result(config: &ExtractionConfig) -> bool {
+    if should_retain_images_after_ocr(config)
+        || config.result_format == crate::types::ResultFormat::ElementBased
+        || config.include_document_structure
+        || config.redaction.is_some()
+    {
+        return true;
+    }
+    #[cfg(feature = "redaction")]
+    if crate::text::redaction::external::external_redaction_is_scoped() {
+        return true;
+    }
+    false
+}
+
+/// Whether any paragraph or table cell is an inline `![alt](url)` placeholder, which the
+/// replace and append passes pair with the unshown pictures in order.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn has_inline_image_placeholder(doc: &InternalDocument) -> bool {
+    doc.elements.iter().any(|element| {
+        matches!(element.kind, crate::types::internal::ElementKind::Paragraph)
+            && is_markdown_image_reference(&element.text)
+    }) || doc.tables.iter().any(|table| {
+        table
+            .cells
+            .iter()
+            .flatten()
+            .any(|cell| is_markdown_image_reference(cell))
+    })
+}
+
 /// Whether the OCR read of an image file already gave the document text or a table.
 ///
 /// The picture of an image file is the document, not a picture inside it: the image extractor
@@ -628,6 +687,7 @@ async fn run_pipeline_impl(
         } else {
             image_positions
         };
+        let image_positions = image_ocr_positions_with_a_reader(&doc, config, image_positions);
         // Clone only selected images so skipped entries keep their positions and a
         // batch-level OCR failure cannot discard the original extracted images.
         if !image_positions.is_empty() {
