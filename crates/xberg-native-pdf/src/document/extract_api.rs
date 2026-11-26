@@ -280,6 +280,19 @@ impl PdfDocument {
         self.page_content_cache.lock_or_recover().clear();
     }
 
+    /// Drop the decoded Form XObject streams that text interpretation shares between
+    /// placements, once the passes that interpret page text are done.
+    ///
+    /// A later read decodes a Form again to the same bytes, so no result changes. Table ruling
+    /// decodes the Forms it walks on its own and reads none of these, yet they stayed alive
+    /// through it, where extraction's heap peaks.
+    #[doc(hidden)]
+    pub fn release_form_stream_cache(&self) {
+        let mut streams = self.xobject_stream_cache.lock_or_recover();
+        streams.clear();
+        self.xobject_stream_cache_bytes.store(0, Ordering::Relaxed);
+    }
+
     /// Drop completed per-page span results so the next read interprets the
     /// page content again, for tests of the caches below the page level.
     #[cfg(test)]

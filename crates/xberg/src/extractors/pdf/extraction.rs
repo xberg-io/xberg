@@ -764,6 +764,9 @@ pub(crate) fn extract_all_from_native_document(
     let needs_structured = needs_structured && !cut_short;
     let retain_hierarchy_segments = needs_structured && !config.force_ocr;
 
+    // The text passes are done; table ruling decodes the Forms it walks on its own. ~keep
+    doc.doc.release_form_stream_cache();
+
     let tables_requested = config.pdf_options.as_ref().is_none_or(|opts| opts.extract_tables);
     if cut_short && tables_requested {
         skipped_stages.push("tables");
