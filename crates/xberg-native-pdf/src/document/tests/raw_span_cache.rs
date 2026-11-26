@@ -297,6 +297,43 @@ fn preserved_geometry_is_paired_only_when_announced_while_the_passes_run() {
     assert_eq!(page_span_interpretations() - before, 1, "release ends the pairing");
 }
 
+/// A budget that holds every page's flattened entry and nothing more still holds them all with
+/// preserved reads paired: a preserved entry only takes its page's share of the budget.
+#[test]
+fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
+    const PAGES: usize = 4;
+    let pdf = many_pages_pdf(PAGES);
+    let unpaired = PdfDocument::from_bytes(pdf.clone()).unwrap();
+    unpaired.begin_page_passes();
+    for page in 0..PAGES {
+        drop(unpaired.extract_spans_raw(page).unwrap());
+    }
+    let flattened_bytes = unpaired
+        .raw_page_spans_cache
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .used_bytes();
+
+    let doc = PdfDocument::from_bytes(pdf).unwrap();
+    doc.begin_page_passes();
+    *doc.raw_page_spans_cache.lock().unwrap() = Some(crate::cache::AdmissionBudgetCache::new(flattened_bytes));
+    doc.expect_preserved_script_geometry();
+    for page in 0..PAGES {
+        drop(doc.extract_spans_raw(page).unwrap());
+    }
+    let before = page_span_interpretations();
+    for page in 0..PAGES {
+        drop(doc.extract_spans_raw(page).unwrap());
+    }
+    assert_eq!(
+        page_span_interpretations(),
+        before,
+        "every flattened entry stayed cached"
+    );
+}
+
 /// The span-only page reads are the page-text reads with an empty character list.
 #[test]
 fn span_only_page_reads_equal_page_text_reads_without_chars() {

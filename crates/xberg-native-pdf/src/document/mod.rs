@@ -961,10 +961,10 @@ pub struct PdfDocument {
             crate::cache::AdmissionBudgetCache<extract_api::RawSpanKey, std::sync::Arc<extract_api::InterpretedPage>>,
         >,
     >,
-    /// Whether a flattened-geometry read while the page passes run also finishes and caches the
-    /// page's preserved-geometry spans. Set by `expect_preserved_script_geometry`, cleared by
-    /// `release_page_caches`.
-    pair_script_geometries: AtomicBool,
+    /// The document's page count while a flattened-geometry read in the page passes also finishes
+    /// and caches the page's preserved-geometry spans, else 0. Set by
+    /// `expect_preserved_script_geometry`, cleared by `release_page_caches`.
+    paired_geometry_pages: AtomicUsize,
     /// Small-text density evidence for a single-page document.
     small_painted_text: std::sync::OnceLock<bool>,
     /// Per-page lightweight search index (page text + span bounding boxes,

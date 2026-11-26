@@ -121,6 +121,12 @@ impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
         bytes <= self.budget_bytes - (self.used_bytes - replaced)
     }
 
+    /// The bytes in use once an entry of `bytes` is stored under `key`.
+    pub(crate) fn used_bytes_with(&self, key: &K, bytes: usize) -> usize {
+        let replaced = self.map.get(key).map_or(0, |(_, bytes)| *bytes);
+        self.used_bytes - replaced + bytes
+    }
+
     /// Store `value` under `key`, replacing an existing entry, when the budget
     /// still fits it. Returns whether the value was stored; a value that does
     /// not fit leaves any existing entry in place.
@@ -145,6 +151,10 @@ impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
     }
 
     #[cfg(test)]
+    pub(crate) fn used_bytes(&self) -> usize {
+        self.used_bytes
+    }
+
     pub(crate) fn budget_bytes(&self) -> usize {
         self.budget_bytes
     }

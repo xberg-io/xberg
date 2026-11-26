@@ -190,7 +190,7 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Resolve each span's font resource alias to its `/BaseFont` name and
     /// §9.10.2 mapping provenance, in place. Split out of
-    /// `extract_text_spans_impl` for readability only — same single pass over
+    /// `finish_text_spans` for readability only — same single pass over
     /// `self.spans`, same lookup keyed by the raw resource alias. ~keep
     fn resolve_span_font_provenance(&mut self) {
         let font_names = &mut self.font_names;

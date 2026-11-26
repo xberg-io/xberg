@@ -279,7 +279,8 @@ impl PdfDocument {
     /// page's content again. Lasts until [`Self::release_page_caches`].
     #[doc(hidden)]
     pub fn expect_preserved_script_geometry(&self) {
-        self.pair_script_geometries.store(true, Ordering::Relaxed);
+        self.paired_geometry_pages
+            .store(self.page_count().unwrap_or(0), Ordering::Relaxed);
     }
 
     /// End the per-page passes: drop the page-pass cache and stop filling it,
@@ -288,7 +289,7 @@ impl PdfDocument {
     #[doc(hidden)]
     pub fn release_page_caches(&self) {
         *self.raw_page_spans_cache.lock_or_recover() = None;
-        self.pair_script_geometries.store(false, Ordering::Relaxed);
+        self.paired_geometry_pages.store(0, Ordering::Relaxed);
         self.page_spans_cache.lock_or_recover().clear();
         self.page_chars_cache.lock_or_recover().clear();
         self.page_content_cache.lock_or_recover().clear();
@@ -366,9 +367,10 @@ impl PdfDocument {
         }
         // A flattened read while preserved reads are expected finishes the preserved spans from
         // the same content run and caches them, unless that page is already cached. ~keep
+        let paired_pages = self.paired_geometry_pages.load(Ordering::Relaxed);
         let pair_geometries = passes_running
             && script_geometry == ScriptGeometry::Flatten
-            && self.pair_script_geometries.load(Ordering::Relaxed)
+            && paired_pages > 0
             && !self
                 .raw_page_spans_cache
                 .lock_or_recover()
@@ -422,13 +424,21 @@ impl PdfDocument {
                 script_baselines: Vec::new(),
                 preserved: None,
             };
-            self.retain_interpretation(
-                RawSpanKey {
-                    page_index,
-                    script_geometry: ScriptGeometry::Preserve,
-                },
-                &preserved,
-            );
+            let preserved_key = RawSpanKey {
+                page_index,
+                script_geometry: ScriptGeometry::Preserve,
+            };
+            // Paced to this page's share of the budget, so the flattened entries of the pages
+            // still to come, which more passes read, keep the room they had without pairing. ~keep
+            let paced = self.raw_page_spans_cache.lock_or_recover().as_ref().map_or(0, |cache| {
+                let share = cache.budget_bytes() as u128 * (page_index as u128 + 1) / paired_pages as u128;
+                usize::try_from(share).unwrap_or(usize::MAX)
+            });
+            if let Some(bytes) = self.admitted_bytes(&preserved_key, &preserved, paced)
+                && let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut()
+            {
+                cache.insert(preserved_key, std::sync::Arc::new(preserved), bytes);
+            }
         }
         Ok((page.spans, page.mc_actualtext))
     }
@@ -437,19 +447,9 @@ impl PdfDocument {
     /// admits it. The admission checks run before the copy, the first without
     /// walking the spans, so a page past the budget costs neither.
     fn retain_interpretation(&self, key: RawSpanKey, page: &InterpretedPage) {
-        let admits = |bytes: usize| {
-            self.raw_page_spans_cache
-                .lock_or_recover()
-                .as_ref()
-                .is_some_and(|cache| cache.admits(&key, bytes))
+        let Some(bytes) = self.admitted_bytes(&key, page, usize::MAX) else {
+            return;
         };
-        if !admits(page.minimum_bytes()) {
-            return;
-        }
-        let bytes = page.estimated_bytes();
-        if !admits(bytes) {
-            return;
-        }
         let copy = InterpretedPage {
             spans: page.spans.clone(),
             mc_actualtext: page.mc_actualtext.clone(),
@@ -462,6 +462,23 @@ impl PdfDocument {
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
             cache.insert(key, std::sync::Arc::new(copy), bytes);
         }
+    }
+
+    /// The estimated bytes of `page` when the page-pass cache admits it under
+    /// `key` with at most `limit` bytes in use afterwards, else `None`. The
+    /// first check runs without walking the spans.
+    fn admitted_bytes(&self, key: &RawSpanKey, page: &InterpretedPage, limit: usize) -> Option<usize> {
+        let admits = |bytes: usize| {
+            self.raw_page_spans_cache
+                .lock_or_recover()
+                .as_ref()
+                .is_some_and(|cache| cache.admits(key, bytes) && cache.used_bytes_with(key, bytes) <= limit)
+        };
+        if !admits(page.minimum_bytes()) {
+            return None;
+        }
+        let bytes = page.estimated_bytes();
+        admits(bytes).then_some(bytes)
     }
 
     /// Internal helper: extract raw text spans using a specific extraction config.

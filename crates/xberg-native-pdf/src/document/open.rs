@@ -338,7 +338,7 @@ impl PdfDocument {
             page_content_cache: Mutex::new(BoundedEntryCache::new(64)),
             page_spans_cache: Mutex::new(BoundedEntryCache::new(8)),
             raw_page_spans_cache: Mutex::new(None),
-            pair_script_geometries: AtomicBool::new(false),
+            paired_geometry_pages: AtomicUsize::new(0),
             small_painted_text: std::sync::OnceLock::new(),
             search_index: Mutex::new(HashMap::new()),
             page_chars_cache: Mutex::new(BoundedEntryCache::new(PAGE_CHARS_CACHE_ENTRIES)),
