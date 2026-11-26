@@ -25,7 +25,8 @@ impl ExtractionConfig {
     /// - `XBERG_OCR_MODEL_VERSION`: PaddleOCR model generation ("pp-ocrv6" or "pp-ocrv5")
     /// - `XBERG_OCR_MODEL_TIER`: PaddleOCR model tier (e.g. "medium"/"small"/"tiny" for v6, "mobile"/"server" for v5)
     /// - `XBERG_OCR_TESSDATA_MODEL`: Tesseract model set ("fast" or "best"), applied to the
-    ///   top-level `tessdata_model` so it never creates an `ocr` section
+    ///   top-level `tessdata_model` so it never creates an `ocr` section; also applied on its own
+    ///   by [`Self::apply_env_tessdata_model`]
     /// - `XBERG_CHUNKING_MAX_CHARS`: Maximum characters per chunk (positive integer)
     /// - `XBERG_CHUNKING_MAX_OVERLAP`: Maximum overlap between chunks (non-negative integer)
     /// - `XBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")
@@ -117,18 +118,32 @@ impl ExtractionConfig {
             }
         }
 
-        if let Ok(model) = std::env::var("XBERG_OCR_TESSDATA_MODEL") {
-            let model = model.parse().map_err(|message: String| XbergError::Validation {
-                message: format!("Invalid value for XBERG_OCR_TESSDATA_MODEL: {message}"),
-                source: None,
-            })?;
-            // ~keep The top-level set reaches every OCR this extraction performs without creating
-            // an `ocr` section, which would change whether OCR runs; an `ocr` section's own set
-            // is cleared so the environment wins over the config file.
-            self.tessdata_model = Some(model);
-            if let Some(ocr) = self.ocr.as_mut() {
-                ocr.tessdata_model = None;
-            }
+        self.apply_env_tessdata_model()
+    }
+
+    /// Apply only `XBERG_OCR_TESSDATA_MODEL`, the one override the CLI's `extract` and `batch`
+    /// commands read (every other override is applied by [`Self::apply_env_overrides`] for
+    /// `serve`, `mcp` and `doctor`).
+    ///
+    /// The value sets the top-level `tessdata_model`, so it reaches every OCR the extraction
+    /// performs without creating an `ocr` section, and clears an `ocr` section's own set so the
+    /// environment wins over the config file. Unset is a no-op.
+    ///
+    /// # Errors
+    ///
+    /// Returns `XbergError::Validation` when the value is not `fast` or `best`.
+    #[cfg_attr(alef, alef(skip))]
+    pub fn apply_env_tessdata_model(&mut self) -> Result<()> {
+        let Ok(model) = std::env::var("XBERG_OCR_TESSDATA_MODEL") else {
+            return Ok(());
+        };
+        let model = model.parse().map_err(|message: String| XbergError::Validation {
+            message: format!("Invalid value for XBERG_OCR_TESSDATA_MODEL: {message}"),
+            source: None,
+        })?;
+        self.tessdata_model = Some(model);
+        if let Some(ocr) = self.ocr.as_mut() {
+            ocr.tessdata_model = None;
         }
         Ok(())
     }

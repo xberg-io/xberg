@@ -108,8 +108,7 @@ use commands::{chunk_command, validate_chunk_params};
 #[cfg(feature = "mcp")]
 use commands::{mcp_command, resolve_mcp_allowed_hosts};
 use input::{
-    apply_json_overrides, resolve_batch_inputs, resolve_extract_input, validate_batch_input_uris,
-    validate_extract_input,
+    extraction_config, resolve_batch_inputs, resolve_extract_input, validate_batch_input_uris, validate_extract_input,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -994,9 +993,13 @@ fn main() -> Result<()> {
             #[cfg(feature = "redaction")]
             let overrides = overrides.read_redaction_findings_stdin(stdin)?;
 
-            let mut config = load_config(config_path, !no_config_discovery)?;
-            apply_json_overrides(&mut config, config_json, config_json_base64)?;
-            overrides.apply(&mut config);
+            let config = extraction_config(
+                config_path,
+                !no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+            )?;
 
             extract_command(
                 input,
@@ -1034,9 +1037,13 @@ fn main() -> Result<()> {
             #[cfg(feature = "redaction")]
             let overrides = overrides.read_redaction_findings_stdin(false)?;
 
-            let mut config = load_config(config_path, !no_config_discovery)?;
-            apply_json_overrides(&mut config, config_json, config_json_base64)?;
-            overrides.apply(&mut config);
+            let config = extraction_config(
+                config_path,
+                !no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+            )?;
 
             let file_configs_map = if let Some(file_configs_path) = file_configs {
                 let file_configs_json = std::fs::read_to_string(&file_configs_path)
@@ -1863,5 +1870,100 @@ mod tree_sitter_cli_tests {
                 format: WireFormat::Toon
             }
         ));
+    }
+}
+
+#[cfg(all(test, feature = "ocr-surface"))]
+mod tessdata_env_tests {
+    use super::*;
+    use xberg_child_test::{child_test_root, run_child_test};
+
+    const CASE: &str = "XBERG_CLI_TESSDATA_ENV_CASE";
+    const CHILD: &str = "tessdata_env_tests::extract_and_batch_read_the_tessdata_env_child";
+
+    fn run_case(case: &str, value: &str) {
+        run_child_test(CHILD, CASE, case, |command| {
+            command
+                .env_remove("XBERG_OCR_LANGUAGE")
+                .env_remove("XBERG_OCR_BACKEND")
+                .env("XBERG_OCR_TESSDATA_MODEL", value);
+        });
+    }
+
+    #[test]
+    fn extract_and_batch_apply_the_tessdata_env_below_the_flag() {
+        run_case("env", "best");
+    }
+
+    #[test]
+    fn extract_and_batch_reject_an_invalid_tessdata_env() {
+        run_case("invalid", "medium");
+    }
+
+    fn resolved(args: &[&str]) -> Result<xberg::ExtractionConfig> {
+        let cli = Cli::try_parse_from(args).expect("clap should parse the command");
+        match cli.command {
+            Commands::Extract {
+                config: config_path,
+                no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+                ..
+            }
+            | Commands::Batch {
+                config: config_path,
+                no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+                ..
+            } => extraction_config(
+                config_path,
+                !no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+            ),
+            _ => panic!("expected extract or batch"),
+        }
+    }
+
+    #[test]
+    #[ignore = "run with an isolated environment by its parent test"]
+    fn extract_and_batch_read_the_tessdata_env_child() {
+        let Some(case) = child_test_root(CASE) else {
+            return;
+        };
+        let commands: [&[&str]; 2] = [
+            &["xberg", "extract", "scan.pdf", "--no-config-discovery"],
+            &["xberg", "batch", "scan.pdf", "--no-config-discovery"],
+        ];
+        for args in commands {
+            if case.to_str() == Some("invalid") {
+                let error = resolved(args).expect_err("an invalid set must be rejected");
+                assert!(format!("{error:#}").contains("XBERG_OCR_TESSDATA_MODEL"), "{error:#}");
+                continue;
+            }
+            let config = resolved(args).expect("the config resolves");
+            assert!(config.ocr.is_none(), "the environment never creates an ocr section");
+            assert_eq!(config.tessdata_model, Some(xberg::TessdataModel::Best), "{args:?}");
+
+            let with_flag = [args, &["--ocr-tessdata-model", "fast"]].concat();
+            let config = resolved(&with_flag).expect("the config resolves");
+            assert_eq!(
+                config.effective_tessdata_model(),
+                xberg::TessdataModel::Fast,
+                "the flag beats the environment: {with_flag:?}"
+            );
+
+            let with_json = [args, &["--config-json", r#"{"tessdata_model":"fast"}"#]].concat();
+            let config = resolved(&with_json).expect("the config resolves");
+            assert_eq!(
+                config.effective_tessdata_model(),
+                xberg::TessdataModel::Best,
+                "the environment beats the config: {with_json:?}"
+            );
+        }
     }
 }

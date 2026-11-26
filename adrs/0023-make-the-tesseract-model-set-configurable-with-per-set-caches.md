@@ -46,8 +46,11 @@ selects the set for every OCR an extraction performs, automatic and fallback
 OCR included, and never enables OCR: creating an `ocr` section would change
 whether OCR runs. `OcrConfig.tessdata_model` overrides it for one section;
 `None` inherits, and a per-file `ocr` section that names none keeps the base
-section's set. `XBERG_OCR_TESSDATA_MODEL` (for `xberg serve`, `xberg mcp` and
-`xberg doctor`) and `--ocr-tessdata-model` set the top-level field. The name
+section's set. `XBERG_OCR_TESSDATA_MODEL` (read by every CLI command that
+extracts: `extract`, `batch`, `serve`, `mcp` and `doctor`; for `extract` and
+`batch` it is the only `XBERG_*` override applied) and `--ocr-tessdata-model`
+set the top-level field, with the flag above the variable above the config
+file, so an image that sets the variable runs every command with that set. The name
 sits beside `tessdata_path` and `tessdata_bytes`, and the values are the
 upstream repository suffixes. An unset set is not serialized.
 

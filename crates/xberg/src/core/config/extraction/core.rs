@@ -60,8 +60,9 @@ pub struct ExtractionConfig {
 
     /// Tesseract model set (`"fast"` or `"best"`) for any OCR this extraction performs,
     /// automatic and fallback OCR included. `ocr.tessdata_model` overrides it; `None` means
-    /// `fast`. Setting it does not enable OCR. See `OcrConfig::tessdata_model` for how a set is
-    /// resolved.
+    /// `fast`. Setting it does not enable OCR. `XBERG_OCR_TESSDATA_MODEL` sets it for every CLI
+    /// command that extracts (see `ExtractionConfig::apply_env_tessdata_model`). See
+    /// `OcrConfig::tessdata_model` for how a set is resolved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tessdata_model: Option<super::super::ocr::TessdataModel>,
 

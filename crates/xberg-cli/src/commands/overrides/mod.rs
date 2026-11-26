@@ -134,7 +134,7 @@ pub struct ExtractionOverrides {
     ///
     /// A directory from `ocr.tessdata_path` or `TESSDATA_PREFIX` that holds every requested
     /// language is used as given, whichever set it holds. Sets the top-level `tessdata_model`, so it
-    /// also applies to automatic OCR and never enables OCR.
+    /// also applies to automatic OCR and never enables OCR. Overrides `XBERG_OCR_TESSDATA_MODEL`.
     #[cfg(feature = "ocr-surface")]
     #[arg(long, value_name = "SET")]
     pub ocr_tessdata_model: Option<TessdataModelArg>,
