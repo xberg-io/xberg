@@ -32,8 +32,13 @@ const _: () = assert!(MINERU_EXTRACTION_TIMEOUT_SECS + PYTHON_TIMEOUT_MARGIN_SEC
 const _: () = assert!(MINERU_MAX_TIMEOUT_SECS > PYMUPDF4LLM_MAX_TIMEOUT_SECS);
 const LITEPARSE_BINARY: &str = "lit";
 const LITEPARSE_VERSION_PREFIX: &str = "lit ";
-const LITEPARSE_REQUIRED_BATCH_OPTIONS: [&str; 5] =
-    ["--format", "--no-ocr", "--num-workers", "--ocr-backend", "--ocr-language"];
+const LITEPARSE_REQUIRED_BATCH_OPTIONS: [&str; 5] = [
+    "--format",
+    "--no-ocr",
+    "--num-workers",
+    "--ocr-backend",
+    "--ocr-language",
+];
 /// Formats `lit` 2.21 rasterizes natively (`IMAGE_EXTENSIONS` in liteparse's `src/conversion.rs`).
 const LITEPARSE_IMAGE_FORMATS: [&str; 9] = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg"];
 /// Formats `lit` 2.21 converts to PDF through LibreOffice (its office, presentation and
