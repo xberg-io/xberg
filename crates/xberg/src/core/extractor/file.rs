@@ -308,7 +308,7 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
     mime_type: &str,
     config: &ExtractionConfig,
 ) -> Result<ExtractedDocument> {
-    super::cacheability::scope(extract_file_scoped(path, mime_type, config)).await
+    crate::core::runtime::pin_boxed(|| super::cacheability::scope(extract_file_scoped(path, mime_type, config))).await
 }
 
 async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<ExtractedDocument> {
