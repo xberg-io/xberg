@@ -4784,7 +4784,7 @@ mod tests {
                     table
                         .cells
                         .iter()
-                        .any(|row| row[0] == descriptor && row.iter().any(|cell| *cell == value)),
+                        .any(|row| row[0] == descriptor && row.contains(&value)),
                     "record {record} must be one row holding its whole description and value: {:?}",
                     table.cells
                 );

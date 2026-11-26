@@ -194,7 +194,7 @@ fn equal_spans_share_a_fingerprint_and_any_changed_field_breaks_it() {
         ..TextSpan::default()
     };
     let reference = fingerprint(std::slice::from_ref(&base));
-    assert_eq!(reference, fingerprint(&[base.clone()]), "equal spans must match");
+    assert_eq!(reference, fingerprint(std::slice::from_ref(&base)), "equal spans must match");
 
     let mutations = field_mutations();
     for (field, mutate) in &mutations {
@@ -222,7 +222,7 @@ fn equal_spans_share_a_fingerprint_and_any_changed_field_breaks_it() {
         "floats compare by bit pattern"
     );
     assert_ne!(
-        fingerprint(&[base.clone()]),
+        fingerprint(std::slice::from_ref(&base)),
         fingerprint(&[base.clone(), base]),
         "the span count is part of the fingerprint"
     );

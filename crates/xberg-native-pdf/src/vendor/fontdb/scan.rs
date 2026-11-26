@@ -541,7 +541,9 @@ mod tests {
         scanned_db.load_system_fonts();
         if scanned_db.faces.is_empty() {
             // Only a host without installed fonts gets here. ~keep
-            assert!(!cfg!(target_os = "macos"), "macOS ships system fonts");
+            #[cfg(target_os = "macos")]
+            panic!("macOS ships system fonts");
+            #[cfg(not(target_os = "macos"))]
             return;
         }
 

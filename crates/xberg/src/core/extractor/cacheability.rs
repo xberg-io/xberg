@@ -148,7 +148,7 @@ pub(crate) fn block_outer_result_publication() {
     }
 }
 
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[cfg(all(test, feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) async fn with_ocr_cancellation<F: Future>(
     token: Option<&crate::cancellation::CancellationToken>,
     future: F,
