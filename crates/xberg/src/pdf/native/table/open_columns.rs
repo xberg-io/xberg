@@ -115,18 +115,22 @@ fn is_value(span: &TextSpan) -> bool {
     is_numeric_word(span.text.trim())
 }
 
-/// The vertical extent of a row: its single-row cells' bounds, else their text's. A cell spanning
-/// several rows (the empty run of a ruled column whose values stop early) says nothing about this
-/// row's height, and an unruled body row may carry no cell bounds at all.
+/// The vertical extent of a row: its occupied single-row cells' bounds, else their text's, else
+/// any single-row cell's bounds. A cell spanning several rows (the empty run of a ruled column
+/// whose values stop early) says nothing about this row's height, and neither does an empty cell
+/// of a ruled cell split into text rows: it keeps the whole ruled cell's bounds, so every row cut
+/// from that cell would share one band. An unruled body row may carry no cell bounds at all.
 fn row_band(row: &TableRow) -> Option<Band> {
     let single = || row.cells.iter().filter(|cell| cell.rowspan <= 1);
+    let occupied = || single().filter(|cell| !cell.spans.is_empty() || !cell.text.trim().is_empty());
     let union = |bounds: &mut dyn Iterator<Item = Rect>| {
         bounds
             .map(|bbox| (bbox.y, bbox.y + bbox.height))
             .reduce(|(bottom, top), (low, high)| (bottom.min(low), top.max(high)))
     };
-    union(&mut single().filter_map(|cell| cell.bbox))
-        .or_else(|| union(&mut single().flat_map(|cell| cell.spans.iter().map(|span| span.bbox))))
+    union(&mut occupied().filter_map(|cell| cell.bbox))
+        .or_else(|| union(&mut occupied().flat_map(|cell| cell.spans.iter().map(|span| span.bbox))))
+        .or_else(|| union(&mut single().filter_map(|cell| cell.bbox)))
 }
 
 /// The row a span belongs to: the band holding its centre (the nearest centre among several),
@@ -371,6 +375,39 @@ mod tests {
         assert_eq!(table.col_count, 4);
         assert_eq!(table.rows[0].cells[2].text, "Multiplier Factor");
         assert_eq!(table.rows[3].cells.last().map(|cell| cell.text.as_str()), Some("1.00"));
+    }
+
+    /// pb_SERFF_TX_random_pages_1_page1075: rows 81 to 91+ are cut by text from one ruled cell,
+    /// and each row's empty cell in a column whose values stop early keeps that ruled cell's
+    /// bounds, which cover all of those rows.
+    #[test]
+    fn values_join_rows_cut_from_one_ruled_cell_with_empty_cells() {
+        let mut table = ruled_table(4);
+        let split_cell = Rect::new(200.0, TABLE_TOP - 5.0 * ROW_HEIGHT, 0.0, 4.0 * ROW_HEIGHT);
+        for row in &mut table.rows[1..] {
+            row.cells.push(TableCell {
+                text: String::new(),
+                spans: Vec::new(),
+                colspan: 1,
+                rowspan: 1,
+                mcids: Vec::new(),
+                bbox: Some(split_cell),
+                is_header: false,
+            });
+        }
+
+        restore_open_trailing_columns(&mut table, &open_spans(4), &[]);
+
+        assert_eq!(table.col_count, 4);
+        let last_two = |row: usize| {
+            let cells = &table.rows[row].cells;
+            [
+                cells[cells.len() - 2].text.as_str(),
+                cells[cells.len() - 1].text.as_str(),
+            ]
+        };
+        assert_eq!(last_two(1), ["1.01", "1.00"]);
+        assert_eq!(last_two(4), ["1.04", "1.00"]);
     }
 
     #[test]
