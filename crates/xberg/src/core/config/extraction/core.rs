@@ -759,6 +759,18 @@ impl ExtractionConfig {
         }
     }
 
+    /// The config an extraction entry point runs with: a copy with the inherited Tesseract model set
+    /// copied into an `ocr` section that names none, or `None` when nothing needs to change. Code
+    /// that receives only `config.ocr` (for example `extraction::image_ocr::pdf_gap`) then sees
+    /// the set. Boxed because the entry points hold it across awaits.
+    pub(crate) fn resolved_for_extraction(&self) -> Option<Box<Self>> {
+        self.has_unresolved_tessdata_model().then(|| {
+            let mut resolved = Box::new(self.clone());
+            resolved.resolve_tessdata_model();
+            resolved
+        })
+    }
+
     /// Whether [`Self::resolve_tessdata_model`] would change anything.
     pub(crate) fn has_unresolved_tessdata_model(&self) -> bool {
         self.tessdata_model.is_some() && self.ocr.as_ref().is_some_and(|ocr| ocr.tessdata_model.is_none())
@@ -1368,6 +1380,39 @@ mod tests {
         };
         assert_eq!(own.effective_tessdata_model(), TessdataModel::Fast);
         assert!(matches!(own.ocr_or_default(), std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn entry_resolution_fills_only_an_ocr_section_without_a_set() {
+        let no_section = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ..Default::default()
+        };
+        assert!(no_section.resolved_for_extraction().is_none(), "no section is created");
+        assert_eq!(no_section.effective_tessdata_model(), TessdataModel::Best);
+
+        let unset = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        let resolved = unset.resolved_for_extraction().expect("the section inherits");
+        // Read exactly as `pdf_gap` reads it before `build_pending_ocr_tasks`.
+        let ocr = resolved.ocr.as_ref().expect("eligible explicit OCR configuration");
+        assert_eq!(ocr.tessdata_model, Some(TessdataModel::Best));
+        assert_eq!(ocr.effective_tessdata_model(), TessdataModel::Best);
+
+        let own = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ocr: Some(OcrConfig {
+                tessdata_model: Some(TessdataModel::Fast),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(own.resolved_for_extraction().is_none(), "a section's own set is kept");
+        assert_eq!(own.effective_tessdata_model(), TessdataModel::Fast);
+        assert!(ExtractionConfig::default().resolved_for_extraction().is_none());
     }
 
     #[test]
