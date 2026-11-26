@@ -310,6 +310,7 @@ fn demultiply(pixel: &mut [u8; 4]) {
 
 /// The straight-alpha RGB channels of premultiplied RGBA pixels, alpha dropped: exactly what
 /// decoding [`encode_png`]'s output and converting it to RGB8 yields, without the round trip.
+#[cfg(test)]
 pub(in crate::rendering) fn straight_rgb8(premultiplied_rgba: &[u8]) -> Vec<u8> {
     let pixels = premultiplied_rgba.as_chunks::<4>().0;
     let mut rgb = Vec::with_capacity(pixels.len() * 3);
@@ -319,6 +320,28 @@ pub(in crate::rendering) fn straight_rgb8(premultiplied_rgba: &[u8]) -> Vec<u8> 
         rgb.extend_from_slice(&pixel[..3]);
     }
     rgb
+}
+
+/// The straight-alpha RGB channels of premultiplied RGBA pixels, alpha dropped (what decoding
+/// [`encode_png`]'s output to RGB8 yields), computed in the RGBA buffer itself so a page raster
+/// never holds the RGBA and RGB copies at once. Pixel `i` moves from offset `4i` to `3i`, never
+/// past a pixel still unread.
+pub(in crate::rendering) fn straight_rgb8_in_place(mut premultiplied_rgba: Vec<u8>) -> Vec<u8> {
+    let pixels = premultiplied_rgba.len() / 4;
+    for index in 0..pixels {
+        let source = index * 4;
+        let mut pixel = [
+            premultiplied_rgba[source],
+            premultiplied_rgba[source + 1],
+            premultiplied_rgba[source + 2],
+            premultiplied_rgba[source + 3],
+        ];
+        demultiply(&mut pixel);
+        premultiplied_rgba[index * 3..index * 3 + 3].copy_from_slice(&pixel[..3]);
+    }
+    premultiplied_rgba.truncate(pixels * 3);
+    premultiplied_rgba.shrink_to_fit();
+    premultiplied_rgba
 }
 
 /// Encode a tiny_skia `Pixmap` to PNG.
@@ -366,5 +389,21 @@ mod straight_rgb8_tests {
         let decoded = image::load_from_memory(&png).unwrap().into_rgb8();
 
         assert_eq!(straight_rgb8(pixmap.data()), decoded.into_raw());
+    }
+
+    #[test]
+    fn straight_rgb8_in_place_matches_the_copying_conversion_for_every_alpha() {
+        let mut rgba = Vec::with_capacity(256 * 256 * 4);
+        for index in 0..256 * 256 {
+            let alpha = (index / 256) as u8;
+            let value = ((index % 256) as u8).min(alpha);
+            rgba.extend_from_slice(&[value, value / 2, alpha.saturating_sub(value), alpha]);
+        }
+
+        let expected = straight_rgb8(&rgba);
+        let converted = straight_rgb8_in_place(rgba);
+
+        assert_eq!(converted, expected);
+        assert_eq!(converted.capacity(), converted.len());
     }
 }
