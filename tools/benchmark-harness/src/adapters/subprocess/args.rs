@@ -61,6 +61,7 @@ impl SubprocessAdapter {
         output_dir: impl Into<String>,
         output_format: impl Into<String>,
         disable_ocr: bool,
+        ocr_language_arg: Option<String>,
     ) -> Vec<String> {
         let mut args = vec![
             "batch-parse".to_string(),
@@ -79,6 +80,7 @@ impl SubprocessAdapter {
         if disable_ocr {
             args.push("--no-ocr".to_string());
         }
+        args.extend(ocr_language_arg);
         args
     }
     pub(super) fn batch_sample_id(&self, file_paths: &[&Path], force_ocr: bool, output_format: OutputFormat) -> String {

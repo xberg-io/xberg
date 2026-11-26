@@ -230,8 +230,8 @@ fn ocr_pdf_contract_eligibility_matches_framework_language_capabilities() {
 
     assert_eq!(
         eligible("liteparse"),
-        3,
-        "default-language LiteParse must exclude German"
+        4,
+        "LiteParse accepts the per-batch German selection through --ocr-language"
     );
     assert_eq!(eligible("docling"), 4, "Docling accepts the per-batch German selection");
     assert_eq!(eligible("xberg-markdown-sceptre-ort"), 4);

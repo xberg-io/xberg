@@ -32,7 +32,8 @@ const _: () = assert!(MINERU_EXTRACTION_TIMEOUT_SECS + PYTHON_TIMEOUT_MARGIN_SEC
 const _: () = assert!(MINERU_MAX_TIMEOUT_SECS > PYMUPDF4LLM_MAX_TIMEOUT_SECS);
 const LITEPARSE_BINARY: &str = "lit";
 const LITEPARSE_VERSION_PREFIX: &str = "lit ";
-const LITEPARSE_REQUIRED_BATCH_OPTIONS: [&str; 4] = ["--format", "--no-ocr", "--num-workers", "--ocr-backend"];
+const LITEPARSE_REQUIRED_BATCH_OPTIONS: [&str; 5] =
+    ["--format", "--no-ocr", "--num-workers", "--ocr-backend", "--ocr-language"];
 /// Formats `lit` 2.21 rasterizes natively (`IMAGE_EXTENSIONS` in liteparse's `src/conversion.rs`).
 const LITEPARSE_IMAGE_FORMATS: [&str; 9] = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg"];
 /// Formats `lit` 2.21 converts to PDF through LibreOffice (its office, presentation and
@@ -248,6 +249,9 @@ pub fn create_liteparse_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> 
         },
     )
     .with_configured_ocr(ocr_enabled)
+    // `lit` takes a Tesseract language per invocation, so one native batch carries one language. ~keep
+    .with_ocr_language_arg("--ocr-language")
+    .with_ocr_language_policy(crate::adapter::declared_ocr_language_policy("liteparse"))
     .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS))
     .with_native_batch_command(liteparse_command)
     .with_format_aware(true))
@@ -691,7 +695,7 @@ if [ "$1" = "--version" ]; then
   exit 0
 fi
 if [ "$1" = "batch-parse" ] && [ "$2" = "--help" ]; then
-  echo "--format --no-ocr --num-workers --ocr-backend"
+  echo "--format --no-ocr --num-workers --ocr-backend --ocr-language"
   exit 0
 fi
 exit 2
@@ -719,6 +723,27 @@ exit 2
         );
 
         let error = verify_liteparse_cli(&command).expect_err("the pinned OCR backend flag must be supported");
+        assert!(error.to_string().contains("native batch-parse interface"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn liteparse_probe_rejects_cli_without_ocr_language_selector() {
+        let (_temp, command) = fake_liteparse(
+            r#"
+if [ "$1" = "--version" ]; then
+  echo "lit 2.8.0"
+  exit 0
+fi
+if [ "$1" = "batch-parse" ] && [ "$2" = "--help" ]; then
+  echo "--format --no-ocr --num-workers --ocr-backend"
+  exit 0
+fi
+exit 2
+"#,
+        );
+
+        let error = verify_liteparse_cli(&command).expect_err("fixture OCR languages must be forwardable");
         assert!(error.to_string().contains("native batch-parse interface"));
     }
 

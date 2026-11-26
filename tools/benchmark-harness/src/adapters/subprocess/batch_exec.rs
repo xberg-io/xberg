@@ -185,8 +185,9 @@ impl SubprocessAdapter {
             .batch_capability
             .is_some_and(|capability| capability.entry_point == BatchEntryPoint::LiteparseBatchParse)
         {
+            let ocr_language_arg = self.batch_ocr_language_forward_arg(ocr_languages)?;
             return self
-                .execute_liteparse_native_batch(file_paths, timeout, force_ocr, output_format)
+                .execute_liteparse_native_batch(file_paths, timeout, force_ocr, ocr_language_arg, output_format)
                 .await;
         }
 
@@ -364,6 +365,7 @@ impl SubprocessAdapter {
         file_paths: &[&Path],
         timeout: Duration,
         force_ocr: bool,
+        ocr_language_arg: Option<String>,
         output_format: OutputFormat,
     ) -> Result<SubprocessExecution> {
         use std::fs;
@@ -388,6 +390,7 @@ impl SubprocessAdapter {
             output_dir.to_string_lossy().into_owned(),
             format_arg,
             disable_ocr,
+            ocr_language_arg,
         );
 
         let mut cmd = Self::measured_command(self.liteparse_batch_command());

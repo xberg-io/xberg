@@ -105,6 +105,7 @@ impl FrameworkAdapter for SubprocessAdapter {
                 "<output-dir>",
                 "<output-format>",
                 self.args.iter().any(|arg| arg == "--no-ocr"),
+                None,
             );
             return Some(crate::provenance::ExecutableProvenance::from_invocation(
                 self.liteparse_batch_command(),

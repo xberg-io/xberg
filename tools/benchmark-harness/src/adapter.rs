@@ -141,7 +141,7 @@ pub fn declared_ocr_language_policy(framework: &str) -> OcrLanguagePolicy {
     }
 
     match framework.strip_suffix("-batch").unwrap_or(framework) {
-        "docling" => OcrLanguagePolicy::AnyBatchGlobal,
+        "docling" | "liteparse" => OcrLanguagePolicy::AnyBatchGlobal,
         "mineru" => OcrLanguagePolicy::MineruChineseEnglish,
         "tika" | "unstructured" => OcrLanguagePolicy::AnyPerDocument,
         _ => OcrLanguagePolicy::DefaultOnly,
@@ -417,7 +417,7 @@ mod tests {
     fn framework_language_policies_match_runtime_capabilities() {
         assert_eq!(
             declared_ocr_language_policy("liteparse"),
-            OcrLanguagePolicy::DefaultOnly
+            OcrLanguagePolicy::AnyBatchGlobal
         );
         assert_eq!(
             declared_ocr_language_policy("docling"),
