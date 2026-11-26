@@ -640,3 +640,54 @@ fn a_word_no_witness_line_holds_stays_with_the_piece_before_it() {
     let order: Vec<Vec<usize>> = pieces.iter().map(|piece| piece.words.clone()).collect();
     assert_eq!(order, vec![vec![2], vec![0, 1], vec![3]]);
 }
+
+#[test]
+fn a_forced_read_without_layout_detection_admits_the_column_retry() {
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    let ocr = OcrConfig::default();
+    let forced = ExtractionConfig {
+        force_ocr: true,
+        ..Default::default()
+    };
+    assert!(super::request_admits_retry(&forced, &ocr));
+    assert!(super::request_admits_retry(&ExtractionConfig::default(), &ocr));
+}
+
+#[test]
+fn a_caller_chosen_segmentation_or_page_set_refuses_the_column_retry() {
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    let config = ExtractionConfig::default();
+    let mut explicit_psm = OcrConfig::default();
+    explicit_psm.tesseract_config.get_or_insert_default().psm = Some(11);
+    assert!(!super::request_admits_retry(&config, &explicit_psm));
+    let selected_pages = ExtractionConfig {
+        force_ocr_pages: Some(vec![1]),
+        ..Default::default()
+    };
+    assert!(!super::request_admits_retry(&selected_pages, &OcrConfig::default()));
+    let german = OcrConfig {
+        language: vec!["deu".to_string()],
+        ..Default::default()
+    };
+    assert!(!super::request_admits_retry(&config, &german));
+}
+
+#[tokio::test]
+async fn a_page_without_column_interleaving_never_pays_for_the_automatic_read() {
+    let single_column: Vec<Word<'static>> = source_page().into_iter().filter(|word| word.bounds[0] < 674).collect();
+    let baseline = page_read(11, "single column", &single_column);
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let (kept, order) = super::retry_order_read(baseline, "tesseract", None, || async {
+        reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(page_read(3, "automatic read", &single_column))
+    })
+    .await
+    .unwrap();
+    assert!(order.is_none());
+    assert_eq!(kept.content, "single column");
+    assert_eq!(
+        reads.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "no PSM 3 pass for an unflagged page"
+    );
+}
