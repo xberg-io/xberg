@@ -522,6 +522,52 @@ jobs:
         if: contains(matrix.pipeline, 'paddle')
         uses: ./.github/actions/setup-paddle-ocr-models
 
+      # ~keep The default Tesseract image route re-reads an unreliable photo with PaddleOCR only
+      # when the default PaddleOCR models (pp-ocrv6 det, rec and dict, textline classifier) are
+      # already cached (`OcrConfig::image_paddle_fallback`); it never downloads them itself. One
+      # PaddleOCR extraction fetches exactly the set the fallback probes. The key hashes the pinned
+      # model list (model_manager.rs) and the default version and tier (config.rs).
+      # Layout legs never take the fallback (layout detection makes a request ineligible).
+      - name: Cache default PaddleOCR models (image fallback)
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface/hub
+          key: paddle-ocr-v6-default-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crates/xberg/src/paddle_ocr/model_manager.rs', 'crates/xberg/src/paddle_ocr/config.rs') }}
+      - name: Pre-warm default PaddleOCR models (image fallback)
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if ./target/release/xberg extract test_documents/images/test_hello_world.png \
+              --ocr true --force-ocr true --ocr-backend paddle-ocr --ocr-language eng \
+              --no-cache true --format json >/dev/null; then
+              exit 0
+            fi
+            echo "::warning::PaddleOCR model pre-warm attempt $attempt failed" >&2
+            sleep $((attempt * 20))
+          done
+          echo "::error::PaddleOCR models could not be fetched for the image fallback" >&2
+          exit 1
+
+      # ~keep Runs before the benchmark: a missing model, a changed gate or a build without
+      # PaddleOCR would let every image row silently keep Tesseract's read. cord_receipt_02 is an
+      # ocr-images-fast photo the fallback must replace; failing here leaves this cell without
+      # results, so validate-artifacts blocks publication instead of publishing a zero-fire run.
+      - name: Assert the PaddleOCR image fallback fires
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        run: |
+          set -euo pipefail
+          result="$(./target/release/xberg extract test_documents/images/cord_receipt_02.jpg \
+            --ocr-language eng --no-cache true --format json)"
+          page_backend="$(jq -r '.result.pages[0].ocr_confidence.backend // "none"' <<<"$result")"
+          fallback_backend="$(jq -r '.result.metadata.ocr_fallback_backend // "none"' <<<"$result")"
+          if [ "$page_backend" != "paddle-ocr" ] && [ "$fallback_backend" != "paddle-ocr" ]; then
+            echo "::error::PaddleOCR image fallback did not fire on cord_receipt_02.jpg (pages[0].ocr_confidence.backend: $page_backend, metadata.ocr_fallback_backend: $fallback_backend)" >&2
+            exit 1
+          fi
+          echo "PaddleOCR image fallback fired (pages[0].ocr_confidence.backend: $page_backend, metadata.ocr_fallback_backend: $fallback_backend)"
+
       - name: Pre-warm Sceptre ORT models
         if: contains(matrix.pipeline, 'sceptre-ort')
         env:

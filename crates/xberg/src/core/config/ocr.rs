@@ -1207,6 +1207,27 @@ pub struct OcrConfig {
     /// `"tsv"`, because it would re-punctuate the bare coordinate integers in that markup.
     #[serde(default)]
     pub numeric_repair: bool,
+
+    /// Read a standalone camera photo again with the built-in PaddleOCR backend when the default
+    /// Tesseract read of it is sparse and unreliable, and keep the PaddleOCR read when its text
+    /// keeps at least the word- and number-shaped tokens Tesseract read with confidence (and at
+    /// least four), is about as word-like as Tesseract's read, and passes the OCR quality gate.
+    ///
+    /// Defaults to `true`. It applies only to a JPEG or WebP whose pixel size is not a standard
+    /// page at a scan resolution (PNG, BMP, GIF and TIFF images, and HEIC, which reaches OCR as
+    /// PNG, never qualify). The request must use `backend = "tesseract"` and leave every other
+    /// OCR choice unset: no `tesseract_config` (even a default one), `element_config`,
+    /// `paddle_ocr_settings`, `paddle_ocr_config`, `tessdata_path`, `tessdata_bytes`,
+    /// `numeric_repair`, backend tuning, `pipeline`, `vlm_fallback`, layout detection or
+    /// `include_document_structure`, and one Latin-script language. Tesseract must have read
+    /// between 1 and 80 words with word confidences that fail the sparse-text robustness check.
+    /// It needs a build with PaddleOCR and models already in the local cache: this re-read never
+    /// downloads a model, so the output for such a photo depends on whether the models are
+    /// cached, and the extraction cache keys on their state. An explicit `backend = "tesseract"`
+    /// with no other setting cannot be told apart from the default, so set this to `false` to
+    /// keep Tesseract's read on every image. A backend other than `tesseract` is never replaced.
+    #[serde(default = "default_image_paddle_fallback")]
+    pub image_paddle_fallback: bool,
 }
 
 impl Default for OcrConfig {
@@ -1233,6 +1254,7 @@ impl Default for OcrConfig {
             tessdata_path: None,
             tessdata_model: None,
             numeric_repair: false,
+            image_paddle_fallback: default_image_paddle_fallback(),
         }
     }
 }
@@ -1671,6 +1693,10 @@ fn default_ocr_enabled() -> bool {
 
 fn default_tesseract_backend() -> String {
     "tesseract".to_string()
+}
+
+fn default_image_paddle_fallback() -> bool {
+    true
 }
 
 /// Default OCR language (Tesseract/ISO 639 naming): English.

@@ -458,7 +458,7 @@ impl ModelManager {
     }
 
     /// Gets the cache directory path.
-    #[cfg(test)]
+    #[cfg(any(test, all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
     pub(crate) fn cache_dir(&self) -> &PathBuf {
         &self.cache_dir
     }
@@ -603,7 +603,52 @@ impl ModelManager {
         tier: &str,
         include_doc_ori: bool,
     ) -> Result<Vec<(String, bool)>, XbergError> {
-        let mut artifacts: Vec<(String, String, &str)> = Vec::new();
+        Ok(Self::required_artifacts(version, family, tier, include_doc_ori)?
+            .into_iter()
+            .map(|(label, remote, sha)| (label, self.cached_artifact_ok(&remote, sha)))
+            .collect())
+    }
+
+    /// Where every artifact [`Self::check_models_cached`] lists lives in the local cache: the
+    /// pinned snapshot path ([`Self::manifest_cache_path`]), whether or not it exists.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn model_file_paths(
+        &self,
+        version: &str,
+        family: &str,
+        tier: &str,
+        include_doc_ori: bool,
+    ) -> Result<Vec<PathBuf>, XbergError> {
+        Ok(Self::required_artifacts(version, family, tier, include_doc_ori)?
+            .iter()
+            .map(|(_, remote, _)| self.manifest_cache_path(remote))
+            .collect())
+    }
+
+    /// The local paths of every artifact [`Self::check_models_cached`] lists, or `None` when any
+    /// is not a file. Stats the pinned snapshot paths only: no client, no checksum, no download.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn cached_model_files(
+        &self,
+        version: &str,
+        family: &str,
+        tier: &str,
+        include_doc_ori: bool,
+    ) -> Result<Option<Vec<PathBuf>>, XbergError> {
+        let paths = self.model_file_paths(version, family, tier, include_doc_ori)?;
+        Ok(paths.iter().all(|path| path.is_file()).then_some(paths))
+    }
+
+    /// The `(label, remote file, sha256)` of every artifact a run with the given version,
+    /// script family and tier loads.
+    #[cfg(paddle_ocr)]
+    fn required_artifacts(
+        version: &str,
+        family: &str,
+        tier: &str,
+        include_doc_ori: bool,
+    ) -> Result<Vec<(String, String, &'static str)>, XbergError> {
+        let mut artifacts: Vec<(String, String, &'static str)> = Vec::new();
 
         let invalid_tier = |tier: &str| XbergError::Plugin {
             message: format!("Invalid model_tier \"{tier}\". Valid values: \"server\", \"mobile\""),
@@ -705,23 +750,26 @@ impl ModelManager {
             ));
         }
 
-        Ok(artifacts
-            .into_iter()
-            .map(|(label, remote, sha)| (label, self.cached_artifact_ok(&remote, sha)))
-            .collect())
+        Ok(artifacts)
     }
 
     /// Whether a pinned artifact is present in the local HF cache and passes
     /// its checksum. Never downloads.
     #[cfg(paddle_ocr)]
     fn cached_artifact_ok(&self, remote_filename: &str, sha256: &str) -> bool {
-        let Ok(api) = model_download::hf_client(Some(&self.cache_dir)) else {
-            return false;
-        };
+        self.cached_artifact_path(remote_filename)
+            .is_some_and(|path| model_download::verify_sha256(&path, sha256, remote_filename).is_ok())
+    }
+
+    /// The local path of a pinned artifact's cache entry, without checking its contents. Never
+    /// downloads.
+    #[cfg(paddle_ocr)]
+    fn cached_artifact_path(&self, remote_filename: &str) -> Option<PathBuf> {
+        let api = model_download::hf_client(Some(&self.cache_dir)).ok()?;
         model_download::hf_cached_revision_with_client(&api, HF_REPO_ID, remote_filename, Some(HF_REPO_REVISION))
             .ok()
             .flatten()
-            .is_some_and(|path| model_download::verify_sha256(&path, sha256, remote_filename).is_ok())
+            .filter(|path| path.is_file())
     }
 
     /// Returns the manifest of all PaddleOCR model files with checksums and sizes.
