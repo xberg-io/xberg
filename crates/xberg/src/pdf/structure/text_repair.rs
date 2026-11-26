@@ -679,22 +679,18 @@ pub(super) fn normalize_unicode_text_mapped(text: &str, record: bool) -> Repaire
     }
 }
 
-/// Final hyphen polish applied to assembled paragraph text.
+/// Final hyphen polish applied to assembled paragraph text: maps U+2010/U+2011
+/// to ASCII `-` to match ground-truth tokenization.
 ///
-/// Runs after segments are joined into a line/paragraph string (the spaced
-/// pattern only exists post-join when the hyphen was its own PDF text run):
-/// collapses spaced U+2010/U+2011 artifacts via [`collapse_spaced_hyphens`],
-/// then maps the remaining Unicode hyphens to ASCII `-` to match ground-truth
-/// tokenization.
+/// Spacing around the hyphen is left alone. Once segments are joined, a space the
+/// PDF draws (`unfurl ‑ Extract`, a name/description separator) cannot be told
+/// from one the join inserted, and the drawn kind is the common one. Spaces inside
+/// one segment are still handled by [`collapse_spaced_hyphens`] during text repair.
 pub(super) fn finalize_hyphens(text: &str) -> Cow<'_, str> {
-    if text.contains(['\u{2010}', '\u{2011}']) {
-        tracing::debug!(input = %text, "finalize_hyphens: unicode hyphen present");
+    if !text.contains(['\u{2010}', '\u{2011}']) {
+        return Cow::Borrowed(text);
     }
-    let collapsed = collapse_spaced_hyphens(text);
-    if !collapsed.contains(['\u{2010}', '\u{2011}']) {
-        return collapsed;
-    }
-    Cow::Owned(collapsed.replace(['\u{2010}', '\u{2011}'], "-"))
+    Cow::Owned(text.replace(['\u{2010}', '\u{2011}'], "-"))
 }
 
 /// Collapse spacing artifacts around Unicode hyphens between alphanumerics.
@@ -1008,10 +1004,14 @@ mod tests {
     }
 
     #[test]
-    fn test_finalize_hyphens_collapses_and_maps() {
+    fn test_finalize_hyphens_maps_and_keeps_drawn_spacing() {
         assert_eq!(
-            finalize_hyphens("DARPA \u{2010} BAA \u{2010} 15 \u{2010} 58 September"),
-            "DARPA-BAA-15-58 September"
+            finalize_hyphens("unfurl \u{2011} Extract and visualize data"),
+            "unfurl - Extract and visualize data"
+        );
+        assert_eq!(
+            finalize_hyphens("quark\u{2011}engine \u{2011} An Obfuscation\u{2011}Neglect scorer"),
+            "quark-engine - An Obfuscation-Neglect scorer"
         );
         assert_eq!(finalize_hyphens("DARPA\u{2010}BAA"), "DARPA-BAA");
         assert_eq!(finalize_hyphens("non\u{2011}breaking"), "non-breaking");
