@@ -435,12 +435,15 @@ mod tests {
         let status = std::process::Command::new("mkfifo").arg(&fifo).status().unwrap();
         assert!(status.success());
 
-        assert!(!super::adopt_verified(
-            &fifo,
-            &target.path().join("eng.traineddata"),
-            &payload_digest(),
-            0
-        ));
+        let output = target.path().join("eng.traineddata");
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(super::adopt_verified(&fifo, &output, &payload_digest(), 0));
+        });
+        let adopted = finished
+            .recv_timeout(TIMEOUT)
+            .expect("adopting a FIFO must not block on opening it");
+        assert!(!adopted);
         assert_eq!(target.path().read_dir().unwrap().count(), 0);
     }
 

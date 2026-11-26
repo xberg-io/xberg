@@ -202,17 +202,24 @@ fn test_adoption_sources_per_model() {
     assert_eq!(
         sources(TessdataModel::Best, true),
         [
-            base.join("tessdata").join("fast"),
             base.join("tessdata"),
+            base.join("tessdata").join("fast"),
             PathBuf::from("/given/system/best"),
             PathBuf::from("/given/system/fast"),
         ]
     );
     assert_eq!(
         sources(TessdataModel::Fast, true),
-        [base.join("tessdata"), PathBuf::from("/given/system/fast")]
+        [
+            base.join("tessdata"),
+            base.join("tessdata").join("fast"),
+            PathBuf::from("/given/system/fast"),
+        ]
     );
-    assert_eq!(sources(TessdataModel::Fast, false), [base.join("tessdata")]);
+    assert_eq!(
+        sources(TessdataModel::Fast, false),
+        [base.join("tessdata"), base.join("tessdata").join("fast")]
+    );
 }
 
 #[test]
@@ -432,12 +439,25 @@ fn test_materialize_eng_from_bundled_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let langs = vec!["eng".to_string()];
 
-    materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[], &PINNED).unwrap();
+    let provision = offline(&NO_SYSTEM, &PINNED);
+    materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[], &provision).unwrap();
     assert!(dir.path().join("eng.traineddata").exists());
     assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
 }
 
 const NO_SYSTEM: SystemTessdataDirs<'static> = SystemTessdataDirs { fast: &[], best: &[] };
+
+fn no_network(lang: &str, _model: TessdataModel, _directory: &Path) -> Result<bool, OcrError> {
+    panic!("this test must not download {lang}")
+}
+
+fn offline<'a>(system: &'a SystemTessdataDirs<'a>, pins: &'a PinTables<'a>) -> Provision<'a> {
+    Provision {
+        system,
+        pins,
+        fetch: &no_network,
+    }
+}
 
 fn cache_env(cache: &Path, model: TessdataModel) -> TessdataEnv {
     TessdataEnv {
@@ -467,8 +487,7 @@ fn test_best_resolution_copies_a_verified_pack_from_the_fast_cache() {
         &["zzz".to_string()],
         None,
         &cache_env(cache.path(), TessdataModel::Best),
-        &NO_SYSTEM,
-        &pins,
+        &offline(&NO_SYSTEM, &pins),
     )
     .unwrap();
 
@@ -492,8 +511,7 @@ fn test_shared_packs_reach_the_best_directory_once_a_source_appears() {
             &["eng".to_string()],
             None,
             &cache_env(cache.path(), TessdataModel::Best),
-            &NO_SYSTEM,
-            &pins,
+            &offline(&NO_SYSTEM, &pins),
         )
         .unwrap()
     };
@@ -539,8 +557,13 @@ fn test_a_custom_pack_in_the_flat_cache_keeps_serving_fast_requests() {
     std::fs::write(flat.join("fra.traineddata"), b"french").unwrap();
     let env = cache_env(cache.path(), TessdataModel::Fast);
 
-    let resolved =
-        resolve_tessdata_path_with(&["eng".to_string(), "fra".to_string()], None, &env, &NO_SYSTEM, &PINNED).unwrap();
+    let resolved = resolve_tessdata_path_with(
+        &["eng".to_string(), "fra".to_string()],
+        None,
+        &env,
+        &offline(&NO_SYSTEM, &PINNED),
+    )
+    .unwrap();
 
     assert_eq!(resolved, flat.to_str().unwrap());
     assert_eq!(std::fs::read(flat.join("eng.traineddata")).unwrap(), b"custom english");
@@ -571,13 +594,50 @@ fn test_a_flat_cache_holding_part_of_a_request_stays_the_fast_destination() {
         ..cache_env(cache.path(), TessdataModel::Fast)
     };
 
-    let resolved =
-        resolve_tessdata_path_with(&["eng".to_string(), "fra".to_string()], None, &env, &system, &pins).unwrap();
+    let resolved = resolve_tessdata_path_with(
+        &["eng".to_string(), "fra".to_string()],
+        None,
+        &env,
+        &offline(&system, &pins),
+    )
+    .unwrap();
 
     assert_eq!(resolved, flat.to_str().unwrap());
     assert_eq!(std::fs::read(flat.join("eng.traineddata")).unwrap(), b"custom english");
     assert_eq!(std::fs::read(flat.join("fra.traineddata")).unwrap(), b"french");
     assert!(!model_cache_dir(cache.path(), TessdataModel::Fast).exists());
+}
+
+#[test]
+fn test_air_gapped_fast_request_split_across_the_flat_and_fast_caches_resolves_offline() {
+    let cache = tempfile::tempdir().unwrap();
+    let flat = cache.path().join("tessdata");
+    let fast = model_cache_dir(cache.path(), TessdataModel::Fast);
+    std::fs::create_dir_all(&fast).unwrap();
+    std::fs::write(flat.join("eng.traineddata"), b"custom english").unwrap();
+    std::fs::write(fast.join("deu.traineddata"), b"german").unwrap();
+    std::fs::write(fast.join("osd.traineddata"), b"orientation").unwrap();
+    let deu = sha256_hex(b"german");
+    let osd = sha256_hex(b"orientation");
+    let pin = [("deu", deu.as_str(), 6), ("osd", osd.as_str(), 11)];
+    let pins = PinTables { fast: &pin, best: &pin };
+
+    let resolved = resolve_tessdata_path_with(
+        &["eng".to_string(), "deu".to_string()],
+        None,
+        &cache_env(cache.path(), TessdataModel::Fast),
+        &offline(&NO_SYSTEM, &pins),
+    )
+    .unwrap();
+
+    assert_eq!(resolved, flat.to_str().unwrap());
+    assert_eq!(std::fs::read(flat.join("eng.traineddata")).unwrap(), b"custom english");
+    assert_eq!(std::fs::read(flat.join("deu.traineddata")).unwrap(), b"german");
+    assert_eq!(
+        std::fs::read(flat.join("osd.traineddata")).unwrap(),
+        b"orientation",
+        "shared packs reach the flat destination too"
+    );
 }
 
 #[test]

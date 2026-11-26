@@ -153,25 +153,53 @@ pub(crate) fn resolve_tessdata_path_in(
     override_path: Option<&Path>,
     tessdata_env: &TessdataEnv,
 ) -> Result<String, OcrError> {
-    resolve_tessdata_path_with(languages, override_path, tessdata_env, &SYSTEM_TESSDATA_DIRS, &PINNED)
+    let provision = Provision {
+        system: &SYSTEM_TESSDATA_DIRS,
+        pins: &PINNED,
+        fetch: &download_pack,
+    };
+    resolve_tessdata_path_with(languages, override_path, tessdata_env, &provision)
 }
 
-/// [`resolve_tessdata_path_in`] with the system directories and pin tables given as arguments.
+/// Where packs come from: the system directories, the pins they are checked against and the
+/// downloader. Production uses the real ones; tests inject small tables and a downloader that
+/// fails the test if it is called.
+struct Provision<'a> {
+    system: &'a SystemTessdataDirs<'a>,
+    pins: &'a PinTables<'a>,
+    fetch: &'a dyn Fn(&str, TessdataModel, &Path) -> Result<bool, OcrError>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn download_pack(lang: &str, model: TessdataModel, directory: &Path) -> Result<bool, OcrError> {
+    crate::ocr::tessdata_download::ensure_language_pack(lang, model, directory, &[])
+}
+
+#[cfg(target_arch = "wasm32")]
+fn download_pack(lang: &str, _model: TessdataModel, _directory: &Path) -> Result<bool, OcrError> {
+    Err(OcrError::TesseractInitializationFailed(format!(
+        "Cannot download language pack '{lang}' on WASM"
+    )))
+}
+
+/// [`resolve_tessdata_path_in`] with the pack sources given as an argument.
 fn resolve_tessdata_path_with(
     languages: &[String],
     override_path: Option<&Path>,
     tessdata_env: &TessdataEnv,
-    system: &SystemTessdataDirs<'_>,
-    pins: &PinTables<'_>,
+    provision: &Provision<'_>,
 ) -> Result<String, OcrError> {
     let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
     let managed = model_cache_dir(&cache_base, tessdata_env.model);
-    let sources = adoption_sources(&cache_base, tessdata_env, system);
+    let flat = cache_base.join("tessdata");
+    let sources = adoption_sources(&cache_base, tessdata_env, provision.system);
+    let xberg_owned =
+        |dir: &Path| dir == managed.as_path() || (tessdata_env.model == TessdataModel::Fast && dir == flat);
 
-    for dir in tessdata_search_dirs_with(override_path, tessdata_env, system) {
+    for dir in tessdata_search_dirs_with(override_path, tessdata_env, provision.system) {
         if all_languages_exist(&dir, languages)? {
-            if Path::new(&dir) == managed.as_path() {
-                adopt_shared_packs(&managed, tessdata_env.model, &sources, pins);
+            if xberg_owned(Path::new(&dir)) {
+                adopt_shared_packs(Path::new(&dir), tessdata_env.model, &sources, provision.pins);
             }
             log_resolved(&dir, override_path, tessdata_env);
             return Ok(dir);
@@ -181,7 +209,6 @@ fn resolve_tessdata_path_with(
     // ~keep A flat cache that already serves some of the requested languages stays the fast
     // destination, as before model sets existed, so a pack placed there by hand keeps being used
     // beside the newly downloaded ones.
-    let flat = cache_base.join("tessdata");
     let destination = if tessdata_env.model == TessdataModel::Fast && any_language_exists(&flat, languages) {
         flat
     } else {
@@ -195,10 +222,8 @@ fn resolve_tessdata_path_with(
         ))
     })?;
 
-    materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, pins)?;
-    if destination == managed {
-        adopt_shared_packs(&managed, tessdata_env.model, &sources, pins);
-    }
+    materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, provision)?;
+    adopt_shared_packs(&destination, tessdata_env.model, &sources, provision.pins);
 
     let dest_str = destination
         .to_str()
@@ -222,14 +247,14 @@ fn any_language_exists(directory: &Path, languages: &[String]) -> bool {
 }
 
 /// Local directories a missing pack of the requested set may be copied from after its pin is
-/// verified: the flat cache and, for `best`, the `fast` cache, since `osd` and `equ` are the same
-/// bytes in both sets; then the built-in `best` directory and the system paths.
+/// verified: the flat cache and the `fast` cache (for `best` too, since `osd` and `equ` are the
+/// same bytes in both sets; a directory is never its own source), then the built-in `best`
+/// directory and the system paths.
 fn adoption_sources(cache_base: &Path, tessdata_env: &TessdataEnv, system: &SystemTessdataDirs<'_>) -> Vec<PathBuf> {
-    let mut sources = Vec::new();
-    if tessdata_env.model == TessdataModel::Best {
-        sources.push(model_cache_dir(cache_base, TessdataModel::Fast));
-    }
-    sources.push(cache_base.join("tessdata"));
+    let mut sources = vec![
+        cache_base.join("tessdata"),
+        model_cache_dir(cache_base, TessdataModel::Fast),
+    ];
     if tessdata_env.system_paths {
         if tessdata_env.model == TessdataModel::Best {
             sources.extend(system.best.iter().map(PathBuf::from));
@@ -470,13 +495,11 @@ fn materialize_missing_languages(
     languages: &[String],
     model: TessdataModel,
     sources: &[PathBuf],
-    pins: &PinTables<'_>,
+    provision: &Provision<'_>,
 ) -> Result<(), OcrError> {
-    use crate::ocr::tessdata_download::ensure_language_pack;
-
     for lang in languages {
         let traineddata_path = tessdata_path.join(format!("{}.traineddata", lang));
-        if traineddata_path.exists() || pins.adopt(lang, model, tessdata_path, sources) {
+        if traineddata_path.exists() || provision.pins.adopt(lang, model, tessdata_path, sources) {
             continue;
         }
 
@@ -495,7 +518,7 @@ fn materialize_missing_languages(
             continue;
         }
 
-        ensure_language_pack(lang, model, tessdata_path, &[])?;
+        (provision.fetch)(lang, model, tessdata_path)?;
     }
 
     Ok(())
@@ -508,7 +531,7 @@ fn materialize_missing_languages(
     languages: &[String],
     _model: TessdataModel,
     _sources: &[PathBuf],
-    _pins: &PinTables<'_>,
+    _provision: &Provision<'_>,
 ) -> Result<(), OcrError> {
     Err(OcrError::TesseractInitializationFailed(format!(
         "Cannot download language packs on WASM. Requested: {:?}",
