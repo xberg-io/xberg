@@ -179,20 +179,17 @@ impl OrientationRetry {
     ) -> crate::Result<ExtractedDocument> {
         let original = original?;
         check_cancelled(cancel)?;
-        if let Some(requested) = &self.recognition_config {
+        if self.recognition_config.is_some() {
             let result = self
                 .after_recognition(backend, raster, config, original, cancel, recovery)
                 .await?;
             check_cancelled(cancel)?;
-            // ~keep A following TATR pass owns the effective word capture. The PDF pipeline
-            // still applies the caller's public OCR-element policy when it emits the page.
-            #[cfg(feature = "layout-detection")]
-            let requested = if matches!(recovery, RecognitionRecovery::LayoutTable) {
-                config
-            } else {
-                requested
-            };
-            return Ok(recognition::restore_elements(result, requested));
+            // ~keep The words captured for recognition give way to this read's own element
+            // policy, as a read without the recognition retry would have returned them: page
+            // stages after it (column order, symbol-noise pruning, a TATR pass) asked for words
+            // through `config`. The PDF pipeline applies the caller's public OCR-element policy
+            // when it emits the page.
+            return Ok(recognition::restore_elements(result, config));
         }
         #[cfg(auto_rotate)]
         {
@@ -1347,6 +1344,58 @@ mod tests {
                 ..Default::default()
             };
             assert_eq!(recognition_retry_eligible(&config), eligible, "{policy:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_recognition_retry_keeps_the_words_the_read_itself_requested() {
+        let models = tempfile::tempdir().unwrap();
+        for language in ["eng", "osd"] {
+            std::fs::write(models.path().join(format!("{language}.traineddata")), b"fixture").unwrap();
+        }
+        let requested = OcrConfig {
+            tessdata_path: Some(models.path().into()),
+            ..Default::default()
+        };
+        let config = ExtractionConfig {
+            ocr: Some(requested.clone()),
+            ..Default::default()
+        };
+        let read_with_words = OcrConfig {
+            element_config: Some(OcrElementConfig {
+                include_elements: true,
+                min_level: OcrElementLevel::Word,
+                ..Default::default()
+            }),
+            ..requested.clone()
+        };
+        for (read_config, keeps_words) in [(&requested, false), (&read_with_words, true)] {
+            let retry = OrientationRetry::new(&config, OcrQualityThresholds::default());
+            let backend: Arc<dyn OcrBackend> = Arc::new(ScriptedBackend {
+                replies: parking_lot::Mutex::new(vec![marked_recognition_read(), table_candidate()].into()),
+                rasters: Default::default(),
+                configs: Default::default(),
+            });
+            let result = retry
+                .after_ocr(
+                    &backend,
+                    Arc::new(png_with_one_red_corner()),
+                    read_config,
+                    Ok(inverted_primary()),
+                    None,
+                    RecognitionRecovery::Table,
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.tables.len(), 1, "the recognition retry ran");
+            assert_eq!(
+                result
+                    .ocr_elements
+                    .as_ref()
+                    .is_some_and(|elements| !elements.is_empty()),
+                keeps_words,
+                "the read's own element policy decides which words survive"
+            );
         }
     }
 
