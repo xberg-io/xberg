@@ -4712,8 +4712,31 @@ fn restructured_document_retains_prose(
     );
     let baseline_text = crate::rendering::render_plain(&baseline);
     let restructured_text = crate::rendering::render_plain(doc);
-    ocr_structure_heuristic_char_retention(&restructured_text, &baseline_text)
-        >= MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION
+    let retention = ocr_structure_heuristic_char_retention(&restructured_text, &baseline_text);
+    let retained = retention >= MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION;
+    if !retained && tracing::enabled!(tracing::Level::DEBUG) {
+        let mut kept = std::collections::HashMap::<char, usize>::new();
+        for character in ocr_structure_heuristic_canonical_chars(&restructured_text) {
+            *kept.entry(character).or_default() += 1;
+        }
+        let missing: String = ocr_structure_heuristic_canonical_chars(&baseline_text)
+            .into_iter()
+            .filter(|character| match kept.get_mut(character) {
+                Some(count) if *count > 0 => {
+                    *count -= 1;
+                    false
+                }
+                _ => true,
+            })
+            .take(64)
+            .collect();
+        tracing::debug!(
+            retention,
+            missing = %missing,
+            "OCR document-level heading/list heuristic dropped characters; keeping the per-page structure"
+        );
+    }
+    retained
 }
 /// Split the single, document-wide [`crate::types::internal::InternalDocument`]
 /// [`heuristically_restructured_ocr_pages`] produced back into one per-page document per
