@@ -550,6 +550,7 @@ fn extract_native_blocking(
         },
     );
     native_document.doc.release_page_caches();
+    xberg_native_pdf::release_memory::return_freed_memory_to_os();
     let extraction = extraction?;
     ensure_pdf_not_cancelled(&config)?;
 

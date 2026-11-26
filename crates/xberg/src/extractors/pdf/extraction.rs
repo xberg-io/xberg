@@ -772,6 +772,7 @@ pub(crate) fn extract_all_from_native_document(
 
     // The text passes are done; table ruling decodes the Forms it walks on its own. ~keep
     doc.doc.release_form_stream_cache();
+    xberg_native_pdf::release_memory::return_freed_memory_to_os();
 
     let tables_requested = config.pdf_options.as_ref().is_none_or(|opts| opts.extract_tables);
     if cut_short && tables_requested {
@@ -930,6 +931,9 @@ pub(crate) fn extract_all_from_native_document(
         (Vec::new(), Vec::new(), None, Vec::new())
     };
     extraction_warnings.extend(table_warnings);
+    // The table and structure passes are done with their per-page buffers; give the OS the pages
+    // before annotations, images and the output assembly allocate on top. ~keep
+    xberg_native_pdf::release_memory::return_freed_memory_to_os();
 
     let (annotations, annotation_text_fallback, annotation_warnings) = extract_annotations_with_empty_body_fallback(
         doc,

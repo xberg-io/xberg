@@ -115,6 +115,8 @@ mod memcmpeq_shim {
 
 pub mod error;
 
+pub mod release_memory;
+
 pub(crate) mod cache;
 
 /// Third-party code vendored directly into this crate rather than pulled in
