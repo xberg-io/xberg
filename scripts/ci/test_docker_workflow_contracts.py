@@ -9,6 +9,7 @@ checks.
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -96,6 +97,66 @@ def assert_every_published_variant_copies_notices(text: str) -> None:
         assert NOTICE_COPY in dockerfile.read_text(), f"{dockerfile} does not copy both notices"
 
 
+def assert_publish_docker_verifies_best_before_push(text: str) -> None:
+    """The tessdata_best twin is tested and notice-checked before its digest can be pushed."""
+    steps = load_workflow(text)["jobs"]["build-docker"]["steps"]
+    names = step_names(steps)
+    verifier = named_step(steps, "Verify best image notices")
+    assert names.index("Run best Docker tests") < names.index("Verify best image notices")
+    assert names.index("Verify best image notices") < names.index("Build and push best by digest")
+    assert names.index("Upload digest") < names.index("Build best test image"), (
+        "best must not hold back the default image"
+    )
+    assert verifier.get("if") == "${{ matrix.best && steps.gate.outputs.go_best == 'true' }}"
+    assert VERIFIER in str(verifier.get("run"))
+    assert "xberg-publish:${{ matrix.variant }}-best-test" in str(verifier.get("run"))
+    tests = named_step(steps, "Run best Docker tests")
+    assert "--variant ${{ matrix.variant }}-best" in str(tests.get("run"))
+    default_build = named_step(steps, "Build test image")["with"]
+    for name in ("Build best test image", "Build and push best by digest"):
+        build = named_step(steps, name)["with"]
+        assert build.get("target") == "best", name
+        assert build["build-args"] == default_build["build-args"], f"{name} must reuse the default build's cache"
+        assert build["cache-from"] == default_build["cache-from"], name
+
+
+def digest_artifacts(workflow: dict[str, object]) -> list[str]:
+    """Expand the digest artifact names build-docker uploads for every matrix leg."""
+    job = workflow["jobs"]["build-docker"]
+    templates = [
+        (step["with"]["name"], "best" in step["name"])
+        for step in job["steps"]
+        if str(step.get("uses", "")).startswith("actions/upload-artifact")
+    ]
+    assert len(templates) == 2, templates
+    names = []
+    for entry in job["strategy"]["matrix"]["include"]:
+        for platform in job["strategy"]["matrix"]["platform"]:
+            for template, best in templates:
+                if best and not entry["best"]:
+                    continue
+                names.append(
+                    template.replace("${{ matrix.platform.name }}", platform["name"]).replace(
+                        "${{ matrix.variant }}", entry["variant"]
+                    )
+                )
+    return names
+
+
+def assert_merge_patterns_select_one_variant(text: str) -> None:
+    """Each published manifest must collect exactly its own two platform digests."""
+    workflow = load_workflow(text)
+    artifacts = digest_artifacts(workflow)
+    merge = workflow["jobs"]["merge-docker"]
+    pattern = named_step(merge["steps"], "Download digests")["with"]["pattern"]
+    variants = [entry["variant"] for entry in merge["strategy"]["matrix"]["include"]]
+    assert sorted(variants) == ["cli", "core", "core-best", "full", "full-best"]
+    for variant in variants:
+        matched = fnmatch.filter(artifacts, pattern.replace("${{ matrix.variant }}", variant))
+        assert len(matched) == 2, (variant, matched)
+    assert len(artifacts) == 10, artifacts
+
+
 def assert_ci_lint_paths_cover_notices(text: str) -> None:
     """The workflow that runs these contracts must run when a notice source changes."""
     paths = push_paths(text)
@@ -132,6 +193,28 @@ def test_publish_docker_verifies_notice_bytes_before_pushing_a_digest() -> None:
 
 def test_every_published_variant_keeps_the_canonical_notice_copy() -> None:
     assert_every_published_variant_copies_notices(PUBLISH_DOCKER.read_text())
+
+
+def test_publish_docker_verifies_the_best_image_before_pushing_its_digest() -> None:
+    assert_publish_docker_verifies_best_before_push(PUBLISH_DOCKER.read_text())
+
+
+def test_each_manifest_downloads_only_its_own_digests() -> None:
+    assert_merge_patterns_select_one_variant(PUBLISH_DOCKER.read_text())
+
+
+def test_publish_contract_rejects_a_best_image_without_the_verifier() -> None:
+    broken = remove_step(PUBLISH_DOCKER.read_text(), "Verify best image notices")
+
+    assert_rejected(assert_publish_docker_verifies_best_before_push, broken, "no best image notice verifier")
+
+
+def test_merge_contract_rejects_a_pattern_that_also_matches_best_digests() -> None:
+    broken = PUBLISH_DOCKER.read_text().replace(
+        "pattern: digest-*-${{ matrix.variant }}", "pattern: digest-*-${{ matrix.variant }}*"
+    )
+
+    assert_rejected(assert_merge_patterns_select_one_variant, broken, "an overlapping digest pattern")
 
 
 def test_ci_lint_path_filters_cover_the_notice_sources() -> None:
