@@ -9,6 +9,7 @@ pub(crate) mod forms;
 pub(crate) mod geometry;
 pub(crate) mod hierarchy;
 pub(crate) mod images;
+pub(crate) mod math_latex;
 pub(crate) mod metadata;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod proven_dpi;
