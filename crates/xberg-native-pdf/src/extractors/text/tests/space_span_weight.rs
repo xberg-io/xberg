@@ -30,20 +30,28 @@ fn merged_span_texts(base_font: &str, stream: &str) -> Vec<String> {
     extractor.spans.iter().map(|span| span.text.clone()).collect()
 }
 
+/// The weight of the space span inserted after a run in `base_font`.
+fn space_weight(base_font: &str, closes_ltr_run: bool) -> FontWeight {
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), half_em_font(base_font));
+    extractor.state_stack.current_mut().font_size = 12.0;
+    extractor.state_stack.current_mut().horizontal_scaling = 100.0;
+    extractor.state_stack.current_mut().font_name = Some("F1".to_string());
+    extractor.insert_space_as_span(closes_ltr_run).unwrap();
+    extractor.spans.last().unwrap().font_weight
+}
+
 #[test]
-fn test_insert_space_as_span_carries_the_weight_of_the_current_font() {
-    for (base_font, bold) in [("Helvetica", false), ("Helvetica-Bold", true)] {
-        let mut extractor = TextExtractor::new();
-        extractor.add_font("F1".to_string(), half_em_font(base_font));
-        extractor.state_stack.current_mut().font_size = 12.0;
-        extractor.state_stack.current_mut().horizontal_scaling = 100.0;
-        extractor.state_stack.current_mut().font_name = Some("F1".to_string());
+fn test_insert_space_as_span_after_a_left_to_right_run_carries_the_weight_of_the_font() {
+    assert_eq!(space_weight("Helvetica", true), FontWeight::Normal);
+    assert_eq!(space_weight("Helvetica-Bold", true), FontWeight::Bold);
+}
 
-        extractor.insert_space_as_span().unwrap();
-
-        let weight = extractor.spans.last().unwrap().font_weight;
-        assert_eq!(weight == FontWeight::Bold, bold, "{base_font}");
-    }
+/// A right-to-left run is put in logical order span by span: a bold space joined to it would let the
+/// merge pass weld the next word drawn onto it in visual order (rtl_arabic_native.pdf).
+#[test]
+fn test_insert_space_as_span_after_a_right_to_left_run_stays_regular() {
+    assert_eq!(space_weight("Helvetica-Bold", false), FontWeight::Normal);
 }
 
 /// A bold heading set with 0.132 em `TJ` word gaps (84034880.pdf, "Two Minute Paper Summary"): the

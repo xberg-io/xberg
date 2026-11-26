@@ -529,6 +529,12 @@ impl<'doc> TextExtractor<'doc> {
                 .next_back()
                 .map(|c| c.is_whitespace())
                 .unwrap_or(false);
+        let closes_ltr_run = buffer
+            .unicode
+            .chars()
+            .rev()
+            .find(|c| !c.is_whitespace())
+            .is_some_and(|c| !crate::text::is_rtl_text(c as u32));
 
         self.flush_tj_buffer(buffer)?;
 
@@ -550,8 +556,8 @@ impl<'doc> TextExtractor<'doc> {
 
         if !buffer_ends_with_space && !next_element_starts_with_space {
             match set_back_depth {
-                None => self.insert_space_as_span()?,
-                Some(depth) => self.insert_space_past_drawn_run(offset, depth)?,
+                None => self.insert_space_as_span(closes_ltr_run)?,
+                Some(depth) => self.insert_space_past_drawn_run(offset, depth, closes_ltr_run)?,
             }
         }
 
@@ -613,13 +619,13 @@ impl<'doc> TextExtractor<'doc> {
     /// span at the pen would sort into a word that is already drawn and cut it (GH#2322). Only the part of
     /// the offset past the end of that run is a gap: when that part is a word-boundary offset too, the
     /// space span goes at the end of the run, as after a pen set to that end. ~keep
-    fn insert_space_past_drawn_run(&mut self, offset: f32, depth: f32) -> Result<()> {
+    fn insert_space_past_drawn_run(&mut self, offset: f32, depth: f32, closes_ltr_run: bool) -> Result<()> {
         let past_end = self.tj_offset_advance(offset) - depth;
         let pen = self.state_stack.current().text_matrix;
         match self.current_drawn_end() {
             Some(end) if past_end > self.tj_offset_advance(self.calculate_adaptive_tj_threshold()) => {
                 self.state_stack.current_mut().text_matrix = end;
-                let inserted = self.insert_space_as_span();
+                let inserted = self.insert_space_as_span(closes_ltr_run);
                 self.state_stack.current_mut().text_matrix = pen;
                 inserted
             }

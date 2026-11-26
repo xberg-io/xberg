@@ -124,7 +124,7 @@ fn test_insert_space_as_span() {
     extractor.state_stack.current_mut().font_name = Some("F1".to_string());
 
     let before = extractor.spans.len();
-    extractor.insert_space_as_span().unwrap();
+    extractor.insert_space_as_span(true).unwrap();
     assert_eq!(extractor.spans.len(), before + 1);
     assert_eq!(extractor.spans.last().unwrap().text, " ");
     assert!(extractor.spans.last().unwrap().offset_semantic);

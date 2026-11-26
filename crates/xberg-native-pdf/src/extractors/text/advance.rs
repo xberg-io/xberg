@@ -552,8 +552,9 @@ impl<'doc> TextExtractor<'doc> {
         Ok(())
     }
 
-    /// Insert a space character as a separate span.
-    pub(super) fn insert_space_as_span(&mut self) -> Result<()> {
+    /// Insert a space character as a separate span. `closes_ltr_run` says the run the space follows
+    /// ends in a left-to-right character.
+    pub(super) fn insert_space_as_span(&mut self, closes_ltr_run: bool) -> Result<()> {
         let mcid_scope = self.current_mcid_scope();
         let state = self.state_stack.current();
         let font_size = state.font_size;
@@ -599,11 +600,14 @@ impl<'doc> TextExtractor<'doc> {
         let font_name_space = state.font_name.clone().unwrap_or_else(|| "Unknown".to_string());
         let space_font = state.font_name.as_ref().and_then(|name| self.fonts.get(name));
         let is_italic_space = space_font.is_some_and(|font| font.is_italic());
-        // The space carries the weight of the run it separates, as a glyph run's buffer does: span
-        // merging joins only same-weight spans, so a regular space between two bold words stays a
-        // span of its own, which segment projection drops as blank, and a word gap narrower than the
-        // geometric threshold (a bold heading set with 0.13 em `TJ` gaps) loses its space. ~keep
-        let space_weight = if space_font.is_some_and(|font| font.is_bold()) {
+        // After a left-to-right run the space carries the weight of its font, as a glyph run's buffer
+        // does: span merging joins only same-weight spans, so a regular space between two bold words
+        // stays a span of its own, which segment projection drops as blank, and a word gap narrower
+        // than the geometric threshold (a bold heading set with 0.13 em `TJ` gaps) loses its space.
+        // A right-to-left run is drawn in visual order and put in logical order span by span, so a
+        // bold space there stays regular: joined to its run, it would let the merge pass weld the
+        // next word drawn onto it, two words in visual order (`التحقق خطوات`). ~keep
+        let space_weight = if closes_ltr_run && space_font.is_some_and(|font| font.is_bold()) {
             FontWeight::Bold
         } else {
             FontWeight::Normal
