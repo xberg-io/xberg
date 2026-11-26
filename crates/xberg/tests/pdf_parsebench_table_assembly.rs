@@ -37,6 +37,52 @@ fn row_index(cells: &[Vec<String>], starts_with: &str) -> usize {
         .unwrap_or_else(|| panic!("no row starts with {starts_with:?}: {cells:?}"))
 }
 
+/// `pb_sample_page_16_page1`: a header band whose cells stack one to three centred label lines.
+#[test]
+fn stacked_header_band_is_one_header_row() {
+    let Some(document) = extract(".corpus-cache/pdf/pb_sample_page_16_page1.pdf") else {
+        return;
+    };
+    let [table] = document.tables.as_slice() else {
+        panic!(
+            "expected one table, got {}: {}",
+            document.tables.len(),
+            document.content
+        );
+    };
+
+    assert_eq!(
+        table.cells[0],
+        [
+            "UW Tier Group",
+            "Vehicle Type Group",
+            "Minimum Vehicle Miles",
+            "Maximum Vehicle Miles",
+            "BI",
+            "PD",
+            "CSL",
+            "PIP",
+            "UM BI",
+            "UM PD",
+            "UM CSL",
+            "UIMBI",
+            "UIMCSL",
+            "COMPO",
+            "COMPA",
+            "COMPG",
+            "COMPC",
+            "COLL",
+            "Comp Auto Loan /Lease",
+            "Coll Auto Loan /Lease",
+            "OLTE",
+            "Excess Custom Equipment",
+            "Excess Electronic Equipment",
+            "Roadside Assistance",
+        ]
+    );
+    assert_eq!(&table.cells[1][..4], ["002", "AO", "1000", "1999"]);
+}
+
 /// `pb_fqr-retail-blackrock-global-allocation-fund-inc_page8`: a holdings table whose only row
 /// with a digit in every cell is a label continuation deep in the body.
 #[test]

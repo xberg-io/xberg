@@ -588,6 +588,99 @@ fn find_row_index_by_overlap(row_positions: &[u32], word: &HocrWord, median_heig
         .map(|(index, _)| index)
 }
 
+/// Fewest rows in a stacked header band.
+const STACKED_BAND_MIN_ROWS: usize = 3;
+/// Fewest words in each row of a stacked header band.
+const STACKED_BAND_MIN_ROW_WORDS: usize = 2;
+/// Fewest columns whose label stacks two or more of the band's rows.
+const STACKED_BAND_MIN_STACKED_COLUMNS: usize = 2;
+
+/// Read a stacked header band at the top of a table as one row.
+///
+/// A header whose cells stack a different number of centred label lines ("UW Tier / Group"
+/// beside "Minimum / Vehicle / Miles" beside "BI") interleaves the cells' lines into rows closer
+/// together than a line of text (pb_sample_page_16: 2.8pt apart at a 4.3pt glyph height). Read
+/// as rows, each cell's label is scattered over several header rows, and `post_process_table`
+/// keeps only the last two as the header and demotes the others below it. Lines that close cannot
+/// share a column with the line next to them without their glyphs colliding, so the band is
+/// recognised by text rows that step less than a line apart and never overlap the adjacent row
+/// horizontally, while a column's own lines, two rows apart, do overlap. The band's rows are
+/// replaced by its last row: every band word lies above it and every later row at least a line
+/// below, so each band word is nearest to it, and [`order_cell_words_in_reading_order`] still
+/// reads each cell's lines top to bottom. The same pass reorders such a band in the native
+/// reading order (`pdf::native::hierarchy::stacked_header_band`). ~keep
+fn collapse_stacked_header_band(words: &[HocrWord], mut row_positions: Vec<u32>, median_height: u32) -> Vec<u32> {
+    let band = stacked_header_band_rows(words, &row_positions, median_height);
+    if band >= STACKED_BAND_MIN_ROWS {
+        row_positions.drain(..band - 1);
+    }
+    row_positions
+}
+
+/// The number of leading rows of `row_positions` that form a stacked header band, or 0.
+fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_height: u32) -> usize {
+    if median_height == 0 || row_positions.len() <= STACKED_BAND_MIN_ROWS {
+        return 0;
+    }
+    let mut rows: Vec<Vec<&HocrWord>> = vec![Vec::new(); row_positions.len()];
+    for word in words {
+        if let Some(row) = find_row_index_by_overlap(row_positions, word, median_height) {
+            rows[row].push(word);
+        }
+    }
+    let is_label_row = |row: &[&HocrWord]| {
+        row.len() >= STACKED_BAND_MIN_ROW_WORDS && row.iter().all(|word| !text_is_value(word.text.trim()))
+    };
+    if !is_label_row(&rows[0]) {
+        return 0;
+    }
+    let mut band = 1;
+    while band < rows.len()
+        && is_label_row(&rows[band])
+        && row_positions[band].abs_diff(row_positions[band - 1]) < median_height
+        && !rows_overlap_horizontally(&rows[band - 1], &rows[band])
+    {
+        band += 1;
+    }
+    let stacked = band >= STACKED_BAND_MIN_ROWS
+        && band < rows.len()
+        && stacked_column_count(&rows[..band]) >= STACKED_BAND_MIN_STACKED_COLUMNS;
+    if stacked { band } else { 0 }
+}
+
+fn rows_overlap_horizontally(upper: &[&HocrWord], lower: &[&HocrWord]) -> bool {
+    upper.iter().any(|above| {
+        lower
+            .iter()
+            .any(|below| above.left < below.right() && below.left < above.right())
+    })
+}
+
+/// The number of horizontally overlapping word clusters in `rows` that hold words of two or more
+/// rows.
+fn stacked_column_count(rows: &[Vec<&HocrWord>]) -> usize {
+    let mut words: Vec<(usize, &HocrWord)> = rows
+        .iter()
+        .enumerate()
+        .flat_map(|(row, words)| words.iter().map(move |word| (row, *word)))
+        .collect();
+    words.sort_by_key(|(_, word)| word.left);
+    let mut stacked = 0;
+    let mut cluster: Option<(u32, usize, bool)> = None;
+    for (row, word) in words {
+        cluster = Some(match cluster {
+            Some((right, first_row, multi_row)) if word.left < right => {
+                (right.max(word.right()), first_row, multi_row || row != first_row)
+            }
+            finished => {
+                stacked += usize::from(finished.is_some_and(|(_, _, multi_row)| multi_row));
+                (word.right(), row, false)
+            }
+        });
+    }
+    stacked + usize::from(cluster.is_some_and(|(_, _, multi_row)| multi_row))
+}
+
 /// Find which column a word belongs to, by the nearest left edge of the tracks it was folded from
 /// ([`ColumnTrack::distance_to`]).
 fn find_column_index(columns: &[ColumnTrack], word: &HocrWord) -> Option<usize> {
@@ -959,8 +1052,8 @@ pub(crate) fn reconstruct_table_with_columns(
         return (Vec::new(), Vec::new());
     }
 
-    let row_positions = detect_rows(words, row_threshold_ratio);
     let median_height = median_word_height(words);
+    let row_positions = collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height);
     let groups = group_words_into_cell_tokens(words, &row_positions);
     let cell_tokens: Vec<HocrWord> = groups.iter().map(|(token, _)| token.clone()).collect();
     let columns = detect_columns(&cell_tokens, &row_positions, column_threshold);
@@ -2322,6 +2415,94 @@ mod tests {
         assert_eq!(table.len(), 12);
         assert_eq!(table[10][5], "10500");
         assert_eq!(table[10][6], "10600");
+    }
+
+    const BAND_DATA_ROWS: u32 = 6;
+
+    /// The pb_sample_page_16 header band as the native PDF path rounds it: 4pt words whose lines
+    /// step 3pt, each cell's one to three label lines centred on the band, above 6pt-pitch data rows.
+    fn stacked_header_band_table() -> Vec<HocrWord> {
+        let mut words = vec![
+            word("Minimum", 72, 86, 18, 4),
+            word("Maximum", 95, 86, 19, 4),
+            word("UW", 25, 89, 5, 4),
+            word("Tier", 33, 89, 8, 4),
+            word("Vehicle", 45, 89, 12, 4),
+            word("Type", 59, 89, 7, 4),
+            word("Comp", 151, 89, 9, 4),
+            word("Auto", 162, 89, 9, 4),
+            word("Coll", 176, 89, 7, 4),
+            word("Auto", 184, 89, 9, 4),
+            word("Vehicle", 74, 92, 14, 4),
+            word("Vehicle", 98, 92, 14, 4),
+            word("BI", 126, 92, 4, 4),
+            word("Group", 27, 95, 11, 4),
+            word("Group", 51, 95, 11, 4),
+            word("Loan", 150, 95, 8, 4),
+            word("/Lease", 159, 95, 11, 4),
+            word("Loan", 174, 95, 8, 4),
+            word("/Lease", 183, 95, 11, 4),
+            word("Miles", 75, 98, 9, 4),
+            word("Miles", 99, 98, 9, 4),
+        ];
+        for row in 0..BAND_DATA_ROWS {
+            let top = 105 + row * 6;
+            words.extend([
+                word("002", 30, top, 6, 4),
+                word("AO", 54, top, 5, 4),
+                word(&format!("{}000", row + 1), 76, top, 9, 4),
+                word(&format!("{}999", row + 1), 99, top, 9, 4),
+                word("1.000", 122, top, 11, 4),
+                word("1.000", 155, top, 11, 4),
+                word("1.000", 179, top, 11, 4),
+            ]);
+        }
+        words
+    }
+
+    #[test]
+    fn stacked_header_band_is_read_as_one_header_row() {
+        let table = reconstruct_table(&stacked_header_band_table(), 20, 0.5);
+
+        assert_eq!(
+            table[0],
+            [
+                "UW Tier Group",
+                "Vehicle Type Group",
+                "Minimum Vehicle Miles",
+                "Maximum Vehicle Miles",
+                "BI",
+                "Comp Auto Loan /Lease",
+                "Coll Auto Loan /Lease",
+            ]
+        );
+        assert_eq!(table.len(), 1 + BAND_DATA_ROWS as usize);
+        assert_eq!(table[1], ["002", "AO", "1000", "1999", "1.000", "1.000", "1.000"]);
+    }
+
+    #[test]
+    fn stacked_header_band_rows_counts_the_interleaved_band() {
+        let words = stacked_header_band_table();
+        let rows = detect_rows(&words, 0.5);
+
+        assert_eq!(stacked_header_band_rows(&words, &rows, median_word_height(&words)), 5);
+    }
+
+    #[test]
+    fn close_text_rows_sharing_columns_are_not_a_stacked_band() {
+        let mut words = Vec::new();
+        for (row, top) in [86, 89, 92, 95].into_iter().enumerate() {
+            words.push(word(&format!("label{row}"), 20, top, 20, 4));
+            words.push(word(&format!("note{row}"), 60, top, 20, 4));
+        }
+        for row in 0..BAND_DATA_ROWS {
+            words.push(word("item", 20, 105 + row * 6, 20, 4));
+            words.push(word("12.5", 60, 105 + row * 6, 20, 4));
+        }
+        let rows = detect_rows(&words, 0.5);
+
+        assert_eq!(stacked_header_band_rows(&words, &rows, median_word_height(&words)), 0);
+        assert_eq!(reconstruct_table(&words, 20, 0.5).len(), 4 + BAND_DATA_ROWS as usize);
     }
 
     #[test]
