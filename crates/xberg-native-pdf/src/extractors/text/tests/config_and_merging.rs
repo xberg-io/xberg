@@ -827,6 +827,29 @@ fn test_snap_superscript_baselines_correctness() {
 }
 
 #[test]
+fn test_snap_superscript_baselines_records_the_raw_baseline() {
+    let mut extractor = TextExtractor::new();
+    extractor.spans = vec![
+        snap_span("x", 100.0, 700.0, 30.0, 12.0, 0),
+        snap_span("2", 130.0, 704.0, 4.0, 6.0, 1),
+    ];
+    extractor.snap_superscript_baselines();
+    assert_eq!(extractor.raw_script_baselines, [(130.0, 6.0, 704.0)]);
+
+    let mut preserving = TextExtractor::new();
+    preserving.preserve_script_baselines = true;
+    preserving.spans = vec![
+        snap_span("x", 100.0, 700.0, 30.0, 12.0, 0),
+        snap_span("2", 130.0, 704.0, 4.0, 6.0, 1),
+    ];
+    preserving.snap_superscript_baselines();
+    assert!(
+        preserving.raw_script_baselines.is_empty(),
+        "a preserving read restores the raw baseline itself"
+    );
+}
+
+#[test]
 fn test_snap_superscript_baselines_scales() {
     let mut extractor = TextExtractor::new();
     let mut spans = Vec::with_capacity(50_002);

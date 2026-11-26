@@ -113,9 +113,8 @@ pub(crate) fn rewrite_math_spans_with(spans: &[TextSpan], delimiters: Delimiters
 }
 
 /// [`rewrite_math_spans`] for spans read with flattened script geometry, which snaps a
-/// script's baseline onto its base: each span's raw baseline is looked up in the page's
-/// spans as read with script geometry preserved. Reads the page again only when it sets
-/// math.
+/// script's baseline onto its base: the raw baselines the page's read recorded put each
+/// script back where it was drawn, without reading the page again.
 pub(crate) fn rewrite_page_math(
     doc: &xberg_native_pdf::PdfDocument,
     page_index: usize,
@@ -124,36 +123,35 @@ pub(crate) fn rewrite_page_math(
     if !has_math_font(spans) {
         return None;
     }
-    let preserved = doc
-        .extract_page_text_with_cmsy_capture(page_index, xberg_native_pdf::document::ReadingOrder::TopToBottom, None)
-        .map(|page| page.spans)
-        .unwrap_or_default();
-    rewrite_with_baselines(spans, Delimiters::Dollars, &RawBaselines::new(&preserved))
+    let baselines = RawBaselines::new(&doc.flattened_script_baselines(page_index));
+    rewrite_with_baselines(spans, Delimiters::Dollars, &baselines)
 }
 
 fn has_math_font(spans: &[TextSpan]) -> bool {
     spans.iter().any(|span| math_font(&span.font_name).is_some())
 }
 
-/// Raw baselines of a page's spans, keyed by text, origin x and size.
+/// Raw baselines of snapped script spans, keyed by origin x and size.
 #[derive(Default)]
-struct RawBaselines(std::collections::HashMap<(String, u32, u32), f32>);
+struct RawBaselines(std::collections::HashMap<(u32, u32), f32>);
 
 impl RawBaselines {
-    fn new(preserved: &[TextSpan]) -> Self {
-        let mut baselines = std::collections::HashMap::new();
-        for span in preserved {
-            baselines.entry(Self::key(span)).or_insert(span.bbox.y);
+    fn new(recorded: &[(f32, f32, f32)]) -> Self {
+        let mut baselines = std::collections::HashMap::with_capacity(recorded.len());
+        for &(x, size, baseline) in recorded {
+            baselines.entry((x.to_bits(), size.to_bits())).or_insert(baseline);
         }
         Self(baselines)
     }
 
-    fn key(span: &TextSpan) -> (String, u32, u32) {
-        (span.text.clone(), span.bbox.x.to_bits(), span.font_size.to_bits())
-    }
-
     fn of(&self, span: &TextSpan) -> f32 {
-        self.0.get(&Self::key(span)).copied().unwrap_or(span.bbox.y)
+        if self.0.is_empty() {
+            return span.bbox.y;
+        }
+        self.0
+            .get(&(span.bbox.x.to_bits(), span.font_size.to_bits()))
+            .copied()
+            .unwrap_or(span.bbox.y)
     }
 }
 
@@ -316,16 +314,19 @@ impl<'a> Piece<'a> {
 /// The horizontal extent of a span's visible glyphs, without edge whitespace.
 fn ink_extent(span: &TextSpan) -> (f32, f32) {
     let full = (span.bbox.x, span.bbox.x + span.bbox.width);
-    if span.text.trim().len() == span.text.len() {
+    let text = span.text.as_str();
+    let leading = text.chars().take_while(|c| c.is_whitespace()).count();
+    let trailing = text.chars().rev().take_while(|c| c.is_whitespace()).count();
+    if leading == 0 && trailing == 0 {
         return full;
     }
-    let chars = span.to_chars();
-    let mut ink = chars.iter().filter(|c| !c.char.is_whitespace());
-    match (ink.next(), ink.last()) {
-        (Some(first), Some(last)) => (first.bbox.x, last.bbox.x + last.bbox.width),
-        (Some(only), None) => (only.bbox.x, only.bbox.x + only.bbox.width),
-        _ => full,
+    let count = text.chars().count();
+    if span.char_widths.len() != count || leading + trailing >= count {
+        return full;
     }
+    let start = span.bbox.x + span.char_widths[..leading].iter().sum::<f32>();
+    let end = start + span.char_widths[leading..count - trailing].iter().sum::<f32>();
+    (start, end)
 }
 
 fn classify(text: &str, font_name: &str) -> Class {

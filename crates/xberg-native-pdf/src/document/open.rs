@@ -320,6 +320,7 @@ impl PdfDocument {
             structure_content_cache: Mutex::new(None),
             actualtext_index_cache: Mutex::new(None),
             mc_actualtext_mcids: Mutex::new(HashMap::new()),
+            script_baselines: Mutex::new(HashMap::new()),
             table_elements_cache: Mutex::new(None),
             page_cache: Mutex::new(HashMap::new()),
             page_cache_populated: AtomicBool::new(false),

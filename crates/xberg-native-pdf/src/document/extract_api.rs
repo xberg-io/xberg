@@ -53,6 +53,8 @@ pub(super) struct InterpretedPage {
     warnings: Vec<crate::extractors::warnings::Warning>,
     /// Recoveries the interpretation charged to the document.
     recovered: crate::extractors::recovery_tally::RecoverySnapshot,
+    /// `(origin x, font size, raw baseline)` of each script span the read snapped onto its base.
+    script_baselines: Vec<(f32, f32, f32)>,
 }
 
 impl InterpretedPage {
@@ -63,6 +65,7 @@ impl InterpretedPage {
             cmsy: None,
             warnings: Vec::new(),
             recovered: Default::default(),
+            script_baselines: Vec::new(),
         }
     }
 
@@ -328,6 +331,7 @@ impl PdfDocument {
             self.warning_sink.extend(page.warnings.iter().cloned());
             self.recovery_counts().add(&page.recovered);
             self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
+            self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
             if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
                 output.clone_from(witnesses);
             }
@@ -353,6 +357,7 @@ impl PdfDocument {
         page.warnings = warnings;
         page.recovered = self.recovery_counts().snapshot().since(&recovered_before);
         self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
+        self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
         if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
             output.clone_from(witnesses);
         }
@@ -383,6 +388,7 @@ impl PdfDocument {
             cmsy: page.cmsy.clone(),
             warnings: page.warnings.clone(),
             recovered: page.recovered,
+            script_baselines: page.script_baselines.clone(),
         };
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
             cache.insert(key, std::sync::Arc::new(copy), bytes);
@@ -465,6 +471,37 @@ impl PdfDocument {
         } else {
             guard.insert(page_index, mc_set);
         }
+    }
+
+    /// Keep the raw script baselines of a page's last flattened-geometry read, replacing any
+    /// earlier entry.
+    fn record_script_baselines(
+        &self,
+        page_index: usize,
+        script_geometry: ScriptGeometry,
+        baselines: &[(f32, f32, f32)],
+    ) {
+        if script_geometry != ScriptGeometry::Flatten {
+            return;
+        }
+        let mut guard = self.script_baselines.lock_or_recover();
+        if baselines.is_empty() {
+            guard.remove(&page_index);
+        } else {
+            guard.insert(page_index, baselines.to_vec());
+        }
+    }
+
+    /// `(origin x, font size, raw baseline)` of each script span the page's last
+    /// flattened-geometry read snapped onto its base's baseline: the script geometry that
+    /// [`ScriptGeometry::Flatten`] spans no longer carry. Empty until such a read ran.
+    #[doc(hidden)]
+    pub fn flattened_script_baselines(&self, page_index: usize) -> Vec<(f32, f32, f32)> {
+        self.script_baselines
+            .lock_or_recover()
+            .get(&page_index)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Interpret a page's content stream into raw spans. Uncached; the document
@@ -576,6 +613,7 @@ impl PdfDocument {
             cmsy,
             warnings: Vec::new(),
             recovered: Default::default(),
+            script_baselines: std::mem::take(&mut extractor.raw_script_baselines),
         })
     }
 

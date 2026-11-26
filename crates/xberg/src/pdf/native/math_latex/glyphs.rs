@@ -37,15 +37,12 @@ pub(crate) fn math_font(font_name: &str) -> Option<MathFont> {
         Some((tag, rest)) if tag.len() == SUBSET_TAG_LEN && tag.bytes().all(|b| b.is_ascii_uppercase()) => rest,
         _ => font_name,
     };
-    let family: String = name
-        .split(['-', ','])
-        .next()
-        .unwrap_or_default()
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .map(|c| c.to_ascii_uppercase())
-        .collect();
-    let has = |families: &[&str]| families.iter().any(|prefix| family.starts_with(prefix));
+    // Called for every span of every page, so the family is compared in place. ~keep
+    let family = name.split(['-', ',']).next().unwrap_or_default().trim().as_bytes();
+    let starts_with =
+        |prefix: &str| family.len() >= prefix.len() && family[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes());
+    let has = |families: &[&str]| families.iter().any(|prefix| starts_with(prefix));
+    let ends_with_math = family.len() >= 4 && family[family.len() - 4..].eq_ignore_ascii_case(b"MATH");
     if has(BLACKBOARD_FAMILIES) {
         Some(MathFont::Blackboard)
     } else if has(FRAKTUR_FAMILIES) {
@@ -54,7 +51,7 @@ pub(crate) fn math_font(font_name: &str) -> Option<MathFont> {
         Some(MathFont::Script)
     } else if has(SYMBOL_FAMILIES) {
         Some(MathFont::Symbol)
-    } else if has(ITALIC_FAMILIES) || family.ends_with("MATH") {
+    } else if has(ITALIC_FAMILIES) || ends_with_math {
         Some(MathFont::Italic)
     } else {
         None

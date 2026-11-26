@@ -151,6 +151,10 @@ impl<'doc> TextExtractor<'doc> {
             .zip(snapped_script_baselines(&snapshot, SnapReach::EXTRACTOR))
         {
             if let Some(base_y) = base_y {
+                if moves_marks {
+                    self.raw_script_baselines
+                        .push((span.bbox.x, span.font_size, span.bbox.y));
+                }
                 let marked = moves_marks && self.pen_continuations.remove(&SpanKey::of(span));
                 span.bbox.y = base_y;
                 if marked {

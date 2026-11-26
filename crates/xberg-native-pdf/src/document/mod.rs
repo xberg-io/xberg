@@ -860,6 +860,9 @@ pub struct PdfDocument {
     /// it covers, so a struct-tree-scope `/ActualText` on an ancestor
     /// element must NOT override it.
     pub(crate) mc_actualtext_mcids: Mutex<HashMap<usize, HashSet<u32>>>,
+    /// Per page, the raw baselines of the script spans its last flattened-geometry read
+    /// snapped onto their bases (`PdfDocument::flattened_script_baselines`).
+    pub(crate) script_baselines: Mutex<HashMap<usize, Vec<(f32, f32, f32)>>>,
     /// `Table` structure elements bucketed by page, built once via
     /// `find_table_elements_all_pages_shared` (one tree walk) so the converter
     /// table path does an O(1) lookup instead of walking the tree per page.
