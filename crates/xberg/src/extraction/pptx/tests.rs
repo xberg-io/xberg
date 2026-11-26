@@ -2,6 +2,7 @@ use super::*;
 
 mod chart_numbers;
 mod ooxml_regressions;
+mod run_spacing_and_reading_order;
 mod slides_images_and_comments;
 
 pub(crate) use ooxml_regressions::build_single_slide_pptx;

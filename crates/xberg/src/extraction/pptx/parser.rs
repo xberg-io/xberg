@@ -410,6 +410,13 @@ fn parse_table_cell(tc_node: &Node) -> Result<TableCell> {
             n.is_element() && n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
         }) {
             let mut paragraph_runs = parse_paragraph(&p_node, false, "")?;
+            // A cell renders on one line, so its paragraphs are separated by a space.
+            if !runs.is_empty() && !paragraph_runs.is_empty() {
+                runs.push(Run {
+                    text: " ".to_string(),
+                    ..line_break_run()
+                });
+            }
             runs.append(&mut paragraph_runs);
         }
     }

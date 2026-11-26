@@ -155,14 +155,16 @@ fn enforce_slide_limit(slide_count: usize, max_pages: Option<usize>) -> Result<(
     Ok(crate::extractors::security::enforce_page_count(slide_count, max_pages)?)
 }
 
-/// Join text runs with smart spacing: inserts a space between adjacent runs
-/// only when the previous run doesn't end with whitespace and the next run
-/// doesn't start with whitespace.
+/// Join a paragraph's runs. Text runs are contiguous, so `<a:t>Sum</a:t><a:t>mary</a:t>`
+/// reads "Summary"; a math run carries no source whitespace, so it gets a space on each
+/// side that does not already have one.
 fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> String {
     let mut result = String::new();
+    let mut previous_is_math = false;
     for run in runs {
         let text = extract(run);
-        if !result.is_empty() && !text.is_empty() {
+        let is_math = run.math_latex.is_some();
+        if (is_math || previous_is_math) && !result.is_empty() && !text.is_empty() {
             let ends_ws = result.ends_with(|c: char| c.is_whitespace());
             let starts_ws = text.starts_with(|c: char| c.is_whitespace());
             if !ends_ws && !starts_ws {
@@ -170,6 +172,7 @@ fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> Str
             }
         }
         result.push_str(&text);
+        previous_is_math = is_math;
     }
     result
 }
