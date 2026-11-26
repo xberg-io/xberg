@@ -2263,7 +2263,9 @@ pub(super) fn effective_text(para: &PdfParagraph) -> String {
 /// True when text looks like a standalone heading rather than a title continuation.
 ///
 /// Matches product model codes ("HR 22", "HR 28/24"), mixed alphanumeric tokens
-/// ("A4", "HR28"), and lines that start with a digit.
+/// ("A4", "HR28"), and lines that start with a digit. A bare number followed by a
+/// lowercase word is mid-phrase rather than an enumerator: medium.pdf wraps its title
+/// as `... hepatitis C virus genotype` / `1 infection`.
 fn looks_like_standalone_heading_text(text: &str) -> bool {
     let trimmed = text.trim();
     let mut words = trimmed.splitn(3, ' ');
@@ -2271,7 +2273,9 @@ fn looks_like_standalone_heading_text(text: &str) -> bool {
     let second = words.next().unwrap_or("");
 
     if first.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        return true;
+        let number_before_lowercase_word =
+            first.chars().all(|c| c.is_ascii_digit()) && second.chars().next().is_some_and(char::is_lowercase);
+        return !number_before_lowercase_word;
     }
     let first_has_alpha = first.chars().any(|c| c.is_ascii_alphabetic());
     let first_has_digit = first.chars().any(|c| c.is_ascii_digit());
@@ -3752,6 +3756,30 @@ mod tests {
             2,
             "long lines several line pitches apart are separate headings"
         );
+    }
+
+    /// medium.pdf wraps its 23.9pt title after `genotype`, leaving `1 infection` on the last
+    /// line; the leading digit made it a standalone heading and the title lost its tail.
+    #[test]
+    fn merge_h1s_joins_a_wrapped_title_line_that_opens_with_a_number() {
+        let mut page = vec![
+            make_h1_at_baseline(23.9, "Swedish patients with hepatitis C virus genotype", 600.0),
+            make_h1_at_baseline(23.9, "1 infection", 573.0),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            1,
+            "a number continuing a wrapped title is not a new heading"
+        );
+        assert!(page[0].text.ends_with("genotype 1 infection"), "got {:?}", page[0].text);
+
+        let mut numbered = vec![
+            make_h1_at_baseline(23.9, "Swedish patients with hepatitis C virus genotype", 600.0),
+            make_h1_at_baseline(23.9, "1 Introduction", 573.0),
+        ];
+        merge_consecutive_h1s(&mut numbered);
+        assert_eq!(numbered.len(), 2, "a numbered capitalised heading stays standalone");
     }
 
     #[test]
