@@ -288,8 +288,8 @@ pub(super) struct TruncatedRange {
     sheet: TruncatedSheet,
     cells: Vec<calamine::Cell<calamine::Data>>,
     kept: SheetBounds,
-    /// First and last row seen anywhere in the sheet, kept or not.
-    rows: Option<(u32, u32)>,
+    /// First row seen in the sheet.
+    first_row: Option<u32>,
 }
 
 impl TruncatedRange {
@@ -298,17 +298,19 @@ impl TruncatedRange {
             sheet,
             cells: Vec::new(),
             kept: SheetBounds::default(),
-            rows: None,
+            first_row: None,
         }
     }
 
-    pub(super) fn push(&mut self, position: (u32, u32), value: &DataRef<'_>) {
+    /// Adds a cell of the kept rows; returns `false` at the first cell past them, where reading stops.
+    pub(super) fn push(&mut self, position: (u32, u32), value: &DataRef<'_>) -> bool {
         let row = position.0;
-        let (first, last) = self.rows.get_or_insert((row, row));
-        *first = (*first).min(row);
-        *last = (*last).max(row);
-        if row >= self.sheet.row_end || matches!(value, DataRef::Empty) {
-            return;
+        if row >= self.sheet.row_end {
+            return false;
+        }
+        self.first_row.get_or_insert(row);
+        if matches!(value, DataRef::Empty) {
+            return true;
         }
         let mut grown = self.kept.clone();
         if grown.grow(position).is_ok_and(|cells| cells <= self.sheet.max_cells) {
@@ -316,10 +318,7 @@ impl TruncatedRange {
             self.cells
                 .push(calamine::Cell::new(position, super::owned_xlsx_cell_value(value)));
         }
-    }
-
-    fn past_kept_rows(&self) -> bool {
-        self.rows.is_some_and(|(_, last)| last >= self.sheet.row_end)
+        true
     }
 
     pub(super) fn finish(
@@ -329,13 +328,13 @@ impl TruncatedRange {
     ) -> crate::types::ExcelSheet {
         let range = calamine::Range::from_sparse(self.cells);
         let sheet = super::process_sheet(name, &range, warnings);
-        let (first, last) = self.rows.unwrap_or_default();
-        let total = u64::from(last) - u64::from(first) + 1;
-        let kept = range.end().map_or(0, |(row, _)| u64::from(row) - u64::from(first) + 1);
+        let first = u64::from(self.first_row.unwrap_or_default());
+        let kept = range.end().map_or(0, |(row, _)| u64::from(row) - first + 1);
         let message = format!(
-            "Sheet '{name}' was truncated to its first {kept} of {total} rows: the remaining rows did not fit \
-             in the remaining table-cell budget (`security_limits.max_table_cells` is {}); raise the limit to \
-             extract the whole sheet",
+            "Sheet '{name}' was truncated to its first {kept} {}: the remaining rows did not fit in the \
+             remaining table-cell budget (`security_limits.max_table_cells` is {}); raise the limit to extract \
+             the whole sheet",
+            if kept == 1 { "row" } else { "rows" },
             self.sheet.limit
         );
         crate::core::diagnostics::push_warning(warnings, "excel", message);
@@ -343,7 +342,8 @@ impl TruncatedRange {
     }
 }
 
-/// Read the kept leading rows of an XLSX worksheet the preflight truncated.
+/// Read the kept leading rows of an XLSX worksheet the preflight truncated. Reading stops at the first
+/// row past them, so the rows left out are never read.
 pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
     workbook: &mut calamine::Xlsx<R>,
     name: &str,
@@ -354,17 +354,12 @@ pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
         .worksheet_cells_reader(name)
         .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
     let mut kept = TruncatedRange::new(sheet);
-    loop {
-        match reader.next_cell() {
-            Ok(Some(cell)) => kept.push(cell.get_position(), cell.get_value()),
-            Ok(None) => break,
-            // Past the kept rows the reader only counts rows, so a bad cell there ends the count.
-            Err(_) if kept.past_kept_rows() => break,
-            Err(error) => {
-                return Err(XbergError::parsing(format!(
-                    "Failed to read worksheet '{name}': {error}"
-                )));
-            }
+    while let Some(cell) = reader
+        .next_cell()
+        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+    {
+        if !kept.push(cell.get_position(), cell.get_value()) {
+            break;
         }
     }
     Ok(kept.finish(name, warnings))

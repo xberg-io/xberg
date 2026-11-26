@@ -707,7 +707,7 @@ fn should_warn_when_sheet_declared_dimensions_greatly_exceed_actual_data() {
         read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000)),
         "Huge",
         SecurityLimits::default().max_table_cells,
-        (1, 100_002),
+        1,
     );
     assert_eq!(
         truncated.sheets[0].table_cells.as_ref().unwrap(),
@@ -1052,8 +1052,7 @@ fn should_truncate_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    let workbook =
-        assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, (1, 2));
+    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 1);
     assert_eq!(
         workbook.sheets[0].table_cells.as_ref().unwrap(),
         &[vec!["1".to_string()]]
@@ -1061,18 +1060,19 @@ fn should_truncate_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
 }
 
 /// An XLSX sheet that tripped `max_table_cells` after its leading rows keeps only those rows, with a
-/// warning naming the `(kept, total)` row counts.
+/// warning naming the kept row count.
 fn assert_sheet_truncated_for_cell_limit(
     result: Result<ExcelReadResult>,
     sheet: &str,
     max: usize,
-    (kept, total): (usize, usize),
+    kept: usize,
 ) -> ExcelWorkbook {
     let (workbook, warnings) = result.expect("a sheet over the table-cell limit must degrade, not fail");
     assert_eq!(workbook.sheets.len(), 1);
     assert_eq!(workbook.sheets[0].name, sheet);
     assert!(workbook.sheets[0].row_count <= kept, "{:?}", workbook.sheets[0]);
-    let expected = format!("Sheet '{sheet}' was truncated to its first {kept} of {total} rows");
+    let unit = if kept == 1 { "row" } else { "rows" };
+    let expected = format!("Sheet '{sheet}' was truncated to its first {kept} {unit}:");
     let limit = format!("`security_limits.max_table_cells` is {max}");
     assert!(
         warnings
@@ -1165,7 +1165,7 @@ fn should_truncate_then_skip_the_sheets_over_the_table_budget_gh3417() {
         .collect();
     assert_eq!(budget.len(), 2, "{warnings:?}");
     assert!(
-        budget[0].contains("Sheet 'Big' was truncated to its first 1 of 5 rows"),
+        budget[0].contains("Sheet 'Big' was truncated to its first 1 row:"),
         "{}",
         budget[0]
     );
@@ -1193,7 +1193,7 @@ fn should_keep_the_leading_rows_of_a_sheet_over_the_table_budget_gh3417() {
     let messages: Vec<&str> = warnings.iter().map(|warning| warning.message.as_ref()).collect();
     assert_eq!(messages.len(), 1, "{messages:?}");
     assert!(
-        messages[0].contains("Sheet 'Sheet1' was truncated to its first 3 of 6 rows"),
+        messages[0].contains("Sheet 'Sheet1' was truncated to its first 3 rows:"),
         "{}",
         messages[0]
     );
@@ -1237,8 +1237,7 @@ fn should_budget_formula_only_xlsx_ranges_before_collecting_formulas_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    let workbook =
-        assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, (0, 2));
+    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 0);
     assert!(
         !workbook.metadata.contains_key("formulas_Sheet1"),
         "{:?}",
@@ -1259,10 +1258,10 @@ fn should_apply_the_xlsx_preflight_to_file_inputs_and_addins_gh2296() {
     };
     let directory = tempfile::tempdir().unwrap();
     for extension in [".xlsx", ".xlsm", ".xltm", ".xlam"] {
-        assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, extension, &limits), "Sheet1", 8, (1, 2));
+        assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, extension, &limits), "Sheet1", 8, 1);
         let path = directory.path().join(format!("budget{extension}"));
         std::fs::write(&path, &bytes).unwrap();
-        assert_sheet_truncated_for_cell_limit(read_excel_file(path.to_str().unwrap(), &limits), "Sheet1", 8, (1, 2));
+        assert_sheet_truncated_for_cell_limit(read_excel_file(path.to_str().unwrap(), &limits), "Sheet1", 8, 1);
     }
 }
 
@@ -1319,7 +1318,7 @@ fn should_keep_xlsx_cell_guards_when_a_file_is_renamed_gh2296() {
             max_table_cells: 3,
             ..Default::default()
         };
-        assert_sheet_truncated_for_cell_limit(read_excel_file(path.to_str().unwrap(), &low), "Sheet1", 3, (1, 2));
+        assert_sheet_truncated_for_cell_limit(read_excel_file(path.to_str().unwrap(), &low), "Sheet1", 3, 1);
         let exact = SecurityLimits {
             max_table_cells: 4,
             ..Default::default()
