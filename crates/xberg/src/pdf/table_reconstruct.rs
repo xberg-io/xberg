@@ -68,7 +68,7 @@ use super::structure::lines::{leading_opener_touches, segments_are_touching, tra
 /// columns along the wrong axes. [`SegmentData::upright_origin`] rotates the
 /// origin back into the segment's own reading frame (identity for the
 /// unrotated case, matching the plain x/y this replaced) so the row/column
-/// clustering downstream in `native::table::cluster_words_into_vertical_regions`
+/// clustering downstream in `native::table::cluster_words_into_vertical_regions_with_rules`
 /// operates on the table's actual advance/cross axes instead of the page's.
 ///
 /// Standalone calls (no sibling segments) always pass `(0.0, 0.0)` offsets: a

@@ -2916,16 +2916,8 @@ fn row_center(word: &crate::pdf::table_reconstruct::HocrWord) -> f32 {
 /// page gutter separating a table from an adjacent prose column, which the
 /// y-gap test alone cannot see (xberg-io/xberg#1769). Each region is a slab
 /// of words that may form a table; the caller validates with
-/// `reconstruct_table` + `post_process_table`.
-#[cfg(test)]
-fn cluster_words_into_vertical_regions(
-    words: &[crate::pdf::table_reconstruct::HocrWord],
-) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {
-    cluster_words_into_vertical_regions_with_rules(words, &[])
-}
-
-/// [`cluster_words_into_vertical_regions`], also joining a ruled label header row to the region
-/// whose columns it heads (see [`attach_ruled_label_headers`]).
+/// `reconstruct_table` + `post_process_table`. A ruled label header row joins the region whose
+/// columns it heads (see [`attach_ruled_label_headers`]).
 fn cluster_words_into_vertical_regions_with_rules(
     words: &[crate::pdf::table_reconstruct::HocrWord],
     rules: &[HeaderRule],
@@ -3096,7 +3088,7 @@ fn merge_regular_row_fragments(
 /// Further split each y-clustered region on a dominant vertical corridor — a gap in x
 /// that no word's horizontal interval crosses on any row of the region. A page gutter
 /// between a table and an adjacent prose column produces exactly this shape: the y-gap
-/// test in `cluster_words_into_vertical_regions` has no x term, so a table whose row
+/// test in `cluster_words_into_vertical_regions_with_rules` has no x term, so a table whose row
 /// pitch is close to a neighbouring column's line pitch never opens a wide enough
 /// vertical gap to separate them (xberg-io/xberg#1769). This pass runs after that
 /// clustering and before the region-shape retain filter. ~keep
@@ -4270,6 +4262,12 @@ mod header_metadata_tests;
 mod tests {
     use super::*;
     use xberg_native_pdf::layout::Color;
+
+    fn cluster_words_into_vertical_regions(
+        words: &[crate::pdf::table_reconstruct::HocrWord],
+    ) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {
+        cluster_words_into_vertical_regions_with_rules(words, &[])
+    }
 
     #[test]
     fn recovered_year_token_requires_glyphs_inside_the_column() {

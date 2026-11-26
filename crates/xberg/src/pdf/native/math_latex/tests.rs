@@ -1,7 +1,12 @@
 use super::glyphs::{MathFont, math_font, spell_glyph};
-use super::{is_equation_number, rewrite_math_spans};
+use super::{Delimiters, is_equation_number, rewrite_math_spans_with};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::TextSpan;
+
+/// Rewrite the math of one page as `$`-delimited LaTeX, or `None` when nothing changes.
+fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
+    rewrite_math_spans_with(spans, Delimiters::Dollars)
+}
 
 fn span(text: &str, font: &str, size: f32, x: f32, width: f32, baseline: f32) -> TextSpan {
     TextSpan {

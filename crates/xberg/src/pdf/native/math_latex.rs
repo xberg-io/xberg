@@ -100,19 +100,13 @@ impl Delimiters {
     }
 }
 
-/// Rewrite the math of one page as `$`-delimited LaTeX, or `None` when nothing changes.
-#[cfg(test)]
-pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
-    rewrite_math_spans_with(spans, Delimiters::Dollars)
-}
-
 /// Rewrite the math of one page as LaTeX delimited by `delimiters`, or `None` when nothing
 /// changes.
 pub(crate) fn rewrite_math_spans_with(spans: &[TextSpan], delimiters: Delimiters) -> Option<Vec<TextSpan>> {
     rewrite_with_baselines(spans, delimiters, &RawBaselines::default()).map(|(rewritten, _)| rewritten)
 }
 
-/// [`rewrite_math_spans`] for spans read with flattened script geometry, which snaps a
+/// [`rewrite_math_spans_with`] for spans read with flattened script geometry, which snaps a
 /// script's baseline onto its base: the raw baselines the page's read recorded put each
 /// script back where it was drawn, without reading the page again.
 pub(crate) fn rewrite_page_math(
@@ -141,7 +135,7 @@ pub(crate) fn rewrite_page_math_indexed(
     rewrite_with_baselines(spans, Delimiters::Dollars, &baselines)
 }
 
-/// [`rewrite_math_spans`] with the source-to-rewritten index map.
+/// [`rewrite_math_spans_with`] `$`-delimited, with the source-to-rewritten index map.
 #[cfg(all(test, feature = "layout-detection"))]
 pub(crate) fn rewrite_math_spans_indexed(spans: &[TextSpan]) -> Option<IndexedRewrite> {
     rewrite_with_baselines(spans, Delimiters::Dollars, &RawBaselines::default())
