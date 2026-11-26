@@ -14,7 +14,9 @@ use super::NativeDocument;
 // Inline-script rejoining measures baselines and character origins in raw page
 // coordinates, so it needs the strict page-axis predicate, not the
 // rotation-agnostic writing-mode one.
-use super::span_geometry::{has_same_rotation, is_horizontal_ltr, upright_advance_extent, upright_cross_extent};
+use super::span_geometry::{
+    has_same_rotation, is_horizontal_ltr, is_unrotated, upright_advance_extent, upright_cross_extent,
+};
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
@@ -503,11 +505,55 @@ fn reorder_single_page_reading_order(
     if xberg_native_pdf::pipeline::reading_order::order_by_stream_columns(spans) {
         return;
     }
+    let margin_runs = take_rotated_margin_runs(spans);
+    reorder_upright_columns(spans, page_width, page_height, page_index);
+    spans.extend(margin_runs);
+}
+
+fn reorder_upright_columns(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    page_width: f32,
+    page_height: f32,
+    page_index: usize,
+) {
     super::text::reorder_sparse_two_column_page(spans, page_width);
     if super::text::reorder_dense_two_column_page(spans, page_width) {
         return;
     }
     apply_xy_cut_if_column_aware(spans, page_width, page_height, page_index);
+}
+
+/// Remove and return the rotated runs that stand wholly beside the page's upright text, in
+/// their current order, when upright text makes up most of the page.
+///
+/// The column passes measure `bbox`, which a rotated run flattens onto its own axis, so an
+/// arXiv identifier stamped up the left margin reads as a line hundreds of points wide that
+/// crosses the gutter. It became a band boundary and split the columns into two stories
+/// (2001.09113 and 2305.09790 page 1 read the top of the right column before the foot of the
+/// left). Such a run is not part of either column, so it is read after them; its page-space
+/// box (`page_bbox`) decides that it lies outside the upright text. ~keep
+fn take_rotated_margin_runs(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+) -> Vec<xberg_native_pdf::layout::TextSpan> {
+    let inked = |span: &&xberg_native_pdf::layout::TextSpan| !span.text.trim().is_empty();
+    let upright: Vec<_> = spans.iter().filter(inked).filter(|span| is_unrotated(span)).collect();
+    let rotated_count = spans.iter().filter(inked).filter(|span| !is_unrotated(span)).count();
+    if rotated_count == 0 || upright.len() <= rotated_count {
+        return Vec::new();
+    }
+    let Some((upright_left, upright_right)) = content_bounds(&upright) else {
+        return Vec::new();
+    };
+    let is_margin_run = |span: &xberg_native_pdf::layout::TextSpan| {
+        let page_box = span.page_bbox();
+        !is_unrotated(span) && (page_box.right() <= upright_left || page_box.left() >= upright_right)
+    };
+    if !spans.iter().any(is_margin_run) {
+        return Vec::new();
+    }
+    let (margin_runs, rest): (Vec<_>, Vec<_>) = std::mem::take(spans).into_iter().partition(is_margin_run);
+    *spans = rest;
+    margin_runs
 }
 
 /// Run xberg_native_pdf's `ColumnAware` XY-Cut pass when `select_reading_order`
@@ -2121,6 +2167,33 @@ mod tests {
             ],
             "dense two-column band-split repair must run in the element path and group each column together"
         );
+    }
+
+    /// 2001.09113 page 1: an arXiv identifier runs up the left margin, its flattened `bbox` a
+    /// 300pt line across the gutter between the seventh and eighth rows. The columns read whole
+    /// and the stamp follows them.
+    #[test]
+    fn rotated_margin_stamp_does_not_split_the_columns() {
+        let mut spans = dense_two_column_spans_narrow_gutter();
+        let expected: Vec<String> = {
+            let mut control = spans.clone();
+            super::reorder_page_reading_order(&mut control, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+            control.into_iter().map(|span| span.text).collect()
+        };
+        let stamp = "arXiv:2001.09113v1 [cs.RO] 24 Jan 2020";
+        spans.push(TextSpan {
+            text: stamp.to_string(),
+            bbox: Rect::new(30.0, 816.0 - 6.5 * 14.0, 300.0, 10.0),
+            font_size: 10.0,
+            rotation_degrees: 90.0,
+            ..TextSpan::default()
+        });
+
+        super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+
+        let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        let expected: Vec<&str> = expected.iter().map(String::as_str).chain([stamp]).collect();
+        assert_eq!(texts, expected);
     }
 
     /// Regression guard for GH#1397: a genuine single-column page (numbered
