@@ -167,6 +167,7 @@ impl PdfDocument {
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::{FillRule, PathExtractor, PathGraphicsStateStack};
         use crate::layout::Color;
+        use std::ops::ControlFlow;
 
         let page = self.get_page(page_index)?;
         let page_dict = page.as_dict().ok_or_else(|| Error::ParseError {
@@ -215,11 +216,7 @@ impl PdfDocument {
             extractor.set_resources(resolved_resources);
         }
 
-        let mut failure = None;
-        let mut apply = |op: Operator| {
-            if failure.is_some() {
-                return;
-            }
+        let mut apply = |op: Operator| -> ControlFlow<Error> {
             if let Some(evidence) = bottom_pagination.as_deref_mut() {
                 evidence.observe(&op, &extractor);
             }
@@ -357,15 +354,14 @@ impl PdfDocument {
                 Operator::Do { name } => {
                     // The focused query observes page-local paths only. ~keep
                     if paginating {
-                        return;
+                        return ControlFlow::Continue(());
                     }
                     if let Err(error) =
                         self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack, &mut form_budget)
                     {
                         // A truncated paint sequence cannot safely serve as source evidence. ~keep
                         if form_budget.incomplete {
-                            failure = Some(error);
-                            return;
+                            return ControlFlow::Break(error);
                         }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
@@ -399,13 +395,14 @@ impl PdfDocument {
 
                 _ => {}
             }
+            ControlFlow::Continue(())
         };
-        match (separator_ops, page_content) {
-            (Some(operators), _) => operators.into_iter().for_each(&mut apply),
+        let flow = match (separator_ops, page_content) {
+            (Some(operators), _) => operators.into_iter().try_for_each(&mut apply),
             (None, Some(data)) => crate::content::parser::visit_page_path_operators(&data, &mut apply),
-            (None, None) => {}
-        }
-        if let Some(error) = failure {
+            (None, None) => ControlFlow::Continue(()),
+        };
+        if let ControlFlow::Break(error) = flow {
             return Err(error);
         }
 

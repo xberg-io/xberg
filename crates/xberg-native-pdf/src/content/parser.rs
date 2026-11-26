@@ -29,6 +29,7 @@ use nom::bytes::complete::take_while1;
 use nom::character::complete::multispace0;
 use smallvec::SmallVec;
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 
 /// Default maximum number of operators to parse from a single content
 /// stream. Prevents pathological inputs (e.g., Isartor 6.1.12) from
@@ -223,7 +224,10 @@ fn visit_content_stream(
 pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
     let estimated_capacity = data.len() / 20;
     let mut operators = Vec::with_capacity(estimated_capacity.min(100_000).min(effective_max_operators()));
-    visit_path_operators(data, None, |op| operators.push(op));
+    visit_path_operators(data, None, |op| {
+        operators.push(op);
+        ControlFlow::Continue(())
+    });
     Ok(operators)
 }
 
@@ -233,32 +237,55 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
 /// figure Form is tens of thousands of them, which [`visit_form_path_operators`] then replays one
 /// at a time from the same bytes and limit.
 pub(crate) fn count_complete_form_path_operators(data: &[u8], operator_limit: usize) -> Option<usize> {
-    let (count, complete) = visit_path_operators(data, Some(operator_limit), |_| {});
+    let (count, complete) = visit_path_operators(data, Some(operator_limit), |_| ControlFlow::Continue(()));
     complete.then_some(count)
 }
 
 /// Feed `visit` the operators [`count_complete_form_path_operators`] counted for the same bytes and limit.
-pub(crate) fn visit_form_path_operators(data: &[u8], operator_limit: usize, visit: impl FnMut(Operator)) {
-    visit_path_operators(data, Some(operator_limit), visit);
+pub(crate) fn visit_form_path_operators(data: &[u8], operator_limit: usize, mut visit: impl FnMut(Operator)) {
+    visit_path_operators(data, Some(operator_limit), |op| {
+        visit(op);
+        ControlFlow::Continue(())
+    });
 }
 
 /// Feed `visit` the operators [`parse_content_stream_paths_only`] would collect, one at a time, under
-/// the same operator cap, without holding the list.
-pub(crate) fn visit_page_path_operators(data: &[u8], visit: impl FnMut(Operator)) {
-    visit_path_operators(data, None, visit);
+/// the same operator cap, without holding the list. The scan stops at the first `Break`, which is
+/// returned.
+pub(crate) fn visit_page_path_operators<B>(
+    data: &[u8],
+    mut visit: impl FnMut(Operator) -> ControlFlow<B>,
+) -> ControlFlow<B> {
+    let mut stopped = None;
+    visit_path_operators(data, None, |op| match visit(op) {
+        ControlFlow::Continue(()) => ControlFlow::Continue(()),
+        ControlFlow::Break(value) => {
+            stopped = Some(value);
+            ControlFlow::Break(())
+        }
+    });
+    stopped.map_or(ControlFlow::Continue(()), ControlFlow::Break)
 }
 
-/// Pass each path operator of `data` to `emit` in stream order. Returns how many were emitted and
-/// whether the scan reached the end of the stream.
-fn visit_path_operators(data: &[u8], operator_limit: Option<usize>, mut emit: impl FnMut(Operator)) -> (usize, bool) {
+/// Pass each path operator of `data` to `emit` in stream order until `emit` breaks. Returns how
+/// many were emitted and whether the scan reached the end of the stream.
+fn visit_path_operators(
+    data: &[u8],
+    operator_limit: Option<usize>,
+    mut emit: impl FnMut(Operator) -> ControlFlow<()>,
+) -> (usize, bool) {
     let max_operators = effective_max_operators().min(operator_limit.unwrap_or(usize::MAX));
     let mut emitted: usize = 0;
     let len = data.len();
     let mut i: usize = 0;
     let mut operand_start: usize = 0;
     let mut consecutive_errors: usize = 0;
+    let mut stopped = false;
 
     loop {
+        if stopped {
+            return (emitted, false);
+        }
         while i < len && BYTE_CLASS[data[i] as usize] == SCAN_SKIP {
             i += 1;
         }
@@ -335,8 +362,8 @@ fn visit_path_operators(data: &[u8], operator_limit: Option<usize>, mut emit: im
                         // "tidy" those arms away. See GH#1633 and the matching note in
                         // rendering/page_renderer.rs. ~keep
                         b's' => {
-                            emit(Operator::ClosePath);
                             emitted += 1;
+                            stopped = stopped || emit(Operator::ClosePath).is_break();
                             Some(Operator::Stroke)
                         }
                         b'W' => Some(Operator::ClipNonZero),
@@ -352,8 +379,8 @@ fn visit_path_operators(data: &[u8], operator_limit: Option<usize>, mut emit: im
                         return (emitted, false);
                     }
                     if let Some(op) = op {
-                        emit(op);
                         emitted += 1;
+                        stopped = stopped || emit(op).is_break();
                         i += 1;
                         operand_start = i;
                         consecutive_errors = 0;
@@ -435,16 +462,16 @@ fn visit_path_operators(data: &[u8], operator_limit: Option<usize>, mut emit: im
                     return (emitted, false);
                 }
                 if let Some(op) = fast_op {
-                    emit(op);
                     emitted += 1;
+                    stopped = stopped || emit(op).is_break();
                     operand_start = i;
                     continue;
                 }
 
                 match parse_operator_with_operands(&data[operand_start..]) {
                     Ok((rest, op)) => {
-                        emit(op);
                         emitted += 1;
+                        stopped = stopped || emit(op).is_break();
                         i = len - rest.len();
                         operand_start = i;
                     }
@@ -5868,8 +5895,28 @@ mod tests {
 
     fn visited_page_operators(page: &[u8]) -> Vec<Operator> {
         let mut visited = Vec::new();
-        visit_page_path_operators(page, |op| visited.push(op));
+        let flow = visit_page_path_operators(page, |op| {
+            visited.push(op);
+            ControlFlow::<()>::Continue(())
+        });
+        assert_eq!(flow, ControlFlow::Continue(()));
         visited
+    }
+
+    #[test]
+    fn page_operator_visit_stops_at_the_first_break() {
+        let mut visited = Vec::new();
+        let flow = visit_page_path_operators(b"q 0 0 m 5 5 l S Q", |op| {
+            let stop = matches!(op, Operator::MoveTo { .. });
+            visited.push(op);
+            if stop {
+                ControlFlow::Break("stopped")
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert_eq!(flow, ControlFlow::Break("stopped"));
+        assert_eq!(visited, vec![Operator::SaveState, Operator::MoveTo { x: 0.0, y: 0.0 }]);
     }
 
     #[test]

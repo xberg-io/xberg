@@ -226,6 +226,22 @@ fn form_extraction_reports_incomplete_decode_and_parse() {
     );
 }
 
+/// The page scan stops at the first incomplete Form paint and returns its error, not one a
+/// later paint would raise.
+#[test]
+fn page_path_scan_returns_the_first_incomplete_form_error() {
+    use super::super::paths::FormPathBudget;
+    let content = "0 0 10 10 re f";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length {} >>\nstream\n{content}\nendstream",
+        content.len()
+    );
+    let error = page_with_xobject("/X1 Do /X1 Do", &form)
+        .extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 1))
+        .unwrap_err();
+    assert!(error.to_string().contains("incomplete Form path parse"), "{error}");
+}
+
 #[test]
 fn form_path_budget_allows_trailing_text_at_exact_fit() {
     use super::super::paths::FormPathBudget;
