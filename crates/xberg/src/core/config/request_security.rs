@@ -109,6 +109,7 @@ const OPERATOR_OWNED_FIELDS: &[&str] = &[
     "/html_output/css_file",
     "/tree_sitter/cache_dir",
     "/ocr/tessdata_path",
+    "/ocr/tessdata_model",
     "/chunking/embedding/cache_dir",
     "/chunking/embedding/model/model_id",
     "/chunking/sparse_embedding/cache_dir",
@@ -252,6 +253,7 @@ pub(crate) fn merge_html_override(operator: &super::ExtractionConfig, caller: &m
 /// egress comes from the operator, and resource limits can only tighten.
 pub(crate) fn adopt_operator_policy(config: &mut super::ExtractionConfig, operator: &super::ExtractionConfig) {
     adopt_operator_crawl_egress(config, operator);
+    adopt_operator_tessdata_model(config.ocr.as_mut(), operator.ocr.as_ref());
     config.concurrency = operator.concurrency.clone();
     #[cfg(feature = "html")]
     preserve_operator_css_file(config.html_output.as_mut(), operator.html_output.as_ref());
@@ -273,6 +275,7 @@ pub(crate) fn adopt_file_operator_policy(
     effective: &super::ExtractionConfig,
 ) {
     adopt_file_operator_crawl_egress(config, effective);
+    adopt_operator_tessdata_model(config.ocr.as_mut(), effective.ocr.as_ref());
     #[cfg(feature = "html")]
     preserve_operator_css_file(config.html_output.as_mut(), effective.html_output.as_ref());
     if let Some(timeout) = config.timeout_secs {
@@ -284,6 +287,14 @@ pub(crate) fn adopt_file_operator_policy(
     #[cfg(feature = "transcription-types")]
     if let Some(transcription) = config.transcription.as_mut() {
         tighten_transcription_limits(transcription, effective.transcription.as_ref());
+    }
+}
+
+/// A caller `ocr` object replaces the operator's, so restore the operator's Tesseract model set:
+/// it selects what the server downloads and caches.
+fn adopt_operator_tessdata_model(ocr: Option<&mut super::OcrConfig>, operator: Option<&super::OcrConfig>) {
+    if let Some(ocr) = ocr {
+        ocr.tessdata_model = operator.map(|operator| operator.tessdata_model).unwrap_or_default();
     }
 }
 

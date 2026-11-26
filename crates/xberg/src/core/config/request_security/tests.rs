@@ -480,6 +480,53 @@ fn should_reject_caller_tessdata_path() {
 }
 
 #[test]
+fn should_reject_caller_tessdata_model() {
+    let config = serde_json::json!({"ocr": {"tessdata_model": "best"}});
+
+    assert_eq!(
+        validate_caller_extraction_config(&config),
+        Err("Caller extraction config may not set ocr.tessdata_model".to_string())
+    );
+}
+
+#[test]
+fn should_keep_operator_tessdata_model_when_caller_sends_an_ocr_object() {
+    use super::super::{OcrConfig, TessdataModel};
+
+    let operator = super::super::ExtractionConfig {
+        ocr: Some(OcrConfig {
+            tessdata_model: TessdataModel::Best,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let caller = serde_json::json!({"ocr": {"language": ["deu"]}});
+
+    let resolved = resolve_caller_extraction_config(&operator, Some(&caller)).unwrap();
+    let ocr = resolved.ocr.as_ref().unwrap();
+    assert_eq!(ocr.tessdata_model, TessdataModel::Best);
+    assert_eq!(ocr.language, ["deu"]);
+
+    let mut file = super::super::FileExtractionConfig {
+        ocr: Some(OcrConfig::default()),
+        ..Default::default()
+    };
+    adopt_file_operator_policy(&mut file, &resolved);
+    assert_eq!(file.ocr.unwrap().tessdata_model, TessdataModel::Best);
+
+    let fast_operator = super::super::ExtractionConfig::default();
+    let mut config = super::super::ExtractionConfig {
+        ocr: Some(OcrConfig {
+            tessdata_model: TessdataModel::Best,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    adopt_operator_policy(&mut config, &fast_operator);
+    assert_eq!(config.ocr.unwrap().tessdata_model, TessdataModel::default());
+}
+
+#[test]
 fn should_reject_each_operator_owned_field_without_leaking_its_value() {
     for pointer in OPERATOR_OWNED_FIELDS {
         let secret = format!("/secret/for{pointer}");
