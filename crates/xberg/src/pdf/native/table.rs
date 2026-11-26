@@ -2159,13 +2159,20 @@ fn reconstruct_wrapped_side_by_side_child(
     allow_single_column: bool,
     horizontal_rules: usize,
 ) -> Option<(Table, bool)> {
-    if let Some(table) =
-        reconstruct_side_by_side_child(region, page_height, page_number, allow_single_column, horizontal_rules)
-    {
-        return Some((table, false));
-    }
     let col_gap = side_by_side_child_gap(region)?;
     let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
+    if let Ok(table) = admit_region_grid(
+        region,
+        grid.clone(),
+        column_positions.clone(),
+        page_height,
+        page_number,
+        allow_single_column,
+        col_gap,
+        horizontal_rules,
+    ) {
+        return Some((table, false));
+    }
     let median_height = median_word_height(region);
     let geometry = grid_row_geometry(region, grid.len(), median_height)?;
     let indent_tolerance = median_height / 2;
