@@ -1,7 +1,7 @@
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::TextSpan;
 
-use super::{ReadingOrderMemoScope, computed_orders, fingerprint, output_positions, stored_positions};
+use super::{ReadingOrderMemoScope, SpanEncodings, computed_orders, fingerprint, output_positions, stored_positions};
 
 fn same_spans(left: &[TextSpan], right: &[TextSpan]) -> bool {
     fingerprint(left) == fingerprint(right)
@@ -342,27 +342,65 @@ fn a_rearranging_order_is_kept_as_positions_and_served_identically() {
     );
 }
 
+fn span(text: &str) -> TextSpan {
+    TextSpan {
+        text: text.to_string(),
+        ..TextSpan::default()
+    }
+}
+
+fn positions(input: &[&str], output: &[&str], bucket: impl Fn(&[u8]) -> u64) -> Option<Vec<u32>> {
+    let input: Vec<_> = input.iter().map(|text| span(text)).collect();
+    let output: Vec<_> = output.iter().map(|text| span(text)).collect();
+    output_positions(&SpanEncodings::of(&input), &SpanEncodings::of(&output), bucket)
+}
+
 #[test]
 fn positions_name_where_each_input_went_and_refuse_anything_but_a_rearrangement() {
-    assert_eq!(output_positions(&[10, 20, 30], &[30, 10, 20]), Some(vec![1, 2, 0]));
+    let fixed = std::hash::RandomState::new();
+    let bucket = |encoded: &[u8]| std::hash::BuildHasher::hash_one(&fixed, encoded);
     assert_eq!(
-        output_positions(&[7, 7, 9], &[9, 7, 7]),
+        positions(&["a", "b", "c"], &["c", "a", "b"], &bucket),
+        Some(vec![1, 2, 0])
+    );
+    assert_eq!(
+        positions(&["x", "x", "y"], &["y", "x", "x"], &bucket),
         Some(vec![1, 2, 0]),
         "equal spans keep their relative order"
     );
     assert_eq!(
-        output_positions(&[1, 2], &[1, 3]),
+        positions(&["a", "b"], &["a", "c"], &bucket),
         None,
         "a changed span is not a rearrangement"
     );
     assert_eq!(
-        output_positions(&[1, 2], &[1, 1]),
+        positions(&["a", "b"], &["a", "a"], &bucket),
         None,
         "a duplicated span is not a rearrangement"
     );
     assert_eq!(
-        output_positions(&[1, 2], &[1]),
+        positions(&["a", "b"], &["a"], &bucket),
         None,
         "a dropped span is not a rearrangement"
+    );
+}
+
+#[test]
+fn spans_whose_bucket_hashes_collide_are_still_told_apart() {
+    let collide = |_: &[u8]| 0;
+    assert_eq!(
+        positions(&["a"], &["b"], collide),
+        None,
+        "a colliding hash must not make two different spans equal"
+    );
+    assert_eq!(
+        positions(&["a", "b"], &["a", "c"], collide),
+        None,
+        "a changed span in a shared bucket is not a rearrangement"
+    );
+    assert_eq!(
+        positions(&["a", "b", "c"], &["c", "a", "b"], collide),
+        Some(vec![1, 2, 0]),
+        "one bucket for every span still finds each exact match"
     );
 }

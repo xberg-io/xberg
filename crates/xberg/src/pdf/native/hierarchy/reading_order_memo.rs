@@ -63,8 +63,8 @@ struct Memo {
     budget: usize,
     used: usize,
     pages: HashMap<usize, OrderedPage>,
-    /// Keys the per-span hashes that match ordered spans back to their inputs. Random per memo,
-    /// so span content taken from a PDF cannot be crafted to collide two different spans.
+    /// Keys the hash that buckets spans when matching ordered spans back to their inputs; the
+    /// match itself compares encodings. Random per memo, so crafted content cannot fill one bucket.
     span_keys: RandomState,
 }
 
@@ -146,15 +146,17 @@ pub(super) fn reorder(
     if served {
         return;
     }
-    // Hashed only on a page the memo will keep, so a served page pays for the fingerprint alone. ~keep
-    let input_hashes = input.as_ref().map(|(_, keys)| span_hashes(spans, keys));
+    // Encoded only on a page the memo will keep, so a served page pays for the fingerprint alone. ~keep
+    let input_encodings = input.as_ref().map(|_| SpanEncodings::of(spans));
     order(spans);
     #[cfg(test)]
     COMPUTED_ORDERS.with(|count| count.set(count.get() + 1));
-    let (Some((input, keys)), Some(input_hashes)) = (input, input_hashes) else {
+    let (Some((input, keys)), Some(input_encodings)) = (input, input_encodings) else {
         return;
     };
-    let ordered = match output_positions(&input_hashes, &span_hashes(spans, &keys)) {
+    let ordered = match output_positions(&input_encodings, &SpanEncodings::of(spans), |encoded| {
+        keys.hash_one(encoded)
+    }) {
         Some(positions) => StoredOrder::Positions(positions),
         None => StoredOrder::Spans(spans.clone()),
     };
@@ -307,36 +309,62 @@ pub(super) fn fingerprint(spans: &[TextSpan]) -> SpansFingerprint {
     }
 }
 
-/// Each span's hash under `keys`, over the same encoding the fingerprint reads.
-fn span_hashes(spans: &[TextSpan], keys: &RandomState) -> Vec<u64> {
-    let mut digest = Digest {
-        hasher: blake3::Hasher::new(),
-        buf: Vec::new(),
-    };
-    spans
-        .iter()
-        .map(|span| {
-            digest.buf.clear();
+/// Each span's fingerprint encoding, which covers every field (floats by bit pattern), so two
+/// spans encode to equal bytes exactly when they are equal.
+pub(super) struct SpanEncodings {
+    bytes: Vec<u8>,
+    ends: Vec<usize>,
+}
+
+impl SpanEncodings {
+    pub(super) fn of(spans: &[TextSpan]) -> Self {
+        let mut digest = Digest {
+            hasher: blake3::Hasher::new(),
+            buf: Vec::new(),
+        };
+        let mut ends = Vec::with_capacity(spans.len());
+        for span in spans {
             hash_span(&mut digest, span);
-            keys.hash_one(&digest.buf[..])
-        })
-        .collect()
+            ends.push(digest.buf.len());
+        }
+        Self {
+            bytes: digest.buf,
+            ends,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.ends.len()
+    }
+
+    fn get(&self, index: usize) -> &[u8] {
+        let start = index.checked_sub(1).map_or(0, |previous| self.ends[previous]);
+        &self.bytes[start..self.ends[index]]
+    }
 }
 
 /// The output position of each input span, when the output is the input rearranged: every output
-/// hash claims a distinct input with the same hash. `None` when the ordering added, dropped or
+/// span claims a distinct input span with byte-equal encoding. `bucket` only narrows the search;
+/// equality is always decided on the encodings. `None` when the ordering added, dropped or
 /// changed a span, or a page has more spans than a position can name.
-fn output_positions(input: &[u64], output: &[u64]) -> Option<Vec<u32>> {
+pub(super) fn output_positions(
+    input: &SpanEncodings,
+    output: &SpanEncodings,
+    bucket: impl Fn(&[u8]) -> u64,
+) -> Option<Vec<u32>> {
     if input.len() != output.len() || u32::try_from(input.len()).is_err() {
         return None;
     }
     let mut unclaimed: HashMap<u64, Vec<usize>> = HashMap::with_capacity(input.len());
-    for (index, hash) in input.iter().enumerate().rev() {
-        unclaimed.entry(*hash).or_default().push(index);
+    for index in 0..input.len() {
+        unclaimed.entry(bucket(input.get(index))).or_default().push(index);
     }
     let mut positions = vec![0u32; input.len()];
-    for (position, hash) in output.iter().enumerate() {
-        let index = unclaimed.get_mut(hash)?.pop()?;
+    for position in 0..output.len() {
+        let encoded = output.get(position);
+        let candidates = unclaimed.get_mut(&bucket(encoded))?;
+        let found = candidates.iter().position(|&index| input.get(index) == encoded)?;
+        let index = candidates.remove(found);
         positions[index] = u32::try_from(position).ok()?;
     }
     Some(positions)
