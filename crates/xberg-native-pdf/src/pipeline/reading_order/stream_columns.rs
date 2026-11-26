@@ -35,6 +35,9 @@ const MIN_COLUMN_WIDTH_FRACTION: f32 = 0.12;
 /// Size ratio below which one of two runs is secondary type (notes, table headers), whose
 /// position in the stream says nothing about the order of the body columns.
 const SECONDARY_TYPE_RATIO: f32 = 0.9;
+/// Most stream runs a page may break into for this pass. The run comparisons are quadratic, and a
+/// prose page reads as a few runs per column; a page past this is fragments, not columns.
+const MAX_STREAM_RUNS: usize = 512;
 /// Fewest alphabetic words for a line to count as prose.
 const MIN_PROSE_LINE_WORDS: usize = 3;
 /// Most line breaks in a prose column that leave room for the next line's first word. Prose
@@ -86,7 +89,7 @@ pub fn order_by_stream_columns(spans: &mut [TextSpan]) -> bool {
     }
     let (lines, line_of_candidate) = stream_lines(&candidates);
     let runs = stream_runs(&lines);
-    if !reads_column_by_column(&lines, &runs) {
+    if runs.len() > MAX_STREAM_RUNS || !reads_column_by_column(&lines, &runs) {
         return false;
     }
     let mut run_of_line = vec![0; lines.len()];
@@ -803,6 +806,34 @@ mod tests {
         assert!(order_by_stream_columns(&mut spans));
 
         assert_eq!(texts(&spans), expected);
+    }
+
+    /// Three long prose columns followed by more one-line fragments in small type than the
+    /// quadratic run passes are allowed to compare. The columns keep the body size and the line
+    /// coverage, so only the run cap turns the page down.
+    #[test]
+    fn page_of_too_many_stream_runs_keeps_geometric_order() {
+        const COLUMN_LINES: usize = 420;
+        let mut reading_order = Vec::new();
+        for (label, &left) in ["first", "second", "third"].iter().zip(&COLUMN_LEFTS) {
+            reading_order.extend(column(label, left, 0, COLUMN_LINES));
+        }
+        let mut control = rows(written(reading_order.clone()));
+        assert!(
+            order_by_stream_columns(&mut control),
+            "the columns alone read column-major"
+        );
+        for fragment in 0..=MAX_STREAM_RUNS {
+            let (x, y) = if fragment % 2 == 0 {
+                (COLUMN_LEFTS[0], 10.0)
+            } else {
+                (COLUMN_LEFTS[2], 30.0)
+            };
+            reading_order.push(span(&format!("fragment {fragment}"), x, y, 20.0, 4.0));
+        }
+        let mut spans = rows(written(reading_order));
+
+        assert!(!order_by_stream_columns(&mut spans));
     }
 
     #[test]
