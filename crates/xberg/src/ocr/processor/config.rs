@@ -327,25 +327,21 @@ mod tests {
     #[test]
     fn should_distinguish_cache_keys_by_tessdata_model() {
         use crate::core::config::TessdataModel;
-        use crate::ocr::processor::validation::model_cache_dir;
 
-        let base = std::path::Path::new("/cache");
         let config_for = |tessdata_model| TesseractConfig {
             tessdata_model,
             ..create_test_config()
         };
-        let fast_dir = model_cache_dir(base, TessdataModel::Fast);
-        let best_dir = model_cache_dir(base, TessdataModel::Best);
 
-        assert_ne!(
-            hash_config(&config_for(TessdataModel::Fast), fast_dir.to_str().unwrap()),
-            hash_config(&config_for(TessdataModel::Best), best_dir.to_str().unwrap()),
-            "fast and best resolve different cache directories and must not share an entry"
-        );
         assert_ne!(
             hash_config(&config_for(TessdataModel::Fast), TEST_TESSDATA_PATH),
             hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
-            "the model set is part of the key even when an explicit directory serves both"
+            "the model set is part of the key even when one directory serves both"
+        );
+        assert_eq!(
+            hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
+            hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
+            "the same set and directory must keep sharing an entry"
         );
     }
 

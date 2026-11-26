@@ -11,7 +11,7 @@ use std::fs;
 #[cfg(paddle_ocr)]
 use super::error::OcrError;
 #[cfg(paddle_ocr)]
-use super::tessdata_download::{download_missing_language_pack, pinned_packs, pinned_source_url};
+use super::tessdata_download::{ensure_language_pack, pinned_packs, pinned_source_url};
 use crate::core::config::TessdataModel;
 
 /// Manages tessdata file downloading, caching, and manifest generation.
@@ -20,6 +20,23 @@ use crate::core::config::TessdataModel;
 pub struct TessdataManager {
     cache_dir: PathBuf,
     model: TessdataModel,
+    adopt_from: Vec<PathBuf>,
+}
+
+/// The local directories a manager writing into `set_dir` may copy verified packs from.
+fn adoption_sources(set_dir: &Path, model: TessdataModel) -> Vec<PathBuf> {
+    let Some(flat) = set_dir
+        .parent()
+        .filter(|_| set_dir.file_name().is_some_and(|name| name == model.as_str()))
+    else {
+        return Vec::new();
+    };
+    let mut sources = Vec::new();
+    if model == TessdataModel::Best {
+        sources.push(flat.join(TessdataModel::Fast.as_str()));
+    }
+    sources.push(flat.to_path_buf());
+    sources
 }
 
 impl TessdataManager {
@@ -35,10 +52,20 @@ impl TessdataManager {
     /// `cache_dir` is the directory the model files are written to. When `None`, it is the
     /// model set's own directory under the xberg cache, `<cache>/tessdata/<model>`, which is
     /// where OCR resolution looks for it.
+    ///
+    /// When `cache_dir` is such a `<root>/tessdata/<model>` directory, a missing pack is first
+    /// copied, after its SHA-256 is checked against the pin, from the flat `<root>/tessdata`
+    /// older releases filled and, for `best`, from `<root>/tessdata/fast` (`osd` and `equ` are
+    /// the same bytes in both sets), before it is downloaded.
     pub fn for_model(cache_dir: Option<PathBuf>, model: TessdataModel) -> Self {
         let cache_dir =
             cache_dir.unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("tessdata").join(model.as_str()));
-        Self { cache_dir, model }
+        let adopt_from = adoption_sources(&cache_dir, model);
+        Self {
+            cache_dir,
+            model,
+            adopt_from,
+        }
     }
 
     /// Get the cache directory path.
@@ -94,6 +121,15 @@ impl TessdataManager {
         Ok(0)
     }
 
+    /// Downloads the pinned traineddata files of `languages` for this manager's model set.
+    ///
+    /// When the `paddle-ocr` feature is not enabled, no download URLs are available
+    /// and this method always returns `Ok(0)`.
+    #[cfg(not(paddle_ocr))]
+    pub fn ensure_languages(&self, _languages: &[&str]) -> Result<usize, crate::error::XbergError> {
+        Ok(0)
+    }
+
     /// Downloads every pinned traineddata file of this manager's model set.
     ///
     /// Skips files that already exist. Returns the count of newly downloaded files.
@@ -107,8 +143,9 @@ impl TessdataManager {
 
     /// Downloads the pinned traineddata files of `languages` for this manager's model set.
     ///
-    /// Skips files that already exist; a language with no pinned pack is an error. Returns the
-    /// count of newly downloaded files.
+    /// Skips files that already exist and copies verified ones from the flat cache (see
+    /// [`Self::for_model`]); a language with no pinned pack is an error. Returns the count of
+    /// newly published files.
     #[cfg(paddle_ocr)]
     pub fn ensure_languages(&self, languages: &[&str]) -> Result<usize, OcrError> {
         fs::create_dir_all(&self.cache_dir).map_err(|e| {
@@ -131,7 +168,12 @@ impl TessdataManager {
                 progress = format!("{}/{}", i + 1, total),
                 "Downloading tessdata"
             );
-            downloaded += usize::from(download_missing_language_pack(lang, self.model, &self.cache_dir)?);
+            downloaded += usize::from(ensure_language_pack(
+                lang,
+                self.model,
+                &self.cache_dir,
+                &self.adopt_from,
+            )?);
         }
 
         tracing::info!(downloaded, total, model = %self.model, "Tessdata download complete");
@@ -241,6 +283,25 @@ mod tests {
 
         let downloaded = manager.ensure_all_languages().unwrap();
         assert_eq!(downloaded, 0);
+    }
+
+    #[test]
+    fn a_set_directory_adopts_from_the_flat_cache_and_best_also_from_fast() {
+        let root = Path::new("/cache/tessdata");
+
+        assert_eq!(
+            TessdataManager::for_model(Some(root.join("fast")), TessdataModel::Fast).adopt_from,
+            [root.to_path_buf()]
+        );
+        assert_eq!(
+            TessdataManager::for_model(Some(root.join("best")), TessdataModel::Best).adopt_from,
+            [root.join("fast"), root.to_path_buf()]
+        );
+        assert!(
+            TessdataManager::for_model(Some(PathBuf::from("/elsewhere")), TessdataModel::Best)
+                .adopt_from
+                .is_empty()
+        );
     }
 
     #[cfg(paddle_ocr)]

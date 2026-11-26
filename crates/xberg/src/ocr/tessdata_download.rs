@@ -9,8 +9,8 @@
 use crate::core::config::TessdataModel;
 use crate::ocr::error::OcrError;
 use sha2::{Digest as _, Sha256};
-use std::io::{ErrorKind, Write as _};
-use std::path::Path;
+use std::io::{ErrorKind, Read as _, Write as _};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 mod pins;
@@ -88,30 +88,90 @@ pub(super) fn pinned_source_url(lang: &str, model: TessdataModel) -> String {
     )
 }
 
-pub(crate) fn download_language_pack(lang: &str, model: TessdataModel, output_dir: &Path) -> Result<(), OcrError> {
-    download_missing_language_pack(lang, model, output_dir).map(|_| ())
+/// The languages whose `fast` and `best` packs are byte-identical (`equ`, `osd`).
+pub(crate) fn shared_languages() -> impl Iterator<Item = &'static str> {
+    TESSDATA_BEST_PACKS
+        .iter()
+        .filter(|best| pinned_pack(best.0, TessdataModel::Fast).is_some_and(|fast| fast == *best))
+        .map(|pack| pack.0)
 }
 
-/// Whether the file at `path` is exactly the pinned `model` pack for `lang`.
+/// Make the pinned `model` pack for `lang` present in `output_dir`: keep an existing file, else
+/// copy a verified one from the first of `sources` holding it, else download it.
 ///
-/// Reads and hashes the whole file, so callers use it once to adopt an existing file into a
-/// per-model cache, never on every resolution.
-pub(crate) fn matches_pinned_pack(lang: &str, model: TessdataModel, path: &Path) -> bool {
-    let Some(&(_, sha256, size)) = pinned_pack(lang, model) else {
-        return false;
-    };
-    if std::fs::metadata(path).map(|metadata| metadata.len()).ok() != Some(size) {
-        return false;
-    }
-    std::fs::read(path).is_ok_and(|bytes| hex::encode(Sha256::digest(&bytes)) == sha256)
-}
-
-/// Returns whether this call published a newly downloaded pack.
-pub(super) fn download_missing_language_pack(
+/// Returns whether this call published a new file.
+pub(crate) fn ensure_language_pack(
     lang: &str,
     model: TessdataModel,
     output_dir: &Path,
+    sources: &[PathBuf],
 ) -> Result<bool, OcrError> {
+    if output_dir.join(format!("{lang}.traineddata")).is_file() {
+        return Ok(false);
+    }
+    if adopt_pinned_pack(lang, model, output_dir, sources) {
+        return Ok(true);
+    }
+    download_missing_language_pack(lang, model, output_dir)
+}
+
+/// Copy the pinned `model` pack for `lang` into `output_dir` from the first of `sources` that
+/// holds exactly those bytes. Never downloads. Returns whether `output_dir` now holds the pack.
+pub(crate) fn adopt_pinned_pack(lang: &str, model: TessdataModel, output_dir: &Path, sources: &[PathBuf]) -> bool {
+    let Some(&(_, sha256, size)) = pinned_pack(lang, model) else {
+        return false;
+    };
+    let file_name = format!("{lang}.traineddata");
+    let output_path = output_dir.join(&file_name);
+    sources
+        .iter()
+        .filter(|source| source.as_path() != output_dir)
+        .any(|source| adopt_verified(&source.join(&file_name), &output_path, sha256, size))
+}
+
+/// Publish a copy of `source` at `output_path` when the bytes read from it are exactly `size`
+/// bytes with digest `expected_sha256`.
+///
+/// The bytes that are hashed are the bytes written, to a temporary file in the target directory
+/// that is then published without replacing anything, so a source that is a symlink or changes
+/// meanwhile can only ever produce a verified copy.
+fn adopt_verified(source: &Path, output_path: &Path, expected_sha256: &str, size: u64) -> bool {
+    let read = || -> std::io::Result<Option<Vec<u8>>> {
+        let file = std::fs::File::open(source)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() || metadata.len() != size {
+            return Ok(None);
+        }
+        let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or_default());
+        file.take(size.saturating_add(1)).read_to_end(&mut bytes)?;
+        Ok(Some(bytes))
+    };
+    let bytes = match read() {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return false,
+        Err(error) if error.kind() == ErrorKind::NotFound => return false,
+        Err(error) => {
+            tracing::debug!(source = %source.display(), %error, "Cannot read a tessdata file to adopt");
+            return false;
+        }
+    };
+    if bytes.len() as u64 != size || hex::encode(Sha256::digest(&bytes)) != expected_sha256 {
+        return false;
+    }
+    match publish(&bytes, output_path) {
+        Ok(_) => {
+            tracing::debug!(source = %source.display(), target = %output_path.display(), "Adopted verified tessdata");
+            true
+        }
+        Err(error) => {
+            tracing::debug!(target = %output_path.display(), %error, "Cannot publish adopted tessdata");
+            false
+        }
+    }
+}
+
+/// Returns whether this call published a newly downloaded pack.
+fn download_missing_language_pack(lang: &str, model: TessdataModel, output_dir: &Path) -> Result<bool, OcrError> {
     let repository = model.repository();
     let &(_, sha256, size) = pinned_pack(lang, model)
         .ok_or_else(|| OcrError::InvalidLanguageCode(format!("No pinned {repository} language pack for '{lang}'")))?;
@@ -205,6 +265,12 @@ fn download_file(
         });
     }
 
+    Ok(publish(&bytes, output_path)?)
+}
+
+/// Atomically publish `bytes` at `output_path` without replacing an existing pack. Returns whether
+/// this call created the file.
+fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool> {
     let directory = output_path
         .parent()
         .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidInput, "missing language pack directory"))?;
@@ -219,11 +285,11 @@ fn download_file(
     };
     #[cfg(not(unix))]
     let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
-    temporary.write_all(&bytes)?;
+    temporary.write_all(bytes)?;
     match temporary.persist_noclobber(output_path) {
         Ok(_) => Ok(true),
         Err(error) if error.error.kind() == ErrorKind::AlreadyExists && output_path.is_file() => Ok(false),
-        Err(error) => Err(error.error.into()),
+        Err(error) => Err(error.error),
     }
 }
 
@@ -300,19 +366,115 @@ mod tests {
     }
 
     #[test]
-    fn a_file_matches_only_the_pin_of_its_own_model() {
-        use super::{TessdataModel, matches_pinned_pack};
+    fn only_osd_and_equ_are_shared_between_the_sets() {
+        assert_eq!(super::shared_languages().collect::<Vec<_>>(), ["equ", "osd"]);
+    }
 
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("eng.traineddata");
-        std::fs::write(&path, b"not a pinned model").unwrap();
-        assert!(!matches_pinned_pack("eng", TessdataModel::Fast, &path));
-        assert!(!matches_pinned_pack("eng", TessdataModel::Best, &path));
-        assert!(!matches_pinned_pack(
-            "eng",
-            TessdataModel::Fast,
-            &directory.path().join("missing")
+    #[test]
+    fn a_verified_file_is_adopted_as_an_independent_copy() {
+        let source = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let original = source.path().join("eng.traineddata");
+        std::fs::write(&original, PAYLOAD).unwrap();
+        let output = target.path().join("eng.traineddata");
+
+        assert!(super::adopt_verified(
+            &original,
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64
         ));
+
+        assert_eq!(std::fs::read(&output).unwrap(), PAYLOAD);
+        std::fs::write(&original, b"rewritten later").unwrap();
+        assert_eq!(
+            std::fs::read(&output).unwrap(),
+            PAYLOAD,
+            "the adopted file must be a copy"
+        );
+        assert_eq!(
+            target.path().read_dir().unwrap().count(),
+            1,
+            "no temporary file may remain"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_source_is_copied_not_linked() {
+        let source = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let real = source.path().join("real.traineddata");
+        std::fs::write(&real, PAYLOAD).unwrap();
+        let link = source.path().join("eng.traineddata");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let output = target.path().join("eng.traineddata");
+
+        assert!(super::adopt_verified(
+            &link,
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64
+        ));
+
+        assert!(!output.symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read(&output).unwrap(), PAYLOAD);
+    }
+
+    #[test]
+    fn an_unverified_file_is_never_adopted() {
+        let source = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let original = source.path().join("eng.traineddata");
+        let output = target.path().join("eng.traineddata");
+        let wrong_bytes = vec![b'x'; PAYLOAD.len()];
+        std::fs::write(&original, &wrong_bytes).unwrap();
+
+        assert!(!super::adopt_verified(
+            &original,
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64
+        ));
+        assert!(!super::adopt_verified(
+            &source.path().join("missing.traineddata"),
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64
+        ));
+        assert_eq!(target.path().read_dir().unwrap().count(), 0);
+    }
+
+    #[test]
+    fn adoption_never_replaces_an_existing_target() {
+        let source = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let original = source.path().join("eng.traineddata");
+        std::fs::write(&original, PAYLOAD).unwrap();
+        let output = target.path().join("eng.traineddata");
+        std::fs::write(&output, b"locally supplied pack").unwrap();
+
+        assert!(super::adopt_verified(
+            &original,
+            &output,
+            &payload_digest(),
+            PAYLOAD.len() as u64
+        ));
+        assert_eq!(std::fs::read(&output).unwrap(), b"locally supplied pack");
+    }
+
+    #[test]
+    fn a_pinned_pack_is_adopted_from_the_first_source_that_matches_its_own_set() {
+        use super::{TessdataModel, adopt_pinned_pack};
+
+        let source = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        std::fs::write(source.path().join("eng.traineddata"), b"not a pinned model").unwrap();
+        let sources = [source.path().to_path_buf()];
+
+        assert!(!adopt_pinned_pack("eng", TessdataModel::Fast, target.path(), &sources));
+        assert!(!adopt_pinned_pack("eng", TessdataModel::Best, target.path(), &sources));
+        assert_eq!(target.path().read_dir().unwrap().count(), 0);
     }
 
     #[test]
@@ -320,9 +482,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("jpn_vert.traineddata");
         std::fs::write(&output, b"locally supplied vertical model").unwrap();
-        assert!(
-            !super::download_missing_language_pack("jpn_vert", super::TessdataModel::Best, directory.path()).unwrap()
-        );
+        assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[]).unwrap());
         assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
     }
