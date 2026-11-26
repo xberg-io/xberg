@@ -46,7 +46,7 @@ pub(super) fn cmyk_jpeg(dimension: u32) -> Vec<u8> {
     bytes
 }
 
-fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
+pub(super) fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
     let mut output = format!("<< {entries} /Length {} >>\nstream\n", bytes.len()).into_bytes();
     output.extend(bytes);
     output.extend(b"\nendstream");
@@ -104,7 +104,7 @@ pub(super) fn document_painting_of(
     from_objects(&objects)
 }
 
-fn from_objects(objects: &[Vec<u8>]) -> PdfDocument {
+pub(super) fn from_objects(objects: &[Vec<u8>]) -> PdfDocument {
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
     for object in objects {

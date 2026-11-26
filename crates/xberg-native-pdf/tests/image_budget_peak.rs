@@ -168,5 +168,31 @@ fn in_place_decodes_and_pre_resizes_stay_within_their_charges() {
         );
         checked += 1;
     }
-    assert_eq!(checked, 8);
+
+    // The native downscale resizes gray or RGB samples before widening them; its modelled peak,
+    // source included, must bound the measured one and stay within what the RGBA path holds (the
+    // full-size RGBA raster beside its pre-resize), which the JPEG charges count.
+    for components in [1u8, 3] {
+        for target in [(1_600, 800), (2_048, 700), (1_200, 1_024), (300, 150)] {
+            let length = source.0 as usize * source.1 as usize * usize::from(components);
+            let bound = budget_probe::native_downscale_bound(source, target, components);
+            let (peak, widened) = measured_peak(|| {
+                let samples: Vec<u8> = (0..length).map(|index| (index % 251) as u8).collect();
+                budget_probe::native_downscale(samples, source, target, components)
+            });
+            assert_eq!(widened, Some(target.0 as usize * target.1 as usize * 4), "{target:?}");
+            println!("native {components}-byte downscale to {target:?}: peak {peak}, charge {bound}");
+            assert!(
+                peak <= bound,
+                "native {components}-byte downscale to {target:?}: peak {peak} exceeds charge {bound}"
+            );
+            let rgba_path = u64::from(source.0 * source.1) * 4 + budget_probe::resize_bound(source, target);
+            assert!(
+                bound <= rgba_path,
+                "native {components}-byte downscale to {target:?}: charge {bound} exceeds the RGBA path's {rgba_path}"
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 16);
 }

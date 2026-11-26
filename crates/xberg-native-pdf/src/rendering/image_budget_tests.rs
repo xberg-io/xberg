@@ -3,6 +3,8 @@ use super::*;
 mod guards;
 #[path = "image_budget_tests/in_place.rs"]
 mod in_place;
+#[path = "image_budget_tests/native.rs"]
+mod native;
 #[path = "image_budget_tests/resize.rs"]
 mod resize;
 #[path = "image_budget_tests/source.rs"]

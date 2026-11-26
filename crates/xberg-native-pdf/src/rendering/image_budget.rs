@@ -583,16 +583,25 @@ const COEFFICIENT_BYTES_PER_SLOT: u64 = 8 + 2;
 /// is `2 * ceil(in / out) + 1` slots (3 for an enlarged axis) per output pixel. Saturates rather
 /// than wrapping, so an absurd target is refused.
 pub(super) fn resize_working_bytes(source: (u32, u32), target: (u32, u32)) -> u64 {
+    resize_samples_working_bytes(source, target, 4)
+}
+
+/// [`resize_working_bytes`] for samples of `components` bytes per pixel, which
+/// `raster_budget::resize_samples` resizes: the output and intermediate rasters (and the
+/// intermediate's one alignment pixel) hold `components` bytes per pixel, the coefficient tables
+/// depend on the geometry alone.
+pub(super) fn resize_samples_working_bytes(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
+    let components = u64::from(components);
     let (source_width, source_height) = (u64::from(source.0), u64::from(source.1));
     let (target_width, target_height) = (u64::from(target.0), u64::from(target.1));
-    let output = target_width.saturating_mul(target_height).saturating_mul(4);
+    let output = target_width.saturating_mul(target_height).saturating_mul(components);
     let horizontal = target_width != source_width;
     let vertical = target_height != source_height;
     let intermediate = if horizontal && vertical {
         source_width
             .saturating_mul(target_height)
-            .saturating_mul(4)
-            .saturating_add(4)
+            .saturating_mul(components)
+            .saturating_add(components)
     } else {
         0
     };
@@ -607,6 +616,29 @@ pub(super) fn resize_working_bytes(source: (u32, u32), target: (u32, u32)) -> u6
         .saturating_add(intermediate)
         .saturating_add(coefficients(horizontal, source_width, target_width))
         .saturating_add(coefficients(vertical, source_height, target_height))
+}
+
+/// Peak bytes of `render_image`'s native downscale of a `components`-byte `source` raster: the
+/// source beside the resize's working set; then, with the source freed, the resized samples and
+/// the RGBA raster they are widened into (a moving reallocation holds both); then that RGBA raster
+/// during the draw.
+///
+/// For a `target` no larger than `source` on either axis, the only downscale that path takes, this
+/// never exceeds the full-size RGBA raster plus the pre-resize draw [`Placement::paint_bytes`]
+/// charges, which is what the RGBA path holds and the JPEG charges count: the source is at most
+/// the RGBA raster, the native resize allocates at most the RGBA one, and the widened target is at
+/// most the source in RGBA plus the target in RGBA.
+pub(super) fn native_downscale_peak_bytes(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
+    let pixel_bytes = u64::from(components);
+    let source_bytes = u64::from(source.0)
+        .saturating_mul(u64::from(source.1))
+        .saturating_mul(pixel_bytes);
+    let pixels = u64::from(target.0).saturating_mul(u64::from(target.1));
+    let resizing = source_bytes.saturating_add(resize_samples_working_bytes(source, target, components));
+    let widening = pixels.saturating_mul(pixel_bytes + 4);
+    resizing
+        .max(widening)
+        .max(pixels.saturating_mul(4).saturating_add(TINY_SKIA_DRAW_BYTES))
 }
 
 /// Widest MCU, in pixels: 8 times the largest horizontal sampling factor.
@@ -726,7 +758,7 @@ pub(super) fn decode_jpeg_into_rgba(bytes: &[u8], (width, height): (u32, u32)) -
 /// Widen `channels`-byte gray or RGB samples packed at the front of `raster` into opaque RGBA over
 /// the whole of it. Back to front, pixel `i` lands at `4 * i`, at or after every sample of pixels
 /// `0..=i`, so no sample is overwritten before it is read.
-fn widen_to_rgba(raster: &mut [u8], channels: usize) {
+pub(super) fn widen_to_rgba(raster: &mut [u8], channels: usize) {
     for index in (0..raster.len() / 4).rev() {
         let source = index * channels;
         let pixel = if channels == 1 {

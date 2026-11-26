@@ -36,16 +36,46 @@ impl PageRenderer {
 /// Returns `None` on failure (zero dimensions, SIMD dispatch error) so callers
 /// can fall back to tiny_skia's own resampling path.
 ///
-/// `from_slice_u8` takes the source mutably, but the resize only reads it: the caller lends its
-/// raster rather than holding a copy beside it. `image_budget::resize_working_bytes` bounds what
-/// this allocates: the output, the intermediate and the coefficient tables.
+/// The resize only reads the source: the caller lends its raster rather than holding a copy beside
+/// it. `image_budget::resize_working_bytes` bounds what this allocates: the output, the
+/// intermediate and the coefficient tables.
 pub(super) fn resize_rgba(src: &mut [u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
-    use fast_image_resize::images::Image;
+    resize_samples(src, (src_w, src_h), (dst_w, dst_h), 4)
+}
+
+/// [`resize_rgba`] for opaque samples of `components` bytes per pixel: 1 (gray), 3 (RGB) or 4.
+///
+/// Every `u8` kernel of `fast_image_resize` 6, scalar and SIMD, computes each output byte as
+/// `clamp((2^(p-1) + sum(k_i * s_i)) >> p, 0, 255)` in exact `i32` arithmetic, with one coefficient
+/// table per axis whatever the pixel type and the vertical pass first for every `u8` type. A gray
+/// or RGB raster resized here and then widened to opaque RGBA is therefore byte-identical to the
+/// same raster widened first and resized by [`resize_rgba`]; the constant 255 alpha resizes to 255.
+/// `samples` must hold exactly `source` pixels. `image_budget::native_resize_working_bytes` bounds
+/// what this allocates. ~keep
+pub(super) fn resize_samples(
+    samples: &[u8],
+    (src_w, src_h): (u32, u32),
+    (dst_w, dst_h): (u32, u32),
+    components: u8,
+) -> Option<Vec<u8>> {
+    use fast_image_resize::images::{Image, ImageRef};
     use fast_image_resize::pixels::PixelType;
     use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 
-    let src_img = Image::from_slice_u8(src_w, src_h, src, PixelType::U8x4).ok()?;
-    let mut dst_img = Image::new(dst_w, dst_h, PixelType::U8x4);
+    let pixel_type = match components {
+        1 => PixelType::U8,
+        3 => PixelType::U8x3,
+        4 => PixelType::U8x4,
+        _ => return None,
+    };
+    let expected = (src_w as usize)
+        .checked_mul(src_h as usize)?
+        .checked_mul(usize::from(components))?;
+    if samples.len() != expected {
+        return None;
+    }
+    let src_img = ImageRef::new(src_w, src_h, samples, pixel_type).ok()?;
+    let mut dst_img = Image::new(dst_w, dst_h, pixel_type);
     Resizer::new()
         .resize(
             &src_img,

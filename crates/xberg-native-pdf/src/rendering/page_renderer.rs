@@ -2342,26 +2342,41 @@ impl PageRenderer {
                 blit = admitted.blit;
             }
         }
+        // Masks read the full-size RGBA raster and a direct draw resamples it, so only an unmasked
+        // pre-resized downscale is resized in the source's own gray or RGB format, widening just the
+        // resized raster to RGBA. The JPEG charges above, made for the RGBA path, bound its peak
+        // (`image_budget::native_downscale_peak_bytes`). ~keep
+        let native = mask_obj.is_none()
+            && smask_obj.is_none()
+            && pdf_image.soft_mask_in_data().is_none()
+            && blit == image_budget::Blit::PreResize;
+        let raw_source = (pdf_image.width(), pdf_image.height());
+        let raw_transform = image_unit_square_transform(transform, raw_source.0, raw_source.1);
+        let resized_raw = native
+            .then(|| native_samples(&pdf_image))
+            .flatten()
+            .and_then(|(samples, components)| {
+                native_downscale(samples, components, raw_source, raw_transform).map(|resized| (resized, components))
+            });
+        if let Some((resized, components)) = resized_raw {
+            drop(pdf_image);
+            let paint = pixmap_paint_for_image_blit(raw_transform, gs.fill_alpha, &gs.blend_mode);
+            blit_native_resized(pixmap, resized, components, raw_transform, paint, clip_mask);
+            return Ok(());
+        }
         let decoded = match (pdf_image.data(), decode) {
             (ImageData::Jpeg(bytes), image_budget::JpegDecode::Reduced(denominator)) => {
-                image_budget::decode_reduced_jpeg(bytes, denominator).map(|image| {
-                    let rgba = image.to_rgba8();
-                    (image, rgba)
-                })
+                image_budget::decode_reduced_jpeg(bytes, denominator).map(|image| (image, None))
             }
             // Only an image without a /Mask or /SMask is decoded in place, and those masks are the
             // only readers of the source raster below, so an empty one stands in for it. ~keep
             (ImageData::Jpeg(bytes), image_budget::JpegDecode::InPlace) => {
                 image_budget::decode_jpeg_into_rgba(bytes, (pdf_image.width(), pdf_image.height()))
-                    .map(|rgba| (image::DynamicImage::new_luma8(0, 0), rgba))
+                    .map(|rgba| (image::DynamicImage::new_luma8(0, 0), Some(rgba)))
             }
-            _ => {
-                let image = pdf_image.to_dynamic_image()?;
-                let rgba = image.to_rgba8();
-                Ok((image, rgba))
-            }
+            _ => Ok((pdf_image.to_dynamic_image()?, None)),
         };
-        let (dynamic_image, mut rgba_image) = match decoded {
+        let (dynamic_image, rgba_image) = match decoded {
             Ok(decoded) => decoded,
             Err(error) => {
                 if let Some(budget) = self.source_image_budget.as_mut() {
@@ -2370,6 +2385,22 @@ impl PageRenderer {
                 return Err(error);
             }
         };
+        let decoded_source = (dynamic_image.width(), dynamic_image.height());
+        let decoded_transform = image_unit_square_transform(transform, decoded_source.0, decoded_source.1);
+        let resized_decoded = (native && rgba_image.is_none())
+            .then(|| native_decoded_samples(&dynamic_image))
+            .flatten()
+            .and_then(|(samples, components)| {
+                native_downscale(samples, components, decoded_source, decoded_transform)
+                    .map(|resized| (resized, components))
+            });
+        if let Some((resized, components)) = resized_decoded {
+            drop(dynamic_image);
+            let paint = pixmap_paint_for_image_blit(decoded_transform, gs.fill_alpha, &gs.blend_mode);
+            blit_native_resized(pixmap, resized, components, decoded_transform, paint, clip_mask);
+            return Ok(());
+        }
+        let mut rgba_image = rgba_image.unwrap_or_else(|| dynamic_image.to_rgba8());
 
         // A referenced ImageMask uses stencil polarity: default /Decode [0 1]
         // makes sample 0 opaque, while [1 0] reverses it. ~keep
@@ -8001,6 +8032,87 @@ fn blit_rgba(
     }
 }
 
+/// The opaque gray (1 byte per pixel) or RGB (3) samples `to_rgba8` would widen `image`'s
+/// `to_dynamic_image` into, borrowed without that copy, or `None` for every other image. It mirrors
+/// `PdfImage::to_dynamic_image`: a 1-bit DeviceGray image takes its own unpacking path, CMYK is
+/// converted, and a buffer longer than the image is cut, so each of those is left to it.
+fn native_samples(image: &crate::extractors::images::PdfImage) -> Option<(&[u8], u8)> {
+    use crate::extractors::images::{ColorSpace, ImageData, PixelFormat};
+
+    let ImageData::Raw { pixels, format } = image.data() else {
+        return None;
+    };
+    if image.bits_per_component() == 1 && *image.color_space() == ColorSpace::DeviceGray {
+        return None;
+    }
+    let components = match format {
+        PixelFormat::Grayscale => 1,
+        PixelFormat::RGB => 3,
+        PixelFormat::CMYK => return None,
+    };
+    let expected = (image.width() as usize)
+        .checked_mul(image.height() as usize)?
+        .checked_mul(usize::from(components))?;
+    (pixels.len() == expected).then_some((pixels.as_slice(), components))
+}
+
+/// The opaque gray or RGB samples of a decoded `image`, as [`native_samples`] for a raster.
+fn native_decoded_samples(image: &image::DynamicImage) -> Option<(&[u8], u8)> {
+    match image {
+        image::DynamicImage::ImageLuma8(gray) => Some((gray.as_raw().as_slice(), 1)),
+        image::DynamicImage::ImageRgb8(rgb) => Some((rgb.as_raw().as_slice(), 3)),
+        _ => None,
+    }
+}
+
+/// Resize opaque `samples` of `components` bytes per pixel and `source` size to the size
+/// [`blit_rgba`] would pre-resize their RGBA widening to, in their own pixel format. `None` when
+/// that blit would not pre-resize, when the target is larger than the source on either axis, or
+/// when the resize fails; the caller then takes the RGBA path. The resized samples, widened by
+/// [`blit_native_resized`], are byte-identical to `blit_rgba`'s pre-resized RGBA (see
+/// `raster_budget::resize_samples`).
+fn native_downscale(
+    samples: &[u8],
+    components: u8,
+    source: (u32, u32),
+    image_transform: Transform,
+) -> Option<((u32, u32), Vec<u8>)> {
+    let target = fast_resize_target(image_transform, source)?;
+    if target.0 > source.0 || target.1 > source.1 {
+        return None;
+    }
+    raster_budget::resize_samples(samples, source, target, components).map(|resized| (target, resized))
+}
+
+/// Widen samples from [`native_downscale`] to opaque RGBA and copy them 1:1 onto `pixmap` as
+/// [`blit_rgba`] draws its pre-resized raster. Opaque RGBA is already premultiplied.
+fn blit_native_resized(
+    pixmap: &mut Pixmap,
+    ((width, height), resized): ((u32, u32), Vec<u8>),
+    components: u8,
+    image_transform: Transform,
+    mut paint: PixmapPaint,
+    clip_mask: Option<&tiny_skia::Mask>,
+) {
+    let rgba = widen_native(resized, components);
+    paint.quality = tiny_skia::FilterQuality::Nearest;
+    let translate = Transform::from_translate(image_transform.tx, image_transform.ty);
+    if let Some(img_pixmap) = tiny_skia::IntSize::from_wh(width, height).and_then(|size| Pixmap::from_vec(rgba, size)) {
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, translate, clip_mask);
+    }
+}
+
+/// Widen gray or RGB `samples` of `components` bytes per pixel, in place, to the opaque RGBA
+/// `image::DynamicImage::to_rgba8` makes of them.
+fn widen_native(mut samples: Vec<u8>, components: u8) -> Vec<u8> {
+    let rgba_len = samples.len() / usize::from(components) * 4;
+    // `resize` alone grows by doubling, which leaves an RGB raster with 6 bytes per pixel. ~keep
+    samples.reserve_exact(rgba_len - samples.len());
+    samples.resize(rgba_len, 0);
+    image_budget::widen_to_rgba(&mut samples, usize::from(components));
+    samples
+}
+
 /// The clip a current path made of a single `m` describes. ISO 32000-1 8.5.3.3.1: a
 /// single-point open subpath produces no output, so intersecting the clip with it
 /// leaves nothing. `PathBuilder::finish` rejects a lone move-to, which would read as
@@ -10238,6 +10350,20 @@ pub mod budget_probe {
     /// returning the length of the resized raster.
     pub fn resize(pixels: &mut [u8], source: (u32, u32), target: (u32, u32)) -> Option<usize> {
         super::raster_budget::resize_rgba(pixels, source.0, source.1, target.0, target.1).map(|resized| resized.len())
+    }
+
+    /// The peak the image budget models for `render_image`'s native downscale of a `source` raster of
+    /// `components` bytes per pixel to `target`, the source raster included.
+    pub fn native_downscale_bound(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
+        super::image_budget::native_downscale_peak_bytes(source, target, components)
+    }
+
+    /// Resize `samples` in their own pixel format, free them and widen the result to RGBA, as
+    /// `render_image` does, returning the length of the RGBA raster.
+    pub fn native_downscale(samples: Vec<u8>, source: (u32, u32), target: (u32, u32), components: u8) -> Option<usize> {
+        let resized = super::raster_budget::resize_samples(&samples, source, target, components)?;
+        drop(samples);
+        Some(super::widen_native(resized, components).len())
     }
 }
 
