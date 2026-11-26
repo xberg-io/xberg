@@ -35,6 +35,15 @@ BIN="$BIN_DIR/$BINARY_NAME"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# On macOS one libmalloc magazine lowers the CLI's peak RSS and wall time (ADR 0022). libmalloc reads
+# it before main, so the launcher sets it, only for the binary it execs, and keeps a user value. ~keep
+exec_cli() {
+  if [ "$(uname -s)" = "Darwin" ] && [ -z "${MallocMaxMagazines+set}" ]; then
+    export MallocMaxMagazines=1
+  fi
+  exec "$@"
+}
+
 # True when $1 runs and reports a version at or above PINNED_VERSION. A prerelease of a version
 # sorts below that version (SemVer), so 1.5.0-rc.1 does not satisfy a 1.5.0 pin. ~keep
 runnable() {
@@ -53,13 +62,13 @@ runnable() {
 
 if runnable "$BIN"; then
   log "using cached xberg at $BIN"
-  exec "$BIN" "$@"
+  exec_cli "$BIN" "$@"
 fi
 if have "$BINARY_NAME"; then
   PATH_BIN="$(command -v "$BINARY_NAME")"
   if runnable "$PATH_BIN"; then
     log "using xberg on PATH ($PATH_BIN)"
-    exec "$PATH_BIN" "$@"
+    exec_cli "$PATH_BIN" "$@"
   fi
 fi
 
@@ -77,7 +86,7 @@ if [ "$LAUNCHER" = "brew" ] && have brew; then
   if brew install xberg-io/tap/xberg >&2; then
     if have "$BINARY_NAME"; then
       BREW_BIN="$(command -v "$BINARY_NAME")"
-      runnable "$BREW_BIN" && exec "$BREW_BIN" "$@"
+      runnable "$BREW_BIN" && exec_cli "$BREW_BIN" "$@"
     fi
     log "brew install reported success but xberg is not on PATH; falling through"
   else
@@ -182,7 +191,7 @@ try_download() {
 
 if want download; then
   if try_download; then
-    exec "$BIN" "$@"
+    exec_cli "$BIN" "$@"
   fi
 fi
 

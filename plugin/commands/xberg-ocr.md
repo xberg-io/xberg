@@ -5,7 +5,7 @@ description: Extract scanned documents with OCR
 <!--
 AI-RULEZ :: GENERATED FILE — DO NOT EDIT
 Content-Hash: blake3:1715ebd3d000212eb2e4dbfa814d6d5990bcc0c636bae67734a503f2c3ae8be4
-Source-Hash: blake3:745a1d19b9f0e0eaf10c740318c422e6f4a5e294bb526f1e7151c30217236822
+Source-Hash: blake3:fada2310083f29a5d0b9fa2780d18bac9823ed52647ad6bacc24ed54daa38bad
 Schema-Version: v1
 -->
 

@@ -28,6 +28,7 @@ BIN_NAME = "xberg"
 PKG_NAME = "xberg-cli"
 VERSION_ENV = "XBERG_CLI_VERSION"
 _USER_AGENT = "xberg-cli-python-proxy"
+MALLOC_MAGAZINES_ENV = "MallocMaxMagazines"
 
 
 def _target_triple() -> str:
@@ -257,8 +258,20 @@ def ensure_binary() -> str:
     return str(binary_path)
 
 
+def native_env() -> dict[str, str] | None:
+    """Return the environment for the native binary, or ``None`` to inherit this one unchanged.
+
+    On macOS one libmalloc magazine lowers the CLI's peak RSS and wall time (ADR 0022). libmalloc
+    reads the variable before ``main``, so only the launcher can set it; a value the user already
+    set, even an empty one, is kept.
+    """
+    if platform.system().lower() != "darwin" or MALLOC_MAGAZINES_ENV in os.environ:
+        return None
+    return {**os.environ, MALLOC_MAGAZINES_ENV: "1"}
+
+
 def run(args: list[str]) -> int:
     """Run the native binary with the given args, returning its exit code."""
     binary_path = ensure_binary()
-    completed = subprocess.run([binary_path, *args], check=False)
+    completed = subprocess.run([binary_path, *args], check=False, env=native_env())
     return completed.returncode
