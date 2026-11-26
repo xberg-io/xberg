@@ -3371,15 +3371,15 @@ fn extract_page_text_column_aware(
             span_count = page_text_data.spans.len(),
             "glyph fragmentation detected — rebuilding text from span positions (#962)"
         );
-        rebuild_text_from_fragmented_spans(&with_math_as_latex(&page_text_data.spans))
+        rebuild_text_from_fragmented_spans(&with_math_as_latex(doc, page_index, &page_text_data.spans))
     } else if financial_rows.is_none()
         && !producer_order_applied
         && !page_text_data.structure_ordered
         && let Some(spans) = structured_path_page_spans(doc, page_index, excluded_layers, options.margins)
     {
-        assemble_page_text(&with_math_as_latex(&spans))
+        assemble_page_text(&with_math_as_latex(doc, page_index, &spans))
     } else {
-        assemble_page_text(&with_math_as_latex(&page_text_data.spans))
+        assemble_page_text(&with_math_as_latex(doc, page_index, &page_text_data.spans))
     };
 
     append_missing_widget_values(&mut text, &widgets);
@@ -3394,8 +3394,12 @@ fn extract_page_text_column_aware(
 /// The page's spans with each formula rewritten as LaTeX; the spans themselves when the page
 /// sets no math. Applied after every ordering and layout decision, so those see the source
 /// spans and only the formula text changes.
-fn with_math_as_latex(spans: &[TextSpan]) -> Cow<'_, [TextSpan]> {
-    super::math_latex::rewrite_math_spans(spans).map_or(Cow::Borrowed(spans), Cow::Owned)
+fn with_math_as_latex<'s>(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &'s [TextSpan],
+) -> Cow<'s, [TextSpan]> {
+    super::math_latex::rewrite_page_math(doc, page_index, spans).map_or(Cow::Borrowed(spans), Cow::Owned)
 }
 
 pub(crate) fn rotation_span(span: &xberg_native_pdf::layout::TextSpan) -> crate::extractors::pdf::rotation::TextSpan {

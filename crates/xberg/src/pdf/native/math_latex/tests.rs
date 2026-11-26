@@ -172,23 +172,24 @@ fn should_ignore_rotated_math() {
     assert!(rewrite_math_spans(&[rotated, script]).is_none());
 }
 
-fn fixture_spans(relative: &str, page: usize) -> Option<Vec<TextSpan>> {
+/// The page's spans as the plain path reads them, and the page's math rewrite.
+fn fixture_page(relative: &str, page: usize) -> Option<(Vec<TextSpan>, Option<Vec<TextSpan>>)> {
     let bytes = crate::utils::read_test_fixture(relative)?;
     let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("fixture PDF must parse");
-    Some(
-        document
-            .extract_spans_with_reading_order(page, xberg_native_pdf::document::ReadingOrder::ColumnAware)
-            .expect("fixture page must extract"),
-    )
+    let spans = document
+        .extract_spans_with_reading_order(page, xberg_native_pdf::document::ReadingOrder::ColumnAware)
+        .expect("fixture page must extract");
+    let rewritten = super::rewrite_page_math(&document, page, &spans);
+    Some((spans, rewritten))
 }
 
 #[test]
 fn should_rewrite_the_definition_on_an_arxiv_page() {
     // Page 6 of arXiv 1509.07624 sets `z ≡ 2r² − 1, (4)` as a display equation in CMMI/CMSY.
-    let Some(spans) = fixture_spans(".corpus-cache/pdf/1509.07624.pdf", 5) else {
+    let Some((spans, rewritten)) = fixture_page(".corpus-cache/pdf/1509.07624.pdf", 5) else {
         return;
     };
-    let rewritten = rewrite_math_spans(&spans).expect("a TeX math page has formulas");
+    let rewritten = rewritten.expect("a TeX math page has formulas");
     let display = rewritten
         .iter()
         .find(|span| span.text.starts_with("$$") && span.text.contains("\\equiv"))
@@ -198,11 +199,13 @@ fn should_rewrite_the_definition_on_an_arxiv_page() {
         rewritten.iter().any(|span| span.text.trim() == "(4)"),
         "equation number kept"
     );
+    // A span outside every formula is unchanged, or lost only the closing bracket a formula took.
     for span in rewritten.iter().filter(|span| !span.text.starts_with('$')) {
         assert!(
             spans
                 .iter()
-                .any(|source| source.text == span.text && source.bbox == span.bbox),
+                .any(|source| source.text == span.text && source.bbox == span.bbox
+                    || (source.text.ends_with(span.text.as_str()) && source.text.starts_with([')', ']']))),
             "a span outside any formula changed: {:?}",
             span.text
         );
@@ -211,10 +214,10 @@ fn should_rewrite_the_definition_on_an_arxiv_page() {
 
 #[test]
 fn should_not_touch_a_page_without_tex_math() {
-    let Some(spans) = fixture_spans("pdf/embedded_images_tables.pdf", 0) else {
+    let Some((_, rewritten)) = fixture_page("pdf/embedded_images_tables.pdf", 0) else {
         return;
     };
-    assert!(rewrite_math_spans(&spans).is_none());
+    assert!(rewritten.is_none());
 }
 
 #[test]

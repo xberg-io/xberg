@@ -101,6 +101,7 @@ impl Delimiters {
 }
 
 /// Rewrite the math of one page as `$`-delimited LaTeX, or `None` when nothing changes.
+#[cfg(test)]
 pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
     rewrite_math_spans_with(spans, Delimiters::Dollars)
 }
@@ -108,13 +109,66 @@ pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
 /// Rewrite the math of one page as LaTeX delimited by `delimiters`, or `None` when nothing
 /// changes.
 pub(crate) fn rewrite_math_spans_with(spans: &[TextSpan], delimiters: Delimiters) -> Option<Vec<TextSpan>> {
-    if !spans.iter().any(|span| math_font(&span.font_name).is_some()) {
+    rewrite_with_baselines(spans, delimiters, &RawBaselines::default())
+}
+
+/// [`rewrite_math_spans`] for spans read with flattened script geometry, which snaps a
+/// script's baseline onto its base: each span's raw baseline is looked up in the page's
+/// spans as read with script geometry preserved. Reads the page again only when it sets
+/// math.
+pub(crate) fn rewrite_page_math(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[TextSpan],
+) -> Option<Vec<TextSpan>> {
+    if !has_math_font(spans) {
+        return None;
+    }
+    let preserved = doc
+        .extract_page_text_with_cmsy_capture(page_index, xberg_native_pdf::document::ReadingOrder::TopToBottom, None)
+        .map(|page| page.spans)
+        .unwrap_or_default();
+    rewrite_with_baselines(spans, Delimiters::Dollars, &RawBaselines::new(&preserved))
+}
+
+fn has_math_font(spans: &[TextSpan]) -> bool {
+    spans.iter().any(|span| math_font(&span.font_name).is_some())
+}
+
+/// Raw baselines of a page's spans, keyed by text, origin x and size.
+#[derive(Default)]
+struct RawBaselines(std::collections::HashMap<(String, u32, u32), f32>);
+
+impl RawBaselines {
+    fn new(preserved: &[TextSpan]) -> Self {
+        let mut baselines = std::collections::HashMap::new();
+        for span in preserved {
+            baselines.entry(Self::key(span)).or_insert(span.bbox.y);
+        }
+        Self(baselines)
+    }
+
+    fn key(span: &TextSpan) -> (String, u32, u32) {
+        (span.text.clone(), span.bbox.x.to_bits(), span.font_size.to_bits())
+    }
+
+    fn of(&self, span: &TextSpan) -> f32 {
+        self.0.get(&Self::key(span)).copied().unwrap_or(span.bbox.y)
+    }
+}
+
+fn rewrite_with_baselines(
+    spans: &[TextSpan],
+    delimiters: Delimiters,
+    baselines: &RawBaselines,
+) -> Option<Vec<TextSpan>> {
+    if !has_math_font(spans) {
         return None;
     }
     let pieces: Vec<Piece<'_>> = spans
         .iter()
         .enumerate()
-        .filter_map(|(i, span)| Piece::new(i, span))
+        .filter_map(|(i, span)| Piece::new(i, span, baselines.of(span)))
         .collect();
     let mut formulas = find_formulas(&pieces);
     if formulas.is_empty() {
@@ -190,13 +244,13 @@ struct Piece<'a> {
 }
 
 impl<'a> Piece<'a> {
-    fn new(span: usize, source: &'a TextSpan) -> Option<Self> {
+    fn new(span: usize, source: &'a TextSpan, baseline: f32) -> Option<Self> {
         let upright = source.rotation_degrees == 0.0 && !source.mirrored && source.wmode == 0;
         let text = source.text.as_str();
         let geometry_ok = source.font_size.is_finite()
             && source.font_size > 0.0
             && source.bbox.x.is_finite()
-            && source.bbox.y.is_finite()
+            && baseline.is_finite()
             && source.bbox.width.is_finite();
         if !upright || source.rtl_draw_logical || !geometry_ok || text.trim().is_empty() {
             return None;
@@ -207,7 +261,7 @@ impl<'a> Piece<'a> {
             text,
             x0,
             x1,
-            base: source.bbox.y + source.text_rise * source.font_size,
+            base: baseline + source.text_rise * source.font_size,
             size: source.font_size,
             class: classify(text, &source.font_name),
         })
@@ -305,7 +359,10 @@ fn is_equation_number(text: &str) -> bool {
         return false;
     };
     let inner = inner.trim();
-    let inner = inner.strip_prefix(|c: char| c.is_ascii_uppercase()).unwrap_or(inner);
+    let inner = match inner.strip_prefix(|c: char| c.is_ascii_uppercase()) {
+        Some(rest) => rest.strip_prefix('.').unwrap_or(rest),
+        None => inner,
+    };
     let inner = inner.strip_suffix(|c: char| c.is_ascii_lowercase()).unwrap_or(inner);
     !inner.is_empty()
         && inner
