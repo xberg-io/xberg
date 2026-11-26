@@ -157,11 +157,31 @@ fn enforce_slide_limit(slide_count: usize, max_pages: Option<usize>) -> Result<(
 
 /// Join a paragraph's runs. Text runs are contiguous, so `<a:t>Sum</a:t><a:t>mary</a:t>`
 /// reads "Summary"; a math run carries no source whitespace, so it gets a space on each
-/// side that does not already have one.
+/// side that does not already have one. Neighbouring text runs that render alike are joined
+/// before `extract` sees them, so a bold word split across language runs renders as one
+/// `**Summary**`, not `**Sum****mary**`.
 fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> String {
     let mut result = String::new();
     let mut previous_is_math = false;
-    for run in runs {
+    let mut start = 0;
+    while start < runs.len() {
+        let mut end = start + 1;
+        while end < runs.len() && renders_alike(&runs[start], &runs[end]) {
+            end += 1;
+        }
+        let merged;
+        let run = if end - start == 1 {
+            &runs[start]
+        } else {
+            merged = Run {
+                text: runs[start..end].iter().map(|run| run.text.as_str()).collect(),
+                formatting: runs[start].formatting.clone(),
+                hyperlink_id: runs[start].hyperlink_id.clone(),
+                math_latex: None,
+            };
+            &merged
+        };
+        start = end;
         let text = extract(run);
         let is_math = run.math_latex.is_some();
         if (is_math || previous_is_math) && !result.is_empty() && !text.is_empty() {
@@ -177,6 +197,15 @@ fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> Str
         }
     }
     result
+}
+
+/// Whether two text runs carry the same markers and link, so their text renders as one run.
+fn renders_alike(one: &Run, other: &Run) -> bool {
+    let (a, b) = (&one.formatting, &other.formatting);
+    one.math_latex.is_none()
+        && other.math_latex.is_none()
+        && one.hyperlink_id == other.hyperlink_id
+        && (a.bold, a.italic, a.underlined, a.strikethrough) == (b.bold, b.italic, b.underlined, b.strikethrough)
 }
 
 /// Extract PPTX content from a file path.

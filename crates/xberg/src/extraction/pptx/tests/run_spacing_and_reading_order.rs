@@ -76,6 +76,42 @@ fn test_an_empty_run_after_math_keeps_the_space_before_text() {
     assert_eq!(join_runs_with_spacing(&runs, Run::extract), "x b");
 }
 
+/// A bold or italic word split across language runs renders with one pair of markers;
+/// where the formatting changes, the markers still close at the boundary.
+#[test]
+fn test_a_formatted_word_split_across_runs_renders_one_marker_pair() {
+    let content = extracted_slide_content(&text_box(
+        2,
+        914400,
+        1371600,
+        4572000,
+        914400,
+        r#"<a:p><a:r><a:rPr lang="en-GB" b="1"/><a:t>Sum</a:t></a:r><a:r><a:rPr lang="en-CH" b="1"/><a:t>mary</a:t></a:r></a:p>
+           <a:p><a:r><a:rPr lang="en-GB" i="1"/><a:t>Over</a:t></a:r><a:r><a:rPr lang="en-CH" i="1"/><a:t>view</a:t></a:r></a:p>
+           <a:p><a:r><a:rPr lang="en-GB" b="1"/><a:t>Bold</a:t></a:r><a:r><a:rPr lang="en-GB"/><a:t>face</a:t></a:r></a:p>"#,
+    ));
+
+    assert!(content.contains("**Summary**"), "{content:?}");
+    assert!(!content.contains("****"), "{content:?}");
+    assert!(content.contains("*Overview*"), "{content:?}");
+    assert!(!content.contains("*Over**view*"), "{content:?}");
+    assert!(content.contains("**Bold**face"), "{content:?}");
+}
+
+#[test]
+fn test_runs_that_render_alike_join_before_rendering() {
+    let bold = elements::Formatting {
+        bold: true,
+        ..Default::default()
+    };
+    let runs = [
+        text_run("Sum", bold.clone()),
+        text_run("mary", bold),
+        text_run(" plain", elements::Formatting::default()),
+    ];
+    assert_eq!(join_runs_with_spacing(&runs, Run::render_as_md), "**Summary** plain");
+}
+
 /// A table cell renders on one line, so its paragraphs still need a separator once
 /// runs stop being spaced apart.
 #[test]
