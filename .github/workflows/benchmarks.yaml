@@ -117,16 +117,21 @@ jobs:
           set -euo pipefail
           CARGO_TARGET_DIR="$RUNNER_TEMP/order-file-target" python3 scripts/ci/rust/order_file.py generate \
             --work-dir "$RUNNER_TEMP/order-file" --out "$RUNNER_TEMP/xberg.order" \
-            -- --features all,ort-dynamic,xberg/sceptre-ocr-tract
+            -- --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract \
+            --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'
           rm -rf "$RUNNER_TEMP/order-file-target"
 
       # `ort-dynamic` matches the released CLI: ONNX Runtime is not linked and loads on first
-      # model use, from the ORT_DYLIB_PATH each benchmark job's setup-onnx-runtime exports. ~keep
+      # model use, from the ORT_DYLIB_PATH each benchmark job's setup-onnx-runtime exports.
+      # `heic-dynamic` does the same for libheif (ADR-0019), found at /usr/local/lib where
+      # install-system-deps puts it. The --config override drops libheif-sys's link request as
+      # publish.yaml's cli-binaries job does; it stays on this command line so the harness and the
+      # validate-gt `cargo run` keep linking libheif. ~keep
       - name: Build xberg-cli (release, all features + Sceptre tract diagnostic)
         env:
           XBERG_ORDER_FILE: ${{ runner.temp }}/xberg.order
           XBERG_LINK_MAP: ${{ runner.temp }}/xberg.map
-        run: cargo build --locked --release -p xberg-cli --features all,ort-dynamic,xberg/sceptre-ocr-tract
+        run: cargo build --locked --release -p xberg-cli --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'
 
       - name: Verify the linker applied the order file
         run: >-

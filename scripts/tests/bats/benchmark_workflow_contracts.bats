@@ -50,7 +50,7 @@ run_validation() {
 }
 
 @test "benchmark workflow guard should require the exact setup CLI feature set" {
-	rewrite_fixture 's/all,xberg\/sceptre-ocr-tract/all/' workflow.yaml
+	rewrite_fixture 's/all,ort-dynamic,heic-dynamic,xberg\/sceptre-ocr-tract/all,ort-dynamic,xberg\/sceptre-ocr-tract/' workflow.yaml
 	run_validation
 	xberg_assert_status 1
 	xberg_assert_output_contains 'setup must build exactly one all-feature CLI'
