@@ -68,8 +68,10 @@ Rules:
   execution provider set (CPU only, default options), a recipe string naming
   the session options of the building route, and the source model's verified
   SHA-256. Any difference is a different key, so a mismatch rebuilds and
-  never reuses. Publishing a key removes entries for the same model path
-  under older keys.
+  never reuses. Publishing a key keeps the four newest keys for the same
+  model path and removes older ones, so hosts with different CPUs or ONNX
+  Runtime builds that share a cache directory do not delete each other's
+  entries on every save.
 * **Integrity.** A sidecar records the schema, key, size and SHA-256 of the
   graph; the graph file is named by its digest. Before every load the sidecar
   and graph are opened without following symlinks, the size must match and be
@@ -126,7 +128,9 @@ Rules:
   Runtime opening it is unchanged from before this decision.
 * **Not covered.** A principal who controls an ancestor directory of the cache
   root can swap the root between the check and the open; the checks cover
-  the root and its entries only. The window between re-hashing a graph and
+  the root and its entries only. The default root is under the user's own
+  cache directory; an `XBERG_CACHE_DIR` in shared space must sit below a
+  directory other users cannot rename. The window between re-hashing a graph and
   ONNX Runtime opening it needs write access to the 0700 directory, which
   only the cache owner has. Network filesystems with weak rename or fsync
   semantics may lose an entry, which only costs a rebuild.

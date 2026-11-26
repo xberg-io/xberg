@@ -217,13 +217,23 @@ fn discard_removes_the_entry() {
     assert_eq!(slot.verified_graph(), Ok(None));
 }
 
+/// Backdates `slot`'s sidecar so publish order is unambiguous at any mtime granularity.
+fn publish_aged(slot: &Slot, bytes: &[u8], age_seconds: u64) -> PathBuf {
+    let graph = save(slot, bytes);
+    fs::File::options()
+        .write(true)
+        .open(slot.meta_path())
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(age_seconds))
+        .unwrap();
+    graph
+}
+
 #[test]
-fn publishing_a_new_key_removes_the_superseded_entry_for_the_same_model() {
+fn a_model_keeps_its_newest_keys_and_drops_older_ones() {
     let root = TempDir::new().unwrap();
     let model = root.path().join("model.onnx");
     let dir = root.path().join("cache");
-    let old = Slot::new(dir.clone(), &model, &"a".repeat(64), "recipe v1", &platform());
-    let old_graph = save(&old, b"old graph");
     let other = Slot::new(
         dir.clone(),
         &root.path().join("other.onnx"),
@@ -231,13 +241,29 @@ fn publishing_a_new_key_removes_the_superseded_entry_for_the_same_model() {
         "recipe v1",
         &platform(),
     );
-    let other_graph = save(&other, b"other graph");
+    let other_graph = publish_aged(&other, b"other graph", 1_000);
+    // One key per host sharing the cache, as a different CPU feature set produces.
+    let slots: Vec<Slot> = (0..=KEYS_PER_MODEL)
+        .map(|host| {
+            let platform = Platform {
+                cpu: format!("host {host}"),
+                ..platform()
+            };
+            Slot::new(dir.clone(), &model, &"a".repeat(64), "recipe v1", &platform)
+        })
+        .collect();
+    let graphs: Vec<PathBuf> = slots
+        .iter()
+        .enumerate()
+        .map(|(index, slot)| publish_aged(slot, format!("graph {index}").as_bytes(), 500 - index as u64))
+        .collect();
 
-    let new = Slot::new(dir, &model, &"b".repeat(64), "recipe v1", &platform());
-    save(&new, b"new graph");
-
-    assert!(!old_graph.exists(), "the superseded graph for this model is removed");
-    assert!(!old.meta_path().exists());
+    assert!(!graphs[0].exists(), "the oldest key beyond KEYS_PER_MODEL is removed");
+    assert!(!slots[0].meta_path().exists());
+    for (slot, graph) in slots.iter().zip(&graphs).skip(1) {
+        assert!(graph.exists(), "a newer key's graph is kept");
+        assert_eq!(slot.verified_graph().unwrap().as_ref(), Some(graph));
+    }
     assert!(other_graph.exists(), "another model's graph is kept");
 }
 

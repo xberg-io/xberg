@@ -20,6 +20,11 @@
 //!   others, and every entry a regular file with the same properties, opened without following
 //!   symlinks. Anything else disables the cache for that build with a warning.
 //!
+//! The checks cover the cache directory and its entries, not its ancestors: whoever can rename a
+//! parent can swap the whole directory between checks. The default location is under the user's
+//! own cache directory; an `XBERG_CACHE_DIR` in shared space must sit below a directory other
+//! users cannot rename, such as a subdirectory of the sticky `/tmp`.
+//!
 //! Every failure falls back to the normal online-optimised build, at most one load and one save
 //! per build; a graph that fails its checks or fails to load is deleted.
 
@@ -47,6 +52,10 @@ const MAX_GRAPH_BYTES: u64 = 2 << 30;
 const ORPHAN_AGE: Duration = Duration::from_secs(60 * 60);
 /// Saved graphs kept across all models; the least recently published are removed first.
 const MAX_GRAPHS: usize = 16;
+/// Keys kept per model, the newest first. A cache directory shared by hosts with different CPUs
+/// or ONNX Runtime builds holds one key per host for the same model; keeping only the newest
+/// would make each host delete the others' entries on every save.
+const KEYS_PER_MODEL: usize = 4;
 const DIR_MODE: u32 = 0o700;
 const FILE_MODE: u32 = 0o600;
 const SHA256_HEX_LEN: usize = 64;
@@ -521,14 +530,14 @@ impl Slot {
         }
     }
 
-    /// Remove entries for this model under other keys, staging files and graphs no sidecar
-    /// points to once they are old enough not to belong to a running process, and the least
-    /// recently published entries beyond [`MAX_GRAPHS`].
+    /// Remove staging files and graphs no sidecar points to once they are old enough not to
+    /// belong to a running process, this model's entries beyond the newest [`KEYS_PER_MODEL`]
+    /// keys, and the least recently published entries beyond [`MAX_GRAPHS`].
     fn evict(&self) {
         let same_model = format!("{}-", self.prefix);
-        let own = format!("{}-{}", self.prefix, self.key);
-        let own_meta = format!("{own}.meta");
+        let own_meta = format!("{}-{}.meta", self.prefix, self.key);
         let mut other_metas: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
+        let mut superseded: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
         let listed = entries(&self.dir);
         for (name, path, modified) in &listed {
             let orphan_age_passed = modified.elapsed().is_ok_and(|age| age >= ORPHAN_AGE);
@@ -536,17 +545,39 @@ impl Slot {
                 if name.ends_with(".tmp") && orphan_age_passed {
                     let _ = fs::remove_file(path);
                 }
-            } else if name.starts_with(&same_model) && !name.starts_with(&own) {
-                let _ = fs::remove_file(path);
             } else if name.ends_with(".meta") {
-                if *name != own_meta {
-                    other_metas.push((*modified, path.clone()));
+                if *name == own_meta {
+                    continue;
                 }
+                if name.starts_with(&same_model) {
+                    superseded.push((*modified, path.clone()));
+                }
+                other_metas.push((*modified, path.clone()));
             } else if name.ends_with(".onnx") && orphan_age_passed && !is_referenced(name, &listed) {
                 let _ = fs::remove_file(path);
             }
         }
+        // This model's older keys go with their graphs, as nothing else will load them here.
+        if superseded.len() >= KEYS_PER_MODEL {
+            superseded.sort();
+            for (_, meta) in &superseded[..=superseded.len() - KEYS_PER_MODEL] {
+                let _ = fs::remove_file(meta);
+                let graphs = meta
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .map(|stem| format!("{stem}-"));
+                for (name, path, _) in &listed {
+                    if graphs
+                        .as_ref()
+                        .is_some_and(|graphs| name.starts_with(graphs) && name.ends_with(".onnx"))
+                    {
+                        let _ = fs::remove_file(path);
+                    }
+                }
+            }
+        }
         // Dropping a sidecar retires its entry at once; its graph goes once it is orphaned.
+        other_metas.retain(|(_, meta)| meta.exists());
         if other_metas.len() >= MAX_GRAPHS {
             other_metas.sort();
             for (_, meta) in &other_metas[..=other_metas.len() - MAX_GRAPHS] {
