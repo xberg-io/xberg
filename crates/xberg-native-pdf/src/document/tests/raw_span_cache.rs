@@ -334,6 +334,64 @@ fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
     );
 }
 
+/// Once the cache is past a page's paced share, a flattened read no longer finishes the preserved
+/// spans the cache would refuse, and every read still equals an uncached one.
+#[test]
+fn a_flattened_read_skips_the_preserved_finish_the_budget_would_refuse() {
+    const PAGES: usize = 4;
+    let pdf = many_pages_pdf(PAGES);
+    let unpaired = PdfDocument::from_bytes(pdf.clone()).unwrap();
+    unpaired.begin_page_passes();
+    for page in 0..2 {
+        drop(unpaired.extract_spans_raw(page).unwrap());
+    }
+    let two_pages_bytes = unpaired
+        .raw_page_spans_cache
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .used_bytes();
+
+    let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
+    doc.begin_page_passes();
+    *doc.raw_page_spans_cache.lock().unwrap() = Some(crate::cache::AdmissionBudgetCache::new(two_pages_bytes));
+    doc.expect_preserved_script_geometry();
+    drop(doc.extract_spans_raw(0).unwrap());
+    let before = super::super::extract_api::paired_finishes();
+    let flattened: Vec<String> = (1..PAGES)
+        .map(|page| format!("{:?}", doc.extract_spans_raw(page).unwrap()))
+        .collect();
+    assert_eq!(
+        super::super::extract_api::paired_finishes(),
+        before,
+        "pages 1 to 3 start past their share of a budget that holds two flattened pages"
+    );
+    for (page, flattened) in (1..PAGES).zip(flattened) {
+        let mut witnesses = Vec::new();
+        let preserved = doc
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .unwrap();
+        let cold = PdfDocument::from_bytes(pdf.clone()).unwrap();
+        assert_eq!(
+            flattened,
+            format!("{:?}", cold.extract_spans_raw(page).unwrap()),
+            "page {page}"
+        );
+        let mut cold_witnesses = Vec::new();
+        let cold_preserved = cold
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut cold_witnesses))
+            .unwrap();
+        assert_eq!(format!("{preserved:?}"), format!("{cold_preserved:?}"), "page {page}");
+        assert_eq!(format!("{witnesses:?}"), format!("{cold_witnesses:?}"), "page {page}");
+        assert_eq!(
+            doc.flattened_script_baselines(page),
+            cold.flattened_script_baselines(page),
+            "page {page}"
+        );
+    }
+}
+
 /// The span-only page reads are the page-text reads with an empty character list.
 #[test]
 fn span_only_page_reads_equal_page_text_reads_without_chars() {

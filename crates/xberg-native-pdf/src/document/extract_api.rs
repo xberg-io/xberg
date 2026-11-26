@@ -112,15 +112,29 @@ pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usiz
             .sum::<usize>()
 }
 
+/// The page-pass cache bytes a paired preserved entry of `page_index` may bring the cache to:
+/// that page's pro-rata share of `budget`.
+fn paired_preserved_share(budget: usize, page_index: usize, paired_pages: usize) -> usize {
+    let share = budget as u128 * (page_index as u128 + 1) / paired_pages as u128;
+    usize::try_from(share).unwrap_or(usize::MAX)
+}
+
 #[cfg(test)]
 thread_local! {
     static PAGE_SPAN_INTERPRETATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PAIRED_FINISHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Content interpretations for spans run on this thread so far.
 #[cfg(test)]
 pub(super) fn page_span_interpretations() -> usize {
     PAGE_SPAN_INTERPRETATIONS.with(std::cell::Cell::get)
+}
+
+/// Content interpretations on this thread so far that also finished the preserved geometry.
+#[cfg(test)]
+pub(super) fn paired_finishes() -> usize {
+    PAIRED_FINISHES.with(std::cell::Cell::get)
 }
 
 /// Internal bridge: reorders `spans` with `order` as if each raised mark sat on the baseline of the
@@ -373,7 +387,7 @@ impl PdfDocument {
         // A flattened read while preserved reads are expected finishes the preserved spans from
         // the same content run and caches them, unless that page is already cached. ~keep
         let paired_pages = self.paired_geometry_pages.load(Ordering::Relaxed);
-        let pair_geometries = passes_running
+        let expects_preserved = passes_running
             && script_geometry == ScriptGeometry::Flatten
             && paired_pages > 0
             && !self
@@ -388,11 +402,12 @@ impl PdfDocument {
                         })
                         .is_some()
                 });
+        let pair_geometries = expects_preserved && self.paired_preserved_entry_may_fit(page_index, paired_pages);
         // The markdown hierarchy asks for witnesses on preserved-geometry pages
         // a plain read already cached; capturing on the first read lets the
         // cached entry answer both instead of interpreting the page again. ~keep
         let capture =
-            capture_cmsy || pair_geometries || (passes_running && script_geometry == ScriptGeometry::Preserve);
+            capture_cmsy || expects_preserved || (passes_running && script_geometry == ScriptGeometry::Preserve);
         let ((page, warnings), recovered) =
             crate::extractors::recovery_tally::capture_recoveries(self.recovery_counts(), || {
                 crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
@@ -438,8 +453,7 @@ impl PdfDocument {
             // Paced to this page's share of the budget, so the flattened entries of the pages
             // still to come, which more passes read, keep the room they had without pairing. ~keep
             let paced = self.raw_page_spans_cache.lock_or_recover().as_ref().map_or(0, |cache| {
-                let share = cache.budget_bytes() as u128 * (page_index as u128 + 1) / paired_pages as u128;
-                usize::try_from(share).unwrap_or(usize::MAX)
+                paired_preserved_share(cache.budget_bytes(), page_index, paired_pages)
             });
             if let Some(bytes) = self.admitted_bytes(&preserved_key, &preserved, paced)
                 && let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut()
@@ -448,6 +462,28 @@ impl PdfDocument {
             }
         }
         Ok((page.spans, page.mc_actualtext))
+    }
+
+    /// Whether a paired read of `page_index` could still cache its preserved entry. Pairing
+    /// finishes the preserved spans before the flattened entry is admitted, so this is a bound:
+    /// after that admission the cache holds at least what it holds now less the page's own
+    /// flattened entry, which the admission may replace, and a preserved entry adds at least
+    /// [`InterpretedPage`] itself. A cache already past the page's paced share refuses the entry,
+    /// and finishing it would only throw it away.
+    fn paired_preserved_entry_may_fit(&self, page_index: usize, paired_pages: usize) -> bool {
+        let guard = self.raw_page_spans_cache.lock_or_recover();
+        let Some(cache) = guard.as_ref() else {
+            return false;
+        };
+        let flattened = RawSpanKey {
+            page_index,
+            script_geometry: ScriptGeometry::Flatten,
+        };
+        let limit = paired_preserved_share(cache.budget_bytes(), page_index, paired_pages).min(cache.budget_bytes());
+        cache
+            .used_bytes_with(&flattened, 0)
+            .saturating_add(size_of::<InterpretedPage>())
+            <= limit
     }
 
     /// Copy `page` into the page-pass cache when the passes run and its budget
@@ -702,6 +738,8 @@ impl PdfDocument {
             extractor.cmsy_witnesses = Some(Vec::new());
         }
         let (spans, preserved) = if pair_geometries && script_geometry == ScriptGeometry::Flatten {
+            #[cfg(test)]
+            PAIRED_FINISHES.with(|count| count.set(count.get() + 1));
             let (flattened, preserved) = extractor.extract_text_spans_in_both_script_geometries(&content_data)?;
             (flattened, Some(preserved))
         } else {
