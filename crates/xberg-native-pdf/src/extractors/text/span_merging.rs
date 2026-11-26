@@ -32,6 +32,7 @@ impl<'doc> TextExtractor<'doc> {
         // used below to rescue a narrow word gap the fixed kerning guard
         // suppressed. Computed before the fold consumes the list. ~keep
         let line_thresholds = Self::bimodal_line_gap_thresholds(&spans);
+        let ink_rows = InkRows::new(&ink_boxes);
         let mut merged = Vec::with_capacity(old_len);
         let mut current_span: Option<TextSpan> = None;
         // Whether the last run folded into `current_span` is a ligature that the decoder expanded to
@@ -274,11 +275,16 @@ impl<'doc> TextExtractor<'doc> {
                 0.5
             };
 
+            // A sub/superscript left on its own row by the sort (a lowered subscript is never
+            // snapped onto its base line) still occupies the gap between the two base-line runs
+            // around it, as the `2` between `H` and `SO` of `H₂SO₄`. Folding those runs into one
+            // span closes the gap, so the script can never rejoin its base downstream. ~keep
             let should_merge = (same_line
                 && is_same_font
                 && same_mcid
                 && (self.merging_config.severe_overlap_threshold_pt..merge_threshold_pt).contains(&gap)
-                && !large_gap_indicates_column)
+                && !large_gap_indicates_column
+                && !ink_rows.has_script_in_gap(&current.bbox, &span.bbox))
                 || (same_line && has_split_boundary && same_mcid)
                 || (cross_font_word_glue && same_mcid)
                 || (small_caps_glue && same_mcid);
@@ -712,5 +718,79 @@ impl<'doc> TextExtractor<'doc> {
                 other => other,
             }
         });
+    }
+}
+
+/// Vertical size of one [`InkRows`] bucket, in points: about half a body line, so a gap query
+/// reads only the few buckets its band overlaps.
+const INK_ROW_BUCKET_PT: f32 = 4.0;
+
+/// Gap a script must at least partly fill before it counts, in points, as for the rescue branch.
+const MIN_SCRIPT_GAP_PT: f32 = 0.5;
+
+/// Fraction of the gap the script's ink must cover.
+const MIN_SCRIPT_GAP_COVERAGE: f32 = 0.35;
+
+/// A script is clearly shorter than the runs it sits between.
+const MAX_SCRIPT_HEIGHT_RATIO: f32 = 0.9;
+
+/// Drawn glyph-run boxes bucketed by vertical position, so the merge fold can ask whether a
+/// sub/superscript sits in a gap without scanning every run on the page for every pair.
+struct InkRows {
+    rows: HashMap<i64, Vec<Rect>>,
+}
+
+impl InkRows {
+    fn new(boxes: &[Rect]) -> Self {
+        let mut rows: HashMap<i64, Vec<Rect>> = HashMap::new();
+        for ink in boxes {
+            if let Some((first, last)) = Self::bucket_range(ink.y, ink.y + ink.height) {
+                for bucket in first..=last {
+                    rows.entry(bucket).or_default().push(*ink);
+                }
+            }
+        }
+        Self { rows }
+    }
+
+    fn bucket_range(bottom: f32, top: f32) -> Option<(i64, i64)> {
+        if !bottom.is_finite() || !top.is_finite() {
+            return None;
+        }
+        let (low, high) = (bottom.min(top), bottom.max(top));
+        Some((
+            (low / INK_ROW_BUCKET_PT).floor() as i64,
+            (high / INK_ROW_BUCKET_PT).floor() as i64,
+        ))
+    }
+
+    /// True when a glyph run shorter than `left` and `right`, centred inside their vertical
+    /// band, covers a good part of the horizontal gap between them: a script drawn between two
+    /// base-line runs. A run on a neighbouring line can clip the band under tight leading, but
+    /// its centre lies outside it.
+    fn has_script_in_gap(&self, left: &Rect, right: &Rect) -> bool {
+        let gap_start = left.x + left.width;
+        let gap_end = right.x;
+        let gap_width = gap_end - gap_start;
+        if gap_width.is_nan() || gap_width <= MIN_SCRIPT_GAP_PT {
+            return false;
+        }
+        let band_bottom = left.y.min(right.y);
+        let band_top = (left.y + left.height).max(right.y + right.height);
+        let max_script_height = left.height.max(right.height) * MAX_SCRIPT_HEIGHT_RATIO;
+        let Some((first, last)) = Self::bucket_range(band_bottom, band_top) else {
+            return false;
+        };
+        (first..=last)
+            .filter_map(|bucket| self.rows.get(&bucket))
+            .flatten()
+            .any(|ink| {
+                let overlap = (ink.x + ink.width).min(gap_end) - ink.x.max(gap_start);
+                let centre = ink.y + ink.height * 0.5;
+                overlap > gap_width * MIN_SCRIPT_GAP_COVERAGE
+                    && ink.height < max_script_height
+                    && centre > band_bottom
+                    && centre < band_top
+            })
     }
 }

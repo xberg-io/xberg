@@ -3563,6 +3563,17 @@ mod tests {
     }
 
     #[test]
+    fn subscripts_between_same_font_runs_rejoin_their_formula() {
+        let Some(text) = extract_fixture_page("pdf/embedded_images_tables.pdf") else {
+            return;
+        };
+        assert!(
+            text.contains("0.5 M H2SO4"),
+            "formula split around its subscripts: {text:?}"
+        );
+    }
+
+    #[test]
     fn tagged_hebrew_page_uses_logical_structure_order() {
         let Some(text) = extract_fixture_page("pdf/rtl_hebrew_native.pdf") else {
             return;
