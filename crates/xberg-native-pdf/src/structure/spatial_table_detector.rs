@@ -6213,6 +6213,39 @@ mod tests {
         assert!(open_outer_column_edges(&h_edges, &v_edges, &interior_ruled_table_text(true)).is_empty());
     }
 
+    /// 2026-13845 tables 2 and 3: a year band over the value columns has its own column rules, so
+    /// its outermost rule stands inside the body's. The last year (`2031`) sat in the open strip
+    /// and was lost from the header row; the header line then failed the carried-text test and
+    /// was emitted again as prose. The closing edge must span the year band as well as the body.
+    #[test]
+    fn the_open_column_edge_spans_a_header_band_with_its_own_column_rules() {
+        use crate::elements::PathContent;
+        let mut lines = vec![
+            PathContent::line(45., 400., 567., 400.),
+            PathContent::line(45., 380., 567., 380.),
+            PathContent::line(45., 300., 567., 300.),
+            PathContent::line(300., 380., 300., 400.),
+        ];
+        lines.extend([142., 389., 464., 535.].map(|x| PathContent::line(x, 300., x, 380.)));
+        let spans = vec![
+            create_test_span("County subarea", 60., 385., 70., 9.),
+            create_test_span("2026", 210., 385., 20., 9.),
+            create_test_span("2031", 480., 385., 20., 9.),
+            create_test_span("4.5", 545., 355., 12., 9.),
+        ];
+        let (mut h_edges, mut v_edges) = extract_edges(&lines);
+        snap_and_merge(&mut h_edges);
+        snap_and_merge(&mut v_edges);
+
+        let edges = open_outer_column_edges(&h_edges, &v_edges, &spans);
+
+        let right = edges.iter().find(|edge| (edge.coord - 567.).abs() <= SNAP_TOL);
+        assert!(
+            right.is_some_and(|edge| edge.start <= 300. && edge.end >= 400.),
+            "{edges:?}"
+        );
+    }
+
     #[test]
     fn rules_overhanging_an_empty_strip_add_no_column() {
         let lines = interior_ruled_table(false);
