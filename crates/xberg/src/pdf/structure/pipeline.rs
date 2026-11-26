@@ -8899,21 +8899,22 @@ fn stacked_title_line_count(paragraph: &PdfParagraph, titles: &ahash::AHashSet<S
 }
 
 fn refresh_split_paragraph(paragraph: &mut PdfParagraph) {
-    let segments = || paragraph.lines.iter().flat_map(|line| &line.segments);
+    let (mut left, mut bottom, mut right, mut top) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for segment in paragraph.lines.iter().flat_map(|line| &line.segments) {
+        left = left.min(segment.x);
+        bottom = bottom.min(segment.baseline_y);
+        right = right.max(segment.x + segment.width);
+        top = top.max(segment.baseline_y + segment.height);
+    }
+    if paragraph.block_bbox.is_some() {
+        paragraph.block_bbox = Some((left, bottom, right, top));
+    }
     paragraph.dominant_font_size = paragraph
         .lines
         .iter()
         .map(|line| line.dominant_font_size)
         .fold(0.0, f32::max);
     paragraph.is_bold = paragraph.lines.iter().filter(|line| line.is_bold).count() * 2 > paragraph.lines.len();
-    paragraph.block_bbox = paragraph.block_bbox.map(|_| {
-        (
-            segments().map(|s| s.x).fold(f32::MAX, f32::min),
-            segments().map(|s| s.baseline_y).fold(f32::MAX, f32::min),
-            segments().map(|s| s.x + s.width).fold(f32::MIN, f32::max),
-            segments().map(|s| s.baseline_y + s.height).fold(f32::MIN, f32::max),
-        )
-    });
     paragraph.text.clear();
     paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
 }
