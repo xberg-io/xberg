@@ -306,7 +306,10 @@ fn pipeline_benchmark_rejects_unknown_sort_metric() {
 
 #[test]
 fn cohort_contract_summary_includes_exact_matrix_cells() {
-    let summary = cohort_contract_summary(benchmark_harness::bench_matrix::Cohort::Native);
+    let summary = cohort_contract_summary(
+        benchmark_harness::bench_matrix::Cohort::Native,
+        benchmark_harness::bench_matrix::MatrixProfile::Full,
+    );
     let matrix = summary["matrix"].as_array().expect("matrix array");
 
     // 6 xberg (baseline md/plain + layout md, single/batch; plain layout is not benchmarked)
@@ -322,6 +325,32 @@ fn cohort_contract_summary_includes_exact_matrix_cells() {
     );
     assert_eq!(matrix[0]["mode"], "single-file");
     assert_eq!(matrix[0]["optional"], false);
+}
+
+#[test]
+fn smoke_cohort_contract_summary_lists_only_the_smoke_cells() {
+    let summary = cohort_contract_summary(
+        benchmark_harness::bench_matrix::Cohort::Native,
+        benchmark_harness::bench_matrix::MatrixProfile::Smoke,
+    );
+    let artifacts: Vec<&str> = summary["matrix"]
+        .as_array()
+        .expect("matrix array")
+        .iter()
+        .map(|cell| cell["artifact"].as_str().expect("artifact"))
+        .collect();
+
+    assert_eq!(
+        artifacts,
+        [
+            "benchmarks-rust-baseline-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-rust-baseline-markdown-batch-native-pdf-fast-b8",
+            "benchmarks-docling-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-liteparse-markdown-single-file-native-pdf-fast-b8",
+        ]
+    );
+    assert_eq!(summary["expected_matrix_keys"], 4);
+    assert_eq!(summary["optional_matrix_keys"], 0);
 }
 
 #[test]

@@ -35,13 +35,53 @@ class TestWorkflowMatrixValidation(unittest.TestCase):
     def test_expands_every_exact_contract_cell_once(self) -> None:
         cells = VALIDATOR.workflow_cells(WORKFLOW)
 
-        assert len(cells) == 128
-        assert len({VALIDATOR.cell_key(cell) for cell in cells}) == 128
+        assert len(cells) == 140
+        assert len({VALIDATOR.cell_key(cell) for cell in cells}) == 140
         assert sum(not cell["optional"] for cell in cells) == 84
         pdfium_cells = [cell for cell in cells if cell["framework"].endswith("-baseline-pdfium")]
         assert len(pdfium_cells) == 4
         assert all(cell["cohort"] == "native-pdf-fast-b8" for cell in pdfium_cells)
         assert all(not cell["optional"] for cell in pdfium_cells)
+
+    def test_smoke_profile_expands_exactly_the_smoke_cells(self) -> None:
+        cells = VALIDATOR.workflow_cells(WORKFLOW, "smoke")
+
+        # Mirrors bench_matrix::SMOKE_ARTIFACTS; CI checks the two against each other through
+        # `validate-workflow-matrix.py --profile smoke` with the built harness.
+        assert sorted(cell["artifact"] for cell in cells) == [
+            "benchmarks-docling-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-liteparse-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-rust-baseline-markdown-batch-native-pdf-fast-b8",
+            "benchmarks-rust-baseline-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-rust-baseline-markdown-single-file-ocr-images-fast",
+            "benchmarks-rust-baseline-markdown-single-file-ocr-pdf-fast-b4",
+        ]
+        assert not any(cell["optional"] for cell in cells)
+
+    def test_smoke_excludes_do_not_change_the_full_expansion(self) -> None:
+        stripped = "\n".join(line for line in WORKFLOW.splitlines() if "{ profile: smoke," not in line)
+
+        full = {VALIDATOR.cell_key(cell) for cell in VALIDATOR.workflow_cells(WORKFLOW)}
+        assert full == {VALIDATOR.cell_key(cell) for cell in VALIDATOR.workflow_cells(stripped)}
+        assert len(VALIDATOR.workflow_cells(stripped, "smoke")) > len(VALIDATOR.workflow_cells(WORKFLOW, "smoke"))
+
+    def test_a_job_without_a_profile_dimension_must_skip_smoke_runs(self) -> None:
+        mutated = WORKFLOW.replace(
+            "github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (needs.setup.result == 'success' && !cancelled())",
+            "github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled())",
+            1,
+        )
+        assert mutated != WORKFLOW
+
+        with self.assertRaisesRegex(ValueError, "must skip smoke runs"):
+            VALIDATOR.workflow_cells(mutated, "smoke")
+
+    def test_profile_dimension_must_follow_the_run_input(self) -> None:
+        mutated = WORKFLOW.replace("""profile: ["${{ inputs.profile || 'full' }}"]""", 'profile: ["smoke"]', 1)
+        assert mutated != WORKFLOW
+
+        with self.assertRaisesRegex(ValueError, "matrix profile must be"):
+            VALIDATOR.workflow_cells(mutated)
 
     def test_framework_env_drift_changes_cell_even_when_artifact_name_is_unchanged(self) -> None:
         mutated = WORKFLOW.replace("FRAMEWORK: docling", "FRAMEWORK: docling-wrong", 1)

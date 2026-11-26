@@ -27,6 +27,46 @@ fn accepts_exact_raw_contract_for_every_format_cohort() {
 }
 
 #[test]
+fn smoke_profile_accepts_exactly_the_smoke_cells() {
+    for (cohort, cells) in [(Cohort::Native, 4), (Cohort::Ocr, 1), (Cohort::Images, 1)] {
+        let scenario = artifact_scenario_for(cohort, MatrixProfile::Smoke);
+        let message =
+            validate(&scenario.args).unwrap_or_else(|error| panic!("{} smoke failed: {error}", cohort.as_str()));
+        assert_eq!(
+            message,
+            format!("validated {cells} {} benchmark artifacts", cohort.as_str())
+        );
+    }
+}
+
+#[test]
+fn full_profile_rejects_a_smoke_cell_set() {
+    let mut scenario = artifact_scenario_for(Cohort::Native, MatrixProfile::Smoke);
+    scenario.args.profile = MatrixProfile::Full;
+
+    assert_err_contains(validate(&scenario.args), "artifacts mismatch; missing=");
+}
+
+#[test]
+fn smoke_profile_rejects_cells_outside_the_smoke_set() {
+    let mut scenario = artifact_scenario(Cohort::Native);
+    scenario.args.profile = MatrixProfile::Smoke;
+
+    assert_err_contains(validate(&scenario.args), "allowed artifacts mismatch");
+}
+
+#[test]
+fn smoke_profile_rejects_a_cohort_it_does_not_run() {
+    let mut scenario = artifact_scenario(Cohort::Office);
+    scenario.args.profile = MatrixProfile::Smoke;
+
+    assert_err_contains(
+        validate(&scenario.args),
+        "cohort office has no cells in the Smoke profile",
+    );
+}
+
+#[test]
 fn rejects_provenance_schema_2_without_required_measurement_contract() {
     let scenario = artifact_scenario(Cohort::Native);
     tamper_json(&provenance_path(&scenario, 0), |value| {

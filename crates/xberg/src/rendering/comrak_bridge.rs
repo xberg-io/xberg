@@ -2388,6 +2388,70 @@ mod tests {
         assert_eq!(out.matches("<!-- end list -->").count(), 3, "got: {out}");
     }
 
+    /// One list holding one item, inside a layout region of its own, as PDF assembly emits an
+    /// OCR'd numbered line whose neighbours sit in other regions.
+    fn one_item_list_in_region(b: &mut InternalDocumentBuilder, region: &str, ordered: bool, label: &str, text: &str) {
+        b.push_group_start(Some(region), Some(1));
+        b.push_list(ordered);
+        let item = b.push_list_item(text, ordered, vec![], Some(1), None);
+        if !label.is_empty() {
+            b.set_list_item_source_label(item, label);
+        }
+        b.end_list();
+        b.push_group_end();
+    }
+
+    /// nougat_002_scanned: "1. Agenda", "2. Minutes", "3. Business Arising" each closed their own
+    /// list, and the writer put `<!-- end list -->` between the numbered items.
+    #[test]
+    fn numbered_lists_whose_numbering_continues_render_as_one_list() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", true, "1.", "Agenda");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", true, "2.", "Minutes");
+        b.push_page_break();
+        one_item_list_in_region(&mut b, "pdf-layout:p2:r1:text", true, "3.", "Business Arising");
+        let doc = b.build();
+        assert_eq!(
+            crate::rendering::render_markdown(&doc),
+            "1. Agenda\n2. Minutes\n3. Business Arising\n"
+        );
+        assert_eq!(crate::rendering::render_html(&doc).matches("<ol").count(), 1);
+    }
+
+    #[test]
+    fn numbered_lists_whose_numbering_restarts_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", true, "1.", "Agenda");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", true, "1.", "Restart");
+        assert_eq!(
+            crate::rendering::render_markdown(&b.build()),
+            "1. Agenda\n\n<!-- end list -->\n\n1. Restart\n"
+        );
+    }
+
+    #[test]
+    fn bullet_lists_in_separate_regions_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", false, "", "First");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", false, "", "Second");
+        assert_eq!(
+            crate::rendering::render_markdown(&b.build()),
+            "- First\n\n<!-- end list -->\n\n- Second\n"
+        );
+    }
+
+    #[test]
+    fn numbered_lists_with_a_paragraph_between_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", true, "1.", "Agenda");
+        b.push_paragraph("Motion carried.", vec![], Some(1), None);
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", true, "2.", "Minutes");
+        assert_eq!(
+            crate::rendering::render_markdown(&b.build()),
+            "1. Agenda\n\nMotion carried.\n\n2. Minutes\n"
+        );
+    }
+
     #[test]
     fn test_blockquote() {
         let mut b = InternalDocumentBuilder::new("test");

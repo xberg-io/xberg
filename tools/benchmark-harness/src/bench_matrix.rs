@@ -252,7 +252,44 @@ impl Cohort {
             Cohort::ImagesStructured => images_structured_contract(),
         }
     }
+
+    /// This cohort's contract restricted to the cells `profile` runs. [`MatrixProfile::Full`] is
+    /// [`Cohort::contract`] unchanged; [`MatrixProfile::Smoke`] keeps only [`SMOKE_ARTIFACTS`],
+    /// every one of them a required cell of the full contract, so a smoke run is held to the
+    /// full-run rules for each cell it does produce.
+    pub fn contract_for(self, profile: MatrixProfile) -> CohortContract {
+        let mut contract = self.contract();
+        if profile == MatrixProfile::Smoke {
+            contract
+                .matrix
+                .retain(|entry| SMOKE_ARTIFACTS.contains(&entry.artifact.as_str()));
+        }
+        contract
+    }
 }
+
+/// Which benchmark cells a workflow run produces and its validators expect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MatrixProfile {
+    /// The full release contract.
+    #[default]
+    Full,
+    /// The minimal cell set that runs every benchmark job type end to end: xberg on native PDF
+    /// (single-file and batch), OCR PDF and images, plus one LiteParse and one Docling cell.
+    /// Smoke runs are never published.
+    Smoke,
+}
+
+/// The cells a [`MatrixProfile::Smoke`] run produces, by artifact name. The workflow's smoke
+/// matrix and `validate-workflow-matrix.py --profile smoke` are checked against this list.
+pub const SMOKE_ARTIFACTS: [&str; 6] = [
+    "benchmarks-rust-baseline-markdown-single-file-native-pdf-fast-b8",
+    "benchmarks-rust-baseline-markdown-batch-native-pdf-fast-b8",
+    "benchmarks-rust-baseline-markdown-single-file-ocr-pdf-fast-b4",
+    "benchmarks-rust-baseline-markdown-single-file-ocr-images-fast",
+    "benchmarks-liteparse-markdown-single-file-native-pdf-fast-b8",
+    "benchmarks-docling-markdown-single-file-native-pdf-fast-b8",
+];
 
 const NATIVE_COHORT: &str = "native-pdf-fast-b8";
 const OCR_COHORT: &str = "ocr-pdf-fast-b4";
@@ -695,6 +732,7 @@ fn broad_office_competitors(cohort: &str) -> Vec<MatrixEntry> {
 fn office_matrix() -> Vec<MatrixEntry> {
     let mut matrix = xberg_entries(OFFICE_COHORT, false, false, false);
     matrix.extend(broad_office_competitors(OFFICE_COHORT));
+    matrix.extend(optional(grid_entries("liteparse", OFFICE_COHORT)));
     matrix
 }
 
@@ -707,6 +745,8 @@ fn markup_matrix() -> Vec<MatrixEntry> {
 fn data_matrix() -> Vec<MatrixEntry> {
     let mut matrix = xberg_entries(DATA_COHORT, false, false, false);
     matrix.extend(broad_office_competitors(DATA_COHORT));
+    // LiteParse converts the csv/tsv fixtures through LibreOffice; json/yaml are outside its formats.
+    matrix.extend(optional(grid_entries("liteparse", DATA_COHORT)));
     matrix
 }
 
@@ -739,6 +779,7 @@ fn images_matrix(cohort: &str) -> Vec<MatrixEntry> {
     // (single-file, plaintext). Best-effort: absence never fails validation.
     matrix.push(plaintext_single_file_entry("unstructured", cohort).into_optional());
     matrix.push(plaintext_single_file_entry("tika", cohort).into_optional());
+    matrix.extend(optional(grid_entries("liteparse", cohort)));
     matrix
 }
 

@@ -69,6 +69,25 @@ impl From<CliCohort> for benchmark_harness::bench_matrix::Cohort {
     }
 }
 
+/// CLI enum for the benchmark matrix profile a workflow run produced
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum CliMatrixProfile {
+    /// The full release contract
+    Full,
+    /// The smoke subset: one cell per benchmark job type, never published
+    Smoke,
+}
+
+impl From<CliMatrixProfile> for benchmark_harness::bench_matrix::MatrixProfile {
+    fn from(profile: CliMatrixProfile) -> Self {
+        use benchmark_harness::bench_matrix::MatrixProfile;
+        match profile {
+            CliMatrixProfile::Full => MatrixProfile::Full,
+            CliMatrixProfile::Smoke => MatrixProfile::Smoke,
+        }
+    }
+}
+
 impl From<CliMode> for BenchmarkMode {
     fn from(mode: CliMode) -> Self {
         match mode {
@@ -278,5 +297,9 @@ pub(crate) enum Commands {
         /// Which cohort's contract to print
         #[arg(long)]
         cohort: CliCohort,
+
+        /// Which matrix profile's cells to print
+        #[arg(long, value_enum, default_value = "full")]
+        profile: CliMatrixProfile,
     },
 }

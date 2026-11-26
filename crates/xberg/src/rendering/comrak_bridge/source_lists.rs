@@ -25,6 +25,23 @@ fn compatible(existing: &NodeList, requested: &NodeList, ordinal: Option<usize>,
             || next.is_some_and(|next| ordinal.is_none_or(|ordinal| ordinal == next)))
 }
 
+/// The ordered list directly before the still-empty `list` when the first item of `list` is
+/// numbered one past that list's last item.
+///
+/// A layout region or page end closes a PDF list after every item, so a numbered run comes out as
+/// one-item sibling lists that the writer separates with `<!-- end list -->`. Only an explicit
+/// source number continues a list: a restart, a gap, an unlabeled item or a bullet list stays
+/// separate, and anything rendered between the two lists keeps them apart.
+fn continued_list<'a>(list: &'a AstNode<'a>, requested: &NodeList, ordinal: Option<usize>) -> Option<&'a AstNode<'a>> {
+    let ordinal = ordinal.filter(|_| requested.list_type == ListType::Ordered)?;
+    let previous = list.previous_sibling()?;
+    let ordered = matches!(
+        &previous.data.borrow().value,
+        NodeValue::List(existing) if existing.list_type == ListType::Ordered
+    );
+    (ordered && previous_ordinal(previous)?.checked_add(1) == Some(ordinal)).then_some(previous)
+}
+
 pub(super) fn item_parent<'a>(
     arena: &'a comrak::Arena<'a>,
     parent: &'a AstNode<'a>,
@@ -42,6 +59,13 @@ pub(super) fn item_parent<'a>(
         return (list, requested);
     };
     if parent.first_child().is_none() {
+        if let Some(continued) = continued_list(parent, &requested, ordinal)
+            && let Some(entry) = stack.last_mut().filter(|entry| entry.node.same_node(parent))
+        {
+            parent.detach();
+            entry.node = continued;
+            return (continued, requested);
+        }
         parent.data.borrow_mut().value = NodeValue::List(requested.clone());
         return (parent, requested);
     }
