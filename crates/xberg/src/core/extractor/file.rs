@@ -241,7 +241,7 @@ pub(crate) async fn extract_file(
             let _ = LEGACY_POWERPOINT_MIME_TYPE;
         }
 
-        Box::pin(extract_file_with_extractor(path, &detected_mime, config)).await
+        crate::core::runtime::pin_boxed(|| extract_file_with_extractor(path, &detected_mime, config)).await
     });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let extraction_future = Box::pin(super::cacheability::with_ocr_request(
@@ -358,7 +358,7 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     }
 
     let lifecycle_generations_before = lifecycle_registry_generations();
-    let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
+    let result = crate::core::runtime::pin_boxed(|| extract_file_uncached(path, mime_type, config)).await?;
     let lifecycle_generations_after = lifecycle_registry_generations();
 
     // A soft stop at the time limit leaves a partial document, which must not be served later. ~keep
@@ -588,18 +588,20 @@ pub(crate) async fn extract_with_candidates(
                     );
                 }
                 let builtin_html = candidate.is_builtin() && candidate.plugin().name() == "html-extractor";
-                let result = Box::pin(crate::core::pipeline::run_pipeline_from_extractor(
-                    doc,
-                    config,
-                    builtin_html,
-                    #[cfg(all(
-                        feature = "pdf",
-                        feature = "ocr",
-                        feature = "tokio-runtime",
-                        not(target_arch = "wasm32")
-                    ))]
-                    placement,
-                ))
+                let result = crate::core::runtime::pin_boxed(|| {
+                    crate::core::pipeline::run_pipeline_from_extractor(
+                        doc,
+                        config,
+                        builtin_html,
+                        #[cfg(all(
+                            feature = "pdf",
+                            feature = "ocr",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        placement,
+                    )
+                })
                 .await?;
                 return Ok(result);
             }
@@ -1064,18 +1066,20 @@ pub(in crate::core::extractor) async fn extract_bytes_with_extractor_and_layout_
     ensure_builtin_extraction_method(&mut doc, is_builtin);
 
     let builtin_html = is_builtin && extractor.name() == "html-extractor";
-    let result = Box::pin(crate::core::pipeline::run_pipeline_from_extractor(
-        doc,
-        config,
-        builtin_html,
-        #[cfg(all(
-            feature = "pdf",
-            feature = "ocr",
-            feature = "tokio-runtime",
-            not(target_arch = "wasm32")
-        ))]
-        placement,
-    ))
+    let result = crate::core::runtime::pin_boxed(|| {
+        crate::core::pipeline::run_pipeline_from_extractor(
+            doc,
+            config,
+            builtin_html,
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            placement,
+        )
+    })
     .await?;
     Ok(result)
 }
