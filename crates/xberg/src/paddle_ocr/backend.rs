@@ -2476,15 +2476,18 @@ mod tests {
     fn session_options_apply_to_a_builder_for_every_combo() {
         use crate::ort_options::OrtSessionOptions;
 
-        crate::ort_discovery::ensure_ort_available();
+        let Some(environment) =
+            crate::ort_discovery::test_ort_environment("session_options_apply_to_a_builder_for_every_combo")
+        else {
+            return;
+        };
         for (memory_pattern, cpu_arena) in [(true, true), (false, true), (true, false), (false, false)] {
             let options = OrtSessionOptions {
                 memory_pattern,
                 cpu_arena,
                 max_threads: None,
             };
-            let builder = ort::session::Session::builder(crate::ort_discovery::ort_environment().expect("ort env"))
-                .expect("session builder");
+            let builder = ort::session::Session::builder(environment).expect("session builder");
             apply_paddle_session_options(builder, &options).unwrap_or_else(|e| panic!("{options:?}: {e}"));
         }
     }

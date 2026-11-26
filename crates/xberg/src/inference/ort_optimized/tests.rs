@@ -384,8 +384,6 @@ fn cpu() -> crate::core::config::acceleration::AccelerationConfig {
 /// Writes `bytes` as a model and verifies it, as a model manager would before loading it.
 fn pinned_model(root: &TempDir, name: &str, bytes: &[u8]) -> (PathBuf, PinnedFile) {
     use sha2::{Digest, Sha256};
-    // `Platform::current` reads `ort::info()`, which needs the runtime loaded.
-    crate::ort_discovery::ort_environment().unwrap();
     let path = root.path().join(name);
     fs::write(&path, bytes).unwrap();
     crate::model_download::verify_sha256(&path, &hex::encode(Sha256::digest(bytes)), name).unwrap();
@@ -403,6 +401,11 @@ fn run_tiny(session: &mut Session) -> Vec<u32> {
 
 #[test]
 fn a_verified_model_is_saved_then_loaded_with_identical_outputs() {
+    if crate::ort_discovery::test_ort_environment("a_verified_model_is_saved_then_loaded_with_identical_outputs")
+        .is_none()
+    {
+        return;
+    }
     let root = TempDir::new().unwrap();
     let (model, pinned) = pinned_model(&root, "tiny.onnx", &tiny_model::onnx());
     let slot = Slot::new(
@@ -428,6 +431,9 @@ fn a_verified_model_is_saved_then_loaded_with_identical_outputs() {
 
 #[test]
 fn a_forged_entry_that_fails_to_load_is_replaced() {
+    if crate::ort_discovery::test_ort_environment("a_forged_entry_that_fails_to_load_is_replaced").is_none() {
+        return;
+    }
     let root = TempDir::new().unwrap();
     let (model, pinned) = pinned_model(&root, "tiny.onnx", &tiny_model::onnx());
     let slot = Slot::new(
@@ -458,6 +464,9 @@ fn a_forged_entry_that_fails_to_load_is_replaced() {
 
 #[test]
 fn a_model_changed_after_verification_is_not_saved() {
+    if crate::ort_discovery::test_ort_environment("a_model_changed_after_verification_is_not_saved").is_none() {
+        return;
+    }
     let root = TempDir::new().unwrap();
     let (model, pinned) = pinned_model(&root, "tiny.onnx", &tiny_model::onnx());
     let slot = Slot::new(
@@ -569,7 +578,6 @@ fn assert_saved_graph_is_bit_identical(
         eprintln!("skip: no verified {model_type} model in the local cache (run `xberg cache warm`)");
         return false;
     };
-    crate::ort_discovery::ort_environment().unwrap();
     // The manager pins the model when it hashes it; a build that skips the hash is pinned here.
     let pinned = crate::model_download::pinned_file(&model).unwrap_or_else(|| {
         use sha2::{Digest, Sha256};
@@ -613,6 +621,11 @@ fn assert_saved_graph_is_bit_identical(
 #[cfg(feature = "layout-detection")]
 #[test]
 fn saved_layout_graphs_reproduce_online_outputs_bit_for_bit() {
+    // `Platform::current` reads `ort::info()`, which needs the runtime loaded.
+    if crate::ort_discovery::test_ort_environment("saved_layout_graphs_reproduce_online_outputs_bit_for_bit").is_none()
+    {
+        return;
+    }
     let accel = cpu();
     let rtdetr = assert_saved_graph_is_bit_identical(
         "rtdetr",

@@ -65,6 +65,11 @@ fn relative_probe(test_name: &str, location: &str) {
 
 #[test]
 fn memory_binding_executes_the_external_tensor_without_a_model_file() {
+    if crate::ort_discovery::test_ort_environment("memory_binding_executes_the_external_tensor_without_a_model_file")
+        .is_none()
+    {
+        return;
+    }
     let graph = super::toy_model::external_token_sum_nli_model_bytes("weights.data");
     let mut session = memory_session(&graph, Some(("weights.data", 0.1f32.to_le_bytes().to_vec()))).unwrap();
     let ids = ort::value::Tensor::from_array(([1usize, 6], vec![2i64, 4, 3, 6, 7, 3])).unwrap();
@@ -80,6 +85,11 @@ fn memory_binding_executes_the_external_tensor_without_a_model_file() {
 
 #[test]
 fn memory_loading_rejects_an_undeclared_absolute_external_path() {
+    if crate::ort_discovery::test_ort_environment("memory_loading_rejects_an_undeclared_absolute_external_path")
+        .is_none()
+    {
+        return;
+    }
     let directory = tempfile::tempdir().unwrap();
     let weights = directory.path().join(WARM_FILE);
     std::fs::write(&weights, 0.1f32.to_le_bytes()).unwrap();
@@ -89,6 +99,13 @@ fn memory_loading_rejects_an_undeclared_absolute_external_path() {
 
 #[test]
 fn memory_loading_rejects_an_undeclared_parent_traversal_to_warm_weights() {
+    if crate::ort_discovery::test_ort_environment(
+        "memory_loading_rejects_an_undeclared_parent_traversal_to_warm_weights",
+    )
+    .is_none()
+    {
+        return;
+    }
     relative_probe(
         "memory_loading_rejects_an_undeclared_parent_traversal_to_warm_weights",
         "../undeclared-external.data",
@@ -97,6 +114,11 @@ fn memory_loading_rejects_an_undeclared_parent_traversal_to_warm_weights() {
 
 #[test]
 fn memory_loading_rejects_undeclared_weights_in_the_working_directory() {
+    if crate::ort_discovery::test_ort_environment("memory_loading_rejects_undeclared_weights_in_the_working_directory")
+        .is_none()
+    {
+        return;
+    }
     relative_probe(
         "memory_loading_rejects_undeclared_weights_in_the_working_directory",
         WARM_FILE,

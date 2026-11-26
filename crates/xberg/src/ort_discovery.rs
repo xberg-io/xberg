@@ -378,6 +378,25 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
     Ok(environment)
 }
 
+/// The shared environment for a test that runs ONNX Runtime, or `None` after printing why when
+/// the runtime cannot be loaded and `XBERG_REQUIRE_TRACT_PARITY` (set by CI's model jobs) does
+/// not require it. The load is checked before [`ort_environment`]: building any `ort::Error`
+/// calls into the runtime, so on a failed dynamic load ort falls back to a bare-name `dlopen`
+/// and panics.
+#[cfg(all(test, any(ort_session_providers, feature = "ner-onnx")))]
+pub(crate) fn test_ort_environment(test: &str) -> Option<&'static ort::environment::Environment> {
+    #[cfg(ort_dynamic_discovery)]
+    if let Err(error) = preload_ort_runtime() {
+        assert!(
+            std::env::var_os("XBERG_REQUIRE_TRACT_PARITY").is_none(),
+            "XBERG_REQUIRE_TRACT_PARITY is set but ONNX Runtime cannot be loaded for {test}: {error}"
+        );
+        eprintln!("SKIP: ONNX Runtime not available ({error}): {test}");
+        return None;
+    }
+    Some(ort_environment().unwrap_or_else(|error| panic!("{test}: ONNX Runtime environment failed: {error}")))
+}
+
 /// Apply execution providers to an ORT session builder based on [`AccelerationConfig`].
 ///
 /// Shared by all ORT consumers (layout detection, embeddings, PaddleOCR, doc orientation).

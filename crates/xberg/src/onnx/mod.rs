@@ -944,6 +944,9 @@ mod tests {
 
     #[test]
     fn session_builds_and_runs_for_every_option_combo() {
+        if crate::ort_discovery::test_ort_environment("session_builds_and_runs_for_every_option_combo").is_none() {
+            return;
+        }
         for (mp, arena, threads) in [
             (true, true, None),
             (false, false, Some(1)),
@@ -963,7 +966,10 @@ mod tests {
 
     #[test]
     fn build_session_rejects_garbage_model_without_panicking() {
-        crate::ort_discovery::ensure_ort_available();
+        if crate::ort_discovery::test_ort_environment("build_session_rejects_garbage_model_without_panicking").is_none()
+        {
+            return;
+        }
         let r = build_session_with(&OrtSessionOptions::default(), Some(&cpu_accel()), embed_err, |b| {
             b.commit_from_memory(b"definitely not onnx")
         });
@@ -973,7 +979,11 @@ mod tests {
     #[cfg(not(feature = "cuda"))]
     #[test]
     fn unavailable_provider_errors_before_memory_options_are_applied() {
-        crate::ort_discovery::ensure_ort_available();
+        if crate::ort_discovery::test_ort_environment("unavailable_provider_errors_before_memory_options_are_applied")
+            .is_none()
+        {
+            return;
+        }
         let accel = AccelerationConfig {
             provider: ExecutionProviderType::Cuda,
             device_id: 0,
