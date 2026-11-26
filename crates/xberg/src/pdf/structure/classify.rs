@@ -1726,8 +1726,8 @@ fn other_paragraphs_font_size(
     }
 }
 
-/// Extract plain text from a paragraph.
-fn paragraph_plain_text(para: &PdfParagraph) -> String {
+/// A paragraph's segments joined by single spaces, ignoring any recorded `text`.
+pub(super) fn paragraph_plain_text(para: &PdfParagraph) -> String {
     para.lines
         .iter()
         .flat_map(|l| l.segments.iter())

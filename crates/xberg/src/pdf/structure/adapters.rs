@@ -1476,8 +1476,8 @@ fn trim_blank_boundaries(mut lines: Vec<types::PdfParagraph>) -> Vec<types::PdfP
 fn union_bboxes(lines: &[types::PdfParagraph]) -> Option<(f32, f32, f32, f32)> {
     lines
         .iter()
-        .filter_map(|line| line.block_bbox)
-        .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))
+        .map(|line| line.block_bbox)
+        .fold(None, super::geometry::union_bbox)
 }
 
 /// Master switch for [`reattach_ocr_layout_list_markers`].

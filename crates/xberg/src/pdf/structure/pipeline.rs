@@ -19,7 +19,8 @@ use super::classify::{
     classify_formula_paragraphs, classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings,
     demote_unnumbered_subsections, is_body_size_bold_heading_candidate, is_body_size_bold_signal,
     is_numbered_section_heading, is_short_body_size_section_title, level_numbered_headings_by_depth, mark_arxiv_noise,
-    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
+    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, paragraph_plain_text, reads_vertically,
+    refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{crosses_visual_line_break, is_cjk_char, segments_need_space};
@@ -620,10 +621,7 @@ fn continues_bold_title(title: &PdfParagraph, next: &PdfParagraph, body_font_siz
 fn joined_paragraph(title: &PdfParagraph, next: &PdfParagraph) -> PdfParagraph {
     let mut joined = title.clone();
     joined.lines.extend(next.lines.iter().cloned());
-    joined.block_bbox = match (title.block_bbox, next.block_bbox) {
-        (Some((tl, tb, tr, tt)), Some((nl, nb, nr, nt))) => Some((tl.min(nl), tb.min(nb), tr.max(nr), tt.max(nt))),
-        (bbox, None) | (None, bbox) => bbox,
-    };
+    joined.block_bbox = super::geometry::union_bbox(title.block_bbox, next.block_bbox);
     joined.text.clear();
     joined.word_count = PdfParagraph::compute_word_count("", &joined.lines);
     joined
@@ -9074,6 +9072,9 @@ fn stacked_title_line_count(paragraph: &PdfParagraph, titles: &ahash::AHashSet<S
     None
 }
 
+/// Bounds follow `finalize_paragraph`'s baseline-to-baseline-plus-height convention, so a split
+/// paragraph's box matches an unsplit one's; [`paragraph_geometry_bbox`]'s wider fallback
+/// (glyph `y` included) applies only where no block box was recorded.
 fn refresh_split_paragraph(paragraph: &mut PdfParagraph) {
     let (mut left, mut bottom, mut right, mut top) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
     for segment in paragraph.lines.iter().flat_map(|line| &line.segments) {
@@ -9244,14 +9245,10 @@ fn strip_section_label(text: &str) -> &str {
     }
 }
 
-fn paragraph_text_raw(para: &PdfParagraph) -> String {
+/// The paragraph's text when recorded, otherwise its segments joined by single spaces.
+pub(super) fn paragraph_text_raw(para: &PdfParagraph) -> String {
     if para.text.is_empty() {
-        para.lines
-            .iter()
-            .flat_map(|line| line.segments.iter())
-            .map(|segment| segment.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
+        paragraph_plain_text(para)
     } else {
         para.text.clone()
     }

@@ -5,6 +5,7 @@
 //! entries were emitted as loose paragraphs. Each entry is one item of the bibliography list,
 //! set apart by a hanging indent rather than a glyph; this pass restores that structure.
 
+use super::pipeline::paragraph_text_raw as paragraph_text;
 use super::types::PdfParagraph;
 
 /// Section titles that open a bibliography.
@@ -199,27 +200,9 @@ fn initial_count(text: &str) -> usize {
 
 fn append_continuation(entry: &mut PdfParagraph, continuation: PdfParagraph) {
     entry.text.clear();
-    entry.block_bbox = match (entry.block_bbox, continuation.block_bbox) {
-        (Some((el, eb, er, et)), Some((cl, cb, cr, ct))) => Some((el.min(cl), eb.min(cb), er.max(cr), et.max(ct))),
-        (Some(bbox), None) | (None, Some(bbox)) => Some(bbox),
-        (None, None) => None,
-    };
+    entry.block_bbox = super::geometry::union_bbox(entry.block_bbox, continuation.block_bbox);
     entry.lines.extend(continuation.lines);
     entry.word_count = PdfParagraph::compute_word_count("", &entry.lines);
-}
-
-fn paragraph_text(paragraph: &PdfParagraph) -> String {
-    if paragraph.text.is_empty() {
-        paragraph
-            .lines
-            .iter()
-            .flat_map(|line| line.segments.iter())
-            .map(|segment| segment.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        paragraph.text.clone()
-    }
 }
 
 #[cfg(test)]
