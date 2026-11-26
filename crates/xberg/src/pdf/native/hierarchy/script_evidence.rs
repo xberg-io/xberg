@@ -147,12 +147,16 @@ impl NativePageSegments {
                 .map(|(_, segment)| segment.clone())
                 .collect(),
         );
-        let source_counts = projection_counts(&projected);
-        let retained_counts = projection_counts(&segments);
-        let owners = owners
-            .into_iter()
-            .filter(|owner| owner.survives_inventory(&source_counts) && owner.survives_inventory(&retained_counts))
-            .collect();
+        let owners = if owners.is_empty() {
+            owners
+        } else {
+            let source_counts = projection_counts(&projected);
+            let retained_counts = projection_counts(&segments);
+            owners
+                .into_iter()
+                .filter(|owner| owner.survives_inventory(&source_counts) && owner.survives_inventory(&retained_counts))
+                .collect()
+        };
         let prose_rows = certified_prose_row_keys(&spans, &projected);
         Self {
             #[cfg(feature = "formula-recognition")]
@@ -199,7 +203,16 @@ impl NativePageSegments {
         self.owners.iter().any(|owner| owner.literal_prime_right.is_some())
     }
 
+    /// Whether any owner is a raised script rather than a literal prime.
+    pub(crate) fn has_script_owners(&self) -> bool {
+        self.owners.iter().any(|owner| owner.literal_prime_right.is_none())
+    }
+
     pub(crate) fn valid_owners(&self, segments: &[SegmentData]) -> Vec<ScriptOwner> {
+        // Counting the inventory hashes every segment; with no owner it decides nothing. ~keep
+        if self.owners.is_empty() {
+            return Vec::new();
+        }
         let counts = projection_counts(segments);
         self.owners
             .iter()

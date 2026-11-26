@@ -231,6 +231,29 @@ fn should_reject_ambiguous_bases_and_unrelated_small_raised_text() {
 }
 
 #[test]
+fn owner_kinds_and_validity_follow_the_captured_owners() {
+    let prose = page(vec![
+        span("Author", 100.0, 700.0, 40.0, 12.0),
+        span("names", 150.0, 700.0, 30.0, 12.0),
+    ]);
+    assert!(prose.owners.is_empty());
+    assert!(!prose.has_script_owners());
+    assert!(!prose.has_literal_primes());
+    assert!(prose.valid_owners(&prose.segments).is_empty());
+
+    let scripted = page(vec![
+        span("Author", 100.0, 700.0, 40.0, 12.0),
+        span("1", 140.0, 704.5, 4.0, 8.0),
+        span(",", 144.0, 704.5, 2.0, 8.0),
+        span("2", 146.0, 704.5, 4.0, 8.0),
+    ]);
+    assert_eq!(scripted.owners.len(), 3);
+    assert!(scripted.has_script_owners());
+    assert!(!scripted.has_literal_primes());
+    assert_eq!(scripted.valid_owners(&scripted.segments).len(), 3);
+}
+
+#[test]
 fn should_reject_changed_or_removed_endpoints_and_incomplete_runs() {
     let captured = page(vec![
         span("Author", 100.0, 700.0, 40.0, 12.0),
