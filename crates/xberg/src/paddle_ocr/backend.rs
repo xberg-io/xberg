@@ -1001,7 +1001,16 @@ impl PaddleOcrBackend {
     ) -> std::result::Result<(), xberg_paddle_ocr::OcrError> {
         let _acceleration_guard = PaddleAccelerationGuard::set(accel);
         crate::ort_discovery::ensure_ort_available();
-        crate::ort_discovery::ort_environment()?;
+        // An unloaded runtime must not become an `ort::Error`: building one makes ort retry
+        // its own library search. ~keep
+        crate::ort_discovery::ort_environment().map_err(|error| match error {
+            crate::ort_discovery::OrtSessionError::Ort(error) => xberg_paddle_ocr::OcrError::Ort(error),
+            #[cfg(ort_dynamic_discovery)]
+            crate::ort_discovery::OrtSessionError::Runtime(runtime) => xberg_paddle_ocr::OcrError::Inference {
+                message: runtime.to_string(),
+                source: Some(Box::new(runtime)),
+            },
+        })?;
 
         let builder_fn = paddle_builder_hook(
             PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()),

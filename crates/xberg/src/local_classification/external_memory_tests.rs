@@ -2,13 +2,14 @@ const CHILD_PROBE: &str = "XBERG_NLI_EXTERNAL_MEMORY_PROBE";
 const WARM_FILE: &str = "undeclared-external.data";
 
 fn memory_session(graph: &[u8], external: Option<(&str, Vec<u8>)>) -> ort::Result<ort::session::Session> {
-    let mut builder = ort::session::Session::builder(crate::ort_discovery::ort_environment()?)?
-        .with_no_environment_execution_providers()
-        .map_err(|error| ort::Error::new(error.message()))?
-        .with_intra_threads(1)
-        .map_err(|error| ort::Error::new(error.message()))?
-        .with_inter_threads(1)
-        .map_err(|error| ort::Error::new(error.message()))?;
+    let mut builder =
+        ort::session::Session::builder(crate::ort_discovery::ort_environment().expect("ONNX Runtime environment"))?
+            .with_no_environment_execution_providers()
+            .map_err(|error| ort::Error::new(error.message()))?
+            .with_intra_threads(1)
+            .map_err(|error| ort::Error::new(error.message()))?
+            .with_inter_threads(1)
+            .map_err(|error| ort::Error::new(error.message()))?;
     if let Some((name, bytes)) = external {
         builder = builder
             .with_external_initializer_file_in_memory(name, bytes.into())

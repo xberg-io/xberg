@@ -335,12 +335,34 @@ pub(crate) fn is_explicit_provider_request(
     resolve_execution_provider(accel) != crate::core::config::acceleration::ExecutionProviderType::Auto
 }
 
+/// A session-building failure that stays constructible when ONNX Runtime is not loaded.
+///
+/// Building an [`ort::Error`] calls `CreateStatus` through the ORT API, which with
+/// `load-dynamic` makes ort `dlopen` its default library name and panic when that fails. A
+/// runtime that could not be loaded is therefore carried as [`OrtSessionError::Runtime`] and
+/// must never be converted into an [`ort::Error`]. [`OrtSessionError::Ort`] only ever holds an
+/// error ort produced, which implies the runtime was loaded.
+#[cfg(any(ort_session_providers, feature = "ner-onnx"))]
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum OrtSessionError {
+    /// The ONNX Runtime library could not be resolved or loaded.
+    #[cfg(ort_dynamic_discovery)]
+    #[error(transparent)]
+    Runtime(std::sync::Arc<OrtRuntimeError>),
+    /// ONNX Runtime itself reported an error.
+    #[error(transparent)]
+    Ort(#[from] ort::Error),
+}
+
 /// The process-wide ONNX Runtime environment every session builder in this crate shares; ort
 /// rc.14 takes it as an argument and ONNX Runtime requires it to outlive every session.
 /// The `xberg-paddle-ocr` and `xberg-gliner` session builders are handed this same
 /// environment when it is created, so call this before they load a model. ~keep
+///
+/// This is the only way into ort for session builders: it loads the runtime first, so every
+/// later ort call and [`ort::Error`] runs against the resolved library.
 #[cfg(any(ort_session_providers, feature = "ner-onnx"))]
-pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment, ort::Error> {
+pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment, OrtSessionError> {
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     static ENVIRONMENT: std::sync::OnceLock<ort::environment::Environment> = std::sync::OnceLock::new();
     #[cfg(feature = "sceptre-ocr-ort")]
@@ -359,10 +381,10 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
     // A failed dynamic load must stop here: any ort call would otherwise make ort retry with
     // its own name-based loader search. ~keep
     #[cfg(ort_dynamic_discovery)]
-    preload_ort_runtime()
-        .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
+    preload_ort_runtime().map_err(OrtSessionError::Runtime)?;
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     let environment = ort::init().build()?;
+    // The runtime is loaded (or linked) by now, so building an `ort::Error` is safe here. ~keep
     #[cfg(feature = "sceptre-ocr-ort")]
     let environment = sceptre::ort_environment()
         .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
@@ -903,6 +925,15 @@ mod sceptre_tests;
 #[cfg(all(test, feature = "sceptre-ocr-ort", ort_dynamic_discovery))]
 #[path = "ort_discovery/dynamic_sceptre_tests.rs"]
 mod dynamic_sceptre_tests;
+
+#[cfg(all(
+    test,
+    ort_dynamic_discovery,
+    any(ort_session_providers, feature = "ner-onnx"),
+    any(target_os = "linux", target_os = "macos")
+))]
+#[path = "ort_discovery/unloaded_runtime_tests.rs"]
+mod unloaded_runtime_tests;
 
 #[cfg(all(
     test,

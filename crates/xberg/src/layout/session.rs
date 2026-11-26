@@ -36,15 +36,14 @@ pub(crate) fn build_session(
         &configure,
     );
     #[cfg(not(unix))]
-    let session = configure()
-        .and_then(|builder| {
-            builder
-                .with_optimization_level(ort::session::builder::GraphOptimizationLevel::All)
-                .map_err(|e| ort::Error::new(e.message()))
-        })
-        .and_then(|mut builder| builder.commit_from_file(path));
+    let session = configure().and_then(|builder| {
+        let mut builder = builder
+            .with_optimization_level(ort::session::builder::GraphOptimizationLevel::All)
+            .map_err(|e| ort::Error::new(e.message()))?;
+        Ok(builder.commit_from_file(path)?)
+    });
 
-    session.map_err(LayoutError::Ort)
+    session.map_err(LayoutError::from_ort_session)
 }
 
 /// Everything but the optimisation level of a layout session: thread budget, a single inter-op
@@ -52,7 +51,7 @@ pub(crate) fn build_session(
 pub(crate) fn session_builder(
     accel: Option<&AccelerationConfig>,
     thread_budget: usize,
-) -> Result<SessionBuilder, ort::Error> {
+) -> Result<SessionBuilder, crate::ort_discovery::OrtSessionError> {
     let builder = Session::builder(crate::ort_discovery::ort_environment()?)?
         .with_intra_threads(thread_budget)
         .map_err(|e| ort::Error::new(e.message()))?
@@ -60,5 +59,5 @@ pub(crate) fn session_builder(
         .map_err(|e| ort::Error::new(e.message()))?
         .with_device_allocated_initializers()
         .map_err(|e| ort::Error::new(e.message()))?;
-    crate::ort_discovery::apply_execution_providers(builder, accel)
+    Ok(crate::ort_discovery::apply_execution_providers(builder, accel)?)
 }

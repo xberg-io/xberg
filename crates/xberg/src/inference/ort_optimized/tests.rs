@@ -571,7 +571,7 @@ fn layout_model(model_type: &str) -> Option<PathBuf> {
 fn assert_saved_graph_is_bit_identical(
     model_type: &str,
     recipe: &str,
-    configure: &dyn Fn() -> Result<SessionBuilder, ort::Error>,
+    configure: &dyn Fn() -> Result<SessionBuilder, OrtSessionError>,
     make_inputs: &dyn Fn(&Session) -> Inputs,
 ) -> bool {
     let Some(model) = layout_model(model_type) else {

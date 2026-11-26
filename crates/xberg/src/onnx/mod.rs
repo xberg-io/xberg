@@ -607,9 +607,21 @@ pub(crate) fn build_session_with(
     commit: impl FnOnce(&mut ort::session::builder::SessionBuilder) -> ort::Result<ort::session::Session>,
 ) -> crate::Result<ort::session::Session> {
     let thread_budget = intra_thread_count(options);
+    // Resolved before any ort call: an unloaded runtime must not become an `ort::Error`, whose
+    // construction makes ort retry its own library search. The message names every path
+    // searched, so it is kept rather than replaced by the generic install hint. ~keep
+    let environment = crate::ort_discovery::ort_environment().map_err(|e| match e {
+        #[cfg(ort_dynamic_discovery)]
+        crate::ort_discovery::OrtSessionError::Runtime(_) => {
+            crate::XbergError::MissingDependency(format!("ONNX Runtime - {e}"))
+        }
+        crate::ort_discovery::OrtSessionError::Ort(_) => {
+            ort_missing_or(err, format!("Failed to create ONNX session: {e}"))
+        }
+    })?;
 
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let mut builder = ort::session::Session::builder(crate::ort_discovery::ort_environment()?)?;
+        let mut builder = ort::session::Session::builder(environment)?;
         builder = builder
             .with_optimization_level(ort::session::builder::GraphOptimizationLevel::All)
             .map_err(|e| ort::Error::new(e.message()))?;

@@ -22,6 +22,7 @@ use ort::value::{DynValue, Tensor, TensorElementType, Value};
 use parking_lot::Mutex;
 
 use crate::core::config::acceleration::AccelerationConfig;
+use crate::ort_discovery::OrtSessionError;
 
 use super::backend::{InferenceBackend, InferenceError, InferenceSession};
 use super::tensor::InferenceTensor;
@@ -47,10 +48,10 @@ impl OrtBackend {
         with_eps: bool,
     ) -> Result<Session, InferenceError> {
         let configure = || session_builder(accel, thread_budget, with_eps);
-        let optimized = || {
-            configure()?
+        let optimized = || -> Result<SessionBuilder, OrtSessionError> {
+            Ok(configure()?
                 .with_optimization_level(GraphOptimizationLevel::All)
-                .map_err(|e| ort::Error::new(e.message()))
+                .map_err(|e| ort::Error::new(e.message()))?)
         };
         match source {
             #[cfg(all(model_download, unix))]
@@ -61,8 +62,8 @@ impl OrtBackend {
                 &configure,
             ),
             #[cfg(not(all(model_download, unix)))]
-            ModelSource::File(path) => optimized().and_then(|mut builder| builder.commit_from_file(path)),
-            ModelSource::Memory(bytes) => optimized().and_then(|mut builder| builder.commit_from_memory(bytes)),
+            ModelSource::File(path) => optimized().and_then(|mut builder| Ok(builder.commit_from_file(path)?)),
+            ModelSource::Memory(bytes) => optimized().and_then(|mut builder| Ok(builder.commit_from_memory(bytes)?)),
         }
         .map_err(|e| InferenceError::Load(e.to_string()))
     }
@@ -116,7 +117,7 @@ pub(super) fn session_builder(
     accel: Option<&AccelerationConfig>,
     thread_budget: usize,
     with_eps: bool,
-) -> Result<SessionBuilder, ort::Error> {
+) -> Result<SessionBuilder, OrtSessionError> {
     let mut builder = Session::builder(crate::ort_discovery::ort_environment()?)?
         .with_intra_threads(thread_budget)
         .map_err(|e| ort::Error::new(e.message()))?

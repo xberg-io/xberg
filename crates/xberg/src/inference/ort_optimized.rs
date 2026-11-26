@@ -33,6 +33,7 @@ use ort::session::Session;
 use ort::session::builder::{GraphOptimizationLevel, SessionBuilder};
 
 use crate::model_download::PinnedFile;
+use crate::ort_discovery::OrtSessionError;
 
 /// Changed whenever the key inputs, the sidecar or the file naming change, so older entries miss.
 const CACHE_SCHEMA: &str = "xberg-ort-optimized v2";
@@ -72,8 +73,8 @@ pub(crate) fn commit_from_file(
     model: &Path,
     cpu_only: bool,
     recipe: &str,
-    configure: impl Fn() -> Result<SessionBuilder, ort::Error>,
-) -> Result<Session, ort::Error> {
+    configure: impl Fn() -> Result<SessionBuilder, OrtSessionError>,
+) -> Result<Session, OrtSessionError> {
     if !cpu_only || !cache_enabled() {
         return online(&configure, model);
     }
@@ -97,8 +98,11 @@ pub(crate) fn commit_from_file(
     commit_with_cache(model, &source, &slot, &configure).map(|(session, _)| session)
 }
 
-fn online(configure: &impl Fn() -> Result<SessionBuilder, ort::Error>, model: &Path) -> Result<Session, ort::Error> {
-    with_level(configure()?, GraphOptimizationLevel::All)?.commit_from_file(model)
+fn online(
+    configure: &impl Fn() -> Result<SessionBuilder, OrtSessionError>,
+    model: &Path,
+) -> Result<Session, OrtSessionError> {
+    Ok(with_level(configure()?, GraphOptimizationLevel::All)?.commit_from_file(model)?)
 }
 
 fn with_level(builder: SessionBuilder, level: GraphOptimizationLevel) -> Result<SessionBuilder, ort::Error> {
@@ -116,8 +120,8 @@ fn commit_with_cache(
     model: &Path,
     source: &PinnedFile,
     slot: &Slot,
-    configure: &impl Fn() -> Result<SessionBuilder, ort::Error>,
-) -> Result<(Session, Outcome), ort::Error> {
+    configure: &impl Fn() -> Result<SessionBuilder, OrtSessionError>,
+) -> Result<(Session, Outcome), OrtSessionError> {
     match slot.prepare_dir() {
         Ok(true) => {}
         Ok(false) => return online(configure, model).map(|session| (session, Outcome::Online)),
