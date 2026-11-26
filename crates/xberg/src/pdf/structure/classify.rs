@@ -1649,6 +1649,176 @@ pub(super) fn level_numbered_headings_by_depth(all_pages: &mut [Vec<PdfParagraph
     }
 }
 
+/// A roman numeral opening an outline heading has at most this many letters (`XVIII.`,
+/// the longest [`is_valid_roman`] reads); a longer capitalised run is a word. ~keep
+const MAX_OUTLINE_MARKER_CHARS: usize = 5;
+
+/// An emphasized outline heading wraps onto at most this many lines: the Federal
+/// Register's three-column pages set `B. Summary of Changes to Budgets and the EPA's
+/// Analysis of the State's Submittal` on three. ~keep
+const MAX_OUTLINE_HEADING_LINES: usize = 3;
+
+/// Deepest markdown heading level. ~keep
+const MAX_OUTLINE_HEADING_LEVEL: u8 = 6;
+
+/// Points below the body size within which an outline heading is still set at body size. ~keep
+const OUTLINE_HEADING_FONT_TOLERANCE: f32 = 0.5;
+
+/// The enumerator of a government or legal outline: roman sections (`IV. Results`) with
+/// lettered subsections (`B. Scope`) beneath them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum OutlineEnumerator {
+    Roman,
+    Letter,
+}
+
+/// The outline enumerator opening `text`: an upper-case roman numeral or a single capital,
+/// closed by `.` or `)` and followed by whitespace and a capitalised word.
+///
+/// A lone `I`, `V` or `X` reads as roman; any other lone capital, `C.` and `D.` included,
+/// as a letter, since a lettered run reaches C long before a roman one reaches 100. ~keep
+pub(super) fn outline_enumerator(text: &str) -> Option<OutlineEnumerator> {
+    let text = text.trim_start();
+    let marker_end = text.find(|character: char| !character.is_ascii_uppercase())?;
+    if marker_end == 0 || marker_end > MAX_OUTLINE_MARKER_CHARS {
+        return None;
+    }
+    let rest = text[marker_end..].strip_prefix(['.', ')'])?;
+    if !rest.starts_with(char::is_whitespace) || !rest.trim_start().starts_with(char::is_uppercase) {
+        return None;
+    }
+    let marker = &text[..marker_end];
+    if marker_end == 1 && !matches!(marker, "I" | "V" | "X") {
+        return Some(OutlineEnumerator::Letter);
+    }
+    is_valid_roman(marker).then_some(OutlineEnumerator::Roman)
+}
+
+/// Whether `text` is nothing but an outline marker (`A.`, `IV)`), which a producer may
+/// set apart from, and in another style than, the title it opens.
+fn is_outline_marker_only(text: &str) -> bool {
+    let text = text.trim();
+    let Some(marker) = text.strip_suffix(['.', ')']) else {
+        return false;
+    };
+    (marker.len() == 1 && marker.bytes().all(|byte| byte.is_ascii_uppercase())) || is_valid_roman(marker)
+}
+
+/// Whether every segment carrying text, leaving out a bare outline marker, satisfies
+/// `is_emphasized`, and at least one does.
+pub(super) fn segments_all_emphasized<'a>(
+    segments: impl IntoIterator<Item = &'a SegmentData>,
+    is_emphasized: impl Fn(&SegmentData) -> bool,
+) -> bool {
+    let mut any = false;
+    for segment in segments {
+        let text = segment.text.trim();
+        if text.is_empty() || is_outline_marker_only(text) {
+            continue;
+        }
+        if !is_emphasized(segment) {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
+/// Whether a list item is an outline heading set entirely in italic or in bold: a short,
+/// unterminated title of at most three lines, at body size or larger, opened by an
+/// outline enumerator.
+fn reads_as_emphasized_outline_heading(para: &PdfParagraph, body_font_size: Option<f32>) -> bool {
+    if !para.is_list_item
+        || para.heading_level.is_some()
+        || para.is_page_furniture
+        || para.is_code_block
+        || para.is_formula
+        || para.lines.len() > MAX_OUTLINE_HEADING_LINES
+        || para.word_count > MAX_HEADING_WORD_COUNT
+        || body_font_size.is_some_and(|body| para.dominant_font_size < body - OUTLINE_HEADING_FONT_TOLERANCE)
+    {
+        return false;
+    }
+    let segments = || para.lines.iter().flat_map(|line| line.segments.iter());
+    if !segments_all_emphasized(segments(), |segment| segment.is_italic)
+        && !segments_all_emphasized(segments(), |segment| segment.is_bold)
+    {
+        return false;
+    }
+    let text = paragraph_plain_text(para);
+    let trimmed = text.trim();
+    outline_enumerator(trimmed).is_some() && !ends_with_sentence_period(trimmed) && !trimmed.ends_with(':')
+}
+
+/// Level a document's roman and lettered outline headings, and promote the emphasized
+/// outline list items among them to headings.
+///
+/// Government and legal documents number sections `I.`, `II.` and subsections `A.`, `B.`
+/// at body size: 2026-13845 sets its roman sections in bold and its lettered subsections
+/// in italic. The list grouper took `A. Standard and Geographic Area Applicable to This
+/// Action` for a list item and the body-size bold pass put every section at H3. A roman
+/// section is a top-level section like `2 Data`, and a lettered heading sits one level
+/// under the numbered section it follows; after an unnumbered top-level heading
+/// (`References`) a lettered heading is an appendix at the top level.
+///
+/// Only a document whose headings number at least three top-level sections, roman or
+/// arabic, has such an outline. ~keep
+pub(super) fn level_outline_enumerated_headings(all_pages: &mut [Vec<PdfParagraph>], body_font_size: Option<f32>) {
+    let top_level = TOP_LEVEL_SECTION_HEADING_LEVEL as u8;
+    let (mut roman_sections, mut numbered_sections) = (0usize, 0usize);
+    for paragraph in all_pages
+        .iter()
+        .flatten()
+        .filter(|paragraph| paragraph.heading_level.is_some() && !paragraph.is_page_furniture)
+    {
+        let text = paragraph_plain_text(paragraph);
+        if outline_enumerator(&text) == Some(OutlineEnumerator::Roman) {
+            roman_sections += 1;
+        } else if section_number_depth(&text) == Some(1) {
+            numbered_sections += 1;
+        }
+    }
+    let roman_outline =
+        roman_sections >= MIN_TOP_LEVEL_NUMBERED_HEADINGS && numbered_sections < MIN_TOP_LEVEL_NUMBERED_HEADINGS;
+    if !roman_outline && numbered_sections < MIN_TOP_LEVEL_NUMBERED_HEADINGS {
+        return;
+    }
+
+    let mut section_level: Option<u8> = None;
+    for paragraph in all_pages.iter_mut().flatten() {
+        if paragraph.is_page_furniture {
+            continue;
+        }
+        let text = paragraph_plain_text(paragraph);
+        let enumerator = outline_enumerator(&text);
+        let promotable = match enumerator {
+            Some(OutlineEnumerator::Letter) => true,
+            Some(OutlineEnumerator::Roman) => roman_outline,
+            None => false,
+        };
+        if promotable && reads_as_emphasized_outline_heading(paragraph, body_font_size) {
+            paragraph.is_list_item = false;
+            paragraph.heading_level = Some(top_level);
+        }
+        let Some(level) = paragraph.heading_level else {
+            continue;
+        };
+        match enumerator {
+            Some(OutlineEnumerator::Roman) if roman_outline => {
+                paragraph.heading_level = Some(top_level);
+                section_level = Some(top_level);
+            }
+            Some(OutlineEnumerator::Letter) if level >= top_level => {
+                paragraph.heading_level =
+                    Some(section_level.map_or(top_level, |section| (section + 1).min(MAX_OUTLINE_HEADING_LEVEL)));
+            }
+            _ if section_number_depth(&text).is_some() => section_level = Some(level),
+            _ if level <= top_level => section_level = None,
+            _ => {}
+        }
+    }
+}
+
 /// Demote long runs of consecutive same-level headings to body text.
 ///
 /// When the layout model (or font-size classification) produces 4+ consecutive
@@ -4648,6 +4818,130 @@ mod tests {
             heading_levels(&pages),
             [Some(1), Some(2), Some(3), Some(2), Some(3), Some(2), Some(1)],
             "with top-level sections already at H2 only numbered headings move"
+        );
+    }
+
+    fn outline_list_item(text: &str, italic: bool, bold: bool) -> PdfParagraph {
+        let mut paragraph = make_text_paragraph(12.0, text, bold);
+        for segment in paragraph.lines.iter_mut().flat_map(|line| line.segments.iter_mut()) {
+            segment.is_italic = italic;
+        }
+        paragraph.is_list_item = true;
+        paragraph
+    }
+
+    fn body(text: &str) -> PdfParagraph {
+        make_text_paragraph(12.0, text, false)
+    }
+
+    fn list_flags(pages: &[Vec<PdfParagraph>]) -> Vec<bool> {
+        pages.iter().flatten().map(|paragraph| paragraph.is_list_item).collect()
+    }
+
+    #[test]
+    fn outline_enumerator_reads_roman_sections_and_lettered_subsections() {
+        assert_eq!(
+            outline_enumerator("IV. Proposed Action"),
+            Some(OutlineEnumerator::Roman)
+        );
+        assert_eq!(outline_enumerator("I. Background"), Some(OutlineEnumerator::Roman));
+        assert_eq!(outline_enumerator("XVIII) Scope"), Some(OutlineEnumerator::Roman));
+        assert_eq!(outline_enumerator("B. Motor Vehicle"), Some(OutlineEnumerator::Letter));
+        assert_eq!(
+            outline_enumerator("C. Existing Approved Budgets"),
+            Some(OutlineEnumerator::Letter)
+        );
+        assert_eq!(outline_enumerator("B. lower-case remainder"), None);
+        assert_eq!(outline_enumerator("U.S. Government"), None);
+        assert_eq!(outline_enumerator("AGENCY: Environmental Protection Agency"), None);
+        assert_eq!(outline_enumerator("CO2 emissions"), None);
+        assert_eq!(outline_enumerator("1. Introduction"), None);
+    }
+
+    /// 2026-13845: bold body-size roman sections promoted at H3, italic lettered
+    /// subsections left as list items.
+    #[test]
+    fn roman_outline_puts_sections_at_h2_and_promotes_italic_lettered_subsections_to_h3() {
+        let mut pages = vec![
+            vec![
+                heading_at("I. Background", 3),
+                outline_list_item("A. Standard and Geographic Area Applicable to This Action", true, false),
+                body("The EPA approved the budgets in an earlier action."),
+                outline_list_item(
+                    "B. Motor Vehicle Emissions Budgets and Transportation Conformity",
+                    true,
+                    false,
+                ),
+            ],
+            vec![
+                heading_at("II. Clean Air Act Procedural and Administrative Requirements", 3),
+                heading_at("III. Revised Motor Vehicle Emissions Budgets", 3),
+                outline_list_item("A. Review of Revised Budgets", true, false),
+            ],
+        ];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(2), Some(3), None, Some(3), Some(2), Some(2), Some(3)]
+        );
+        assert_eq!(list_flags(&pages), [false; 7]);
+    }
+
+    #[test]
+    fn roman_outline_keeps_upright_and_sentence_lettered_items_as_list_items() {
+        let mut pages = vec![vec![
+            heading_at("I. Background", 3),
+            outline_list_item("A. Standard and Geographic Area", false, false),
+            outline_list_item("B. The applicant files the form.", true, false),
+            heading_at("II. Requirements", 3),
+            heading_at("III. Revised Budgets", 3),
+        ]];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(heading_levels(&pages), [Some(2), None, None, Some(2), Some(2)]);
+        assert_eq!(list_flags(&pages), [false, true, true, false, false]);
+    }
+
+    #[test]
+    fn emphasized_lettered_items_stay_list_items_without_a_numbered_outline() {
+        let mut pages = vec![vec![
+            heading_at("I. Background", 3),
+            outline_list_item("A. Standard and Geographic Area", true, false),
+            heading_at("II. Requirements", 3),
+        ]];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(3), None, Some(3)],
+            "two roman headings are no outline"
+        );
+        assert_eq!(list_flags(&pages), [false, true, false]);
+    }
+
+    /// 1509.07624 and 2305.09790 set appendix titles (`A. Matrix entries`) as bold
+    /// lettered lines after their numbered sections and references.
+    #[test]
+    fn bold_lettered_appendix_after_numbered_sections_is_a_top_level_heading() {
+        let mut pages = vec![vec![
+            heading_at("1 Introduction", 2),
+            heading_at("2 Method", 2),
+            outline_list_item("A. Sampling details", false, true),
+            heading_at("3 Results", 2),
+            heading_at("References", 2),
+            outline_list_item("A. Matrix entries", false, true),
+            outline_list_item("B. Dirac notation", false, true),
+        ]];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(2), Some(2), Some(3), Some(2), Some(2), Some(2), Some(2)]
         );
     }
 

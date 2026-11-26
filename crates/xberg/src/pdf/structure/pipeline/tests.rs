@@ -4140,6 +4140,56 @@ fn numbered_heading_wrapping_once_still_splits_from_body_after_the_twice_wrapped
     );
 }
 
+fn italic_column_seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
+    SegmentData {
+        is_italic: true,
+        ..column_seg(text, x, width, baseline_y)
+    }
+}
+
+/// 2026-13845's lettered subsections are italic at the body's size, weight and pitch, so
+/// only the change to upright type separates `B. Motor Vehicle Emissions Budgets and
+/// Transportation Conformity` from the body beneath it.
+#[test]
+fn italic_lettered_heading_splits_from_the_upright_body_beneath_it() {
+    let paragraphs = blocks_to_paragraphs(
+        vec![
+            italic_column_seg("B. Motor Vehicle Emissions Budgets and", 306.0, 160.0, 500.0),
+            italic_column_seg("Transportation Conformity", 306.0, 110.0, 489.0),
+            column_seg("Under the CAA, States are required to submit, at", 318.0, 160.0, 478.0),
+            column_seg("various times, control strategy SIP revisions and", 306.0, 172.0, 467.0),
+        ],
+        &[],
+        &[],
+    );
+
+    assert_eq!(paragraphs.len(), 2, "heading and body must be separate: {paragraphs:?}");
+    assert_eq!(
+        paragraph_segment_text(&paragraphs[0]),
+        "B. Motor Vehicle Emissions Budgets and Transportation Conformity"
+    );
+    assert_eq!(
+        paragraph_segment_text(&paragraphs[1]),
+        "Under the CAA, States are required to submit, at various times, control strategy SIP revisions and"
+    );
+}
+
+/// An italic lettered item that ends in a full stop is a sentence, not a heading, and keeps
+/// the upright line that continues it.
+#[test]
+fn italic_lettered_sentence_keeps_its_upright_continuation() {
+    let paragraphs = blocks_to_paragraphs(
+        vec![
+            italic_column_seg("A. The applicant files the form.", 306.0, 160.0, 500.0),
+            column_seg("The agency then reviews the submission", 306.0, 160.0, 489.0),
+        ],
+        &[],
+        &[],
+    );
+
+    assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
+}
+
 /// GH#1740 control, the reproducer's page 4: the same three-line heading as
 /// above, set in BOLD rather than italic. `bold_change` already separates the
 /// heading from the body regardless of this fix; the point of this control is

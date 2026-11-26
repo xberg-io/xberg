@@ -21,11 +21,14 @@ use super::classify::is_body_size_bold_heading_candidate;
 use super::classify::{
     body_size_bold_signal_text, classify_formula_paragraphs, classify_paragraphs, demote_heading_runs,
     demote_structure_annotation_headings, demote_unnumbered_subsections, is_body_size_bold_signal,
-    is_numbered_section_heading, level_numbered_headings_by_depth, mark_arxiv_noise,
+    is_numbered_section_heading, level_numbered_headings_by_depth, level_outline_enumerated_headings, mark_arxiv_noise,
     mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_as_body_size_bold_heading,
     reads_as_short_section_title, reads_vertically, refine_heading_hierarchy,
 };
-use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
+use super::constants::{
+    FULL_LINE_FRACTION, MAX_HEADING_WORD_COUNT, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP,
+    MIN_HEADING_FONT_RATIO,
+};
 use super::lines::{crosses_visual_line_break, is_cjk_char, segments_need_space};
 use super::paragraphs::{
     accent_letter_over_formula_start, merge_continuation_paragraphs, merge_continuation_paragraphs_with_gaps,
@@ -2475,6 +2478,34 @@ fn place_markers_before_their_row_bodies(mut lines: Vec<SegmentData>) -> Vec<Seg
     lines
 }
 
+/// Whether `line`, upright, follows a block that is wholly an italic outline heading: an
+/// unterminated title of at most [`MAX_HEADING_WORD_COUNT`] words opened by an outline
+/// enumerator, set in italic apart from its marker.
+fn ends_italic_outline_heading(current_lines: &[&SegmentData], line: &SegmentData) -> bool {
+    if line.is_italic || line.text.trim().is_empty() {
+        return false;
+    }
+    // Bounding the words first keeps a long italic paragraph from being rescanned whole
+    // at every one of its line starts. ~keep
+    let mut word_count = 0;
+    for segment in current_lines {
+        word_count += segment.text.split_whitespace().count();
+        if word_count > MAX_HEADING_WORD_COUNT {
+            return false;
+        }
+    }
+    if !super::classify::segments_all_emphasized(current_lines.iter().copied(), |segment| segment.is_italic) {
+        return false;
+    }
+    let text = current_lines
+        .iter()
+        .map(|segment| segment.text.trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    super::classify::outline_enumerator(&text).is_some() && !super::classify::ends_with_sentence_period(&text)
+}
+
 fn blocks_to_paragraphs(
     lines: Vec<SegmentData>,
     heading_map: &[(f32, Option<u8>)],
@@ -2712,6 +2743,11 @@ fn blocks_to_paragraphs(
                     (prev_right <= corridor_left && line_left >= corridor_right)
                         || (line_right <= corridor_left && prev_left >= corridor_right)
                 });
+            // An italic outline heading (`B. Motor Vehicle Emissions Budgets and Transportation
+            // Conformity`) ends where the upright body beneath it begins. The heading and its
+            // body share size, weight and line pitch, so without this term 2026-13845's
+            // lettered subsections were welded to their first body paragraph. ~keep
+            let ends_italic_heading = starts_new_line && ends_italic_outline_heading(&current_lines, line);
             rotation_change
                 || font_change
                 || role_change
@@ -2722,6 +2758,7 @@ fn blocks_to_paragraphs(
                 || follows_section
                 || crossed_gap
                 || crosses_column_corridor
+                || ends_italic_heading
         };
 
         if should_break && !current_lines.is_empty() {
@@ -4948,6 +4985,7 @@ fn build_document_structure_with_native(
     promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, bold_heading_body_font_size);
     if !used_structure_tree {
         level_numbered_headings_by_depth(&mut all_page_paragraphs);
+        level_outline_enumerated_headings(&mut all_page_paragraphs, bold_heading_body_font_size);
     }
     #[cfg(feature = "layout-detection")]
     for ((page, projection), accepted_folio) in all_page_paragraphs
