@@ -52,6 +52,7 @@ use crate::ocr::hocr_parser::{
     DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_preserving_rejected_table_words,
     parse_hocr_without_claimed_table_rows,
 };
+#[cfg(test)]
 use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
 use crate::ocr::preprocessing::should_invert_for_polarity;
@@ -3133,16 +3134,10 @@ impl OcrRequest<'_> {
                 }
             }
         } else {
-            match xberg_tesseract::Pix::from_raw_rgb(&image.data, image.width, image.height) {
-                Ok(pix) => match preprocess_pix(pix, preprocessing) {
-                    Ok(processed) => Some(processed),
-                    Err(error) => {
-                        tracing::debug!(%error, "Leptonica preprocessing failed; using raw image");
-                        None
-                    }
-                },
+            match crate::ocr::preprocessing::preprocess_rgb(&image.data, image.width, image.height, preprocessing) {
+                Ok(processed) => Some(processed),
                 Err(error) => {
-                    tracing::debug!(%error, "Leptonica Pix creation failed; using raw image");
+                    tracing::debug!(%error, "Leptonica preprocessing failed; using raw image");
                     None
                 }
             }
