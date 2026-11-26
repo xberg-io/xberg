@@ -522,6 +522,25 @@ jobs:
         if: contains(matrix.pipeline, 'paddle')
         uses: ./.github/actions/setup-paddle-ocr-models
 
+      # ~keep The default Tesseract image route re-reads an unreliable photo with PaddleOCR only
+      # when the default PaddleOCR models (pp-ocrv6 det, rec and dict, textline classifier) are
+      # already cached (`OcrConfig::image_paddle_fallback`); it never downloads them itself. One
+      # PaddleOCR extraction fetches exactly the set the fallback probes, keyed on the pinned list.
+      # Layout legs never take the fallback (layout detection makes a request ineligible).
+      - name: Cache default PaddleOCR models (image fallback)
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface/hub
+          key: paddle-ocr-v6-default-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crates/xberg/src/paddle_ocr/model_manager.rs') }}
+      - name: Pre-warm default PaddleOCR models (image fallback)
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        run: |
+          set -euo pipefail
+          ./target/release/xberg extract test_documents/images/test_hello_world.png \
+            --ocr true --force-ocr true --ocr-backend paddle-ocr --ocr-language eng \
+            --no-cache true --format json >/dev/null
+
       - name: Pre-warm Sceptre ORT models
         if: contains(matrix.pipeline, 'sceptre-ort')
         env:
@@ -554,6 +573,21 @@ jobs:
           TIMEOUT: ${{ github.event.inputs.timeout }}
           COHORT: tools/benchmark-harness/cohorts/${{ matrix.cohort }}.json
         run: scripts/benchmarks/run-benchmark.sh
+
+      # ~keep A missing model, a changed gate or a build without PaddleOCR would let every image
+      # row silently keep Tesseract's read. cord_receipt_02 is an ocr-images-fast photo the
+      # fallback must replace, so a zero-fire run fails here instead of publishing quietly.
+      - name: Assert the PaddleOCR image fallback fired
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        run: |
+          set -euo pipefail
+          backend="$(./target/release/xberg extract test_documents/images/cord_receipt_02.jpg \
+            --ocr-language eng --no-cache true --format json \
+            | jq -r '.result.pages[0].ocr_confidence.backend // "none"')"
+          if [ "$backend" != "paddle-ocr" ]; then
+            echo "::error::PaddleOCR image fallback did not fire on cord_receipt_02.jpg (backend: $backend)" >&2
+            exit 1
+          fi
 
       - name: Upload artifacts
         if: always()
