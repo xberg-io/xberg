@@ -221,18 +221,32 @@ fn visit_content_stream(
 /// `Object::Real` for each numeric operand. Common operators like `m`, `l`, `c`,
 /// `re`, `cm`, `rg` are parsed entirely from raw bytes.
 pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
-    Ok(scan_path_operators(data, None).0)
-}
-
-pub(crate) fn parse_complete_form_path_operators(data: &[u8], operator_limit: usize) -> Option<Vec<Operator>> {
-    let (operators, complete) = scan_path_operators(data, Some(operator_limit));
-    complete.then_some(operators)
-}
-
-fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Operator>, bool) {
-    let max_operators = effective_max_operators().min(operator_limit.unwrap_or(usize::MAX));
     let estimated_capacity = data.len() / 20;
-    let mut operators = Vec::with_capacity(estimated_capacity.min(100_000).min(max_operators));
+    let mut operators = Vec::with_capacity(estimated_capacity.min(100_000).min(effective_max_operators()));
+    visit_path_operators(data, None, |op| operators.push(op));
+    Ok(operators)
+}
+
+/// How many path operators a Form stream holds when the scan reaches its end within `operator_limit`.
+///
+/// Counting first lets a Form be checked against the page budget without holding its operators: a
+/// figure Form is tens of thousands of them, which [`visit_form_path_operators`] then replays one
+/// at a time from the same bytes and limit.
+pub(crate) fn count_complete_form_path_operators(data: &[u8], operator_limit: usize) -> Option<usize> {
+    let (count, complete) = visit_path_operators(data, Some(operator_limit), |_| {});
+    complete.then_some(count)
+}
+
+/// Feed `visit` the operators [`count_complete_form_path_operators`] counted for the same bytes and limit.
+pub(crate) fn visit_form_path_operators(data: &[u8], operator_limit: usize, visit: impl FnMut(Operator)) {
+    visit_path_operators(data, Some(operator_limit), visit);
+}
+
+/// Pass each path operator of `data` to `emit` in stream order. Returns how many were emitted and
+/// whether the scan reached the end of the stream.
+fn visit_path_operators(data: &[u8], operator_limit: Option<usize>, mut emit: impl FnMut(Operator)) -> (usize, bool) {
+    let max_operators = effective_max_operators().min(operator_limit.unwrap_or(usize::MAX));
+    let mut emitted: usize = 0;
     let len = data.len();
     let mut i: usize = 0;
     let mut operand_start: usize = 0;
@@ -251,11 +265,11 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
             }
             continue;
         }
-        if operator_limit.is_none() && operators.len() >= max_operators {
+        if operator_limit.is_none() && emitted >= max_operators {
             if max_operators == effective_max_operators() {
                 push_operator_cap_warning();
             }
-            return (operators, false);
+            return (emitted, false);
         }
 
         match BYTE_CLASS[data[i] as usize] {
@@ -263,12 +277,9 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                 let first_byte = data[i];
                 let second_is_non_alpha = i + 1 >= len || BYTE_CLASS[data[i + 1] as usize] != SCAN_ALPHA;
 
-                if second_is_non_alpha
-                    && first_byte == b's'
-                    && operator_limit.is_some()
-                    && max_operators - operators.len() < 2
+                if second_is_non_alpha && first_byte == b's' && operator_limit.is_some() && max_operators - emitted < 2
                 {
-                    return (operators, false);
+                    return (emitted, false);
                 }
                 if second_is_non_alpha {
                     let operands = &data[operand_start..i];
@@ -318,7 +329,8 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                         // "tidy" those arms away. See GH#1633 and the matching note in
                         // rendering/page_renderer.rs. ~keep
                         b's' => {
-                            operators.push(Operator::ClosePath);
+                            emit(Operator::ClosePath);
+                            emitted += 1;
                             Some(Operator::Stroke)
                         }
                         b'W' => Some(Operator::ClipNonZero),
@@ -330,11 +342,12 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                         }
                         _ => None,
                     };
-                    if op.is_some() && operators.len() >= max_operators {
-                        return (operators, false);
+                    if op.is_some() && emitted >= max_operators {
+                        return (emitted, false);
                     }
                     if let Some(op) = op {
-                        operators.push(op);
+                        emit(op);
+                        emitted += 1;
                         i += 1;
                         operand_start = i;
                         consecutive_errors = 0;
@@ -364,7 +377,7 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                             i = len - rest.len();
                             operand_start = i;
                         }
-                        None => return (operators, false),
+                        None => return (emitted, false),
                     }
                     continue;
                 }
@@ -412,18 +425,20 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                     _ => None,
                 };
 
-                if operators.len() >= max_operators {
-                    return (operators, false);
+                if emitted >= max_operators {
+                    return (emitted, false);
                 }
                 if let Some(op) = fast_op {
-                    operators.push(op);
+                    emit(op);
+                    emitted += 1;
                     operand_start = i;
                     continue;
                 }
 
                 match parse_operator_with_operands(&data[operand_start..]) {
                     Ok((rest, op)) => {
-                        operators.push(op);
+                        emit(op);
+                        emitted += 1;
                         i = len - rest.len();
                         operand_start = i;
                     }
@@ -480,13 +495,13 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                         bytes = len - i,
                         "content stream had too many consecutive parse errors; bailing out"
                     );
-                    return (operators, false);
+                    return (emitted, false);
                 }
             }
         }
     }
 
-    (operators, true)
+    (emitted, true)
 }
 
 /// Skips a `[...]`-delimited array in the paths-only fast scanner, honoring
@@ -5820,6 +5835,29 @@ mod tests {
             "byte parser must decompose `s`, got {tail:?}"
         );
         assert!(matches!(build_operator("s", SmallVec::new()), Operator::CloseStroke));
+    }
+
+    #[test]
+    fn form_operator_count_matches_the_replayed_operators() {
+        // A Form is counted against the page budget and then replayed from the same bytes, so both
+        // passes must see one sequence, including `s`, which the fast path emits as two operators. ~keep
+        let form = b"q 1 0 0 1 5 5 cm 0 0 m 10 0 l s BT /F1 9 Tf (x) Tj ET 0 0 4 4 re f /Fm0 Do Q";
+        let expected = parse_content_stream_paths_only(form).unwrap();
+        assert_eq!(expected.len(), 10, "{expected:?}");
+
+        assert_eq!(
+            count_complete_form_path_operators(form, expected.len()),
+            Some(expected.len())
+        );
+        let mut replayed = Vec::new();
+        visit_form_path_operators(form, expected.len(), |op| replayed.push(op));
+        assert_eq!(replayed, expected);
+
+        assert_eq!(
+            count_complete_form_path_operators(form, expected.len() - 1),
+            None,
+            "a Form with more operators than the limit is incomplete"
+        );
     }
 
     #[test]

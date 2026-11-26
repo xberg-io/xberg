@@ -605,7 +605,8 @@ impl PdfDocument {
         state_stack: &mut crate::extractors::paths::PathGraphicsStateStack,
         form_budget: &mut FormPathBudget,
     ) -> Result<()> {
-        use crate::content::{Matrix, Operator, parser::parse_complete_form_path_operators};
+        use crate::content::parser::{count_complete_form_path_operators, visit_form_path_operators};
+        use crate::content::{Matrix, Operator};
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::FillRule;
         use crate::layout::Color;
@@ -681,12 +682,13 @@ impl PdfDocument {
 
         // Cached Forms consume the same traversal work on each painted occurrence. ~keep
         form_budget.charge(0, stream_data.len(), 0)?;
-        let Some(operators) = parse_complete_form_path_operators(&stream_data, form_budget.operators) else {
+        let operator_limit = form_budget.operators;
+        let Some(operator_count) = count_complete_form_path_operators(&stream_data, operator_limit) else {
             extractor.pop_xobject_failed();
             return Err(form_budget.incomplete("incomplete Form path parse".into()));
         };
 
-        form_budget.charge(0, 0, operators.len())?;
+        form_budget.charge(0, 0, operator_count)?;
         let matrix = if let Some(matrix_obj) = xobject_dict.get("Matrix") {
             if let Some(array) = matrix_obj.as_array() {
                 if array.len() >= 6 {
@@ -760,7 +762,11 @@ impl PdfDocument {
         // anything this XObject leaves unbalanced (see truncate below). ~keep
         let oc_base_depth = extractor.oc_layer_depth();
 
-        for op in operators {
+        let mut nested_failure = None;
+        visit_form_path_operators(&stream_data, operator_limit, |op| {
+            if nested_failure.is_some() {
+                return;
+            }
             match op {
                 Operator::SaveState => {
                     state_stack.save();
@@ -871,7 +877,8 @@ impl PdfDocument {
                         self.process_form_xobject_paths(&nested_name, extractor, state_stack, form_budget)
                     {
                         if form_budget.incomplete {
-                            return Err(error);
+                            nested_failure = Some(error);
+                            return;
                         }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
@@ -905,6 +912,9 @@ impl PdfDocument {
 
                 _ => {}
             }
+        });
+        if let Some(error) = nested_failure {
+            return Err(error);
         }
 
         if extractor.has_current_path() {
