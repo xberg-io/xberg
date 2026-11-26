@@ -9,8 +9,8 @@ use xberg::core::config::ExtractionConfig;
 mod helpers;
 use helpers::extract_bytes_document;
 
-/// #155: a top-level JSON array of objects must render as headings/list items,
-/// not as one opaque code block.
+/// #155: a top-level JSON array of objects must render its fields, not one opaque
+/// code block, and must not invent "Item N" labels the source does not contain.
 #[tokio::test]
 async fn should_render_structure_for_top_level_json_array() {
     let config = ExtractionConfig::default();
@@ -21,8 +21,8 @@ async fn should_render_structure_for_top_level_json_array() {
         .expect("json extraction should succeed");
 
     assert!(
-        extraction.content.contains("Item 1") && extraction.content.contains("Item 2"),
-        "expected per-item headings, got: {}",
+        !extraction.content.contains("Item 1") && !extraction.content.contains("Item 2"),
+        "expected no synthetic per-item labels, got: {}",
         extraction.content
     );
     assert!(
@@ -94,8 +94,8 @@ async fn should_render_structure_for_jsonl() {
         .expect("jsonl extraction should succeed");
 
     assert!(
-        extraction.content.contains("Item 1") && extraction.content.contains("Item 2"),
-        "expected per-record headings, got: {}",
+        !extraction.content.contains("Item 1") && !extraction.content.contains("Item 2"),
+        "expected no synthetic per-record labels, got: {}",
         extraction.content
     );
     assert!(extraction.content.contains("name: Alice"));

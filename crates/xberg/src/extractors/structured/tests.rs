@@ -44,10 +44,9 @@ fn test_json_array_objects_render_as_nested_markdown() {
     let markdown = crate::rendering::render_markdown(&builder.build());
 
     assert!(markdown.contains("# people"), "missing array heading: {markdown}");
-    assert!(markdown.contains("## Item 1"), "missing first item heading: {markdown}");
     assert!(markdown.contains("name: Ada"), "missing first nested value: {markdown}");
     assert!(
-        markdown.contains("### details"),
+        markdown.contains("## details"),
         "missing nested object heading: {markdown}"
     );
     assert!(
@@ -55,10 +54,6 @@ fn test_json_array_objects_render_as_nested_markdown() {
         "missing deeply nested value: {markdown}"
     );
     assert!(markdown.contains("active: true"), "missing boolean value: {markdown}");
-    assert!(
-        markdown.contains("## Item 2"),
-        "missing second item heading: {markdown}"
-    );
     assert!(
         markdown.contains("name: Grace"),
         "missing second nested value: {markdown}"
@@ -75,6 +70,19 @@ fn test_json_array_objects_render_as_nested_markdown() {
         !markdown.contains(r#"{\"name\":\"Ada\""#),
         "object remained compact JSON: {markdown}"
     );
+}
+
+#[tokio::test]
+async fn array_items_render_only_source_text_without_synthetic_labels() {
+    let content = br#"[{"name": "Ada"}, {"name": "Grace", "tags": ["x"]}]"#;
+    let result = StructuredExtractor::new()
+        .extract_content(content, "application/json", &ExtractionConfig::default())
+        .await
+        .unwrap();
+
+    let markdown = crate::rendering::render_markdown(&result);
+
+    assert_eq!(markdown.trim(), "name: Ada\n\nname: Grace\n\n# tags\n\n- x");
 }
 
 #[test]
