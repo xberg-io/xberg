@@ -3,21 +3,18 @@
 //! lines interleave into rows closer together than any line of text, so a row-by-row read
 //! scatters every cell's label across the band (pb_sample_page_16). Such a band is read cell
 //! by cell: the spans are grouped into columns by horizontal overlap, the columns are read left
-//! to right and each column top to bottom.
+//! to right and each column top to bottom. Table reconstruction reads the same band as one
+//! header row by the same rule (`table_core::overlap`).
 
 use xberg_native_pdf::layout::TextSpan;
 
-/// Largest baseline step between two rows of a band, as a fraction of the rows' glyph height.
-/// Lines of text step at least their glyph height; the stacked band measured 0.63 to 0.67.
-const MAX_BAND_ROW_STEP_FRACTION: f32 = 0.7;
+use crate::table_core::overlap::{
+    STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
+    extents_overlap, overlap_columns,
+};
+
 /// Baseline difference, as a fraction of the glyph height, within which consecutive spans share a row.
 const SAME_ROW_FRACTION: f32 = 0.2;
-/// Fewest rows in a band.
-const MIN_BAND_ROWS: usize = 3;
-/// Fewest spans in each row of a band.
-const MIN_ROW_SPANS: usize = 2;
-/// Fewest columns of two or more stacked spans in a band.
-const MIN_STACKED_COLUMNS: usize = 2;
 /// Largest ratio between the tallest and the shortest glyph height in a band; raised and
 /// lowered script marks are smaller than their line.
 const MAX_BAND_HEIGHT_RATIO: f32 = 1.2;
@@ -31,7 +28,7 @@ pub(super) fn read_stacked_header_bands(spans: &mut [TextSpan]) {
         while last + 1 < rows.len() && rows_stack(spans, &rows[last], &rows[last + 1]) {
             last += 1;
         }
-        if last + 1 - first >= MIN_BAND_ROWS {
+        if last + 1 - first >= STACKED_BAND_MIN_ROWS {
             let start = rows[first].start;
             let end = rows[last].end;
             reorder_band(&mut spans[start..end]);
@@ -99,10 +96,12 @@ fn ink_spans<'a>(spans: &'a [TextSpan], row: &Row) -> Vec<&'a TextSpan> {
 }
 
 /// True when `lower` is the next row of a stacked band that `upper` belongs to: both rows hold
-/// several upright spans of one glyph height and `lower` sits less than a line below `upper`.
+/// several upright spans of one glyph height, `lower` sits less than a line below `upper`, and
+/// no span of one row overlaps a span of the other horizontally, as the lines of one column
+/// that close together would.
 fn rows_stack(spans: &[TextSpan], upper: &Row, lower: &Row) -> bool {
     let (upper, lower) = (ink_spans(spans, upper), ink_spans(spans, lower));
-    if upper.len() < MIN_ROW_SPANS || lower.len() < MIN_ROW_SPANS {
+    if upper.len() < STACKED_BAND_MIN_ROW_WORDS || lower.len() < STACKED_BAND_MIN_ROW_WORDS {
         return false;
     }
     if !upper.iter().chain(&lower).all(|span| is_upright(span)) {
@@ -116,39 +115,33 @@ fn rows_stack(spans: &[TextSpan], upper: &Row, lower: &Row) -> bool {
         return false;
     }
     let step = upper[0].bbox.y - lower[0].bbox.y;
-    step > 0.0 && step < MAX_BAND_ROW_STEP_FRACTION * shortest
+    let extent = |span: &&TextSpan| (span.bbox.x, span.bbox.x + span.bbox.width);
+    step > 0.0
+        && step < STACKED_BAND_MAX_ROW_STEP * shortest
+        && !extents_overlap(upper.iter().map(extent), lower.iter().map(extent))
 }
 
 /// Read `band` column by column: spans whose horizontal extents overlap share a column, the
 /// columns go left to right and each column top to bottom.
 fn reorder_band(band: &mut [TextSpan]) {
-    let extent = |span: &TextSpan| {
-        let width = if is_ink(span) { span.bbox.width.max(0.0) } else { 0.0 };
-        (span.bbox.x, span.bbox.x + width)
-    };
-    let mut order: Vec<usize> = (0..band.len()).collect();
-    order.sort_by(|&left, &right| extent(&band[left]).0.total_cmp(&extent(&band[right]).0));
-    let mut columns: Vec<(Vec<usize>, f32)> = Vec::new();
-    for index in order {
-        let (left, right) = extent(&band[index]);
-        if let Some((members, column_right)) = columns.last_mut()
-            && left < *column_right
-        {
-            members.push(index);
-            *column_right = column_right.max(right);
-            continue;
-        }
-        columns.push((vec![index], right));
-    }
+    let extents: Vec<(f32, f32)> = band
+        .iter()
+        .map(|span| {
+            let width = if is_ink(span) { span.bbox.width.max(0.0) } else { 0.0 };
+            (span.bbox.x, span.bbox.x + width)
+        })
+        .collect();
+    let columns = overlap_columns(&extents);
     let stacked = columns
         .iter()
-        .filter(|(members, _)| members.iter().filter(|&&index| is_ink(&band[index])).count() >= 2)
+        .filter(|column| column.members.iter().filter(|&&index| is_ink(&band[index])).count() >= 2)
         .count();
-    if stacked < MIN_STACKED_COLUMNS {
+    if stacked < STACKED_BAND_MIN_STACKED_COLUMNS {
         return;
     }
     let mut reading: Vec<usize> = Vec::with_capacity(band.len());
-    for (mut members, _) in columns {
+    for column in columns {
+        let mut members = column.members;
         members.sort_by(|&upper, &lower| {
             band[lower]
                 .bbox
@@ -307,6 +300,28 @@ mod tests {
             span("five", 100.0, row(2), 10.0),
             span("six", 120.0, row(2), 10.0),
         ]);
+        let before: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
+
+        read_stacked_header_bands(&mut spans);
+
+        assert_eq!(texts(&spans), before);
+    }
+
+    /// Tightly set rows of one two-column grid: each row's spans overlap the next row's, so
+    /// they are lines of shared columns, not a band of interleaved cell labels.
+    #[test]
+    fn close_rows_sharing_columns_keep_their_order() {
+        let row = |line: usize| BAND_TOP - line as f32 * BAND_STEP;
+        let mut spans = rows(
+            (0..4)
+                .flat_map(|line| {
+                    [
+                        span(&format!("label {line}"), 20.0, row(line), 30.0),
+                        span(&format!("value {line}"), 80.0, row(line), 30.0),
+                    ]
+                })
+                .collect(),
+        );
         let before: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
 
         read_stacked_header_bands(&mut spans);

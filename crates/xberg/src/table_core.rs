@@ -9,6 +9,13 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
+pub(crate) mod overlap;
+
+use overlap::{
+    STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
+    extents_overlap, overlap_columns,
+};
+
 /// Represents a word extracted from hOCR (or any source) with position and confidence information.
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone)]
@@ -587,13 +594,6 @@ fn find_row_index_by_overlap(row_positions: &[u32], word: &HocrWord, median_heig
         .map(|(index, _)| index)
 }
 
-/// Fewest rows in a stacked header band.
-const STACKED_BAND_MIN_ROWS: usize = 3;
-/// Fewest words in each row of a stacked header band.
-const STACKED_BAND_MIN_ROW_WORDS: usize = 2;
-/// Fewest columns whose label stacks two or more of the band's rows.
-const STACKED_BAND_MIN_STACKED_COLUMNS: usize = 2;
-
 /// Read a stacked header band at the top of a table as one row.
 ///
 /// A header whose cells stack a different number of centred label lines ("UW Tier / Group"
@@ -643,7 +643,8 @@ fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_he
     let mut band = 1;
     while band < rows.len()
         && is_label_row(&rows[band])
-        && row_positions[band].abs_diff(row_positions[band - 1]) < median_height
+        && (row_positions[band].abs_diff(row_positions[band - 1]) as f32)
+            < STACKED_BAND_MAX_ROW_STEP * median_height as f32
         && !rows_overlap_horizontally(&rows[band - 1], &rows[band])
     {
         band += 1;
@@ -655,36 +656,25 @@ fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_he
 }
 
 fn rows_overlap_horizontally(upper: &[&HocrWord], lower: &[&HocrWord]) -> bool {
-    upper.iter().any(|above| {
-        lower
-            .iter()
-            .any(|below| above.left < below.right() && below.left < above.right())
-    })
+    let extent = |word: &&HocrWord| (word.left, word.right());
+    extents_overlap(upper.iter().map(extent), lower.iter().map(extent))
 }
 
 /// The number of horizontally overlapping word clusters in `rows` that hold words of two or more
 /// rows.
 fn stacked_column_count(rows: &[Vec<&HocrWord>]) -> usize {
-    let mut words: Vec<(usize, &HocrWord)> = rows
+    let (word_rows, extents): (Vec<usize>, Vec<(u32, u32)>) = rows
         .iter()
         .enumerate()
-        .flat_map(|(row, words)| words.iter().map(move |word| (row, *word)))
-        .collect();
-    words.sort_by_key(|(_, word)| word.left);
-    let mut stacked = 0;
-    let mut cluster: Option<(u32, usize, bool)> = None;
-    for (row, word) in words {
-        cluster = Some(match cluster {
-            Some((right, first_row, multi_row)) if word.left < right => {
-                (right.max(word.right()), first_row, multi_row || row != first_row)
-            }
-            finished => {
-                stacked += usize::from(finished.is_some_and(|(_, _, multi_row)| multi_row));
-                (word.right(), row, false)
-            }
-        });
-    }
-    stacked + usize::from(cluster.is_some_and(|(_, _, multi_row)| multi_row))
+        .flat_map(|(row, words)| words.iter().map(move |word| (row, (word.left, word.right()))))
+        .unzip();
+    overlap_columns(&extents)
+        .iter()
+        .filter(|column| {
+            let first_row = word_rows[column.members[0]];
+            column.members.iter().any(|&member| word_rows[member] != first_row)
+        })
+        .count()
 }
 
 /// Find which column a word belongs to, by the nearest left edge of the tracks it was folded from

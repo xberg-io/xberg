@@ -151,20 +151,15 @@ fn row_for(bands: &[Option<Band>], span: &TextSpan) -> Option<usize> {
 
 /// The columns the value spans form: spans whose horizontal extents overlap share a column.
 fn value_tracks(candidates: &[&TextSpan]) -> Vec<Track> {
-    let mut values: Vec<Track> = candidates
+    let values: Vec<Track> = candidates
         .iter()
         .filter(|span| is_value(span))
         .map(|span| (span.bbox.x, span.bbox.right()))
         .collect();
-    values.sort_by(|left, right| left.0.total_cmp(&right.0));
-    let mut tracks: Vec<Track> = Vec::new();
-    for (left, right) in values {
-        match tracks.last_mut() {
-            Some(track) if left < track.1 => track.1 = track.1.max(right),
-            _ => tracks.push((left, right)),
-        }
-    }
-    tracks
+    crate::table_core::overlap::overlap_columns(&values)
+        .into_iter()
+        .map(|column| (column.left, column.right))
+        .collect()
 }
 
 fn containing_band(bands: &[Option<Band>], y: f32) -> Option<usize> {
