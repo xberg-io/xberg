@@ -120,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** a large scanned image painted near its own resolution is decoded or drawn within the image budget instead of leaving the page without an image for layout and OCR.
 - **pdf:** reads after a successful `authenticate()` no longer return page content, spans or characters cached before it.
 - **docx:** script carets in table cells are kept when markdown escaping is off.
+- **docker:** the `core` and `full` images no longer carry the Tesseract language data twice. A recursive `chmod` over the already world-readable tessdata copied every language file into a second layer.
 
 ## [1.5.4] - 2026-11-25
 

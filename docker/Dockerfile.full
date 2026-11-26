@@ -263,17 +263,13 @@ RUN for attempt in 1 2 3 4 5; do \
     chown -R xberg:xberg /app/.xberg && \
     echo "All models ready (PaddleOCR + layout detection)"
 
-RUN set -eux; \
-    echo "Setting up tessdata permissions..."; \
-    for dir in /usr/share/tesseract-ocr/*/tessdata /usr/share/tesseract-ocr/tessdata /usr/share/tessdata; do \
-        if [ -d "$dir" ]; then \
-            chmod -R a+rx "$dir" 2>/dev/null || true; \
-            if [ -f "$dir/eng.traineddata" ]; then \
-                echo "✓ Found tessdata with eng.traineddata at: $dir"; \
-            fi; \
-        fi; \
-    done; \
-    echo "✓ Tessdata permissions configured"
+# Debian installs the language data world-readable, so the nonroot user needs no mode change.
+# Assert it rather than changing modes recursively: that copies every traineddata file into a new
+# layer and ships the whole language set twice. ~keep
+RUN set -eu; \
+    unreadable="$(find /usr/share/tesseract-ocr \( \( -type f ! -perm -0444 \) -o \( -type d ! -perm -0555 \) \) -print -quit)"; \
+    if [ -n "$unreadable" ]; then echo "tessdata is not world-readable: $unreadable" >&2; exit 1; fi; \
+    test -n "$(find /usr/share/tesseract-ocr/*/tessdata -maxdepth 1 -name eng.traineddata -print -quit)"
 
 # Inspection only -- `docker inspect` on a shipped image shows which build id went into it. It has
 # no runtime effect: `cache_version_tag` reads the value through `env!`, i.e. baked in at
