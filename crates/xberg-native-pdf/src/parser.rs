@@ -205,6 +205,37 @@ fn checked_reference(id: i64, generation: i64) -> Option<ObjectRef> {
 /// into this function for an element/value. See [`MAX_OBJECT_NESTING_DEPTH`]
 /// for why this exists.
 fn parse_object_at_depth(input: &[u8], depth: usize, strict: bool) -> IResult<&[u8], Object> {
+    parse_object_at_depth_with(input, depth, strict, None)
+}
+
+/// Parse one lenient object whose stream payload, when `input` lies inside `source`, is a
+/// zero-copy slice of `source` rather than a copy. Falls back to copying for any payload
+/// outside `source`.
+pub(crate) fn parse_object_shared<'a>(input: &'a [u8], source: &bytes::Bytes) -> IResult<&'a [u8], Object> {
+    parse_object_at_depth_with(input, 0, false, Some(source))
+}
+
+/// The bytes of `data`: a slice of `source` when `data` lies inside it, a copy otherwise.
+pub(crate) fn shared_or_copied(source: Option<&bytes::Bytes>, data: &[u8]) -> bytes::Bytes {
+    if let Some(source) = source {
+        let base = source.as_ptr() as usize;
+        let start = (data.as_ptr() as usize).wrapping_sub(base);
+        if let Some(end) = start.checked_add(data.len())
+            && start <= source.len()
+            && end <= source.len()
+        {
+            return source.slice(start..end);
+        }
+    }
+    bytes::Bytes::copy_from_slice(data)
+}
+
+fn parse_object_at_depth_with<'a>(
+    input: &'a [u8],
+    depth: usize,
+    strict: bool,
+    source: Option<&bytes::Bytes>,
+) -> IResult<&'a [u8], Object> {
     let object_input = input;
     let (input, tok) = token(input)?;
 
@@ -278,7 +309,7 @@ fn parse_object_at_depth(input: &[u8], depth: usize, strict: bool) -> IResult<&[
                     final_input,
                     Object::Stream {
                         dict,
-                        data: bytes::Bytes::from(stream_data),
+                        data: shared_or_copied(source, stream_data),
                     },
                 ));
             }
@@ -310,7 +341,7 @@ fn declared_stream_end_at(input: &[u8], length: usize) -> bool {
 ///
 /// PDF Spec: ISO 32000-1:2008, Section 7.3.8.1 - Stream Objects
 /// The keyword stream must be followed by either a CRLF or LF sequence, but not CR alone.
-fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IResult<&'a [u8], Vec<u8>> {
+fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IResult<&'a [u8], &'a [u8]> {
     // SPEC COMPLIANCE: PDF Spec ISO 32000-1:2008, Section 7.3.8.1 states that
     // the 'stream' keyword must be followed by either CRLF or LF, but NOT CR alone.
     //
@@ -378,7 +409,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
     {
         let length = length as usize;
         if length <= input.len() {
-            let stream_data = input[..length].to_vec();
+            let stream_data = &input[..length];
             let remaining = &input[length..];
 
             let ws_result: nom::IResult<&[u8], &[u8]> =
@@ -408,7 +439,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
             if end > 0 && input[end - 1] == b'\r' {
                 end -= 1;
             }
-            let stream_data = input[..end].to_vec();
+            let stream_data = &input[..end];
             let remaining = &input[pos..];
             let (remaining, _) = token(remaining)?;
             return Ok((remaining, stream_data));
@@ -436,7 +467,7 @@ fn parse_stream_data<'a>(input: &'a [u8], dict: &HashMap<String, Object>) -> IRe
         if end > 0 && input[end - 1] == b'\r' {
             end -= 1;
         }
-        let stream_data = input[..end].to_vec();
+        let stream_data = &input[..end];
         let remaining = &input[pos..];
 
         let (remaining, _) = token(remaining)?;

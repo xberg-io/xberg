@@ -181,7 +181,7 @@ impl PdfDocument {
                         tail,
                         Object::Stream {
                             dict,
-                            data: bytes::Bytes::copy_from_slice(data),
+                            data: crate::parser::shared_or_copied(Some(&self.source_bytes), data),
                         },
                     )
                 } else {
@@ -1353,7 +1353,17 @@ impl PdfDocument {
 
         // Check if there's content after "obj" on the same line
         // Some PDFs have "N G obj\n<<..." while others have "N G obj<<..." on one line ~keep
-        let mut data = Vec::new();
+        // The object text is a contiguous range of the document's own bytes, so it
+        // is sliced rather than copied; the parser slices stream payloads out of it
+        // the same way. ~keep
+        let body_start = usize::try_from(cursor.position())
+            .unwrap_or(usize::MAX)
+            .min(self.source_bytes.len());
+        let first_line_end = usize::try_from(offset)
+            .ok()
+            .and_then(|start| start.checked_add(header_bytes.len()));
+        let mut data_start = body_start;
+        let mut prefix: Vec<u8> = Vec::new();
 
         if let Some(obj_keyword_pos) = header_bytes.windows(3).position(|w| w == b"obj") {
             let after_obj_pos = obj_keyword_pos + 3;
@@ -1370,7 +1380,14 @@ impl PdfDocument {
             // If there's a newline, skip it (normal case: "N G obj\n")
             // If there's content (like "<<"), include it (malformed case: "N G obj<<...") ~keep
             if content_start < header_bytes.len() && header_bytes[content_start] != b'\n' {
-                data.extend_from_slice(&header_bytes[content_start..]);
+                // Contiguous with the body unless continuation header lines were read in between.
+                match usize::try_from(offset)
+                    .ok()
+                    .and_then(|start| start.checked_add(content_start))
+                {
+                    Some(remainder_start) if first_line_end == Some(body_start) => data_start = remainder_start,
+                    _ => prefix.extend_from_slice(&header_bytes[content_start..]),
+                }
                 tracing::trace!(target: LOG_TARGET,
                     "Object {} has content after 'obj' on header line ({} bytes)",
                     obj_ref.id,
@@ -1379,54 +1396,66 @@ impl PdfDocument {
             }
         }
 
-        // Body, read from the same cursor the header left positioned.
+        // Body, scanned from where the header left off.
         // Use byte limit instead of line count — large uncompressed streams can have
         // hundreds of thousands of short lines (e.g., vector path drawing commands). ~keep
         const MAX_BYTES: usize = 100 * 1024 * 1024; // 100 MB safety limit ~keep
 
-        {
-            let reader = &mut cursor;
-            loop {
-                let mut chunk = Vec::new();
-                let bytes_read = reader.read_until(b'\n', &mut chunk)?;
+        let source: &[u8] = &self.source_bytes;
+        let mut data_end = body_start;
+        let mut line_start = body_start;
+        loop {
+            let line_end = source[line_start..]
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .map_or(source.len(), |newline| line_start + newline + 1);
+            let bytes_read = line_end - line_start;
+            let data_len = prefix.len() + (data_end - data_start);
 
-                if data.len() > MAX_BYTES {
-                    tracing::warn!(target: LOG_TARGET,
-                        "Object {} exceeded maximum byte limit ({} bytes), truncating",
-                        obj_ref.id,
-                        MAX_BYTES
-                    );
-                    break;
-                }
-
-                if bytes_read == 0 {
-                    let msg = format!(
-                        "Unexpected EOF while reading object {} (no endobj found after {} bytes)",
-                        obj_ref.id,
-                        data.len()
-                    );
-                    tracing::warn!(target: LOG_TARGET, "{}", msg);
-                    // structured-warnings sink. ~keep
-                    self.push_structured_warning(crate::extractors::warnings::Warning {
-                        category: crate::extractors::warnings::WarningCategory::EofPremature,
-                        page: None,
-                        message: msg,
-                        spec_section: Some("7.5"),
-                    });
-                    // Don't fail - try to parse what we have ~keep
-                    break;
-                }
-
-                if chunk.contains(&b'e')
-                    && let Some(endobj_pos) = find_substring(&chunk, b"endobj")
-                {
-                    data.extend_from_slice(&chunk[..endobj_pos]);
-                    break;
-                }
-
-                data.extend_from_slice(&chunk);
+            if data_len > MAX_BYTES {
+                tracing::warn!(target: LOG_TARGET,
+                    "Object {} exceeded maximum byte limit ({} bytes), truncating",
+                    obj_ref.id,
+                    MAX_BYTES
+                );
+                break;
             }
+
+            if bytes_read == 0 {
+                let msg = format!(
+                    "Unexpected EOF while reading object {} (no endobj found after {} bytes)",
+                    obj_ref.id, data_len
+                );
+                tracing::warn!(target: LOG_TARGET, "{}", msg);
+                // structured-warnings sink. ~keep
+                self.push_structured_warning(crate::extractors::warnings::Warning {
+                    category: crate::extractors::warnings::WarningCategory::EofPremature,
+                    page: None,
+                    message: msg,
+                    spec_section: Some("7.5"),
+                });
+                // Don't fail - try to parse what we have ~keep
+                break;
+            }
+
+            let chunk = &source[line_start..line_end];
+            if chunk.contains(&b'e')
+                && let Some(endobj_pos) = find_substring(chunk, b"endobj")
+            {
+                data_end = line_start + endobj_pos;
+                break;
+            }
+
+            data_end = line_end;
+            line_start = line_end;
         }
+
+        let data: bytes::Bytes = if prefix.is_empty() {
+            self.source_bytes.slice(data_start..data_end)
+        } else {
+            prefix.extend_from_slice(&source[body_start..data_end]);
+            bytes::Bytes::from(prefix)
+        };
 
         tracing::trace!(target: LOG_TARGET,
             "About to parse object {} gen {} ({} bytes)",
@@ -1436,7 +1465,7 @@ impl PdfDocument {
         );
 
         let _warnings = self.warning_scope();
-        let mut obj = match parse_object(&data) {
+        let mut obj = match crate::parser::parse_object_shared(&data, &self.source_bytes) {
             Ok((_, parsed_obj)) => parsed_obj,
             Err(e) => {
                 let error_kind = match &e {

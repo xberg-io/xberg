@@ -748,3 +748,16 @@ fn test_open_pdf_version_2_0() {
     pdf.extend_from_slice(format!("trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off).as_bytes());
     assert_eq!(PdfDocument::from_bytes(pdf).unwrap().version(), (2, 0));
 }
+
+#[test]
+fn a_loaded_stream_object_borrows_its_payload_from_the_source_allocation() {
+    let doc = PdfDocument::from_bytes(build_nested_xobject_do_with_orphaned_operands_pdf()).expect("parse pdf");
+    let Object::Stream { data, .. } = doc.load_object(ObjectRef::new(4, 0)).expect("load stream object") else {
+        panic!("object 4 is a content stream");
+    };
+
+    assert!(!data.is_empty());
+    let source = doc.source_bytes.as_ptr() as usize..doc.source_bytes.as_ptr() as usize + doc.source_bytes.len();
+    let payload = data.as_ptr() as usize..data.as_ptr() as usize + data.len();
+    assert!(source.start <= payload.start && payload.end <= source.end);
+}
