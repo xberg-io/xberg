@@ -166,6 +166,137 @@ fn cached_reads_equal_uncached_reads_with_cmsy_witnesses() {
     assert_cached_reads_equal_uncached(&pdf, &[0]);
 }
 
+/// With preserved reads expected, read each page flattened and then preserved: one content run
+/// serves both, the preserved read and the flattened script baselines equal a cold document's,
+/// and every later read equals an uncached one.
+fn assert_paired_reads_equal_uncached(pdf: &[u8], order: &[usize]) {
+    let warm = PdfDocument::from_bytes(pdf.to_vec()).expect("open warm document");
+    warm.begin_page_passes();
+    warm.expect_preserved_script_geometry();
+    for &page in order {
+        let before = page_span_interpretations();
+        drop(warm.extract_spans_raw(page).expect("flattened read"));
+        let mut witnesses = Vec::new();
+        let preserved = warm
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .expect("preserved read");
+        assert_eq!(
+            page_span_interpretations() - before,
+            1,
+            "page {page}, order {order:?}: one content run serves both geometries"
+        );
+
+        let cold = PdfDocument::from_bytes(pdf.to_vec()).expect("open cold document");
+        drop(cold.extract_spans_raw(page).expect("cold flattened read"));
+        let mut cold_witnesses = Vec::new();
+        let cold_preserved = cold
+            .extract_page_text_with_cmsy_capture(page, ReadingOrder::TopToBottom, Some(&mut cold_witnesses))
+            .expect("cold preserved read");
+        assert_eq!(format!("{preserved:?}"), format!("{cold_preserved:?}"), "page {page}");
+        assert_eq!(format!("{witnesses:?}"), format!("{cold_witnesses:?}"), "page {page}");
+        assert_eq!(
+            warm.flattened_script_baselines(page),
+            cold.flattened_script_baselines(page),
+            "page {page}"
+        );
+    }
+    for &page in order {
+        let before = page_span_interpretations();
+        let cached = page_reads(&warm, page, |_| {});
+        assert_eq!(
+            page_span_interpretations(),
+            before,
+            "page {page}, order {order:?}: the warm reads must all be served from the cache"
+        );
+        let cold = PdfDocument::from_bytes(pdf.to_vec()).expect("open cold document");
+        let uncached = page_reads(&cold, page, PdfDocument::release_page_caches);
+        assert_eq!(cached, uncached, "page {page}, order {order:?}");
+    }
+}
+
+#[test]
+fn paired_reads_equal_uncached_reads_for_every_fixture() {
+    assert_paired_reads_equal_uncached(&option_set_pdf(), &[0, 1, 2, 3, 4]);
+    assert_paired_reads_equal_uncached(&super::span_cache_actual_text::tagged_layered_pdf(), &[0]);
+    assert_paired_reads_equal_uncached(&cmsy_witness_pdf(), &[0]);
+    assert_paired_reads_equal_uncached(&warning_pdf(), &[0]);
+    for pdf in [
+        super::form_cache_page_context::inherited_cmap_form_pdf(16),
+        super::form_cache_page_context::shadowed_selected_font_pdf("D", 13),
+        super::form_cache_page_context::shadowed_selected_font_pdf("space", 12),
+    ] {
+        for order in [[0, 1], [1, 0]] {
+            assert_paired_reads_equal_uncached(&pdf, &order);
+        }
+    }
+}
+
+/// The preserved read a paired flattened read cached pushes the warnings and charges the
+/// recoveries of a preserved read of its own.
+#[test]
+fn a_paired_preserved_hit_replays_the_effects_of_its_own_read() {
+    let effects = |doc: &PdfDocument| {
+        drop(doc.take_structured_warnings());
+        let start = doc.recovery_counts().snapshot();
+        drop(
+            doc.extract_page_text_with_script_geometry(0, ReadingOrder::TopToBottom)
+                .unwrap(),
+        );
+        (
+            format!("{:?}", doc.take_structured_warnings()),
+            doc.recovery_counts().snapshot().since(&start),
+        )
+    };
+    let warm = PdfDocument::from_bytes(warning_pdf()).expect("open document");
+    warm.begin_page_passes();
+    warm.expect_preserved_script_geometry();
+    drop(warm.extract_spans_raw(0).unwrap());
+    let before = page_span_interpretations();
+    let (warnings, recovered) = effects(&warm);
+    assert_eq!(page_span_interpretations(), before, "the preserved read is a hit");
+    let cold = PdfDocument::from_bytes(warning_pdf()).expect("open document");
+    let (cold_warnings, cold_recovered) = effects(&cold);
+    assert!(cold_warnings.contains("Type3Font"), "{cold_warnings}");
+    assert!(cold_recovered.missing_font_decodes > 0, "{cold_recovered:?}");
+    assert_eq!(warnings, cold_warnings);
+    assert_eq!(recovered, cold_recovered);
+}
+
+/// Without the announcement, or after the passes end, a flattened read interprets only its own
+/// geometry.
+#[test]
+fn preserved_geometry_is_paired_only_when_announced_while_the_passes_run() {
+    let preserved_runs = |announce: bool| {
+        let doc = PdfDocument::from_bytes(option_set_pdf()).expect("open document");
+        doc.begin_page_passes();
+        if announce {
+            doc.expect_preserved_script_geometry();
+        }
+        drop(doc.extract_spans_raw(1).unwrap());
+        let before = page_span_interpretations();
+        drop(
+            doc.extract_page_text_with_script_geometry(1, ReadingOrder::TopToBottom)
+                .unwrap(),
+        );
+        page_span_interpretations() - before
+    };
+    assert_eq!(preserved_runs(false), 1);
+    assert_eq!(preserved_runs(true), 0);
+
+    let doc = PdfDocument::from_bytes(option_set_pdf()).expect("open document");
+    doc.begin_page_passes();
+    doc.expect_preserved_script_geometry();
+    doc.release_page_caches();
+    doc.begin_page_passes();
+    drop(doc.extract_spans_raw(1).unwrap());
+    let before = page_span_interpretations();
+    drop(
+        doc.extract_page_text_with_script_geometry(1, ReadingOrder::TopToBottom)
+            .unwrap(),
+    );
+    assert_eq!(page_span_interpretations() - before, 1, "release ends the pairing");
+}
+
 #[test]
 fn the_fixture_exercises_script_geometry_and_actual_text() {
     let doc = PdfDocument::from_bytes(option_set_pdf()).expect("open document");

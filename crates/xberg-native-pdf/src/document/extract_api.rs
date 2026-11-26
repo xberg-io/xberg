@@ -55,6 +55,9 @@ pub(super) struct InterpretedPage {
     recovered: crate::extractors::recovery_tally::RecoverySnapshot,
     /// `(origin x, font size, raw baseline)` of each script span the read snapped onto its base.
     script_baselines: Vec<(f32, f32, f32)>,
+    /// The preserved-geometry spans of a flattened read that finished both geometries from one
+    /// content run; never kept in the cache.
+    preserved: Option<Vec<crate::layout::TextSpan>>,
 }
 
 impl InterpretedPage {
@@ -66,6 +69,7 @@ impl InterpretedPage {
             warnings: Vec::new(),
             recovered: Default::default(),
             script_baselines: Vec::new(),
+            preserved: None,
         }
     }
 
@@ -269,12 +273,22 @@ impl PdfDocument {
         *self.raw_page_spans_cache.lock_or_recover() = Some(crate::cache::AdmissionBudgetCache::new(budget));
     }
 
+    /// Announce that the running page passes will also read preserved script
+    /// geometry, so each page's first flattened read finishes and caches both
+    /// geometries from one content run instead of the preserved read running the
+    /// page's content again. Lasts until [`Self::release_page_caches`].
+    #[doc(hidden)]
+    pub fn expect_preserved_script_geometry(&self) {
+        self.pair_script_geometries.store(true, Ordering::Relaxed);
+    }
+
     /// End the per-page passes: drop the page-pass cache and stop filling it,
     /// and empty the per-page span, character and content caches, so a document
     /// held past its extraction (OCR, rendering) keeps none of them alive.
     #[doc(hidden)]
     pub fn release_page_caches(&self) {
         *self.raw_page_spans_cache.lock_or_recover() = None;
+        self.pair_script_geometries.store(false, Ordering::Relaxed);
         self.page_spans_cache.lock_or_recover().clear();
         self.page_chars_cache.lock_or_recover().clear();
         self.page_content_cache.lock_or_recover().clear();
@@ -350,10 +364,28 @@ impl PdfDocument {
             }
             return Ok((page.spans.clone(), page.mc_actualtext.clone()));
         }
+        // A flattened read while preserved reads are expected finishes the preserved spans from
+        // the same content run and caches them, unless that page is already cached. ~keep
+        let pair_geometries = passes_running
+            && script_geometry == ScriptGeometry::Flatten
+            && self.pair_script_geometries.load(Ordering::Relaxed)
+            && !self
+                .raw_page_spans_cache
+                .lock_or_recover()
+                .as_ref()
+                .is_some_and(|cache| {
+                    cache
+                        .get(&RawSpanKey {
+                            page_index,
+                            script_geometry: ScriptGeometry::Preserve,
+                        })
+                        .is_some()
+                });
         // The markdown hierarchy asks for witnesses on preserved-geometry pages
         // a plain read already cached; capturing on the first read lets the
         // cached entry answer both instead of interpreting the page again. ~keep
-        let capture = capture_cmsy || (passes_running && script_geometry == ScriptGeometry::Preserve);
+        let capture =
+            capture_cmsy || pair_geometries || (passes_running && script_geometry == ScriptGeometry::Preserve);
         let recovered_before = self.recovery_counts().snapshot();
         let (page, warnings) = crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
             self.interpret_page_spans(
@@ -364,6 +396,7 @@ impl PdfDocument {
                 script_geometry,
                 false,
                 capture,
+                pair_geometries,
             )
         });
         let mut page = page?;
@@ -374,7 +407,29 @@ impl PdfDocument {
         if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
             output.clone_from(witnesses);
         }
+        let preserved = page.preserved.take();
+        // The flattened entry is admitted first: the later passes read it more often. ~keep
         self.retain_interpretation(key, &page);
+        if let Some(preserved) = preserved {
+            // The preserved read shares the content run, so it has the same document effects;
+            // only the flattened read records script baselines. ~keep
+            let preserved = InterpretedPage {
+                spans: preserved,
+                mc_actualtext: page.mc_actualtext.clone(),
+                cmsy: page.cmsy.clone(),
+                warnings: page.warnings.clone(),
+                recovered: page.recovered,
+                script_baselines: Vec::new(),
+                preserved: None,
+            };
+            self.retain_interpretation(
+                RawSpanKey {
+                    page_index,
+                    script_geometry: ScriptGeometry::Preserve,
+                },
+                &preserved,
+            );
+        }
         Ok((page.spans, page.mc_actualtext))
     }
 
@@ -402,6 +457,7 @@ impl PdfDocument {
             warnings: page.warnings.clone(),
             recovered: page.recovered,
             script_baselines: page.script_baselines.clone(),
+            preserved: None,
         };
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
             cache.insert(key, std::sync::Arc::new(copy), bytes);
@@ -461,6 +517,7 @@ impl PdfDocument {
             script_geometry,
             skip_nonpainting_text,
             false,
+            false,
         )?;
         self.record_mc_actualtext(page_index, page.mc_actualtext);
         Ok(page.spans)
@@ -519,7 +576,8 @@ impl PdfDocument {
 
     /// Interpret a page's content stream into raw spans. Uncached; the document
     /// effect it produces is returned in [`InterpretedPage`] for the caller to
-    /// record.
+    /// record. With `pair_geometries`, a [`ScriptGeometry::Flatten`] read also
+    /// returns the page's preserved-geometry spans from the same content run.
     fn interpret_page_spans(
         &self,
         page_index: usize,
@@ -529,6 +587,7 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         skip_nonpainting_text: bool,
         capture_cmsy: bool,
+        pair_geometries: bool,
     ) -> Result<InterpretedPage> {
         #[cfg(test)]
         PAGE_SPAN_INTERPRETATIONS.with(|count| count.set(count.get() + 1));
@@ -618,7 +677,12 @@ impl PdfDocument {
         if capture_cmsy {
             extractor.cmsy_witnesses = Some(Vec::new());
         }
-        let spans = extractor.extract_text_spans(&content_data)?;
+        let (spans, preserved) = if pair_geometries && script_geometry == ScriptGeometry::Flatten {
+            let (flattened, preserved) = extractor.extract_text_spans_in_both_script_geometries(&content_data)?;
+            (flattened, Some(preserved))
+        } else {
+            (extractor.extract_text_spans(&content_data)?, None)
+        };
         let cmsy = capture_cmsy.then(|| extractor.cmsy_witnesses.take().unwrap_or_default());
         Ok(InterpretedPage {
             spans,
@@ -627,6 +691,7 @@ impl PdfDocument {
             warnings: Vec::new(),
             recovered: Default::default(),
             script_baselines: std::mem::take(&mut extractor.raw_script_baselines),
+            preserved,
         })
     }
 

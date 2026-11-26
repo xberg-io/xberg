@@ -690,6 +690,20 @@ pub(crate) fn extract_all_from_native_document(
     let page_structure_was_implicitly_tracked =
         force_annotation_page_tracking && !crate::pdf::native::text::page_boundaries_required(config);
 
+    let ocr_inline_images = super::inline_image_ocr_enabled(config);
+    let needs_structured = needs_structured_extraction(
+        hierarchy_enabled,
+        config.include_document_structure,
+        &config.output_format,
+        ocr_inline_images,
+        config.content_filter.is_some(),
+    );
+    if needs_structured && !config.force_ocr {
+        // The structure pass reads every page again in preserved script geometry; the text pass's
+        // content run of each page then serves that read too. ~keep
+        doc.doc.expect_preserved_script_geometry();
+    }
+
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
     let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata, financial_rows) =
         crate::pdf::native::text::extract_text_and_metadata(doc, Some(text_config)).map_err(map_native_text_error)?;
@@ -750,14 +764,6 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(feature = "layout-detection"))]
     let _ = layout_hints;
 
-    let ocr_inline_images = super::inline_image_ocr_enabled(config);
-    let needs_structured = needs_structured_extraction(
-        hierarchy_enabled,
-        config.include_document_structure,
-        &config.output_format,
-        ocr_inline_images,
-        config.content_filter.is_some(),
-    );
     if cut_short && needs_structured {
         skipped_stages.push("document structure");
     }
