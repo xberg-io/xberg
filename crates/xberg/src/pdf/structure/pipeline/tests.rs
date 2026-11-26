@@ -6866,6 +6866,19 @@ fn test_heuristic_path_dehyphenates_a_word_wrapped_at_a_unicode_hyphen() {
     }
 }
 
+/// The rejoin strips the trailing word by characters; counting its UTF-8 bytes instead
+/// also ate the space before an accented word and welded it to its neighbour.
+#[test]
+fn test_heuristic_path_dehyphenates_a_non_ascii_word_without_eating_the_space_before_it() {
+    let output = process_heuristic_segments(vec![
+        heuristic_segment("Le petit dé-", 700.0, 490.0, false),
+        heuristic_segment("jeuner est servi", 680.0, 200.0, false),
+    ]);
+
+    assert_eq!(output.len(), 1);
+    assert_eq!(paragraph_text(&output[0]), "Le petit déjeuner est servi");
+}
+
 #[test]
 fn test_heuristic_path_preserves_compound_and_code_hyphens() {
     let compound = process_heuristic_segments(vec![

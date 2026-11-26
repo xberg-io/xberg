@@ -8521,7 +8521,7 @@ fn dehyphenate_paragraph_lines(para: &mut PdfParagraph, hyphen_witnesses: &Hyphe
                 .text
                 .chars()
                 .rev()
-                .skip(trailing_word.len() + 1)
+                .skip(trailing_word.chars().count() + 1)
                 .collect::<String>()
                 .chars()
                 .rev()
@@ -8586,7 +8586,7 @@ fn dehyphenate_hyphen_only(para: &mut PdfParagraph, hyphen_witnesses: &HyphenWit
                 .text
                 .chars()
                 .rev()
-                .skip(trailing_word.len() + 1)
+                .skip(trailing_word.chars().count() + 1)
                 .collect::<String>()
                 .chars()
                 .rev()
