@@ -31,6 +31,8 @@ pub(crate) mod native;
 #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
 pub(crate) mod native_text;
 #[cfg(feature = "pdf")]
+pub(crate) mod object_graph;
+#[cfg(feature = "pdf")]
 /// PDF page rendering to raster images.
 pub mod render;
 #[cfg(feature = "pdf")]

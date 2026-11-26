@@ -58,16 +58,6 @@ pub(crate) fn extract_embedded_files(document: &Document) -> Vec<EmbeddedFile> {
     files
 }
 
-/// Whether `document` has a catalog `/Names` → `/EmbeddedFiles` name tree.
-///
-/// [`extract_embedded_files`] returns nothing without one, so a caller already holding a
-/// lopdf parse of the bytes can skip [`extract_and_process_embedded_files`], which would
-/// parse them again only to find no tree.
-#[cfg(feature = "tokio-runtime")]
-pub(crate) fn has_embedded_files_name_tree(document: &Document) -> bool {
-    embedded_files_name_tree(document).is_some()
-}
-
 #[cfg(feature = "tokio-runtime")]
 fn embedded_files_name_tree(document: &Document) -> Option<lopdf::Dictionary> {
     let catalog = document.catalog().ok()?;
@@ -429,20 +419,17 @@ mod tests {
         let doc = Document::with_version("1.5");
         let files = extract_embedded_files(&doc);
         assert!(files.is_empty());
-        assert!(!has_embedded_files_name_tree(&doc));
     }
 
-    /// The predicate that lets callers skip the attachment pass must hold exactly when the
-    /// catalog reaches an `/EmbeddedFiles` dictionary, the precondition of any extracted file.
+    /// A file is extracted only when the catalog reaches an `/EmbeddedFiles` dictionary.
     #[test]
-    fn embedded_files_name_tree_predicate_tracks_the_catalog_tree() {
+    fn embedded_files_require_the_catalog_tree() {
         let mut with_tree = Document::with_version("1.7");
         let fs_id = build_filespec(&mut with_tree, "report.txt", b"hello");
         let root = with_tree.add_object(dictionary! {
             "Names" => vec![Object::string_literal("report.txt"), Object::Reference(fs_id)],
         });
         attach_embedded_files_root(&mut with_tree, root);
-        assert!(has_embedded_files_name_tree(&with_tree));
         assert_eq!(extract_embedded_files(&with_tree).len(), 1);
 
         let mut dests_only = Document::with_version("1.7");
@@ -450,7 +437,6 @@ mod tests {
         let names = dests_only.add_object(dictionary! { "Dests" => Object::Reference(dests) });
         let catalog = dests_only.add_object(dictionary! { "Type" => "Catalog", "Names" => Object::Reference(names) });
         dests_only.trailer.set("Root", Object::Reference(catalog));
-        assert!(!has_embedded_files_name_tree(&dests_only));
         assert!(extract_embedded_files(&dests_only).is_empty());
 
         let mut dangling = Document::with_version("1.7");
@@ -459,7 +445,6 @@ mod tests {
             "Names" => dictionary! { "EmbeddedFiles" => Object::Reference((999, 0)) },
         });
         dangling.trailer.set("Root", Object::Reference(catalog));
-        assert!(!has_embedded_files_name_tree(&dangling));
         assert!(extract_embedded_files(&dangling).is_empty());
     }
 

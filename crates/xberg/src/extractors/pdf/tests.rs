@@ -840,41 +840,41 @@ fn catalog(
 
 #[cfg(feature = "pdf")]
 #[test]
-fn lopdf_compatibility_pass_skips_pdf_without_relevant_signals() {
+fn outline_pass_skips_pdf_without_relevant_signals() {
     let catalog = catalog([]);
 
-    assert!(!raw_pdf_needs_lopdf_compatibility_pass(
+    assert!(!raw_pdf_may_have_outline_or_revisions(
         b"%PDF-1.7\nordinary content\n%%EOF",
     ));
-    assert!(!catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
+    assert!(!catalog_may_have_outline(Some(&catalog)));
 }
 
 #[cfg(feature = "pdf")]
 #[test]
-fn lopdf_compatibility_pass_keeps_raw_pdf_signals() {
+fn outline_pass_keeps_raw_pdf_signals() {
     let catalog = catalog([]);
 
-    assert!(raw_pdf_needs_lopdf_compatibility_pass(
+    assert!(raw_pdf_may_have_outline_or_revisions(
         b"%PDF-1.7\ntrailer << /Prev 42 >>",
     ));
-    assert!(raw_pdf_needs_lopdf_compatibility_pass(
+    assert!(raw_pdf_may_have_outline_or_revisions(
         b"%PDF-1.7\n<< /Outlines 7 0 R >>",
     ));
-    assert!(!catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
+    assert!(!catalog_may_have_outline(Some(&catalog)));
 }
 
 #[cfg(feature = "pdf")]
 #[test]
-fn lopdf_compatibility_pass_keeps_parsed_catalog_outline() {
+fn outline_pass_keeps_parsed_catalog_outline() {
     let catalog = catalog([("Outlines", xberg_native_pdf::object::Object::Null)]);
 
-    assert!(catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
+    assert!(catalog_may_have_outline(Some(&catalog)));
 }
 
 #[cfg(feature = "pdf")]
 #[test]
-fn lopdf_compatibility_pass_fails_open_without_catalog() {
-    assert!(catalog_needs_lopdf_compatibility_pass(None));
+fn outline_pass_fails_open_without_catalog() {
+    assert!(catalog_may_have_outline(None));
 }
 
 #[cfg(feature = "pdf")]

@@ -247,7 +247,7 @@ fn contains_pdf_marker(content: &[u8], marker: &[u8]) -> bool {
 }
 
 #[cfg(feature = "pdf")]
-fn catalog_needs_lopdf_compatibility_pass(catalog: Option<&xberg_native_pdf::object::Object>) -> bool {
+fn catalog_may_have_outline(catalog: Option<&xberg_native_pdf::object::Object>) -> bool {
     let Some(catalog) = catalog else {
         return true;
     };
@@ -258,7 +258,7 @@ fn catalog_needs_lopdf_compatibility_pass(catalog: Option<&xberg_native_pdf::obj
 }
 
 #[cfg(feature = "pdf")]
-fn raw_pdf_needs_lopdf_compatibility_pass(content: &[u8]) -> bool {
+fn raw_pdf_may_have_outline_or_revisions(content: &[u8]) -> bool {
     contains_pdf_marker(content, PDF_PREVIOUS_XREF_MARKER) || contains_pdf_marker(content, PDF_OUTLINES_MARKER)
 }
 
@@ -269,8 +269,7 @@ fn raw_pdf_needs_lopdf_compatibility_pass(content: &[u8]) -> bool {
 /// open the document at all.
 ///
 /// The fallback exists because the `xberg_native_pdf` open is the sole gate on this cap, and
-/// `raw_pdf_needs_lopdf_compatibility_pass` below documents that some structures only
-/// `lopdf` can walk — so without it, a document `xberg_native_pdf` rejects skips the cap
+/// some documents only `lopdf` can open — so without it, a document `xberg_native_pdf` rejects skips the cap
 /// entirely and is then handed to an extraction path that may still recover it. That
 /// is the shape a hostile input would take against a security limit.
 ///
@@ -345,47 +344,39 @@ fn lopdf_page_count(content: &[u8]) -> Option<usize> {
 }
 
 #[cfg(feature = "pdf")]
-fn parsed_pdf_needs_lopdf_compatibility_pass(document: &crate::pdf::native::NativeDocument) -> bool {
+fn parsed_pdf_may_have_outline(document: &crate::pdf::native::NativeDocument) -> bool {
     match document.doc.catalog() {
-        Ok(catalog) => catalog_needs_lopdf_compatibility_pass(Some(&catalog)),
+        Ok(catalog) => catalog_may_have_outline(Some(&catalog)),
         Err(error) => {
             tracing::debug!(
                 error = %error,
-                "xberg_native_pdf catalog inspection failed; retaining lopdf compatibility pass"
+                "xberg_native_pdf catalog inspection failed; reading the outline anyway"
             );
-            catalog_needs_lopdf_compatibility_pass(None)
+            catalog_may_have_outline(None)
         }
     }
 }
 
 #[cfg(feature = "pdf")]
 #[derive(Default)]
-struct LopdfCompatibilityData {
+struct OutlineAndRevisionData {
     outline_entries: Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
     bookmark_uris: Vec<crate::types::ExtractedUri>,
     revisions: Option<Vec<crate::types::DocumentRevision>>,
-    /// Whether the attachment pass, which loads these same bytes with lopdf, can find a file.
-    /// `false` when lopdf cannot load them, as the attachment pass then returns nothing too.
-    #[cfg(feature = "tokio-runtime")]
-    has_embedded_files: bool,
 }
 
+/// The outline and incremental-update history, read from the document extraction already
+/// opened instead of a second, whole-file lopdf parse.
 #[cfg(feature = "pdf")]
-fn extract_lopdf_compatibility_data(content: &[u8]) -> LopdfCompatibilityData {
-    match lopdf::Document::load_mem(content) {
-        Ok(lopdf_doc) => {
-            let outline_entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
-            let bookmark_uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&outline_entries);
-            let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
-            LopdfCompatibilityData {
-                outline_entries,
-                bookmark_uris,
-                revisions,
-                #[cfg(feature = "tokio-runtime")]
-                has_embedded_files: crate::pdf::embedded_files::has_embedded_files_name_tree(&lopdf_doc),
-            }
-        }
-        Err(_) => LopdfCompatibilityData::default(),
+fn extract_outline_and_revision_data(document: &xberg_native_pdf::PdfDocument) -> OutlineAndRevisionData {
+    let graph = crate::pdf::object_graph::NativeObjectGraph::new(document);
+    let outline_entries = crate::pdf::bookmarks::extract_outline_entries(&graph);
+    let bookmark_uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&outline_entries);
+    let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(&document.source_bytes, &graph);
+    OutlineAndRevisionData {
+        outline_entries,
+        bookmark_uris,
+        revisions,
     }
 }
 
@@ -551,33 +542,21 @@ fn extract_native_blocking(
         .as_ref()
         .and_then(|options| options.passwords.as_deref())
         .unwrap_or(&[]);
-    let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
-    let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
+    let raw_outline_signal = raw_pdf_may_have_outline_or_revisions(&content);
     let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
     #[cfg(all(test, feature = "tokio-runtime"))]
     source_mapping_tests::record_opened(&native_document.doc.source_bytes);
-    let compatibility_data = match compatibility_data {
-        Some(data) => Some(data),
-        None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
-            let source = std::mem::take(&mut native_document.doc.source_bytes);
-            drop(native_document);
-            let data = extract_lopdf_compatibility_data(&source);
-            native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(source, passwords)?;
-            Some(data)
-        }
-        None => None,
-    };
-    #[cfg(feature = "tokio-runtime")]
-    let may_have_embedded_files = compatibility_data.as_ref().map_or_else(
-        || may_have_embedded_files(&native_document.doc),
-        |data| data.has_embedded_files,
-    );
-    let LopdfCompatibilityData {
+    let OutlineAndRevisionData {
         outline_entries,
         bookmark_uris,
         revisions: pdf_revisions,
-        ..
-    } = compatibility_data.unwrap_or_default();
+    } = if raw_outline_signal || parsed_pdf_may_have_outline(&native_document) {
+        extract_outline_and_revision_data(&native_document.doc)
+    } else {
+        OutlineAndRevisionData::default()
+    };
+    #[cfg(feature = "tokio-runtime")]
+    let may_have_embedded_files = may_have_embedded_files(&native_document.doc);
     ensure_pdf_not_cancelled(&config)?;
     let diagrams = if wants_dot_output(&config) {
         crate::extraction::diagram::pdf::recover(&mut native_document)
@@ -3818,8 +3797,8 @@ fn name_tree_without_embedded_files_skips_attachment_parsing() {
     assert!(may_have_embedded_files(&unreadable));
 }
 
-/// One page of text whose catalog carries `/Outlines`, which sends it through the lopdf
-/// compatibility pass, and optionally a `/Names` → `/EmbeddedFiles` tree holding `attachment`.
+/// One page of text whose catalog carries `/Outlines`, which sends it through the outline
+/// pass, and optionally a `/Names` → `/EmbeddedFiles` tree holding `attachment`.
 #[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
 fn outlined_pdf_with_attachment(attachment: Option<&[u8]>) -> Vec<u8> {
     use lopdf::{Object, Stream, dictionary};
@@ -3865,20 +3844,20 @@ fn outlined_pdf_with_attachment(attachment: Option<&[u8]>) -> Vec<u8> {
 
 #[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
 #[test]
-fn lopdf_compatibility_pass_reports_whether_an_attachment_tree_exists() {
+fn outlined_pdf_reports_whether_an_attachment_tree_exists() {
     let without = outlined_pdf_with_attachment(None);
     let with = outlined_pdf_with_attachment(Some(b"Attachment text"));
-    assert!(raw_pdf_needs_lopdf_compatibility_pass(&without));
-    assert!(raw_pdf_needs_lopdf_compatibility_pass(&with));
+    assert!(raw_pdf_may_have_outline_or_revisions(&without));
+    assert!(raw_pdf_may_have_outline_or_revisions(&with));
 
-    assert!(!extract_lopdf_compatibility_data(&without).has_embedded_files);
-    assert!(extract_lopdf_compatibility_data(&with).has_embedded_files);
-    assert!(!extract_lopdf_compatibility_data(b"%PDF-1.7\n/Outlines but no document").has_embedded_files);
+    let open = |bytes: Vec<u8>| xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("open");
+    assert!(!may_have_embedded_files(&open(without)));
+    assert!(may_have_embedded_files(&open(with)));
 }
 
 #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[tokio::test]
-async fn outlined_pdf_keeps_its_attachment_after_the_compatibility_pass() {
+async fn outlined_pdf_keeps_its_attachment_after_the_outline_pass() {
     let config = ExtractionConfig {
         use_cache: false,
         disable_ocr: true,
