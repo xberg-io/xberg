@@ -163,9 +163,32 @@ class DocRecord:
 
 
 def load_ledger() -> dict[str, dict]:
-    if LEDGER.exists():
-        return {r["id"]: r for r in json.loads(LEDGER.read_text())}
-    return {}
+    records = {r["id"]: r for r in json.loads(LEDGER.read_text())} if LEDGER.exists() else {}
+    _merge_overrides(records)
+    return records
+
+
+# A GT corrected by hand after review (e.g. text on the page that the upstream annotation leaves out) is
+# marked `gt_override` in the manifest. The published GT file is then the override: normalize keeps its
+# hashes and assemble rewrites it unchanged instead of regenerating it from upstream. ~keep
+OVERRIDE_FIELDS = ("gt_override", "out_gt_md_sha256", "gt_txt_sha256")
+
+
+def _merge_overrides(records: dict[str, dict]) -> None:
+    """Carry `gt_override` marks (and the override hashes) from the committed manifest into the ledger."""
+    if not MANIFEST.exists():
+        return
+    for doc in json.loads(MANIFEST.read_text()).get("documents", []):
+        if not doc.get("gt_override"):
+            continue
+        rec = records.setdefault(doc["id"], dict(doc))
+        for key in OVERRIDE_FIELDS:
+            rec[key] = doc[key]
+
+
+def _record_generated_gt(rec: dict, out: str) -> None:
+    if not rec.get("gt_override"):
+        rec["out_gt_md_sha256"] = sha256_bytes(out.encode())
 
 
 def save_ledger(records: dict[str, dict]) -> None:
@@ -215,7 +238,7 @@ def stage_normalize(records: dict, dry: bool) -> None:
                 )
             )
             rec["src_gt_sha256"] = sha256_bytes(raw.encode())
-            rec["out_gt_md_sha256"] = sha256_bytes(out.encode())
+            _record_generated_gt(rec, out)
             rec["transforms"] = report
             records[md.stem] = rec
             if not dry:
@@ -241,7 +264,7 @@ def stage_normalize(records: dict, dry: bool) -> None:
             )
         )
         rec["src_gt_sha256"] = sha256_bytes(html.encode())
-        rec["out_gt_md_sha256"] = sha256_bytes(out.encode())
+        _record_generated_gt(rec, out)
         rec["transforms"] = {"html_to_gfm": 1}
         records[pid] = rec
         count += 1
@@ -279,7 +302,7 @@ def _normalize_staged(records: dict, name: str, base: Path, dry: bool) -> None:
             )
         )
         rec["src_gt_sha256"] = sha256_bytes(raw.encode())
-        rec["out_gt_md_sha256"] = sha256_bytes(out.encode())
+        _record_generated_gt(rec, out)
         rec["transforms"] = report
         records[sid] = rec
         count += 1
@@ -590,18 +613,44 @@ def _dest(redistribute: str) -> tuple[Path, Path, str]:
     return CACHE_PDF, CACHE_GT, "../../../../test_documents/.corpus-cache"
 
 
-def _write_doc(r: dict) -> tuple[int, str] | None:
+def _read_overrides(records: list[dict]) -> dict[str, tuple[str, str]]:
+    """Read every `gt_override` doc's published GT (.md, .txt) before assemble prunes it. A missing file or a
+    hash that differs from the manifest fails loudly: regenerating would silently drop the correction.
+    """
+    found = {}
+    for r in records:
+        if not r.get("gt_override"):
+            continue
+        _, gt_dir, _ = _dest(doc_redistribute(r))
+        md_path, txt_path = gt_dir / f"{r['id']}.md", gt_dir / f"{r['id']}.txt"
+        if not md_path.exists() or not txt_path.exists():
+            raise RuntimeError(f"{r['id']}: gt_override is set but {md_path} or its .txt is missing")
+        md, txt = md_path.read_text("utf-8"), txt_path.read_text("utf-8")
+        if sha256_bytes(md.encode()) != r["out_gt_md_sha256"] or sha256_bytes(txt.encode()) != r["gt_txt_sha256"]:
+            raise RuntimeError(f"{r['id']}: gt_override GT on disk does not match the manifest hashes")
+        found[r["id"]] = (md, txt)
+    return found
+
+
+def _write_doc(r: dict, override: tuple[str, str] | None = None) -> tuple[int, str] | None:
     """Copy the source PDF + write GFM/.txt GT to the doc's redistribution destination (committed for
     vendor, gitignored cache for reference). Records redistribute + pdf/txt hashes. Returns (bytes, prefix).
+    `override` is a hand-corrected (md, txt) pair written verbatim instead of the normalized GT.
     """
     import shutil
 
     src_pdf, gt = _source_pdf(r), _normalized_gt(r)
-    if src_pdf is None or not src_pdf.exists() or not gt.exists():
+    if src_pdf is None or not src_pdf.exists() or (override is None and not gt.exists()):
         r["exclusion_reason"] = "missing source PDF or normalized GT"
         return None
-    md = gt.read_text("utf-8", "replace")
-    txt = strip_to_text(md)
+    if override is not None:
+        md, txt = override
+    elif r.get("gt_override"):
+        r["exclusion_reason"] = "gt_override GT not available"
+        return None
+    else:
+        md = gt.read_text("utf-8", "replace")
+        txt = strip_to_text(md)
     r["redistribute"] = doc_redistribute(r)
     pdf_dir, gt_dir, prefix = _dest(r["redistribute"])
     for d in (pdf_dir, gt_dir):
@@ -693,6 +742,7 @@ def stage_assemble(records: dict, dry: bool) -> None:
     materialize before a run.
     """
     active = [r for r in records.values() if r["gate_verdict"] == "ACCEPT" and r.get("size_tier") in ("smoke", "core")]
+    overrides = _read_overrides(active) if not dry else {}
     if not dry:
         for d in (PDF_DIR, GT_DIR, FIXTURE_DIR, CACHE_PDF, CACHE_GT):
             d.mkdir(parents=True, exist_ok=True)
@@ -704,7 +754,7 @@ def stage_assemble(records: dict, dry: bool) -> None:
             if _source_pdf(r) and _normalized_gt(r).exists():
                 written[doc_redistribute(r)] += 1
             continue
-        res = _write_doc(r)
+        res = _write_doc(r, overrides.get(r["id"]))
         if res is None:
             continue
         nbytes, prefix = res
