@@ -67,3 +67,79 @@ fn test_table_cell_paragraphs_stay_separated() {
 
     assert!(content.contains("North East"), "{content:?}");
 }
+
+/// Shapes side by side read left to right even when the right one starts a little
+/// higher; a shape below them still comes after both.
+#[test]
+fn test_side_by_side_shapes_read_left_to_right() {
+    let shapes = [
+        text_box(
+            2,
+            6180463,
+            1344058,
+            4076241,
+            3877937,
+            "<a:p><a:r><a:t>Right column</a:t></a:r></a:p>",
+        ),
+        text_box(
+            3,
+            838200,
+            1825625,
+            3623631,
+            2136775,
+            "<a:p><a:r><a:t>Left column</a:t></a:r></a:p>",
+        ),
+        text_box(
+            4,
+            838200,
+            5600000,
+            3623631,
+            457200,
+            "<a:p><a:r><a:t>Footer below</a:t></a:r></a:p>",
+        ),
+    ]
+    .concat();
+    let content = extracted_slide_content(&shapes);
+
+    let at = |needle: &str| {
+        content
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle:?} missing from {content:?}"))
+    };
+    assert!(at("Left column") < at("Right column"), "{content:?}");
+    assert!(at("Right column") < at("Footer below"), "{content:?}");
+}
+
+/// A full-slide shape overlaps everything but covers too little of each shape's row to
+/// join it, so the shapes on top of it keep their top-to-bottom order.
+#[test]
+fn test_full_slide_shape_does_not_merge_stacked_rows() {
+    let shapes = [
+        text_box(2, 0, 0, 12192000, 6858000, "<a:p><a:r><a:t>Backdrop</a:t></a:r></a:p>"),
+        text_box(
+            3,
+            3000000,
+            1000000,
+            4000000,
+            600000,
+            "<a:p><a:r><a:t>Upper text</a:t></a:r></a:p>",
+        ),
+        text_box(
+            4,
+            900000,
+            3000000,
+            4000000,
+            600000,
+            "<a:p><a:r><a:t>Lower text</a:t></a:r></a:p>",
+        ),
+    ]
+    .concat();
+    let content = extracted_slide_content(&shapes);
+
+    let at = |needle: &str| {
+        content
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle:?} missing from {content:?}"))
+    };
+    assert!(at("Upper text") < at("Lower text"), "{content:?}");
+}

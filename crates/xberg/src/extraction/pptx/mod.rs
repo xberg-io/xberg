@@ -58,7 +58,7 @@ use crate::types::{ExtractedImage, PptxExtractionResult, ProcessingWarning};
 
 use container::{PptxContainer, SlideIterator};
 use content_builder::ContentBuilder;
-use elements::{ParserConfig, Run, SlideElement};
+use elements::{ParserConfig, Run, SlideElement, reading_order};
 use image_handling::detect_image_format;
 use metadata::{extract_all_notes, extract_metadata, extract_section_names};
 
@@ -226,16 +226,13 @@ pub(crate) fn extract_pptx_from_bytes_with_slide_contents(
 }
 
 fn ordered_slide_images(slide: &elements::Slide) -> Vec<(&elements::ImageReference, &elements::ElementPosition)> {
-    let mut images: Vec<_> = slide
-        .elements
-        .iter()
-        .filter_map(|element| match element {
+    reading_order(&slide.elements)
+        .into_iter()
+        .filter_map(|idx| match &slide.elements[idx] {
             SlideElement::Image(image, position) => Some((image, position)),
             _ => None,
         })
-        .collect();
-    images.sort_by_key(|(_, position)| (position.y, position.x));
-    images
+        .collect()
 }
 
 /// Read one slide's referenced images (by relationship ID, not iteration
@@ -730,11 +727,7 @@ fn build_slide_structure(
     doc_builder: &mut DocumentStructureBuilder,
     image_index_counter: &mut u32,
 ) {
-    let mut sorted_indices: Vec<usize> = (0..slide.elements.len()).collect();
-    sorted_indices.sort_by_key(|&i| {
-        let pos = slide.elements[i].position();
-        (pos.y, pos.x)
-    });
+    let sorted_indices = reading_order(&slide.elements);
 
     let slide_title = sorted_indices
         .iter()
