@@ -236,32 +236,6 @@ pub(crate) fn accepted_mixed_ocr_coordinate_frames(
         .collect()
 }
 
-#[cfg(feature = "pdf")]
-const PDF_OUTLINES_MARKER: &[u8] = b"/Outlines";
-#[cfg(feature = "pdf")]
-const PDF_PREVIOUS_XREF_MARKER: &[u8] = b"/Prev";
-
-#[cfg(feature = "pdf")]
-fn contains_pdf_marker(content: &[u8], marker: &[u8]) -> bool {
-    memchr::memmem::find(content, marker).is_some()
-}
-
-#[cfg(feature = "pdf")]
-fn catalog_may_have_outline(catalog: Option<&xberg_native_pdf::object::Object>) -> bool {
-    let Some(catalog) = catalog else {
-        return true;
-    };
-    let Some(dictionary) = catalog.as_dict() else {
-        return true;
-    };
-    dictionary.contains_key("Outlines")
-}
-
-#[cfg(feature = "pdf")]
-fn raw_pdf_may_have_outline_or_revisions(content: &[u8]) -> bool {
-    contains_pdf_marker(content, PDF_PREVIOUS_XREF_MARKER) || contains_pdf_marker(content, PDF_OUTLINES_MARKER)
-}
-
 /// Reject a document whose page count exceeds `security_limits.max_pages` before any
 /// per-page work (layout detection, OCR, rendering) begins (#1451).
 ///
@@ -344,21 +318,6 @@ fn lopdf_page_count(content: &[u8]) -> Option<usize> {
 }
 
 #[cfg(feature = "pdf")]
-fn parsed_pdf_may_have_outline(document: &crate::pdf::native::NativeDocument) -> bool {
-    match document.doc.catalog() {
-        Ok(catalog) => catalog_may_have_outline(Some(&catalog)),
-        Err(error) => {
-            tracing::debug!(
-                error = %error,
-                "xberg_native_pdf catalog inspection failed; reading the outline anyway"
-            );
-            catalog_may_have_outline(None)
-        }
-    }
-}
-
-#[cfg(feature = "pdf")]
-#[derive(Default)]
 struct OutlineAndRevisionData {
     outline_entries: Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
     bookmark_uris: Vec<crate::types::ExtractedUri>,
@@ -367,6 +326,10 @@ struct OutlineAndRevisionData {
 
 /// The outline and incremental-update history, read from the document extraction already
 /// opened instead of a second, whole-file lopdf parse.
+///
+/// It runs on every document rather than behind a raw-byte scan for `/Outlines` or `/Prev`:
+/// both reads stop at the catalog and the trailer chain, while the scan read every byte of a
+/// mapped file and so kept all of it resident. ~keep
 #[cfg(feature = "pdf")]
 fn extract_outline_and_revision_data(document: &xberg_native_pdf::PdfDocument) -> OutlineAndRevisionData {
     let graph = crate::pdf::object_graph::NativeObjectGraph::new(document);
@@ -542,7 +505,6 @@ fn extract_native_blocking(
         .as_ref()
         .and_then(|options| options.passwords.as_deref())
         .unwrap_or(&[]);
-    let raw_outline_signal = raw_pdf_may_have_outline_or_revisions(&content);
     let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
     #[cfg(all(test, feature = "tokio-runtime"))]
     source_mapping_tests::record_opened(&native_document.doc.source_bytes);
@@ -550,11 +512,7 @@ fn extract_native_blocking(
         outline_entries,
         bookmark_uris,
         revisions: pdf_revisions,
-    } = if raw_outline_signal || parsed_pdf_may_have_outline(&native_document) {
-        extract_outline_and_revision_data(&native_document.doc)
-    } else {
-        OutlineAndRevisionData::default()
-    };
+    } = extract_outline_and_revision_data(&native_document.doc);
     #[cfg(feature = "tokio-runtime")]
     let may_have_embedded_files = may_have_embedded_files(&native_document.doc);
     ensure_pdf_not_cancelled(&config)?;
@@ -3847,8 +3805,6 @@ fn outlined_pdf_with_attachment(attachment: Option<&[u8]>) -> Vec<u8> {
 fn outlined_pdf_reports_whether_an_attachment_tree_exists() {
     let without = outlined_pdf_with_attachment(None);
     let with = outlined_pdf_with_attachment(Some(b"Attachment text"));
-    assert!(raw_pdf_may_have_outline_or_revisions(&without));
-    assert!(raw_pdf_may_have_outline_or_revisions(&with));
 
     let open = |bytes: Vec<u8>| xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("open");
     assert!(!may_have_embedded_files(&open(without)));
@@ -3884,4 +3840,72 @@ async fn outlined_pdf_keeps_its_attachment_after_the_outline_pass() {
         .await
         .unwrap();
     assert!(document.children.is_none(), "{:?}", document.children);
+}
+
+/// A catalog without `/Outlines` whose only incremental update links back through `/Prev`:
+/// the case the removed raw `/Prev` scan existed for, so its revision must still be reported.
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[tokio::test]
+async fn incremental_update_without_outline_still_reports_its_revision() {
+    use lopdf::{Object, Stream, dictionary};
+
+    let mut pdf = lopdf::Document::with_version("1.4");
+    let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let contents = pdf.add_object(Stream::new(
+        dictionary! {},
+        b"BT /F1 24 Tf 72 720 Td (Revised body) Tj ET".to_vec(),
+    ));
+    let pages = pdf.new_object_id();
+    let page = pdf.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages,
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        "Contents" => contents,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    pdf.objects.insert(
+        pages,
+        Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }),
+    );
+    let root = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    assert!(memchr::memmem::find(&bytes, b"/Outlines").is_none());
+
+    let tail = &bytes[bytes.len().saturating_sub(64)..];
+    let keyword = memchr::memmem::rfind(tail, b"startxref").expect("base startxref");
+    let base_xref: usize = std::str::from_utf8(&tail[keyword + b"startxref".len()..])
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .and_then(|offset| offset.parse().ok())
+        .expect("base xref offset");
+    let added = pdf.max_id + 1;
+    let added_offset = bytes.len();
+    bytes.extend_from_slice(format!("{added} 0 obj\n<</Update true>>\nendobj\n").as_bytes());
+    let update_xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n{added} 1\n{added_offset:010} 00000 n \n").as_bytes());
+    bytes.extend_from_slice(
+        format!(
+            "trailer\n<</Size {} /Root {} {} R /Prev {base_xref}>>\nstartxref\n{update_xref}\n%%EOF\n",
+            added + 1,
+            root.0,
+            root.1
+        )
+        .as_bytes(),
+    );
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let document = PdfExtractor::new()
+        .extract_content(&bytes, "application/pdf", &config)
+        .await
+        .unwrap();
+    let revisions = document.revisions.expect("the incremental update must be reported");
+    assert_eq!(revisions.len(), 1);
+    assert_eq!(revisions[0].revision_id, format!("xref-offset-{base_xref}"));
 }

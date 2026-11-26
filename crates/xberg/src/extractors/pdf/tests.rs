@@ -827,57 +827,6 @@ fn layout_gate_metadata_reports_one_indexed_skipped_pages_and_all_reasons() {
 }
 
 #[cfg(feature = "pdf")]
-fn catalog(
-    entries: impl IntoIterator<Item = (&'static str, xberg_native_pdf::object::Object)>,
-) -> xberg_native_pdf::object::Object {
-    xberg_native_pdf::object::Object::Dictionary(
-        entries
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value))
-            .collect(),
-    )
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn outline_pass_skips_pdf_without_relevant_signals() {
-    let catalog = catalog([]);
-
-    assert!(!raw_pdf_may_have_outline_or_revisions(
-        b"%PDF-1.7\nordinary content\n%%EOF",
-    ));
-    assert!(!catalog_may_have_outline(Some(&catalog)));
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn outline_pass_keeps_raw_pdf_signals() {
-    let catalog = catalog([]);
-
-    assert!(raw_pdf_may_have_outline_or_revisions(
-        b"%PDF-1.7\ntrailer << /Prev 42 >>",
-    ));
-    assert!(raw_pdf_may_have_outline_or_revisions(
-        b"%PDF-1.7\n<< /Outlines 7 0 R >>",
-    ));
-    assert!(!catalog_may_have_outline(Some(&catalog)));
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn outline_pass_keeps_parsed_catalog_outline() {
-    let catalog = catalog([("Outlines", xberg_native_pdf::object::Object::Null)]);
-
-    assert!(catalog_may_have_outline(Some(&catalog)));
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn outline_pass_fails_open_without_catalog() {
-    assert!(catalog_may_have_outline(None));
-}
-
-#[cfg(feature = "pdf")]
 fn pdf_test_document(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../test_documents/pdf/{name}"))
 }
