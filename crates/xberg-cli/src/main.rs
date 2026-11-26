@@ -61,6 +61,8 @@
 
 mod commands;
 mod input;
+#[cfg(target_os = "macos")]
+mod large_blocks;
 mod logging;
 mod output;
 mod peak_memory;
@@ -118,6 +120,10 @@ use xberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 #[cfg(all(feature = "mimalloc", target_os = "linux", target_env = "musl"))]
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[cfg(target_os = "macos")]
+#[global_allocator]
+static GLOBAL_ALLOCATOR: large_blocks::MappedLargeBlocks = large_blocks::MappedLargeBlocks;
 
 fn version_json() -> serde_json::Value {
     json!({
@@ -917,6 +923,9 @@ fn version_command(format: WireFormat) -> Result<()> {
     reason = "formats/api-schema results are the CLI's stdout output contract"
 )]
 fn main() -> Result<()> {
+    #[cfg(all(target_os = "macos", feature = "ocr"))]
+    large_blocks::map_large_pix_data();
+
     // Captured as early as feasible for the optional per-stage cold-start timing breakdown (see
     // `commands::extract::stage_timing_requested`). Gated on the env var so the timing path is
     // fully zero-cost (no `Instant::now()` call, no state) when stage timing isn't requested. ~keep
