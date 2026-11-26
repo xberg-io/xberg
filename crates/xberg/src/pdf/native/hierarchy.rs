@@ -21,6 +21,7 @@ use crate::pdf::hierarchy::SegmentData;
 mod reading_order_memo;
 mod repeated_header_columns;
 pub(crate) mod script_evidence;
+mod stacked_header_band;
 
 pub(crate) use reading_order_memo::ReadingOrderMemoScope;
 
@@ -422,6 +423,7 @@ fn compute_page_reading_order(
 ) {
     let Some(gutter_x) = two_up_gutter(spans, page_width, page_height) else {
         reorder_single_page_reading_order(spans, page_width, page_height, page_index);
+        stacked_header_band::read_stacked_header_bands(spans);
         preserve_inline_prose_symbol_order(spans);
         return;
     };
@@ -434,6 +436,7 @@ fn compute_page_reading_order(
     reorder_single_page_reading_order(&mut right, page_width - gutter_x, page_height, page_index);
     spans.extend(left);
     spans.extend(right);
+    stacked_header_band::read_stacked_header_bands(spans);
     preserve_inline_prose_symbol_order(spans);
 }
 
