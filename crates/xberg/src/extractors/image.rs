@@ -3658,6 +3658,12 @@ impl ImageExtractor {
             // exactly the duplication being fixed. Once any table was detected, trust
             // the (possibly empty) filtered element list instead of that fallback. ~keep
             let use_hocr_headings = ocr_extraction_result.page_contents.is_none();
+            let (ocr_tables, place_tables) = standalone_tables_for_placement(
+                ocr_tables,
+                use_hocr_headings && !has_public_ocr_structure,
+                &ocr_metadata,
+                ocr_internal_document.as_ref(),
+            );
             let hocr_has_content_or_tables =
                 |internal_doc: &InternalDocument| !internal_doc.elements.is_empty() || !ocr_tables.is_empty();
             let (mut doc, placed_tables) = match &ocr_internal_document {
@@ -3666,7 +3672,8 @@ impl ImageExtractor {
                     0,
                 ),
                 Some(internal_doc) if use_hocr_headings && hocr_has_content_or_tables(internal_doc) => {
-                    build_image_internal_document_from_hocr_elements(&internal_doc.elements, &ocr_tables)
+                    let placeable: &[crate::types::Table] = if place_tables { &ocr_tables } else { &[] };
+                    build_image_internal_document_from_hocr_elements(&internal_doc.elements, placeable)
                 }
                 _ => (
                     build_image_internal_document(Some(&ocr_extraction_result.content), None),
@@ -4145,6 +4152,76 @@ fn standalone_image_element_font_size(element: &crate::types::internal::Internal
         .ok()
 }
 
+/// The top edge of a standalone-image OCR table (raster pixels, top-left origin).
+#[cfg(feature = "ocr")]
+fn table_top(table: &crate::types::Table) -> Option<f64> {
+    table.bounding_box.map(|bbox| bbox.y0).filter(|top| top.is_finite())
+}
+
+/// Tables top to bottom; a table without a usable box keeps its place after every boxed one.
+#[cfg(feature = "ocr")]
+fn tables_in_reading_order(mut tables: Vec<crate::types::Table>) -> Vec<crate::types::Table> {
+    tables.sort_by(|left, right| {
+        table_top(left)
+            .unwrap_or(f64::INFINITY)
+            .total_cmp(&table_top(right).unwrap_or(f64::INFINITY))
+    });
+    tables
+}
+
+/// The tables of a standalone image and whether to place them among its paragraphs: only for an
+/// hOCR-built document whose boxes are in the raster frame. Placed tables come sorted, so
+/// `doc.tables` and the page's tables share the placement order.
+#[cfg(feature = "ocr")]
+fn standalone_tables_for_placement(
+    tables: Vec<crate::types::Table>,
+    hocr_document: bool,
+    metadata: &crate::types::Metadata,
+    source: Option<&InternalDocument>,
+) -> (Vec<crate::types::Table>, bool) {
+    let place = hocr_document && source.is_some_and(|source| ocr_kept_the_raster_frame(metadata, &source.elements));
+    if place {
+        (tables_in_reading_order(tables), true)
+    } else {
+        (tables, false)
+    }
+}
+
+/// Whether the OCR boxes are in the source raster's frame: the page was not recognized turned
+/// (auto-rotation, an undone backend rotation, a recorded orientation) and no element carries a
+/// rotation. Table placement compares boxes, so it runs only in that frame.
+#[cfg(feature = "ocr")]
+fn ocr_kept_the_raster_frame(
+    metadata: &crate::types::Metadata,
+    elements: &[crate::types::internal::InternalElement],
+) -> bool {
+    use crate::ocr_metadata_keys::{
+        OCR_AUTO_ROTATED_METADATA_KEY, OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY,
+    };
+    let flag = |key: &str| {
+        metadata
+            .additional
+            .get(key)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    };
+    let turned = metadata
+        .additional
+        .get(OCR_ORIENTATION_DEGREES_METADATA_KEY)
+        .and_then(serde_json::Value::as_i64)
+        .is_some_and(|degrees| degrees.rem_euclid(360) != 0);
+    let upright = |degrees: f64| degrees.rem_euclid(360.0) < f64::EPSILON;
+    !flag(OCR_AUTO_ROTATED_METADATA_KEY)
+        && !flag(OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY)
+        && !turned
+        && elements.iter().all(|element| {
+            element
+                .ocr_rotation
+                .as_ref()
+                .is_none_or(|rotation| upright(rotation.angle_degrees))
+        })
+}
+
 /// Build an `InternalDocument` from hOCR-derived paragraph elements.
 ///
 /// Promotes large-font, short, single-line paragraphs to real `Heading`
@@ -4155,17 +4232,16 @@ fn standalone_image_element_font_size(element: &crate::types::internal::Internal
 /// itself as an `Image` node, matching `build_image_internal_document`.
 ///
 /// A table goes before the first paragraph that starts below the table's top edge, the rule PDF
-/// assembly places tables by (`vertical_insertion_slot`). Tables are placed in their given order,
-/// so the document's table order is theirs; the returned count is the leading tables placed. The
-/// caller appends the rest after the image node, as every table was before.
+/// assembly places tables by (`vertical_insertion_slot`). Tables are placed in their given order
+/// (the caller passes them in [`tables_in_reading_order`]), so the document's table order is
+/// theirs; the returned count is the leading tables placed. The caller appends the rest after the
+/// image node, as every table was before.
 #[cfg(feature = "ocr")]
 fn build_image_internal_document_from_hocr_elements(
     elements: &[crate::types::internal::InternalElement],
     tables: &[crate::types::Table],
 ) -> (InternalDocument, usize) {
     use crate::types::internal::ElementKind;
-
-    let table_top = |table: &crate::types::Table| table.bounding_box.map(|bbox| bbox.y0).filter(|top| top.is_finite());
 
     let mut font_sizes: Vec<f64> = elements.iter().filter_map(standalone_image_element_font_size).collect();
     let median_font_size = if font_sizes.is_empty() {
@@ -5801,26 +5877,86 @@ mod tests {
 
     #[cfg(feature = "ocr")]
     #[test]
-    fn standalone_image_tables_are_placed_in_their_given_order() {
+    fn standalone_image_tables_are_placed_top_to_bottom_whatever_their_detection_order() {
         let elements = vec![
             hocr_paragraph_at("Top", 50.0),
             hocr_paragraph_at("Middle", 500.0),
             hocr_paragraph_at("Bottom", 1000.0),
         ];
-        let tables = vec![
+        let detected = vec![
+            table_at("Unboxed", None),
             table_at("Lower", Some(rows(900.0, 950.0))),
             table_at("Upper", Some(rows(100.0, 200.0))),
         ];
+        let tables = tables_in_reading_order(detected);
+        let labels = |tables: &[crate::types::Table]| tables.iter().map(|t| t.cells[0][0].clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&tables), ["Upper", "Lower", "Unboxed"]);
 
         let (doc, placed) = build_image_internal_document_from_hocr_elements(&elements, &tables);
 
         assert_eq!(placed, 2);
         assert_eq!(
             element_sequence(&doc),
-            ["Top", "Middle", "table 0", "table 1", "Bottom", "image"]
+            ["Top", "table 0", "Middle", "table 1", "Bottom", "image"]
         );
-        assert_eq!(doc.tables[0].cells[0][0], "Lower");
-        assert_eq!(doc.tables[1].cells[0][0], "Upper");
+        assert_eq!(labels(&doc.tables), labels(&tables[..placed]));
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn standalone_image_tables_are_placed_only_in_the_raster_frame() {
+        let elements = vec![hocr_paragraph_at("Title", 10.0), hocr_paragraph_at("Summary", 500.0)];
+        assert!(ocr_kept_the_raster_frame(&Default::default(), &elements));
+
+        for (key, value) in [
+            (
+                crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY,
+                serde_json::json!(true),
+            ),
+            (
+                crate::ocr_metadata_keys::OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY,
+                serde_json::json!(true),
+            ),
+            (
+                crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY,
+                serde_json::json!(90),
+            ),
+        ] {
+            let mut metadata = crate::types::Metadata::default();
+            metadata.additional.insert(std::borrow::Cow::Borrowed(key), value);
+            assert!(!ocr_kept_the_raster_frame(&metadata, &elements), "{key}");
+        }
+        let mut level = crate::types::Metadata::default();
+        level.additional.insert(
+            std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY),
+            serde_json::json!(0),
+        );
+        assert!(ocr_kept_the_raster_frame(&level, &elements));
+
+        let mut rotated = elements.clone();
+        rotated[1].ocr_rotation = Some(crate::types::OcrRotation {
+            angle_degrees: 180.0,
+            confidence: None,
+        });
+        assert!(!ocr_kept_the_raster_frame(&Default::default(), &rotated));
+    }
+
+    /// The image extractor's PaddleOCR fallback: a first read built from PaddleOCR is never
+    /// replaced by the PSM 6 Tesseract table re-read.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn a_paddle_first_read_is_not_read_again_as_one_block() {
+        let config = ExtractionConfig::default();
+        let first = image_table_reread::sample_table_document();
+        assert!(single_block_table_config(&config, "image/jpeg", &first).is_some());
+
+        let mut paddle_first = image_table_reread::sample_table_document();
+        paddle_first.prebuilt_pages = Some(vec![image_paddle_fallback::page_read_by("paddle-ocr")]);
+        assert!(single_block_table_config(&config, "image/jpeg", &paddle_first).is_none());
+
+        let mut tesseract_first = image_table_reread::sample_table_document();
+        tesseract_first.prebuilt_pages = Some(vec![image_paddle_fallback::page_read_by("tesseract")]);
+        assert!(single_block_table_config(&config, "image/jpeg", &tesseract_first).is_some());
     }
 
     /// The plain page text of a sparse table still renders once the table sits among the
