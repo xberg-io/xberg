@@ -228,9 +228,8 @@ const SCEPTRE_LANGUAGE_GROUPS: &[&[&str]] = &[
 /// here — this is a hand-maintained mirror, NOT verified against xberg's source at build or test
 /// time. It MUST be kept in sync by hand whenever `crates/xberg/src/extractors/image.rs` changes
 /// `WHOLE_IMAGE_TESSERACT_PSM`. A benchmark that materializes `tesseract_config` to disable the
-/// OCR result cache (see `comparison.rs::finalize_timed_ocr_result_cache`,
-/// `batch_diagnostic.rs::disable_ocr_result_caches`, and
-/// `adapters/subprocess.rs::materialize_tesseract_ocr`) must pin PSM to this same value, or it
+/// OCR result cache (see `comparison.rs::finalize_timed_ocr_result_cache` and
+/// `batch_diagnostic.rs::disable_ocr_result_caches`) must pin PSM to this same value, or it
 /// silently regresses to `TesseractConfig::default()`'s PSM 3 and stops measuring xberg's real
 /// production default.
 pub(crate) const XBERG_WHOLE_IMAGE_TESSERACT_PSM: i32 = 11;

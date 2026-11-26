@@ -491,10 +491,14 @@ pub struct NativeAdapter {
     reject_layout_failures: bool,
 }
 
+/// Sets the fixture's OCR language. An existing `tesseract_config` is kept in step, but none is
+/// materialized: its mere presence switches off xberg's default-route OCR stages, and the
+/// config's request-level `use_cache: false` already keeps the OCR result cache cold. ~keep
 fn apply_ocr_language(ocr: &mut xberg::OcrConfig, language: &str) {
     ocr.language = crate::adapter::canonicalize_ocr_languages(language);
-    if ocr.backend == "tesseract" {
-        let tesseract = ocr.tesseract_config.get_or_insert_with(Default::default);
+    if ocr.backend == "tesseract"
+        && let Some(tesseract) = ocr.tesseract_config.as_mut()
+    {
         tesseract.language.clone_from(&ocr.language);
         tesseract.use_cache = false;
     }

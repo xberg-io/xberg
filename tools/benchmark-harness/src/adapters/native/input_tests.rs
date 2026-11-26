@@ -46,14 +46,29 @@ fn build_batch_input_updates_nested_tesseract_language_and_disables_cache() {
 }
 
 #[test]
-fn extraction_config_for_updates_nested_tesseract_language_and_disables_cache() {
+fn extraction_config_for_sets_tesseract_language_without_materializing_nested_config() {
     let adapter = NativeAdapter::with_config(base_config(true, Some("tesseract")));
+
+    let config = adapter.extraction_config_for(false, Some("deu+eng"));
+    let ocr = config.ocr.expect("OCR config");
+
+    assert_eq!(ocr.language, vec!["deu".to_string(), "eng".to_string()]);
+    assert!(
+        ocr.tesseract_config.is_none() && ocr.backend_options.is_none(),
+        "either field would switch xberg off its default OCR route"
+    );
+}
+
+#[test]
+fn extraction_config_for_refreshes_an_existing_tesseract_config() {
+    let mut base = base_config(true, Some("tesseract"));
+    base.ocr.as_mut().unwrap().tesseract_config = Some(xberg::TesseractConfig::default());
+    let adapter = NativeAdapter::with_config(base);
 
     let config = adapter.extraction_config_for(false, Some("deu+eng"));
     let ocr = config.ocr.expect("OCR config");
     let tesseract = ocr.tesseract_config.expect("nested Tesseract config");
 
-    assert_eq!(ocr.language, vec!["deu".to_string(), "eng".to_string()]);
     assert_eq!(tesseract.language, ocr.language);
     assert!(!tesseract.use_cache);
 }

@@ -577,13 +577,16 @@ fn steady_and_cold_probe_share_forced_tesseract_config() {
     assert!(cold.force_ocr);
     assert_eq!(steady.ocr.as_ref().map(|ocr| ocr.backend.as_str()), Some("tesseract"));
     assert_eq!(cold.ocr.as_ref().map(|ocr| ocr.backend.as_str()), Some("tesseract"));
-    let steady_tesseract = steady
-        .ocr
-        .as_ref()
-        .and_then(|ocr| ocr.tesseract_config.as_ref())
-        .expect("warm in-process OCR must carry explicit nested cache control");
-    assert_eq!(steady_tesseract.language, vec!["eng".to_string()]);
-    assert!(!steady_tesseract.use_cache);
+    let steady_ocr = steady.ocr.as_ref().expect("warm in-process OCR config");
+    assert!(
+        steady_ocr.tesseract_config.is_none() && steady_ocr.backend_options.is_none(),
+        "either field would switch xberg off its default OCR route"
+    );
+    assert_eq!(steady_ocr.language, vec!["eng".to_string()]);
+    assert!(
+        !steady.use_cache && !cold.use_cache,
+        "request-level use_cache=false keeps OCR cold"
+    );
     assert_eq!(steady.concurrency.as_ref().and_then(|value| value.max_threads), Some(4));
 }
 

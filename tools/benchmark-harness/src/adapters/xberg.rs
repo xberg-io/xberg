@@ -460,13 +460,8 @@ fn steady_extraction_config(
         ocr_enabled,
         extraction_timeout_secs(run_timeout),
     ))?;
-    if let Some(ocr) = config.ocr.as_mut()
-        && ocr.backend == "tesseract"
-    {
-        let tesseract = ocr.tesseract_config.get_or_insert_with(Default::default);
-        tesseract.language.clone_from(&ocr.language);
-        tesseract.use_cache = false;
-    }
+    // Same OCR config as the cold subprocess: no materialized `tesseract_config`, which would
+    // switch off xberg's default-route OCR stages; `use_cache: false` keeps OCR cold. ~keep
     config.output_format = match output_format {
         OutputFormat::Markdown => xberg::OutputFormat::Markdown,
         OutputFormat::Plaintext => xberg::OutputFormat::Plain,
