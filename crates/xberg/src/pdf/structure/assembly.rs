@@ -811,7 +811,12 @@ fn assemble_page_elements_with_tables(
         unpositioned.push(*table);
     }
 
-    positioned.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let reading_tops: Vec<f32> = positioned
+        .iter()
+        .map(|&(top, table)| table_reading_top(top, table, &positioned))
+        .collect();
+    let mut positioned: Vec<_> = positioned.into_iter().zip(reading_tops).collect();
+    positioned.sort_by(|a, b| b.1.total_cmp(&a.1));
 
     let table_token_counts: Vec<(&crate::types::Table, std::collections::HashMap<String, usize>)> = tables
         .iter()
@@ -835,7 +840,7 @@ fn assemble_page_elements_with_tables(
     let mut tables_at_slot: Vec<Vec<&crate::types::Table>> =
         (0..=ordered_paragraphs.len()).map(|_| Vec::new()).collect();
 
-    for (table_y, table) in positioned {
+    for ((table_y, table), _) in positioned {
         let geometric_slot = table_insertion_slot(&ordered_paragraphs, table, table_y);
         let slot = top_level_table_slot(&ordered_paragraphs, geometric_slot, table_y);
         tables_at_slot[slot].push(table);
@@ -891,6 +896,33 @@ fn assemble_page_elements_with_tables(
     }
 
     (paragraph_elem_map, page_end_transition_index)
+}
+
+/// The height a table is read at among the page's tables: its top, or just above the top of a
+/// larger table whose upper half holds it.
+///
+/// A table detected inside another one's box is a band of that table, usually its header: the
+/// SERFF rate sheet's "2.2% Simple Inflation or ..." header cells sit 0.7pt under the top of the
+/// rate table and were emitted after all its rows. Read first, the band stays next to the header
+/// row it belongs to. ~keep
+fn table_reading_top(top: f32, table: &crate::types::Table, positioned: &[(f32, &crate::types::Table)]) -> f32 {
+    let Some(inner) = table.bounding_box else {
+        return top;
+    };
+    let area = |bbox: &crate::types::BoundingBox| (bbox.x1 - bbox.x0) * (bbox.y1 - bbox.y0);
+    positioned
+        .iter()
+        .filter_map(|&(outer_top, other)| {
+            let outer = other.bounding_box?;
+            let encloses = outer.x0 <= inner.x0
+                && inner.x1 <= outer.x1
+                && outer.y0 <= inner.y0
+                && inner.y1 <= outer.y1
+                && area(&inner) < area(&outer);
+            let in_upper_half = inner.y0 + inner.y1 > outer.y0 + outer.y1;
+            (encloses && in_upper_half).then_some(outer_top.next_up())
+        })
+        .fold(top, f32::max)
 }
 
 fn close_list(builder: &mut InternalDocumentBuilder, in_list: &mut bool) {
@@ -3108,6 +3140,35 @@ mod tests {
         let document = assemble_internal_document(pages, &tables, None, &[], &Default::default());
 
         assert_eq!(page_element_labels(&document), ["Before", "<table>", "After"]);
+    }
+
+    /// SERFF rate sheet: the header band detected as its own table inside the rate table's box,
+    /// 0.7pt under its top, reads before the rate table rather than after its last row.
+    #[test]
+    fn test_table_nested_at_the_top_of_another_table_is_read_first() {
+        let pages = vec![vec![
+            make_paragraph_in_box("Before", 900.0, 40.0, 560.0),
+            make_paragraph_in_box("After", 300.0, 40.0, 560.0),
+        ]];
+        let mut rates = make_table_in_box("| Rates |", 40.0, 560.0, 800.0);
+        if let Some(bbox) = rates.bounding_box.as_mut() {
+            bbox.y0 = 400.0;
+        }
+        let header_band = make_table_in_box("| Header band |", 90.0, 500.0, 799.3);
+        let tables = vec![rates, header_band];
+
+        let document = assemble_internal_document(pages, &tables, None, &[], &Default::default());
+
+        let labels: Vec<&str> = document
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                ElementKind::Paragraph => Some(element.text.as_str()),
+                ElementKind::Table { table_index } => Some(document.tables[*table_index as usize].markdown.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, ["Before", "| Header band |", "| Rates |", "After"]);
     }
 
     #[test]
