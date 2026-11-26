@@ -936,11 +936,12 @@ Builds that link ONNX Runtime (the language packages other than Intel macOS, `ca
 
 Builds that load ONNX Runtime dynamically (the Linux glibc and macOS CLI release archives, the `core`/`full` Docker images and the Intel macOS packages) load it the first time a model runs, never at startup, from the first of:
 
-1. `ORT_DYLIB_PATH`, when set and non-empty. A path that does not load is an error; Xberg does not fall back to another library.
-2. The release layout: `libonnxruntime.so` (or `libonnxruntime.so.1`) / `libonnxruntime.dylib` / `onnxruntime.dll` in the directory of the running executable (symlinks resolved), then in `<executable dir>/../lib`.
+1. `ORT_DYLIB_PATH`, when set and non-empty. A path that does not load is an error; Xberg does not fall back to another library. The CLI and Docker images require an absolute path.
+2. `libonnxruntime.so` (or `libonnxruntime.so.1`) / `libonnxruntime.dylib` / `onnxruntime.dll` in the directory of the `xberg` executable (the CLI) or of the native library that holds Xberg (the Intel macOS packages), symlinks resolved, then in `<prefix>/lib` when that directory is `<prefix>/bin`.
 3. The system locations `/usr/lib`, `/usr/local/lib`, `/usr/lib/{x86_64,aarch64}-linux-gnu` (Linux), `/opt/homebrew/lib`, `/usr/local/lib` (macOS), `C:\Program Files\onnxruntime\bin`, `C:\Windows\System32` (Windows).
+4. The Intel macOS packages only: the dynamic loader's own search for `libonnxruntime.dylib` (`DYLD_LIBRARY_PATH`, `DYLD_FALLBACK_LIBRARY_PATH`, rpaths).
 
-If none exists, the model operation fails with an error listing every path searched. The current directory and the dynamic loader's search path are never consulted.
+A file found in steps 2 and 3 is loaded only if it and its directory are owned by root or the current user and are not writable by group or others; a file that fails this check, or does not load, is skipped. If nothing loads, the model operation fails with an error listing every path searched and every file skipped. The CLI and Docker images never consult the current directory or the dynamic loader's search path.
 
 ### XBERG_ORT_EP
 

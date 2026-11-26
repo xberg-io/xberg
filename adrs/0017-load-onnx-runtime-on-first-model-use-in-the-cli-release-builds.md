@@ -26,7 +26,8 @@ so that a run that needs no model does not pay for it?
 * The runtime the CLI loads is located deterministically and is the same
   digest-pinned Microsoft build the other release artifacts ship.
 * The language bindings keep their current, already qualified, ONNX Runtime
-  linkage.
+  linkage, and the Intel macOS bindings, which already load it dynamically,
+  keep finding it where they did.
 
 ## Considered Options
 
@@ -47,18 +48,35 @@ loader resolves at start.
 
 `ort_discovery::preload_ort_runtime` is the single entry: `ort_environment`
 (every xberg session builder, and through it PaddleOCR and GLiNER) and the
-Sceptre ORT route call it before any ort API. It resolves the library once,
-caches the result, success or failure, and on failure returns an error instead
-of letting ort fall back to its own name-based loader search. Resolution order:
+Sceptre ORT route call it before any ort API. It resolves the library once and
+caches the result, success or failure, so a failure is returned as an error
+instead of reaching ort, whose next API call would `dlopen` its default name
+and panic. Resolution order:
 
 1. `ORT_DYLIB_PATH` when set and non-empty, authoritative even when it does not
    load (no fallback past an explicit choice).
 2. `libonnxruntime.{so,so.1,dylib}` / `onnxruntime.dll` in the directory of the
-   running executable with symlinks resolved, then in `<exe dir>/../lib`.
+   image that holds xberg, symlinks resolved, then in `<prefix>/lib` when that
+   directory is `<prefix>/bin`.
 3. The fixed, previously documented system paths (`/usr/lib`, `/usr/local/lib`,
    the Debian multiarch directories, `/opt/homebrew/lib`, `C:\Program Files\onnxruntime\bin`,
    `C:\Windows\System32`).
-4. Otherwise an error naming every path searched.
+4. Otherwise an error naming every path searched and every file skipped.
+
+A discovered file that exists but does not load is skipped for the next
+candidate; the first such failure is reported when none loads.
+
+Two policies share this order. The release CLI enables `ort-strict-discovery`
+(through its `ort-dynamic` feature): the image is the running executable,
+`ORT_DYLIB_PATH` must be absolute, and nothing else is consulted. A library
+consumer without that feature, such as the Intel macOS language bindings
+(`macos-intel-target`), runs inside an interpreter whose executable says nothing
+about xberg, so the image is the shared library that holds xberg, found with
+`dladdr` (falling back to the executable), a relative `ORT_DYLIB_PATH` keeps
+ort's meaning (beside the executable, then the loader), and after step 3 the
+bare library name goes to the platform loader, which searches
+`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, `DYLD_FALLBACK_LIBRARY_PATH`, rpaths
+and `PATH` as ort's own loader did before this change.
 
 The Linux glibc and macOS release legs build with `ort-dynamic`, stage
 Microsoft's runtime through `setup-onnx-runtime` (SHA-256 pinned in
@@ -72,20 +90,38 @@ which is `<exe dir>/../lib` for `/usr/local/bin/xberg`. The benchmark build uses
 Unchanged: the Windows CLI (its archive gates require the `onnxruntime.dll`
 import), the musl archives and the Alpine `cli` image (Alpine's `onnxruntime`
 package, linked), the `binstall` archives (no ONNX Runtime), the Homebrew
-formula (built from source by the tap) and every language binding.
+formula (built from source by the tap) and the language bindings that link ONNX
+Runtime. The Intel macOS bindings already loaded it dynamically; they now also
+search beside the binding library and skip untrusted discovered files, and
+still reach the loader's search path last.
 
 ### Trust model
 
-The loaded library has the trust of the executable that loads it. Candidates are
-absolute paths only, so neither the current directory nor the loader's search
-path (`LD_LIBRARY_PATH`, `DYLD_*`, `PATH`) can inject a library. A library
-beside the executable or in its `../lib` is writable by whoever can replace the
-executable itself. `ORT_DYLIB_PATH` comes from the environment, which already
-controls the process. The system paths are reached only when the archive layout
-is broken; `/opt/homebrew/lib` and `/usr/local/lib` are writable by the Homebrew
-owner on macOS, which this order keeps behind the shipped library. The release
-pipeline verifies the archive digest before the library enters the CLI archive;
-nothing re-verifies it at load time, as nothing re-verifies the binary.
+A discovered library runs with the privileges of the process that loads it, so
+a discovered file is loaded only when it, and the directory that holds it,
+both with symlinks resolved, are owned by root or the effective user and are
+not writable by group or others; the resolved path is what gets loaded. This
+matters because the executable's directory says nothing about who controls its
+neighbours: a binary copied alone to `/tmp/x/xberg` would otherwise search
+`/tmp/lib`, which any local user can create. For the same reason `<prefix>/lib`
+is searched only for an executable in a directory named `bin`. Ancestor
+directories are not checked; a shared one such as `/tmp` is sticky, so another
+user cannot rename the directories below it. Windows has no owner check; no
+Windows build xberg ships loads ONNX Runtime dynamically.
+
+Under `ort-strict-discovery` every candidate is absolute and owner-checked, so
+neither the current directory nor the loader's search path (`LD_LIBRARY_PATH`,
+`DYLD_*`, `PATH`) can supply the library, and a relative `ORT_DYLIB_PATH` is
+refused rather than resolved against the current directory. `ORT_DYLIB_PATH`
+itself is not owner-checked: it comes from the environment, which already
+controls the process. The system paths are reached only when the archive
+layout is broken; `/opt/homebrew/lib` and `/usr/local/lib` belong to the
+Homebrew owner on macOS, which this order keeps behind the shipped library, and
+a group-writable Homebrew prefix is skipped. Library consumers end with the
+loader's search path, as they did before; whoever sets those variables already
+controls the process. The release pipeline verifies the archive digest before
+the library enters the CLI archive; nothing re-verifies it at load time, as
+nothing re-verifies the binary.
 
 ### Consequences
 
@@ -105,10 +141,13 @@ nothing re-verifies it at load time, as nothing re-verifies the binary.
 
 ### Confirmation
 
-`crates/xberg/src/ort_discovery/resolution_tests.rs` pins the resolution order
-with a temporary release layout. `dynamic_sceptre_tests.rs` proves in a child
-process that a broken library and a missing explicit path return typed errors
-and never load another candidate. `test_unix_cli_loads_a_shipped_onnx_runtime_instead_of_linking_it`
+`crates/xberg/src/ort_discovery/resolution_tests.rs` pins the resolution order,
+both policies, the `bin`-only `<prefix>/lib` rule and the owner check with a
+temporary release layout. `dynamic_sceptre_tests.rs` proves in a child process
+that a missing explicit path returns a typed error and never loads another
+candidate, that a broken candidate is skipped for a working one, and that a
+library consumer finds the runtime through `LD_LIBRARY_PATH` /
+`DYLD_LIBRARY_PATH`. `test_unix_cli_loads_a_shipped_onnx_runtime_instead_of_linking_it`
 in `scripts/ci/test_publish_workflow_contracts.py` pins which CLI legs use
 `ort-dynamic`, that the runtime is staged after the build with digest
 verification, and that the archive ships it. The release job fails when `otool

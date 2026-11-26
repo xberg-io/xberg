@@ -107,10 +107,12 @@ ort-bundled = ["legacy-base", "xberg/ort-bundled"]
 # release CLIs are built with their normal features PLUS this: ort-sys
 # `disable-linking` (pulled by load-dynamic) short-circuits its build script
 # before any prebuilt is resolved, so feature parity is unchanged. xberg loads
-# the library on first model use from ORT_DYLIB_PATH, else from beside the
-# executable or `<exe dir>/../lib`, which is where the release archives ship
-# Microsoft's pinned runtime (`ort_discovery::resolve_ort_library`). ~keep
-ort-dynamic = ["legacy-base", "xberg/ort-dynamic"]
+# the library on first model use from an absolute ORT_DYLIB_PATH, else from
+# beside the executable or, for `<prefix>/bin/xberg`, `<prefix>/lib`, which is
+# where the release archives and images ship Microsoft's pinned runtime; only
+# files owned by root or the user and not group/other-writable are loaded
+# (`ort-strict-discovery`, `ort_discovery::resolve_ort_library`). ~keep
+ort-dynamic = ["legacy-base", "xberg/ort-dynamic", "xberg/ort-strict-discovery"]
 
 # Native Intel macOS (x86_64-apple-darwin) platform aggregate. Passthrough to
 # the xberg `macos-intel-target` set (full feature parity, ort loaded

@@ -438,6 +438,12 @@ ort-bundled = ["ort?/download-binaries", "ort?/tls-rustls", "xberg-gliner?/ort-b
 # Dynamic ORT consumers use it to preload discovered native libraries. This
 # takes precedence when their features also select ort-bundled. ~keep
 ort-dynamic = ["ort?/load-dynamic", "xberg-gliner?/ort-dynamic"]
+# `ort-dynamic` for an executable that ships ONNX Runtime beside itself (the release CLI): the
+# library is searched for only at absolute, owner-checked paths, never through the platform
+# loader's search path, and `ORT_DYLIB_PATH` must be absolute. Without it, a library consumer
+# (the language bindings) searches beside the image that holds xberg, then the system paths,
+# then the platform loader (`ort_discovery::resolve_ort_library`, ADR-0017). ~keep
+ort-strict-discovery = ["ort-dynamic"]
 # CoreML EP opt-in. On macOS the target-specific `ort` dependency table already enables
 # `ort/coreml` unconditionally, and `ort_discovery.rs` gates the CoreML EP code behind
 # `target_os = "macos"`; this feature exists for parity with `cuda`/`tensorrt` below and to
