@@ -2634,8 +2634,6 @@ pub struct TextExtractor<'doc> {
 /// `…::text::<child>`, breaking consumer `EnvFilter`s that name the old target. ~keep
 pub(super) const LOG_TARGET: &str = module_path!();
 
-/// Smallest channel value of a white fill. ~keep
-const WHITE_FILL_MIN: f32 = 0.999;
 /// Largest CMYK component of a white fill.
 const WHITE_CMYK_MAX: f32 = 0.001;
 
@@ -2653,7 +2651,9 @@ pub(super) fn paints_invisible_text(state: &crate::content::graphics_state::Grap
         "DeviceCMYK" => state
             .fill_color_cmyk
             .is_some_and(|(c, m, y, k)| [c, m, y, k].iter().all(|component| *component <= WHITE_CMYK_MAX)),
-        "DeviceGray" | "DeviceRGB" | "CalGray" | "CalRGB" => [r, g, b].iter().all(|channel| *channel >= WHITE_FILL_MIN),
+        space if crate::document::painted::is_resolved_colour_space(space) => [r, g, b]
+            .iter()
+            .all(|channel| *channel >= crate::document::painted::WHITE_PAINT_MIN),
         _ => false,
     }
 }

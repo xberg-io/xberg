@@ -109,3 +109,45 @@ fn white_text_in_a_cached_form_is_dropped_on_every_read() {
     assert!(shown(&cold, "Shown") && !shown(&cold, "Hidden"), "{cold:?}");
     assert_eq!(warm, cold);
 }
+
+fn form_page_texts(page: &str, form: &str) -> Vec<String> {
+    let document = PdfDocument::from_bytes(build_page_and_form_pdf(page, form)).expect("fixture PDF parses");
+    page_texts(&document)
+}
+
+/// The path walker models `rg`, `g` and `k` only: a box filled after `sc` or `scn` keeps the
+/// stale white of the earlier `1 g`, so the label over it read as white on nothing.
+#[test]
+fn white_text_on_a_box_filled_by_sc_is_kept() {
+    for fill in [
+        "/DeviceRGB cs 0 0 0.5 sc",
+        "/DeviceRGB cs 0 0 0.5 scn",
+        "/DeviceGray cs",
+    ] {
+        let content =
+            format!("{VISIBLE_LINE}1 g {fill} 40 590 200 30 re f\nBT /F1 10 Tf 1 g 1 0 0 1 50 600 Tm (Label) Tj ET\n");
+
+        assert!(shown(&span_texts(&content), "Label"), "{fill}");
+    }
+}
+
+/// The colour audit read only the page stream, so a Form filling a box in a colour the path
+/// walker cannot model left the page resolvable, and the label over the box was dropped.
+#[test]
+fn white_text_on_a_box_a_form_fills_in_an_unmodelled_colour_is_kept() {
+    let page = format!("{VISIBLE_LINE}1 g /Fm0 Do BT /F1 10 Tf 1 g 1 0 0 1 50 600 Tm (Label) Tj ET");
+    for fill in ["/DeviceRGB cs 0 0 0.5 sc", "/CS0 cs 1 sc", "/Pattern cs /P0 scn"] {
+        let form = format!("{fill} 40 590 200 30 re f");
+
+        assert!(shown(&form_page_texts(&page, &form), "Label"), "{fill}");
+    }
+}
+
+#[test]
+fn white_text_on_a_white_box_a_form_fills_is_dropped() {
+    let page = format!("{VISIBLE_LINE}/Fm0 Do BT /F1 10 Tf 1 g 1 0 0 1 50 600 Tm (Hidden) Tj ET");
+
+    let texts = form_page_texts(&page, "1 g 40 590 200 30 re f");
+
+    assert!(shown(&texts, "Visible") && !shown(&texts, "Hidden"), "{texts:?}");
+}

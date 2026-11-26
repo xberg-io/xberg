@@ -145,11 +145,7 @@ impl<'doc> TextExtractor<'doc> {
         };
         let unpainted: HashSet<usize> = invisible
             .iter()
-            .filter(|(_, bbox)| {
-                !painted
-                    .iter()
-                    .any(|region| crate::document::painted::overlaps(region, bbox))
-            })
+            .filter(|(_, bbox)| !painted.iter().any(|region| region.intersects(bbox)))
             .map(|(sequence, _)| *sequence)
             .collect();
         if unpainted.is_empty() {
