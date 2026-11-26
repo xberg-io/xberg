@@ -29,6 +29,34 @@ _DOUBLE_BOLD = re.compile(r"\*\*\*\*")
 _TRAILING_WS = re.compile(r"[ \t]+$", re.MULTILINE)
 _BLANK_RUN = re.compile(r"\n{3,}")
 
+# READoc's arXiv GT keeps some tables as raw LaTeX (`\begin{table}`/`\begin{tabular}` with `\hline`), which the
+# markdown metric cannot see as tables and whose commands leak into the derived plaintext as words. ~keep
+_LATEX_TABLE = re.compile(r"\\begin\{table\*?\}.*?\\end\{table\*?\}|\\begin\{tabular\}.*?\\end\{tabular\}", re.DOTALL)
+_LATEX_TABLE_ENV = re.compile(r"\\begin\{table\*?\}|\\end\{table\*?\}")
+_GFM_CODE_MATH = re.compile(r"\$`(.*?)`\$")
+
+
+def latex_table_to_gfm(match: re.Match) -> str:
+    """Convert one raw LaTeX table to a GFM pipe table with pandoc; keep the LaTeX when pandoc cannot."""
+    body = _LATEX_TABLE_ENV.sub("", match.group(0))
+    pandoc = shutil.which("pandoc")
+    if not pandoc:
+        raise RuntimeError("pandoc not found on PATH — needed to convert READoc LaTeX tables to GFM")
+    out = subprocess.run(
+        [pandoc, "-f", "latex", "-t", "gfm-raw_html", "--wrap=none"],
+        input=body.encode("utf-8"),
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+    gfm = out.stdout.decode("utf-8", "replace").strip()
+    if out.returncode != 0 or not gfm.startswith("|"):
+        return match.group(0)
+    # pandoc's gfm writer emits cell math as $`x`$ and escapes the GT's literal ** bold markers. ~keep
+    gfm = _GFM_CODE_MATH.sub(lambda m: f"${m.group(1)}$", gfm)
+    gfm = "\n".join(line.replace("\\*\\*", "**") if line.startswith("|") else line for line in gfm.split("\n"))
+    return f"\n\n{gfm}\n\n"
+
 
 # Each transform is (name, human description, compiled regex, replacement). Keeping them declarative
 # lets build_corpus.py both apply them and generate the "how the data was modified" documentation
@@ -37,6 +65,12 @@ READOC_TRANSFORMS = [
     ("math_display", r"display math \[…\] → $$…$$", _MATH_DISPLAY, lambda m: f"$$ {m.group(1).strip()} $$"),
     ("math_inline", r"inline math \(…\) → $…$", _MATH_INLINE, lambda m: f"${m.group(1).strip()}$"),
     ("double_bold", "merge pandoc doubled bold ****  (bold-close+bold-open)", _DOUBLE_BOLD, ""),
+    (
+        "latex_table",
+        "raw LaTeX table → GFM pipe table via pandoc (kept as LaTeX when pandoc cannot parse it)",
+        _LATEX_TABLE,
+        latex_table_to_gfm,
+    ),
 ]
 COMMON_TRANSFORMS = [
     ("trailing_ws", "strip trailing whitespace", _TRAILING_WS, ""),
