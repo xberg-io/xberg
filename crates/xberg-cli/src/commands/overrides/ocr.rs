@@ -138,10 +138,14 @@ impl ExtractionOverrides {
             }
             if let Some(ocr) = config.ocr.as_mut() {
                 self.apply_ocr_fields(ocr);
-            } else if let Some(model) = self.ocr_tessdata_model {
-                // ~keep An `ocr` section created for the set alone would change whether OCR runs;
-                // the set applies to the implicit OCR config instead.
-                xberg::core::config::ocr::set_implicit_tessdata_model(model.into());
+            }
+            // ~keep The top-level set reaches every OCR the extraction performs without creating an
+            // `ocr` section, which would change whether OCR runs.
+            if let Some(model) = self.ocr_tessdata_model {
+                config.tessdata_model = Some(model.into());
+                if let Some(ocr) = config.ocr.as_mut() {
+                    ocr.tessdata_model = None;
+                }
             }
         }
 
@@ -209,9 +213,6 @@ impl ExtractionOverrides {
         if let Some(rotate) = self.ocr_auto_rotate {
             ocr.auto_rotate = Some(rotate);
         }
-        if let Some(model) = self.ocr_tessdata_model {
-            ocr.tessdata_model = model.into();
-        }
         if let Some(no_cache) = self.ocr_no_cache {
             apply_ocr_no_cache(ocr, no_cache);
         }
@@ -261,7 +262,7 @@ impl ExtractionOverrides {
                 security_limits: None,
                 tessdata_bytes: None,
                 tessdata_path: None,
-                tessdata_model: Default::default(),
+                tessdata_model: None,
                 numeric_repair: false,
                 backend_options,
             });

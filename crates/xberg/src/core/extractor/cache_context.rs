@@ -194,8 +194,8 @@ impl ModelSelection {
         if !(image || pdf || mime.is_none_or(str::is_empty) || config.runs_ocr_on_embedded_images()) {
             return None;
         }
-        let default_ocr = crate::core::config::OcrConfig::implicit();
-        let ocr = config.ocr.as_ref().unwrap_or(&default_ocr);
+        let default_ocr = config.ocr_or_default();
+        let ocr: &crate::core::config::OcrConfig = &default_ocr;
         if ocr.backend != "tesseract" || ocr.pipeline.is_some() {
             return None;
         }
@@ -227,7 +227,7 @@ impl ModelSelection {
         Some(Self {
             languages,
             directory: ocr.tessdata_path.clone(),
-            tessdata_model: ocr.tessdata_model,
+            tessdata_model: ocr.effective_tessdata_model(),
             mixed_pdf_khmer,
             vertical_japanese_retry: ocr
                 .tesseract_config
@@ -272,7 +272,7 @@ impl ModelSelection {
         Some(Self {
             languages: ocr.effective_tesseract_language(),
             directory: ocr.tessdata_path.clone(),
-            tessdata_model: ocr.tessdata_model,
+            tessdata_model: config.effective_tessdata_model(),
             mixed_pdf_khmer: false,
             vertical_japanese_retry: false,
         })
@@ -415,7 +415,7 @@ impl CacheDependency {
             let model = ModelSelection {
                 languages: inputs.languages(),
                 directory: inputs.directory().map(std::path::Path::to_path_buf),
-                tessdata_model: inputs.tessdata_model(),
+                tessdata_model: config.effective_tessdata_model(),
                 mixed_pdf_khmer: false,
                 vertical_japanese_retry: false,
             };

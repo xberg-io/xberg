@@ -99,8 +99,8 @@ async fn evaluate_auto_gate(
     // OCR. An explicit `ocr` config keeps its full per-page gate behavior.
     // `ocr_near_empty_fallback` overrides that derivation in either direction
     // (GH#1752); see `near_empty_ocr_fallback_applies`. ~keep
-    let default_ocr_config = crate::core::config::OcrConfig::implicit();
-    let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
+    let default_ocr_config = config.ocr_or_default();
+    let ocr_config: &crate::core::config::OcrConfig = &default_ocr_config;
     let thresholds = ocr_config.effective_thresholds();
     let mut decision = ocr::evaluate_per_page_ocr(
         native_text,

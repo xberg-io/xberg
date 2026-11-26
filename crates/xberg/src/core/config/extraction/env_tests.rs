@@ -301,23 +301,25 @@ isolated_env_test! {
             .apply_env_overrides()
             .expect("a valid tessdata model should apply");
         assert!(config.ocr.is_none(), "the set alone must not create an ocr section");
+        assert_eq!(config.tessdata_model, Some(crate::core::config::TessdataModel::Best));
         assert_eq!(
-            crate::core::config::ocr::implicit_tessdata_model(),
-            crate::core::config::TessdataModel::Best
-        );
-        assert_eq!(
-            crate::core::config::OcrConfig::implicit().tessdata_model,
-            crate::core::config::TessdataModel::Best
+            config.ocr_or_default().tessdata_model,
+            Some(crate::core::config::TessdataModel::Best),
+            "fallback OCR uses the set"
         );
 
         let mut configured = ExtractionConfig {
-            ocr: Some(OcrConfig::default()),
+            ocr: Some(OcrConfig {
+                tessdata_model: Some(crate::core::config::TessdataModel::Fast),
+                ..OcrConfig::default()
+            }),
             ..ExtractionConfig::default()
         };
         configured.apply_env_overrides().unwrap();
         assert_eq!(
-            configured.ocr.map(|ocr| ocr.tessdata_model),
-            Some(crate::core::config::TessdataModel::Best)
+            configured.effective_tessdata_model(),
+            crate::core::config::TessdataModel::Best,
+            "the environment wins over a config file's ocr.tessdata_model"
         );
     }
 }

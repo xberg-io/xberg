@@ -73,7 +73,7 @@ impl TesseractWasmBackend {
     /// Resolve tessdata bytes for a language, consulting the cache, the
     /// supplied OcrConfig, and the optional bundled-eng compile-time blob.
     fn resolve_tessdata(&self, language: &str, config: &OcrConfig) -> Result<Vec<u8>> {
-        let key = (config.tessdata_model, language.to_owned());
+        let key = (config.effective_tessdata_model(), language.to_owned());
         if let Ok(cache) = self.tessdata_cache.lock()
             && let Some(cached) = cache.get(&key)
         {
@@ -208,13 +208,13 @@ impl OcrBackend for TesseractWasmBackend {
 /// WebAssembly does not bundle or download `tessdata_best`; a caller who wants it supplies the
 /// bytes through `OcrConfig::tessdata_bytes`.
 fn require_bundled_model(config: &OcrConfig) -> Result<()> {
-    if config.tessdata_model == TessdataModel::Fast {
+    if config.effective_tessdata_model() == TessdataModel::Fast {
         return Ok(());
     }
     Err(crate::XbergError::MissingDependency(format!(
         "tessdata_model '{}' is not bundled on WebAssembly, which ships only tessdata_fast English. \
          Provide the model bytes via OcrConfig::tessdata_bytes, or use tessdata_model 'fast'.",
-        config.tessdata_model
+        config.effective_tessdata_model()
     )))
 }
 
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn should_refuse_the_bundled_fast_model_for_a_best_request() {
         let best = OcrConfig {
-            tessdata_model: crate::core::config::TessdataModel::Best,
+            tessdata_model: Some(crate::core::config::TessdataModel::Best),
             ..Default::default()
         };
 
@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn should_use_caller_supplied_bytes_for_a_best_request() {
         let best = OcrConfig {
-            tessdata_model: crate::core::config::TessdataModel::Best,
+            tessdata_model: Some(crate::core::config::TessdataModel::Best),
             tessdata_bytes: Some(HashMap::from([("eng".to_string(), vec![7_u8; 3])])),
             ..Default::default()
         };

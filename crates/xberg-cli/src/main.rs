@@ -1540,10 +1540,7 @@ mod feature_profile_tests {
             .expect("built-in extraction config should load without discovery");
         overrides.apply(&mut config);
 
-        assert_eq!(
-            config.ocr.map(|ocr| ocr.tessdata_model),
-            Some(xberg::TessdataModel::Best)
-        );
+        assert_eq!(config.effective_tessdata_model(), xberg::TessdataModel::Best);
         assert!(parse("fast").is_ok());
         assert!(parse("medium").is_err(), "an unknown model set must be rejected");
         assert!(parse("Best").is_err(), "values are lowercase, as in config files");

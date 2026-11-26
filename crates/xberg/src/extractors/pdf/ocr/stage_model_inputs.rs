@@ -28,9 +28,6 @@ impl<'a> StageModelInputs<'a> {
         self.parent.tessdata_path.as_deref()
     }
     #[cfg(any(test, all(feature = "ocr", not(target_arch = "wasm32"))))]
-    pub(crate) fn tessdata_model(&self) -> crate::core::config::TessdataModel {
-        self.parent.tessdata_model
-    }
     #[cfg(any(test, all(feature = "ocr", not(target_arch = "wasm32"))))]
     pub(crate) fn languages(&self) -> Vec<String> {
         crate::core::config::ocr::effective_tesseract_language_for(

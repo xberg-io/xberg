@@ -253,6 +253,7 @@ pub(crate) fn merge_html_override(operator: &super::ExtractionConfig, caller: &m
 /// egress comes from the operator, and resource limits can only tighten.
 pub(crate) fn adopt_operator_policy(config: &mut super::ExtractionConfig, operator: &super::ExtractionConfig) {
     adopt_operator_crawl_egress(config, operator);
+    config.tessdata_model = operator.tessdata_model;
     adopt_operator_tessdata_model(config.ocr.as_mut(), operator.ocr.as_ref());
     config.concurrency = operator.concurrency.clone();
     #[cfg(feature = "html")]
@@ -290,31 +291,33 @@ pub(crate) fn adopt_file_operator_policy(
     }
 }
 
-/// The Tesseract model set `operator` runs: its `ocr` section's, else the implicit one.
-fn operator_tessdata_model(operator: Option<&super::OcrConfig>) -> super::TessdataModel {
-    operator.map_or_else(super::ocr::implicit_tessdata_model, |ocr| ocr.tessdata_model)
-}
-
-/// Reject a caller `ocr.tessdata_model` that differs from the operator's: the set decides what the
-/// server downloads and caches. Restating the operator's value is allowed, so a client that
-/// serializes a whole config is not rejected.
+/// Reject a caller `tessdata_model` or `ocr.tessdata_model` that differs from the set the
+/// operator's config runs: the set decides what the server downloads and caches. Restating the
+/// operator's set is allowed, so a client that serializes a whole config is not rejected. A value
+/// that is not a set name is left to config deserialization, which reports it as invalid.
 pub(crate) fn check_caller_tessdata_model(operator: &super::ExtractionConfig, caller: &Value) -> Result<(), String> {
-    let Some(value) = caller.pointer("/ocr/tessdata_model").filter(|value| !value.is_null()) else {
-        return Ok(());
-    };
-    let requested = serde_json::from_value::<super::TessdataModel>(value.clone()).ok();
-    if requested == Some(operator_tessdata_model(operator.ocr.as_ref())) {
-        Ok(())
-    } else {
-        Err("Caller extraction config may not set ocr.tessdata_model".to_string())
+    let operator_model = operator.effective_tessdata_model();
+    for (pointer, path) in [
+        ("/tessdata_model", "tessdata_model"),
+        ("/ocr/tessdata_model", "ocr.tessdata_model"),
+    ] {
+        let Some(value) = caller.pointer(pointer).filter(|value| !value.is_null()) else {
+            continue;
+        };
+        if let Ok(requested) = serde_json::from_value::<super::TessdataModel>(value.clone())
+            && requested != operator_model
+        {
+            return Err(format!("Caller extraction config may not set {path}"));
+        }
     }
+    Ok(())
 }
 
 /// A caller `ocr` object replaces the operator's, so restore the operator's Tesseract model set:
-/// it selects what the server downloads and caches.
+/// it selects what the server downloads and caches. `None` inherits the top-level set.
 fn adopt_operator_tessdata_model(ocr: Option<&mut super::OcrConfig>, operator: Option<&super::OcrConfig>) {
     if let Some(ocr) = ocr {
-        ocr.tessdata_model = operator_tessdata_model(operator);
+        ocr.tessdata_model = operator.and_then(|operator| operator.tessdata_model);
     }
 }
 

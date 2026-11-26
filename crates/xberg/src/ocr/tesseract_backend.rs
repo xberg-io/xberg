@@ -252,7 +252,7 @@ impl TesseractBackend {
         // receives no `ExtractionConfig`. ~keep
         internal.security_limits = config.security_limits.clone();
         internal.tessdata_path = config.tessdata_path.clone();
-        internal.tessdata_model = config.tessdata_model;
+        internal.tessdata_model = config.effective_tessdata_model();
         internal.source_dpi = Self::source_dpi_from_backend_options(config);
         internal.known_full_page_scan = Self::known_full_page_scan_from_backend_options(config);
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
@@ -943,7 +943,7 @@ impl OcrBackend for TesseractBackend {
         self.get_cached_languages(
             &config.effective_tesseract_language(),
             config.tessdata_path.as_deref(),
-            &TessdataEnv::from_process().for_model(config.tessdata_model),
+            &TessdataEnv::from_process().for_model(config.effective_tessdata_model()),
         )
         .iter()
         .any(|candidate| candidate == language)
@@ -969,7 +969,7 @@ impl OcrBackend for TesseractBackend {
         self.get_cached_languages(
             &config.effective_tesseract_language(),
             config.tessdata_path.as_deref(),
-            &TessdataEnv::from_process().for_model(config.tessdata_model),
+            &TessdataEnv::from_process().for_model(config.effective_tessdata_model()),
         )
         .to_vec()
     }
@@ -1016,7 +1016,7 @@ impl OcrBackend for TesseractBackend {
 /// "unknown language code, download would also fail" (fail).
 #[cfg(not(target_arch = "wasm32"))]
 fn probe_tessdata(config: &OcrConfig) -> crate::doctor::DoctorCheck {
-    let env = TessdataEnv::from_process().for_model(config.tessdata_model);
+    let env = TessdataEnv::from_process().for_model(config.effective_tessdata_model());
     let dirs = crate::ocr::processor::validation::tessdata_search_dirs(config.tessdata_path.as_deref(), &env);
     probe_tessdata_in_dirs(config, &dirs, &env)
 }
@@ -2065,6 +2065,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn config_to_tesseract_hands_the_resolved_model_set_to_the_engine() {
+        let backend = TesseractBackend::new();
+        let mut extraction = crate::core::config::ExtractionConfig {
+            tessdata_model: Some(crate::core::config::TessdataModel::Best),
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        extraction.resolve_tessdata_model();
+
+        let resolved = backend.config_to_tesseract(extraction.ocr.as_ref().unwrap());
+        let fallback = backend.config_to_tesseract(
+            &crate::core::config::ExtractionConfig {
+                tessdata_model: Some(crate::core::config::TessdataModel::Best),
+                ..Default::default()
+            }
+            .ocr_or_default(),
+        );
+
+        assert_eq!(resolved.tessdata_model, crate::core::config::TessdataModel::Best);
+        assert_eq!(fallback.tessdata_model, crate::core::config::TessdataModel::Best);
+        assert_eq!(
+            backend.config_to_tesseract(&OcrConfig::default()).tessdata_model,
+            crate::core::config::TessdataModel::Fast
+        );
+    }
+
     /// GH#2300: every call without an explicit `ocr.pipeline` gets the script retry, with the
     /// caller's mean-confidence floor as the noise bound; a staged pipeline is the caller's own
     /// language plan and gets one read.
@@ -2815,7 +2842,7 @@ mod probe_tests {
         probe_tessdata_in_dirs(
             config,
             &dirs,
-            &TessdataEnv::from_lookup(|_| None).for_model(config.tessdata_model),
+            &TessdataEnv::from_lookup(|_| None).for_model(config.effective_tessdata_model()),
         )
     }
 
@@ -2845,11 +2872,11 @@ mod probe_tests {
         std::fs::write(dir.path().join("eng.traineddata"), b"fake").unwrap();
         let prefix = dir.path().to_string_lossy().into_owned();
         let config = OcrConfig {
-            tessdata_model: crate::core::config::TessdataModel::Best,
+            tessdata_model: Some(crate::core::config::TessdataModel::Best),
             ..OcrConfig::default()
         };
         let env = TessdataEnv::from_lookup(|name| (name == "TESSDATA_PREFIX").then(|| prefix.clone()))
-            .for_model(config.tessdata_model);
+            .for_model(config.effective_tessdata_model());
 
         let check = probe_tessdata_in_dirs(&config, std::slice::from_ref(&prefix), &env);
         assert_eq!(check.status, ProbeStatus::Warn, "{}", check.message);

@@ -58,6 +58,13 @@ pub struct ExtractionConfig {
     #[serde(default)]
     pub ocr: Option<OcrConfig>,
 
+    /// Tesseract model set (`"fast"` or `"best"`) for any OCR this extraction performs,
+    /// automatic and fallback OCR included. `ocr.tessdata_model` overrides it; `None` means
+    /// `fast`. Setting it does not enable OCR. See `OcrConfig::tessdata_model` for how a set is
+    /// resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tessdata_model: Option<super::super::ocr::TessdataModel>,
+
     /// Force OCR even for searchable PDFs
     #[serde(default)]
     pub force_ocr: bool,
@@ -615,6 +622,7 @@ impl Default for ExtractionConfig {
             use_cache: true,
             enable_quality_processing: true,
             ocr: None,
+            tessdata_model: None,
             force_ocr: false,
             ocr_strategy: OcrStrategy::Auto,
             force_ocr_pages: None,
@@ -711,6 +719,49 @@ impl ExtractionConfig {
         let mut resolved = layout.clone();
         resolved.acceleration = acceleration.cloned();
         Some(std::borrow::Cow::Owned(resolved))
+    }
+
+    /// The Tesseract model set OCR in this extraction uses: `ocr.tessdata_model`, else
+    /// [`Self::tessdata_model`], else `fast`.
+    #[must_use]
+    pub fn effective_tessdata_model(&self) -> super::super::ocr::TessdataModel {
+        self.ocr
+            .as_ref()
+            .and_then(|ocr| ocr.tessdata_model)
+            .or(self.tessdata_model)
+            .unwrap_or_default()
+    }
+
+    /// The `ocr` section, or the default one OCR runs with when there is none, with the
+    /// effective Tesseract model set filled in. Every fallback to a default `OcrConfig` goes
+    /// through here so the top-level set reaches automatic and fallback OCR.
+    pub(crate) fn ocr_or_default(&self) -> std::borrow::Cow<'_, OcrConfig> {
+        match self.ocr.as_ref() {
+            Some(ocr) if ocr.tessdata_model.is_some() || self.tessdata_model.is_none() => {
+                std::borrow::Cow::Borrowed(ocr)
+            }
+            ocr => {
+                let mut resolved = ocr.cloned().unwrap_or_default();
+                resolved.tessdata_model = Some(self.effective_tessdata_model());
+                std::borrow::Cow::Owned(resolved)
+            }
+        }
+    }
+
+    /// Copy the top-level Tesseract model set into an `ocr` section that does not name one, so
+    /// code that only receives the `OcrConfig` sees the inherited set. Never creates a section.
+    pub(crate) fn resolve_tessdata_model(&mut self) {
+        let inherited = self.tessdata_model;
+        if let Some(ocr) = self.ocr.as_mut()
+            && ocr.tessdata_model.is_none()
+        {
+            ocr.tessdata_model = inherited;
+        }
+    }
+
+    /// Whether [`Self::resolve_tessdata_model`] would change anything.
+    pub(crate) fn has_unresolved_tessdata_model(&self) -> bool {
+        self.tessdata_model.is_some() && self.ocr.as_ref().is_some_and(|ocr| ocr.tessdata_model.is_none())
     }
 
     /// Install an internal cancellation token when a timeout is configured but no
@@ -817,7 +868,13 @@ impl ExtractionConfig {
             config.enable_quality_processing = *v;
         }
         if let Some(v) = ocr {
-            config.ocr = Some(v.clone());
+            let mut ocr = v.clone();
+            // ~keep A per-file `ocr` section replaces the base one; an unset set inherits the
+            // base section's instead of falling back to the top-level value.
+            ocr.tessdata_model = ocr
+                .tessdata_model
+                .or_else(|| self.ocr.as_ref().and_then(|base| base.tessdata_model));
+            config.ocr = Some(ocr);
         }
         if let Some(v) = force_ocr {
             config.force_ocr = *v;
@@ -1271,6 +1328,90 @@ fn default_true() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::ocr::TessdataModel;
+
+    #[test]
+    fn the_top_level_model_set_reaches_ocr_without_creating_a_section() {
+        let config = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ..Default::default()
+        };
+
+        assert!(config.ocr.is_none());
+        assert_eq!(config.effective_tessdata_model(), TessdataModel::Best);
+        assert_eq!(config.ocr_or_default().tessdata_model, Some(TessdataModel::Best));
+        assert!(!config.has_unresolved_tessdata_model());
+        assert_eq!(
+            ExtractionConfig::default().effective_tessdata_model(),
+            TessdataModel::Fast
+        );
+    }
+
+    #[test]
+    fn an_ocr_section_inherits_the_top_level_set_unless_it_names_one() {
+        let mut config = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        assert!(config.has_unresolved_tessdata_model());
+        config.resolve_tessdata_model();
+        assert_eq!(config.ocr.as_ref().unwrap().tessdata_model, Some(TessdataModel::Best));
+
+        let own = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ocr: Some(OcrConfig {
+                tessdata_model: Some(TessdataModel::Fast),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(own.effective_tessdata_model(), TessdataModel::Fast);
+        assert!(matches!(own.ocr_or_default(), std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn a_per_file_ocr_section_inherits_the_base_model_set() {
+        let file = FileExtractionConfig {
+            ocr: Some(OcrConfig {
+                language: vec!["deu".to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let base_section = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                tessdata_model: Some(TessdataModel::Best),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let base_top_level = ExtractionConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            ..Default::default()
+        };
+        let own = FileExtractionConfig {
+            ocr: Some(OcrConfig {
+                tessdata_model: Some(TessdataModel::Fast),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            base_section.with_file_overrides(&file).effective_tessdata_model(),
+            TessdataModel::Best
+        );
+        assert_eq!(
+            base_top_level.with_file_overrides(&file).effective_tessdata_model(),
+            TessdataModel::Best
+        );
+        assert_eq!(
+            base_section.with_file_overrides(&own).effective_tessdata_model(),
+            TessdataModel::Fast
+        );
+    }
+
     #[cfg(all(feature = "layout-types", not(feature = "layout-detection")))]
     #[test]
     fn pp_doclayout_v3_selection_is_rejected_without_the_ort_engine() {

@@ -485,30 +485,54 @@ fn should_reject_only_a_caller_tessdata_model_that_differs_from_the_operators() 
 
     let fast_operator = super::super::ExtractionConfig::default();
     let best_operator = super::super::ExtractionConfig {
-        ocr: Some(OcrConfig {
-            tessdata_model: TessdataModel::Best,
-            ..Default::default()
-        }),
+        tessdata_model: Some(TessdataModel::Best),
         ..Default::default()
     };
-    let caller = |model: &str| serde_json::json!({"ocr": {"tessdata_model": model}});
-    let rejected = Err("Caller extraction config may not set ocr.tessdata_model".to_string());
+    let in_ocr = |model: &str| serde_json::json!({"ocr": {"tessdata_model": model}});
+    let top_level = |model: &str| serde_json::json!({"tessdata_model": model});
+    let rejected_ocr = Err("Caller extraction config may not set ocr.tessdata_model".to_string());
+    let rejected_top = Err("Caller extraction config may not set tessdata_model".to_string());
 
-    assert_eq!(check_caller_tessdata_model(&fast_operator, &caller("best")), rejected);
-    assert_eq!(check_caller_tessdata_model(&best_operator, &caller("fast")), rejected);
-    assert_eq!(check_caller_tessdata_model(&best_operator, &caller("Best")), rejected);
-    assert_eq!(check_caller_tessdata_model(&fast_operator, &caller("fast")), Ok(()));
-    assert_eq!(check_caller_tessdata_model(&best_operator, &caller("best")), Ok(()));
-    assert!(resolve_caller_extraction_config(&fast_operator, Some(&caller("best"))).is_err());
+    assert_eq!(
+        check_caller_tessdata_model(&fast_operator, &in_ocr("best")),
+        rejected_ocr
+    );
+    assert_eq!(
+        check_caller_tessdata_model(&best_operator, &in_ocr("fast")),
+        rejected_ocr
+    );
+    assert_eq!(
+        check_caller_tessdata_model(&fast_operator, &top_level("best")),
+        rejected_top
+    );
+    assert_eq!(
+        check_caller_tessdata_model(&best_operator, &top_level("fast")),
+        rejected_top
+    );
+    assert_eq!(check_caller_tessdata_model(&fast_operator, &in_ocr("fast")), Ok(()));
+    assert_eq!(check_caller_tessdata_model(&best_operator, &in_ocr("best")), Ok(()));
+    assert_eq!(check_caller_tessdata_model(&best_operator, &top_level("best")), Ok(()));
+    assert!(resolve_caller_extraction_config(&fast_operator, Some(&in_ocr("best"))).is_err());
+
+    assert_eq!(
+        check_caller_tessdata_model(&best_operator, &in_ocr("Best")),
+        Ok(()),
+        "an invalid value is left to deserialization"
+    );
+    let invalid = resolve_caller_extraction_config(&best_operator, Some(&in_ocr("Best")))
+        .expect_err("an invalid set must be rejected");
+    assert!(!invalid.contains("may not set"), "{invalid}");
 
     let serialized = serde_json::json!({"ocr": serde_json::to_value(OcrConfig::default()).unwrap()});
     assert!(
         resolve_caller_extraction_config(&fast_operator, Some(&serialized)).is_ok(),
         "a caller that serializes a default OCR config must not be rejected"
     );
-    assert!(
-        resolve_caller_extraction_config(&best_operator, Some(&serialized)).is_ok(),
-        "an omitted default set keeps the operator's set"
+    let resolved = resolve_caller_extraction_config(&best_operator, Some(&serialized)).unwrap();
+    assert_eq!(
+        resolved.effective_tessdata_model(),
+        TessdataModel::Best,
+        "an omitted set keeps the operator's"
     );
 }
 
@@ -518,7 +542,7 @@ fn should_keep_operator_tessdata_model_when_caller_sends_an_ocr_object() {
 
     let operator = super::super::ExtractionConfig {
         ocr: Some(OcrConfig {
-            tessdata_model: TessdataModel::Best,
+            tessdata_model: Some(TessdataModel::Best),
             ..Default::default()
         }),
         ..Default::default()
@@ -527,7 +551,7 @@ fn should_keep_operator_tessdata_model_when_caller_sends_an_ocr_object() {
 
     let resolved = resolve_caller_extraction_config(&operator, Some(&caller)).unwrap();
     let ocr = resolved.ocr.as_ref().unwrap();
-    assert_eq!(ocr.tessdata_model, TessdataModel::Best);
+    assert_eq!(ocr.tessdata_model, Some(TessdataModel::Best));
     assert_eq!(ocr.language, ["deu"]);
 
     let mut file = super::super::FileExtractionConfig {
@@ -535,18 +559,30 @@ fn should_keep_operator_tessdata_model_when_caller_sends_an_ocr_object() {
         ..Default::default()
     };
     adopt_file_operator_policy(&mut file, &resolved);
-    assert_eq!(file.ocr.unwrap().tessdata_model, TessdataModel::Best);
+    assert_eq!(file.ocr.unwrap().tessdata_model, Some(TessdataModel::Best));
 
-    let fast_operator = super::super::ExtractionConfig::default();
+    let top_level_operator = super::super::ExtractionConfig {
+        tessdata_model: Some(TessdataModel::Best),
+        ..Default::default()
+    };
     let mut config = super::super::ExtractionConfig {
+        ocr: Some(OcrConfig::default()),
+        ..Default::default()
+    };
+    adopt_operator_policy(&mut config, &top_level_operator);
+    assert_eq!(config.tessdata_model, Some(TessdataModel::Best));
+    assert_eq!(config.effective_tessdata_model(), TessdataModel::Best);
+
+    let mut config = super::super::ExtractionConfig {
+        tessdata_model: Some(TessdataModel::Best),
         ocr: Some(OcrConfig {
-            tessdata_model: TessdataModel::Best,
+            tessdata_model: Some(TessdataModel::Best),
             ..Default::default()
         }),
         ..Default::default()
     };
-    adopt_operator_policy(&mut config, &fast_operator);
-    assert_eq!(config.ocr.unwrap().tessdata_model, TessdataModel::default());
+    adopt_operator_policy(&mut config, &super::super::ExtractionConfig::default());
+    assert_eq!(config.effective_tessdata_model(), TessdataModel::Fast);
 }
 
 #[test]

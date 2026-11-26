@@ -170,6 +170,17 @@ pub(crate) async fn extract_file(
 ) -> Result<ExtractedDocument> {
     let path = path.as_ref();
 
+    // ~keep Code that receives only the `ocr` section must see the inherited top-level model set.
+    let owned_config_with_tessdata_model;
+    let config: &ExtractionConfig = if config.has_unresolved_tessdata_model() {
+        let mut owned = Box::new(config.clone());
+        owned.resolve_tessdata_model();
+        owned_config_with_tessdata_model = owned;
+        &owned_config_with_tessdata_model
+    } else {
+        config
+    };
+
     #[cfg(feature = "otel")]
     {
         let span = tracing::Span::current();

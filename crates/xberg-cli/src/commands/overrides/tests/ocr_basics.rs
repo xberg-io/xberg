@@ -651,6 +651,7 @@ fn test_ocr_tessdata_model_flag_sets_only_the_model_set() {
         ocr: Some(OcrConfig {
             language: vec!["deu".to_string()],
             tessdata_path: Some(std::path::PathBuf::from("/opt/tessdata")),
+            tessdata_model: Some(xberg::TessdataModel::Fast),
             ..OcrConfig::default()
         }),
         ..Default::default()
@@ -660,34 +661,16 @@ fn test_ocr_tessdata_model_flag_sets_only_the_model_set() {
         ..default_overrides()
     };
     overrides.apply(&mut config);
+    assert_eq!(config.tessdata_model, Some(xberg::TessdataModel::Best));
+    assert_eq!(config.effective_tessdata_model(), xberg::TessdataModel::Best);
     let ocr = config.ocr.unwrap();
-    assert_eq!(ocr.tessdata_model, xberg::TessdataModel::Best);
     assert_eq!(ocr.language, vec!["deu".to_string()]);
     assert_eq!(ocr.tessdata_path, Some(std::path::PathBuf::from("/opt/tessdata")));
 }
 
 #[cfg(feature = "ocr-surface")]
-const TESSDATA_MODEL_CHILD: &str =
-    "commands::overrides::tests::ocr_basics::tessdata_model_flag_alone_sets_the_implicit_set_child";
-
-#[cfg(feature = "ocr-surface")]
 #[test]
 fn test_ocr_tessdata_model_flag_alone_keeps_the_ocr_section_unset() {
-    crate::commands::env_test::run_child_test(
-        TESSDATA_MODEL_CHILD,
-        crate::commands::env_test::CASE,
-        "flag-alone",
-        |_| {},
-    );
-}
-
-#[cfg(feature = "ocr-surface")]
-#[test]
-#[ignore = "run in an isolated subprocess: it sets the process-wide implicit model set"]
-fn tessdata_model_flag_alone_sets_the_implicit_set_child() {
-    if crate::commands::env_test::child_test_root(crate::commands::env_test::CASE).is_none() {
-        return;
-    }
     let mut config = ExtractionConfig::default();
     let overrides = ExtractionOverrides {
         ocr_tessdata_model: Some(TessdataModelArg::Best),
@@ -695,8 +678,5 @@ fn tessdata_model_flag_alone_sets_the_implicit_set_child() {
     };
     overrides.apply(&mut config);
     assert!(config.ocr.is_none(), "the set alone must not change whether OCR runs");
-    assert_eq!(
-        xberg::core::config::ocr::implicit_tessdata_model(),
-        xberg::TessdataModel::Best
-    );
+    assert_eq!(config.tessdata_model, Some(xberg::TessdataModel::Best));
 }
