@@ -415,6 +415,30 @@ pub(super) fn reorder_page_reading_order(
     });
 }
 
+/// Reorder a page's spans into the order its text flows, for the plain-text assembly: a page
+/// set as two copies of one table side by side under a repeated header row
+/// (`repeated_header_columns`) reads its left half, then its right half; every other page takes
+/// `reorder_page_reading_order`.
+///
+/// The structure and table passes keep `reorder_page_reading_order`: the table detector reads
+/// the halves' rows side by side as one holdings table, and fed the halves one after the other
+/// it found none (blackrock page 4 lost its table). ~keep
+pub(super) fn reorder_text_flow_reading_order(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    page_width: f32,
+    page_height: f32,
+    page_index: usize,
+) {
+    if two_up_gutter(spans, page_width, page_height).is_none()
+        && repeated_header_columns::read_repeated_header_halves(spans)
+    {
+        stacked_header_band::read_stacked_header_bands(spans);
+        preserve_inline_prose_symbol_order(spans);
+        return;
+    }
+    reorder_page_reading_order(spans, page_width, page_height, page_index);
+}
+
 fn compute_page_reading_order(
     spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
     page_width: f32,
@@ -450,9 +474,6 @@ fn compute_page_reading_order(
 /// horizontal valley once a heading spans only some of the columns, so such a
 /// page used to fall back to row order and interleave its columns.
 ///
-/// A page set as two copies of one table side by side under a repeated header row reads its
-/// left half, then its right half (`repeated_header_columns`).
-///
 /// Otherwise applies the guarded sparse-column repair unconditionally, then attempts
 /// the dense two-column band-split repair
 /// (`super::text::reorder_dense_two_column_page`). That repair carries its
@@ -478,9 +499,6 @@ fn reorder_single_page_reading_order(
     page_index: usize,
 ) {
     if xberg_native_pdf::pipeline::reading_order::order_by_stream_columns(spans) {
-        return;
-    }
-    if repeated_header_columns::read_repeated_header_halves(spans) {
         return;
     }
     super::text::reorder_sparse_two_column_page(spans, page_width);

@@ -226,6 +226,31 @@ mod tests {
         assert_eq!(texts(&spans), expected);
     }
 
+    /// Only the plain-text flow reads the halves one after the other; the structure and table
+    /// passes keep the page order the table detector reads the side-by-side halves from.
+    #[test]
+    fn only_the_text_flow_reads_the_halves_one_after_the_other() {
+        const PAGE_WIDTH: f32 = 594.0;
+        const PAGE_HEIGHT: f32 = 774.0;
+        let header = ["Security", "Par (000)", "Value"];
+        let left = schedule_half(0.0, "left", header);
+        let right = schedule_half(RIGHT_HALF_OFFSET, "right", header);
+        let page = rows(left.clone().into_iter().chain(right.clone()).collect());
+        let halves: Vec<String> = rows(left)
+            .iter()
+            .chain(rows(right).iter())
+            .map(|span| span.text.clone())
+            .collect();
+
+        let mut text_flow = page.clone();
+        super::super::reorder_text_flow_reading_order(&mut text_flow, PAGE_WIDTH, PAGE_HEIGHT, 0);
+        let mut structure = page;
+        super::super::reorder_page_reading_order(&mut structure, PAGE_WIDTH, PAGE_HEIGHT, 0);
+
+        assert_eq!(texts(&text_flow), halves);
+        assert_ne!(texts(&structure), halves);
+    }
+
     #[test]
     fn a_wide_table_with_repeated_column_groups_is_left_alone() {
         let header = ["2 Years", "3 Years", "Life"];

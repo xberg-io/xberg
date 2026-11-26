@@ -3121,8 +3121,9 @@ fn page_text_with_options_excluding_layers(
 }
 
 /// The page's spans in the order the structured (markdown) path reads them: top to bottom,
-/// then `hierarchy::reorder_page_reading_order` and the key/value row pass, exactly as
-/// `hierarchy::extract_final_spans_from_page_with_primes` applies them.
+/// then `hierarchy::reorder_text_flow_reading_order` and the key/value row pass, as
+/// `hierarchy::extract_final_spans_from_page_with_primes` applies them except that a page of
+/// two side-by-side table halves under a repeated header reads one half after the other.
 ///
 /// `ReadingOrder::ColumnAware` XY-cuts every page, which reads a table column by column and
 /// interleaves the columns of a page whose gutter the cut misses; the structured path cuts
@@ -3149,7 +3150,7 @@ fn structured_path_page_spans(
         let (left, lower, right, upper) = doc.get_page_media_box(page_index).map_err(|error| error.to_string())?;
         let (page_bottom, page_top) = (lower.min(upper), lower.max(upper));
         retain_spans_inside_page_margins(&mut spans, page_bottom, page_top, margins);
-        super::hierarchy::reorder_page_reading_order(&mut spans, right - left, page_top - page_bottom, page_index);
+        super::hierarchy::reorder_text_flow_reading_order(&mut spans, right - left, page_top - page_bottom, page_index);
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut spans);
         Ok(spans)
     };
