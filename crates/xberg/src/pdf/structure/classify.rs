@@ -2082,7 +2082,7 @@ fn wraps_onto_next_line(prev: &PdfParagraph, next: &PdfParagraph, word_count: us
 ///
 /// Mirrors the `get_text` closure in `assembly::push_paragraph_element` so that
 /// classification helpers and rendering always agree on what a paragraph says.
-fn effective_text(para: &PdfParagraph) -> String {
+pub(super) fn effective_text(para: &PdfParagraph) -> String {
     if !para.text.is_empty() {
         para.text.clone()
     } else {

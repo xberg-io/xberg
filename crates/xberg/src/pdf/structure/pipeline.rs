@@ -15,14 +15,15 @@ use rayon::prelude::*;
 
 #[cfg(test)]
 use super::assembly::assemble_internal_document;
+use super::classify::effective_text as paragraph_text_raw;
 #[cfg(test)]
 use super::classify::is_body_size_bold_heading_candidate;
 use super::classify::{
     body_size_bold_signal_text, classify_formula_paragraphs, classify_paragraphs, demote_heading_runs,
     demote_structure_annotation_headings, demote_unnumbered_subsections, is_body_size_bold_signal,
     is_numbered_section_heading, level_numbered_headings_by_depth, mark_arxiv_noise,
-    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, paragraph_plain_text,
-    reads_as_body_size_bold_heading, reads_as_short_section_title, reads_vertically, refine_heading_hierarchy,
+    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_as_body_size_bold_heading,
+    reads_as_short_section_title, reads_vertically, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{crosses_visual_line_break, is_cjk_char, segments_need_space};
@@ -554,7 +555,9 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
 }
 
 /// Baseline pitch, in body font sizes, within which the next bold paragraph is the following
-/// line of the same title rather than a title of its own.
+/// line of the same title rather than a title of its own. Tighter than classify's
+/// `WRAPPED_TITLE_MAX_PITCH_EM` (2.0) for display titles: a body-size title sits among body
+/// paragraphs, whose gap a 2.0 em pitch would bridge, while display titles are set loose. ~keep
 const WRAPPED_TITLE_MAX_LINE_PITCH_EM: f32 = 1.6;
 
 /// Join a body-size bold title with the bold lines it wraps onto in its column.
@@ -9268,15 +9271,6 @@ fn strip_section_label(text: &str) -> &str {
         rest.trim_start()
     } else {
         text
-    }
-}
-
-/// The paragraph's text when recorded, otherwise its segments joined by single spaces.
-pub(super) fn paragraph_text_raw(para: &PdfParagraph) -> String {
-    if para.text.is_empty() {
-        paragraph_plain_text(para)
-    } else {
-        para.text.clone()
     }
 }
 

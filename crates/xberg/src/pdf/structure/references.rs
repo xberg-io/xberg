@@ -5,7 +5,7 @@
 //! entries were emitted as loose paragraphs. Each entry is one item of the bibliography list,
 //! set apart by a hanging indent rather than a glyph; this pass restores that structure.
 
-use super::pipeline::paragraph_text_raw as paragraph_text;
+use super::classify::effective_text as paragraph_text;
 use super::types::PdfParagraph;
 
 /// Section titles that open a bibliography.
