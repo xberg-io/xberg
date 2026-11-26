@@ -619,7 +619,7 @@ fn the_page_pass_cache_lives_only_between_begin_and_release() {
     doc.script_baselines
         .lock()
         .unwrap()
-        .insert(1, vec![(110.0, 8.0, 703.0)]);
+        .insert(1, vec![(110.0, 8.0, 703.0, 700.0)]);
     doc.release_page_caches();
     assert!(doc.raw_page_spans_cache.lock().unwrap().is_none());
     assert!(doc.flattened_script_baselines(1).is_empty());
