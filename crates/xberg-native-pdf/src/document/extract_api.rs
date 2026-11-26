@@ -100,15 +100,14 @@ impl InterpretedPage {
     }
 }
 
-/// Estimated heap and inline bytes of a span vector, for byte-budgeted caches.
+/// Estimated heap and inline bytes of a span vector, for byte-budgeted caches. A span's font name
+/// is shared with every other span in that font, so it is not charged per span.
 pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usize {
     spans.capacity() * size_of::<crate::layout::TextSpan>()
         + spans
             .iter()
             .map(|span| {
-                span.text.capacity()
-                    + span.font_name.len()
-                    + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
+                span.text.capacity() + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
             })
             .sum::<usize>()
 }

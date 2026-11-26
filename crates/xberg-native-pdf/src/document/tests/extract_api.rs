@@ -590,3 +590,20 @@ fn repeated_contents_refs_within_budget_are_still_concatenated() {
 
     assert_eq!(content.as_slice(), b"q Q\nq Q\nq Q\n");
 }
+
+/// Spans share their font name, so a long name costs the page-pass cache nothing per span.
+#[test]
+fn estimated_span_bytes_does_not_charge_the_shared_font_name() {
+    let span = |font_name: &str| crate::layout::TextSpan {
+        text: "words".to_string(),
+        font_name: font_name.into(),
+        ..crate::layout::TextSpan::default()
+    };
+    let short = vec![span("F1"); 4];
+    let long = vec![span(&"ABCDEF+VeryLongEmbeddedFontName-BoldItalic".repeat(8)); 4];
+
+    assert_eq!(
+        super::super::extract_api::estimated_span_bytes(&short),
+        super::super::extract_api::estimated_span_bytes(&long)
+    );
+}
