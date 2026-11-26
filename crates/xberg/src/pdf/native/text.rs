@@ -2531,10 +2531,23 @@ fn line_is_boundary(
     })
 }
 
+/// Smallest baseline step, in ems of the larger type on either side, between two inked page
+/// lines that makes the empty band between them a story break. Lines step about 1.2 em and a
+/// section heading opens about 2.5 em below the text above it; 2209.05611 page 9 leaves 5.4 em
+/// between its two-column text and its two-column references.
+const STORY_BREAK_MIN_STEP_EM: f32 = 4.0;
+
 /// Split the page's lines into bands at boundary lines (the band-splitting
 /// step). Consecutive non-boundary lines accumulate into one `Content` band;
 /// each boundary line becomes its own single-line `Boundary` band in place,
 /// so it stays between the band above it and the band below it.
+///
+/// A content band also ends at a story break: an empty band across both columns
+/// (`STORY_BREAK_MIN_STEP_EM`) between two blocks of columns, each read column by
+/// column before the next. Read as one band, the columns ran down the whole page,
+/// so 2209.05611's references opened inside its conclusion and its acknowledgments
+/// followed the first column of references. A story too small to reorder on its own
+/// (`MIN_DENSE_COLUMN_SPANS_PER_SIDE` inked spans a side) stays joined to its neighbour.
 fn build_bands(
     spans: &[xberg_native_pdf::layout::TextSpan],
     lines: &[SpanLine],
@@ -2543,20 +2556,85 @@ fn build_bands(
 ) -> Vec<Band> {
     let mut bands = Vec::new();
     let mut current: Vec<usize> = Vec::new();
+    let mut last_inked_line: Option<&SpanLine> = None;
     for line in lines {
+        let inked = line.iter().any(|&index| span_has_ink(&spans[index]));
         if !line_is_boundary(spans, line, furniture_width, split_x) {
+            if inked
+                && last_inked_line.is_some_and(|above| opens_story(spans, above, line))
+                && can_reorder_alone(spans, &current, split_x)
+            {
+                bands.push(Band::Content(std::mem::take(&mut current)));
+            }
             current.extend(line.iter().copied());
-            continue;
+        } else {
+            if !current.is_empty() {
+                bands.push(Band::Content(std::mem::take(&mut current)));
+            }
+            bands.push(Band::Boundary(line.clone()));
         }
-        if !current.is_empty() {
-            bands.push(Band::Content(std::mem::take(&mut current)));
+        if inked {
+            last_inked_line = Some(line);
         }
-        bands.push(Band::Boundary(line.clone()));
     }
     if !current.is_empty() {
         bands.push(Band::Content(current));
     }
-    bands
+    merge_starved_stories(spans, bands, split_x)
+}
+
+/// Whether `line` opens below a story break under `above`: see [`STORY_BREAK_MIN_STEP_EM`].
+fn opens_story(spans: &[xberg_native_pdf::layout::TextSpan], above: &SpanLine, line: &SpanLine) -> bool {
+    let type_size = |line: &SpanLine| {
+        line.iter()
+            .map(|&index| {
+                let span = &spans[index];
+                if span.font_size.is_finite() && span.font_size > 0.0 {
+                    span.font_size
+                } else {
+                    span.bbox.height
+                }
+            })
+            .filter(|size| size.is_finite())
+            .fold(0.0_f32, f32::max)
+    };
+    let (Some(&above_first), Some(&line_first)) = (above.first(), line.first()) else {
+        return false;
+    };
+    let em = type_size(above).max(type_size(line));
+    let step = spans[above_first].bbox.y - spans[line_first].bbox.y;
+    em > 0.0 && step.is_finite() && step >= STORY_BREAK_MIN_STEP_EM * em
+}
+
+/// Whether `band` holds enough inked spans on each side of `split_x` for
+/// [`reorder_band_columns`] to consider it.
+fn can_reorder_alone(spans: &[xberg_native_pdf::layout::TextSpan], band: &[usize], split_x: f32) -> bool {
+    let inked = |left: bool| {
+        band.iter()
+            .filter(|&&index| span_has_ink(&spans[index]) && (spans[index].bbox.x < split_x) == left)
+            .count()
+    };
+    inked(true) >= MIN_DENSE_COLUMN_SPANS_PER_SIDE && inked(false) >= MIN_DENSE_COLUMN_SPANS_PER_SIDE
+}
+
+/// Fold a content band that followed another content band at a story break back into it when
+/// it is too small to reorder alone. Only a story break puts two content bands side by side.
+fn merge_starved_stories(spans: &[xberg_native_pdf::layout::TextSpan], bands: Vec<Band>, split_x: f32) -> Vec<Band> {
+    let mut merged: Vec<Band> = Vec::with_capacity(bands.len());
+    for band in bands {
+        if let Band::Content(mut indices) = band {
+            if let Some(Band::Content(above)) = merged.last_mut()
+                && !can_reorder_alone(spans, &indices, split_x)
+            {
+                above.append(&mut indices);
+                continue;
+            }
+            merged.push(Band::Content(indices));
+        } else {
+            merged.push(band);
+        }
+    }
+    merged
 }
 
 /// Try to reorder one content band column-major (per-band column detection).
@@ -4700,6 +4778,55 @@ mod tests {
                 "for readers seeking further detail here",
             ]
         );
+    }
+
+    /// 2209.05611 page 9: two-column text, an empty band across both columns, then two-column
+    /// references. Each story reads its left column, then its right, before the next story.
+    #[test]
+    fn dense_two_column_stories_read_one_after_the_other() {
+        let mut spans = dense_two_column_spans();
+        let top: Vec<String> = {
+            let mut top = spans.clone();
+            assert!(reorder_dense_two_column_page(&mut top, 612.0));
+            top.into_iter().map(|span| span.text).collect()
+        };
+        let story_top = 816.0 - 7.0 * 14.0 - 5.0 * 11.0;
+        let line = |column: &str, row: usize| format!("{column} reference entry {row} names its authors and journal");
+        for row in 0..8 {
+            let y = story_top - row as f32 * 14.0;
+            spans.push(span_with_width(&line("Left", row), 60.0, y, 200.0, 11.0, 11.0));
+            spans.push(span_with_width(&line("Right", row), 320.0, y, 190.0, 11.0, 11.0));
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = top
+            .into_iter()
+            .chain((0..8).map(|row| line("Left", row)))
+            .chain((0..8).map(|row| line("Right", row)))
+            .collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// A story break above a story too small to reorder alone keeps it in the band above.
+    #[test]
+    fn a_story_too_small_to_reorder_alone_joins_the_band_above() {
+        let mut spans = dense_two_column_spans();
+        let story_top = 816.0 - 7.0 * 14.0 - 5.0 * 11.0;
+        spans.push(span_with_width("Left closing note", 60.0, story_top, 200.0, 11.0, 11.0));
+        spans.push(span_with_width(
+            "Right closing note",
+            320.0,
+            story_top,
+            190.0,
+            11.0,
+            11.0,
+        ));
+        let lines = group_into_lines(&spans, &spans_sorted_top_to_bottom(&spans));
+
+        let bands = build_bands(&spans, &lines, NO_WIDTH_FURNITURE, 300.0);
+
+        assert!(matches!(bands.as_slice(), [Band::Content(indices)] if indices.len() == spans.len()));
     }
 
     /// Five body lines vote for the gutter near 310 and a running head split around its page
