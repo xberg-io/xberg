@@ -9,7 +9,7 @@ fn benchmark_workflow() -> String {
 fn workflow_prewarm_selects_explicit_sceptre_engines() {
     let workflow = benchmark_workflow();
     assert!(workflow.contains("Pre-warm Sceptre ORT models"));
-    assert!(workflow.contains("--features all,xberg/sceptre-ocr-tract"));
+    assert!(workflow.contains("--features all,ort-dynamic,xberg/sceptre-ocr-tract"));
     assert!(workflow.contains(r#"--ocr-backend-options '{"model":{"backend":"ort"}}'"#));
     assert!(workflow.contains("Pre-warm Sceptre diagnostic models"));
     assert!(workflow.contains(r#"backend="tract""#));
