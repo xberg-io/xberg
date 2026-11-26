@@ -1134,6 +1134,8 @@ jobs:
           # var and weights, it self-skips). The `tract` feature is only compiled here — the
           # main unit-test job builds `full`, which does not include it — so this is the sole
           # CI enforcement of the branch's core correctness claim. Same 3-attempt retry as above.
+          # inference::ort_optimized runs here too: its saved-graph bit-identity test needs the
+          # same layout models and the same hard failure when they are missing (ADR 0017).
           for attempt in 1 2 3; do
             if [ $attempt -gt 1 ]; then
               backoff=$((15 * 3 ** (attempt - 2)))
@@ -1144,8 +1146,8 @@ jobs:
             if cargo test --locked \
               -p xberg \
               --features "layout-detection,auto-rotate,tract" \
-              --lib inference::tract_backend \
-              -- --nocapture 2>&1 | tee "/tmp/tract-backend-attempt-${attempt}.log" \
+              --lib \
+              -- inference::tract_backend inference::ort_optimized --nocapture 2>&1 | tee "/tmp/tract-backend-attempt-${attempt}.log" \
               && grep -qE '^test result: ok\. [1-9][0-9]* passed' "/tmp/tract-backend-attempt-${attempt}.log"; then
               exit 0
             fi

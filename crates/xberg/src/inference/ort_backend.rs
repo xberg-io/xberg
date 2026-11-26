@@ -46,38 +46,21 @@ impl OrtBackend {
         thread_budget: usize,
         with_eps: bool,
     ) -> Result<Session, InferenceError> {
-        let configure = || -> Result<SessionBuilder, ort::Error> {
-            let mut builder = Session::builder(crate::ort_discovery::ort_environment()?)?
-                .with_intra_threads(thread_budget)
-                .map_err(|e| ort::Error::new(e.message()))?
-                .with_inter_threads(1)
-                .map_err(|e| ort::Error::new(e.message()))?
-                .with_device_allocated_initializers()
-                .map_err(|e| ort::Error::new(e.message()))?;
-            #[cfg(all(test, feature = "layout-detection"))]
-            if let Some(path) = super::recording::profile_prefix() {
-                builder = builder
-                    .with_profiling(path)
-                    .map_err(|error| ort::Error::new(error.message()))?;
-            }
-            if with_eps {
-                builder = crate::ort_discovery::apply_execution_providers(builder, accel)?;
-            }
-            Ok(builder)
-        };
+        let configure = || session_builder(accel, thread_budget, with_eps);
         let optimized = || {
             configure()?
                 .with_optimization_level(GraphOptimizationLevel::All)
                 .map_err(|e| ort::Error::new(e.message()))
         };
         match source {
-            #[cfg(model_download)]
+            #[cfg(all(model_download, unix))]
             ModelSource::File(path) => super::ort_optimized::commit_from_file(
                 path,
                 crate::ort_discovery::session_is_cpu_only(accel, with_eps),
+                SESSION_RECIPE,
                 &configure,
             ),
-            #[cfg(not(model_download))]
+            #[cfg(not(all(model_download, unix)))]
             ModelSource::File(path) => optimized().and_then(|mut builder| builder.commit_from_file(path)),
             ModelSource::Memory(bytes) => optimized().and_then(|mut builder| builder.commit_from_memory(bytes)),
         }
@@ -119,6 +102,38 @@ impl OrtBackend {
             profiling_enabled: super::recording::profile_prefix().is_some(),
         }))
     }
+}
+
+/// Names the session options [`session_builder`] sets, for the saved-graph cache key. Change it
+/// whenever those options change in a way that can change the optimised graph.
+#[cfg(all(model_download, unix))]
+pub(super) const SESSION_RECIPE: &str = "inference::OrtBackend threads=budget/1 initializers=device v1";
+
+/// Everything but the optimisation level of the standard xberg session: thread budget, a single
+/// inter-op thread, initializers outside the arena and, when `with_eps`, the platform execution
+/// providers.
+pub(super) fn session_builder(
+    accel: Option<&AccelerationConfig>,
+    thread_budget: usize,
+    with_eps: bool,
+) -> Result<SessionBuilder, ort::Error> {
+    let mut builder = Session::builder(crate::ort_discovery::ort_environment()?)?
+        .with_intra_threads(thread_budget)
+        .map_err(|e| ort::Error::new(e.message()))?
+        .with_inter_threads(1)
+        .map_err(|e| ort::Error::new(e.message()))?
+        .with_device_allocated_initializers()
+        .map_err(|e| ort::Error::new(e.message()))?;
+    #[cfg(all(test, feature = "layout-detection"))]
+    if let Some(path) = super::recording::profile_prefix() {
+        builder = builder
+            .with_profiling(path)
+            .map_err(|error| ort::Error::new(error.message()))?;
+    }
+    if with_eps {
+        builder = crate::ort_discovery::apply_execution_providers(builder, accel)?;
+    }
+    Ok(builder)
 }
 
 /// Whether a session build that failed with the platform execution provider may retry

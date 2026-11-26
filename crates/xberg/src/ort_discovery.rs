@@ -443,7 +443,7 @@ pub(crate) fn apply_execution_providers(
 /// `with_eps` is false) runs on the CPU execution provider alone. Mirrors the provider choice in
 /// `apply_execution_providers` and `register_auto_providers`: `Auto` registers CoreML on macOS
 /// and CUDA on Linux builds with the `cuda` feature, and nothing elsewhere.
-#[cfg(all(ort_session_providers, model_download))]
+#[cfg(all(ort_session_providers, model_download, unix))]
 pub(crate) fn session_is_cpu_only(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
     with_eps: bool,

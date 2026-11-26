@@ -505,6 +505,18 @@ $XBERG_CACHE_DIR/
   ocr/                    # OCR result cache
   embeddings/             # Chunk embedding cache
   extractions/            # Full extraction cache
+  ort-optimized/          # Saved ONNX Runtime graphs for CPU layout models
+```
+
+### XBERG_ORT_OPTIMIZED_CACHE
+
+**Type**: `Boolean` (`0`, `false`, `off` or `no` disables, case-insensitive)
+**Default**: Enabled
+
+Reuse ONNX Runtime's optimised graph for CPU-only layout and inference sessions across processes, so a cold start skips graph optimisation. The graph is saved under `$XBERG_CACHE_DIR/ort-optimized/` only for a model verified against its pinned SHA-256 in the same process, and its own SHA-256 is checked before every load. The directory must be owned by the current user and not writable by group or others; otherwise the cache is skipped with a warning. GPU and CoreML sessions never use it.
+
+```bash title="Disable the Saved-Graph Cache"
+export XBERG_ORT_OPTIMIZED_CACHE=0
 ```
 
 ### XBERG_CI_DEBUG
