@@ -31,7 +31,9 @@ fn block_on_shared<F: std::future::Future>(future: F, config: &ExtractionConfig)
 }
 
 pub(super) fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    block_on_shared(extract(input, config), config)?.map_err(xberg::XbergError::into_cli_extraction_diagnostic)
+    // ~keep Boxed in a frame of its own so the extract future is not copied through this one.
+    block_on_shared(xberg::core::runtime::pin_boxed(|| extract(input, config)), config)?
+        .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
 }
 
 pub(super) fn block_on_extract_batch(
