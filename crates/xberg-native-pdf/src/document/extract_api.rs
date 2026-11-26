@@ -1602,8 +1602,10 @@ impl PdfDocument {
     /// Shared, cached character sequence for a page — identical to what
     /// [`Self::extract_chars`] returns, minus the clone. Only the unfiltered
     /// extraction is cached; the layer/ink-filtered variant is keyed on its
-    /// filters and stays uncached.
-    pub(super) fn cached_page_chars(&self, page_index: usize) -> Result<std::sync::Arc<Vec<crate::layout::TextChar>>> {
+    /// filters and stays uncached. Internal Core bridge: core's table and
+    /// script passes read a page's characters without copying them.
+    #[doc(hidden)]
+    pub fn cached_page_chars(&self, page_index: usize) -> Result<std::sync::Arc<Vec<crate::layout::TextChar>>> {
         if let Some(cached) = self.page_chars_cache.lock_or_recover().get(&page_index) {
             return Ok(std::sync::Arc::clone(cached));
         }

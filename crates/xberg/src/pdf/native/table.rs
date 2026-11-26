@@ -360,7 +360,7 @@ struct PageTableContext<'a> {
     source_paths: &'a [PathContent],
     source_spans: &'a scripts::PageSpans,
     capture_members: bool,
-    source_chars: std::cell::OnceCell<Vec<xberg_native_pdf::layout::TextChar>>,
+    source_chars: std::cell::OnceCell<std::sync::Arc<Vec<xberg_native_pdf::layout::TextChar>>>,
 }
 
 fn append_extracted_table(
@@ -374,7 +374,7 @@ fn append_extracted_table(
     let characters = || {
         context
             .source_chars
-            .get_or_init(|| context.doc.doc.extract_chars(context.page_idx).unwrap_or_default())
+            .get_or_init(|| context.doc.doc.cached_page_chars(context.page_idx).unwrap_or_default())
             .as_slice()
     };
     let repaired = restore_ruled_decimal_rows(&mut extracted_table, || (characters(), context.source_paths));
