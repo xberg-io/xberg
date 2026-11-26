@@ -130,7 +130,9 @@ pub struct ExtractionOverrides {
 
     /// Tesseract model set to resolve and download: fast or best.
     ///
-    /// Ignored for a tessdata directory given by `ocr.tessdata_path` or `TESSDATA_PREFIX`.
+    /// A directory from `ocr.tessdata_path` or `TESSDATA_PREFIX` that holds every requested
+    /// language is used as given, whichever set it holds. Without an `ocr` section this sets the
+    /// set OCR uses when it runs, without enabling OCR.
     #[cfg(feature = "ocr-surface")]
     #[arg(long, value_name = "SET")]
     pub ocr_tessdata_model: Option<TessdataModelArg>,

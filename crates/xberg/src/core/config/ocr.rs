@@ -1191,17 +1191,19 @@ pub struct OcrConfig {
     ///
     /// Applies only to the directories xberg manages. An explicit `tessdata_path` or
     /// `TESSDATA_PREFIX` that holds every requested language is used as given, whichever set it
-    /// contains (a `best` request logs a warning then). Otherwise `fast` searches
-    /// `<cache>/tessdata/fast`, the older flat `<cache>/tessdata` and the system tessdata
-    /// directories, and downloads into `<cache>/tessdata/fast`; `best` searches
-    /// `<cache>/tessdata/best` and `/usr/share/xberg/tessdata/best`, and downloads into
-    /// `<cache>/tessdata/best`, because system packages ship `tessdata_fast`. Every download is
-    /// pinned and SHA-256 verified. With `best`, OSD and the script retries (Han, Khmer,
-    /// vertical Japanese) use only models in the `best` directories.
+    /// contains (a `best` request logs a warning then). Otherwise `fast` searches the older flat
+    /// `<cache>/tessdata`, `<cache>/tessdata/fast` and the system tessdata directories, and
+    /// downloads into `<cache>/tessdata/fast` (or into the flat cache when it already holds some
+    /// of the requested languages); `best` searches `<cache>/tessdata/best` and, on Unix,
+    /// `/usr/share/xberg/tessdata/best`, and downloads into `<cache>/tessdata/best`, because
+    /// system packages ship `tessdata_fast`. Every download is pinned and SHA-256 verified. With
+    /// `best`, OSD and the script retries (Han, Khmer, vertical Japanese) use only models in the
+    /// `best` directories.
     ///
     /// The `XBERG_OCR_TESSDATA_MODEL` environment variable sets the same key for env-configured
-    /// servers. REST and MCP callers cannot set it. WebAssembly refuses `best` unless the model
-    /// bytes come in `tessdata_bytes`.
+    /// servers (`xberg serve`, `xberg mcp`) and for `xberg doctor`; without an `ocr` section it
+    /// sets the set OCR uses when it runs, rather than creating one. REST and MCP callers cannot
+    /// change it. WebAssembly refuses `best` unless the model bytes come in `tessdata_bytes`.
     #[serde(default, skip_serializing_if = "is_default_tessdata_model")]
     pub tessdata_model: TessdataModel,
 
