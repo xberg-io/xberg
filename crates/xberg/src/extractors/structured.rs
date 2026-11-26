@@ -687,8 +687,8 @@ fn build_json_internal_structure(
 ///
 /// Lists are closed before an object or nested array is rendered so headings
 /// and paragraphs do not become implicit children of the preceding list item.
-/// Structured items get no synthetic label: an invented "Item N" heading is text
-/// the source never contained.
+/// Each structured item is a record group, so markdown sets consecutive items apart with
+/// a thematic break instead of an invented "Item N" heading the source never contained.
 fn build_json_array(
     values: &[serde_json::Value],
     builder: &mut InternalDocumentBuilder,
@@ -705,7 +705,9 @@ fn build_json_array(
                     builder.end_list();
                     list_is_open = false;
                 }
+                builder.push_record_start();
                 build_json_internal_structure(value, builder, depth, budget)?;
+                builder.push_group_end();
             }
             serde_json::Value::String(text) => {
                 budget.check_entity(text)?;

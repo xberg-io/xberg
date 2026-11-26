@@ -66,23 +66,68 @@ fn test_json_array_objects_render_as_nested_markdown() {
         markdown.contains("- mathematics"),
         "missing nested array value: {markdown}"
     );
+    let ada = markdown.find("name: Ada").unwrap();
+    let grace = markdown.find("name: Grace").unwrap();
+    assert!(
+        markdown[ada..grace].contains("\n-----\n"),
+        "records must be separated by a thematic break: {markdown}"
+    );
     assert!(
         !markdown.contains(r#"{\"name\":\"Ada\""#),
         "object remained compact JSON: {markdown}"
     );
 }
 
-#[tokio::test]
-async fn array_items_render_only_source_text_without_synthetic_labels() {
-    let content = br#"[{"name": "Ada"}, {"name": "Grace", "tags": ["x"]}]"#;
+async fn render_json(content: &[u8]) -> (String, String) {
     let result = StructuredExtractor::new()
         .extract_content(content, "application/json", &ExtractionConfig::default())
         .await
         .unwrap();
+    (
+        crate::rendering::render_markdown(&result),
+        crate::rendering::render_plain(&result),
+    )
+}
 
-    let markdown = crate::rendering::render_markdown(&result);
+#[tokio::test]
+async fn array_records_are_separated_by_a_thematic_break_without_synthetic_labels() {
+    let (markdown, _) = render_json(br#"[{"name":"Ada","age":3},{"name":"Grace","age":4}]"#).await;
 
-    assert_eq!(markdown.trim(), "name: Ada\n\nname: Grace\n\n# tags\n\n- x");
+    assert_eq!(markdown.trim(), "name: Ada\n\nage: 3\n\n-----\n\nname: Grace\n\nage: 4");
+}
+
+#[tokio::test]
+async fn a_record_ending_in_a_list_is_still_separated_from_the_next() {
+    let (markdown, _) = render_json(br#"[{"name": "Grace", "tags": ["x"]}, {"name": "Ada"}]"#).await;
+
+    assert_eq!(markdown.trim(), "name: Grace\n\n# tags\n\n- x\n\n-----\n\nname: Ada");
+}
+
+#[tokio::test]
+async fn inner_arrays_become_separate_lists_split_by_a_thematic_break() {
+    let (markdown, _) = render_json(br#"[[1, 2], [3, 4]]"#).await;
+
+    assert_eq!(markdown.trim(), "- 1\n- 2\n\n-----\n\n- 3\n- 4");
+}
+
+#[tokio::test]
+async fn scalar_arrays_stay_one_bullet_list() {
+    let (markdown, _) = render_json(br#"["a", "b", 3]"#).await;
+
+    assert_eq!(markdown.trim(), "- a\n- b\n- 3");
+}
+
+#[tokio::test]
+async fn plain_output_separates_records_with_blank_lines_and_no_rule() {
+    let (_, plain) = render_json(br#"[{"name":"Ada","age":3},{"name":"Grace","age":4}]"#).await;
+
+    assert!(!plain.contains("--"), "{plain:?}");
+    let records: Vec<&str> = plain
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|block| !block.is_empty())
+        .collect();
+    assert_eq!(records, ["name: Ada", "age: 3", "name: Grace", "age: 4"], "{plain:?}");
 }
 
 #[test]

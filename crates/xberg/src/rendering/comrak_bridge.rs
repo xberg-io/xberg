@@ -16,7 +16,9 @@ use comrak::nodes::{
 };
 
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
-use crate::types::internal::{ElementKind, InternalDocument, InternalElement, list_item_source_label_from_attributes};
+use crate::types::internal::{
+    ElementKind, InternalDocument, InternalElement, is_record_group, list_item_source_label_from_attributes,
+};
 
 use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, has_tex_comment,
@@ -1313,6 +1315,11 @@ fn build_comrak_ast_with_table_mode<'a>(
     // every page end; elsewhere two lists around a page break are two authored lists.
     let mut paged_list: Option<(&'a AstNode<'a>, bool)> = None;
     let lists_close_at_page_ends = doc.source_format == "pdf";
+    // Whether each open group is a record, and where the last record closed: its parent and
+    // that parent's last child then. A record opening right there follows it directly and is
+    // set apart by a thematic break.
+    let mut open_groups_are_records: Vec<bool> = Vec::new();
+    let mut closed_record: Option<(&'a AstNode<'a>, &'a AstNode<'a>)> = None;
 
     for consolidated_elem in &consolidated {
         let orig_idx = consolidated_elem.original_index();
@@ -1338,7 +1345,14 @@ fn build_comrak_ast_with_table_mode<'a>(
                                 pop_container(&mut container_stack, ContainerKind::List);
                             }
                             ElementKind::QuoteEnd => pop_container(&mut container_stack, ContainerKind::BlockQuote),
-                            ElementKind::GroupEnd => pop_container(&mut container_stack, ContainerKind::Group),
+                            ElementKind::GroupEnd => {
+                                pop_container(&mut container_stack, ContainerKind::Group);
+                                closed_record = None;
+                                if open_groups_are_records.pop() == Some(true) {
+                                    let parent = current_parent(&root, &container_stack);
+                                    closed_record = parent.last_child().map(|last| (parent, last));
+                                }
+                            }
                             _ => {}
                         }
                         continue;
@@ -1815,6 +1829,18 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::QuoteEnd => {}
 
             ElementKind::GroupStart => {
+                let is_record = is_record_group(elem_attributes);
+                let container = current_parent(&root, &container_stack);
+                let follows_record = closed_record.is_some_and(|(closed_parent, closed_last)| {
+                    std::ptr::eq(closed_parent, container)
+                        && container
+                            .last_child()
+                            .is_some_and(|last| std::ptr::eq(last, closed_last))
+                });
+                if is_record && follows_record {
+                    parent.append(mk(arena, NodeValue::ThematicBreak(Default::default())));
+                }
+                open_groups_are_records.push(is_record);
                 state.push_container(NestingKind::Group, elem_depth);
                 container_stack.push(ContainerEntry {
                     node: parent,
@@ -1929,6 +1955,31 @@ mod tests {
             heading_level: None,
             style_name: None,
         }
+    }
+
+    fn two_groups(first: Option<&str>, second: Option<&str>) -> String {
+        let mut b = InternalDocumentBuilder::new("json");
+        b.push_group_start(first, None);
+        b.push_paragraph("one", vec![], None, None);
+        b.push_group_end();
+        b.push_group_start(second, None);
+        b.push_paragraph("two", vec![], None, None);
+        b.push_group_end();
+        render(&b.build())
+    }
+
+    #[test]
+    fn consecutive_records_are_split_by_a_thematic_break() {
+        let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
+        assert_eq!(two_groups(record, record), "one\n\n-----\n\ntwo\n");
+    }
+
+    #[test]
+    fn other_groups_and_a_first_record_get_no_thematic_break() {
+        let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
+        assert_eq!(two_groups(None, None), "one\n\ntwo\n");
+        assert_eq!(two_groups(Some("record"), Some("record")), "one\n\ntwo\n");
+        assert_eq!(two_groups(None, record), "one\n\ntwo\n");
     }
 
     #[test]

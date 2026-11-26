@@ -859,6 +859,18 @@ pub(crate) fn list_item_source_label_from_attributes(attributes: Option<&AHashMa
     attributes?.get(LIST_ITEM_SOURCE_LABEL_ATTRIBUTE).map(String::as_str)
 }
 
+/// `label` of a `GroupStart` that opens a record: one entry of a repeated collection,
+/// such as a JSON array item. Namespaced so a source group label (an HTML or djot class)
+/// cannot claim it.
+pub(crate) const RECORD_GROUP_LABEL: &str = "xberg:record";
+
+/// Whether a `GroupStart` with these attributes opens a record.
+pub(crate) fn is_record_group(attributes: Option<&AHashMap<String, String>>) -> bool {
+    attributes
+        .and_then(|attributes| attributes.get("label"))
+        .is_some_and(|label| label == RECORD_GROUP_LABEL)
+}
+
 /// Semantic role of an internal element.
 ///
 /// Superset of [`NodeContent`](super::document_structure::NodeContent) variants
