@@ -1921,6 +1921,94 @@ fn detect_split_x(spans: &[xberg_native_pdf::layout::TextSpan], lines: &[SpanLin
     Some(median)
 }
 
+/// Move a split that cuts a span to the stretch of its own gutter that the fewest lines cross.
+///
+/// The lines that vote for a split each hold a gap around it, and the split may sit anywhere
+/// all of those gaps share. Their median midpoint is one point of that shared gap only: on
+/// 2305.09790 page 1 the votes come from an abstract indented inside the left column, whose
+/// lines end 20pt short of the column edge, so the midpoint fell inside the introduction lines
+/// below it, each of them became a band boundary, and the foot of the page read row by row.
+/// The split moves to the middle of the widest stretch of the shared gap that fewer lines cross
+/// than cross it now, and stays where it is when no stretch does or fewer than
+/// `MIN_DENSE_COLUMN_SPLIT_LINES` lines hold a gap around it. ~keep
+fn slide_split_along_its_gutter(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    furniture_width: f32,
+    min_gutter: f32,
+    split_x: f32,
+) -> f32 {
+    let body_lines: Vec<&SpanLine> = lines
+        .iter()
+        .filter(|line| !line_has_width_furniture(spans, line, furniture_width))
+        .collect();
+    let crossing = |x: f32| body_lines.iter().filter(|line| line_crosses(spans, line, x)).count();
+    let crossing_now = crossing(split_x);
+    if crossing_now == 0 {
+        return split_x;
+    }
+    let (mut low, mut high) = (f32::NEG_INFINITY, f32::INFINITY);
+    let mut holding = 0usize;
+    for line in &body_lines {
+        if let Some((gap_low, gap_high)) = gap_around(spans, line, min_gutter, split_x) {
+            holding += 1;
+            low = low.max(gap_low);
+            high = high.min(gap_high);
+        }
+    }
+    if holding < MIN_DENSE_COLUMN_SPLIT_LINES || high <= low {
+        return split_x;
+    }
+    let mut edges: Vec<f32> = body_lines
+        .iter()
+        .flat_map(|line| line.iter())
+        .filter(|&&index| span_has_ink(&spans[index]))
+        .flat_map(|&index| [spans[index].bbox.left(), spans[index].bbox.right()])
+        .filter(|&edge| edge > low && edge < high)
+        .chain([low, high])
+        .collect();
+    edges.sort_by(f32::total_cmp);
+    edges.dedup();
+    let mut best: Option<(usize, f32, f32)> = None;
+    for pair in edges.windows(2) {
+        let mid = (pair[0] + pair[1]) / 2.0;
+        let (count, width) = (crossing(mid), pair[1] - pair[0]);
+        if best
+            .is_none_or(|(best_count, best_width, _)| count < best_count || (count == best_count && width > best_width))
+        {
+            best = Some((count, width, mid));
+        }
+    }
+    match best {
+        Some((count, _, mid)) if count < crossing_now => mid,
+        _ => split_x,
+    }
+}
+
+/// The internal gap of `line`, at least `min_gutter` wide, that holds `x`.
+fn gap_around(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    line: &SpanLine,
+    min_gutter: f32,
+    x: f32,
+) -> Option<(f32, f32)> {
+    let mut edges: Vec<(f32, f32)> = line
+        .iter()
+        .filter(|&&index| span_has_ink(&spans[index]))
+        .map(|&index| (spans[index].bbox.left(), spans[index].bbox.right()))
+        .collect();
+    edges.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut edges = edges.into_iter();
+    let (_, mut running_right) = edges.next()?;
+    for (left, right) in edges {
+        if left - running_right >= min_gutter && x >= running_right && x <= left {
+            return Some((running_right, left));
+        }
+        running_right = running_right.max(right);
+    }
+    None
+}
+
 /// Move a split that still cuts through a word after snapping to the page's own
 /// whitespace corridor (GH#1545).
 ///
@@ -1976,11 +2064,12 @@ fn redirect_split_out_of_content(
     page_width: f32,
     split_x: f32,
 ) -> f32 {
+    let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
+    let min_gutter = (page_width * MIN_DENSE_COLUMN_GUTTER_FRACTION).max(MIN_DENSE_COLUMN_GUTTER_PTS);
+    let split_x = slide_split_along_its_gutter(spans, lines, furniture_width, min_gutter, split_x);
     let cuts_a_span = spans
         .iter()
         .any(|span| span.bbox.left() < split_x && span.bbox.right() > split_x);
-    let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
-    let min_gutter = (page_width * MIN_DENSE_COLUMN_GUTTER_FRACTION).max(MIN_DENSE_COLUMN_GUTTER_PTS);
     let split_inside_a_table_gap =
         lines_with_internal_gap_at(spans, lines, furniture_width, min_gutter, split_x) >= MIN_DENSE_COLUMN_SPLIT_LINES;
     if !cuts_a_span && !split_inside_a_table_gap {
@@ -4827,6 +4916,60 @@ mod tests {
                 "for readers seeking further detail here",
             ]
         );
+    }
+
+    /// 2305.09790 page 1: only the indented abstract shares lines with the right column, so its
+    /// votes put the split 2pt inside the introduction below it, and a centred title across the
+    /// gutter leaves no empty corridor to redirect to. The split moves along the abstract's gap to
+    /// where only the title crosses it, and the left column reads whole before the right.
+    #[test]
+    fn indented_abstract_votes_do_not_cut_the_column_below() {
+        let mut spans = vec![
+            span_with_width(
+                "A Centred Title Set Across Both Columns",
+                150.0,
+                760.0,
+                300.0,
+                11.0,
+                11.0,
+            ),
+            span_with_width("And Its Second Line Across The Gutter", 170.0, 744.0, 270.0, 11.0, 11.0),
+            span_with_width(
+                "First Author, Second Author and Third Author",
+                180.0,
+                728.0,
+                250.0,
+                11.0,
+                11.0,
+            ),
+        ];
+        let abstract_line = |row: usize| format!("Abstract line {row} sits indented inside the column");
+        let intro_line = |row: usize| format!("Introduction line {row} runs to the column edge");
+        let right_line = |row: usize| format!("Right column line {row} carries the running prose");
+        for row in 0..16 {
+            let y = 700.0 - row as f32 * 14.0;
+            spans.push(span_with_width(&right_line(row), 307.0, y, 236.0, 11.0, 11.0));
+            if row < 8 {
+                spans.push(span_with_width(&abstract_line(row), 75.0, y, 196.0, 11.0, 11.0));
+            } else if row < 15 {
+                spans.push(span_with_width(&intro_line(row - 8), 55.0, y - 7.0, 236.0, 11.0, 11.0));
+            }
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = [
+            "A Centred Title Set Across Both Columns",
+            "And Its Second Line Across The Gutter",
+            "First Author, Second Author and Third Author",
+        ]
+        .into_iter()
+        .map(String::from)
+        .chain((0..8).map(abstract_line))
+        .chain((0..7).map(intro_line))
+        .chain((0..16).map(right_line))
+        .collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
     }
 
     /// 2209.05611 page 9: two-column text, an empty band across both columns, then two-column
