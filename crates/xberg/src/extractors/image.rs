@@ -3370,7 +3370,8 @@ impl ImageExtractor {
             #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
             {
                 builtin_paddle = backend.name() == "paddle-ocr" && registry.has_builtin_paddle();
-                fallback_paddle = image_paddle_fallback::backend(&registry, &backend, config, ocr_config, mime_type);
+                fallback_paddle =
+                    image_paddle_fallback::backend(&registry, &backend, (config, ocr_config), content, mime_type);
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
@@ -3517,6 +3518,10 @@ impl ImageExtractor {
             ocr_result,
         )
         .await?;
+        // Tall-strip recovery and photo-title recovery re-read with Tesseract. ~keep
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let (recover_tall, title_source) =
+            image_paddle_fallback::tesseract_recoveries(paddle_read.as_ref(), recover_tall, title_source);
         #[cfg(target_arch = "wasm32")]
         let ocr_result = backend.process_image(ocr_input, &ocr_config_with_format).await?;
         let ocr_result = {

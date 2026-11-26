@@ -1,10 +1,11 @@
-//! Read a standalone photo again with the built-in PaddleOCR backend when the default
+//! Read a standalone camera photo again with the built-in PaddleOCR backend when the default
 //! Tesseract read of it is sparse and unreliable (`OcrConfig::image_paddle_fallback`).
 //!
 //! Camera photos (receipts, scene text) defeat Tesseract at every PSM and threshold the image
-//! route tries, while PaddleOCR's detector reads them. Each backend's confidence is read on its
-//! own scale only: Tesseract's decides which of its words it read with confidence, PaddleOCR's
-//! which of its lines it did, and the two counts of confidently read tokens are compared.
+//! route tries, while PaddleOCR's detector reads them. Confidences are never compared across
+//! backends. Tesseract's is calibrated, so it decides which Tesseract words were read; PaddleOCR's
+//! line score is its recognition text score, which stays at 0.92-1.00 on reads with no correct
+//! word (measured on the benchmark photos), so the PaddleOCR read is judged by its text alone.
 
 use super::{has_robust_word_confidence_distribution, is_implicit_horizontal_tesseract, usable_word_confidences};
 use crate::cancellation::{CancellationToken, check_cancelled};
@@ -14,25 +15,36 @@ use crate::plugins::registry::OcrBackendRegistry;
 use crate::types::internal::InternalDocument;
 use crate::types::{ExtractedDocument, OcrElementLevel};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::time::SystemTime;
 
 const PADDLE_BACKEND: &str = "paddle-ocr";
 
 /// Metadata key set on a read this fallback adopted, naming the backend that produced it.
 pub(super) const FALLBACK_BACKEND_METADATA_KEY: &str = "ocr_fallback_backend";
 
-/// Recognition confidence (0-1, each backend on its own scale) at or above which a Tesseract
-/// word or a PaddleOCR line counts as confidently read. The bar `image_color_threshold` uses.
-const CONFIDENT_READ: f64 = 0.70;
+/// Lossy camera formats. A PNG, BMP, GIF or TIFF is a screenshot, slide, form or scan; HEIC
+/// reaches OCR already converted to PNG, so it does not qualify either.
+const CAMERA_IMAGE_TYPES: &[&str] = &["image/jpeg", "image/jpg", "image/pjpeg", "image/webp"];
+
+/// Tesseract word confidence (0-1, calibrated) at or above which a Tesseract word counts as read.
+/// The bar `image_color_threshold` uses for a confident word.
+const CONFIDENT_TESSERACT_WORD: f64 = 0.70;
 
 /// Most usable Tesseract words a photo-shaped read has. Receipts and scene photos read 13-40;
-/// a dense page scan reads hundreds, and its noise never hands it to PaddleOCR. The bound
-/// `image_color_threshold` uses for its retry.
+/// page scans read hundreds. The bound `image_color_threshold` uses for its retry.
 const MAX_SPARSE_PRIMARY_WORDS: usize = 80;
 
-/// Fewest confidently read tokens PaddleOCR must add over Tesseract's, as in
-/// `image_color_threshold`'s growth rule: `max(MIN_TOKEN_GAIN, trusted / 4)`.
-const MIN_TOKEN_GAIN: usize = 4;
+/// Fewest plausible tokens a PaddleOCR read must hold to replace anything.
+const MIN_PLAUSIBLE_TOKENS: usize = 4;
+
+/// Least share of a PaddleOCR read's tokens that must be plausible. The benchmark photos measure
+/// 0.69-0.92; detector noise on a texture reads letter fragments that are not.
+const MIN_PLAUSIBLE_SHARE: f64 = 0.6;
+
+/// Longest letter run counted as a plausible word.
+const MAX_PLAUSIBLE_WORD_CHARS: usize = 20;
 
 /// Model sets this process has checked, by cache root and selection. Bounded; cleared when full.
 const MAX_MEMOIZED_MODEL_SETS: usize = 64;
@@ -44,20 +56,24 @@ static MODEL_SETS: LazyLock<ModelMemo> = LazyLock::new(ModelMemo::default);
 pub(super) fn backend(
     registry: &OcrBackendRegistry,
     primary: &Arc<dyn OcrBackend>,
-    config: &ExtractionConfig,
-    ocr: &OcrConfig,
+    (config, ocr): (&ExtractionConfig, &OcrConfig),
+    content: &[u8],
     mime_type: &str,
 ) -> Option<Arc<dyn OcrBackend>> {
-    (registry.is_builtin_tesseract(primary) && registry.has_builtin_paddle() && eligible(config, ocr, mime_type))
-        .then(|| registry.get("paddleocr").ok())
-        .flatten()
+    (registry.is_builtin_tesseract(primary)
+        && registry.has_builtin_paddle()
+        && eligible(config, ocr, mime_type)
+        && is_camera_photo(content, mime_type))
+    .then(|| registry.get("paddleocr").ok())
+    .flatten()
 }
 
-/// Whether the request leaves the backend choice to Xberg: the default Tesseract read with every
-/// Tesseract setting at its default, no multi-backend policy, no layout, and one language
-/// PaddleOCR reads with one model.
+/// Whether the request leaves the backend choice to Xberg: the default Tesseract read with no
+/// `tesseract_config` at all (even a default one is a choice, as the benchmark adapter and the
+/// default OCR routes already treat it), no tessdata override, no numeric repair, no backend
+/// tuning, no multi-backend policy, no layout, and one language PaddleOCR reads with one model.
 ///
-/// An explicit `backend: "tesseract"` with default settings cannot be told apart from the
+/// An explicit `backend: "tesseract"` with no other setting cannot be told apart from the
 /// default; `image_paddle_fallback: false` keeps Tesseract's read.
 fn eligible(config: &ExtractionConfig, ocr: &OcrConfig, mime_type: &str) -> bool {
     #[cfg(feature = "layout-types")]
@@ -70,7 +86,10 @@ fn eligible(config: &ExtractionConfig, ocr: &OcrConfig, mime_type: &str) -> bool
     ocr.image_paddle_fallback
         && !layout
         && is_implicit_horizontal_tesseract(ocr)
-        && tesseract_settings_are_default(ocr)
+        && ocr.tesseract_config.is_none()
+        && ocr.tessdata_path.is_none()
+        && ocr.tessdata_bytes.is_none()
+        && !ocr.numeric_repair
         && !ocr.has_tuning_backend_options()
         && ocr.pipeline.is_none()
         && ocr.vlm_fallback == VlmFallbackPolicy::Disabled
@@ -78,21 +97,23 @@ fn eligible(config: &ExtractionConfig, ocr: &OcrConfig, mime_type: &str) -> bool
         && reads_one_paddle_language(ocr)
 }
 
-/// Every Tesseract setting holds its default. `TesseractConfig` is compared whole, through its
-/// serialized form, so a field added later makes a request ineligible until it is listed here;
-/// only `use_cache` is exempt, because it changes no recognition.
-fn tesseract_settings_are_default(ocr: &OcrConfig) -> bool {
-    let tesseract_default = ocr.tesseract_config.as_ref().is_none_or(|tesseract| {
-        let neutral = crate::types::TesseractConfig {
-            use_cache: tesseract.use_cache,
-            ..Default::default()
-        };
-        matches!(
-            (serde_json::to_value(tesseract), serde_json::to_value(&neutral)),
-            (Ok(given), Ok(default)) if given == default
-        )
-    });
-    tesseract_default && ocr.tessdata_path.is_none() && ocr.tessdata_bytes.is_none() && !ocr.numeric_repair
+/// A camera photo: a lossy camera format whose pixels match no standard page size at a scan
+/// resolution (`resolve_known_source_dpi`, the signal the OCR route uses to spot page scans).
+fn is_camera_photo(content: &[u8], mime_type: &str) -> bool {
+    if !CAMERA_IMAGE_TYPES
+        .iter()
+        .any(|kind| mime_type.eq_ignore_ascii_case(kind))
+    {
+        return false;
+    }
+    let Some((width, height)) = image::ImageReader::new(std::io::Cursor::new(content))
+        .with_guessed_format()
+        .ok()
+        .and_then(|reader| reader.into_dimensions().ok())
+    else {
+        return false;
+    };
+    crate::extraction::image::resolve_known_source_dpi(None, content, width, height).is_none()
 }
 
 fn reads_one_paddle_language(ocr: &OcrConfig) -> bool {
@@ -111,6 +132,20 @@ pub(super) fn read_by_paddle(doc: &InternalDocument) -> bool {
         .any(|confidence| confidence.backend == PADDLE_BACKEND)
 }
 
+/// The Tesseract-only recoveries after the read (tall-strip re-read, photo-title recovery) as
+/// requested, or both off on a read this fallback adopted from PaddleOCR.
+pub(super) fn tesseract_recoveries<Title>(
+    adopted: Option<&Arc<dyn OcrBackend>>,
+    recover_tall: bool,
+    title_source: Option<Title>,
+) -> (bool, Option<Title>) {
+    if adopted.is_none() {
+        (recover_tall, title_source)
+    } else {
+        (false, None)
+    }
+}
+
 /// A photo-shaped Tesseract read that is unreliable: it found text (at most
 /// [`MAX_SPARSE_PRIMARY_WORDS`] words) and fails the sparse-text robustness check.
 fn sparse_unreliable_read(primary: &ExtractedDocument) -> bool {
@@ -125,75 +160,111 @@ fn paddle_read_config(effective: &OcrConfig) -> OcrConfig {
     config
 }
 
-fn alphanumeric_token_count(text: &str) -> usize {
+fn tokens(text: &str) -> impl Iterator<Item = &str> {
     text.split(|character: char| !character.is_alphanumeric())
         .filter(|token| !token.is_empty())
-        .count()
 }
 
-fn confident_tokens(document: &ExtractedDocument, level: OcrElementLevel) -> usize {
-    document
+/// A token that reads like a word or a number: at least two characters, and either all digits
+/// or all letters with a vowel (any letter outside ASCII counts as one), at most
+/// [`MAX_PLAUSIBLE_WORD_CHARS`] long. Misreads such as `x7Q`, `rn`, `sa` or `CoE` mostly fail it.
+fn is_plausible_token(token: &str) -> bool {
+    let length = token.chars().count();
+    length >= 2
+        && (token.chars().all(|character| character.is_ascii_digit())
+            || (length <= MAX_PLAUSIBLE_WORD_CHARS
+                && token.chars().all(char::is_alphabetic)
+                && token
+                    .chars()
+                    .any(|character| !character.is_ascii() || "aeiouyAEIOUY".contains(character))))
+}
+
+fn plausible_tokens(text: &str) -> usize {
+    tokens(text).filter(|token| is_plausible_token(token)).count()
+}
+
+/// Plausible tokens among the words Tesseract read with confidence.
+fn trusted_tesseract_tokens(primary: &ExtractedDocument) -> usize {
+    primary
         .ocr_elements
         .iter()
         .flatten()
-        .filter(|element| element.level == level && element.confidence.recognition >= CONFIDENT_READ)
-        .map(|element| alphanumeric_token_count(&element.text))
+        .filter(|element| {
+            element.level == OcrElementLevel::Word && element.confidence.recognition >= CONFIDENT_TESSERACT_WORD
+        })
+        .map(|element| plausible_tokens(&element.text))
         .sum()
 }
 
-/// The PaddleOCR read replaces the Tesseract read when its confidently read lines hold at least
-/// `max(MIN_TOKEN_GAIN, trusted / 4)` more letter-or-digit tokens than Tesseract's confidently
-/// read words, its text is not empty, and that text clears the quality gate a PDF OCR pipeline
-/// stage must clear (`pipeline_min_quality`).
+/// The PaddleOCR read replaces the Tesseract read when its text keeps at least as many plausible
+/// tokens as Tesseract read with confidence (and at least [`MIN_PLAUSIBLE_TOKENS`]), at least
+/// [`MIN_PLAUSIBLE_SHARE`] of its tokens are plausible, and the text clears the quality gate a
+/// PDF OCR pipeline stage must clear (`pipeline_min_quality`). The read it replaces already
+/// failed Tesseract's own robustness check, so the PaddleOCR read must not lose what Tesseract
+/// did read, not out-read it: on cord_receipt_04 PaddleOCR is exact with 14 plausible tokens
+/// against Tesseract's 12 confident ones.
 fn paddle_read_wins(
     primary: &ExtractedDocument,
     candidate: &ExtractedDocument,
     thresholds: &OcrQualityThresholds,
 ) -> bool {
-    let trusted = confident_tokens(primary, OcrElementLevel::Word);
-    let read = confident_tokens(candidate, OcrElementLevel::Line);
+    let all = tokens(&candidate.content).count();
+    let plausible = plausible_tokens(&candidate.content);
     !candidate.content.trim().is_empty()
-        && read >= trusted + MIN_TOKEN_GAIN.max(trusted / 4)
+        && plausible >= MIN_PLAUSIBLE_TOKENS.max(trusted_tesseract_tokens(primary))
+        && plausible as f64 >= MIN_PLAUSIBLE_SHARE * all as f64
         && crate::extractors::pdf::ocr::compute_quality_score(&candidate.content, thresholds)
             >= thresholds.pipeline_min_quality
 }
 
-/// Which model sets are known to be cached and intact, by [`crate::paddle_ocr::RequiredModelSet::key`].
+/// Size and modification time of each model file.
+type FileStamps = Vec<(PathBuf, u64, Option<SystemTime>)>;
+
+fn stamp_files(files: Vec<PathBuf>) -> Option<FileStamps> {
+    files
+        .into_iter()
+        .map(|path| {
+            let metadata = std::fs::metadata(&path).ok()?;
+            Some((path, metadata.len(), metadata.modified().ok()))
+        })
+        .collect()
+}
+
+/// Verification results by model set, kept with the file stamps they were made on.
 #[derive(Default)]
-struct ModelMemo(Mutex<HashMap<String, bool>>);
+struct ModelMemo(Mutex<HashMap<String, (FileStamps, bool)>>);
 
 impl ModelMemo {
-    /// Whether the model set is ready to read without a download. `present` (no hashing) runs
-    /// every time, so a set removed after it was verified fails closed instead of downloading;
-    /// `verify` (hashing, on a blocking thread) runs once per key, and its answer is kept.
-    async fn ready(
-        &self,
-        key: String,
-        present: impl FnOnce() -> bool,
-        verify: impl FnOnce() -> bool + Send + 'static,
-    ) -> bool {
-        if !present() {
+    /// Whether the model set is ready to read without a download. `stamps` is `None` when a file
+    /// is missing: that fails closed, and a set removed after it was verified never reaches the
+    /// backend, which would download it. `verify` (hashing) runs again only when the files'
+    /// sizes or modification times change, for a verified or a failed set alike.
+    fn ready(&self, key: String, stamps: Option<FileStamps>, verify: impl FnOnce() -> bool) -> bool {
+        let Some(stamps) = stamps else {
             return false;
+        };
+        if let Some((seen, verified)) = self.lock().get(&key)
+            && *seen == stamps
+        {
+            return *verified;
         }
-        if let Some(&verified) = self.lock().get(&key) {
-            return verified;
-        }
-        let verified = tokio::task::spawn_blocking(verify).await.unwrap_or(false);
+        let verified = verify();
         let mut memo = self.lock();
         if memo.len() >= MAX_MEMOIZED_MODEL_SETS {
             memo.clear();
         }
-        memo.insert(key, verified);
+        memo.insert(key, (stamps, verified));
         verified
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, bool>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, (FileStamps, bool)>> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
-/// Whether the built-in backend's models for `config` are cached and intact. The built-in
-/// backend is registered with `PaddleOcrConfig::default()`; [`backend`] admits no other.
+/// Whether the built-in backend's models for `config` are cached and intact, checked on a
+/// blocking thread (the cache lookup builds a Hugging Face client; hashing reads every file). The
+/// built-in backend is registered with `PaddleOcrConfig::default()`; [`backend`] admits no other.
 async fn models_ready(config: &OcrConfig) -> bool {
     let set = match crate::paddle_ocr::RequiredModelSet::resolve(&Default::default(), config) {
         Ok(set) => set,
@@ -202,11 +273,12 @@ async fn models_ready(config: &OcrConfig) -> bool {
             return false;
         }
     };
-    let set = Arc::new(set);
-    let verify = Arc::clone(&set);
-    MODEL_SETS
-        .ready(set.key(), || set.present(), move || verify.verified())
-        .await
+    tokio::task::spawn_blocking(move || {
+        let stamps = set.files().and_then(stamp_files);
+        MODEL_SETS.ready(set.key(), stamps, || set.verified())
+    })
+    .await
+    .unwrap_or(false)
 }
 
 /// Returns the selected read and, when PaddleOCR produced it, the PaddleOCR backend.

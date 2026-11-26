@@ -609,19 +609,30 @@ impl ModelManager {
             .collect())
     }
 
-    /// Whether every artifact [`Self::check_models_cached`] lists is in the local cache, judged
-    /// from the cache's snapshot entries alone: no checksum, no download.
+    /// The local paths of every artifact [`Self::check_models_cached`] lists, or `None` when any
+    /// has no cache entry. Reads the cache's snapshot entries through one client: no checksum,
+    /// no download.
     #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-    pub(crate) fn models_present(
+    pub(crate) fn cached_model_files(
         &self,
         version: &str,
         family: &str,
         tier: &str,
         include_doc_ori: bool,
-    ) -> Result<bool, XbergError> {
-        Ok(Self::required_artifacts(version, family, tier, include_doc_ori)?
+    ) -> Result<Option<Vec<PathBuf>>, XbergError> {
+        let artifacts = Self::required_artifacts(version, family, tier, include_doc_ori)?;
+        let Ok(api) = model_download::hf_client(Some(&self.cache_dir)) else {
+            return Ok(None);
+        };
+        Ok(artifacts
             .iter()
-            .all(|(_, remote, _)| self.cached_artifact_path(remote).is_some()))
+            .map(|(_, remote, _)| {
+                model_download::hf_cached_revision_with_client(&api, HF_REPO_ID, remote, Some(HF_REPO_REVISION))
+                    .ok()
+                    .flatten()
+                    .filter(|path| path.is_file())
+            })
+            .collect())
     }
 
     /// The `(label, remote file, sha256)` of every artifact a run with the given version,

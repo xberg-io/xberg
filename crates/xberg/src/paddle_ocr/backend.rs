@@ -2181,12 +2181,14 @@ impl RequiredModelSet {
         )
     }
 
-    /// Whether every file has a cache entry. Reads no file contents and never downloads.
+    /// The cached file of every model, or `None` when any is missing. Reads no file contents
+    /// and never downloads.
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-    pub(crate) fn present(&self) -> bool {
+    pub(crate) fn files(&self) -> Option<Vec<std::path::PathBuf>> {
         self.manager
-            .models_present(&self.version, self.family, &self.tier, self.include_doc_ori)
-            .unwrap_or(false)
+            .cached_model_files(&self.version, self.family, &self.tier, self.include_doc_ori)
+            .ok()
+            .flatten()
     }
 
     /// Whether every file is cached and matches its pinned checksum. Hashes every file.

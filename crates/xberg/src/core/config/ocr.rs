@@ -1122,16 +1122,18 @@ pub struct OcrConfig {
     /// Tesseract read of it is sparse and unreliable, and keep the PaddleOCR read when it reads
     /// clearly more text.
     ///
-    /// Defaults to `true`. It applies only to a standalone image (not a PDF page or TIFF) read
-    /// with `backend = "tesseract"`, every `tesseract_config` setting at its default (only
-    /// `use_cache` may differ), no `tessdata_path`, `tessdata_bytes`, `numeric_repair`, backend
-    /// tuning, `pipeline`, `vlm_fallback` or layout detection, and one language PaddleOCR
-    /// supports; and only when Tesseract read between 1 and 80 words with word confidences that
-    /// fail the sparse-text robustness check. It needs a build with PaddleOCR and models already
-    /// in the local cache: this re-read never downloads a model. An explicit
-    /// `backend = "tesseract"` with default settings cannot be told apart from the default, so set
-    /// this to `false` to keep Tesseract's read on every image. A backend other than `tesseract`
-    /// is never replaced.
+    /// Defaults to `true`. It applies only to a standalone camera photo: a JPEG or WebP whose
+    /// pixel size is not a standard page at a scan resolution (PNG, BMP, GIF and TIFF images,
+    /// and HEIC, which reaches OCR as PNG, never qualify). The request must use
+    /// `backend = "tesseract"` with no `tesseract_config` at all (even a default one is an
+    /// explicit choice), no `tessdata_path`, `tessdata_bytes`, `numeric_repair`, backend tuning,
+    /// `pipeline`, `vlm_fallback` or layout detection, and one language PaddleOCR supports; and
+    /// Tesseract must have read between 1 and 80 words with word confidences that fail the
+    /// sparse-text robustness check. It needs a build with PaddleOCR and models already in the
+    /// local cache: this re-read never downloads a model, so the output for such a photo depends
+    /// on whether the models are cached. An explicit `backend = "tesseract"` with no other setting
+    /// cannot be told apart from the default, so set this to `false` to keep Tesseract's read on
+    /// every image. A backend other than `tesseract` is never replaced.
     #[serde(default = "default_image_paddle_fallback")]
     pub image_paddle_fallback: bool,
 }
