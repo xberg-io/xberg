@@ -34,34 +34,48 @@ const MAX_CONTINUATION_WORDS: usize = 60;
 
 /// Mark the entries of an author-year bibliography as unordered list items, folding a
 /// paragraph that continues an entry on the same page into that entry.
+///
+/// An entry takes one continuation of any shape; a further one must open lowercase, mid
+/// sentence. Otherwise every short paragraph up to the next heading (a note, a closing
+/// remark) would fold into the last entry.
 pub(super) fn mark_author_year_bibliography_entries(all_pages: &mut [Vec<PdfParagraph>]) {
     let sections = bibliography_sections(all_pages);
     for (page_index, page) in all_pages.iter_mut().enumerate() {
         let old = std::mem::take(page);
-        let mut previous_was_entry = false;
+        let mut open_entry: Option<EntryContinuation> = None;
         for (index, mut paragraph) in old.into_iter().enumerate() {
             let in_bibliography = sections[page_index][index];
             if !in_bibliography || !is_candidate(&paragraph) {
-                previous_was_entry = false;
+                open_entry = None;
                 page.push(paragraph);
                 continue;
             }
             let text = paragraph_text(&paragraph);
-            if opens_author_year_entry(text.trim()) {
+            let text = text.trim();
+            if opens_author_year_entry(text) {
                 paragraph.is_list_item = true;
-                previous_was_entry = true;
+                open_entry = Some(EntryContinuation::None);
                 page.push(paragraph);
-            } else if previous_was_entry
+            } else if let Some(state) = open_entry
+                && (state == EntryContinuation::None || text.chars().next().is_some_and(char::is_lowercase))
                 && paragraph.word_count <= MAX_CONTINUATION_WORDS
                 && let Some(entry) = page.last_mut()
             {
                 append_continuation(entry, paragraph);
+                open_entry = Some(EntryContinuation::Folded);
             } else {
-                previous_was_entry = false;
+                open_entry = None;
                 page.push(paragraph);
             }
         }
     }
+}
+
+/// Whether the entry being built has already absorbed a continuation paragraph.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EntryContinuation {
+    None,
+    Folded,
 }
 
 /// For every paragraph, whether it sits in a bibliography section that opens at least
@@ -313,6 +327,44 @@ mod tests {
                 (false, "Proof, Lemma 1 holds for every n in 2020 cases.".to_string()),
             ],
             "entries under the bibliography title become items; text outside it is untouched"
+        );
+    }
+
+    #[test]
+    fn folds_one_continuation_per_entry_and_further_ones_only_mid_sentence() {
+        let mut pages = vec![vec![
+            heading("References"),
+            paragraph("Alaei, Saeed, Hu Fu, and Azarakhsh Malekian (2019):"),
+            paragraph("\u{201c}Efficient computation of optimal auctions via reduced forms,\u{201d}"),
+            paragraph("and its online appendix."),
+            paragraph("Avramov, D., Cheng, S., Lioui, A., Tarelli, A., 2022. Sustainable investing."),
+            paragraph("Avramov, D., Cheng, S., 2023. Green investing."),
+            paragraph("Entries marked with an asterisk are included in the meta-analysis."),
+            paragraph("Further reading is listed on the project website."),
+        ]];
+        mark_author_year_bibliography_entries(&mut pages);
+        assert_eq!(
+            summary(&pages),
+            vec![
+                (false, "References".to_string()),
+                (
+                    true,
+                    "Alaei, Saeed, Hu Fu, and Azarakhsh Malekian (2019): \u{201c}Efficient computation of optimal \
+                     auctions via reduced forms,\u{201d} and its online appendix."
+                        .to_string()
+                ),
+                (
+                    true,
+                    "Avramov, D., Cheng, S., Lioui, A., Tarelli, A., 2022. Sustainable investing.".to_string()
+                ),
+                (
+                    true,
+                    "Avramov, D., Cheng, S., 2023. Green investing. Entries marked with an asterisk are included \
+                     in the meta-analysis."
+                        .to_string()
+                ),
+                (false, "Further reading is listed on the project website.".to_string()),
+            ]
         );
     }
 
