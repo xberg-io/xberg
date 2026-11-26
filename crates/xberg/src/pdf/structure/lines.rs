@@ -163,6 +163,26 @@ pub(crate) fn trailing_marker_touches(
     gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO
 }
 
+/// The mirror of [`trailing_marker_touches`]: a lone opening bracket printed against the
+/// word after it, as in `(` + `Ω` where the symbol comes from another font. The bracket ends
+/// its word, so it is never a cell of its own column, and the two runs must share a baseline
+/// and touch like any split word. ~keep
+pub(crate) fn leading_opener_touches(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    if prev_word.is_empty()
+        || !prev_word.chars().all(|character| matches!(character, '(' | '['))
+        || !next_word.chars().next().is_some_and(char::is_alphanumeric)
+    {
+        return false;
+    }
+    same_line_gap_in_em(prev_seg, next_seg)
+        .is_some_and(|gap| gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO)
+}
+
 /// Signed advance-axis gap between two runs, in ems of the larger font, when they share a
 /// rotation, baseline and font size and no explicit space separates them.
 fn same_line_gap_in_em(prev_seg: &SegmentData, next_seg: &SegmentData) -> Option<f32> {

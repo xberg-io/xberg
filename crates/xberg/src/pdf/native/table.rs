@@ -6094,14 +6094,14 @@ mod tests {
         assert!(
             table.cells[0]
                 .windows(2)
-                .any(|cells| cells == ["icorr (A/cm2)", "Polarization resistance ( Ω )"]),
+                .any(|cells| cells == ["icorr (A/cm2)", "Polarization resistance (Ω)"]),
             "{:?}",
             table.cells[0]
         );
         assert!(
             table
                 .markdown
-                .contains("| icorr (A/cm2) | Polarization resistance ( Ω ) |"),
+                .contains("| icorr (A/cm2) | Polarization resistance (Ω) |"),
             "{}",
             table.markdown
         );

@@ -51,7 +51,7 @@ const NUMERIC_COLUMN_MIN_NUMERIC_PERCENT: usize = 60;
 #[cfg(feature = "pdf")]
 use super::hierarchy::SegmentData;
 #[cfg(feature = "pdf")]
-use super::structure::lines::{segments_are_touching, trailing_marker_touches};
+use super::structure::lines::{leading_opener_touches, segments_are_touching, trailing_marker_touches};
 
 /// Convert a PDF `SegmentData` to an `HocrWord` for table reconstruction, adding
 /// `advance_offset`/`top_offset` to the segment's upright-frame position before
@@ -326,6 +326,7 @@ fn merge_touching_segment_boundaries(
                 let (prev_seg, next_seg) = (&segments[boundary], &segments[boundary + 1]);
                 segments_are_touching(prev_seg, &prev_word.text, next_seg, &next_word.text)
                     || trailing_marker_touches(prev_seg, &prev_word.text, next_seg, &next_word.text)
+                    || leading_opener_touches(prev_seg, &prev_word.text, next_seg, &next_word.text)
             }
             _ => false,
         };
@@ -3362,6 +3363,26 @@ mod tests {
         let words = segments_to_words(&[date, marker], 800.0);
         let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
         assert_eq!(texts, vec!["01/15/38", "(c)"]);
+    }
+
+    /// embedded_images_tables.pdf prints the header `resistance (Ω)` with `Ω` from a symbol
+    /// font: `(` ends 0.026pt before `Ω` starts and `)` starts 0.006pt after it ends. Both
+    /// brackets touch the symbol, so the cell is `(Ω)`; a spaced `(` stays apart.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn brackets_touching_a_symbol_from_another_font_join_it() {
+        let label = make_seg("resistance (", 309.43, 500.0, 36.43, 6.5);
+        let ohm = make_seg("\u{3a9}", 345.88, 500.0, 5.04, 6.5);
+        let close = make_seg(")", 350.93, 500.0, 2.41, 6.5);
+        let words = segments_to_words(&[label, ohm, close], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["resistance", "(\u{3a9})"]);
+
+        let label = make_seg("resistance (", 309.43, 500.0, 36.43, 6.5);
+        let ohm = make_seg("\u{3a9}", 348.0, 500.0, 5.04, 6.5);
+        let words = segments_to_words(&[label, ohm], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["resistance", "(", "\u{3a9}"]);
     }
 
     #[test]
