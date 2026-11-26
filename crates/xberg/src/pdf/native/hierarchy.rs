@@ -2172,7 +2172,7 @@ mod tests {
         reading_order.extend((2..10).map(|row| line("Second", 1, row, "")));
         reading_order.extend((2..10).map(|row| line("Third", 2, row, "")));
         let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
-        let mut spans: Vec<TextSpan> = reading_order
+        let spans: Vec<TextSpan> = reading_order
             .into_iter()
             .enumerate()
             .map(|(sequence, span)| TextSpan { sequence, ..span })

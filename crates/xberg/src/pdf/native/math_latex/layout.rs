@@ -369,7 +369,6 @@ fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
                 }
                 if open_radical {
                     tex.raw(&format!("{{{spelled}}}"));
-                    open_radical = false;
                 } else {
                     tex.push(&spelled, command && item.accents.is_empty());
                 }
