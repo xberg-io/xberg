@@ -159,7 +159,8 @@ ARG XBERG_BUILD_ID
 ARG CARGO_PROFILE_RELEASE_LTO=fat
 
 # `ort-dynamic`: xberg does not link ONNX Runtime; it loads the digest-verified
-# /usr/local/lib/libonnxruntime.so staged below (`<exe dir>/../lib`) on first model use. ~keep
+# /usr/local/lib/libonnxruntime.so staged below (`<prefix>/lib` for /usr/local/bin/xberg) on first
+# model use. ~keep
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \

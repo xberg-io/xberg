@@ -84,7 +84,7 @@ Microsoft's runtime through `setup-onnx-runtime` (SHA-256 pinned in
 the archive as `libonnxruntime.so` / `libonnxruntime.dylib`, and fail if the
 binary links ONNX Runtime. The `core` and `full` Docker images build with
 `ort-dynamic` and already stage the same verified runtime in `/usr/local/lib`,
-which is `<exe dir>/../lib` for `/usr/local/bin/xberg`. The benchmark build uses
+which is `<prefix>/lib` for `/usr/local/bin/xberg`. The benchmark build uses
 `ort-dynamic` and the `ORT_DYLIB_PATH` its jobs already export.
 
 Unchanged: the Windows CLI (its archive gates require the `onnxruntime.dll`
