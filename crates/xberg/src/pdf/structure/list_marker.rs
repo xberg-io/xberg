@@ -64,8 +64,23 @@ fn parse_parenthesized_marker(text: &str) -> Option<(usize, Option<u16>)> {
     let inner = text.strip_prefix('(')?;
     let closing = inner.find(')')?;
     let marker = &inner[..closing];
-    (!marker.is_empty() && marker.chars().all(char::is_alphanumeric))
-        .then(|| (closing + 2, numeric_marker_value(marker)))
+    is_parenthesized_enumerator(marker).then(|| (closing + 2, numeric_marker_value(marker)))
+}
+
+/// Whether the text between parentheses enumerates: a number of up to three digits, a
+/// letter, a roman numeral, or a doubled letter (`(aa)`, as statutes continue past `(z)`).
+/// An acronym or a year in parentheses opens a wrapped line of prose as often as an item:
+/// 2026-14578 turned `(SEFSC) performed an analysis`, `(IHA) is provided` and `(1981)
+/// documented` into list items, each splitting its sentence in two. ~keep
+fn is_parenthesized_enumerator(marker: &str) -> bool {
+    let mut chars = marker.chars();
+    let (Some(first), second) = (chars.next(), chars.next()) else {
+        return false;
+    };
+    numeric_marker_value(marker).is_some()
+        || (first.is_alphabetic() && second.is_none())
+        || is_roman_marker(marker)
+        || (first.is_alphabetic() && second == Some(first) && chars.next().is_none())
 }
 
 fn parse_suffixed_marker(text: &str) -> Option<(usize, Option<u16>)> {
@@ -180,6 +195,28 @@ mod tests {
             "(1] body",
         ] {
             assert!(parse_ordered_list_marker(source).is_none(), "source: {source}");
+        }
+    }
+
+    /// 2026-14578: a wrapped line of prose opening with an acronym or a year in
+    /// parentheses was read as an enumerated item.
+    #[test]
+    fn rejects_parenthesized_acronyms_and_years_but_keeps_enumerators() {
+        for prose in [
+            "(SEFSC) performed an analysis",
+            "(IHA) is provided",
+            "(1981) documented",
+        ] {
+            assert!(parse_ordered_list_marker(prose).is_none(), "source: {prose}");
+        }
+        for item in [
+            "(a) Enforcement",
+            "(D) Definitions",
+            "(iv) Fourth",
+            "(12) Twelfth",
+            "(aa) Continued",
+        ] {
+            assert!(parse_ordered_list_marker(item).is_some(), "source: {item}");
         }
     }
 
