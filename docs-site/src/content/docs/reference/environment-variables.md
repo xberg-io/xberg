@@ -920,7 +920,15 @@ export ORT_DYLIB_PATH=/opt/homebrew/lib/libonnxruntime.dylib
 set ORT_DYLIB_PATH=C:\path\to\onnxruntime.dll
 ```
 
-When not set, Xberg auto-discovers system-installed ONNX Runtime on common paths. If no system library is found, the bundled CPU-only version is used.
+Builds that link ONNX Runtime (the language packages other than Intel macOS, `cargo install xberg-cli`, the Windows CLI) use the linked CPU runtime when this is not set.
+
+Builds that load ONNX Runtime dynamically (the Linux glibc and macOS CLI release archives, the `core`/`full` Docker images and the Intel macOS packages) load it the first time a model runs, never at startup, from the first of:
+
+1. `ORT_DYLIB_PATH`, when set and non-empty. A path that does not load is an error; Xberg does not fall back to another library.
+2. The release layout: `libonnxruntime.so` (or `libonnxruntime.so.1`) / `libonnxruntime.dylib` / `onnxruntime.dll` in the directory of the running executable (symlinks resolved), then in `<executable dir>/../lib`.
+3. The system locations `/usr/lib`, `/usr/local/lib`, `/usr/lib/{x86_64,aarch64}-linux-gnu` (Linux), `/opt/homebrew/lib`, `/usr/local/lib` (macOS), `C:\Program Files\onnxruntime\bin`, `C:\Windows\System32` (Windows).
+
+If none exists, the model operation fails with an error listing every path searched. The current directory and the dynamic loader's search path are never consulted.
 
 ### XBERG_ORT_EP
 

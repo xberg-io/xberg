@@ -78,6 +78,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking (native-pdf):** In the Rust-only `xberg-native-pdf` crate, `PdfDocument::source_bytes` is now `bytes::Bytes` instead of `Vec<u8>`, and `PdfDocument::from_bytes` accepts `impl Into<Bytes>`. A `Vec<u8>` is adopted without copying and a `Bytes` shares the caller's buffer, so the document no longer holds a second copy of the file. Callers that mutated or took ownership of the field as a `Vec` use `.to_vec()`.
+- **cli:** the Linux (glibc) and macOS CLI release archives and the `core`/`full` Docker images no longer link ONNX Runtime. They ship Microsoft's pinned `libonnxruntime` next to the `xberg` binary and load it the first time a model runs, so text-only extraction starts without mapping ONNX Runtime or CoreML. `ORT_DYLIB_PATH` now selects the runtime these builds use; a path that does not load is an error rather than a silent fallback. If the library is missing, model features fail with an error naming every path searched. Keep the library beside the binary when moving it. The Windows, musl and `binstall` archives, the Alpine `cli` image and the language packages are unchanged.
+
 ## [1.5.4] - 2026-11-25
 
 ### Added
