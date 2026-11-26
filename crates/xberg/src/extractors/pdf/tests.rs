@@ -9890,7 +9890,7 @@ mod native_text_stop_tests {
 
     fn extract_native_bytes(content: Vec<u8>, config: ExtractionConfig) -> NativeBlockingOutput {
         extract_native_blocking(
-            content,
+            content.into(),
             config,
             #[cfg(feature = "layout-detection")]
             None,

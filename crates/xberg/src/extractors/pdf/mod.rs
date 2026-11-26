@@ -458,6 +458,56 @@ where
     work()
 }
 
+/// The PDF bytes an extraction reads: borrowed from an in-memory caller, or a shared buffer
+/// the native engine takes over without a copy.
+enum PdfSource<'a> {
+    Borrowed(&'a [u8]),
+    /// A heap buffer, or a file mapping from [`crate::core::io::open_file_bytes`].
+    #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
+    Shared(bytes::Bytes),
+}
+
+impl std::ops::Deref for PdfSource<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        match self {
+            Self::Borrowed(bytes) => bytes,
+            Self::Shared(bytes) => bytes,
+        }
+    }
+}
+
+impl<'a> From<&'a [u8]> for PdfSource<'a> {
+    fn from(bytes: &'a [u8]) -> Self {
+        Self::Borrowed(bytes)
+    }
+}
+
+/// Load a PDF from disk without copying a large file onto the heap.
+///
+/// Files over the `open_file_bytes` threshold are mapped and the mapping becomes the native
+/// document's source, so object and stream reads page in only what they touch. The file must
+/// not be modified or truncated while the extraction runs (the `open_file_bytes` contract).
+#[cfg(feature = "tokio-runtime")]
+async fn load_pdf_source(path: &Path) -> Result<bytes::Bytes> {
+    let open = |path: &Path| -> Result<bytes::Bytes> {
+        let file = crate::core::io::open_file_bytes(path)?;
+        #[cfg(all(test, feature = "pdf"))]
+        source_mapping_tests::record_loaded(&file);
+        Ok(file.into_bytes())
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let path = path.to_path_buf();
+        tokio::task::spawn_blocking(move || open(&path))
+            .await
+            .map_err(|error| crate::XbergError::Other(format!("PDF file read task failed: {error}")))?
+    }
+    #[cfg(target_arch = "wasm32")]
+    open(path)
+}
+
 #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
 fn may_have_embedded_files(document: &xberg_native_pdf::PdfDocument) -> bool {
     if document.is_encrypted() || !document.has_unrecovered_catalog() {
@@ -483,7 +533,7 @@ fn may_have_embedded_files(document: &xberg_native_pdf::PdfDocument) -> bool {
 
 #[cfg(feature = "pdf")]
 fn extract_native_blocking(
-    content: Vec<u8>,
+    content: bytes::Bytes,
     config: ExtractionConfig,
     #[cfg(feature = "layout-detection")] layout_images: Option<Vec<image::RgbImage>>,
     #[cfg(feature = "layout-detection")] layout_results: Option<Vec<crate::pdf::structure::types::PageLayoutResult>>,
@@ -503,8 +553,9 @@ fn extract_native_blocking(
         .unwrap_or(&[]);
     let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
     let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
-    let mut native_document =
-        crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(bytes::Bytes::from(content), passwords)?;
+    let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
+    #[cfg(all(test, feature = "tokio-runtime"))]
+    source_mapping_tests::record_opened(&native_document.doc.source_bytes);
     let compatibility_data = match compatibility_data {
         Some(data) => Some(data),
         None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
@@ -2972,11 +3023,11 @@ impl InternalDocumentExtractor for PdfExtractor {
 
     #[cfg(feature = "tokio-runtime")]
     async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
-        let bytes = crate::core::io::read_file_async(path).await?;
+        let bytes = load_pdf_source(path).await?;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(Some(path.to_path_buf()));
         let result = crate::pdf::render::with_task_render_warnings(self.extract_core(
-            std::borrow::Cow::Owned(bytes),
+            PdfSource::Shared(bytes),
             mime_type,
             config,
             Some(path),
@@ -3045,7 +3096,7 @@ impl PdfExtractor {
     /// as pdfium.
     async fn extract_core(
         &self,
-        content: std::borrow::Cow<'_, [u8]>,
+        content: PdfSource<'_>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3131,7 +3182,7 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native(
         &self,
-        content: std::borrow::Cow<'_, [u8]>,
+        content: PdfSource<'_>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3143,7 +3194,7 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native_with_layout_pages(
         &self,
-        content: std::borrow::Cow<'_, [u8]>,
+        content: PdfSource<'_>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3173,8 +3224,8 @@ impl PdfExtractor {
         ) = layout_runner::maybe_run_layout_for_markdown_with_pages(&content, config, layout_pages).await;
 
         let (blocking_content, borrowed_content) = match content {
-            std::borrow::Cow::Owned(bytes) => (bytes, None),
-            std::borrow::Cow::Borrowed(bytes) => (bytes.to_vec(), Some(bytes)),
+            PdfSource::Shared(bytes) => (bytes, None),
+            PdfSource::Borrowed(bytes) => (bytes::Bytes::copy_from_slice(bytes), Some(bytes)),
         };
         let blocking_config = config.clone();
         #[cfg(feature = "layout-detection")]
@@ -3696,7 +3747,7 @@ impl PdfExtractor {
     #[cfg(not(feature = "pdf"))]
     async fn extract_core_native(
         &self,
-        _content: std::borrow::Cow<'_, [u8]>,
+        _content: PdfSource<'_>,
         mime_type: &str,
         _config: &ExtractionConfig,
         _path: Option<&std::path::Path>,
@@ -3706,6 +3757,8 @@ impl PdfExtractor {
     }
 }
 
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+mod source_mapping_tests;
 #[cfg(test)]
 mod tests;
 
