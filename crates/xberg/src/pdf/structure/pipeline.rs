@@ -489,7 +489,7 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
     let Some(body_font_size) = body_font_size else {
         return;
     };
-    join_wrapped_bold_titles(all_pages, body_font_size);
+    let joins = join_wrapped_bold_titles(all_pages, body_font_size);
     let other_heading_count = all_pages
         .iter()
         .flatten()
@@ -514,24 +514,23 @@ fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>],
                     .is_some_and(|&count| count <= MAX_SHORT_TITLE_REPEATS))
     });
     let signal_count = eligible.iter().flatten().filter(|&&is_eligible| is_eligible).count();
-    if signal_count < MIN_BODY_SIZE_BOLD_SIGNALS
-        || signal_count <= other_heading_count.saturating_mul(MAX_OTHER_HEADING_RATIO)
+    if signal_count >= MIN_BODY_SIZE_BOLD_SIGNALS
+        && signal_count > other_heading_count.saturating_mul(MAX_OTHER_HEADING_RATIO)
     {
-        return;
-    }
-
-    let level = if headingless {
-        HEADINGLESS_BODY_SIZE_HEADING_LEVEL
-    } else {
-        BODY_SIZE_HEADING_LEVEL
-    };
-    for (page, page_eligibility) in all_pages.iter_mut().zip(eligible) {
-        for (paragraph, is_eligible) in page.iter_mut().zip(page_eligibility) {
-            if is_eligible {
-                paragraph.heading_level = Some(level);
+        let level = if headingless {
+            HEADINGLESS_BODY_SIZE_HEADING_LEVEL
+        } else {
+            BODY_SIZE_HEADING_LEVEL
+        };
+        for (page, page_eligibility) in all_pages.iter_mut().zip(eligible) {
+            for (paragraph, is_eligible) in page.iter_mut().zip(page_eligibility) {
+                if is_eligible {
+                    paragraph.heading_level = Some(level);
+                }
             }
         }
     }
+    split_unpromoted_titles(all_pages, joins);
 }
 
 /// Baseline pitch, in body font sizes, within which the next bold paragraph is the following
@@ -546,19 +545,50 @@ const WRAPPED_TITLE_MAX_LINE_PITCH_EM: f32 = 1.6;
 /// prose. A following bold paragraph in the title's size, on the next line, is joined when
 /// the title is unterminated, the follower opens no section of its own, and the joined block
 /// still reads as one title in one column (see [`is_body_size_bold_signal`]).
-fn join_wrapped_bold_titles(all_pages: &mut [Vec<PdfParagraph>], body_font_size: f32) {
-    for page in all_pages.iter_mut() {
+///
+/// The join is provisional: it returns the paragraphs each join consumed, and
+/// [`split_unpromoted_titles`] restores them where the joined block is not promoted.
+fn join_wrapped_bold_titles(all_pages: &mut [Vec<PdfParagraph>], body_font_size: f32) -> Vec<WrappedTitleJoin> {
+    let mut joins: Vec<WrappedTitleJoin> = Vec::new();
+    for (page_index, page) in all_pages.iter_mut().enumerate() {
         let mut index = 0;
         while index + 1 < page.len() {
             let joined = continues_bold_title(&page[index], &page[index + 1], body_font_size)
                 .then(|| joined_paragraph(&page[index], &page[index + 1]))
                 .filter(|joined| is_body_size_bold_signal(joined, body_font_size));
             if let Some(joined) = joined {
-                page[index] = joined;
-                page.remove(index + 1);
+                let title = std::mem::replace(&mut page[index], joined);
+                let follower = page.remove(index + 1);
+                match joins.last_mut() {
+                    Some(join) if join.page == page_index && join.index == index => join.originals.push(follower),
+                    _ => joins.push(WrappedTitleJoin {
+                        page: page_index,
+                        index,
+                        originals: vec![title, follower],
+                    }),
+                }
             } else {
                 index += 1;
             }
+        }
+    }
+    joins
+}
+
+/// The source paragraphs one provisional title join replaced at `all_pages[page][index]`.
+struct WrappedTitleJoin {
+    page: usize,
+    index: usize,
+    originals: Vec<PdfParagraph>,
+}
+
+/// Undo every join whose block did not become a heading: two adjacent bold paragraphs are
+/// one title only when the document's bold body-size convention promotes them.
+fn split_unpromoted_titles(all_pages: &mut [Vec<PdfParagraph>], joins: Vec<WrappedTitleJoin>) {
+    for join in joins.into_iter().rev() {
+        let page = &mut all_pages[join.page];
+        if page[join.index].heading_level.is_none() {
+            page.splice(join.index..=join.index, join.originals);
         }
     }
 }

@@ -9223,6 +9223,45 @@ fn body_below(left: f32, top_baseline: f32) -> PdfParagraph {
     body
 }
 
+/// Joining two adjacent bold paragraphs is part of promoting them: a pair that does not
+/// become a heading keeps its own paragraphs.
+#[test]
+fn should_keep_adjacent_bold_paragraphs_apart_when_their_join_is_not_promoted() {
+    let wrapped_pair = || {
+        vec![
+            bold_title_paragraph(&["Negligible Impact Analysis and"], 45.0, 700.0),
+            bold_title_paragraph(&["Determination"], 45.0, 686.8),
+        ]
+    };
+    let with_body = || {
+        let mut page = wrapped_pair();
+        page.push(body_below(54.0, 660.0));
+        page
+    };
+
+    let mut too_few_signals = vec![with_body()];
+    promote_repeated_body_size_bold_headings(&mut too_few_signals, Some(12.0));
+    assert_eq!(too_few_signals[0].len(), 3, "nothing is promoted, so nothing is joined");
+    assert!(
+        too_few_signals[0]
+            .iter()
+            .all(|paragraph| paragraph.heading_level.is_none())
+    );
+
+    let mut pages = vec![with_body(), with_body(), with_body(), wrapped_pair()];
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+    for page in &pages[..3] {
+        assert_eq!(page.len(), 2, "a promoted wrapped title is joined");
+        assert_eq!(
+            paragraph_text_raw(&page[0]),
+            "Negligible Impact Analysis and Determination"
+        );
+        assert!(page[0].heading_level.is_some());
+    }
+    assert_eq!(pages[3].len(), 2, "a pair with no body to open stays two paragraphs");
+    assert!(pages[3].iter().all(|paragraph| paragraph.heading_level.is_none()));
+}
+
 /// 2026-13845 sets its roman-numbered section titles in bold at body size and wraps them over
 /// up to four lines of a narrow column. The line grouper ends a paragraph after the numbered
 /// line, so `IV. Proposed Action and Request for` was promoted alone with `Public Comment`
