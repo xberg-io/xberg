@@ -284,13 +284,27 @@ pub(super) fn clone_rgb_for_png_encode(
     image: &image::DynamicImage,
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> crate::Result<image::RgbImage> {
+    rgb_for_png_encode(image, security_limits).map(std::borrow::Cow::into_owned)
+}
+
+/// The RGB8 pixels to PNG-encode for `image`, borrowed when it already holds RGB8.
+///
+/// The budget check charges the RGB copy either way, so a page is admitted or refused exactly as
+/// [`clone_rgb_for_png_encode`] decides. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn rgb_for_png_encode<'a>(
+    image: &'a image::DynamicImage,
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> crate::Result<std::borrow::Cow<'a, image::RgbImage>> {
     crate::extraction::image_decode::validate_dynamic_image_additional_live_bytes(
         image,
         security_limits,
         3 + OCR_PNG_ENCODE_BYTES_PER_PIXEL,
         OCR_PNG_ENCODE_FIXED_BYTES,
     )?;
-    Ok(image.to_rgb8())
+    Ok(image
+        .as_rgb8()
+        .map_or_else(|| std::borrow::Cow::Owned(image.to_rgb8()), std::borrow::Cow::Borrowed))
 }
 /// Whether the rendered page raster carries essentially no ink.
 ///
