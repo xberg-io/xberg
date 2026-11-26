@@ -1,4 +1,4 @@
-//! Reuse of ONNX Runtime's optimised graph across processes for CPU-only sessions (ADR 0017).
+//! Reuse of ONNX Runtime's optimised graph across processes for CPU-only sessions (ADR 0018).
 //!
 //! Building a session with `GraphOptimizationLevel::All` re-runs every graph transformer on each
 //! cold start. ONNX Runtime can serialise the graph it produced (`SetOptimizedModelFilePath`), and

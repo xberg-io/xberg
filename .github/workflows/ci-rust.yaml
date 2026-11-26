@@ -1135,7 +1135,7 @@ jobs:
           # main unit-test job builds `full`, which does not include it — so this is the sole
           # CI enforcement of the branch's core correctness claim. Same 3-attempt retry as above.
           # inference::ort_optimized runs here too: its saved-graph bit-identity test needs the
-          # same layout models and the same hard failure when they are missing (ADR 0017).
+          # same layout models and the same hard failure when they are missing (ADR 0018).
           for attempt in 1 2 3; do
             if [ $attempt -gt 1 ]; then
               backoff=$((15 * 3 ** (attempt - 2)))
