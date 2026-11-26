@@ -9052,6 +9052,17 @@ fn should_promote_a_body_size_bold_title_wrapped_onto_two_lines() {
     third.segments[0].text = "is not a title".to_string();
     three_lines[0].lines.push(third);
     pages.push(three_lines);
+    // pdfa_001: bold form labels from two rows of a grid join into one paragraph.
+    let mut shifted_rows = wrapped("Building Name McAuley Wing", "Type of Service Provided");
+    shifted_rows[0].lines[0].segments[0].x = 405.0;
+    shifted_rows[0].lines[1].segments[0].x = 81.0;
+    pages.push(shifted_rows);
+    let mut column_labels = wrapped("Pediatric Care", "Nursery Unit");
+    let mut beside = column_labels[0].lines[0].segments[0].clone();
+    beside.text = "intensive Care Newborn".to_string();
+    beside.x = column_labels[0].lines[0].segments[0].x + 200.0;
+    column_labels[0].lines[0].segments.push(beside);
+    pages.push(column_labels);
 
     promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
 
@@ -9061,6 +9072,11 @@ fn should_promote_a_body_size_bold_title_wrapped_onto_two_lines() {
     assert_eq!(
         pages[3][0].heading_level, None,
         "three bold lines are a block, not a title"
+    );
+    assert_eq!(
+        (pages[4][0].heading_level, pages[5][0].heading_level),
+        (None, None),
+        "two bold rows that start apart or hold a column gutter are form labels, not a wrapped title"
     );
 }
 

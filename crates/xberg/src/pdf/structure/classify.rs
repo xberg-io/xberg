@@ -1742,6 +1742,33 @@ fn paragraph_plain_text(para: &PdfParagraph) -> String {
 /// still bounds the paragraph to title length. ~keep
 const MAX_BODY_SIZE_BOLD_HEADING_LINES: usize = 2;
 
+/// Left-edge drift, in multiples of the body font size, within which a second line is the
+/// wrap of the first rather than a label from another column.
+const WRAPPED_TITLE_LEFT_EDGE_EM: f32 = 1.0;
+
+/// Whether a two-line bold paragraph is one title wrapped in its column: the second line
+/// starts under the first and neither line has a gutter-wide gap. pdfa_001's form joins
+/// bold column labels from two rows (`Pediatric  intensive Care Newborn  Intermediate
+/// Card` / `Nursery`, and `McAuley Wing` above `Type of Service Provided`), and they were
+/// promoted as headings once two lines were admitted. A single line is unaffected. ~keep
+fn reads_as_one_title_block(para: &PdfParagraph, body_font_size: f32) -> bool {
+    let [first, second] = para.lines.as_slice() else {
+        return para.lines.len() == 1;
+    };
+    let left_edge = |line: &super::types::PdfLine| {
+        line.segments
+            .iter()
+            .map(|segment| segment.x)
+            .fold(f32::INFINITY, f32::min)
+    };
+    let has_gutter_gap = para.lines.iter().any(|line| {
+        line.segments
+            .windows(2)
+            .any(|pair| pair[1].x - (pair[0].x + pair[0].width) > body_font_size * SHORT_TITLE_MAX_SEGMENT_GAP_EM)
+    });
+    (left_edge(first) - left_edge(second)).abs() <= body_font_size * WRAPPED_TITLE_LEFT_EDGE_EM && !has_gutter_gap
+}
+
 pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32) -> bool {
     if para.heading_level.is_some()
         || !para.is_bold
@@ -1754,6 +1781,7 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
         || body_font_size <= 0.0
         || (para.dominant_font_size - body_font_size).abs() > 0.5
         || para.word_count > MAX_BOLD_HEADING_WORD_COUNT
+        || !reads_as_one_title_block(para, body_font_size)
     {
         return false;
     }
