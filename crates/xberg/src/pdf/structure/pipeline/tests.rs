@@ -8653,6 +8653,26 @@ fn should_delete_a_consistent_running_footer_page_number() {
     );
 }
 
+/// 2026-14578 is paginated through its Federal Register volume: a five-digit folio heads every
+/// other page, and four digits left `45215` in the text, where the renderer joined it to the
+/// bold section title below.
+#[test]
+fn should_delete_five_digit_volume_folios_on_alternate_pages() {
+    let mut pages: Vec<Vec<PdfParagraph>> = (0..10)
+        .map(|page_index| {
+            let mut page = vec![positioned_para("Some ordinary body sentence.", 90.0, 400.0)];
+            if page_index % 2 == 0 {
+                page.push(positioned_para(&(45207 + page_index).to_string(), 536.0, 750.0));
+            }
+            page
+        })
+        .collect();
+    let page_heights = letter_page_heights(pages.len());
+    mark_validated_page_numbers(&mut pages, &page_heights, false, false);
+    assert!(pages.iter().step_by(2).all(|page| page[1].is_page_furniture));
+    assert!(pages.iter().all(|page| !page[0].is_page_furniture));
+}
+
 #[test]
 fn should_leave_layout_classified_paragraphs_to_the_layout_path() {
     // R6: any layout class at all takes precedence over this heuristic, so

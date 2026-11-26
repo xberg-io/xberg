@@ -80,9 +80,9 @@ pub(crate) fn margin_band(y_ratio: f32) -> MarginBand {
 /// prose outright.
 const MAX_CANDIDATE_CHARS: usize = 24;
 
-/// Maximum digits in an arabic page number. Four covers every realistic pagination
-/// (up to 9999) without matching longer numeric runs such as identifiers or amounts.
-const MAX_PAGE_DIGITS: usize = 4;
+/// Maximum digits in an arabic page number. Volume-paginated serials run past 9999 (the
+/// Federal Register's `45215`); a longer number still needs the cross-page sequence. ~keep
+const MAX_PAGE_DIGITS: usize = 6;
 
 /// The literal keyword introducing the `Page N` and `Page N of M` conventions.
 const PAGE_KEYWORD: &str = "page";
@@ -711,7 +711,7 @@ mod tests {
             "   ",
             "Page layout options",
             "Introduction",
-            "12345",
+            "1234567",
             "12.5",
             "Table 3",
             "Q4",
