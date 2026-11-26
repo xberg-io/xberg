@@ -191,7 +191,8 @@ pub(crate) async fn extract_file(
     let owned_config_with_cancel_token;
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() {
-        let mut owned = config.clone();
+        // ~keep Boxed: held across the awaits below, it would put ~10 KiB in this future, which `instrument` copies.
+        let mut owned = Box::new(config.clone());
         owned.ensure_cancel_token();
         // Each timed extraction gets its own soft-stop state, so a caller's token that is
         // reused for another extraction never starts out stopped.
