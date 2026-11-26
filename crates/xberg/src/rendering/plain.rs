@@ -8,7 +8,7 @@
 
 use crate::types::annotations::PdfAnnotation;
 use crate::types::document_structure::ContentLayer;
-use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+use crate::types::internal::{ElementKind, InternalDocument, InternalElement, is_record_group};
 
 use super::common::{
     FootnoteCollector, annotation_display_text, annotation_type_label, get_admonition_kind, get_admonition_title,
@@ -95,7 +95,17 @@ fn render_body_plain(
     let mut last_heading_depth = None;
     let mut after_text_block = false;
     let mut last_writer: Option<usize> = None;
+    // ~keep A record group only sets records apart in markdown; plain output keeps the
+    // nesting its contents would have outside it, so records add no indentation here.
+    let mut open_groups_are_records: Vec<bool> = Vec::new();
     for (i, elem) in doc.elements.iter().enumerate() {
+        match elem.kind {
+            ElementKind::GroupStart => open_groups_are_records.push(is_record_group(elem.attributes.as_ref())),
+            ElementKind::GroupEnd => {
+                open_groups_are_records.pop();
+            }
+            _ => {}
+        }
         if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
             continue;
         }
@@ -117,7 +127,19 @@ fn render_body_plain(
             }
             after_text_block = true;
         } else {
-            render_element_plain(doc, elem, out, &mut last_heading_depth);
+            let record_depth = u16::try_from(open_groups_are_records.iter().filter(|is_record| **is_record).count())
+                .unwrap_or(u16::MAX);
+            let outside_records;
+            let rendered = if record_depth > 0 {
+                outside_records = InternalElement {
+                    depth: elem.depth.saturating_sub(record_depth),
+                    ..elem.clone()
+                };
+                &outside_records
+            } else {
+                elem
+            };
+            render_element_plain(doc, rendered, out, &mut last_heading_depth);
             let plain_text = elem
                 .attributes
                 .as_ref()

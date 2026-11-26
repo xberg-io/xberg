@@ -118,16 +118,18 @@ async fn scalar_arrays_stay_one_bullet_list() {
 }
 
 #[tokio::test]
-async fn plain_output_separates_records_with_blank_lines_and_no_rule() {
+async fn plain_output_separates_records_with_blank_lines_and_no_rule_or_indent() {
     let (_, plain) = render_json(br#"[{"name":"Ada","age":3},{"name":"Grace","age":4}]"#).await;
 
-    assert!(!plain.contains("--"), "{plain:?}");
-    let records: Vec<&str> = plain
-        .split("\n\n")
-        .map(str::trim)
-        .filter(|block| !block.is_empty())
-        .collect();
-    assert_eq!(records, ["name: Ada", "age: 3", "name: Grace", "age: 4"], "{plain:?}");
+    assert_eq!(plain.trim_end(), "name: Ada\n\nage: 3\n\nname: Grace\n\nage: 4");
+}
+
+#[tokio::test]
+async fn plain_output_keeps_nested_headings_unindented_inside_records() {
+    let (_, plain) = render_json(br#"[{"name":"Ada","details":{"role":"Engineer"}}]"#).await;
+
+    assert!(!plain.contains("  "), "{plain:?}");
+    assert!(plain.contains("role: Engineer"), "{plain:?}");
 }
 
 #[test]
