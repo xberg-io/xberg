@@ -2039,7 +2039,7 @@ impl PdfDocument {
         // Materialize each span's chars ONCE (to_chars allocates + decodes); the
         // word-clustering loop below reuses chars_per_span instead of calling
         // to_chars a second time per span. Byte-identical, halves to_chars work. ~keep
-        let mut all_chars: Vec<_> = Vec::new();
+        let mut all_chars: Vec<_> = Vec::with_capacity(spans.iter().map(|s| s.text.chars().count()).sum());
         let mut span_char_ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(spans.len());
         for s in spans.iter() {
             let start = all_chars.len();
@@ -2401,7 +2401,7 @@ impl PdfDocument {
         let page_bbox = crate::geometry::Rect::new(media_box.0, media_box.1, media_box.2, media_box.3);
 
         // Materialize each span's chars once (see extract_text_as_words). ~keep
-        let mut all_chars: Vec<_> = Vec::new();
+        let mut all_chars: Vec<_> = Vec::with_capacity(spans.iter().map(|s| s.text.chars().count()).sum());
         let mut span_char_ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(spans.len());
         for s in spans.iter() {
             let start = all_chars.len();
@@ -2801,6 +2801,10 @@ impl PdfDocument {
             "retrieved page content data"
         );
 
+        // Concatenation and stream decoding grow the buffer by doubling; the cache keeps every page's
+        // copy for the whole run, so the unused tail is held memory. ~keep
+        let mut content_data = content_data;
+        content_data.shrink_to_fit();
         let content_data = std::sync::Arc::new(content_data);
         self.page_content_cache
             .lock_or_recover()
