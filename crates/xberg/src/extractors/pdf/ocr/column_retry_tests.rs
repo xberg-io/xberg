@@ -503,3 +503,140 @@ async fn transient_order_retry_error_keeps_primary_and_invalidates_cache() {
     })
     .await;
 }
+
+/// A sparse read whose every block and line spans both columns of `words`' rows.
+fn row_spanning_read(words: &[Word<'_>]) -> crate::types::ExtractedDocument {
+    use crate::types::{
+        OcrConfidence, OcrElement, OcrElementLevel,
+        internal::{ElementKind, InternalElement},
+    };
+
+    let mut read = page_read(11, "", words);
+    let doc = read.ocr_internal_document.as_mut().unwrap();
+    let public = read.ocr_elements.as_mut().unwrap();
+    let original = std::mem::take(public);
+    let mut offset = 0;
+    for row in words.chunk_by(|a, b| a.bounds[1] == b.bounds[1]) {
+        let text = row.iter().map(|word| word.text).collect::<Vec<_>>().join(" ");
+        let bounds = super::union(row.iter().map(|word| word.bounds)).unwrap();
+        let mut block = InternalElement::text(ElementKind::Paragraph, text.clone(), 0);
+        block.bbox = Some(super::bbox(bounds));
+        doc.elements.push(block);
+        public.push(
+            OcrElement::new(text, super::rectangle(bounds), OcrConfidence::from_tesseract(95.0))
+                .with_level(OcrElementLevel::Line),
+        );
+        public.extend_from_slice(&original[offset..offset + row.len()]);
+        offset += row.len();
+    }
+    read.content = doc
+        .elements
+        .iter()
+        .map(|block| block.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    read
+}
+
+fn column_major(words: &[Word<'static>]) -> Vec<Word<'static>> {
+    let mut sorted = words.to_vec();
+    sorted.sort_by_key(|word| (word.bounds[0] >= 674, word.bounds[1], word.bounds[0]));
+    sorted
+}
+
+#[test]
+fn regroup_splits_row_spanning_sparse_lines_into_witnessed_column_order() {
+    let words = source_page();
+    let mut primary = row_spanning_read(&words);
+    let retry = structured_read(3, &column_major(&words), None);
+    let tokens = |read: &crate::types::ExtractedDocument| {
+        let mut tokens: Vec<String> = read.content.split_whitespace().map(str::to_string).collect();
+        tokens.sort();
+        tokens
+    };
+    let before = tokens(&primary);
+
+    assert!(super::regroup::regroup(&mut primary, &retry, "tesseract", FRAME));
+
+    let doc = primary.ocr_internal_document.as_ref().unwrap();
+    let expected: Vec<String> = column_major(&words)
+        .chunk_by(|a, b| a.bounds[1] == b.bounds[1] && (a.bounds[0] >= 674) == (b.bounds[0] >= 674))
+        .map(|row| row.iter().map(|word| word.text).collect::<Vec<_>>().join(" "))
+        .collect();
+    let actual: Vec<String> = doc.elements.iter().map(|element| element.text.clone()).collect();
+    assert_eq!(actual, expected);
+    assert_eq!(primary.content, expected.join("\n\n"));
+    assert_eq!(
+        tokens(&primary),
+        before,
+        "regrouping keeps the primary read's token set"
+    );
+    let first = doc.elements[0].bbox.unwrap();
+    assert!(
+        first.x1 < 674.0,
+        "the first piece holds only left-column words: {first:?}"
+    );
+}
+
+#[test]
+fn regroup_keeps_the_primary_when_the_witness_is_not_an_automatic_read_or_does_not_reorder() {
+    let words = source_page();
+    let primary = row_spanning_read(&words);
+
+    let mut unchanged = primary.clone();
+    let sparse_witness = structured_read(11, &column_major(&words), None);
+    assert!(!super::regroup::regroup(
+        &mut unchanged,
+        &sparse_witness,
+        "tesseract",
+        FRAME
+    ));
+    assert_eq!(unchanged.content, primary.content);
+
+    let mut unchanged = primary.clone();
+    let row_witness = row_spanning_read(&words);
+    let mut row_witness_auto = row_witness.clone();
+    row_witness_auto.metadata.format = Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
+        psm: 3,
+        ..Default::default()
+    }));
+    assert!(!super::regroup::regroup(
+        &mut unchanged,
+        &row_witness_auto,
+        "tesseract",
+        FRAME
+    ));
+    assert_eq!(unchanged.content, primary.content);
+}
+
+#[test]
+fn a_word_no_witness_line_holds_stays_with_the_piece_before_it() {
+    let words = [
+        Word {
+            text: "a",
+            bounds: [0, 0, 10, 10],
+            confidence: 0.9,
+        },
+        Word {
+            text: "b",
+            bounds: [20, 0, 30, 10],
+            confidence: 0.9,
+        },
+        Word {
+            text: "c",
+            bounds: [100, 0, 110, 10],
+            confidence: 0.9,
+        },
+        Word {
+            text: "d",
+            bounds: [0, 20, 10, 30],
+            confidence: 0.9,
+        },
+    ];
+    let witness = [[95, 0, 120, 12], [0, 0, 12, 32]];
+    let ranks = super::regroup::word_ranks(&words, &witness);
+    assert_eq!(ranks, vec![Some(1), None, Some(0), Some(1)]);
+    let pieces = super::regroup::pieces(&[vec![0, 1, 2], vec![3]], &ranks, &words);
+    let order: Vec<Vec<usize>> = pieces.iter().map(|piece| piece.words.clone()).collect();
+    assert_eq!(order, vec![vec![2], vec![0, 1], vec![3]]);
+}

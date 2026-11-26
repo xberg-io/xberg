@@ -16,6 +16,8 @@ mod restoration;
 mod lanes;
 #[path = "column_order.rs"]
 mod ordering;
+#[path = "column_regroup.rs"]
+mod regroup;
 #[cfg(feature = "layout-detection")]
 pub(super) use lanes::ColumnLanes;
 pub(super) use ordering::LineOrder;
@@ -56,20 +58,19 @@ async fn retry_order_read(
     let Some(frame) = frame else {
         return Ok((baseline, None));
     };
-    let read = retry_until_stop(cancel, async {
-        let candidate = read().await?;
-        Ok::<_, crate::XbergError>(
-            (!stop_retry(cancel))
-                .then(|| ordering::plan(&baseline, &candidate, backend, frame, cancel))
-                .flatten(),
-        )
-    })
-    .await;
+    let read = retry_until_stop(cancel, read()).await;
     if explicitly_cancelled(cancel) || matches!(read, Some(Err(crate::XbergError::Cancelled))) {
         return Err(crate::XbergError::Cancelled);
     }
     match read {
-        Some(Ok(Some(order))) => return Ok((baseline, Some(order))),
+        Some(Ok(candidate)) if !stop_retry(cancel) => {
+            if regroup::regroup(&mut baseline, &candidate, backend, frame) {
+                return Ok((baseline, None));
+            }
+            if let Some(order) = ordering::plan(&baseline, &candidate, backend, frame, cancel) {
+                return Ok((baseline, Some(order)));
+            }
+        }
         Some(Err(_)) => crate::core::extractor::cacheability::invalidate_current(),
         _ => {}
     }
@@ -816,7 +817,6 @@ fn paired_span<'a>(range: &Range<usize>, slots: &'a [Option<Slot>]) -> Option<(&
     Some((first, last))
 }
 
-#[cfg(test)]
 fn rectangle([x0, y0, x1, y1]: [u32; 4]) -> OcrBoundingGeometry {
     OcrBoundingGeometry::Rectangle {
         left: x0,
