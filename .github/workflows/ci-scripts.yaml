@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/**"
       - "docker/Dockerfile.*"
+      - "charts/**"
       - "tools/**/*.sh"
       - "tools/benchmark-harness/caption_export/**"
       - "integrations/scripts/**"
@@ -80,15 +81,18 @@ jobs:
           use-sccache: "false"
           install-llvm-cov: "false"
 
-      - name: Install cargo-deny for the shipped-license controls
+      # helm renders the chart for helm_chart.bats. ~keep
+      - name: Install cargo-deny and helm for the Bats suite
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install-args: cargo-deny
+          install-args: cargo-deny helm
 
       # cargo-deny is a cargo subcommand, so the suite needs its bin directory on PATH: the Bats
       # runner is not a `mise run` task and therefore gets no tool environment of its own. ~keep
-      - name: Expose cargo-deny to the Bats suite
-        run: echo "$(dirname "$(mise which cargo-deny)")" >>"$GITHUB_PATH"
+      - name: Expose cargo-deny and helm to the Bats suite
+        run: |
+          dirname "$(mise which cargo-deny)" >>"$GITHUB_PATH"
+          dirname "$(mise which helm)" >>"$GITHUB_PATH"
 
       - name: Install Bats
         uses: xberg-io/actions/install-bats@v1

@@ -19,9 +19,17 @@ expected = {
 }
 count = 0
 for path in files:
+    stages = set()
     for line in path.read_text().splitlines():
         if line.startswith("FROM "):
-            image = line.split()[1]
+            tokens = line.split()
+            image = tokens[1]
+            # A stage built FROM an earlier stage names no base image.
+            from_stage = image in stages
+            if len(tokens) == 4 and tokens[2].upper() == "AS":
+                stages.add(tokens[3])
+            if from_stage:
+                continue
         elif line.startswith("ARG MANYLINUX_IMAGE="):
             image = line.split("=", 1)[1]
         else:
@@ -31,8 +39,8 @@ for path in files:
         key = next(key for key in expected if image.startswith(key))
         assert image == expected[key], (path.name, image)
         count += 1
-assert count == 14, count
-print("verified base images: expected=14 actual=14 across 11 Dockerfiles")
+assert count == 16, count
+print("verified base images: expected=16 actual=16 across 11 Dockerfiles")
 PYTHON
 }
 
@@ -308,10 +316,13 @@ codec_urls = (
 )
 epel = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
 source_label = "https://github.com/xberg-io/xberg"
+tessdata_best_url = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/${revision}/${name}"
+tessdata_best_check = "sha256sum --strict -c /opt/tessdata-best/tessdata_best.sha256"
+tessdata_best_manifest = ("scripts/ci/tessdata/tessdata_best.revision", "scripts/ci/tessdata/tessdata_best.sha256")
 # Count duplicate literal URLs, including repositories in the standalone musl builder.
 external_urls = {
-    "core": (*codec_urls, *archive_urls.values(), source_label),
-    "full": (*codec_urls, *archive_urls.values(), source_label),
+    "core": (*codec_urls, *archive_urls.values(), source_label, tessdata_best_url),
+    "full": (*codec_urls, *archive_urls.values(), source_label, tessdata_best_url),
     "cli": (rustup_urls["musl"], archive_urls["PDFIUM"], source_label),
     "musl-build": (*alpine_repository_urls, rustup_urls["musl"], archive_urls["PDFIUM"]),
     "manylinux-node": (epel, *codec_urls, archive_urls["ORT"], rustup_urls["gnu"]),
@@ -349,6 +360,14 @@ def verify_variant(name, text, allowlist):
     assert observed_urls == expected_urls, (
         name, "external URL inventory", dict(observed_urls - expected_urls), dict(expected_urls - observed_urls)
     )
+    if tessdata_best_url in expected_urls:
+        downloads = [line for line, urls in url_uses if tessdata_best_url in urls]
+        assert len(downloads) == 1 and downloads[0].find(tessdata_best_check) > downloads[0].find(tessdata_best_url), (
+            name, "tessdata_best download/verify order"
+        )
+        for source in tessdata_best_manifest:
+            assert (root / source).is_file(), source
+            assert allowlist.splitlines().count("!" + source) == 1, (name, source, "Docker allowlist")
 
     def verify_copy(source, target):
         destinations = [copy[-1] for copy in copies if source in copy[:-1]]
@@ -523,6 +542,8 @@ if sys.argv[2] == "negative":
         (lambda: verify_variant("core", core.replace('tar -xzf "$PDFIUM_ARCHIVE"', 'tar -xzf unverified.tgz', 1), ignore), "archive extract count"),
         (lambda: verify_variant("core", core.replace("COPY " + verifier, "COPY scripts/other.sh", 1), ignore), "COPY source and destination"),
         (lambda: verify_variant("core", core, ignore.replace("!" + verifier, verifier)), "Docker allowlist"),
+        (lambda: verify_variant("core", swap(core, tessdata_best_check, "true"), ignore), "tessdata_best download/verify order"),
+        (lambda: verify_variant("full", variants["full"], swap(ignore, "!" + tessdata_best_manifest[1], tessdata_best_manifest[1])), "Docker allowlist"),
         (lambda: verify_variant("core", core + "\nRUN curl https://chromium-browser-snapshots.invalid\n", ignore), "snapshot endpoint"),
         (lambda: verify_variant("manylinux-node", variants["manylinux-node"] + "\nRUN curl https://sh.rustup.rs\n", ignore), "Rustup endpoint"),
         (lambda: rustup_pins("manylinux-node", variants["manylinux-node"].replace('"$RUSTUP_SHA256" | sha256sum -c -', '"$RUSTUP_SHA256"', 1), "gnu"), "Rustup download/verify/execute order"),
@@ -540,8 +561,8 @@ if sys.argv[2] == "negative":
 else:
     assert sum(verify_variant(name, text, ignore) for name, text in variants.items()) == 8
     verify_rustup(variants)
-    assert sum(map(len, external_urls.values())) == 31
-    print("six Dockerfiles: 31 reviewed URLs, eight verified archive chains, four verified Rustup bootstraps")
+    assert sum(map(len, external_urls.values())) == 33
+    print("six Dockerfiles: 33 reviewed URLs, eight verified archive chains, four verified Rustup bootstraps")
 PYTHON
 }
 

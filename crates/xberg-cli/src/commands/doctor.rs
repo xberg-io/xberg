@@ -130,12 +130,13 @@ pub fn doctor_command(
     )]
     candidates: &OnnxCandidateOptions,
 ) -> Result<()> {
-    let config = load_config(config_path, !no_config_discovery)?;
+    let (config, env_check) = doctor_config(config_path, no_config_discovery)?;
 
     // Clean first so the report reflects the post-clean cache state; the
     // cleanup result is a regular check, keeping one output shape per format.
     let cleaned = clean.then(xberg::doctor::clean_obsolete);
     let mut report = doctor(&config);
+    report.checks.extend(env_check);
     append_cache_clean_check(&mut report, cleaned);
     #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
     append_candidate_checks(&mut report, candidates)?;
@@ -146,6 +147,21 @@ pub fn doctor_command(
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// The config doctor reports on: the loaded config with the environment overrides `serve` and
+/// `mcp` apply, so doctor sees what those servers run. An invalid override is returned as a
+/// failing check instead of aborting the report.
+fn doctor_config(
+    config_path: Option<PathBuf>,
+    no_config_discovery: bool,
+) -> Result<(xberg::ExtractionConfig, Option<DoctorCheck>)> {
+    let mut config = load_config(config_path, !no_config_discovery)?;
+    let env_check = config
+        .apply_env_overrides()
+        .err()
+        .map(|error| DoctorCheck::fail("config.environment", error.to_string()));
+    Ok((config, env_check))
 }
 
 /// Append the experimental candidate artifact catalog to the report.
@@ -204,4 +220,63 @@ fn append_candidate_checks(report: &mut DoctorReport, options: &OnnxCandidateOpt
 
     onnx_candidates::append_doctor_checks(report, &summaries, any_selected);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::env_test;
+
+    const CHILD: &str = "commands::doctor::tests::doctor_config_applies_env_overrides_child";
+
+    #[test]
+    fn doctor_config_applies_env_overrides() {
+        let prefix = tempfile::tempdir().unwrap();
+        std::fs::write(prefix.path().join("eng.traineddata"), b"fast").unwrap();
+        env_test::run_child_test(CHILD, env_test::CASE, "best", |command| {
+            command
+                .env("XBERG_OCR_TESSDATA_MODEL", "best")
+                .env("TESSDATA_PREFIX", prefix.path());
+        });
+    }
+
+    #[test]
+    fn doctor_reports_an_invalid_env_override_as_a_failing_check() {
+        env_test::run_child_test(CHILD, env_test::CASE, "invalid", |command| {
+            command.env("XBERG_OCR_TESSDATA_MODEL", "medium");
+        });
+    }
+
+    #[test]
+    #[ignore = "run with an isolated environment by its parent test"]
+    fn doctor_config_applies_env_overrides_child() {
+        let Some(case) = env_test::child_test_root(env_test::CASE) else {
+            return;
+        };
+        let (config, env_check) = doctor_config(None, true).expect("doctor config loads");
+        if case.to_str() == Some("invalid") {
+            let check = env_check.expect("an invalid override must become a check");
+            assert_eq!(check.status, ProbeStatus::Fail);
+            assert!(check.message.contains("XBERG_OCR_TESSDATA_MODEL"), "{}", check.message);
+            return;
+        }
+
+        assert!(env_check.is_none());
+        assert!(config.ocr.is_none(), "the set alone must not create an ocr section");
+        assert_eq!(
+            config.effective_tessdata_model(),
+            xberg::TessdataModel::Best,
+            "XBERG_OCR_TESSDATA_MODEL must reach doctor"
+        );
+        #[cfg(feature = "ocr")]
+        {
+            let report = doctor(&config);
+            let check = report
+                .checks
+                .iter()
+                .find(|check| check.name == "ocr.tesseract")
+                .expect("an OCR build probes tesseract");
+            assert_eq!(check.status, ProbeStatus::Warn, "{}", check.message);
+        }
+    }
 }

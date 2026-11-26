@@ -1642,7 +1642,8 @@ def test_zigbuild_wiring_gate_rejects_missing_wrong_and_early_installers() -> No
 
 
 def test_helm_publish_does_not_depend_on_the_cli_image_manifest() -> None:
-    # The chart only references xberg:<version> and xberg:<version>-core. merge-docker is one
+    # The chart only references xberg:<version>, xberg:<version>-core and their -best twins
+    # (ocr.tesseractModelSet=best). merge-docker is one
     # matrix job, so a cli leg that fails (cli/amd64 timing out leaves a single-arch digest,
     # which "Verify digests present" rejects) turns its aggregate result into `failure` and
     # skipped the chart for v1.3.6-v1.3.8. ~keep
@@ -1655,6 +1656,8 @@ def test_helm_publish_does_not_depend_on_the_cli_image_manifest() -> None:
     assert "xberg-cli" not in images
     assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}" in images
     assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core" in images
+    assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-best" in images
+    assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core-best" in images
 
 
 def test_publish_contracts_run_in_ci() -> None:

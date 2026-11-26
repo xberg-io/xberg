@@ -124,6 +124,8 @@ jobs:
     outputs:
       core_exists: ${{ steps.core.outputs.exists }}
       full_exists: ${{ steps.full.outputs.exists }}
+      core_best_exists: ${{ steps.core_best.outputs.exists }}
+      full_best_exists: ${{ steps.full_best.outputs.exists }}
       cli_exists: ${{ steps.cli.outputs.exists }}
     steps:
       - name: Checkout code
@@ -150,6 +152,20 @@ jobs:
         env:
           DOCKER_TAG: ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}
           SUMMARY_LABEL: full
+        run: scripts/publish/check-docker-tag.sh
+
+      - name: Check core-best image tag
+        id: core_best
+        env:
+          DOCKER_TAG: ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core-best
+          SUMMARY_LABEL: core-best
+        run: scripts/publish/check-docker-tag.sh
+
+      - name: Check full-best image tag
+        id: full_best
+        env:
+          DOCKER_TAG: ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-best
+          SUMMARY_LABEL: full-best
         run: scripts/publish/check-docker-tag.sh
 
       - name: Check CLI image tag
@@ -181,9 +197,27 @@ jobs:
           - { name: amd64, docker: linux/amd64, runner: ubuntu-latest }
           - { name: arm64, docker: linux/arm64, runner: ubuntu-24.04-arm }
         include:
-          - { variant: core, dockerfile: docker/Dockerfile.core, image: ghcr.io/xberg-io/xberg, tag_suffix: "-core" }
-          - { variant: full, dockerfile: docker/Dockerfile.full, image: ghcr.io/xberg-io/xberg, tag_suffix: "" }
-          - { variant: cli, dockerfile: docker/Dockerfile.cli, image: ghcr.io/xberg-io/xberg-cli, tag_suffix: "" }
+          - {
+              variant: core,
+              dockerfile: docker/Dockerfile.core,
+              image: ghcr.io/xberg-io/xberg,
+              tag_suffix: "-core",
+              best: true,
+            }
+          - {
+              variant: full,
+              dockerfile: docker/Dockerfile.full,
+              image: ghcr.io/xberg-io/xberg,
+              tag_suffix: "",
+              best: true,
+            }
+          - {
+              variant: cli,
+              dockerfile: docker/Dockerfile.cli,
+              image: ghcr.io/xberg-io/xberg-cli,
+              tag_suffix: "",
+              best: false,
+            }
     if: ${{ needs.prepare.outputs.release_docker == 'true' }}
     steps:
       - name: Checkout
@@ -241,25 +275,37 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           CORE_EXISTS: ${{ needs.check-docker.outputs.core_exists }}
           FULL_EXISTS: ${{ needs.check-docker.outputs.full_exists }}
+          CORE_BEST_EXISTS: ${{ needs.check-docker.outputs.core_best_exists }}
+          FULL_BEST_EXISTS: ${{ needs.check-docker.outputs.full_best_exists }}
           CLI_EXISTS: ${{ needs.check-docker.outputs.cli_exists }}
         run: |
           go=false
+          go_best=false
           if [ "$FORCE" = "true" ]; then
             go=true
+            case "$VARIANT" in core|full) go_best=true ;; esac
           else
             case "$VARIANT" in
-              core) if [ "$CORE_EXISTS" != "true" ]; then go=true; fi ;;
-              full) if [ "$FULL_EXISTS" != "true" ]; then go=true; fi ;;
+              core)
+                if [ "$CORE_EXISTS" != "true" ]; then go=true; fi
+                if [ "$CORE_BEST_EXISTS" != "true" ]; then go_best=true; fi ;;
+              full)
+                if [ "$FULL_EXISTS" != "true" ]; then go=true; fi
+                if [ "$FULL_BEST_EXISTS" != "true" ]; then go_best=true; fi ;;
               cli)  if [ "$CLI_EXISTS"  != "true" ]; then go=true; fi ;;
             esac
           fi
           echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "go_best=$go_best" >> "$GITHUB_OUTPUT"
           if [ "$go" != "true" ]; then
             echo "Docker tag already exists for variant $VARIANT; skipping build." >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [ "$go_best" != "true" ] && [ "$VARIANT" != "cli" ]; then
+            echo "Docker tag already exists for variant $VARIANT-best; skipping its build." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Set up Docker Buildx
-        if: ${{ steps.gate.outputs.go == 'true' }}
+        if: ${{ steps.gate.outputs.go == 'true' || steps.gate.outputs.go_best == 'true' }}
         uses: docker/setup-buildx-action@v4
 
       # The one compile. Built with buildx and loaded into the local daemon so the tests run
@@ -297,7 +343,7 @@ jobs:
         run: python3 scripts/ci/docker/verify_image_notices.py --image xberg-publish:${{ matrix.variant }}-test
 
       - name: Log in to GitHub Container Registry
-        if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ (steps.gate.outputs.go == 'true' || steps.gate.outputs.go_best == 'true') && needs.prepare.outputs.dry_run != 'true' }}
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -337,8 +383,76 @@ jobs:
         if: ${{ steps.gate.outputs.go == 'true' && needs.prepare.outputs.dry_run != 'true' }}
         uses: actions/upload-artifact@v7
         with:
-          name: digest-${{ matrix.variant }}-${{ matrix.platform.name }}
+          # Platform first: merge-docker matches `digest-*-<variant>`, which must not also match
+          # the `<variant>-best` digests. ~keep
+          name: digest-${{ matrix.platform.name }}-${{ matrix.variant }}
           path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      # The tessdata_best twin: the `best` target of the same Dockerfile, built after the default
+      # image's digest is uploaded so a best failure cannot hold that image back. Every stage it
+      # shares with the default image resolves from this builder's cache. ~keep
+      - name: Build best test image
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: best
+          platforms: ${{ matrix.platform.docker }}
+          build-args: |
+            ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
+            XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
+            CARGO_PROFILE_RELEASE_LTO=${{ matrix.platform.name == 'arm64' && 'thin' || 'fat' }}
+          load: true
+          provenance: false
+          tags: xberg-publish:${{ matrix.variant }}-best-test
+          cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
+          cache-to: type=gha,mode=max,ignore-error=true,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
+
+      - name: Run best Docker tests
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' }}
+        run: python3 scripts/ci/docker/test_docker.py --image xberg-publish:${{ matrix.variant }}-best-test --variant ${{ matrix.variant }}-best --verbose
+
+      - name: Verify best image notices
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' }}
+        run: python3 scripts/ci/docker/verify_image_notices.py --image xberg-publish:${{ matrix.variant }}-best-test
+
+      - name: Build and push best by digest
+        id: build_best
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: best
+          platforms: ${{ matrix.platform.docker }}
+          build-args: |
+            ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
+            XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
+            CARGO_PROFILE_RELEASE_LTO=${{ matrix.platform.name == 'arm64' && 'thin' || 'fat' }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Xberg document intelligence - ${{ matrix.variant }}-best variant
+            org.opencontainers.image.licenses=MIT AND LGPL-3.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND MPL-2.0 AND Apache-2.0
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=publish-docker-${{ matrix.variant }}-${{ matrix.platform.name }}
+
+      - name: Export best digest
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        env:
+          DIGEST: ${{ steps.build_best.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests-best
+          touch "/tmp/digests-best/${DIGEST#sha256:}"
+
+      - name: Upload best digest
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.platform.name }}-${{ matrix.variant }}-best
+          path: /tmp/digests-best/*
           if-no-files-found: error
           retention-days: 1
 
@@ -350,9 +464,17 @@ jobs:
           TAG_SUFFIX: ${{ matrix.tag_suffix }}
         run: scripts/publish/docker/dry-run-summary.sh
 
+      - name: Docker best dry-run summary
+        if: ${{ matrix.best && steps.gate.outputs.go_best == 'true' && needs.prepare.outputs.dry_run == 'true' && matrix.platform.name == 'amd64' }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG_SUFFIX: ${{ matrix.tag_suffix }}-best
+        run: scripts/publish/docker/dry-run-summary.sh
+
       - name: Clean up local Docker images
         if: ${{ always() }}
-        run: docker rmi xberg-publish:${{ matrix.variant }}-test || true
+        run: docker rmi xberg-publish:${{ matrix.variant }}-test xberg-publish:${{ matrix.variant }}-best-test || true
 
   merge-docker:
     name: Publish ${{ matrix.variant }} manifest
@@ -379,6 +501,8 @@ jobs:
         include:
           - { variant: core, image: ghcr.io/xberg-io/xberg, tag_suffix: "-core", extra_tag: "core" }
           - { variant: full, image: ghcr.io/xberg-io/xberg, tag_suffix: "", extra_tag: "latest" }
+          - { variant: core-best, image: ghcr.io/xberg-io/xberg, tag_suffix: "-core-best", extra_tag: "core-best" }
+          - { variant: full-best, image: ghcr.io/xberg-io/xberg, tag_suffix: "-best", extra_tag: "latest-best" }
           - { variant: cli, image: ghcr.io/xberg-io/xberg-cli, tag_suffix: "", extra_tag: "latest" }
     steps:
       - name: Decide whether to publish
@@ -388,6 +512,8 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           CORE_EXISTS: ${{ needs.check-docker.outputs.core_exists }}
           FULL_EXISTS: ${{ needs.check-docker.outputs.full_exists }}
+          CORE_BEST_EXISTS: ${{ needs.check-docker.outputs.core_best_exists }}
+          FULL_BEST_EXISTS: ${{ needs.check-docker.outputs.full_best_exists }}
           CLI_EXISTS: ${{ needs.check-docker.outputs.cli_exists }}
         run: |
           go=false
@@ -397,6 +523,8 @@ jobs:
             case "$VARIANT" in
               core) if [ "$CORE_EXISTS" != "true" ]; then go=true; fi ;;
               full) if [ "$FULL_EXISTS" != "true" ]; then go=true; fi ;;
+              core-best) if [ "$CORE_BEST_EXISTS" != "true" ]; then go=true; fi ;;
+              full-best) if [ "$FULL_BEST_EXISTS" != "true" ]; then go=true; fi ;;
               cli)  if [ "$CLI_EXISTS"  != "true" ]; then go=true; fi ;;
             esac
           fi
@@ -413,7 +541,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
-          pattern: digest-${{ matrix.variant }}-*
+          pattern: digest-*-${{ matrix.variant }}
           merge-multiple: true
 
       # Only push this variant's manifest if both build legs produced digests; a variant that
@@ -484,8 +612,9 @@ jobs:
   # merge-docker is a single matrix job, so one failed leg fails its aggregate result. The cli
   # leg routinely does (cli/amd64 hits the 120 min build timeout, "Verify digests present"
   # then rejects the lone arm64 digest), which skipped the chart for v1.3.6-v1.3.8 while the
-  # core/full images published fine. Gate the chart on the two images it references actually
-  # resolving instead of on the aggregate result. ~keep
+  # core/full images published fine. Gate the chart on the four images it can reference
+  # (ocr.tesseractModelSet=best selects the -best tags) actually resolving instead of on the
+  # aggregate result. ~keep
   chart-images:
     name: Verify chart images resolve
     needs:
@@ -509,7 +638,9 @@ jobs:
           set -euo pipefail
           for tag in \
             ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }} \
-            ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core; do
+            ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core \
+            ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-best \
+            ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core-best; do
             docker buildx imagetools inspect "${tag}"
           done
 

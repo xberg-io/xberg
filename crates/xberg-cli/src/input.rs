@@ -33,6 +33,24 @@ pub(crate) fn apply_json_overrides(
     Ok(())
 }
 
+/// The config `extract` and `batch` run with, in increasing precedence: the config file (or the
+/// discovered one) and inline JSON, `XBERG_OCR_TESSDATA_MODEL`, then the CLI flags. Only that one
+/// environment variable is read here; the other `XBERG_*` overrides stay specific to `serve`,
+/// `mcp` and `doctor`.
+pub(crate) fn extraction_config(
+    config_path: Option<PathBuf>,
+    discover: bool,
+    config_json: Option<String>,
+    config_json_base64: Option<String>,
+    overrides: crate::commands::overrides::ExtractionOverrides,
+) -> Result<xberg::ExtractionConfig> {
+    let mut config = crate::commands::load_config(config_path, discover)?;
+    apply_json_overrides(&mut config, config_json, config_json_base64)?;
+    config.apply_env_tessdata_model()?;
+    overrides.apply(&mut config);
+    Ok(config)
+}
+
 pub(crate) fn resolve_extract_input(
     uri: Option<String>,
     #[cfg(feature = "url-surface")] url: Option<String>,

@@ -339,8 +339,8 @@ pub use core::config::{
     LlmProviderConfig, LlmRateLimitConfig, MergeMode, MimeDetectionPolicy, NerBackendKind, NerConfig, OcrConfig,
     OutputFormat, PageClassificationConfig, PageConfig, PostProcessorConfig, RedactionConfig, RedactionOffsetEncoding,
     RedactionPattern, RedactionTerm, RerankerConfig, RerankerHead, RerankerModelType, StructuredExtractionConfig,
-    SummarizationConfig, TableChunkingMode, TokenReductionOptions, TranslationConfig, UrlExtractionConfig,
-    UrlExtractionMode,
+    SummarizationConfig, TableChunkingMode, TessdataModel, TokenReductionOptions, TranslationConfig,
+    UrlExtractionConfig, UrlExtractionMode,
 };
 pub use core::config::{
     LateInteractionConfig, LateInteractionModelType, SparseEmbeddingConfig, SparseEmbeddingModelType,

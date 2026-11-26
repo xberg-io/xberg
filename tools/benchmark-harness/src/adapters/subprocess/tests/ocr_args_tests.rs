@@ -618,3 +618,135 @@ mod auto_ocr_force_ocr {
         }
     }
 }
+
+mod tessdata_model {
+    use super::super::support::{default_run_timeout, test_build_identity};
+    use crate::adapters::subprocess::SubprocessAdapter;
+    use crate::adapters::subprocess::ocr_args::{
+        apply_tesseract_ocr_override_to_args, build_batch_file_configs, effective_ocr_config_from_args,
+    };
+    use crate::adapters::xberg::adapter_with_identity;
+    use crate::config::BenchmarkMode;
+    use crate::types::{OutputFormat, XbergPdfBackend, XbergPipeline};
+    use std::path::Path;
+
+    const BEST_FLAG: [&str; 2] = ["--ocr-tessdata-model", "best"];
+
+    fn tesseract_adapter(batch: bool) -> SubprocessAdapter {
+        adapter_with_identity(
+            XbergPipeline::Baseline,
+            OutputFormat::Markdown,
+            batch,
+            true,
+            XbergPdfBackend::Native,
+            default_run_timeout(),
+            test_build_identity(),
+        )
+        .unwrap()
+    }
+
+    fn has_best_flag(args: &[String]) -> bool {
+        args.windows(2).any(|pair| pair == BEST_FLAG)
+    }
+
+    fn config_json(args: &[String]) -> serde_json::Value {
+        let index = args.iter().rposition(|arg| arg == "--config-json").unwrap();
+        serde_json::from_str(&args[index + 1]).unwrap()
+    }
+
+    #[test]
+    fn fast_tessdata_model_leaves_xberg_argv_unchanged() {
+        for batch in [false, true] {
+            let default = tesseract_adapter(batch);
+            let fast = tesseract_adapter(batch).with_tessdata_model(xberg::TessdataModel::Fast);
+
+            for force_ocr in [false, true] {
+                assert_eq!(fast.request_args(force_ocr), default.request_args(force_ocr));
+                assert_eq!(
+                    fast.single_file_request_args(force_ocr),
+                    default.single_file_request_args(force_ocr)
+                );
+                assert!(!fast.request_args(force_ocr).iter().any(|arg| arg == BEST_FLAG[0]));
+            }
+            for mode in [BenchmarkMode::SingleFile, BenchmarkMode::Batch] {
+                assert_eq!(
+                    fast.provenance_args_for_mode(mode),
+                    default.provenance_args_for_mode(mode)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn best_tessdata_model_passes_the_flag_on_every_xberg_request() {
+        for batch in [false, true] {
+            let adapter = tesseract_adapter(batch).with_tessdata_model(xberg::TessdataModel::Best);
+
+            for force_ocr in [false, true] {
+                assert!(has_best_flag(&adapter.request_args(force_ocr)), "batch={batch}");
+                assert!(
+                    has_best_flag(&adapter.single_file_request_args(force_ocr)),
+                    "batch={batch}"
+                );
+            }
+            for mode in [BenchmarkMode::SingleFile, BenchmarkMode::Batch] {
+                assert!(has_best_flag(&adapter.provenance_args_for_mode(mode)), "{mode:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn best_tessdata_model_stays_on_argv_when_the_tesseract_config_is_rewritten() {
+        let adapter = tesseract_adapter(false).with_tessdata_model(xberg::TessdataModel::Best);
+
+        let rewritten = apply_tesseract_ocr_override_to_args(&adapter.single_file_request_args(false), Some("deu"))
+            .expect("tesseract OCR config to rewrite");
+
+        assert!(has_best_flag(&rewritten));
+        assert_eq!(
+            config_json(&rewritten).pointer("/ocr/tessdata_model"),
+            None,
+            "the ocr section inherits the top-level set the flag selects"
+        );
+    }
+
+    #[test]
+    fn per_file_batch_ocr_overrides_inherit_the_flagged_tessdata_model() {
+        let adapter = tesseract_adapter(true).with_tessdata_model(xberg::TessdataModel::Best);
+        let request_args = adapter.request_args(false);
+        let base_ocr = effective_ocr_config_from_args(&request_args);
+
+        let cwd = Path::new("docs");
+        let input = Path::new("a.pdf");
+
+        let configs = build_batch_file_configs(&[input], &[Some("deu".to_string())], cwd, base_ocr.as_ref());
+        let config = configs
+            .get(&cwd.join(input).to_string_lossy().into_owned())
+            .expect("file config");
+
+        assert!(has_best_flag(&request_args));
+        assert_eq!(config.pointer("/ocr/tessdata_model"), None);
+    }
+
+    #[test]
+    fn tessdata_model_flag_alone_creates_no_effective_ocr_config() {
+        let args = vec![BEST_FLAG[0].to_string(), BEST_FLAG[1].to_string()];
+
+        assert_eq!(effective_ocr_config_from_args(&args), None);
+    }
+
+    #[test]
+    fn non_xberg_adapters_ignore_the_tessdata_model() {
+        let adapter = SubprocessAdapter::new(
+            "docling",
+            "echo",
+            vec!["sync".to_string()],
+            vec![],
+            vec!["pdf".to_string()],
+        )
+        .with_tessdata_model(xberg::TessdataModel::Best);
+
+        assert_eq!(adapter.request_args(false), ["sync"]);
+        assert_eq!(adapter.single_file_request_args(false), ["sync"]);
+    }
+}

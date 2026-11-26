@@ -968,6 +968,10 @@ fn parse_extract_input(
     if let Some(config) = value.get_mut("config") {
         crate::core::config::request_security::validate_caller_extraction_config(config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        crate::core::config::request_security::check_caller_tessdata_model(operator, config)
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        crate::core::config::request_security::strip_per_input_tessdata_model(operator, config)
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
         crate::core::config::request_security::merge_html_override(operator, config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
     }
@@ -1778,6 +1782,28 @@ mod tests {
         assert_eq!(html.theme, HtmlTheme::Dark);
         assert_eq!(html.class_prefix, "request-");
         assert!(!html.embed_css);
+    }
+
+    #[test]
+    fn should_explain_a_per_input_tessdata_model_and_drop_a_restated_one() {
+        let input = |model: &str| {
+            serde_json::json!({
+                "kind": "bytes",
+                "data": [115, 97, 102, 101],
+                "mime_type": "text/plain",
+                "config": {"tessdata_model": model}
+            })
+        };
+
+        let error = parse_extract_input(input("best"), &ExtractionConfig::default())
+            .expect_err("a per-input set that differs must be rejected");
+        assert!(error.message.contains("tessdata_model"), "{}", error.message);
+        assert!(
+            !error.message.contains("unknown field"),
+            "the message must say why: {}",
+            error.message
+        );
+        parse_extract_input(input("fast"), &ExtractionConfig::default()).expect("a restated set is ignored");
     }
 
     #[test]

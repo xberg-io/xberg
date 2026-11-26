@@ -16,6 +16,24 @@ pub(crate) enum CliMode {
     Batch,
 }
 
+/// CLI enum for the Tesseract model set
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum CliTessdataModel {
+    /// tessdata_fast: integer LSTM models, the smallest and fastest set
+    Fast,
+    /// tessdata_best: float LSTM models, larger and slower than fast
+    Best,
+}
+
+impl From<CliTessdataModel> for xberg::TessdataModel {
+    fn from(model: CliTessdataModel) -> Self {
+        match model {
+            CliTessdataModel::Fast => xberg::TessdataModel::Fast,
+            CliTessdataModel::Best => xberg::TessdataModel::Best,
+        }
+    }
+}
+
 /// CLI enum for output file format
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum OutputFileFormat {

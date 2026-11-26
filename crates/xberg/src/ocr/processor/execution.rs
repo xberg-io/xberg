@@ -4019,7 +4019,8 @@ pub(super) fn is_all_languages(lang: &str) -> bool {
 fn resolve_config_language(config: &TesseractConfig) -> Result<Option<TesseractConfig>, OcrError> {
     if is_all_languages(&config.language) {
         let bootstrap_langs = vec!["eng".to_string()];
-        let tessdata_path = resolve_tessdata_path(&bootstrap_langs, config.tessdata_path.as_deref())?;
+        let tessdata_path =
+            resolve_tessdata_path(&bootstrap_langs, config.tessdata_path.as_deref(), config.tessdata_model)?;
         let resolved = resolve_all_installed_languages(&tessdata_path)?;
         let mut resolved_config = config.clone();
         resolved_config.language = resolved;

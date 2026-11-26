@@ -26,7 +26,9 @@ pub(super) fn probe_ocr(config: &ExtractionConfig) -> Vec<DoctorCheck> {
         guard.registered_snapshot()
     };
     let expected = crate::plugins::registry::builtin_ocr_backend_names();
-    audit_ocr_capabilities_from(config, &expected, registered)
+    let mut config = config.clone();
+    config.resolve_tessdata_model();
+    audit_ocr_capabilities_from(&config, &expected, registered)
 }
 
 fn builtin_fallback_name(name: &str) -> String {
@@ -53,7 +55,7 @@ fn audit_ocr_capabilities_from(
             .or_default()
             .push(EffectiveProbeConfig {
                 ordinal: 1,
-                config: OcrConfig::default(),
+                config: config.ocr_or_default().into_owned(),
             });
     }
 
@@ -88,7 +90,7 @@ fn audit_ocr_capabilities_from(
                 return unregistered_backend_check(&name, &expected, required, unavailable_implicit_tesseract);
             };
 
-            probe_registered_backend(backend.as_ref(), &name, configured, required)
+            probe_registered_backend(backend.as_ref(), &name, configured, required, &config.ocr_or_default())
         })
         .collect()
 }
@@ -128,6 +130,7 @@ fn probe_registered_backend(
     name: &str,
     configured: Option<&Vec<EffectiveProbeConfig>>,
     required: bool,
+    implicit: &OcrConfig,
 ) -> DoctorCheck {
     #[cfg(paddle_ocr)]
     if backend.backend_type() == OcrBackendType::PaddleOCR && !required {
@@ -136,7 +139,7 @@ fn probe_registered_backend(
 
     let default_config = [EffectiveProbeConfig {
         ordinal: 1,
-        config: backend_config(OcrConfig::default(), name),
+        config: backend_config(implicit.clone(), name),
     }];
     let probe_configs = configured.map_or(default_config.as_slice(), Vec::as_slice);
     let mut check = aggregate_probes(backend, probe_configs);

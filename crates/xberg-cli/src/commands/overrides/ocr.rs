@@ -139,6 +139,14 @@ impl ExtractionOverrides {
             if let Some(ocr) = config.ocr.as_mut() {
                 self.apply_ocr_fields(ocr);
             }
+            // ~keep The top-level set reaches every OCR the extraction performs without creating an
+            // `ocr` section, which would change whether OCR runs.
+            if let Some(model) = self.ocr_tessdata_model {
+                config.tessdata_model = Some(model.into());
+                if let Some(ocr) = config.ocr.as_mut() {
+                    ocr.tessdata_model = None;
+                }
+            }
         }
 
         if self.ocr != Some(false)
@@ -254,6 +262,7 @@ impl ExtractionOverrides {
                 security_limits: None,
                 tessdata_bytes: None,
                 tessdata_path: None,
+                tessdata_model: None,
                 numeric_repair: false,
                 backend_options,
             });

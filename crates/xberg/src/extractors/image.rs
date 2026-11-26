@@ -3125,7 +3125,7 @@ fn single_block_table_config(
     if mime_type.to_lowercase().contains("tiff") {
         return None;
     }
-    let mut ocr = config.ocr.clone().unwrap_or_default();
+    let mut ocr = config.ocr_or_default().into_owned();
     if !is_implicit_horizontal_tesseract(&ocr)
         || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
         || ocr.pipeline.is_some()
@@ -3313,14 +3313,8 @@ impl ImageExtractor {
         #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
         let _ = recover_tall;
 
-        let default_ocr_config;
-        let ocr_config = match config.ocr.as_ref() {
-            Some(c) => c,
-            None => {
-                default_ocr_config = crate::core::config::OcrConfig::default();
-                &default_ocr_config
-            }
-        };
+        let default_ocr_config = config.ocr_or_default();
+        let ocr_config: &crate::core::config::OcrConfig = &default_ocr_config;
 
         // `vlm_fallback` and explicit multi-stage pipelines were only honoured by the
         // PDF extractor, so a bare image upload always used a single backend and never

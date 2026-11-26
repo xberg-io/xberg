@@ -1,6 +1,6 @@
 //! `run`: executes benchmarks across one or more registered framework adapters.
 
-use crate::cli::CliMode;
+use crate::cli::{CliMode, CliTessdataModel};
 use benchmark_harness::provenance::{CoverageGateProvenance, FrameworkCoverageProvenance};
 use benchmark_harness::types::ErrorKind;
 use benchmark_harness::{
@@ -51,6 +51,11 @@ pub(crate) struct RunArgs {
     /// otherwise defaults to --max-concurrent. Does not affect other frameworks.
     #[arg(long)]
     pub(crate) xberg_max_threads: Option<usize>,
+
+    /// Tesseract model set for Xberg's OCR. Sets the model on OCR configs Xberg already
+    /// uses, never enabling OCR itself. Does not affect other frameworks.
+    #[arg(long, value_enum, default_value = "fast")]
+    pub(crate) tessdata_model: CliTessdataModel,
 
     /// Timeout in seconds
     #[arg(short = 't', long)]
@@ -640,6 +645,7 @@ fn build_config(args: &RunArgs) -> BenchmarkConfig {
         output_dir: args.output.clone(),
         max_concurrent: args.max_concurrent.unwrap_or_else(num_cpus::get),
         xberg_max_threads: args.xberg_max_threads,
+        tessdata_model: args.tessdata_model.into(),
         timeout: std::time::Duration::from_secs(args.timeout.unwrap_or(1800)),
         benchmark_mode: args.mode.into(),
         warmup_iterations: args.warmup,
@@ -707,6 +713,7 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
         args.cohort.as_deref(),
         args.ocr,
         selected_frameworks_use_tesseract(&frameworks),
+        args.tessdata_model.into(),
     )?;
 
     let fixed_batch_size = resolve_fixed_batch_size(batch_mode, args.batch_size, cohort_manifest.as_ref())?;

@@ -185,12 +185,15 @@ fn resolve_input_config_with(
     allow_caller_llm_env_credentials: bool,
 ) -> Result<Option<FileExtractionConfig>, ApiError> {
     use crate::core::config::request_security::{
-        adopt_file_operator_policy, merge_html_override, reject_caller_input_llm_stages,
+        adopt_file_operator_policy, check_caller_tessdata_model, merge_html_override, reject_caller_input_llm_stages,
+        strip_per_input_tessdata_model,
     };
 
     let Some(mut config) = config else {
         return Ok(None);
     };
+    check_caller_tessdata_model(effective, &config).map_err(ApiError::caller_config)?;
+    strip_per_input_tessdata_model(effective, &mut config).map_err(ApiError::caller_config)?;
     merge_html_override(effective, &mut config).map_err(ApiError::caller_config)?;
     let mut config: FileExtractionConfig = serde_json::from_value(config).map_err(|error| {
         ApiError::validation(crate::error::XbergError::validation(format!(

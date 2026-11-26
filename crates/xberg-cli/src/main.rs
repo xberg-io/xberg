@@ -108,8 +108,7 @@ use commands::{chunk_command, validate_chunk_params};
 #[cfg(feature = "mcp")]
 use commands::{mcp_command, resolve_mcp_allowed_hosts};
 use input::{
-    apply_json_overrides, resolve_batch_inputs, resolve_extract_input, validate_batch_input_uris,
-    validate_extract_input,
+    extraction_config, resolve_batch_inputs, resolve_extract_input, validate_batch_input_uris, validate_extract_input,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -712,6 +711,16 @@ enum CacheCommands {
         #[cfg(feature = "classification-onnx")]
         #[arg(long, value_name = "BACKEND")]
         classification_backend: Option<String>,
+
+        /// Tesseract model sets to download (comma-separated: fast,best); default: the default set
+        #[cfg(feature = "paddle-ocr")]
+        #[arg(long, value_name = "SETS", value_delimiter = ',')]
+        tessdata_model: Vec<commands::overrides::TessdataModelArg>,
+
+        /// Tesseract languages to download (comma-separated, e.g. eng,deu); default: all 126 pinned
+        #[cfg(feature = "paddle-ocr")]
+        #[arg(long, value_name = "LANGUAGES", value_delimiter = ',')]
+        tessdata_languages: Vec<String>,
     },
 }
 
@@ -984,9 +993,13 @@ fn main() -> Result<()> {
             #[cfg(feature = "redaction")]
             let overrides = overrides.read_redaction_findings_stdin(stdin)?;
 
-            let mut config = load_config(config_path, !no_config_discovery)?;
-            apply_json_overrides(&mut config, config_json, config_json_base64)?;
-            overrides.apply(&mut config);
+            let config = extraction_config(
+                config_path,
+                !no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+            )?;
 
             extract_command(
                 input,
@@ -1024,9 +1037,13 @@ fn main() -> Result<()> {
             #[cfg(feature = "redaction")]
             let overrides = overrides.read_redaction_findings_stdin(false)?;
 
-            let mut config = load_config(config_path, !no_config_discovery)?;
-            apply_json_overrides(&mut config, config_json, config_json_base64)?;
-            overrides.apply(&mut config);
+            let config = extraction_config(
+                config_path,
+                !no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+            )?;
 
             let file_configs_map = if let Some(file_configs_path) = file_configs {
                 let file_configs_json = std::fs::read_to_string(&file_configs_path)
@@ -1170,6 +1187,10 @@ fn main() -> Result<()> {
                 classification_precision,
                 #[cfg(feature = "classification-onnx")]
                 classification_backend,
+                #[cfg(feature = "paddle-ocr")]
+                tessdata_model,
+                #[cfg(feature = "paddle-ocr")]
+                tessdata_languages,
             } => {
                 let options = WarmOptions {
                     #[cfg(feature = "embeddings")]
@@ -1207,6 +1228,10 @@ fn main() -> Result<()> {
                         #[cfg(feature = "classification-onnx")]
                         classification_backend,
                     },
+                    #[cfg(feature = "paddle-ocr")]
+                    tessdata_models: tessdata_model.into_iter().map(Into::into).collect(),
+                    #[cfg(feature = "paddle-ocr")]
+                    tessdata_languages,
                 };
                 warm_command(cache_dir.clone(), format, options)?;
             }
@@ -1493,6 +1518,41 @@ mod feature_profile_tests {
         assert!(config.ocr.is_none(), "--ocr false should clear OCR backend settings");
     }
 
+    #[cfg(feature = "ocr-surface")]
+    #[test]
+    fn should_map_ocr_tessdata_model_flag_onto_the_ocr_config() {
+        let parse = |value: &str| {
+            Cli::try_parse_from([
+                "xberg",
+                "extract",
+                "scan.pdf",
+                "--ocr",
+                "true",
+                "--ocr-tessdata-model",
+                value,
+                "--no-config-discovery",
+            ])
+        };
+        let cli = parse("best").expect("clap should parse --ocr-tessdata-model best");
+        let Commands::Extract {
+            config: config_path,
+            no_config_discovery,
+            overrides,
+            ..
+        } = cli.command
+        else {
+            panic!("expected Commands::Extract");
+        };
+        let mut config = load_config(config_path, !no_config_discovery)
+            .expect("built-in extraction config should load without discovery");
+        overrides.apply(&mut config);
+
+        assert_eq!(config.effective_tessdata_model(), xberg::TessdataModel::Best);
+        assert!(parse("fast").is_ok());
+        assert!(parse("medium").is_err(), "an unknown model set must be rejected");
+        assert!(parse("Best").is_err(), "values are lowercase, as in config files");
+    }
+
     #[cfg(not(feature = "pdf-surface"))]
     #[test]
     fn non_pdf_profile_omits_pdf_overrides() {
@@ -1673,6 +1733,42 @@ mod tree_sitter_cli_tests {
         assert_eq!(format, WireFormat::Text);
     }
 
+    #[cfg(feature = "paddle-ocr")]
+    #[test]
+    fn should_parse_cache_warm_tessdata_model_and_language_filters() {
+        let cli = Cli::try_parse_from([
+            "xberg",
+            "cache",
+            "warm",
+            "--tessdata-model",
+            "fast,best",
+            "--tessdata-languages",
+            "eng,deu",
+        ])
+        .expect("clap should parse cache warm tessdata filters");
+
+        let Commands::Cache {
+            command:
+                CacheCommands::Warm {
+                    tessdata_model,
+                    tessdata_languages,
+                    ..
+                },
+        } = cli.command
+        else {
+            panic!("expected CacheCommands::Warm");
+        };
+
+        assert_eq!(
+            tessdata_model,
+            [
+                commands::overrides::TessdataModelArg::Fast,
+                commands::overrides::TessdataModelArg::Best
+            ]
+        );
+        assert_eq!(tessdata_languages, ["eng", "deu"]);
+    }
+
     /// `xberg tree-sitter download go zig --groups web,systems` must parse the
     /// positional language names and the comma-delimited `--groups` list exactly,
     /// with `from_config` defaulting to `false` when the flag is absent.
@@ -1774,5 +1870,100 @@ mod tree_sitter_cli_tests {
                 format: WireFormat::Toon
             }
         ));
+    }
+}
+
+#[cfg(all(test, feature = "ocr-surface"))]
+mod tessdata_env_tests {
+    use super::*;
+    use xberg_child_test::{child_test_root, run_child_test};
+
+    const CASE: &str = "XBERG_CLI_TESSDATA_ENV_CASE";
+    const CHILD: &str = "tessdata_env_tests::extract_and_batch_read_the_tessdata_env_child";
+
+    fn run_case(case: &str, value: &str) {
+        run_child_test(CHILD, CASE, case, |command| {
+            command
+                .env_remove("XBERG_OCR_LANGUAGE")
+                .env_remove("XBERG_OCR_BACKEND")
+                .env("XBERG_OCR_TESSDATA_MODEL", value);
+        });
+    }
+
+    #[test]
+    fn extract_and_batch_apply_the_tessdata_env_below_the_flag() {
+        run_case("env", "best");
+    }
+
+    #[test]
+    fn extract_and_batch_reject_an_invalid_tessdata_env() {
+        run_case("invalid", "medium");
+    }
+
+    fn resolved(args: &[&str]) -> Result<xberg::ExtractionConfig> {
+        let cli = Cli::try_parse_from(args).expect("clap should parse the command");
+        match cli.command {
+            Commands::Extract {
+                config: config_path,
+                no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+                ..
+            }
+            | Commands::Batch {
+                config: config_path,
+                no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+                ..
+            } => extraction_config(
+                config_path,
+                !no_config_discovery,
+                config_json,
+                config_json_base64,
+                overrides,
+            ),
+            _ => panic!("expected extract or batch"),
+        }
+    }
+
+    #[test]
+    #[ignore = "run with an isolated environment by its parent test"]
+    fn extract_and_batch_read_the_tessdata_env_child() {
+        let Some(case) = child_test_root(CASE) else {
+            return;
+        };
+        let commands: [&[&str]; 2] = [
+            &["xberg", "extract", "scan.pdf", "--no-config-discovery"],
+            &["xberg", "batch", "scan.pdf", "--no-config-discovery"],
+        ];
+        for args in commands {
+            if case.to_str() == Some("invalid") {
+                let error = resolved(args).expect_err("an invalid set must be rejected");
+                assert!(format!("{error:#}").contains("XBERG_OCR_TESSDATA_MODEL"), "{error:#}");
+                continue;
+            }
+            let config = resolved(args).expect("the config resolves");
+            assert!(config.ocr.is_none(), "the environment never creates an ocr section");
+            assert_eq!(config.tessdata_model, Some(xberg::TessdataModel::Best), "{args:?}");
+
+            let with_flag = [args, &["--ocr-tessdata-model", "fast"]].concat();
+            let config = resolved(&with_flag).expect("the config resolves");
+            assert_eq!(
+                config.effective_tessdata_model(),
+                xberg::TessdataModel::Fast,
+                "the flag beats the environment: {with_flag:?}"
+            );
+
+            let with_json = [args, &["--config-json", r#"{"tessdata_model":"fast"}"#]].concat();
+            let config = resolved(&with_json).expect("the config resolves");
+            assert_eq!(
+                config.effective_tessdata_model(),
+                xberg::TessdataModel::Best,
+                "the environment beats the config: {with_json:?}"
+            );
+        }
     }
 }

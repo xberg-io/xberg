@@ -1,7 +1,7 @@
 //! Tests for `main.rs`'s CLI dispatch and the `run` command's coverage-gate accounting.
 
 use super::tracing_filter;
-use crate::cli::{Cli, Commands};
+use crate::cli::{Cli, CliTessdataModel, Commands};
 use crate::commands::cohort_contract::cohort_contract_summary;
 use crate::commands::parse_pipeline_names;
 use crate::commands::pipeline_benchmark::parse_sort_metric;
@@ -158,6 +158,46 @@ fn run_cli_accepts_exact_cohort_and_model_identity() {
         })
     ));
     assert!(parse_model_provenance(&["invalid".to_string()]).is_err());
+}
+
+#[test]
+fn run_cli_defaults_tessdata_model_to_fast() {
+    let cli = Cli::try_parse_from(["benchmark-harness", "run", "--fixtures", "fixtures"]).unwrap();
+
+    let Commands::Run(crate::commands::run::RunArgs { tessdata_model, .. }) = cli.command else {
+        panic!("expected run command");
+    };
+    assert_eq!(tessdata_model, CliTessdataModel::Fast);
+    assert_eq!(xberg::TessdataModel::from(tessdata_model), xberg::TessdataModel::Fast);
+}
+
+#[test]
+fn run_cli_accepts_best_tessdata_model() {
+    let cli = Cli::try_parse_from([
+        "benchmark-harness",
+        "run",
+        "--fixtures",
+        "fixtures",
+        "--tessdata-model",
+        "best",
+    ])
+    .unwrap();
+
+    let Commands::Run(crate::commands::run::RunArgs { tessdata_model, .. }) = cli.command else {
+        panic!("expected run command");
+    };
+    assert_eq!(xberg::TessdataModel::from(tessdata_model), xberg::TessdataModel::Best);
+    assert!(
+        Cli::try_parse_from([
+            "benchmark-harness",
+            "run",
+            "--fixtures",
+            "fixtures",
+            "--tessdata-model",
+            "medium",
+        ])
+        .is_err()
+    );
 }
 
 #[test]
@@ -451,6 +491,7 @@ fn sample_provenance() -> RunProvenance {
             requested_workers: None,
             effective_workers: None,
             configured_thread_budget: None,
+            tessdata_model: None,
             worker_semantics: "test".to_string(),
             effective_warmup_iterations: 0,
             eligible_documents: 1,

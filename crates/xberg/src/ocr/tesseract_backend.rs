@@ -20,13 +20,20 @@ use std::sync::Arc;
 const USE_CACHE_BACKEND_OPTION: &str = "use_cache";
 
 /// Memo key for the available-language probe: `(probe languages, tessdata_path override,
-/// TESSDATA_PREFIX, XBERG_CACHE_DIR, XBERG_TESSDATA_SYSTEM_PATHS)`.
+/// TESSDATA_PREFIX, XBERG_CACHE_DIR, XBERG_TESSDATA_SYSTEM_PATHS, tessdata model set)`.
 ///
 /// Every component is something tessdata resolution actually reads, so two calls differing in any
 /// one of them can resolve different directories and must not serve each other's answer. Keying on
 /// the override alone (GH#1857's fix) let two calls under different environments, or for different
 /// languages, collide. GH#1891. ~keep
-type LanguagesMemoKey = (Vec<String>, Option<PathBuf>, Option<String>, Option<PathBuf>, bool);
+type LanguagesMemoKey = (
+    Vec<String>,
+    Option<PathBuf>,
+    Option<String>,
+    Option<PathBuf>,
+    bool,
+    crate::core::config::TessdataModel,
+);
 
 #[cfg(all(auto_rotate, feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) mod orientation_evidence {
@@ -245,6 +252,7 @@ impl TesseractBackend {
         // receives no `ExtractionConfig`. ~keep
         internal.security_limits = config.security_limits.clone();
         internal.tessdata_path = config.tessdata_path.clone();
+        internal.tessdata_model = config.effective_tessdata_model();
         internal.source_dpi = Self::source_dpi_from_backend_options(config);
         internal.known_full_page_scan = Self::known_full_page_scan_from_backend_options(config);
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
@@ -363,6 +371,7 @@ impl TesseractBackend {
             tessdata_env.tessdata_prefix.clone(),
             tessdata_env.cache_dir.clone(),
             tessdata_env.system_paths,
+            tessdata_env.model,
         )
     }
 
@@ -421,12 +430,22 @@ impl TesseractBackend {
         // rejected a `tessdata_path` holding only the caller's own language, fell through to
         // another directory, and denied a language every real job with that config loads. See
         // GH#1891. `probe_languages` is what keeps the fallback from downloading. ~keep
-        let tessdata_path =
+        // ~keep A `best` probe answers from files already present: its fallback `eng` has no bundled
+        // copy, so resolving it would download a 15 MB model to answer a capability question
+        // (GH#1891).
+        let tessdata_path = if tessdata_env.model == crate::core::config::TessdataModel::Best {
+            crate::ocr::processor::validation::existing_tessdata_dir_for(probe_languages, override_path, tessdata_env)
+                .ok_or_else(|| crate::XbergError::Ocr {
+                message: "No tessdata_best directory holds the probed languages".to_string(),
+                source: None,
+            })?
+        } else {
             crate::ocr::processor::validation::resolve_tessdata_path_in(probe_languages, override_path, tessdata_env)
                 .map_err(|e| crate::XbergError::Ocr {
-                message: format!("Failed to resolve tessdata path for language query: {}", e),
-                source: Some(Box::new(e)),
-            })?;
+                    message: format!("Failed to resolve tessdata path for language query: {}", e),
+                    source: Some(Box::new(e)),
+                })?
+        };
 
         // ~keep Initialize with a language the resolved directory is known to hold, not a
         // hardcoded `eng`: `resolve_tessdata_path_in` guarantees that only for the languages it
@@ -924,7 +943,7 @@ impl OcrBackend for TesseractBackend {
         self.get_cached_languages(
             &config.effective_tesseract_language(),
             config.tessdata_path.as_deref(),
-            &TessdataEnv::from_process(),
+            &TessdataEnv::from_process().for_model(config.effective_tessdata_model()),
         )
         .iter()
         .any(|candidate| candidate == language)
@@ -950,7 +969,7 @@ impl OcrBackend for TesseractBackend {
         self.get_cached_languages(
             &config.effective_tesseract_language(),
             config.tessdata_path.as_deref(),
-            &TessdataEnv::from_process(),
+            &TessdataEnv::from_process().for_model(config.effective_tessdata_model()),
         )
         .to_vec()
     }
@@ -997,15 +1016,13 @@ impl OcrBackend for TesseractBackend {
 /// "unknown language code, download would also fail" (fail).
 #[cfg(not(target_arch = "wasm32"))]
 fn probe_tessdata(config: &OcrConfig) -> crate::doctor::DoctorCheck {
-    let dirs = crate::ocr::processor::validation::tessdata_search_dirs(
-        config.tessdata_path.as_deref(),
-        &TessdataEnv::from_process(),
-    );
-    probe_tessdata_in_dirs(config, &dirs)
+    let env = TessdataEnv::from_process().for_model(config.effective_tessdata_model());
+    let dirs = crate::ocr::processor::validation::tessdata_search_dirs(config.tessdata_path.as_deref(), &env);
+    probe_tessdata_in_dirs(config, &dirs, &env)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn probe_tessdata_in_dirs(config: &OcrConfig, dirs: &[String]) -> crate::doctor::DoctorCheck {
+fn probe_tessdata_in_dirs(config: &OcrConfig, dirs: &[String], env: &TessdataEnv) -> crate::doctor::DoctorCheck {
     use crate::doctor::DoctorCheck;
     use crate::ocr::validation::TESSERACT_SUPPORTED_LANGUAGE_CODES;
 
@@ -1017,6 +1034,15 @@ fn probe_tessdata_in_dirs(config: &OcrConfig, dirs: &[String]) -> crate::doctor:
             .iter()
             .all(|lang| std::path::Path::new(dir).join(format!("{lang}.traineddata")).exists())
     }) {
+        if crate::ocr::processor::validation::best_served_by_unverified_dir(dir, env) {
+            return DoctorCheck::warn(
+                "ocr.tesseract",
+                format!(
+                    "tesseract {version}; tessdata_model is best, but tessdata comes from {dir} \
+                     (TESSDATA_PREFIX or a system path), which usually holds tessdata_fast"
+                ),
+            );
+        }
         return DoctorCheck::pass(
             "ocr.tesseract",
             format!(
@@ -1333,6 +1359,7 @@ mod tests {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let requested = vec!["deu".to_string()];
 
@@ -1368,6 +1395,7 @@ mod tests {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
 
         assert_eq!(
@@ -1396,21 +1424,31 @@ mod tests {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let env_b = TessdataEnv {
             tessdata_prefix: Some("/b/tessdata".to_string()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let env_c = TessdataEnv {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: Some(std::path::PathBuf::from("/cache")),
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let env_d = TessdataEnv {
             tessdata_prefix: Some("/a/tessdata".to_string()),
             cache_dir: None,
             system_paths: false,
+            model: crate::core::config::TessdataModel::Fast,
+        };
+        let env_e = TessdataEnv {
+            tessdata_prefix: Some("/a/tessdata".to_string()),
+            cache_dir: None,
+            system_paths: true,
+            model: crate::core::config::TessdataModel::Best,
         };
 
         let baseline = TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_a);
@@ -1439,6 +1477,11 @@ mod tests {
             baseline,
             TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_d),
             "XBERG_TESSDATA_SYSTEM_PATHS must take part in the key: it removes the system directories"
+        );
+        assert_ne!(
+            baseline,
+            TesseractBackend::languages_memo_key(&eng(), Some(override_path), &env_e),
+            "the tessdata model set must take part in the key: it selects the cache directory"
         );
         assert_ne!(
             baseline,
@@ -1476,6 +1519,7 @@ mod tests {
             tessdata_prefix: None,
             cache_dir: Some(temp_dir.path().to_path_buf()),
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), None, &tessdata_env)
             .expect("the probe must resolve the fixture tessdata directory and read its languages");
@@ -1548,6 +1592,7 @@ mod tests {
             tessdata_prefix: None,
             cache_dir: Some(temp_dir.path().to_path_buf()),
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), None, &tessdata_env)
             .expect("the probe must resolve the fixture tessdata directory and read its languages");
@@ -1592,6 +1637,7 @@ mod tests {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let languages = TesseractBackend::query_available_languages(&eng(), Some(&override_dir), &tessdata_env)
             .expect("the probe must resolve the configured tessdata directory");
@@ -1634,6 +1680,7 @@ mod tests {
             tessdata_prefix: Some(prefix_dir.to_string_lossy().into_owned()),
             cache_dir: None,
             system_paths: true,
+            model: crate::core::config::TessdataModel::Fast,
         };
         let backend = TesseractBackend::new();
 
@@ -1707,8 +1754,12 @@ mod tests {
         let cache_tessdata_dir = cache_dir.join("tessdata").to_string_lossy().into_owned();
 
         let resolve = |language: &str| {
-            crate::ocr::processor::validation::resolve_tessdata_path(&[language.to_string()], None)
-                .expect("the job resolver must find the fixture language")
+            crate::ocr::processor::validation::resolve_tessdata_path(
+                &[language.to_string()],
+                None,
+                crate::core::config::TessdataModel::Fast,
+            )
+            .expect("the job resolver must find the fixture language")
         };
         assert_eq!(
             resolve("zzz_prefix_marker"),
@@ -2011,6 +2062,33 @@ mod tests {
         assert_eq!(
             tess_config.language, "deu",
             "OcrConfig.language must survive a default TesseractConfig"
+        );
+    }
+
+    #[test]
+    fn config_to_tesseract_hands_the_resolved_model_set_to_the_engine() {
+        let backend = TesseractBackend::new();
+        let mut extraction = crate::core::config::ExtractionConfig {
+            tessdata_model: Some(crate::core::config::TessdataModel::Best),
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        };
+        extraction.resolve_tessdata_model();
+
+        let resolved = backend.config_to_tesseract(extraction.ocr.as_ref().unwrap());
+        let fallback = backend.config_to_tesseract(
+            &crate::core::config::ExtractionConfig {
+                tessdata_model: Some(crate::core::config::TessdataModel::Best),
+                ..Default::default()
+            }
+            .ocr_or_default(),
+        );
+
+        assert_eq!(resolved.tessdata_model, crate::core::config::TessdataModel::Best);
+        assert_eq!(fallback.tessdata_model, crate::core::config::TessdataModel::Best);
+        assert_eq!(
+            backend.config_to_tesseract(&OcrConfig::default()).tessdata_model,
+            crate::core::config::TessdataModel::Fast
         );
     }
 
@@ -2761,7 +2839,54 @@ mod probe_tests {
 
     fn probe_with_dirs(config: &OcrConfig, dirs: &[&Path]) -> crate::doctor::DoctorCheck {
         let dirs: Vec<String> = dirs.iter().map(|d| d.to_string_lossy().into_owned()).collect();
-        probe_tessdata_in_dirs(config, &dirs)
+        probe_tessdata_in_dirs(
+            config,
+            &dirs,
+            &TessdataEnv::from_lookup(|_| None).for_model(config.effective_tessdata_model()),
+        )
+    }
+
+    #[test]
+    fn a_best_language_probe_on_an_empty_cache_never_materializes() {
+        let cache = tempfile::TempDir::new().unwrap();
+        let env = TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().to_path_buf()),
+            system_paths: false,
+            model: crate::core::config::TessdataModel::Best,
+        };
+
+        let result = TesseractBackend::query_available_languages(&["eng".to_string()], None, &env);
+
+        assert!(result.is_err());
+        assert_eq!(
+            cache.path().read_dir().unwrap().count(),
+            0,
+            "the probe must not create or download into the cache"
+        );
+    }
+
+    #[test]
+    fn probe_warns_when_best_is_served_by_tessdata_prefix() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("eng.traineddata"), b"fake").unwrap();
+        let prefix = dir.path().to_string_lossy().into_owned();
+        let config = OcrConfig {
+            tessdata_model: Some(crate::core::config::TessdataModel::Best),
+            ..OcrConfig::default()
+        };
+        let env = TessdataEnv::from_lookup(|name| (name == "TESSDATA_PREFIX").then(|| prefix.clone()))
+            .for_model(config.effective_tessdata_model());
+
+        let check = probe_tessdata_in_dirs(&config, std::slice::from_ref(&prefix), &env);
+        assert_eq!(check.status, ProbeStatus::Warn, "{}", check.message);
+
+        let fast = probe_tessdata_in_dirs(
+            &OcrConfig::default(),
+            std::slice::from_ref(&prefix),
+            &env.for_model(crate::core::config::TessdataModel::Fast),
+        );
+        assert_eq!(fast.status, ProbeStatus::Pass);
     }
 
     #[test]

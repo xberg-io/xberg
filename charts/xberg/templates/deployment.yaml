@@ -1,3 +1,4 @@
+{{- include "xberg.validate" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,8 +33,10 @@ spec:
       enableServiceLinks: {{ .Values.enableServiceLinks }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if and .Values.cache.enabled .Values.cache.initChown }}
+      {{- $initChown := and .Values.cache.enabled .Values.cache.initChown }}
+      {{- if or $initChown .Values.cache.seedFromImage }}
       initContainers:
+        {{- if $initChown }}
         - name: init-cache
           image: busybox:1.37-glibc
           command: ['sh', '-c', 'mkdir -p /app/.xberg && chown -R 1000:1000 /app/.xberg']
@@ -47,6 +50,23 @@ spec:
           volumeMounts:
             - name: cache
               mountPath: /app/.xberg
+        {{- end }}
+        {{- if .Values.cache.seedFromImage }}
+        {{- /* The cache volume is mounted over /app/.xberg and hides what the image ships there
+        (the full image's pre-downloaded models). Mount it elsewhere here and copy the image's
+        files in, keeping any file the volume already holds. */}}
+        - name: seed-cache
+          image: {{ include "xberg.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c", "cp -R --preserve=mode,timestamps --update=none /app/.xberg/. /seed/"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: cache
+              mountPath: /seed
+        {{- end }}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -62,8 +82,12 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.xberg.logLevel | quote }}
+            {{- with .Values.xberg.tessdataPrefix }}
             - name: TESSDATA_PREFIX
-              value: {{ .Values.xberg.tessdataPrefix | quote }}
+              value: {{ . | quote }}
+            {{- end }}
+            - name: XBERG_OCR_TESSDATA_MODEL
+              value: {{ .Values.ocr.tesseractModelSet | quote }}
             - name: XBERG_OCR_LANGUAGE
               value: {{ .Values.xberg.ocrLanguage | quote }}
             - name: XBERG_CACHE_DIR

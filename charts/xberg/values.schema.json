@@ -120,6 +120,19 @@
         "allowUnauthenticated": { "type": "boolean" }
       }
     },
+    "ocr": {
+      "type": "object",
+      "properties": {
+        "tesseractModelSet": {
+          "type": "string",
+          "enum": ["fast", "best"]
+        },
+        "tesseractModelSource": {
+          "type": "string",
+          "enum": ["image", "download"]
+        }
+      }
+    },
     "cache": {
       "type": "object",
       "properties": {
@@ -133,7 +146,8 @@
             "enum": ["ReadWriteOnce", "ReadWriteMany", "ReadOnlyMany", "ReadWriteOncePod"]
           }
         },
-        "initChown": { "type": "boolean" }
+        "initChown": { "type": "boolean" },
+        "seedFromImage": { "type": "boolean" }
       }
     },
     "enableServiceLinks": { "type": "boolean" },
