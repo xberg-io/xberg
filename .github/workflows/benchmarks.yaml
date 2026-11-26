@@ -1652,6 +1652,25 @@ jobs:
           cargo install liteparse --version 2.21.2 --locked
           lit --version
 
+      # lit links the system libtesseract, so its OCR results depend on the apt Tesseract build;
+      # record which one in the run log and the job summary. ~keep
+      - name: Log liteparse OCR provenance
+        run: |
+          set -euo pipefail
+          lit_path="$(command -v lit)"
+          tesseract_version="$(tesseract --version 2>&1)"
+          linked="$(ldd "$lit_path" | grep -E 'lib(tesseract|leptonica|lept)' || echo "no dynamic libtesseract/leptonica link")"
+          printf 'lit: %s (%s)\n%s\nlinked:\n%s\n' "$(lit --version)" "$lit_path" "$tesseract_version" "$linked"
+          {
+            echo "### liteparse OCR provenance"
+            echo '```'
+            echo "lit: $(lit --version) ($lit_path)"
+            echo "$tesseract_version"
+            echo "linked:"
+            echo "$linked"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
       # lit downloads tessdata for a language on first use; fetch every language the OCR cohorts
       # declare before the timed run, so no download is measured as extraction time. ~keep
       - name: Pre-warm liteparse OCR languages
