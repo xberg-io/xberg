@@ -3593,9 +3593,10 @@ fn is_bold_numbered_section_heading(
         && !super::regions::looks_like_figure_label(text)
 }
 
-/// A section number has components of one to three digits, none zero-padded, so a
-/// year ("2024 Highlights") or a dotted date ("12.03.2024", "12.03.24") is not one.
-/// Roman and letter enumerators are left to `starts_with_section_number`.
+/// A section number has components of one to
+/// [`MAX_SECTION_NUMBER_COMPONENT_DIGITS`](super::classify::MAX_SECTION_NUMBER_COMPONENT_DIGITS)
+/// digits, none zero-padded, so a year ("2024 Highlights") or a dotted date ("12.03.2024",
+/// "12.03.24") is not one. Roman and letter enumerators are left to `starts_with_section_number`.
 fn is_section_shaped_number(token: &str) -> bool {
     let number = token.trim_end_matches(['.', ')']);
     if !number.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.') {
@@ -3603,7 +3604,7 @@ fn is_section_shaped_number(token: &str) -> bool {
     }
     !number.is_empty()
         && number.split('.').all(|component| {
-            (1..=3).contains(&component.len())
+            (1..=super::classify::MAX_SECTION_NUMBER_COMPONENT_DIGITS).contains(&component.len())
                 && component.bytes().all(|byte| byte.is_ascii_digit())
                 && !(component.len() > 1 && component.starts_with('0'))
         })
@@ -3614,7 +3615,8 @@ fn opens_with_single_level_number(paragraph: &PdfParagraph) -> bool {
     let text = paragraph_text_raw(paragraph);
     text.split_whitespace().next().is_some_and(|token| {
         let number = token.trim_end_matches(['.', ')']);
-        (1..=3).contains(&number.len()) && number.bytes().all(|byte| byte.is_ascii_digit())
+        (1..=super::classify::MAX_SECTION_NUMBER_COMPONENT_DIGITS).contains(&number.len())
+            && number.bytes().all(|byte| byte.is_ascii_digit())
     })
 }
 

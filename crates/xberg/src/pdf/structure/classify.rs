@@ -1550,9 +1550,10 @@ const MIN_TOP_LEVEL_NUMBERED_HEADINGS: usize = 3;
 /// Level of a top-level numbered section: H1 is left to the document title. ~keep
 const TOP_LEVEL_SECTION_HEADING_LEVEL: usize = 2;
 
-/// A section-number component has at most two digits, so a leading year
-/// (`2026 Annual Report`) or quantity (`500 feet`) is not section numbering. ~keep
-const MAX_SECTION_NUMBER_COMPONENT_DIGITS: usize = 2;
+/// A section-number component has at most three digits (`101. Definitions`, `229.2 Scope`),
+/// so a leading year (`2026 Annual Report`) is not section numbering. Shared by every
+/// section-number reader so they agree on what a number is. ~keep
+pub(super) const MAX_SECTION_NUMBER_COMPONENT_DIGITS: usize = 3;
 
 /// Depth of the section number opening a heading: `2 Data` is 1, `2.1 Data
 /// description` is 2, `A.1 Proof of Theorem 2` is 2. The number must be followed by
@@ -4566,6 +4567,8 @@ mod tests {
         assert_eq!(section_number_depth("A.1 Proof of Theorem 2"), Some(2));
         assert_eq!(section_number_depth("A quick example"), None);
         assert_eq!(section_number_depth("2026 Annual Report"), None);
+        assert_eq!(section_number_depth("101. Definitions"), Some(1));
+        assert_eq!(section_number_depth("229.2 Scope"), Some(2));
         assert_eq!(section_number_depth("3.5 = x"), None);
         assert_eq!(section_number_depth("Introduction"), None);
     }
