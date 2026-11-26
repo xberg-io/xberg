@@ -1642,14 +1642,6 @@ jobs:
           # sccache's rustc spawn hits Windows error 206 on long GNU compiler arguments. ~keep
           use-sccache: ${{ runner.os == 'Windows' && 'false' || 'true' }}
 
-      # Ruby 3.3, 3.4 and 4.0 are the ABIs the release gems ship; mise.ci.toml locks them. ~keep
-      - uses: xberg-io/actions/setup-mise@v1
-        if: runner.os != 'Windows'
-        with:
-          tools: ruby=${{ matrix.ruby }}
-          mise-env: ci
-          config-ref: ${{ github.sha }}
-
       # Windows keeps setup-ruby: the gem's native build needs the RubyInstaller MSYS2/UCRT devkit, which
       # mise's RubyInstaller archive does not provide (ruby on Windows is a lock gap). ~keep
       - uses: ruby/setup-ruby@v1
@@ -1660,6 +1652,24 @@ jobs:
 
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
+
+      # Ruby 3.3, 3.4 and 4.0 are the ABIs the release gems ship; mise.ci.toml locks them. After the system
+      # dependencies: install-macos.sh prepends /opt/homebrew/bin to PATH, and Homebrew's ruby@3.4 then built every
+      # macOS leg (1.5.3 shipped a 3.4-only darwin gem; 1.5.4's ABI merge refused it). ~keep
+      - uses: xberg-io/actions/setup-mise@v1
+        if: runner.os != 'Windows'
+        with:
+          tools: ruby=${{ matrix.ruby }}
+          mise-env: ci
+          config-ref: ${{ github.sha }}
+
+      - name: Require the leg's Ruby
+        shell: bash
+        env:
+          RUBY_MINOR: ${{ matrix.ruby }}
+        run: |
+          ruby -e 'abort("::error::building with Ruby #{RUBY_VERSION} (#{RbConfig.ruby}), expected #{ENV["RUBY_MINOR"]}") unless RUBY_VERSION.start_with?("#{ENV["RUBY_MINOR"]}.")'
+          echo "Ruby $(ruby -e 'print RUBY_VERSION') at $(command -v ruby)"
 
       # `spec.files` is built from a glob that only matches LICENSE*, so stage the notice and
       # extend that glob before `gem build`. Without this the file is absent from data.tar.gz,
