@@ -1607,7 +1607,10 @@ impl PdfDocument {
         if let Some(cached) = self.page_chars_cache.lock_or_recover().get(&page_index) {
             return Ok(std::sync::Arc::clone(cached));
         }
-        let chars = std::sync::Arc::new(self.extract_chars_impl(page_index, HashSet::new(), HashSet::new())?);
+        let mut chars = self.extract_chars_impl(page_index, HashSet::new(), HashSet::new())?;
+        // The cached page outlives the extractor's growth slack. ~keep
+        chars.shrink_to_fit();
+        let chars = std::sync::Arc::new(chars);
         self.page_chars_cache
             .lock_or_recover()
             .insert(page_index, std::sync::Arc::clone(&chars));

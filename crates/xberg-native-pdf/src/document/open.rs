@@ -6,6 +6,14 @@
 
 use super::*;
 
+/// Pages of extracted characters kept by `page_chars_cache`. Each reader of a
+/// page's characters (span postprocessing, the table decimal stamp, ruled-cell
+/// repair, decimal-power evidence) reads them while the pass is still on that
+/// page, and the passes sweep the document one after another, so an entry is
+/// next wanted a whole sweep later. Two entries cover the current page and the
+/// one a reader looks back to; each entry holds every glyph of a page. ~keep
+pub(crate) const PAGE_CHARS_CACHE_ENTRIES: usize = 2;
+
 impl PdfDocument {
     /// Open a PDF document from in-memory bytes.
     ///
@@ -318,7 +326,7 @@ impl PdfDocument {
             raw_page_spans_cache: Mutex::new(None),
             small_painted_text: std::sync::OnceLock::new(),
             search_index: Mutex::new(HashMap::new()),
-            page_chars_cache: Mutex::new(BoundedEntryCache::new(8)),
+            page_chars_cache: Mutex::new(BoundedEntryCache::new(PAGE_CHARS_CACHE_ENTRIES)),
             running_artifact_signatures: Mutex::new(None),
             article_threads_cache: Mutex::new(None),
             output_intent_cmyk_profile_cache: Mutex::new(None),

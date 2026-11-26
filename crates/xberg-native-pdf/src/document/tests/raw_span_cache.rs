@@ -522,3 +522,58 @@ fn a_cache_hit_charges_the_recoveries_of_its_interpretation_again() {
     drop(doc.extract_spans_raw(0).unwrap());
     assert_eq!(doc.recovery_counts().snapshot().since(&middle), first);
 }
+
+/// The ruled-table pass reads one page's characters three times in a row: span
+/// postprocessing fills the entry, then the table decimal stamp and the
+/// ruled-cell repair read it. Each later read is the entry postprocessing
+/// filled, and equals the public, copied result.
+#[test]
+fn every_char_read_on_the_current_page_reuses_the_postprocessed_entry() {
+    let doc = PdfDocument::from_bytes(many_pages_pdf(4)).expect("open document");
+    for page in 0..4 {
+        drop(doc.extract_spans(page).unwrap());
+        let filled = std::sync::Arc::clone(
+            doc.page_chars_cache
+                .lock()
+                .unwrap()
+                .get(&page)
+                .expect("span postprocessing fills the page's characters"),
+        );
+        assert!(!filled.is_empty(), "page {page} has characters");
+        for _ in 0..2 {
+            let read = doc.cached_page_chars(page).unwrap();
+            assert!(std::sync::Arc::ptr_eq(&filled, &read), "page {page} read is a hit");
+        }
+        assert_eq!(
+            format!("{:?}", doc.extract_chars(page).unwrap()),
+            format!("{:?}", *filled),
+            "page {page}"
+        );
+    }
+}
+
+/// The cache keeps the current page and one more, and evicts the oldest when a
+/// third page is read.
+#[test]
+fn the_page_chars_cache_holds_two_pages() {
+    assert_eq!(super::super::open::PAGE_CHARS_CACHE_ENTRIES, 2);
+    let doc = PdfDocument::from_bytes(many_pages_pdf(3)).expect("open document");
+    let first = doc.cached_page_chars(0).unwrap();
+    let second = doc.cached_page_chars(1).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&first, &doc.cached_page_chars(0).unwrap()));
+    assert!(std::sync::Arc::ptr_eq(&second, &doc.cached_page_chars(1).unwrap()));
+    drop(doc.cached_page_chars(2).unwrap());
+    assert_eq!(doc.page_chars_cache.lock().unwrap().len(), 2);
+    let reread = doc.cached_page_chars(0).unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&first, &reread), "page 0 was evicted");
+    assert_eq!(format!("{reread:?}"), format!("{first:?}"));
+}
+
+/// A cached page keeps no growth slack from extraction.
+#[test]
+fn a_cached_page_holds_no_spare_char_capacity() {
+    let doc = PdfDocument::from_bytes(many_pages_pdf(1)).expect("open document");
+    let chars = doc.cached_page_chars(0).unwrap();
+    assert!(!chars.is_empty());
+    assert_eq!(chars.capacity(), chars.len());
+}
