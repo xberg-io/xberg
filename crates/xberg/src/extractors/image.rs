@@ -2587,6 +2587,10 @@ mod image_color_threshold;
 #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 #[path = "image_paddle_fallback.rs"]
 mod image_paddle_fallback;
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) use image_paddle_fallback::{
+    model_request as paddle_fallback_model_request, model_state as paddle_fallback_model_state,
+};
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
@@ -5956,12 +5960,8 @@ mod tests {
         assert!(single_block_table_config(&config, "image/jpeg", &first).is_some());
 
         let mut paddle_first = image_table_reread::sample_table_document();
-        paddle_first.prebuilt_pages = Some(vec![image_paddle_fallback::page_read_by("paddle-ocr")]);
+        image_paddle_fallback::mark_read_by_paddle(&mut paddle_first);
         assert!(single_block_table_config(&config, "image/jpeg", &paddle_first).is_none());
-
-        let mut tesseract_first = image_table_reread::sample_table_document();
-        tesseract_first.prebuilt_pages = Some(vec![image_paddle_fallback::page_read_by("tesseract")]);
-        assert!(single_block_table_config(&config, "image/jpeg", &tesseract_first).is_some());
     }
 
     /// The plain page text of a sparse table still renders once the table sits among the

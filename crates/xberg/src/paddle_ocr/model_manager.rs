@@ -458,7 +458,7 @@ impl ModelManager {
     }
 
     /// Gets the cache directory path.
-    #[cfg(test)]
+    #[cfg(any(test, all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
     pub(crate) fn cache_dir(&self) -> &PathBuf {
         &self.cache_dir
     }
@@ -609,9 +609,24 @@ impl ModelManager {
             .collect())
     }
 
+    /// Where every artifact [`Self::check_models_cached`] lists lives in the local cache: the
+    /// pinned snapshot path ([`Self::manifest_cache_path`]), whether or not it exists.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn model_file_paths(
+        &self,
+        version: &str,
+        family: &str,
+        tier: &str,
+        include_doc_ori: bool,
+    ) -> Result<Vec<PathBuf>, XbergError> {
+        Ok(Self::required_artifacts(version, family, tier, include_doc_ori)?
+            .iter()
+            .map(|(_, remote, _)| self.manifest_cache_path(remote))
+            .collect())
+    }
+
     /// The local paths of every artifact [`Self::check_models_cached`] lists, or `None` when any
-    /// has no cache entry. Reads the cache's snapshot entries through one client: no checksum,
-    /// no download.
+    /// is not a file. Stats the pinned snapshot paths only: no client, no checksum, no download.
     #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     pub(crate) fn cached_model_files(
         &self,
@@ -620,19 +635,8 @@ impl ModelManager {
         tier: &str,
         include_doc_ori: bool,
     ) -> Result<Option<Vec<PathBuf>>, XbergError> {
-        let artifacts = Self::required_artifacts(version, family, tier, include_doc_ori)?;
-        let Ok(api) = model_download::hf_client(Some(&self.cache_dir)) else {
-            return Ok(None);
-        };
-        Ok(artifacts
-            .iter()
-            .map(|(_, remote, _)| {
-                model_download::hf_cached_revision_with_client(&api, HF_REPO_ID, remote, Some(HF_REPO_REVISION))
-                    .ok()
-                    .flatten()
-                    .filter(|path| path.is_file())
-            })
-            .collect())
+        let paths = self.model_file_paths(version, family, tier, include_doc_ori)?;
+        Ok(paths.iter().all(|path| path.is_file()).then_some(paths))
     }
 
     /// The `(label, remote file, sha256)` of every artifact a run with the given version,

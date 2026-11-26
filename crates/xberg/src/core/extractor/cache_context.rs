@@ -1,4 +1,5 @@
-//! Mutable model dependencies of OSD recognition, script retry and optional PDF recovery.
+//! Mutable model dependencies of OSD recognition, script retry, optional PDF recovery and the
+//! standalone-image PaddleOCR fallback.
 
 use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::ExtractionConfig;
@@ -13,6 +14,10 @@ pub(crate) struct CacheDependency {
     script_retry: Option<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     uncertifiable: bool,
+    /// The OCR configuration of a request the image PaddleOCR fallback may run for; its model
+    /// files' identity enters the key, so cold and warm model caches never share an entry.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    paddle_image_fallback: Option<crate::core::config::OcrConfig>,
 }
 
 impl CacheDependency {
@@ -22,6 +27,8 @@ impl CacheDependency {
             let dependency = Self {
                 model: ModelSelection::for_config(config, mime),
                 script_retry: ModelSelection::for_script_retry(config, mime),
+                #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+                paddle_image_fallback: crate::extractors::image::paddle_fallback_model_request(config, mime),
                 ..Self::default()
             };
             #[cfg(feature = "pdf")]
@@ -85,7 +92,8 @@ async fn fingerprint_with_reader(
         .iter()
         .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty());
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
-    if has_orientation_models || has_script_retry {
+    let has_paddle_fallback = paddle_fallback_requested(dependencies);
+    if has_orientation_models || has_script_retry || has_paddle_fallback {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
@@ -100,6 +108,7 @@ async fn fingerprint_with_reader(
                 String::new()
             };
             context.push_str(&retry_context);
+            context.push_str(&paddle_fallback_context(&dependencies));
             Ok(Some(context))
         }))
         .await;
@@ -119,6 +128,49 @@ async fn fingerprint_with_reader(
         };
     }
     Ok(Some(String::new()))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn paddle_fallback_requested(dependencies: &[CacheDependency]) -> bool {
+    #[cfg(all(paddle_ocr, feature = "pdf"))]
+    {
+        dependencies
+            .iter()
+            .any(|dependency| dependency.paddle_image_fallback.is_some())
+    }
+    #[cfg(not(all(paddle_ocr, feature = "pdf")))]
+    {
+        let _ = dependencies;
+        false
+    }
+}
+
+/// The PaddleOCR model state of every request the image fallback may run for, or nothing when
+/// none may. Stats the model files on the caller's blocking thread; never reads or downloads.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn paddle_fallback_context(dependencies: &[CacheDependency]) -> String {
+    #[cfg(all(paddle_ocr, feature = "pdf"))]
+    {
+        let mut hash = blake3::Hasher::new();
+        let mut any = false;
+        for ocr in dependencies
+            .iter()
+            .filter_map(|dependency| dependency.paddle_image_fallback.as_ref())
+        {
+            any = true;
+            hash.update(crate::extractors::image::paddle_fallback_model_state(ocr).as_bytes());
+        }
+        if any {
+            format!(":paddle-image-fallback-v1:{}", hash.finalize().to_hex())
+        } else {
+            String::new()
+        }
+    }
+    #[cfg(not(all(paddle_ocr, feature = "pdf")))]
+    {
+        let _ = dependencies;
+        String::new()
+    }
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
