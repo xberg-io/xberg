@@ -8941,6 +8941,103 @@ fn should_promote_short_body_size_titles_to_h2_in_a_headingless_document() {
     }
 }
 
+/// 2026-14578: the body under `Summary of Request` runs on from the foot of the first column
+/// into the top of the second, so its block spans the page's height and overlapped the
+/// title's own row; the same-row guard read the title as a run-in label.
+#[test]
+fn should_promote_a_title_whose_body_runs_on_into_the_next_column() {
+    let section = |title: &str| {
+        let mut heading = body_size_paragraph_with_bbox(title, true, None, (45.0, 540.0, 200.0, 552.0));
+        heading.lines[0].segments[0].baseline_y = 540.0;
+        let mut body = body_size_paragraph_with_bbox(
+            "On October 31 NMFS received a request from TPWD for a rulemaking",
+            false,
+            None,
+            (45.0, 525.0, 400.0, 712.0),
+        );
+        body.lines[0].segments[0].x = 54.0;
+        body.lines[0].segments[0].baseline_y = 525.0;
+        let mut next_column = body.lines[0].clone();
+        next_column.segments[0].text = "and associated five-year letter of authorization.".to_string();
+        next_column.segments[0].x = 222.0;
+        next_column.segments[0].baseline_y = 700.0;
+        body.lines.push(next_column);
+        vec![heading, body]
+    };
+    let mut pages: Vec<_> = [
+        "Summary of Request",
+        "Description of the Activity",
+        "Comments and Responses",
+    ]
+    .into_iter()
+    .map(section)
+    .collect();
+    let mut run_in = body_size_paragraph_with_bbox("Bold Run In Label", true, None, (45.0, 400.0, 150.0, 412.0));
+    run_in.lines[0].segments[0].baseline_y = 400.0;
+    let mut same_row_body = body_size_paragraph_with_bbox(
+        "continues on the same row as the label and then wraps below it",
+        false,
+        None,
+        (45.0, 380.0, 400.0, 412.0),
+    );
+    same_row_body.lines[0].segments[0].x = 160.0;
+    same_row_body.lines[0].segments[0].baseline_y = 400.0;
+    pages.push(vec![run_in, same_row_body]);
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    for page in &pages[..3] {
+        assert_eq!(page[0].heading_level, Some(2), "{:?}", paragraph_text_raw(&page[0]));
+    }
+    assert_eq!(
+        pages[3][0].heading_level, None,
+        "a label whose body's first line shares its row is still a run-in label"
+    );
+}
+
+/// 2026-14578 sets five section titles on two lines of its narrow columns
+/// (`Summary of Major Provisions Within` / `the Rule`); a one-line test never admitted them.
+#[test]
+fn should_promote_a_body_size_bold_title_wrapped_onto_two_lines() {
+    let wrapped = |first: &str, second: &str| {
+        let mut heading = body_size_paragraph_with_bbox(first, true, None, (72.0, 688.0, 272.0, 712.0));
+        let mut tail = heading.lines[0].clone();
+        tail.segments[0].text = second.to_string();
+        heading.lines.push(tail);
+        heading.text = format!("{first} {second}");
+        heading.word_count = heading.text.split_whitespace().count();
+        vec![
+            heading,
+            body_size_paragraph_with_bbox(
+                "The following is a summary of the major provisions of this rule.",
+                false,
+                None,
+                (72.0, 600.0, 472.0, 680.0),
+            ),
+        ]
+    };
+    let mut pages = vec![
+        wrapped("Summary of Major Provisions Within", "the Rule"),
+        wrapped("Negligible Impact Analysis and", "Determination"),
+        wrapped("Unmitigable Adverse Impact Analysis", "and Determination"),
+    ];
+    let mut three_lines = wrapped("A bold block set", "over three lines");
+    let mut third = three_lines[0].lines[0].clone();
+    third.segments[0].text = "is not a title".to_string();
+    three_lines[0].lines.push(third);
+    pages.push(three_lines);
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    for page in &pages[..3] {
+        assert_eq!(page[0].heading_level, Some(2), "{:?}", paragraph_text_raw(&page[0]));
+    }
+    assert_eq!(
+        pages[3][0].heading_level, None,
+        "three bold lines are a block, not a title"
+    );
+}
+
 #[test]
 fn should_keep_short_bold_labels_as_text_in_a_headingless_document() {
     let mut pages: Vec<_> = ["Introduction", "Results", "Discussion"]

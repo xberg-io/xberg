@@ -315,11 +315,32 @@ fn shares_same_text_row(candidate: &PdfParagraph, following: &PdfParagraph, is_s
 
     let candidate_bottom = candidate_bbox.1.min(candidate_bbox.3);
     let candidate_top = candidate_bbox.1.max(candidate_bbox.3);
-    let following_bottom = following_bbox.1.min(following_bbox.3);
-    let following_top = following_bbox.1.max(following_bbox.3);
+    // The row is the following paragraph's first line, not its block: a paragraph that runs
+    // on into the next column spans the page's height, so its block overlaps every row of the
+    // column the candidate sits in. 2026-14578 lost `Summary of Request` and four more
+    // section titles that way. ~keep
+    let block_bottom = following_bbox.1.min(following_bbox.3);
+    let block_top = following_bbox.1.max(following_bbox.3);
+    let (following_bottom, following_top) = first_line_vertical_extent(following)
+        .filter(|&(bottom, top)| bottom >= block_bottom && top <= block_top)
+        .unwrap_or((block_bottom, block_top));
     let minimum_height = (candidate_top - candidate_bottom).min(following_top - following_bottom);
     let overlap = candidate_top.min(following_top) - candidate_bottom.max(following_bottom);
     minimum_height > 0.0 && overlap.max(0.0) / minimum_height >= SAME_ROW_MIN_VERTICAL_OVERLAP_RATIO
+}
+
+/// Bottom and top of a paragraph's first line, in the same space as `block_bbox`.
+fn first_line_vertical_extent(paragraph: &PdfParagraph) -> Option<(f32, f32)> {
+    let segments = &paragraph.lines.first()?.segments;
+    let bottom = segments
+        .iter()
+        .map(|segment| segment.baseline_y)
+        .fold(f32::MAX, f32::min);
+    let top = segments
+        .iter()
+        .map(|segment| segment.baseline_y + segment.height)
+        .fold(f32::MIN, f32::max);
+    (bottom.is_finite() && top.is_finite() && bottom <= top && !segments.is_empty()).then_some((bottom, top))
 }
 
 fn opens_aligned_body_block(

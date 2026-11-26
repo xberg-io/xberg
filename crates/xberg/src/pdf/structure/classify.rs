@@ -1736,6 +1736,12 @@ fn paragraph_plain_text(para: &PdfParagraph) -> String {
         .join(" ")
 }
 
+/// A body-size bold title wraps in a narrow column: the Federal Register's three-column
+/// pages set `Summary of Major Provisions Within` / `the Rule` and four more titles of
+/// 2026-14578 on two lines, which a one-line test never admitted. The word-count cap
+/// still bounds the paragraph to title length. ~keep
+const MAX_BODY_SIZE_BOLD_HEADING_LINES: usize = 2;
+
 pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32) -> bool {
     if para.heading_level.is_some()
         || !para.is_bold
@@ -1743,7 +1749,7 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
         || para.is_code_block
         || para.is_formula
         || para.is_page_furniture
-        || para.lines.len() != 1
+        || !(1..=MAX_BODY_SIZE_BOLD_HEADING_LINES).contains(&para.lines.len())
         || !body_font_size.is_finite()
         || body_font_size <= 0.0
         || (para.dominant_font_size - body_font_size).abs() > 0.5
