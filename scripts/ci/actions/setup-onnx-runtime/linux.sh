@@ -132,13 +132,19 @@ if [ "$strategy" = "bundled" ]; then
     echo "LIBRARY_PATH=$ort_root/lib:$dest:${LIBRARY_PATH:-}"
   } >>"$GITHUB_ENV"
 else
+  # `libonnxruntime*.so*` also matches libonnxruntime_providers_shared.so, which an
+  # ort-dynamic consumer would then try to load as the runtime. ~keep
+  ort_lib="$ort_root/lib/libonnxruntime.so"
+  if [ ! -e "$ort_lib" ]; then
+    echo "ERROR: $ort_lib missing from the staged ONNX Runtime" >&2
+    exit 1
+  fi
   {
-    ort_lib=$(find "$ort_root/lib" -name "libonnxruntime*.so*" -print -quit)
     echo "ORT_LIB_LOCATION=$ort_root/lib"
     echo "ORT_PREFER_DYNAMIC_LINK=1"
     echo "ORT_SKIP_DOWNLOAD=1"
     echo "ORT_STRATEGY=system"
-    echo "ORT_DYLIB_PATH=$ort_root/lib/${ort_lib##*/}"
+    echo "ORT_DYLIB_PATH=$ort_lib"
     echo "LD_LIBRARY_PATH=$ort_root/lib:$dest:${LD_LIBRARY_PATH:-}"
     echo "LIBRARY_PATH=$ort_root/lib:$dest:${LIBRARY_PATH:-}"
     echo "RUSTFLAGS=$rustflags"
