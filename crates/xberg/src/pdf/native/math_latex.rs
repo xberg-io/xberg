@@ -432,9 +432,6 @@ fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
     let candidates: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class != Class::Prose).collect();
     let mut formulas = Vec::new();
     for component in connected_components(&candidates, &prose) {
-        if component.len() > MAX_COMPONENT_PIECES {
-            continue;
-        }
         for unit in split_rows(component) {
             if let Some(formula) = build_formula(unit, &prose) {
                 formulas.push(formula);
@@ -444,15 +441,23 @@ fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
     formulas
 }
 
-/// Group candidate pieces that sit on one formula row or stack into one formula.
+/// Group candidate pieces that sit on one formula row or stack into one formula. A component
+/// of more than [`MAX_COMPONENT_PIECES`] is left out.
 fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a>]) -> Vec<Vec<&'p Piece<'a>>> {
     let adjacent: Vec<bool> = candidates.iter().map(|piece| is_prose_adjacent(piece, prose)).collect();
     let mut parent: Vec<usize> = (0..candidates.len()).collect();
     let mut order: Vec<usize> = (0..candidates.len()).collect();
     order.sort_by(|&a, &b| candidates[a].base.total_cmp(&candidates[b].base));
-    let reach = candidates.iter().map(|piece| piece.size).fold(0.0_f32, f32::max) * LIMIT_EM;
+    // Two pieces link only within LIMIT_EM of the larger one's size, so a piece's scan ends
+    // where the rise passes that reach for every piece still ahead: the largest size from
+    // there on. A page's largest glyph then widens only the scans that can still reach it.
+    let mut largest_ahead = vec![0.0_f32; order.len() + 1];
+    for position in (0..order.len()).rev() {
+        largest_ahead[position] = largest_ahead[position + 1].max(candidates[order[position]].size);
+    }
     for (position, &i) in order.iter().enumerate() {
-        for &j in &order[position + 1..] {
+        for (offset, &j) in order[position + 1..].iter().enumerate() {
+            let reach = candidates[i].size.max(largest_ahead[position + 1 + offset]) * LIMIT_EM;
             if candidates[j].base - candidates[i].base > reach {
                 break;
             }
@@ -462,10 +467,16 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
             }
         }
     }
+    let roots: Vec<usize> = (0..candidates.len()).map(|i| find(&mut parent, i)).collect();
+    let mut sizes = vec![0_usize; candidates.len()];
+    for &root in &roots {
+        sizes[root] += 1;
+    }
     let mut groups: std::collections::BTreeMap<usize, Vec<&'p Piece<'a>>> = std::collections::BTreeMap::new();
-    for (i, &piece) in candidates.iter().enumerate() {
-        let root = find(&mut parent, i);
-        groups.entry(root).or_default().push(piece);
+    for (&piece, &root) in candidates.iter().zip(&roots) {
+        if sizes[root] <= MAX_COMPONENT_PIECES {
+            groups.entry(root).or_default().push(piece);
+        }
     }
     groups
         .into_values()
