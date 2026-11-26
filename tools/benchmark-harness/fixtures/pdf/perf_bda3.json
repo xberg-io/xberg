@@ -7,6 +7,7 @@
     "description": "Bayesian Data Analysis 3rd ed.: 677 pages, 35 MB, math and many figures",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 677
+    "pages": 677,
+    "opt_in": true
   }
 }

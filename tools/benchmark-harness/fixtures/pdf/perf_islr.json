@@ -7,6 +7,7 @@
     "description": "ISLR sixth printing: 440-page textbook with figures and R code",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 440
+    "pages": 440,
+    "opt_in": true
   }
 }

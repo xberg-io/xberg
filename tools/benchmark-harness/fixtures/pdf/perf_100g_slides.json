@@ -7,6 +7,7 @@
     "description": "100G networking technology overview: 25-slide deck exported to PDF",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 25
+    "pages": 25,
+    "opt_in": true
   }
 }

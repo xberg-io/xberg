@@ -7,6 +7,7 @@
     "description": "A Course in Machine Learning v0.9: 193-page pdfTeX book with math",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 193
+    "pages": 193,
+    "opt_in": true
   }
 }

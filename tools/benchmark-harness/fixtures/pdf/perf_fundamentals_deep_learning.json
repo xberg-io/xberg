@@ -7,6 +7,7 @@
     "description": "Fundamentals of Deep Learning (2014): 61-page, 57 MB image-heavy document",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 61
+    "pages": 61,
+    "opt_in": true
   }
 }

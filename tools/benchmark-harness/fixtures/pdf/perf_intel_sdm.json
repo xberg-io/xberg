@@ -7,6 +7,7 @@
     "description": "Intel 64 and IA-32 SDM combined volumes (June 2021): 4778-page encrypted (no user password) technical manual, dense tables",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 4778
+    "pages": 4778,
+    "opt_in": true
   }
 }

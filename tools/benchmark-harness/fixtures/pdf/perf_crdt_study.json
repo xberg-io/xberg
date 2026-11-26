@@ -7,6 +7,7 @@
     "description": "Shapiro et al. CRDT study: 50-page report, math and many vector figures",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 50
+    "pages": 50,
+    "opt_in": true
   }
 }

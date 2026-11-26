@@ -144,6 +144,9 @@ Fixtures are JSON files organized by format directory under `fixtures/`:
 }
 ```
 
+`metadata.opt_in: true` keeps a fixture out of directory scans (`-f fixtures/` without `--cohort`); it runs only
+when a cohort manifest or `PROFILING_FIXTURES` names it. The long performance-only PDFs use it.
+
 ### Ground Truth Coverage
 
 | Format      | Fixtures | With Markdown GT |

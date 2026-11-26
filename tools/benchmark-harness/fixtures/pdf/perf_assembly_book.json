@@ -7,6 +7,7 @@
     "description": "Assembly Language for Beginners: 1082-page XeTeX book with code listings",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 1082
+    "pages": 1082,
+    "opt_in": true
   }
 }

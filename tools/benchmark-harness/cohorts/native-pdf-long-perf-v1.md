@@ -6,7 +6,8 @@ when any fixture lacks ground truth (`load_quality_ground_truth` in `src/runner/
 `validate-artifacts` expects rows without ground truth to carry no quality block. Every document is pinned by
 `test_documents/corpus.lock.json`.
 
-`batch_size` is 1 because a batch invocation shares one `--timeout` across all of its documents.
+`batch_size` is 1 because a batch invocation shares one `--timeout` across all of its documents. Every member sets
+`metadata.opt_in`, so a directory scan without `--cohort` skips it.
 
 | Fixture | Pages | Bytes | Content |
 | --- | ---: | ---: | --- |
@@ -23,5 +24,5 @@ when any fixture lacks ground truth (`load_quality_ground_truth` in `src/runner/
 | `pdf/perf_crdt_study.json` | 50 | 1537629 | research report, math and vector figures |
 | `pdf/perf_100g_slides.json` | 25 | 1516903 | slide deck exported to PDF |
 
-The Xberg CLI adapters pass `extraction_timeout_secs: 1740` (`src/adapters/xberg.rs`), so raising `--timeout`
-does not lengthen Xberg's own per-document limit.
+Xberg's own per-document limit is `--timeout` minus 60 seconds (`extraction_timeout_secs` in
+`src/adapters/xberg.rs`), so raise `--timeout` for the longest members.

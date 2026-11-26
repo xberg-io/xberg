@@ -7,6 +7,7 @@
     "description": "Gallier and Quaintance math textbook: 1962 pages of pdfTeX math",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 1962
+    "pages": 1962,
+    "opt_in": true
   }
 }

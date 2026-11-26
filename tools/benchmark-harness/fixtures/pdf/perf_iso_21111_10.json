@@ -7,6 +7,7 @@
     "description": "ISO 21111-10:2021 conformance test plans: 214-page standard, dense tables",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 214
+    "pages": 214,
+    "opt_in": true
   }
 }

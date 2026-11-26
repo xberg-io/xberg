@@ -7,6 +7,7 @@
     "description": "PoC||GTFO 13: 72-page, 62 MB polyglot journal, two-column, many fonts and images",
     "category": "pdf-long-performance",
     "size_class": "large",
-    "pages": 72
+    "pages": 72,
+    "opt_in": true
   }
 }
