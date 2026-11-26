@@ -287,12 +287,14 @@ impl PdfDocument {
     }
 
     /// End the per-page passes: drop the page-pass cache and stop filling it,
-    /// and empty the per-page span, character and content caches, so a document
-    /// held past its extraction (OCR, rendering) keeps none of them alive.
+    /// and empty the per-page span, character, content and script-baseline
+    /// caches, so a document held past its extraction (OCR, rendering) keeps
+    /// none of them alive. A later read records its page's baselines again.
     #[doc(hidden)]
     pub fn release_page_caches(&self) {
         *self.raw_page_spans_cache.lock_or_recover() = None;
         self.paired_geometry_pages.store(0, Ordering::Relaxed);
+        self.script_baselines.lock_or_recover().clear();
         *self.painted_regions_cache.lock_or_recover() = None;
         self.page_spans_cache.lock_or_recover().clear();
         self.page_chars_cache.lock_or_recover().clear();
