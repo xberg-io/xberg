@@ -37,9 +37,7 @@ pub(super) fn restore_open_trailing_columns(table: &mut Table, spans: &[TextSpan
     if table.col_count == 0 || table.rows.is_empty() {
         return;
     }
-    let Some(bands) = table.rows.iter().map(row_band).collect::<Option<Vec<_>>>() else {
-        return;
-    };
+    let bands: Vec<Option<Band>> = table.rows.iter().map(row_band).collect();
     let candidates: Vec<&TextSpan> = spans
         .iter()
         .filter(|span| {
@@ -51,12 +49,16 @@ pub(super) fn restore_open_trailing_columns(table: &mut Table, spans: &[TextSpan
         .collect();
     let tracks = value_tracks(&candidates);
     if tracks.is_empty() || tracks.len() > MAX_OPEN_COLUMNS {
+        if !tracks.is_empty() {
+            declined("too many value tracks");
+        }
         return;
     }
     let column_width = bounds.width / table.col_count as f32;
     let mut previous_right = bounds.right();
     for &(left, right) in &tracks {
         if left - previous_right > column_width {
+            declined("value track too far from the table");
             return;
         }
         previous_right = right;
@@ -66,6 +68,7 @@ pub(super) fn restore_open_trailing_columns(table: &mut Table, spans: &[TextSpan
         .iter()
         .any(|span| span.bbox.x > previous_right || span.bbox.right() < first_left - column_width)
     {
+        declined("text beside the value tracks");
         return;
     }
     let right = candidates
@@ -73,17 +76,20 @@ pub(super) fn restore_open_trailing_columns(table: &mut Table, spans: &[TextSpan
         .map(|span| span.bbox.right())
         .fold(previous_right, f32::max);
     if has_vertical_rule(paths, bounds, right) {
+        declined("vertical rule between the table and the values");
         return;
     }
 
     let mut cells: Vec<Vec<Vec<&TextSpan>>> = vec![vec![Vec::new(); tracks.len()]; table.rows.len()];
     for &span in &candidates {
-        let Some(row) = containing_band(&bands, center_y(span)) else {
+        let Some(row) = row_for(&bands, span) else {
+            declined("value outside every row");
             return;
         };
         cells[row][nearest_track(&tracks, span)].push(span);
     }
     if !fills_value_rows(&cells, tracks.len(), table.rows.len()) {
+        declined("values do not fill the rows");
         return;
     }
 
@@ -97,6 +103,10 @@ pub(super) fn restore_open_trailing_columns(table: &mut Table, spans: &[TextSpan
     table.bbox = Some(Rect::new(bounds.x, bounds.y, right - bounds.x, bounds.height));
 }
 
+fn declined(reason: &str) {
+    tracing::trace!(reason, "open value columns beside a ruled table declined");
+}
+
 fn center_y(span: &TextSpan) -> f32 {
     span.bbox.y + span.bbox.height / 2.0
 }
@@ -105,13 +115,38 @@ fn is_value(span: &TextSpan) -> bool {
     is_numeric_word(span.text.trim())
 }
 
-/// The vertical extent of a row's cells, or `None` when no cell has bounds.
+/// The vertical extent of a row: its single-row cells' bounds, else their text's. A cell spanning
+/// several rows (the empty run of a ruled column whose values stop early) says nothing about this
+/// row's height, and an unruled body row may carry no cell bounds at all.
 fn row_band(row: &TableRow) -> Option<Band> {
-    row.cells
-        .iter()
-        .filter_map(|cell| cell.bbox)
-        .map(|bbox| (bbox.y, bbox.y + bbox.height))
-        .reduce(|(bottom, top), (cell_bottom, cell_top)| (bottom.min(cell_bottom), top.max(cell_top)))
+    let single = || row.cells.iter().filter(|cell| cell.rowspan <= 1);
+    let union = |bounds: &mut dyn Iterator<Item = Rect>| {
+        bounds
+            .map(|bbox| (bbox.y, bbox.y + bbox.height))
+            .reduce(|(bottom, top), (low, high)| (bottom.min(low), top.max(high)))
+    };
+    union(&mut single().filter_map(|cell| cell.bbox))
+        .or_else(|| union(&mut single().flat_map(|cell| cell.spans.iter().map(|span| span.bbox))))
+}
+
+/// The row a span belongs to: the band holding its centre (the nearest centre among several),
+/// else, for a label, the nearest band. A label above the first row's band (a header line set in
+/// the table's top margin) still lies inside the table's bounds, which suppress it from the page
+/// text, so it must land in a row. A value outside every band is not read as a row's value.
+fn row_for(bands: &[Option<Band>], span: &TextSpan) -> Option<usize> {
+    let y = center_y(span);
+    containing_band(bands, y).or_else(|| {
+        (!is_value(span))
+            .then(|| {
+                bands
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, band)| band.map(|(bottom, top)| (index, (bottom - y).max(y - top))))
+                    .min_by(|(_, left), (_, right)| left.total_cmp(right))
+                    .map(|(index, _)| index)
+            })
+            .flatten()
+    })
 }
 
 /// The columns the value spans form: spans whose horizontal extents overlap share a column.
@@ -132,10 +167,11 @@ fn value_tracks(candidates: &[&TextSpan]) -> Vec<Track> {
     tracks
 }
 
-fn containing_band(bands: &[Band], y: f32) -> Option<usize> {
+fn containing_band(bands: &[Option<Band>], y: f32) -> Option<usize> {
     bands
         .iter()
         .enumerate()
+        .filter_map(|(index, band)| band.map(|band| (index, band)))
         .filter(|(_, (bottom, top))| (*bottom..=*top).contains(&y))
         .min_by(|(_, left), (_, right)| {
             let distance = |(bottom, top): &Band| ((bottom + top) / 2.0 - y).abs();
@@ -191,7 +227,7 @@ fn has_vertical_rule(paths: &[PathContent], bounds: Rect, right: f32) -> bool {
     })
 }
 
-fn open_cell(is_header: bool, (bottom, top): Band, (left, right): Track, mut members: Vec<&TextSpan>) -> TableCell {
+fn open_cell(is_header: bool, band: Option<Band>, (left, right): Track, mut members: Vec<&TextSpan>) -> TableCell {
     members.sort_by(|upper, lower| {
         lower
             .bbox
@@ -210,7 +246,7 @@ fn open_cell(is_header: bool, (bottom, top): Band, (left, right): Track, mut mem
         spans: members.into_iter().cloned().collect(),
         colspan: 1,
         rowspan: 1,
-        bbox: Some(Rect::new(left, bottom, right - left, top - bottom)),
+        bbox: band.map(|(bottom, top)| Rect::new(left, bottom, right - left, top - bottom)),
         is_header,
     }
 }
@@ -313,6 +349,33 @@ mod tests {
         let bounds = table.bbox.expect("bounds");
         assert_eq!(bounds.x, 100.0);
         assert_eq!(bounds.right(), 284.0);
+    }
+
+    /// pb_SERFF_TX_random_pages_1_page1075: a ruled column whose values stop early leaves one cell
+    /// spanning the remaining rows, and the multiplier header sits in the table's top margin above
+    /// the first row's cells.
+    #[test]
+    fn values_join_past_a_spanning_cell_and_a_header_in_the_top_margin() {
+        let mut table = ruled_table(4);
+        table.rows[1].cells.push(TableCell {
+            text: String::new(),
+            spans: Vec::new(),
+            colspan: 1,
+            rowspan: 4,
+            mcids: Vec::new(),
+            bbox: Some(Rect::new(200.0, TABLE_TOP - 5.0 * ROW_HEIGHT, 0.0, 4.0 * ROW_HEIGHT)),
+            is_header: false,
+        });
+        let bounds = table.bbox.expect("bounds");
+        table.bbox = Some(Rect::new(bounds.x, bounds.y, bounds.width, bounds.height + 20.0));
+        let mut spans = open_spans(4);
+        spans.push(span("Multiplier", 222.0, TABLE_TOP + 8.0, 50.0));
+
+        restore_open_trailing_columns(&mut table, &spans, &[]);
+
+        assert_eq!(table.col_count, 4);
+        assert_eq!(table.rows[0].cells[2].text, "Multiplier Factor");
+        assert_eq!(table.rows[3].cells.last().map(|cell| cell.text.as_str()), Some("1.00"));
     }
 
     #[test]
