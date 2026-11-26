@@ -4629,16 +4629,16 @@ pub(super) mod tests {
         };
 
         assert_eq!(
-            mixed_route_recognition_sessions(None, Some(&probe)),
+            direct_route_recognition_sessions(None, Some(&probe)),
             None,
             "a custom backend has no admission limit, so its batch keeps the thread budget's width"
         );
-        assert_eq!(mixed_route_recognition_sessions(None, None), None);
+        assert_eq!(direct_route_recognition_sessions(None, None), None);
 
         let _pin = PinnedRecognitionSessions::set(2);
-        assert_eq!(mixed_route_recognition_sessions(None, Some(&probe)), Some(2));
+        assert_eq!(direct_route_recognition_sessions(None, Some(&probe)), Some(2));
         assert_eq!(
-            mixed_route_recognition_sessions(Some(&pipeline), Some(&probe)),
+            direct_route_recognition_sessions(Some(&pipeline), Some(&probe)),
             None,
             "the pipeline route reads through its stages' backends, so no one admission limit bounds it"
         );
@@ -4660,7 +4660,7 @@ pub(super) mod tests {
             .expect("the built-in Tesseract backend must be registered");
 
         assert_eq!(
-            mixed_route_recognition_sessions(None, Some(&tesseract)),
+            direct_route_recognition_sessions(None, Some(&tesseract)),
             Some(crate::core::config::concurrency::recognition_concurrency())
         );
     }

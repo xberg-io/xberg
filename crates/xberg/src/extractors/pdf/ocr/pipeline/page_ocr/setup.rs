@@ -319,6 +319,9 @@ pub(super) async fn prepare<'a>(
             "Reduced OCR batch size to fit available memory"
         );
     }
+    // A batch renders every page before reading any, so pages beyond what recognition admits
+    // would only hold their rasters while they wait. ~keep
+    let batch_size = bound_batch_to_recognition(batch_size, direct_route_recognition_sessions(None, Some(&backend)));
 
     let mut ocr_config_owned = ocr_config_for_page_extraction(ocr_config);
     ocr_config_owned.acceleration = config.acceleration.clone();

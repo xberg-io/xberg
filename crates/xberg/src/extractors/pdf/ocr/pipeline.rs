@@ -1556,7 +1556,7 @@ impl<'a> MixedOcrContext<'a> {
             content,
             config,
             routing.preprocessing_render_dpi,
-            mixed_route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
+            direct_route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
         )
         .await;
 
@@ -2341,7 +2341,7 @@ pub(super) fn bound_batch_to_recognition(batch_size: usize, recognition_sessions
 /// pipeline route reads through stages that may each be a different backend, and a custom
 /// backend reads every page it is handed at once.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) fn mixed_route_recognition_sessions(
+pub(super) fn direct_route_recognition_sessions(
     effective_pipeline: Option<&crate::core::config::OcrPipelineConfig>,
     backend: Option<&std::sync::Arc<dyn crate::plugins::OcrBackend>>,
 ) -> Option<usize> {
