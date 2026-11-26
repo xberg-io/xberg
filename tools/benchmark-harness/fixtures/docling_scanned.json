@@ -27,6 +27,6 @@
   "ground_truth": {
     "text_file": "../../../test_documents/ground_truth/pdf/docling.txt",
     "markdown_file": "../../../test_documents/ground_truth/pdf/docling.md",
-    "source": "mistral-pixtral"
+    "source": "pdf_text_layer"
   }
 }

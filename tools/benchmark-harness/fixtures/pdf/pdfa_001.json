@@ -12,6 +12,6 @@
 	"ground_truth": {
 		"text_file": "../../../../test_documents/ground_truth/pdf/pdfa_001.txt",
 		"markdown_file": "../../../../test_documents/ground_truth/pdf/pdfa_001.md",
-		"source": "nougat"
+		"source": "pdf_text_layer"
 	}
 }
