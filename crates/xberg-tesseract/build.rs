@@ -769,6 +769,7 @@ mod build_tesseract {
             );
 
             std::fs::write(&cmakelists_path, cmakelists).expect("Failed to write CMakeLists.txt");
+            skip_legacy_tables_in_lstm_only_init(&tesseract_dir);
 
             let mut tesseract_config = Config::new(
                 cmake_source_path(&tesseract_dir)
@@ -1272,6 +1273,41 @@ mod build_tesseract {
             fs::write(&cmakelists, patched).expect("Failed to write patched CMakeLists.txt");
             eprintln!("Disabled tesseract binary build in CMakeLists.txt");
         }
+    }
+
+    /// Marker the patched `tessedit.cpp` carries, so a re-run over an already patched tree is a no-op.
+    const LSTM_ONLY_INIT_MARKER: &str = "xberg: LSTM-only engines skip the legacy tables";
+
+    /// Make an LSTM-only engine skip the legacy engine's unichar ambiguity tables and params model.
+    ///
+    /// `init_tesseract_lang_data` loads them whenever the legacy engine is compiled in, also for
+    /// `OEM_LSTM_ONLY`. Only the legacy recognizer reads them: `Dict::NoDangerousAmbig` (from
+    /// `LanguageModel::UpdateBestChoice`, the segmentation search), `Classify::AmbigsForAdaption`
+    /// (adaptive learning) and `applybox.cpp` (training), none of which `classify_word_pass1`
+    /// reaches for `OEM_LSTM_ONLY`. The LSTM recognizer has its own `Dict` and unicharset. The
+    /// universal ambigs also add their n-grams to the engine's unicharset, which sizes the adapted
+    /// templates `program_editup` allocates: 25 MB and 15 MB of each engine's 49 MB. A build with
+    /// `DISABLED_LEGACY_ENGINE` skips the same block, so LSTM output is unchanged. ~keep
+    fn skip_legacy_tables_in_lstm_only_init(tesseract_dir: &Path) {
+        let path = tesseract_dir.join("src/ccmain/tessedit.cpp");
+        let source = fs::read_to_string(&path).expect("Failed to read tessedit.cpp");
+        if source.contains(LSTM_ONLY_INIT_MARKER) {
+            return;
+        }
+        let anchor =
+            "#ifndef DISABLED_LEGACY_ENGINE\n\n  // Setup initial unichar ambigs table and read universal ambigs.\n";
+        assert_eq!(
+            source.matches(anchor).count(),
+            1,
+            "tessedit.cpp no longer has the universal ambigs block this build patches"
+        );
+        let patched = source.replace(
+            anchor,
+            &format!(
+                "#ifndef DISABLED_LEGACY_ENGINE\n  // {LSTM_ONLY_INIT_MARKER}.\n  if (tessedit_ocr_engine_mode == OEM_LSTM_ONLY) {{\n    return true;\n  }}\n\n  // Setup initial unichar ambigs table and read universal ambigs.\n"
+            ),
+        );
+        fs::write(&path, patched).expect("Failed to write tessedit.cpp");
     }
 
     /// Apply C++ source fixups programmatically when the diff patch fails.

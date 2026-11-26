@@ -27,6 +27,17 @@ char *xberg_tess_get_utf8_text(void *handle) {
     }
 }
 
+int xberg_tess_is_valid_character(void *handle, const char *utf8_character) {
+    if (handle == nullptr || utf8_character == nullptr) {
+        return -1;
+    }
+    try {
+        return static_cast<TessBaseAPI *>(handle)->IsValidCharacter(utf8_character) ? 1 : 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
 int xberg_tess_clear(void *handle) {
     if (handle == nullptr) {
         return -1;

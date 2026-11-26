@@ -93,5 +93,9 @@ required-features = ["build-tesseract", "bundle-tessdata-eng"]
 name = "exit_cleanup_race"
 required-features = ["build-tesseract", "bundle-tessdata-eng"]
 
+[[test]]
+name = "lstm_only_legacy_tables"
+required-features = ["build-tesseract", "bundle-tessdata-eng"]
+
 [lints]
 workspace = true
