@@ -40,6 +40,8 @@
 !scripts/ci/install-system-deps/build-ocr-linux.sh
 !scripts/ci/install-system-deps/verify-ocr-linux.py
 !scripts/ci/install-system-deps/verify-ocr-fixture.sh
+!scripts/ci/tessdata/tessdata_best.revision
+!scripts/ci/tessdata/tessdata_best.sha256
 
 # Re-exclude build artifacts inside allowed dirs
 **/target/

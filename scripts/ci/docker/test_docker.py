@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified Docker image test script for all variants (core, full, cli)."""
+"""Unified Docker image test script for all variants (core, full, their -best twins, cli)."""
 
 from __future__ import annotations
 
@@ -33,6 +33,10 @@ MEBIBYTE_BYTES = 1024 * 1024
 # that was introduced as "reasonable" with no recorded rationale, blocking every CLI manifest
 # publish. Compare raw bytes so reporting precision cannot change the pass/fail result. ~keep
 CLI_IMAGE_LIMIT_BYTES = 250 * MEBIBYTE_BYTES
+BEST_VARIANT_SUFFIX = "-best"
+BEST_TESSDATA_DIR = "/usr/share/xberg/tessdata/best"
+BEST_TESSDATA_LICENSE = "/usr/local/share/licenses/tessdata_best/LICENSE"
+BEST_TESSDATA_MANIFEST = REPO_ROOT / "scripts/ci/tessdata/tessdata_best.sha256"
 
 
 def format_image_size(size_bytes: int) -> str:
@@ -55,6 +59,15 @@ class TestRunner:
     failed: int = 0
     failed_names: list[str] = field(default_factory=list)
     containers: list[str] = field(default_factory=list)
+
+    @property
+    def base_variant(self) -> str:
+        """The variant without the tessdata_best suffix: core-best tests as core, full-best as full."""
+        return self.variant.removesuffix(BEST_VARIANT_SUFFIX)
+
+    @property
+    def is_best(self) -> bool:
+        return self.variant.endswith(BEST_VARIANT_SUFFIX)
 
     def log(self, level: str, color: str, msg: str) -> None:
         print(f"{color}[{level}]{NC} {msg}", flush=True)
@@ -448,6 +461,76 @@ def test_ocr_extraction(t: TestRunner) -> None:
         t.fail_test("OCR extraction", "Output too short or OCR failed")
 
 
+def expected_best_models() -> list[str]:
+    """The traineddata files the best images must ship, from the checked-in download manifest."""
+    names = [line.split("  ", 1)[1] for line in BEST_TESSDATA_MANIFEST.read_text().splitlines()]
+    return sorted(name for name in names if name.endswith(".traineddata"))
+
+
+def test_best_tessdata_layout(t: TestRunner) -> None:
+    t.start("tessdata_best models, license and environment")
+    models = expected_best_models()
+    checks = f"""
+        test "${{XBERG_OCR_TESSDATA_MODEL:-}}" = best
+        test -z "${{TESSDATA_PREFIX+set}}"
+        test -s {BEST_TESSDATA_LICENSE}
+        cd {BEST_TESSDATA_DIR}
+        test "$(ls)" = "{chr(10).join(models)}"
+        test -z "$(find . -type f ! -perm 0444)"
+        test -z "$(find . -type f ! -user root)"
+        """
+    r = t.docker_run("--name", t.container_name(), "--entrypoint", "/bin/sh", t.image, "-exc", checks)
+    if r.returncode == 0:
+        t.pass_test()
+    else:
+        t.fail_test("tessdata_best layout", f"Exit code {r.returncode}: {r.stderr.strip()[-500:]}")
+
+
+def run_offline_ocr(t: TestRunner, *extra_args: str) -> tuple[int, str]:
+    """OCR the fixture image without a network, so no model can be downloaded."""
+    r = t.docker_run(
+        "--name",
+        t.container_name(),
+        "--network",
+        "none",
+        "--memory",
+        "1g",
+        "-v",
+        f"{TEST_DOCS_DIR}:/data:ro",
+        *extra_args,
+        t.image,
+        "extract",
+        "/data/images/ocr_image.jpg",
+        "--ocr",
+        "true",
+    )
+    return r.returncode, (r.stdout + r.stderr).strip()
+
+
+def test_best_ocr_offline(t: TestRunner) -> None:
+    """Prove OCR reads the image's tessdata_best: it works offline and fails once that directory is empty.
+
+    ~keep A best request never falls back to the system tessdata_fast, so with the network off the
+    image's best directory is the only source; hiding it behind an empty tmpfs is the negative
+    control. The 1g limit matches the fast OCR test: best models need more memory, and a pass here
+    is the evidence that the chart's default 2Gi limit covers a single best OCR request.
+    """
+    t.start("OCR uses the bundled tessdata_best offline")
+    code, out = run_offline_ocr(t)
+    t.debug(f"Offline best OCR output (first 100 chars): {out[:100]}")
+    if code != 0 or len(out) <= 10:
+        t.fail_test("Offline best OCR", f"Exit code {code}: {out[:300]}")
+        return
+    t.pass_test()
+
+    t.start("OCR fails offline when the bundled tessdata_best is hidden")
+    code, out = run_offline_ocr(t, "--tmpfs", f"{BEST_TESSDATA_DIR}:ro")
+    if code != 0:
+        t.pass_test()
+    else:
+        t.fail_test("Hidden tessdata_best", f"OCR succeeded without the best models; output: {out[:300]}")
+
+
 def test_paddle_ocr_extraction(t: TestRunner) -> None:
     t.start("PaddleOCR extraction (pre-loaded models)")
     name = t.container_name()
@@ -551,7 +634,7 @@ def test_api_health(t: TestRunner) -> None:
         ext_count = int(ext_m.group(1)) if ext_m else 0
         t.debug(f"OCR backends: {ocr_count}, Extractors: {ext_count}")
 
-        if t.variant == "full":
+        if t.base_variant == "full":
             if ocr_count > 0:
                 t.info(f"Full variant: {ocr_count} OCR backend(s) registered")
                 t.pass_test()
@@ -1109,8 +1192,11 @@ def run_core_full_tests(t: TestRunner) -> None:
     test_extract_docx(t)
     test_extract_html(t)
     test_ocr_extraction(t)
+    if t.is_best:
+        test_best_tessdata_layout(t)
+        test_best_ocr_offline(t)
 
-    if t.variant == "full":
+    if t.base_variant == "full":
         test_doc_extraction(t)
         test_paddle_ocr_extraction(t)
 
@@ -1133,7 +1219,7 @@ def run_core_full_tests(t: TestRunner) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Docker image tests")
     parser.add_argument("--image", required=True, help="Docker image name")
-    parser.add_argument("--variant", required=True, choices=["core", "full", "cli"])
+    parser.add_argument("--variant", required=True, choices=["core", "full", "core-best", "full-best", "cli"])
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--skip-build", action="store_true", help="(ignored, kept for compat)")
     args = parser.parse_args()

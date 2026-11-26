@@ -170,7 +170,32 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp target/release/xberg /build/xberg && \
     strip /build/xberg
 
-FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+# tessdata_best for the `best` target, at the revision and digests pinned in
+# crates/xberg/src/ocr/tessdata_download/pins.rs (scripts/ci/tessdata/generate_best_manifest.py).
+# The zero mtimes keep the copied layer identical across builds. ~keep
+FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS tessdata-best
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY scripts/ci/tessdata/tessdata_best.revision scripts/ci/tessdata/tessdata_best.sha256 /opt/tessdata-best/
+WORKDIR /tessdata-best
+RUN set -eu; \
+    revision="$(cat /opt/tessdata-best/tessdata_best.revision)"; \
+    case "$revision" in *[!0-9a-f]*|'') echo "Invalid tessdata_best revision: $revision" >&2; exit 1 ;; esac; \
+    [ "${#revision}" -eq 40 ]; \
+    while read -r _ name; do \
+        curl -fsSL --retry 5 --retry-delay 2 --retry-max-time 300 --retry-all-errors -o "$name" \
+            "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/${revision}/${name}"; \
+    done </opt/tessdata-best/tessdata_best.sha256; \
+    sha256sum --strict -c /opt/tessdata-best/tessdata_best.sha256; \
+    mkdir models license; \
+    mv ./*.traineddata models/; \
+    mv LICENSE license/; \
+    find models license -type f -exec touch -d @0 {} +
+
+FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/xberg-io/xberg"
 LABEL org.opencontainers.image.description="Xberg document intelligence - full variant"
@@ -294,3 +319,20 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 ENTRYPOINT ["/usr/bin/tini", "--", "xberg"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]
+
+# The same image with tessdata_best for the image's languages in a read-only directory xberg
+# searches for best requests only. TESSDATA_PREFIX stays unset: it would take precedence over the
+# model set and serve these files to fast requests too. ~keep
+FROM runtime AS best
+
+LABEL org.opencontainers.image.description="Xberg document intelligence - full-best variant"
+
+COPY --link --chmod=0444 --from=tessdata-best /tessdata-best/models/*.traineddata /usr/share/xberg/tessdata/best/
+COPY --link --chmod=0444 --from=tessdata-best /tessdata-best/license/LICENSE /usr/local/share/licenses/tessdata_best/LICENSE
+
+ENV XBERG_OCR_TESSDATA_MODEL=best
+
+RUN bash /opt/xberg-ocr/verify-ocr-fixture.sh /usr/local/bin/tesseract /usr/share/xberg/tessdata/best
+
+# The default target: the image without tessdata_best. ~keep
+FROM runtime AS fast
