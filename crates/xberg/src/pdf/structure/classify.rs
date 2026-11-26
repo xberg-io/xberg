@@ -2299,7 +2299,10 @@ fn looks_like_standalone_heading_text(text: &str) -> bool {
 /// on others is one repeated line, not two lines that each fall under the page threshold.
 /// The third key masks digit runs, so a running line that carries a per-page counter
 /// ("45209 Federal Register / Vol. 91", "Frm 00030") still repeats, including against
-/// its pages that print no counter.
+/// its pages that print no counter. The fourth drops a `Page N of M` counter from the
+/// masked key, so a running head that the counter joins on some pages and stands apart
+/// from on others is still one line (medium.pdf: `... 2011, 11:124 Page 3 of 7 http://...`
+/// against `... 2011, 11:124 http://...`).
 fn margin_text_keys(normalized: &str) -> Vec<String> {
     let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
     if alphanum_key.is_empty() {
@@ -2313,9 +2316,18 @@ fn margin_text_keys(normalized: &str) -> Vec<String> {
     words.sort_unstable();
     let word_set_key = format!("words|{}", words.join(" "));
     let mut keys = vec![alphanum_key, word_set_key];
-    keys.extend(digit_masked_margin_key(normalized));
+    if let Some(masked) = digit_masked_margin_key(normalized) {
+        let without_counter = masked.replace(PAGE_COUNTER_MASK, "");
+        if without_counter != masked {
+            keys.push(without_counter);
+        }
+        keys.push(masked);
+    }
     keys
 }
+
+/// A `Page N of M` counter inside a line, as [`digit_masked_margin_key`] spells it.
+const PAGE_COUNTER_MASK: &str = "page#of#";
 
 /// Letters a margin line must keep once its digits are masked: rows of figures, bare
 /// page counters and numbered markers carry too few to tell one line from another. ~keep
@@ -4099,6 +4111,34 @@ mod tests {
         for (i, page) in pages.iter().enumerate().skip(1) {
             assert!(page[0].is_page_furniture, "page {i} running head must be furniture");
             assert!(page[2].is_page_furniture, "page {i} slug must be furniture");
+            assert!(!page[1].is_page_furniture);
+        }
+    }
+
+    /// medium.pdf's running head takes its `Page N of 7` counter into the same line on some
+    /// pages and leaves it a line of its own on others; neither form alone is on more than
+    /// half the pages.
+    #[test]
+    fn test_cross_page_repeating_text_drops_a_joined_page_counter() {
+        let page_heights = vec![792.0; 7];
+        let head = "Alestig et al. BMC Infectious Diseases 2011, 11:124";
+        let url = "http://www.biomedcentral.com/1471-2334/11/124";
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..7)
+            .map(|i| {
+                let running = if [2, 3, 6].contains(&i) {
+                    format!("{head} Page {} of 7 {url}", i + 1)
+                } else {
+                    format!("{head} {url}")
+                };
+                vec![make_margin_body(&running), make_body_center(&format!("Body {i}"))]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
+
+        assert!(!pages[0][0].is_page_furniture, "the first running head stays");
+        for (i, page) in pages.iter().enumerate().skip(1) {
+            assert!(page[0].is_page_furniture, "page {i} running head must be furniture");
             assert!(!page[1].is_page_furniture);
         }
     }
