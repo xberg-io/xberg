@@ -13,7 +13,7 @@ pub(crate) mod overlap;
 
 use overlap::{
     STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
-    extents_overlap, overlap_columns,
+    extents_overlap, overlap_columns, ranges_intersect,
 };
 
 /// Represents a word extracted from hOCR (or any source) with position and confidence information.
@@ -603,7 +603,8 @@ fn find_row_index_by_overlap(row_positions: &[u32], word: &HocrWord, median_heig
 /// keeps only the last two as the header and demotes the others below it. Lines that close cannot
 /// share a column with the line next to them without their glyphs colliding, so the band is
 /// recognised by text rows that step less than a line apart and never overlap the adjacent row
-/// horizontally, while a column's own lines, two rows apart, do overlap. The band's rows are
+/// horizontally while covering the same horizontal range, and a column's own lines, two rows
+/// apart, do overlap. The band's rows are
 /// replaced by its last row: every band word lies above it and every later row at least a line
 /// below, so each band word is nearest to it, and [`order_cell_words_in_reading_order`] still
 /// reads each cell's lines top to bottom. The same pass reorders such a band in the native
@@ -652,7 +653,7 @@ fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_he
         && is_label_row(&rows[band])
         && (row_positions[band].abs_diff(row_positions[band - 1]) as f32)
             < STACKED_BAND_MAX_ROW_STEP * median_height as f32
-        && !rows_overlap_horizontally(&rows[band - 1], &rows[band])
+        && rows_interleave(&rows[band - 1], &rows[band])
     {
         band += 1;
     }
@@ -662,9 +663,12 @@ fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_he
     if stacked { band } else { 0 }
 }
 
-fn rows_overlap_horizontally(upper: &[&HocrWord], lower: &[&HocrWord]) -> bool {
+/// Whether two adjacent rows can be lines of one stacked band: no word of one overlaps a word of
+/// the other, and the two rows cover one horizontal range.
+fn rows_interleave(upper: &[&HocrWord], lower: &[&HocrWord]) -> bool {
     let extent = |word: &&HocrWord| (word.left, word.right());
-    extents_overlap(upper.iter().map(extent), lower.iter().map(extent))
+    !extents_overlap(upper.iter().map(extent), lower.iter().map(extent))
+        && ranges_intersect(upper.iter().map(extent), lower.iter().map(extent))
 }
 
 /// The number of horizontally overlapping word clusters in `rows` that hold words of two or more

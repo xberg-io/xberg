@@ -11,7 +11,7 @@ use xberg_native_pdf::layout::TextSpan;
 use super::super::text::span_has_ink;
 use crate::table_core::overlap::{
     STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
-    extents_overlap, overlap_columns,
+    extents_overlap, overlap_columns, ranges_intersect,
 };
 
 /// Baseline difference, as a fraction of the glyph height, within which consecutive spans share a row.
@@ -96,9 +96,10 @@ fn ink_spans<'a>(spans: &'a [TextSpan], row: &Row) -> Vec<&'a TextSpan> {
 }
 
 /// True when `lower` is the next row of a stacked band that `upper` belongs to: both rows hold
-/// several upright spans of one glyph height, `lower` sits less than a line below `upper`, and
-/// no span of one row overlaps a span of the other horizontally, as the lines of one column
-/// that close together would.
+/// several upright spans of one glyph height, `lower` sits less than a line below `upper`, no
+/// span of one row overlaps a span of the other horizontally, as the lines of one column that
+/// close together would, and the two rows cover one horizontal range, as the lines of two
+/// blocks side by side do not.
 fn rows_stack(spans: &[TextSpan], upper: &Row, lower: &Row) -> bool {
     let (upper, lower) = (ink_spans(spans, upper), ink_spans(spans, lower));
     if upper.len() < STACKED_BAND_MIN_ROW_WORDS || lower.len() < STACKED_BAND_MIN_ROW_WORDS {
@@ -119,6 +120,7 @@ fn rows_stack(spans: &[TextSpan], upper: &Row, lower: &Row) -> bool {
     step > 0.0
         && step < STACKED_BAND_MAX_ROW_STEP * shortest
         && !extents_overlap(upper.iter().map(extent), lower.iter().map(extent))
+        && ranges_intersect(upper.iter().map(extent), lower.iter().map(extent))
 }
 
 /// Read `band` column by column: spans whose horizontal extents overlap share a column, the
@@ -291,6 +293,34 @@ mod tests {
             span("five", 100.0, row(2), 10.0),
             span("six", 120.0, row(2), 10.0),
         ]);
+        let before: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
+
+        read_stacked_header_bands(&mut spans);
+
+        assert_eq!(texts(&spans), before);
+    }
+
+    /// pb_fqr-retail-blackrock page 8: two holdings tables side by side whose rows sit at offset
+    /// baselines, so in row order the rows alternate between the tables less than a line apart
+    /// and never overlap. Each table's rows are a line apart; read as a band, every few rows
+    /// came out names first, then shares, then values.
+    #[test]
+    fn offset_rows_of_side_by_side_tables_keep_their_order() {
+        let line = GLYPH_HEIGHT * 1.1;
+        let mut page = Vec::new();
+        for row in 0..4 {
+            let left_y = BAND_TOP - row as f32 * line;
+            let right_y = left_y - line / 2.0;
+            page.extend([
+                span(&format!("Left name {row}"), 18.0, left_y, 100.0),
+                span(&format!("{row}1,000"), 200.0, left_y, 20.0),
+                span(&format!("{row}2,000"), 250.0, left_y, 30.0),
+                span(&format!("Right name {row}"), 309.0, right_y, 100.0),
+                span(&format!("{row}3,000"), 490.0, right_y, 20.0),
+                span(&format!("{row}4,000"), 545.0, right_y, 30.0),
+            ]);
+        }
+        let mut spans = rows(page);
         let before: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
 
         read_stacked_header_bands(&mut spans);

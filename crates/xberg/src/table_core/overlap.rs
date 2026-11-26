@@ -75,6 +75,33 @@ pub(crate) fn overlap_columns<T: Coordinate>(extents: &[(T, T)]) -> Vec<OverlapC
     columns
 }
 
+/// Whether the horizontal ranges the two rows cover, leftmost left edge to rightmost right
+/// edge, intersect: the guard that keeps two blocks set side by side out of a stacked header
+/// band. A band's cells share one header, so each row's labels sit between the other's; rows
+/// of two tables standing side by side cover disjoint ranges, and where the two tables' rows
+/// sit at offset baselines (pb_fqr-retail-blackrock page 8) the rows alternate between the
+/// tables less than a line apart and never overlap, which alone read as a band.
+pub(crate) fn ranges_intersect<T: Coordinate>(
+    upper: impl IntoIterator<Item = (T, T)>,
+    lower: impl IntoIterator<Item = (T, T)>,
+) -> bool {
+    match (covered_range(upper), covered_range(lower)) {
+        (Some((left, right)), Some((other_left, other_right))) => left < other_right && other_left < right,
+        _ => false,
+    }
+}
+
+fn covered_range<T: Coordinate>(extents: impl IntoIterator<Item = (T, T)>) -> Option<(T, T)> {
+    extents.into_iter().reduce(|(left, right), (other_left, other_right)| {
+        let left = if other_left.order(&left) == Ordering::Less {
+            other_left
+        } else {
+            left
+        };
+        (left, right.larger(other_right))
+    })
+}
+
 /// Whether an extent of `upper` overlaps an extent of `lower` horizontally: the guard that
 /// keeps two adjacent rows of one column out of a stacked header band.
 pub(crate) fn extents_overlap<T: Coordinate>(
@@ -104,6 +131,20 @@ mod tests {
             [(0.0, 10.0, vec![1, 3]), (10.0, 12.0, vec![4]), (30.0, 50.0, vec![0, 2])],
             "an extent starting at a column's right edge starts a new column"
         );
+    }
+
+    #[test]
+    fn row_ranges_intersect_when_the_rows_interleave() {
+        assert!(ranges_intersect(
+            [(25.0_f32, 40.0), (150.0, 170.0)],
+            [(71.0, 89.0), (95.0, 113.0)]
+        ));
+        assert!(
+            !ranges_intersect([(18.0_f32, 126.6), (200.1, 282.0)], [(309.0, 417.6), (482.0, 573.0)]),
+            "rows of two tables side by side cover disjoint ranges"
+        );
+        assert!(!ranges_intersect([(0_u32, 10)], [(10_u32, 20)]));
+        assert!(!ranges_intersect(Vec::<(u32, u32)>::new(), [(0_u32, 10)]));
     }
 
     #[test]
