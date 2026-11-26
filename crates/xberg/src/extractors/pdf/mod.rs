@@ -3125,7 +3125,10 @@ impl PdfExtractor {
         path: Option<&std::path::Path>,
     ) -> Result<InternalDocument> {
         // ~keep Keep the added compatibility wrapper from doubling the native future's stack footprint.
-        Box::pin(self.extract_core_native_with_layout_pages(content, mime_type, config, path, None)).await
+        crate::core::runtime::pin_boxed(|| {
+            self.extract_core_native_with_layout_pages(content, mime_type, config, path, None)
+        })
+        .await
     }
 
     #[cfg(feature = "pdf")]
