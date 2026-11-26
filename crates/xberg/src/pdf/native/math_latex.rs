@@ -12,10 +12,13 @@
 //! never start a formula.
 
 mod glyphs;
+mod layout;
+pub(crate) mod sentinels;
 #[cfg(test)]
 mod tests;
 
-use glyphs::{MathFont, accent_command, is_mark, is_operator, is_relation, is_unmapped, math_font, spell_glyph};
+use glyphs::{MathFont, accent_command, is_mark, is_operator, is_relation, is_unmapped, math_font};
+use layout::group_tex;
 use xberg_native_pdf::layout::TextSpan;
 
 /// A glyph below this fraction of the formula's largest size is a script or limit.
@@ -75,8 +78,36 @@ const MAX_NUMERIC_RUNS: usize = 3;
 /// Nesting depth past which a group is spelled flat.
 const MAX_DEPTH: usize = 6;
 
-/// Rewrite the math of one page as LaTeX, or `None` when nothing changes.
+/// How a rewritten formula is delimited in its span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Delimiters {
+    /// `$...$` and `$$...$$`, for text written as is.
+    Dollars,
+    /// The [`sentinels`] pairs, for text that structure assembly turns into math annotations.
+    Sentinels,
+}
+
+impl Delimiters {
+    fn wrap(self, tex: &str, display: bool) -> String {
+        use sentinels::{DISPLAY_CLOSE, DISPLAY_OPEN, INLINE_CLOSE, INLINE_OPEN};
+        let (open, close) = match (self, display) {
+            (Self::Dollars, false) => ('$'.to_string(), '$'.to_string()),
+            (Self::Dollars, true) => ("$$".to_owned(), "$$".to_owned()),
+            (Self::Sentinels, false) => (INLINE_OPEN.to_string(), INLINE_CLOSE.to_string()),
+            (Self::Sentinels, true) => (DISPLAY_OPEN.to_string(), DISPLAY_CLOSE.to_string()),
+        };
+        format!("{open}{tex}{close}")
+    }
+}
+
+/// Rewrite the math of one page as `$`-delimited LaTeX, or `None` when nothing changes.
 pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
+    rewrite_math_spans_with(spans, Delimiters::Dollars)
+}
+
+/// Rewrite the math of one page as LaTeX delimited by `delimiters`, or `None` when nothing
+/// changes.
+pub(crate) fn rewrite_math_spans_with(spans: &[TextSpan], delimiters: Delimiters) -> Option<Vec<TextSpan>> {
     if !spans.iter().any(|span| math_font(&span.font_name).is_some()) {
         return None;
     }
@@ -85,17 +116,25 @@ pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
         .enumerate()
         .filter_map(|(i, span)| Piece::new(i, span))
         .collect();
-    let formulas = find_formulas(&pieces);
+    let mut formulas = find_formulas(&pieces);
     if formulas.is_empty() {
         return None;
     }
     let mut replacement: Vec<Option<TextSpan>> = vec![None; spans.len()];
     let mut removed = vec![false; spans.len()];
-    for formula in &formulas {
+    for formula in &mut formulas {
+        if let Some((index, count)) = formula.closers
+            && let Some(trimmed) = trim_leading_chars(&spans[index], count)
+        {
+            formula.tex.extend(spans[index].text.chars().take(count));
+            formula.x1 = formula.x1.max(trimmed.bbox.x);
+            replacement[index] = (!trimmed.text.trim().is_empty()).then_some(trimmed);
+            removed[index] = true;
+        }
         for piece in &formula.members {
             removed[piece.span] = true;
         }
-        replacement[formula.anchor_span] = Some(formula.to_span(&spans[formula.anchor_span]));
+        replacement[formula.anchor_span] = Some(formula.to_span(&spans[formula.anchor_span], delimiters));
     }
     let rewritten = spans
         .iter()
@@ -107,6 +146,27 @@ pub(crate) fn rewrite_math_spans(spans: &[TextSpan]) -> Option<Vec<TextSpan>> {
         })
         .collect();
     Some(rewritten)
+}
+
+/// `span` without its first `count` characters, its left edge moved to the next glyph;
+/// `None` when the glyph positions are unknown.
+fn trim_leading_chars(span: &TextSpan, count: usize) -> Option<TextSpan> {
+    let chars = span.to_chars();
+    let next = chars.get(count)?;
+    let bytes = span.text.char_indices().nth(count)?.0;
+    let mut trimmed = span.clone();
+    trimmed.text = span.text[bytes..].to_owned();
+    trimmed.bbox.width = (span.bbox.x + span.bbox.width - next.bbox.x).max(0.0);
+    trimmed.bbox.x = next.bbox.x;
+    let char_count = span.text.chars().count();
+    for positions in [&mut trimmed.char_widths, &mut trimmed.char_x_offsets] {
+        if positions.len() == char_count {
+            positions.drain(..count);
+        } else {
+            positions.clear();
+        }
+    }
+    Some(trimmed)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,13 +323,14 @@ struct Formula<'a> {
     x1: f32,
     base: f32,
     size: f32,
+    /// A prose span starting with the closing brackets this formula lacks: (span, count).
+    closers: Option<(usize, usize)>,
 }
 
 impl Formula<'_> {
-    fn to_span(&self, anchor: &TextSpan) -> TextSpan {
-        let delimiter = if self.display { "$$" } else { "$" };
+    fn to_span(&self, anchor: &TextSpan, delimiters: Delimiters) -> TextSpan {
         let mut span = anchor.clone();
-        span.text = format!("{delimiter}{}{delimiter}", self.tex);
+        span.text = delimiters.wrap(&self.tex, self.display);
         span.bbox.x = self.x0;
         span.bbox.y = self.base;
         span.bbox.width = self.x1 - self.x0;
@@ -501,6 +562,9 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
     {
         members.pop();
     }
+    while is_trailing_note_mark(&members) {
+        members.pop();
+    }
     if !has_math_evidence(&members) {
         return None;
     }
@@ -531,7 +595,11 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
     if tex.is_empty() {
         return None;
     }
+    let closers = (!display)
+        .then(|| missing_closers(&members, prose, x1, anchor.base, size))
+        .flatten();
     Some(Formula {
+        closers,
         anchor_span: anchor.span,
         base: anchor.base,
         members: members.into_iter().copied().collect(),
@@ -541,6 +609,59 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
         x1,
         size,
     })
+}
+
+/// A raised script-size number right after sentence punctuation: a footnote mark that
+/// follows the formula, not its exponent.
+fn is_trailing_note_mark(members: &[&Piece<'_>]) -> bool {
+    let [.., before, last] = members else {
+        return false;
+    };
+    let size = members.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
+    let digits = last.text.trim();
+    !digits.is_empty()
+        && digits.bytes().all(|byte| byte.is_ascii_digit())
+        && last.size < size * SCRIPT_SIZE_RATIO
+        && last.base > before.base + size * STRUCTURE_OFFSET_EM
+        && before.text.trim_end().ends_with(['.', ',', ';', ':'])
+}
+
+/// The prose span right after an inline formula that opens with the closing brackets the
+/// formula is missing, and how many of them it lends: (span, count).
+fn missing_closers(
+    members: &[&Piece<'_>],
+    prose: &[&Piece<'_>],
+    x1: f32,
+    base: f32,
+    size: f32,
+) -> Option<(usize, usize)> {
+    let balance = |open: char, close: char| {
+        members
+            .iter()
+            .flat_map(|piece| piece.text.chars())
+            .fold(0_isize, |depth, c| {
+                depth + isize::from(c == open) - isize::from(c == close)
+            })
+    };
+    let (mut parens, mut brackets) = (balance('(', ')'), balance('[', ']'));
+    if parens <= 0 && brackets <= 0 {
+        return None;
+    }
+    let reach = size * STRUCTURE_OFFSET_EM;
+    let next = prose_near(prose, base - reach, base + reach)
+        .iter()
+        .filter(|piece| piece.x0 >= x1 - size * AXIS_OVERLAP_EM && piece.x0 - x1 <= size * CLUSTER_GAP_EM)
+        .min_by(|a, b| a.x0.total_cmp(&b.x0))?;
+    let mut count = 0;
+    for c in next.text.chars() {
+        match c {
+            ')' if parens > 0 => parens -= 1,
+            ']' if brackets > 0 => brackets -= 1,
+            _ => break,
+        }
+        count += 1;
+    }
+    (count > 0).then_some((next.span, count))
 }
 
 /// Whether every math-font glyph is a binary operator, as a LaTeX table's `$-$3.4` minus is.
@@ -590,393 +711,4 @@ fn has_structure(members: &[&Piece<'_>], size: f32) -> bool {
             || piece.size < size * SCRIPT_SIZE_RATIO
             || piece.accent().is_some()
     })
-}
-
-/// LaTeX writer that separates a command word from a following letter.
-#[derive(Default)]
-struct Tex {
-    out: String,
-    after_command: bool,
-}
-
-impl Tex {
-    fn push(&mut self, tex: &str, command: bool) {
-        if tex.is_empty() {
-            return;
-        }
-        if self.after_command && tex.starts_with(|c: char| c.is_ascii_alphabetic()) {
-            self.out.push(' ');
-        }
-        self.out.push_str(tex);
-        self.after_command = command;
-    }
-
-    fn raw(&mut self, tex: &str) {
-        self.out.push_str(tex);
-        self.after_command = false;
-    }
-}
-
-/// Spell a span's text; upright operator names become their commands.
-fn spell_text(tex: &mut Tex, text: &str, font: Option<MathFont>) {
-    let mut chars = text.char_indices().peekable();
-    while let Some((start, c)) = chars.next() {
-        if font.is_none() && c.is_ascii_alphabetic() {
-            let mut end = start + c.len_utf8();
-            while let Some(&(next, letter)) = chars.peek() {
-                if !letter.is_ascii_alphabetic() {
-                    break;
-                }
-                end = next + letter.len_utf8();
-                chars.next();
-            }
-            let word = &text[start..end];
-            if glyphs::OPERATOR_NAMES.contains(&word) {
-                tex.push(&format!("\\{word}"), true);
-            } else if word.len() > 1 {
-                tex.push(&format!("\\mathrm{{{word}}}"), false);
-            } else {
-                tex.push(word, false);
-            }
-            continue;
-        }
-        let spelling = spell_glyph(c, font);
-        tex.push(&spelling.tex, spelling.command);
-    }
-}
-
-fn spell_piece(piece: &Piece<'_>) -> (String, bool) {
-    let mut tex = Tex::default();
-    spell_text(&mut tex, piece.text, piece.font());
-    (tex.out, tex.after_command)
-}
-
-enum ItemKind<'p, 'a> {
-    Base(&'p Piece<'a>),
-    Fraction(Vec<&'p Piece<'a>>, Vec<&'p Piece<'a>>),
-    Limits(Vec<&'p Piece<'a>>, Vec<&'p Piece<'a>>),
-}
-
-/// One element of a formula row with the scripts it carries.
-struct Item<'p, 'a> {
-    x0: f32,
-    x1: f32,
-    kind: ItemKind<'p, 'a>,
-    accents: Vec<&'static str>,
-    subscripts: Vec<&'p Piece<'a>>,
-    superscripts: Vec<&'p Piece<'a>>,
-}
-
-impl<'p, 'a> Item<'p, 'a> {
-    fn new(x0: f32, x1: f32, kind: ItemKind<'p, 'a>) -> Self {
-        Self {
-            x0,
-            x1,
-            kind,
-            accents: Vec::new(),
-            subscripts: Vec::new(),
-            superscripts: Vec::new(),
-        }
-    }
-
-    fn is_big_operator(&self) -> bool {
-        matches!(self.kind, ItemKind::Base(piece) if piece.text.trim_end().ends_with(['∑', '∏', '∫', '⋃', '⋂', '∐', '∮']))
-    }
-}
-
-/// Spell a group of pieces as one LaTeX expression.
-fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> String {
-    let visible: Vec<&Piece<'_>> = pieces.iter().copied().filter(|piece| !piece.is_blank()).collect();
-    if visible.is_empty() {
-        return String::new();
-    }
-    if depth >= MAX_DEPTH {
-        return flat_tex(&visible);
-    }
-    let size = visible.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
-    let (accents, glyphs) = split_accents(&visible, size);
-    let Some(axis) = axis_row(&glyphs) else {
-        return flat_tex(&visible);
-    };
-    let base = axis[0].base;
-    let rest: Vec<&Piece<'_>> = glyphs.iter().copied().filter(|piece| !contains(&axis, piece)).collect();
-    let mut items: Vec<Item<'_, '_>> = axis
-        .iter()
-        .copied()
-        .chain(
-            rest.iter()
-                .copied()
-                .filter(|piece| (piece.base - base).abs() <= size * OFF_AXIS_EM),
-        )
-        .map(|piece| Item::new(piece.x0, piece.x1, ItemKind::Base(piece)))
-        .collect();
-    for item in &mut items {
-        if let ItemKind::Base(piece) = item.kind {
-            item.accents = accents
-                .iter()
-                .filter(|(target, _)| std::ptr::eq(*target, piece))
-                .map(|(_, command)| *command)
-                .collect();
-        }
-    }
-    let above = clusters(
-        rest.iter()
-            .copied()
-            .filter(|piece| piece.base > base + size * OFF_AXIS_EM),
-        size,
-    );
-    let below = clusters(
-        rest.iter()
-            .copied()
-            .filter(|piece| piece.base < base - size * OFF_AXIS_EM),
-        size,
-    );
-    let (above, below) = pair_stacks(&mut items, above, below, &axis, base, size);
-    let leftovers = attach_scripts(&mut items, above, below, size);
-    write_items(&items, &leftovers, depth)
-}
-
-fn flat_tex(pieces: &[&Piece<'_>]) -> String {
-    let mut sorted = pieces.to_vec();
-    sorted.sort_by(|a, b| a.x0.total_cmp(&b.x0));
-    let mut tex = Tex::default();
-    for piece in sorted {
-        spell_text(&mut tex, piece.text, piece.font());
-    }
-    tex.out
-}
-
-/// Accent glyphs drawn over a base glyph, as (base, command), and the remaining glyphs.
-fn split_accents<'p, 'a>(
-    pieces: &[&'p Piece<'a>],
-    size: f32,
-) -> (Vec<(&'p Piece<'a>, &'static str)>, Vec<&'p Piece<'a>>) {
-    let mut accents = Vec::new();
-    let mut glyphs = Vec::new();
-    for &piece in pieces {
-        let target = piece.accent().and_then(|command| {
-            pieces
-                .iter()
-                .copied()
-                .filter(|other| {
-                    other.accent().is_none()
-                        && other.overlap(piece.x0, piece.x1) >= piece.width() * ACCENT_SHARE
-                        && piece.base >= other.base - size * STRUCTURE_OFFSET_EM
-                        && piece.base <= other.base + size
-                })
-                .min_by(|a, b| (piece.base - a.base).total_cmp(&(piece.base - b.base)))
-                .map(|other| (other, command))
-        });
-        match target {
-            Some(accent) => accents.push(accent),
-            None => glyphs.push(piece),
-        }
-    }
-    (accents, glyphs)
-}
-
-/// Group off-axis pieces into runs of one baseline (a script, a numerator, a limit).
-fn clusters<'p, 'a>(pieces: impl Iterator<Item = &'p Piece<'a>>, size: f32) -> Vec<Vec<&'p Piece<'a>>>
-where
-    'a: 'p,
-{
-    let mut sorted: Vec<&'p Piece<'a>> = pieces.collect();
-    sorted.sort_by(|a, b| a.x0.total_cmp(&b.x0));
-    let mut clusters: Vec<Vec<&'p Piece<'a>>> = Vec::new();
-    for piece in sorted {
-        match clusters.last_mut() {
-            Some(cluster)
-                if piece.x0 - extent(cluster).1 <= size * CLUSTER_GAP_EM
-                    && (piece.base - cluster[0].base).abs() <= size * SAME_ROW_EM =>
-            {
-                cluster.push(piece);
-            }
-            _ => clusters.push(vec![piece]),
-        }
-    }
-    clusters
-}
-
-fn extent(pieces: &[&Piece<'_>]) -> (f32, f32) {
-    pieces
-        .iter()
-        .fold((f32::INFINITY, f32::NEG_INFINITY), |(x0, x1), piece| {
-            (x0.min(piece.x0), x1.max(piece.x1))
-        })
-}
-
-type Clusters<'p, 'a> = Vec<Vec<&'p Piece<'a>>>;
-
-/// Pair numerators with denominators (and upper with lower limits) that stand in a gap of
-/// the axis; returns the clusters left unpaired.
-fn pair_stacks<'p, 'a>(
-    items: &mut Vec<Item<'p, 'a>>,
-    above: Clusters<'p, 'a>,
-    mut below: Clusters<'p, 'a>,
-    axis: &[&Piece<'_>],
-    base: f32,
-    size: f32,
-) -> (Clusters<'p, 'a>, Clusters<'p, 'a>) {
-    let mut unpaired_above = Vec::new();
-    for upper in above {
-        let lowest = upper.iter().map(|piece| piece.base).fold(f32::INFINITY, f32::min);
-        let partner = (lowest >= base + size * FRACTION_OFFSET_EM)
-            .then(|| {
-                below
-                    .iter()
-                    .position(|lower| stacks_with(&upper, lower, axis, items, base, size))
-            })
-            .flatten();
-        let Some(index) = partner else {
-            unpaired_above.push(upper);
-            continue;
-        };
-        let lower = below.remove(index);
-        let highest = lower.iter().map(|piece| piece.base).fold(f32::NEG_INFINITY, f32::max);
-        let small = upper
-            .iter()
-            .chain(&lower)
-            .all(|piece| piece.size <= size * SCRIPT_SIZE_RATIO);
-        let far = lowest > base + size * LIMIT_OFFSET_EM && highest < base - size * LIMIT_OFFSET_EM;
-        let (x0, x1) = (
-            extent(&upper).0.min(extent(&lower).0),
-            extent(&upper).1.max(extent(&lower).1),
-        );
-        let kind = if small && far {
-            ItemKind::Limits(upper, lower)
-        } else {
-            ItemKind::Fraction(upper, lower)
-        };
-        items.push(Item::new(x0, x1, kind));
-    }
-    items.sort_by(|a, b| a.x0.total_cmp(&b.x0));
-    (unpaired_above, below)
-}
-
-fn stacks_with(
-    upper: &[&Piece<'_>],
-    lower: &[&Piece<'_>],
-    axis: &[&Piece<'_>],
-    items: &[Item<'_, '_>],
-    base: f32,
-    size: f32,
-) -> bool {
-    let highest = lower.iter().map(|piece| piece.base).fold(f32::NEG_INFINITY, f32::max);
-    if highest > base - size * FRACTION_OFFSET_EM {
-        return false;
-    }
-    let (upper_x0, upper_x1) = extent(upper);
-    let (lower_x0, lower_x1) = extent(lower);
-    let shared = upper_x1.min(lower_x1) - upper_x0.max(lower_x0);
-    if shared <= STACK_SHARE * (upper_x1 - upper_x0).min(lower_x1 - lower_x0) {
-        return false;
-    }
-    let (x0, x1) = (upper_x0.min(lower_x0), upper_x1.max(lower_x1));
-    if axis.iter().any(|glyph| glyph.overlap(x0, x1) > size * AXIS_OVERLAP_EM) {
-        return false;
-    }
-    // A script stack hugs its base; a fraction keeps the null delimiter space from it. ~keep
-    let left_edge = items
-        .iter()
-        .filter(|item| matches!(item.kind, ItemKind::Base(_)) && item.x1 <= x0 + size * AXIS_OVERLAP_EM)
-        .map(|item| item.x1)
-        .fold(f32::NEG_INFINITY, f32::max);
-    x0 - left_edge >= size * FRACTION_LEFT_GAP_EM
-}
-
-/// Hang each unpaired cluster on the item it scripts; returns clusters with no base.
-fn attach_scripts<'p, 'a>(
-    items: &mut [Item<'p, 'a>],
-    above: Clusters<'p, 'a>,
-    below: Clusters<'p, 'a>,
-    size: f32,
-) -> Clusters<'p, 'a> {
-    let mut leftovers = Vec::new();
-    let sides = above
-        .into_iter()
-        .map(|cluster| (cluster, true))
-        .chain(below.into_iter().map(|c| (c, false)));
-    for (cluster, superscript) in sides {
-        let (x0, x1) = extent(&cluster);
-        let operator = items
-            .iter()
-            .position(|item| item.is_big_operator() && x1.min(item.x1) - x0.max(item.x0) > LIMIT_SHARE * (x1 - x0));
-        let target = operator.or_else(|| items.iter().rposition(|item| item.x0 <= x0 + size * BASE_REACH_EM));
-        match target {
-            Some(index) if x0 - items[index].x1 <= size * SCRIPT_REACH_EM => {
-                let item = &mut items[index];
-                let side = if superscript {
-                    &mut item.superscripts
-                } else {
-                    &mut item.subscripts
-                };
-                side.extend(cluster);
-            }
-            _ => leftovers.push(cluster),
-        }
-    }
-    leftovers
-}
-
-fn write_items(items: &[Item<'_, '_>], leftovers: &[Vec<&Piece<'_>>], depth: usize) -> String {
-    let mut tex = Tex::default();
-    let mut open_radical = false;
-    for item in items {
-        let subscript = group_tex(&item.subscripts, depth + 1);
-        let superscript = group_tex(&item.superscripts, depth + 1);
-        match &item.kind {
-            ItemKind::Base(piece) => {
-                let (mut spelled, command) = spell_piece(piece);
-                for accent in &item.accents {
-                    spelled = format!("\\{accent}{{{spelled}}}");
-                }
-                let radical = spelled.ends_with("\\sqrt") && item.accents.is_empty();
-                if radical && !(subscript.is_empty() && superscript.is_empty()) {
-                    tex.push(&format!("{spelled}{{{subscript}{superscript}}}"), false);
-                    continue;
-                }
-                if open_radical {
-                    tex.raw(&format!("{{{spelled}}}"));
-                    open_radical = false;
-                } else {
-                    tex.push(&spelled, command && item.accents.is_empty());
-                }
-                open_radical = radical;
-            }
-            ItemKind::Fraction(upper, lower) => {
-                let (numerator, denominator) = (group_tex(upper, depth + 1), group_tex(lower, depth + 1));
-                if numerator.is_empty() || denominator.is_empty() {
-                    tex.raw(&format!("{numerator}{denominator}"));
-                } else {
-                    tex.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
-                }
-            }
-            ItemKind::Limits(upper, lower) => {
-                let (upper, lower) = (group_tex(upper, depth + 1), group_tex(lower, depth + 1));
-                tex.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
-            }
-        }
-        write_scripts(&mut tex, &subscript, &superscript);
-    }
-    for cluster in leftovers {
-        tex.raw(&group_tex(cluster, depth + 1));
-    }
-    if open_radical {
-        tex.raw("{}");
-    }
-    tex.out
-}
-
-fn write_scripts(tex: &mut Tex, subscript: &str, superscript: &str) {
-    if !subscript.is_empty() {
-        tex.raw(&format!("_{{{subscript}}}"));
-    }
-    if superscript.is_empty() {
-        return;
-    }
-    if superscript.chars().all(|c| c == '\'') {
-        tex.raw(superscript);
-    } else {
-        tex.raw(&format!("^{{{superscript}}}"));
-    }
 }

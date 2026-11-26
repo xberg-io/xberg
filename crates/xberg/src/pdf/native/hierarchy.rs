@@ -1060,7 +1060,7 @@ fn extract_final_spans_from_page(
     page_index: usize,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
-    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None, None)
+    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None, None, None)
 }
 
 fn extract_final_spans_from_page_with_primes(
@@ -1069,6 +1069,7 @@ fn extract_final_spans_from_page_with_primes(
     script_geometry: ScriptGeometry,
     prime_witnesses: Option<&mut Vec<script_evidence::LiteralPrimeWitness>>,
     cmsy_witnesses: Option<&mut Vec<xberg_native_pdf::layout::TextSpan>>,
+    math: Option<super::math_latex::Delimiters>,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
     let extracted = if script_geometry == ScriptGeometry::Preserve {
@@ -1109,7 +1110,11 @@ fn extract_final_spans_from_page_with_primes(
         }
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
     }
-    Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
+    // Formulas are rebuilt before script rejoining folds their scripts into base text. ~keep
+    let spans = math
+        .and_then(|delimiters| super::math_latex::rewrite_math_spans_with(&page_text_data.spans, delimiters))
+        .unwrap_or(page_text_data.spans);
+    Ok(rejoin_inline_scripts_inner(spans, script_geometry))
 }
 
 fn project_final_spans(

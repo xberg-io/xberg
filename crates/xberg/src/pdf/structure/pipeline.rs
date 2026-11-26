@@ -4582,6 +4582,9 @@ fn build_document_structure_with_native(
     );
 
     // Source-owned children must replace the aggregate before table coverage suppresses prose. ~keep
+    for table in &mut emitted_tables {
+        crate::pdf::native::math_latex::sentinels::strip_table(table);
+    }
     if crate::pdf::native::table::repeated_schema_header::apply_splits(schemas, &mut emitted_tables, true) {
         assign_deterministic_table_ids(&mut emitted_tables);
     }
@@ -4914,6 +4917,7 @@ fn build_document_structure_with_native(
     #[cfg(feature = "formula-recognition")]
     tracing::trace!(target: "xberg::pdf::cmsy", matched = inline_math_bounds.iter().map(Vec::len).sum::<usize>(), "paragraph offsets recovered");
 
+    super::display_math::split_display_formulas(&mut all_page_paragraphs);
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(
         total_paragraphs,
@@ -4930,6 +4934,7 @@ fn build_document_structure_with_native(
         &witnesses.hyphens,
         !ocr_text,
     );
+    crate::pdf::native::math_latex::sentinels::strip_document(&mut doc);
     #[cfg(feature = "formula-recognition")]
     for element in &mut doc.elements {
         let bounds = element

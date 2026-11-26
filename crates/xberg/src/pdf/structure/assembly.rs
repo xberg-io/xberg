@@ -1337,6 +1337,9 @@ fn push_text_with_inline_math(
     page: Option<u32>,
     bbox: Option<BoundingBox>,
 ) -> u32 {
+    if crate::pdf::native::math_latex::sentinels::contains_sentinel(text) {
+        return push_text_with_native_math(builder, text, annotations, page, bbox);
+    }
     let spans = if !builder.inline_math()
         || text.contains('$')
         || annotations
@@ -1376,6 +1379,46 @@ fn push_text_with_inline_math(
     annotations.extend(math_annotations);
     let index = builder.push_paragraph(&marked, annotations, page, bbox);
     builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, text);
+    index
+}
+
+/// Push a paragraph whose native formulas travel between math sentinels: each becomes
+/// `$..$` (`$$..$$` for a display formula left inside prose) with its math annotation, and
+/// the plain projection keeps the undelimited TeX. Formatting annotations that reach into a
+/// formula are dropped, since its source font (italic math) is not emphasis.
+fn push_text_with_native_math(
+    builder: &mut InternalDocumentBuilder,
+    text: &str,
+    mut annotations: Vec<TextAnnotation>,
+    page: Option<u32>,
+    bbox: Option<BoundingBox>,
+) -> u32 {
+    use crate::pdf::native::math_latex::sentinels;
+    let mut resolved = sentinels::resolve(text, builder.inline_math());
+    if !builder.inline_math() {
+        resolved.math.clear();
+    }
+    resolved.remap_annotations(&mut annotations);
+    annotations.retain(|annotation| {
+        !resolved
+            .math
+            .iter()
+            .any(|math| (annotation.start as usize) < math.end && math.start < annotation.end as usize)
+    });
+    annotations.extend(resolved.math.iter().map(|math| TextAnnotation {
+        start: math.start as u32,
+        end: math.end as u32,
+        kind: AnnotationKind::math(math.display),
+    }));
+    annotations.sort_by_key(|annotation| (annotation.start, std::cmp::Reverse(annotation.end)));
+    let index = builder.push_paragraph(&resolved.text, annotations, page, bbox);
+    if !resolved.math.is_empty() {
+        builder.merge_attribute(
+            index,
+            crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
+            &sentinels::strip(text),
+        );
+    }
     index
 }
 
@@ -4456,6 +4499,76 @@ mod tests {
             "\u{03B1}",
             "the annotation must cover the same character once the delimiters are inserted"
         );
+    }
+
+    fn native_inline(tex: &str) -> String {
+        use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+        format!("{INLINE_OPEN}{tex}{INLINE_CLOSE}")
+    }
+
+    /// A native inline formula becomes `$..$` math, not escaped prose dollars.
+    #[test]
+    fn native_inline_formula_renders_as_markdown_math() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = format!("where {} represents the delta.", native_inline("\\delta_{n,n}"));
+        let where_word = TextAnnotation {
+            start: 0,
+            end: 5,
+            kind: AnnotationKind::Bold,
+        };
+        push_text_with_inline_math(&mut builder, &text, vec![where_word], None, None);
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "where $\\delta_{n,n}$ represents the delta.");
+        let math = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind.math_display() == Some(false))
+            .expect("the formula carries an inline math annotation");
+        assert_eq!(&element.text[math.start as usize..math.end as usize], "$\\delta_{n,n}$");
+        let bold = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind == AnnotationKind::Bold)
+            .expect("an annotation before the formula survives");
+        assert_eq!(&element.text[bold.start as usize..bold.end as usize], "where");
+
+        let markdown = crate::rendering::render_markdown(&document);
+        assert!(markdown.contains("$\\delta"), "{markdown}");
+        assert!(
+            !markdown.contains("\\$"),
+            "the delimiters must not be escaped: {markdown}"
+        );
+        assert!(!crate::pdf::native::math_latex::sentinels::contains_sentinel(&markdown));
+    }
+
+    /// A display formula renders as its own `$$` block; headings and tables lose sentinels.
+    #[test]
+    fn native_display_formula_renders_as_a_block_and_no_sentinel_survives() {
+        use crate::pdf::native::math_latex::sentinels::{self, DISPLAY_CLOSE, DISPLAY_OPEN};
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        builder.push_heading(2, &format!("Bound on {}", native_inline("x^{2}")), None, None);
+        builder.push_formula(&format!("{DISPLAY_OPEN}z\\equiv2r^{{2}}-1,{DISPLAY_CLOSE}"), None, None);
+        let mut document = builder.build();
+        document.tables.push(crate::types::Table {
+            cells: vec![vec![native_inline("\\alpha"), "1.5".to_owned()]],
+            markdown: format!("| {} | 1.5 |", native_inline("\\alpha")),
+            ..Default::default()
+        });
+
+        sentinels::strip_document(&mut document);
+
+        assert_eq!(document.elements[0].text, "Bound on x^{2}");
+        assert_eq!(document.elements[1].text, "z\\equiv2r^{2}-1,");
+        assert_eq!(document.tables[0].cells[0][0], "\\alpha");
+        assert!(!sentinels::contains_sentinel(&document.tables[0].markdown));
+        let markdown = crate::rendering::render_markdown(&document);
+        assert!(markdown.contains("$$"), "{markdown}");
+        assert!(markdown.contains("\\equiv"), "{markdown}");
+        assert!(!sentinels::contains_sentinel(&markdown));
     }
 
     /// A paragraph with no inline math run keeps its annotations byte for byte.

@@ -662,8 +662,14 @@ fn extract_page(
     let mut cmsy = Vec::new();
     let capture = (cfg!(feature = "formula-recognition") && matches!(doc.doc.get_page_rotation(page), Ok(0)))
         .then_some(&mut cmsy);
-    let spans =
-        super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses), capture)?;
+    let spans = super::extract_final_spans_from_page_with_primes(
+        doc,
+        page,
+        geometry,
+        Some(&mut prime_witnesses),
+        capture,
+        Some(super::super::math_latex::Delimiters::Sentinels),
+    )?;
     #[cfg(feature = "formula-recognition")]
     let inline_math_glyphs = surviving_inline_math_glyphs(&cmsy, &spans, roles, geometry);
     #[cfg(feature = "formula-recognition")]

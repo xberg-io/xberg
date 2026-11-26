@@ -218,6 +218,49 @@ fn should_not_touch_a_page_without_tex_math() {
 }
 
 #[test]
+fn should_delimit_formulas_with_sentinels_for_structure_assembly() {
+    use super::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+    let spans = vec![
+        span("where", "CMR10", 10.0, 100.0, 25.0, 700.0),
+        span("δ", "CMMI10", 10.0, 128.0, 5.0, 700.0),
+        span("n,n", "CMMI7", 7.0, 133.0, 10.0, 698.5),
+        span("represents the Kronecker delta.", "CMR10", 10.0, 146.0, 130.0, 700.0),
+    ];
+    let rewritten = super::rewrite_math_spans_with(&spans, super::Delimiters::Sentinels).expect("inline formula");
+    assert_eq!(rewritten[1].text, format!("{INLINE_OPEN}\\delta_{{n,n}}{INLINE_CLOSE}"));
+}
+
+#[test]
+fn should_take_the_closing_bracket_from_the_following_prose() {
+    let mut closing = span(") is", "CMR10", 10.0, 129.5, 14.0, 700.0);
+    closing.char_widths = vec![4.0, 3.0, 3.0, 4.0];
+    let spans = vec![
+        span("the", "CMR10", 10.0, 90.0, 15.0, 700.0),
+        span("G", "CMMI10", 10.0, 110.0, 7.0, 700.0),
+        span("(", "CMR10", 10.0, 117.0, 4.0, 700.0),
+        span("t", "CMMI10", 10.0, 121.0, 4.0, 700.0),
+        span("σ", "CMMI7", 7.0, 125.0, 4.0, 703.6),
+        closing,
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("inline formula is rewritten");
+    assert_eq!(texts(&rewritten), ["the", "$G(t^{\\sigma})$", " is"]);
+    assert_eq!(rewritten[2].bbox.x, 133.5);
+    assert_eq!(rewritten[2].char_widths, [3.0, 3.0, 4.0]);
+}
+
+#[test]
+fn should_leave_a_footnote_mark_after_inline_math_outside_it() {
+    let spans = vec![
+        span("rules choose", "CMR10", 10.0, 70.0, 55.0, 700.0),
+        span("a", "CMMI10", 10.0, 128.0, 5.0, 700.0),
+        span(".", "CMMI10", 10.0, 133.0, 3.0, 700.0),
+        span("2", "CMR7", 7.0, 136.0, 4.0, 704.0),
+        span("We only discuss", "CMR10", 10.0, 143.0, 70.0, 700.0),
+    ];
+    assert!(rewrite_math_spans(&spans).is_none());
+}
+
+#[test]
 fn should_leave_a_table_column_of_negative_numbers_untouched() {
     let mut spans = Vec::new();
     for (row, value) in ["3.4", "12.5", "0.7"].iter().enumerate() {
@@ -230,4 +273,18 @@ fn should_leave_a_table_column_of_negative_numbers_untouched() {
         spans.push(span("4.0", "CMR10", 10.0, 274.0, 12.0, baseline));
     }
     assert!(rewrite_math_spans(&spans).is_none());
+}
+
+#[test]
+fn should_map_annotation_offsets_across_resolved_sentinels() {
+    use super::sentinels::{INLINE_CLOSE, INLINE_OPEN, resolve, strip};
+    let text = format!("a {INLINE_OPEN}x^{{2}}{INLINE_CLOSE} b");
+    let resolved = resolve(&text, true);
+    assert_eq!(resolved.text, "a $x^{2}$ b");
+    assert_eq!(resolved.math.len(), 1);
+    assert_eq!(&resolved.text[resolved.math[0].start..resolved.math[0].end], "$x^{2}$");
+    let b = text.rfind('b').unwrap();
+    assert_eq!(&resolved.text[resolved.remap(b)..], "b");
+    assert_eq!(resolve(&text, false).text, "a x^{2} b");
+    assert_eq!(strip(&text), "a x^{2} b");
 }
