@@ -120,6 +120,19 @@
         "allowUnauthenticated": { "type": "boolean" }
       }
     },
+    "ocr": {
+      "type": "object",
+      "properties": {
+        "tesseractModelSet": {
+          "type": "string",
+          "enum": ["fast", "best"]
+        },
+        "tesseractModelSource": {
+          "type": "string",
+          "enum": ["image", "download"]
+        }
+      }
+    },
     "cache": {
       "type": "object",
       "properties": {

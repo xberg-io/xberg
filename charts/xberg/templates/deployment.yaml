@@ -1,3 +1,4 @@
+{{- include "xberg.validate" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -81,8 +82,12 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.xberg.logLevel | quote }}
+            {{- with .Values.xberg.tessdataPrefix }}
             - name: TESSDATA_PREFIX
-              value: {{ .Values.xberg.tessdataPrefix | quote }}
+              value: {{ . | quote }}
+            {{- end }}
+            - name: XBERG_OCR_TESSDATA_MODEL
+              value: {{ .Values.ocr.tesseractModelSet | quote }}
             - name: XBERG_OCR_LANGUAGE
               value: {{ .Values.xberg.ocrLanguage | quote }}
             - name: XBERG_CACHE_DIR

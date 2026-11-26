@@ -18,6 +18,7 @@ image:
   # -- Image tag. Defaults to Chart.AppVersion when empty.
   # Use "latest" for the full image (Tesseract + PaddleOCR + layout models)
   # or "core" for the minimal image (no pre-downloaded models).
+  # ocr.tesseractModelSet=best with ocr.tesseractModelSource=image appends "-best".
   tag: ""
   # -- Image pull policy
   pullPolicy: IfNotPresent
@@ -127,8 +128,10 @@ extraEnv: []
 xberg:
   # -- Log level: trace, debug, info, warn, error
   logLevel: "info"
-  # -- Tesseract data prefix path (must match the container image)
-  tessdataPrefix: "/usr/share/tesseract-ocr/5/tessdata"
+  # -- TESSDATA_PREFIX for the container. Empty leaves it unset, and xberg finds the image's
+  # tessdata itself. A set prefix is used as given for every model set, so it must stay empty
+  # with ocr.tesseractModelSet=best.
+  tessdataPrefix: ""
   # -- Default OCR language
   ocrLanguage: "eng"
   # -- Secret holding the API bearer token (XBERG_API_TOKEN). The pod binds 0.0.0.0, so the
@@ -140,6 +143,15 @@ xberg:
     key: "token"
   # -- Start without authentication (XBERG_ALLOW_UNAUTHENTICATED=true), e.g. behind a trusted proxy
   allowUnauthenticated: false
+
+ocr:
+  # -- Tesseract model set (XBERG_OCR_TESSDATA_MODEL): "fast" (tessdata_fast) or "best"
+  # (tessdata_best: more accurate, several times slower, and more memory per OCR request).
+  tesseractModelSet: fast
+  # -- Where the best models come from: "image" runs the -best image tag, which ships them for
+  # its OCR languages; "download" keeps the chosen tag and downloads each best model into the
+  # cache volume on first use (needs egress to raw.githubusercontent.com). Ignored for fast.
+  tesseractModelSource: image
 
 cache:
   # -- Enable a persistent cache (PVC) for embedding models and downloaded assets.

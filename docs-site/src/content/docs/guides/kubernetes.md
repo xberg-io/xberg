@@ -78,6 +78,21 @@ helm install xberg oci://ghcr.io/xberg-io/charts/xberg \
   -f values.yaml
 ```
 
+## Tesseract models
+
+The chart runs OCR with `tessdata_fast` by default. Set `ocr.tesseractModelSet: best` for `tessdata_best`, which is more accurate but several times slower and needs more memory per OCR request:
+
+```yaml title="values.yaml"
+ocr:
+  tesseractModelSet: best
+  # image: run the -best image tag, which ships the models ("" -> <appVersion>-best,
+  # latest -> latest-best, core -> core-best). download: keep the tag and download each
+  # model into the cache volume on first use.
+  tesseractModelSource: image
+```
+
+`xberg.tessdataPrefix` (empty by default) sets `TESSDATA_PREFIX`, which is used as given for every model set; the chart refuses to render it together with `best`.
+
 ## Cache and replicas
 
 Embedding and OCR models range from ~90 MB to 1.2 GB and are re-downloaded on every pod restart without a cache. The chart enables a `ReadWriteOnce` PVC (`cache.enabled: true`) mounted at `/app/.xberg` (with `HF_HOME` under it) to persist them.
