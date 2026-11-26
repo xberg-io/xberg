@@ -521,9 +521,16 @@ def _source_pdf(rec: dict) -> Path | None:
     return _readoc_pdf(rec["id"])
 
 
+# Code is text on the page, so its content stays in the plaintext GT; only the fences, the info string and the
+# backticks go. GFM math (```math blocks and $`...`$ spans, as pandoc's gfm writer emits it) is dropped like
+# $...$ math below. Code content is set aside before the markup rules run so they cannot eat `#`, `|` or `*`
+# inside it. ~keep
+_GFM_MATH = re.compile(r"^[ \t]*```+[ \t]*math[ \t]*\n.*?^[ \t]*```+[ \t]*$|\$`[^`\n]*`\$", re.DOTALL | re.MULTILINE)
+_CODE = re.compile(r"^[ \t]*(```+)[^\n]*\n(.*?)^[ \t]*\1[ \t]*$|`([^`\n]+)`", re.DOTALL | re.MULTILINE)
+_CODE_SLOT = "\x00{}\x00"
+_CODE_SLOT_RE = re.compile("\x00(\\d+)\x00")
+
 _STRIP = [
-    (re.compile(r"```.*?```", re.DOTALL), " "),
-    (re.compile(r"`[^`]*`"), " "),
     (re.compile(r"!?\[([^\]]*)\]\([^)]*\)"), r"\1"),
     # Pandoc tex_math_dollars: `$$..$$` display; inline `$` takes an unescaped opener with a non-space after
     # it and a non-space before the closer; neither spans a blank line. Pandoc's no-digit-after-closer rule
@@ -544,10 +551,20 @@ _STRIP = [
 
 
 def strip_to_text(md: str) -> str:
-    """Derive plaintext GT (for text-F1) from GFM markdown by removing structural syntax."""
-    t = md
+    """Derive plaintext GT (for text-F1) from GFM markdown by removing structural syntax. Code keeps its text."""
+    code: list[str] = []
+
+    def stash(m: re.Match) -> str:
+        # An inline span keeps a space either side, as the old rule replaced it with one: READoc writes ~keep
+        # "the`iam:X`permission" for "the iam:X permission". ~keep
+        code.append(f"\n{m.group(2)}\n" if m.group(2) is not None else f" {m.group(3)} ")
+        return _CODE_SLOT.format(len(code) - 1)
+
+    t = _CODE.sub(stash, _GFM_MATH.sub(" ", md))
     for pat, repl in _STRIP:
         t = pat.sub(repl, t)
+    t = _CODE_SLOT_RE.sub(lambda m: code[int(m.group(1))], t)
+    t = re.sub(r"[ \t]+", " ", t)
     return "\n".join(line.strip() for line in t.splitlines() if line.strip()) + "\n"
 
 
