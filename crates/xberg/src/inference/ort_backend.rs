@@ -59,7 +59,7 @@ impl OrtBackend {
                 path,
                 crate::ort_discovery::session_is_cpu_only(accel, with_eps),
                 SESSION_RECIPE,
-                &configure,
+                configure,
             ),
             #[cfg(not(all(model_download, unix)))]
             ModelSource::File(path) => optimized().and_then(|mut builder| Ok(builder.commit_from_file(path)?)),

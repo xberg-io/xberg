@@ -8038,7 +8038,7 @@ mod tests {
         flate2::read::GzDecoder::new(&bytes[..]).read_to_end(&mut pdf).unwrap();
         let mut doc = NativeDocument::open_bytes(&pdf).unwrap();
         let (segments, _) = crate::pdf::native::hierarchy::extract_all_segments_for_tables(
-            &mut doc,
+            &doc,
             crate::pdf::native::hierarchy::ArtifactRetention::default(),
             |_| false,
         )

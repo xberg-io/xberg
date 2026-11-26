@@ -601,13 +601,13 @@ fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
     ] {
         let bytes = std::fs::read(root.join("pdf/regression_pages").join(name)).expect("mandatory ambiguity fixture");
         assert_eq!(hex::encode(Sha256::digest(&bytes)), hash);
-        let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("native source");
+        let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("native source");
         let (pages, used_tree) =
-            extract_all_segment_carriers(&mut doc, ArtifactRetention::default()).expect("actual native carriers");
+            extract_all_segment_carriers(&doc, ArtifactRetention::default()).expect("actual native carriers");
         assert_eq!(pages.len(), 1);
         assert!(!pages[0].segments.is_empty(), "the actual final spans must be present");
         let neighbors =
-            super::super::extract_final_spans_from_page(&mut doc, 0, ScriptGeometry::Preserve).expect("neighbor spans");
+            super::super::extract_final_spans_from_page(&doc, 0, ScriptGeometry::Preserve).expect("neighbor spans");
         let owners: Vec<_> = pages[0]
             .owners
             .iter()

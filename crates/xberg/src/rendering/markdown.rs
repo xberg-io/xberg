@@ -241,7 +241,7 @@ fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
         for ch in text.chars() {
             if SCRIPT_MARKERS.contains(&ch) {
                 flush(&mut part);
-                node.insert_before(arena.alloc(AstNode::from(NodeValue::Raw(ch.to_string().into()))));
+                node.insert_before(arena.alloc(AstNode::from(NodeValue::Raw(ch.to_string()))));
             } else {
                 part.push(ch);
             }

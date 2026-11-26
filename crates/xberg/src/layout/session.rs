@@ -33,7 +33,7 @@ pub(crate) fn build_session(
         std::path::Path::new(path),
         crate::ort_discovery::session_is_cpu_only(accel, true),
         SESSION_RECIPE,
-        &configure,
+        configure,
     );
     #[cfg(not(unix))]
     let session = configure().and_then(|builder| {

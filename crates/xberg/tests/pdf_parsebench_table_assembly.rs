@@ -2,6 +2,7 @@
 //! SKIP line and returns when its page is not present.
 
 #![cfg(feature = "pdf")]
+#![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 
 mod helpers;
 

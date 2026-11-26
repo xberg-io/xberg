@@ -31,15 +31,15 @@ fn document_path(relative: &str) -> PathBuf {
 }
 
 fn config(backend: PdfBackend, output_format: OutputFormat) -> ExtractionConfig {
-    let mut config = ExtractionConfig {
+    ExtractionConfig {
         use_cache: false,
         output_format,
+        pdf_options: Some(PdfConfig {
+            backend,
+            ..Default::default()
+        }),
         ..Default::default()
-    };
-    let mut pdf = PdfConfig::default();
-    pdf.backend = backend;
-    config.pdf_options = Some(pdf);
-    config
+    }
 }
 
 async fn run(path: &Path, config: &ExtractionConfig) -> xberg::ExtractionResult {
@@ -64,7 +64,10 @@ fn bench_group(criterion: &mut Criterion, group_name: &str, output_format: Outpu
             let extraction_config = config(*backend, output_format.clone());
             let warmup = runtime.block_on(run(&path, &extraction_config));
             assert!(
-                !warmup.content.trim().is_empty(),
+                warmup
+                    .results
+                    .iter()
+                    .any(|document| !document.content.trim().is_empty()),
                 "{backend_name} backend returned empty content for {}",
                 path.display()
             );

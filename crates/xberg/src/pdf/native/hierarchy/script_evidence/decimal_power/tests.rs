@@ -10,9 +10,9 @@ fn actual_source() -> (crate::pdf::native::NativeDocument, Vec<TextSpan>) {
         hex::encode(Sha256::digest(&bytes)),
         "71cd7420f93701108312f7b8bd1ba0b1c55665386e1e4051ae2a05782e639308"
     );
-    let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
+    let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
     let spans =
-        crate::pdf::native::hierarchy::extract_final_spans_from_page(&mut doc, 0, ScriptGeometry::Preserve).unwrap();
+        crate::pdf::native::hierarchy::extract_final_spans_from_page(&doc, 0, ScriptGeometry::Preserve).unwrap();
     assert!(!spans.is_empty());
     (doc, spans)
 }

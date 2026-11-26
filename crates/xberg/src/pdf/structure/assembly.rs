@@ -1413,7 +1413,7 @@ fn push_text_with_native_math(
         builder.merge_attribute(
             index,
             crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
-            &sentinels::strip(text),
+            sentinels::strip(text),
         );
     }
     index

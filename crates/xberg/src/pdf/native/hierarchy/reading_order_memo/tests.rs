@@ -286,17 +286,17 @@ fn plain_two_page_pdf() -> Vec<u8> {
 fn each_page_is_ordered_once_across_the_table_and_structure_passes() {
     let bytes = plain_two_page_pdf();
     let artifacts = ArtifactRetention::default();
-    let mut fresh_doc = NativeDocument::open_bytes(&bytes).expect("fixture must parse");
-    let fresh_tables = extract_all_segments_for_tables(&mut fresh_doc, artifacts, |_| false).expect("table segments");
-    let fresh_structure = super::super::script_evidence::extract_all_segment_carriers(&mut fresh_doc, artifacts)
-        .expect("structure segments");
+    let fresh_doc = NativeDocument::open_bytes(&bytes).expect("fixture must parse");
+    let fresh_tables = extract_all_segments_for_tables(&fresh_doc, artifacts, |_| false).expect("table segments");
+    let fresh_structure =
+        super::super::script_evidence::extract_all_segment_carriers(&fresh_doc, artifacts).expect("structure segments");
 
-    let mut doc = NativeDocument::open_bytes(&bytes).expect("fixture must parse");
+    let doc = NativeDocument::open_bytes(&bytes).expect("fixture must parse");
     let memo = ReadingOrderMemoScope::begin(bytes.len());
     let before = computed_orders();
-    let tables = extract_all_segments_for_tables(&mut doc, artifacts, |_| false).expect("table segments");
+    let tables = extract_all_segments_for_tables(&doc, artifacts, |_| false).expect("table segments");
     let structure =
-        super::super::script_evidence::extract_all_segment_carriers(&mut doc, artifacts).expect("structure segments");
+        super::super::script_evidence::extract_all_segment_carriers(&doc, artifacts).expect("structure segments");
     let computed = computed_orders() - before;
     drop(memo);
 
@@ -360,26 +360,26 @@ fn positions_name_where_each_input_went_and_refuse_anything_but_a_rearrangement(
     let fixed = std::hash::RandomState::new();
     let bucket = |encoded: &[u8]| std::hash::BuildHasher::hash_one(&fixed, encoded);
     assert_eq!(
-        positions(&["a", "b", "c"], &["c", "a", "b"], &bucket),
+        positions(&["a", "b", "c"], &["c", "a", "b"], bucket),
         Some(vec![1, 2, 0])
     );
     assert_eq!(
-        positions(&["x", "x", "y"], &["y", "x", "x"], &bucket),
+        positions(&["x", "x", "y"], &["y", "x", "x"], bucket),
         Some(vec![1, 2, 0]),
         "equal spans keep their relative order"
     );
     assert_eq!(
-        positions(&["a", "b"], &["a", "c"], &bucket),
+        positions(&["a", "b"], &["a", "c"], bucket),
         None,
         "a changed span is not a rearrangement"
     );
     assert_eq!(
-        positions(&["a", "b"], &["a", "a"], &bucket),
+        positions(&["a", "b"], &["a", "a"], bucket),
         None,
         "a duplicated span is not a rearrangement"
     );
     assert_eq!(
-        positions(&["a", "b"], &["a"], &bucket),
+        positions(&["a", "b"], &["a"], bucket),
         None,
         "a dropped span is not a rearrangement"
     );

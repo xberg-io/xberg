@@ -1380,9 +1380,12 @@ pub(super) fn read_pages<T: Send>(count: usize, read: impl Fn(usize) -> Result<T
     }
 }
 
+/// One map per page from a marked-content ID to its heading level (`None`: not a heading).
+type PageHeadingRoles = Vec<HashMap<u32, Option<u8>>>;
+
 /// Each page's MCID heading roles from a reliable structure tree, or `None` when the document
 /// has no structure tree its headings can be read from.
-pub(super) fn structure_tree_page_roles(doc: &NativeDocument) -> Result<Option<Vec<HashMap<u32, Option<u8>>>>> {
+pub(super) fn structure_tree_page_roles(doc: &NativeDocument) -> Result<Option<PageHeadingRoles>> {
     let Some(all_page_content) = reliable_heading_content(doc) else {
         return Ok(None);
     };

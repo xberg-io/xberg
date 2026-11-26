@@ -87,8 +87,6 @@ fn assert_entry_points_fail_cleanly(missing: &Path) {
 
     #[cfg(all(inference_ort, any(layout_detection, auto_rotate)))]
     {
-        use crate::inference::InferenceBackend as _;
-
         let backend = crate::inference::default_backend();
         let error = no_panic("inference backend load_from_memory", || {
             backend.load_from_memory(b"not a model", None).map(|_| ())
@@ -103,7 +101,7 @@ fn assert_entry_points_fail_cleanly(missing: &Path) {
             crate::onnx::build_session_with(
                 &crate::ort_options::OrtSessionOptions::default(),
                 None,
-                |message| crate::XbergError::embedding(message),
+                crate::XbergError::embedding,
                 |builder| builder.commit_from_memory(b"not a model"),
             )
             .map(|_| ())

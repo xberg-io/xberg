@@ -287,12 +287,10 @@ fn a_library_in_a_group_or_world_writable_directory_is_skipped() {
 #[cfg(unix)]
 #[test]
 fn only_a_user_private_group_may_have_write_access() {
-    use std::ffi::CStr;
-
     use super::library::private_group;
 
-    let alice = CStr::from_bytes_with_nul(b"alice\0").unwrap();
-    let staff = CStr::from_bytes_with_nul(b"staff\0").unwrap();
+    let alice = c"alice";
+    let staff = c"staff";
     assert!(
         private_group(alice, 1000, alice, false, 1000),
         "Debian-style private group"

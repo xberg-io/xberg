@@ -1165,6 +1165,17 @@ pub(crate) fn render_pdf_ocr_rgb8_page_with_budget_evidence(
 
 /// The OCR page render shared by the PNG and RGB8 outputs: plans the DPI, renders through
 /// `render` under `security_limits.max_content_size` and records a budget-clamp warning.
+/// A page rasterizer: `(document, page, dpi, max dimension, pixel budget)` to the raster, its DPI
+/// and whether the source budget ran out, or the error and that same flag.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
+type OcrPageRenderer<T> = fn(
+    &xberg_native_pdf::PdfDocument,
+    usize,
+    u32,
+    u32,
+    usize,
+) -> std::result::Result<(T, u32, bool), (xberg_native_pdf::Error, bool)>;
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
 fn render_pdf_ocr_page_through<T>(
     (doc, page_index): (&xberg_native_pdf::PdfDocument, usize),
@@ -1172,13 +1183,7 @@ fn render_pdf_ocr_page_through<T>(
     security_limits: &crate::extractors::security::SecurityLimits,
     source_budget_exceeded: &mut bool,
     preprocessing_dpi: Option<i32>,
-    render: fn(
-        &xberg_native_pdf::PdfDocument,
-        usize,
-        u32,
-        u32,
-        usize,
-    ) -> std::result::Result<(T, u32, bool), (xberg_native_pdf::Error, bool)>,
+    render: OcrPageRenderer<T>,
 ) -> std::result::Result<(T, OcrRasterDpi), xberg_native_pdf::Error> {
     *source_budget_exceeded = false;
     let (requested, planned) = match preprocessing_dpi {
