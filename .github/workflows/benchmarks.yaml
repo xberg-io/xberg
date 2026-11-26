@@ -1588,9 +1588,9 @@ jobs:
       matrix:
         mode: [single-file, batch]
         output_format: [markdown, plaintext]
-        # PDF cohorts only, so no LibreOffice is installed: the harness routes liteparse's
-        # office formats only when a LibreOffice binary is discoverable, and images always.
-        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4]
+        # lit converts office, csv and tsv through LibreOffice (installed below) and rasterizes
+        # images itself. Markup, ebook and email hold no format lit accepts. ~keep
+        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4, native-office-fast, native-data-fast, ocr-images-fast]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1636,10 +1636,14 @@ jobs:
           cache-key-prefix: benchmarks-liteparse
           use-sccache: "true"
 
-      - name: Install system tesseract (liteparse default feature)
+      # The harness declares liteparse's office formats only when a LibreOffice binary is
+      # discoverable, as lit needs one to convert them. ~keep
+      - name: Install system tesseract (liteparse default feature) and LibreOffice
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libtesseract-dev libleptonica-dev
+          sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc libreoffice-impress
+          command -v soffice
 
       - name: Install liteparse CLI (lit)
         run: |
@@ -1651,7 +1655,7 @@ jobs:
       - name: Pre-warm liteparse OCR languages
         run: |
           set -euo pipefail
-          for language in eng deu; do
+          for language in eng deu jpn_vert; do
             lit parse test_documents/pdf/non_searchable.pdf --format text --ocr-backend tesseract \
               --ocr-language "$language" --quiet > /dev/null
           done

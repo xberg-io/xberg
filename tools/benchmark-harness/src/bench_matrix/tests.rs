@@ -7,15 +7,15 @@ use std::collections::HashSet;
 const CONTRACT_CELL_COUNTS: [(Cohort, usize, usize); 11] = [
     (Cohort::Native, 23, 22),
     (Cohort::Ocr, 41, 30),
-    (Cohort::Office, 11, 4),
+    (Cohort::Office, 15, 4),
     (Cohort::Markup, 11, 4),
     (Cohort::Ebook, 6, 4),
     (Cohort::Email, 6, 4),
-    (Cohort::Data, 11, 4),
-    (Cohort::Images, 19, 12),
+    (Cohort::Data, 15, 4),
+    (Cohort::Images, 23, 12),
     (Cohort::NativeStructured, 23, 22),
     (Cohort::OcrStructured, 41, 30),
-    (Cohort::ImagesStructured, 19, 12),
+    (Cohort::ImagesStructured, 23, 12),
 ];
 
 #[test]

@@ -695,6 +695,7 @@ fn broad_office_competitors(cohort: &str) -> Vec<MatrixEntry> {
 fn office_matrix() -> Vec<MatrixEntry> {
     let mut matrix = xberg_entries(OFFICE_COHORT, false, false, false);
     matrix.extend(broad_office_competitors(OFFICE_COHORT));
+    matrix.extend(optional(grid_entries("liteparse", OFFICE_COHORT)));
     matrix
 }
 
@@ -707,6 +708,8 @@ fn markup_matrix() -> Vec<MatrixEntry> {
 fn data_matrix() -> Vec<MatrixEntry> {
     let mut matrix = xberg_entries(DATA_COHORT, false, false, false);
     matrix.extend(broad_office_competitors(DATA_COHORT));
+    // LiteParse converts the csv/tsv fixtures through LibreOffice; json/yaml are outside its formats.
+    matrix.extend(optional(grid_entries("liteparse", DATA_COHORT)));
     matrix
 }
 
@@ -739,6 +742,7 @@ fn images_matrix(cohort: &str) -> Vec<MatrixEntry> {
     // (single-file, plaintext). Best-effort: absence never fails validation.
     matrix.push(plaintext_single_file_entry("unstructured", cohort).into_optional());
     matrix.push(plaintext_single_file_entry("tika", cohort).into_optional());
+    matrix.extend(optional(grid_entries("liteparse", cohort)));
     matrix
 }
 
