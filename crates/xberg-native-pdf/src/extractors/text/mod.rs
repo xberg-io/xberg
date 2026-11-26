@@ -2032,11 +2032,11 @@ impl TjBuffer {
             || state.render_mode == 7
             || cached_font
                 .as_ref()
-                .is_some_and(|f| f.base_font.to_uppercase().contains("GLYPHLESS"));
+                .is_some_and(|f| provenance_cache.name_traits(f).glyphless);
         let is_monospace = !is_invisible_or_glyphless
-            && cached_font
-                .as_ref()
-                .is_some_and(|f| f.flags.is_some_and(|flags| flags & 1 != 0) || is_monospace_font(&f.base_font));
+            && cached_font.as_ref().is_some_and(|f| {
+                f.flags.is_some_and(|flags| flags & 1 != 0) || provenance_cache.name_traits(f).monospace
+            });
         let rotation_degrees = snap_run_rotation(&combined);
         let text_pos = state.text_matrix.transform_point(0.0, 0.0);
         let user_pos = state.ctm.transform_point(text_pos.x, text_pos.y);
