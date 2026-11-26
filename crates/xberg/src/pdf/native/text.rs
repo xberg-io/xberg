@@ -3541,6 +3541,28 @@ mod tests {
     }
 
     #[test]
+    fn arxiv_abstract_rejoins_its_line_wrap_hyphens() {
+        let Some(text) = extract_fixture_page(".corpus-cache/pdf/2305.09790.pdf") else {
+            return;
+        };
+        for (stem, rest) in [
+            ("per", "turbagens"),
+            ("ap", "proximately"),
+            ("morpho", "logical"),
+            ("im", "provement"),
+        ] {
+            assert!(
+                !text.contains(&format!("{stem}-\n{rest}")),
+                "{stem}-/{rest} left split in {text:?}"
+            );
+            assert!(
+                text.contains(&format!("{stem}{rest}")),
+                "missing {stem}{rest} in {text:?}"
+            );
+        }
+    }
+
+    #[test]
     fn tagged_hebrew_page_uses_logical_structure_order() {
         let Some(text) = extract_fixture_page("pdf/rtl_hebrew_native.pdf") else {
             return;
