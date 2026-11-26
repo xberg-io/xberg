@@ -2906,6 +2906,7 @@ fn row_center(word: &crate::pdf::table_reconstruct::HocrWord) -> f32 {
 /// y-gap test alone cannot see (xberg-io/xberg#1769). Each region is a slab
 /// of words that may form a table; the caller validates with
 /// `reconstruct_table` + `post_process_table`.
+#[cfg(test)]
 fn cluster_words_into_vertical_regions(
     words: &[crate::pdf::table_reconstruct::HocrWord],
 ) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {

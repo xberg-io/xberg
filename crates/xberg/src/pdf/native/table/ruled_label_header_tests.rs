@@ -20,14 +20,19 @@ fn word(text: &str, left: u32, top: u32, width: u32) -> HocrWord {
     }
 }
 
-/// Two side-by-side holdings schedules under one `Security | Shares | Value` label row, set more
-/// than the region gap above the first body row (pb_fqr-retail-blackrock-global-allocation-fund-inc_page8).
+/// Two side-by-side holdings schedules under one `Security | Shares | Value` label row whose centre
+/// sits 18 points above the first body row's at an 8-point word height, beyond the 15.4-point region
+/// split gap (pb_fqr-retail-blackrock-global-allocation-fund-inc_page8).
 fn holdings_body() -> Vec<HocrWord> {
     let mut words = Vec::new();
     for row in 0..BODY_ROWS {
         let top = BODY_TOP + row * BODY_PITCH;
         for offset in [0, 291] {
-            words.push(word(&format!("Holding{row}"), 18 + offset, top, 100));
+            // A security name and its dot leader are several text words, so the rows are not
+            // numeric-dense and `attach_aligned_numeric_headers` leaves the label row alone.
+            words.push(word(&format!("Holding{row}"), 18 + offset, top, 40));
+            words.push(word("Corp.", 60 + offset, top, 20));
+            words.push(word("..........", 82 + offset, top, 36));
             words.push(word(&format!("{},800", 100 + row), 196 + offset, top, 28));
             words.push(word(&format!("3,{},671", 200 + row), 253 + offset, top, 36));
         }
