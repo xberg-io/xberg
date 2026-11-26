@@ -361,7 +361,7 @@ impl PdfDocument {
         };
         if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
             self.warning_sink.extend(page.warnings.iter().cloned());
-            self.recovery_counts().add(&page.recovered);
+            self.recovery_counts().charge(&page.recovered);
             self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
             self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
             if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
@@ -392,22 +392,24 @@ impl PdfDocument {
         // cached entry answer both instead of interpreting the page again. ~keep
         let capture =
             capture_cmsy || pair_geometries || (passes_running && script_geometry == ScriptGeometry::Preserve);
-        let recovered_before = self.recovery_counts().snapshot();
-        let (page, warnings) = crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
-            self.interpret_page_spans(
-                page_index,
-                crate::extractors::TextExtractionConfig::default(),
-                HashSet::new(),
-                HashSet::new(),
-                script_geometry,
-                false,
-                capture,
-                pair_geometries,
-            )
-        });
+        let ((page, warnings), recovered) =
+            crate::extractors::recovery_tally::capture_recoveries(self.recovery_counts(), || {
+                crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
+                    self.interpret_page_spans(
+                        page_index,
+                        crate::extractors::TextExtractionConfig::default(),
+                        HashSet::new(),
+                        HashSet::new(),
+                        script_geometry,
+                        false,
+                        capture,
+                        pair_geometries,
+                    )
+                })
+            });
         let mut page = page?;
         page.warnings = warnings;
-        page.recovered = self.recovery_counts().snapshot().since(&recovered_before);
+        page.recovered = recovered;
         self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
         self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
         if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {

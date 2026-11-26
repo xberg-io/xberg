@@ -72,6 +72,22 @@ impl RecoverySnapshot {
         *self == Self::default()
     }
 
+    /// Both tallies together.
+    fn plus(&self, other: &Self) -> Self {
+        Self {
+            missing_font_decodes: self.missing_font_decodes.saturating_add(other.missing_font_decodes),
+            missing_font_bytes: self.missing_font_bytes.saturating_add(other.missing_font_bytes),
+            xref_misses: self.xref_misses.saturating_add(other.xref_misses),
+            file_scan_recoveries: self.file_scan_recoveries.saturating_add(other.file_scan_recoveries),
+            objects_treated_as_null: self
+                .objects_treated_as_null
+                .saturating_add(other.objects_treated_as_null),
+            unsupported_cff_versions: self
+                .unsupported_cff_versions
+                .saturating_add(other.unsupported_cff_versions),
+        }
+    }
+
     /// What was recovered between `earlier` and this snapshot.
     pub(crate) fn since(&self, earlier: &Self) -> Self {
         Self {
@@ -90,8 +106,21 @@ impl RecoverySnapshot {
 }
 
 impl RecoveryCounts {
-    /// Charge `delta` again, as a repeat of the work that recovered it.
-    pub(crate) fn add(&self, delta: &RecoverySnapshot) {
+    /// Charge `delta` to the document, and to every [`capture_recoveries`] frame open on this
+    /// thread for it.
+    pub(crate) fn charge(&self, delta: &RecoverySnapshot) {
+        self.add(delta);
+        let identity = std::ptr::from_ref(self) as usize;
+        CAPTURES.with(|captures| {
+            for (watched, captured) in captures.borrow_mut().iter_mut() {
+                if *watched == identity {
+                    *captured = captured.plus(delta);
+                }
+            }
+        });
+    }
+
+    fn add(&self, delta: &RecoverySnapshot) {
         self.missing_font_decodes
             .fetch_add(delta.missing_font_decodes, Ordering::Relaxed);
         self.missing_font_bytes
@@ -126,6 +155,36 @@ thread_local! {
     /// is why every `record` below is a no-op rather than an error when unset —
     /// a decode helper called directly from a unit test must not panic.
     static ACTIVE: RefCell<Option<Arc<RecoveryCounts>>> = const { RefCell::new(None) };
+    /// Open [`capture_recoveries`] frames, innermost last: the counters each watches and what
+    /// this thread charged them meanwhile.
+    static CAPTURES: RefCell<Vec<(usize, RecoverySnapshot)>> = const { RefCell::new(Vec::new()) };
+}
+
+struct CaptureFrame;
+
+impl Drop for CaptureFrame {
+    fn drop(&mut self) {
+        CAPTURES.with(|captures| captures.borrow_mut().pop());
+    }
+}
+
+/// Run `operation` and also return what it charged `counts` on this thread. A delta of the shared
+/// counters would also hold what other threads recovered meanwhile, and a cached result would
+/// charge those again on every replay.
+pub(crate) fn capture_recoveries<T>(counts: &RecoveryCounts, operation: impl FnOnce() -> T) -> (T, RecoverySnapshot) {
+    let identity = std::ptr::from_ref(counts) as usize;
+    CAPTURES.with(|captures| captures.borrow_mut().push((identity, RecoverySnapshot::default())));
+    let frame = CaptureFrame;
+    let value = operation();
+    let captured = CAPTURES.with(|captures| {
+        captures
+            .borrow()
+            .last()
+            .map(|(_, captured)| *captured)
+            .unwrap_or_default()
+    });
+    drop(frame);
+    (value, captured)
 }
 
 /// Installs `counts` as the active document for the current thread, restoring
@@ -243,6 +302,49 @@ mod tests {
             1,
             "outer scope resumed after the inner one ended"
         );
+    }
+
+    /// `scan_detect` interprets pages on several threads at once. The shared counters' delta over
+    /// one interpretation held the other threads' recoveries, which a cached page then charged
+    /// again on every replay.
+    #[test]
+    fn a_capture_holds_only_what_its_own_thread_charged() {
+        let document = counts();
+        let xref_misses = |count| RecoverySnapshot {
+            xref_misses: count,
+            ..RecoverySnapshot::default()
+        };
+
+        let ((), captured) = capture_recoveries(&document, || {
+            std::thread::scope(|scope| {
+                scope.spawn(|| document.charge(&xref_misses(5)));
+            });
+            document.charge(&xref_misses(1));
+        });
+
+        assert_eq!(captured, xref_misses(1));
+        assert_eq!(document.snapshot(), xref_misses(6));
+    }
+
+    #[test]
+    fn a_nested_capture_charges_the_outer_one_too() {
+        let document = counts();
+        let other = counts();
+        let one = RecoverySnapshot {
+            missing_font_decodes: 1,
+            ..RecoverySnapshot::default()
+        };
+
+        let (inner, outer) = capture_recoveries(&document, || {
+            let ((), inner) = capture_recoveries(&document, || {
+                document.charge(&one);
+                other.charge(&one);
+            });
+            inner
+        });
+
+        assert_eq!(inner, one);
+        assert_eq!(outer, one);
     }
 
     #[test]

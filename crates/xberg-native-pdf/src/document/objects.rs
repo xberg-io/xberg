@@ -740,8 +740,10 @@ impl PdfDocument {
                 // Object not in xref table - try scanning the file as fallback
                 // This handles PDFs with incomplete/corrupted xref tables ~keep
                 self.recovery
-                    .xref_misses
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                        xref_misses: 1,
+                        ..Default::default()
+                    });
                 let available: Vec<u32> = self.xref.entries.keys().copied().take(20).collect();
                 tracing::trace!(target: LOG_TARGET,
                     "Object {} not in xref table. Total entries: {}. First 20 objects: {:?}",
@@ -753,8 +755,10 @@ impl PdfDocument {
                 match self.scan_for_object(obj_ref) {
                     Ok(offset) => {
                         self.recovery
-                            .file_scan_recoveries
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                                file_scan_recoveries: 1,
+                                ..Default::default()
+                            });
                         tracing::trace!(target: LOG_TARGET,
                             "Successfully found object {} via file scan at offset {}",
                             obj_ref.id,
@@ -779,8 +783,10 @@ impl PdfDocument {
                         // PDF Spec §7.3.10: missing object reference "shall be treated as null"
                         // ~keep
                         self.recovery
-                            .objects_treated_as_null
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                                objects_treated_as_null: 1,
+                                ..Default::default()
+                            });
                         tracing::trace!(target: LOG_TARGET,
                             "Object {} gen {} not found (xref + file scan failed), treating as Null per §7.3.10",
                             obj_ref.id,
@@ -1343,8 +1349,10 @@ impl PdfDocument {
                 && scan_offset != offset
             {
                 self.recovery
-                    .file_scan_recoveries
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                        file_scan_recoveries: 1,
+                        ..Default::default()
+                    });
                 tracing::warn!(target: LOG_TARGET,
                     operation = "load_uncompressed_object",
                     error_code = "object_reference_mismatch",
