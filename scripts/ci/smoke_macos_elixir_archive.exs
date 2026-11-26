@@ -5,7 +5,8 @@ defmodule MacosElixirArchiveSmoke do
 
   @use_block ~r/^  use RustlerPrecompiled,.*?force_build:[^\n]*$/ms
   @codec ~r/^lib(?:heif|x265|de265|aom)(?:\.\d+)+\.dylib$/
-  @member_count 20
+  @codec_count 4
+  @project_notices ["LICENSE", "THIRD_PARTY_LICENSES.md", "GPL-SOURCE-OFFER.txt"]
   @size 64
 
   # Synthetic 64 × 64 gradient, encoded independently through pinned x265
@@ -78,22 +79,25 @@ defmodule MacosElixirArchiveSmoke do
 
     members = File.ls!(directory)
     count = length(members)
-    @member_count = count
 
-    for name <- [
-          "LICENSE",
-          "THIRD_PARTY_LICENSES.md",
-          "GPL-SOURCE-OFFER.txt",
-          "sources.tsv",
-          "notices.sha256"
-        ] do
+    for name <- @project_notices ++ ["sources.tsv", "notices.sha256"] do
       true = name in members
     end
+
+    # The NIF, the codecs, the project notices, every file notices.sha256 lists and the manifest
+    # itself; macos_elixir_archive.py owns the exact inventory, so the count follows its manifest. ~keep
+    listed =
+      directory
+      |> Path.join("notices.sha256")
+      |> File.read!()
+      |> String.split("\n", trim: true)
+
+    ^count = 1 + @codec_count + length(@project_notices) + length(listed) + 1
 
     root = Path.basename(basename, ".tar.gz")
     [^root] = Enum.filter(members, &String.ends_with?(&1, ".so"))
     codecs = Enum.filter(members, &Regex.match?(@codec, &1))
-    4 = length(codecs)
+    @codec_count = length(codecs)
 
     IO.puts("OTP archive extraction verified #{count} members, SHA-256 #{hash}")
 
