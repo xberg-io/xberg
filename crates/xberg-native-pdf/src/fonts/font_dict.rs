@@ -5449,6 +5449,9 @@ impl FontInfo {
         if let Some(weight) = Self::tex_font_name_weight(&name_lower) {
             return weight;
         }
+        if Self::names_bold_style_extension(&name_lower) {
+            return FontWeight::Bold;
+        }
         if Self::names_regular_style(&name_lower) {
             return FontWeight::Normal;
         }
@@ -5518,6 +5521,24 @@ impl FontInfo {
             return None;
         };
         Some(if bold { FontWeight::Bold } else { FontWeight::Normal })
+    }
+
+    /// Whether the name ends in a bold style extension, as the Advent 3B2 typesetter writes
+    /// its hashed face names: `AdvOT3b30f6db.B` (bold), `.BI` (bold italic), `.I` (italic),
+    /// optionally followed by an encoding variant (`AdvOT8b40f9c2.B+03`). These fonts carry no
+    /// FontWeight, no ForceBold flag and a StemV of 0, so the extension is the only evidence.
+    /// `name_lower` may carry a subset tag (`GLCEJD+advot3b30f6db.b`).
+    fn names_bold_style_extension(name_lower: &str) -> bool {
+        let name = match name_lower.split_once('+') {
+            Some((tag, rest)) if tag.len() == 6 && tag.bytes().all(|b| b.is_ascii_alphabetic()) => rest,
+            _ => name_lower,
+        };
+        let name = match name.rsplit_once('+') {
+            Some((face, variant)) if !variant.is_empty() && variant.bytes().all(|b| b.is_ascii_digit()) => face,
+            _ => name,
+        };
+        name.rsplit_once('.')
+            .is_some_and(|(face, style)| !face.is_empty() && matches!(style, "b" | "bi"))
     }
 
     /// Whether a style suffix of the name says regular weight: `Arial-ItalicMT`,
@@ -8782,6 +8803,17 @@ mod tests {
         assert_eq!(weight_of("Helvetica-Oblique", 140.0), FontWeight::Normal);
         assert_eq!(weight_of("SourceSansPro-It", 140.0), FontWeight::Normal);
         assert_eq!(weight_of("lmroman10-regular", 140.0), FontWeight::Normal);
+    }
+
+    #[test]
+    fn advent_bold_style_extension_marks_a_zero_stem_v_face_bold() {
+        assert_eq!(weight_of("GLCEJD+AdvOT3b30f6db.B", 0.0), FontWeight::Bold);
+        assert_eq!(weight_of("IHEPFJ+AdvOT8b40f9c2.B+03", 0.0), FontWeight::Bold);
+        assert_eq!(weight_of("AdvOT3b30f6db.BI", 0.0), FontWeight::Bold);
+        assert_eq!(weight_of("GLCFJE+AdvOTf0bf83d5.I", 0.0), FontWeight::Normal);
+        assert_eq!(weight_of("GLCEJE+AdvOT46dcae81", 0.0), FontWeight::Normal);
+        assert_eq!(weight_of("GLCFKG+AdvOTa9103878+20", 0.0), FontWeight::Normal);
+        assert_eq!(weight_of(".B", 0.0), FontWeight::Normal);
     }
 
     #[test]
