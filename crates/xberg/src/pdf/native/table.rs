@@ -2762,13 +2762,16 @@ fn horizontal_rules_for_regions(
     let bands: Vec<Option<RuleBand>> = regions.iter().map(|region| RuleBand::for_region(region)).collect();
     let mut counts = vec![0usize; regions.len()];
     for path in paths {
-        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |band| {
+        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |_, band| {
             crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1)
         });
     }
     for rule in segmented_horizontal_rules(paths) {
-        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |band| {
-            (rule.covers(band) && !paths_span_band_at(paths, band, rule.y)).then_some(rule.y)
+        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |index, band| {
+            (rule.covers(band)
+                && !paths_span_band_at(paths, band, rule.y)
+                && !rule.underlines(&regions[index], page_height))
+            .then_some(rule.y)
         });
     }
     counts
@@ -2790,6 +2793,8 @@ struct SegmentedRule {
     x1: f32,
     y: f32,
     covered: f32,
+    /// The left and right edge of each segment in the chain.
+    segments: Vec<(f32, f32)>,
 }
 
 impl SegmentedRule {
@@ -2801,7 +2806,35 @@ impl SegmentedRule {
             && self.x1 >= band.x0 + width * SEGMENTED_RULE_MIN_COVERAGE
             && self.covered >= width * SEGMENTED_RULE_MIN_COVERAGE
     }
+
+    /// Whether every segment underlines words of `region`: it sits at the foot of a word line
+    /// and starts and ends where words do. Underlined text draws one segment per word or phrase;
+    /// a row of boxes draws edges that clear the text inside them.
+    fn underlines(&self, region: &[crate::pdf::table_reconstruct::HocrWord], page_height: f32) -> bool {
+        let image_y = page_height - self.y;
+        let above = |word: &&crate::pdf::table_reconstruct::HocrWord| {
+            let height = word.height as f32;
+            let below_foot = image_y - word.top.saturating_add(word.height) as f32;
+            (-UNDERLINE_MAX_RISE_EM * height..=UNDERLINE_MAX_DROP_EM * height).contains(&below_foot)
+        };
+        let words: Vec<_> = region.iter().filter(above).collect();
+        let near = |edge: f32, word_edge: u32, height: u32| (edge - word_edge as f32).abs() <= 0.5 * height as f32;
+        !self.segments.is_empty()
+            && self.segments.iter().all(|&(x0, x1)| {
+                words.iter().any(|word| near(x0, word.left, word.height))
+                    && words
+                        .iter()
+                        .any(|word| near(x1, word.left.saturating_add(word.width), word.height))
+            })
+    }
 }
+
+/// How far above a word's foot, in word heights, an underline may sit: through the descenders.
+const UNDERLINE_MAX_RISE_EM: f32 = 0.4;
+
+/// How far below a word's foot, in word heights, an underline may sit. A boxed field's bottom
+/// edge clears its text by most of a line, well past this.
+const UNDERLINE_MAX_DROP_EM: f32 = 0.5;
 
 /// Chains of two or more collinear horizontal rules, each gap at most
 /// [`SEGMENTED_RULE_MAX_GAP_PTS`]. A single rule is not a chain: it is counted on its own.
@@ -2828,6 +2861,7 @@ fn segmented_horizontal_rules(paths: &[PathContent]) -> Vec<SegmentedRule> {
                 Some((rule, members)) if x0 <= rule.x1 + SEGMENTED_RULE_MAX_GAP_PTS => {
                     rule.covered += (x1 - rule.x1.max(x0)).max(0.0);
                     rule.x1 = rule.x1.max(x1);
+                    rule.segments.push((x0, x1));
                     *members += 1;
                 }
                 _ => {
@@ -2842,6 +2876,7 @@ fn segmented_horizontal_rules(paths: &[PathContent]) -> Vec<SegmentedRule> {
                             x1,
                             y,
                             covered: x1 - x0,
+                            segments: vec![(x0, x1)],
                         },
                         1,
                     ));
@@ -2871,7 +2906,7 @@ fn credit_rule_to_nearest_band(
     bands: &[Option<RuleBand>],
     page_height: f32,
     counts: &mut [usize],
-    rule_y_for: impl Fn(&RuleBand) -> Option<f32>,
+    rule_y_for: impl Fn(usize, &RuleBand) -> Option<f32>,
 ) {
     let mut best: Option<f32> = None;
     let mut owners: Vec<usize> = Vec::new();
@@ -2879,7 +2914,7 @@ fn credit_rule_to_nearest_band(
         let Some(band) = band else {
             continue;
         };
-        let Some(rule_y) = rule_y_for(band) else {
+        let Some(rule_y) = rule_y_for(index, band) else {
             continue;
         };
         let Some(distance) = band.distance(page_height - rule_y) else {
@@ -8363,6 +8398,65 @@ mod tests {
                 .flatten()
                 .any(|cell| cell.contains("McAuley Wing"))
         );
+    }
+
+    /// Three lines of four words each at a 12-unit pitch from image-space `top`, every word
+    /// underlined by its own segment one unit below its foot.
+    fn underlined_block(top: u32) -> (Vec<crate::pdf::table_reconstruct::HocrWord>, Vec<PathContent>) {
+        let mut words = Vec::new();
+        let mut paths = Vec::new();
+        for line in 0..3u32 {
+            let line_top = top + 12 * line;
+            let underline_y = FRAMED_PAGE_HEIGHT - (line_top + 10) as f32;
+            for (column, text) in ["alpha", "beta", "gamma", "delta"].into_iter().enumerate() {
+                let left = 40 + 44 * column as u32;
+                words.push(framed_word(text, left, line_top, 40));
+                paths.push(PathContent::line(
+                    left as f32,
+                    underline_y,
+                    (left + 40) as f32,
+                    underline_y,
+                ));
+            }
+        }
+        (words, paths)
+    }
+
+    #[test]
+    fn underlined_words_do_not_rule_their_lines() {
+        let (region, mut paths) = underlined_block(300);
+        paths.push(framed_painted_rule(FRAMED_PAGE_HEIGHT - 296.0, 36.0, 300.0));
+        assert_eq!(
+            horizontal_rules_for_regions(&paths, std::slice::from_ref(&region), FRAMED_PAGE_HEIGHT),
+            vec![1],
+            "only the rule above the block; the per-word underlines are text decoration"
+        );
+    }
+
+    #[test]
+    fn page_wide_rules_far_from_a_short_block_are_not_its_rules() {
+        let region = vec![
+            framed_word("Signed on behalf of the company", 40, 300, 160),
+            framed_word("by its director", 220, 300, 70),
+            framed_word("12 Market Street, Springfield", 40, 312, 150),
+            framed_word("and witnessed", 220, 312, 64),
+        ];
+        let paths = vec![
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 60.0, 36.0, 576.0),
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 420.0, 36.0, 576.0),
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 740.0, 36.0, 576.0),
+        ];
+        let rules = horizontal_rules_for_regions(&paths, std::slice::from_ref(&region), FRAMED_PAGE_HEIGHT);
+        assert_eq!(rules, vec![0], "a header, divider and footer rule frame nothing here");
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            rules[0],
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert!(tables.is_empty(), "got {:?}", gh1760_table_texts(&tables));
     }
 
     /// A box drawn around a short block of text carries two rules whatever its rows; it is not a
