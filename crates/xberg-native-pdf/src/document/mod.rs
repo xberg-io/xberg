@@ -477,6 +477,11 @@ impl BoundedObjectCache {
     }
 
     fn insert(&mut self, key: ObjectRef, value: Object) {
+        self.insert_shared(key, Arc::new(value));
+    }
+
+    /// Cache `value` without copying it, so the caller and the cache share one allocation.
+    fn insert_shared(&mut self, key: ObjectRef, value: Arc<Object>) {
         let entry_size = Self::estimate_size(&value);
 
         if entry_size > self.max_bytes {
@@ -520,7 +525,7 @@ impl BoundedObjectCache {
             }
         }
 
-        if self.map.insert(key, Arc::new(value)).is_none() && !self.pinned.contains(&key) {
+        if self.map.insert(key, value).is_none() && !self.pinned.contains(&key) {
             self.insertion_order.push_back(key);
         }
         self.current_bytes += entry_size;

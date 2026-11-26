@@ -128,12 +128,17 @@ fn warm_object_reads_share_the_cache_and_owned_loads_stay_independent() {
     let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
     let reference = ObjectRef::new(1, 0);
     document.object_cache.lock_or_recover().clear();
-    let cold = document.load_object_for_read(reference).unwrap();
-    assert!(matches!(cold, super::super::objects::LoadedObject::Owned(_)));
+    let super::super::objects::LoadedObject::Fresh(cold) = document.load_object_for_read(reference).unwrap() else {
+        panic!("a cold read that fills the cache must share the cached allocation");
+    };
 
     let super::super::objects::LoadedObject::Cached(first) = document.load_object_for_read(reference).unwrap() else {
         panic!("the warm object must share the cached allocation");
     };
+    assert!(
+        std::sync::Arc::ptr_eq(&cold, &first),
+        "the cold read must not copy the object it cached"
+    );
     let super::super::objects::LoadedObject::Cached(second) = document.load_object_for_read(reference).unwrap() else {
         panic!("a second warm read must share the cached allocation");
     };
@@ -760,4 +765,24 @@ fn a_loaded_stream_object_borrows_its_payload_from_the_source_allocation() {
     let source = doc.source_bytes.as_ptr() as usize..doc.source_bytes.as_ptr() as usize + doc.source_bytes.len();
     let payload = data.as_ptr() as usize..data.as_ptr() as usize + data.len();
     assert!(source.start <= payload.start && payload.end <= source.end);
+}
+
+#[test]
+fn cold_owned_load_is_independent_of_the_cached_object() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let reference = ObjectRef::new(1, 0);
+    document.object_cache.lock_or_recover().clear();
+    let clones_before = document.cached_object_clone_count();
+
+    let mut owned = document.load_object(reference).unwrap();
+    assert_eq!(
+        document.cached_object_clone_count(),
+        clones_before,
+        "a miss is not a cache-hit clone"
+    );
+    let cached = document.load_object_shared(reference).unwrap();
+    assert_eq!(owned, *cached);
+
+    owned = Object::Null;
+    assert_ne!(owned, *cached, "mutating the owned copy leaves the cached object alone");
 }

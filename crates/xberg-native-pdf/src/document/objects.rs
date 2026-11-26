@@ -79,19 +79,43 @@ fn keyword_boundary(input: &[u8]) -> bool {
         .is_some_and(|byte| matches!(byte, 0 | 9 | 10 | 12 | 13 | 32 | b'<' | b'[' | b'%'))
 }
 
-/// A read-only view holds a cache hit without deep-copying it. A miss keeps
-/// the existing owned parse result and does not allocate a second shared object.
+/// A read-only view holds a cache hit without deep-copying it. A miss that
+/// filled the cache shares the cached allocation instead of copying it; a miss
+/// the cache did not take keeps the owned parse result.
+#[derive(Debug)]
 pub(super) enum LoadedObject {
     Cached(Arc<Object>),
+    /// Parsed by this read and handed to the cache alongside this handle.
+    Fresh(Arc<Object>),
     Owned(Object),
+}
+
+impl LoadedObject {
+    /// The object by value, copied only when the cache still shares it.
+    pub(super) fn into_object(self) -> Object {
+        match self {
+            Self::Cached(object) | Self::Fresh(object) => {
+                Arc::try_unwrap(object).unwrap_or_else(|shared| Object::clone(&shared))
+            }
+            Self::Owned(object) => object,
+        }
+    }
 }
 
 impl AsRef<Object> for LoadedObject {
     fn as_ref(&self) -> &Object {
         match self {
-            Self::Cached(object) => object.as_ref(),
+            Self::Cached(object) | Self::Fresh(object) => object.as_ref(),
             Self::Owned(object) => object,
         }
+    }
+}
+
+impl std::ops::Deref for LoadedObject {
+    type Target = Object;
+
+    fn deref(&self) -> &Object {
+        self.as_ref()
     }
 }
 
@@ -112,7 +136,9 @@ impl PdfDocument {
         let Some((offset, bytes)) = self.proof_object_span(reference, max_bytes) else {
             return Ok(None);
         };
-        let object = self.read_uncompressed_object(reference, offset, true, false)?;
+        let object = self
+            .read_uncompressed_object(reference, offset, true, false)?
+            .into_object();
         Ok(Some((object, bytes)))
     }
 
@@ -643,7 +669,7 @@ impl PdfDocument {
                 self.cached_object_clone_count.fetch_add(1, Ordering::Relaxed);
                 Object::clone(&object)
             }
-            LoadedObject::Owned(object) => object,
+            fresh @ (LoadedObject::Fresh(_) | LoadedObject::Owned(_)) => fresh.into_object(),
         })
     }
 
@@ -659,7 +685,7 @@ impl PdfDocument {
     /// Like [`Self::load_object`] but shares a cached object instead of deep-copying it.
     pub(crate) fn load_object_shared(&self, obj_ref: ObjectRef) -> Result<Arc<Object>> {
         self.load_object_for_read(obj_ref).map(|loaded| match loaded {
-            LoadedObject::Cached(object) => object,
+            LoadedObject::Cached(object) | LoadedObject::Fresh(object) => object,
             LoadedObject::Owned(object) => Arc::new(object),
         })
     }
@@ -747,7 +773,7 @@ impl PdfDocument {
                             s.borrow_mut().remove(&obj_ref);
                         });
 
-                        return result.map(LoadedObject::Owned);
+                        return result;
                     }
                     Err(_) => {
                         // PDF Spec §7.3.10: missing object reference "shall be treated as null"
@@ -843,7 +869,7 @@ impl PdfDocument {
                 RESOLVING_STACK.with(|s| {
                     s.borrow_mut().remove(&obj_ref);
                 });
-                return result.map(LoadedObject::Owned);
+                return result;
             }
 
             // Recovery path 2 — the object may be compressed inside a
@@ -885,6 +911,7 @@ impl PdfDocument {
                 // entry.generation = index within stream ~keep
                 tracing::trace!(target: LOG_TARGET, "  → Compressed object in stream {}, index {}", entry_offset, entry_gen);
                 self.load_compressed_object(obj_ref, entry_offset as u32, entry_gen)
+                    .map(LoadedObject::Owned)
             }
             XRefEntryType::Uncompressed => {
                 tracing::trace!(target: LOG_TARGET, "  → Uncompressed object at offset {}", entry_offset);
@@ -898,7 +925,7 @@ impl PdfDocument {
                     obj_ref.id
                 );
                 self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-                Ok(Object::Null)
+                Ok(LoadedObject::Owned(Object::Null))
             }
         };
 
@@ -907,7 +934,7 @@ impl PdfDocument {
             s.borrow_mut().remove(&obj_ref);
         });
 
-        result.map(LoadedObject::Owned)
+        result
     }
 
     /// Resolve references within an object recursively.
@@ -1063,7 +1090,7 @@ impl PdfDocument {
     }
 
     /// Load an uncompressed object (Type 1 xref entry).
-    fn load_uncompressed_object(&self, obj_ref: ObjectRef, offset: u64) -> Result<Object> {
+    fn load_uncompressed_object(&self, obj_ref: ObjectRef, offset: u64) -> Result<LoadedObject> {
         self.load_uncompressed_object_impl(obj_ref, offset, false)
     }
 
@@ -1145,7 +1172,7 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         offset: u64,
         already_corrected: bool,
-    ) -> Result<Object> {
+    ) -> Result<LoadedObject> {
         self.read_uncompressed_object(obj_ref, offset, already_corrected, true)
     }
 
@@ -1155,7 +1182,7 @@ impl PdfDocument {
         offset: u64,
         already_corrected: bool,
         cache: bool,
-    ) -> Result<Object> {
+    ) -> Result<LoadedObject> {
         // The header and the body are read through ONE cursor, private to this
         // call, over the document's own bytes. The body read continues from where
         // the header read stopped, so the two must not be separable: a cursor any
@@ -1499,10 +1526,14 @@ impl PdfDocument {
         }
 
         if cache {
-            self.object_cache.lock_or_recover().insert(obj_ref, obj.clone());
+            let shared = Arc::new(obj);
+            self.object_cache
+                .lock_or_recover()
+                .insert_shared(obj_ref, Arc::clone(&shared));
+            return Ok(LoadedObject::Fresh(shared));
         }
 
-        Ok(obj)
+        Ok(LoadedObject::Owned(obj))
     }
 
     /// Load a compressed object from an object stream (Type 2 xref entry).
