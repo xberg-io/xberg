@@ -74,6 +74,8 @@ use group_compositing::{FormInvocation, GroupReplay, GroupSidecar};
 mod group_process_text;
 use super::text_rasterizer::TextRun;
 use group_process_text::GroupTextPaint;
+#[path = "opaque_blit.rs"]
+mod opaque_blit;
 #[path = "raster_budget.rs"]
 mod raster_budget;
 pub(super) use raster_budget::PngRenderBudget;
@@ -8097,6 +8099,9 @@ fn blit_native_resized(
     let rgba = widen_native(resized, components);
     paint.quality = tiny_skia::FilterQuality::Nearest;
     let translate = Transform::from_translate(image_transform.tx, image_transform.ty);
+    if opaque_blit::blit_opaque_translated(pixmap, &rgba, (width, height), &paint, translate, clip_mask) {
+        return;
+    }
     if let Some(img_pixmap) = tiny_skia::IntSize::from_wh(width, height).and_then(|size| Pixmap::from_vec(rgba, size)) {
         pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, translate, clip_mask);
     }
