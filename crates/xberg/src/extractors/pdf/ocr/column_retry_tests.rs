@@ -503,3 +503,34 @@ async fn transient_order_retry_error_keeps_primary_and_invalidates_cache() {
     })
     .await;
 }
+
+#[test]
+fn a_forced_read_without_layout_detection_admits_the_column_retry() {
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    let ocr = OcrConfig::default();
+    let forced = ExtractionConfig {
+        force_ocr: true,
+        ..Default::default()
+    };
+    assert!(super::request_admits_retry(&forced, &ocr));
+    assert!(super::request_admits_retry(&ExtractionConfig::default(), &ocr));
+}
+
+#[test]
+fn a_caller_chosen_segmentation_or_page_set_refuses_the_column_retry() {
+    use crate::core::config::{ExtractionConfig, OcrConfig};
+    let config = ExtractionConfig::default();
+    let mut explicit_psm = OcrConfig::default();
+    explicit_psm.tesseract_config.get_or_insert_default().psm = Some(11);
+    assert!(!super::request_admits_retry(&config, &explicit_psm));
+    let selected_pages = ExtractionConfig {
+        force_ocr_pages: Some(vec![1]),
+        ..Default::default()
+    };
+    assert!(!super::request_admits_retry(&selected_pages, &OcrConfig::default()));
+    let german = OcrConfig {
+        language: vec!["deu".to_string()],
+        ..Default::default()
+    };
+    assert!(!super::request_admits_retry(&config, &german));
+}
