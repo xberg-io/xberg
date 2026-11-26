@@ -198,6 +198,8 @@ mod tests {
     }
 
     #[test]
+    // The owned operands are the point: each comparison exercises one `FontName` impl. ~keep
+    #[allow(clippy::cmp_owned)]
     fn hashes_and_orders_like_the_string_it_replaces() {
         let state = RandomState::new();
         let name = FontName::from("CMSY10");
@@ -209,6 +211,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cmp_owned)]
     fn compares_with_strings_both_ways() {
         let name = FontName::from("Courier");
         assert!(name == "Courier");

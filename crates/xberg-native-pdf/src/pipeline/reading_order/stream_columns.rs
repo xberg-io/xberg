@@ -133,7 +133,7 @@ fn note_targets(lines: &[StreamLine], runs: &[StreamRun]) -> Vec<Option<usize>> 
                         && note.top <= run.bottom
                 })
                 .map(|(target, _)| target)
-                .last()
+                .next_back()
         })
         .collect()
 }

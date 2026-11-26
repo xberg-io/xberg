@@ -67,7 +67,9 @@ pub(super) fn blit_opaque_translated(
 /// canvas, and a partial clip edge blends as tiny-skia does.
 fn blit_span(target: &mut [u8], source: &[u8], channels: usize, coverage: Option<&[u8]>) {
     for (index, (dst, src)) in target
-        .chunks_exact_mut(4)
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
         .zip(source.chunks_exact(channels))
         .enumerate()
     {
@@ -148,7 +150,7 @@ mod tests {
 
     fn canvas(width: u32, height: u32) -> Pixmap {
         let mut pixmap = Pixmap::new(width, height).unwrap();
-        for (index, pixel) in pixmap.data_mut().chunks_exact_mut(4).enumerate() {
+        for (index, pixel) in pixmap.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let value = (index * 37 % 251) as u8;
             pixel.copy_from_slice(&[value / 2, value / 3, value / 4, value]);
         }
