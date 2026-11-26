@@ -44,6 +44,7 @@ Values are validated against `values.schema.json`. Common keys:
 | `xberg.allowUnauthenticated` | `false`    | Start without a token (`XBERG_ALLOW_UNAUTHENTICATED`).   |
 | `cache.enabled`      | `true`             | Persist downloaded models on a PVC (90 MB–1.2 GB each). |
 | `cache.size`         | `2Gi`              | Cache PVC size.                                          |
+| `cache.seedFromImage` | `true`            | Copy the image's `/app/.xberg` models into the cache volume at pod start. |
 
 See [`values.yaml`](values.yaml) for the full, commented list.
 
@@ -53,6 +54,13 @@ Embedding, OCR, and layout models range from 90 MB to 1.2 GB and are re-download
 on every pod restart without a persistent cache. `cache.enabled=true` (the default)
 mounts a PVC to keep them across restarts. With `ReadWriteOnce` storage, keep
 `replicaCount: 1` and `strategy.type: Recreate` to avoid Multi-Attach errors.
+
+The cache volume is mounted at `/app/.xberg`, where the full image ships its pre-downloaded
+PaddleOCR and layout models. `cache.seedFromImage=true` (the default) runs a `seed-cache` init
+container from the same image that copies those files into the volume, keeping files the volume
+already holds, so the models are not downloaded again. Without a PVC the copy repeats on every
+pod start and needs the models' size in node disk; set `cache.seedFromImage=false` to skip it,
+for example with the core image, which ships no models.
 
 ## Documentation
 

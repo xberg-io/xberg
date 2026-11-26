@@ -121,6 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pdf:** reads after a successful `authenticate()` no longer return page content, spans or characters cached before it.
 - **docx:** script carets in table cells are kept when markdown escaping is off.
 - **docker:** the `core` and `full` images no longer carry the Tesseract language data twice. A recursive `chmod` over the already world-readable tessdata copied every language file into a second layer.
+- **helm:** the full image's pre-downloaded PaddleOCR and layout models are used instead of downloaded again. The cache volume mounted at `/app/.xberg` hid them; a `seed-cache` init container now copies the image's `/app/.xberg` into the volume, keeping files it already holds. `cache.seedFromImage: false` turns it off.
 
 ## [1.5.4] - 2026-11-25
 

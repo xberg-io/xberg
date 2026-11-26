@@ -82,6 +82,8 @@ helm install xberg oci://ghcr.io/xberg-io/charts/xberg \
 
 Embedding and OCR models range from ~90 MB to 1.2 GB and are re-downloaded on every pod restart without a cache. The chart enables a `ReadWriteOnce` PVC (`cache.enabled: true`) mounted at `/app/.xberg` (with `HF_HOME` under it) to persist them.
 
+The full image pre-downloads its PaddleOCR and layout models into `/app/.xberg`, which the cache volume hides. With `cache.seedFromImage: true` (the default) a `seed-cache` init container copies the image's `/app/.xberg` into the volume before the server starts, keeping files the volume already holds. Without a PVC the copy repeats on every pod start; set `cache.seedFromImage: false` to skip it, for example with the core image, which ships no models.
+
 :::caution
 A `ReadWriteOnce` volume can only attach to one node, so the chart defaults to `replicaCount: 1` with a `Recreate` strategy. To run multiple replicas, either switch the cache to `ReadWriteMany` storage or set `cache.enabled: false` (each pod then re-downloads models into an ephemeral volume).
 :::

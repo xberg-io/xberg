@@ -161,6 +161,12 @@ cache:
   # to false there. Set to true for NFS or other storage that does not
   # honour fsGroup on mount.
   initChown: true
+  # -- Copy what the image ships under /app/.xberg into the cache volume before the server
+  # starts. The volume is mounted over /app/.xberg, so without this it hides the models the
+  # full image pre-downloads and the first OCR or layout request downloads them again. Files
+  # the volume already holds are kept. The copy runs on every pod start; with the emptyDir
+  # (cache.enabled=false) it copies the full set each time and needs that much node disk.
+  seedFromImage: true
 
 # -- Disable Kubernetes service-discovery environment variable injection.
 # Kubernetes injects {SVCNAME}_PORT=tcp://<clusterIP>:<port> for every
