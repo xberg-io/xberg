@@ -7985,7 +7985,7 @@ fn fast_resize_target(image_transform: Transform, (src_w, src_h): (u32, u32)) ->
 /// [`image_unit_square_transform`]) with `paint`, as the image budget admitted it.
 fn blit_rgba(
     pixmap: &mut Pixmap,
-    mut image: image::RgbaImage,
+    image: image::RgbaImage,
     image_transform: Transform,
     mut paint: PixmapPaint,
     clip_mask: Option<&tiny_skia::Mask>,

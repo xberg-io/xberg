@@ -89,6 +89,7 @@ impl RecoverySnapshot {
     }
 
     /// What was recovered between `earlier` and this snapshot.
+    #[cfg(test)]
     pub(crate) fn since(&self, earlier: &Self) -> Self {
         Self {
             missing_font_decodes: self.missing_font_decodes.saturating_sub(earlier.missing_font_decodes),
