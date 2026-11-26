@@ -41,7 +41,7 @@ dev = [
 # the missing branch (`convert/manager.py`, verified by diffing both wheels). Do not drop
 # below it, and if this failure returns, compare jobkit's handled `PdfBackend` variants
 # against the default docling resolves to before assuming the adapter is at fault. ~keep
-bench-docling = ["docling-jobkit==3.9.1", "easyocr>=1.7.2", "transformers>=5.10.0"]
+bench-docling = ["docling-jobkit==3.10.0", "easyocr>=1.7.2", "transformers>=5.10.0"]
 bench-markitdown = ["markitdown[all]==0.1.9"]
 bench-mineru = ["mineru==4.2.3", "onnxruntime", "transformers>=5.10.0"]
 # paddlepaddle==3.3.1 ships no manylinux aarch64 wheel for any CPython version (checked
@@ -61,7 +61,7 @@ bench-paddleocr-python = [
 ]
 bench-pymupdf4llm = ["pillow>=12.3.0", "pymupdf==2.1", "pymupdf-layout==2.1", "pymupdf4llm==2.1"]
 bench-rapidocr = ["numpy>=2.0", "onnxruntime==1.32.0", "pillow>=12.3.0", "pymupdf==2.1", "rapidocr==3.10.0"]
-bench-unstructured = ["unstructured[docx,pdf,pptx,xlsx,md,odt,rtf,epub,org,rst]==0.27.37", "transformers>=5.10.0"]
+bench-unstructured = ["unstructured[docx,pdf,pptx,xlsx,md,odt,rtf,epub,org,rst]==0.27.38", "transformers>=5.10.0"]
 
 [tool.uv]
 package = false
