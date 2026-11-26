@@ -828,21 +828,23 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.EasyOCR
-          key: docling-easyocr-en-ko-ja-v1-${{ runner.os }}-${{ runner.arch }}
+          key: docling-easyocr-en-ko-ja-v2-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Prefetch EasyOCR language models (en, ko, ja)
+      - name: Prefetch EasyOCR language models (en, latin, ko, ja)
         if: steps.easyocr-cache.outputs.cache-hit != 'true'
         env:
           UV_NO_SYNC: "1"
         run: |
           set -euo pipefail
-          # Docling's default OCR engine is EasyOCR; the image OCR cohort forwards
-          # Korean/Japanese, so prefetch those recognition models (plus the shared
-          # detection model) into ~/.EasyOCR to keep the download out of the timed run.
+          # Docling's default OCR engine is EasyOCR. docling_extract.py maps `eng` to ["en"]
+          # (english_g2) and leaves unmapped languages such as `deu` on Docling's default
+          # ["fr", "de", "es", "en"] (latin_g2); the image cohort forwards Korean/Japanese.
+          # Prefetch each recognition model (plus the shared detection model) into ~/.EasyOCR
+          # to keep the download out of the timed run.
           uv run --no-sync python - <<'PY'
           import easyocr
 
-          for langs in (["en", "ko"], ["ja", "en"]):
+          for langs in (["en"], ["fr", "de", "es", "en"], ["en", "ko"], ["ja", "en"]):
               easyocr.Reader(langs, gpu=False, verbose=False)
           PY
 
