@@ -146,10 +146,28 @@ impl TessdataManager {
     /// Downloads the pinned traineddata files of `languages` for this manager's model set.
     ///
     /// Skips files that already exist and copies verified ones from the flat cache (see
-    /// [`Self::for_model`]); a language with no pinned pack is an error. Returns the count of
-    /// newly published files.
+    /// [`Self::for_model`]). Entries are trimmed and empty ones ignored; every language is checked
+    /// against the pins before anything is written, and one with no pinned pack is an error.
+    /// Returns the count of newly published files.
     #[cfg(paddle_ocr)]
     pub fn ensure_languages(&self, languages: &[&str]) -> Result<usize, OcrError> {
+        let languages: Vec<&str> = languages
+            .iter()
+            .map(|lang| lang.trim())
+            .filter(|lang| !lang.is_empty())
+            .collect();
+        let unknown: Vec<&str> = languages
+            .iter()
+            .copied()
+            .filter(|lang| super::tessdata_download::PINNED.pin(lang, self.model).is_none())
+            .collect();
+        if !unknown.is_empty() {
+            return Err(OcrError::InvalidLanguageCode(format!(
+                "No pinned {} language pack for: {}",
+                self.model.repository(),
+                unknown.join(", ")
+            )));
+        }
         fs::create_dir_all(&self.cache_dir).map_err(|e| {
             OcrError::TesseractInitializationFailed(format!(
                 "Failed to create tessdata cache dir {}: {e}",
@@ -313,7 +331,15 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let manager = TessdataManager::for_model(Some(temp_dir.path().to_path_buf()), TessdataModel::Fast);
 
-        assert!(manager.ensure_languages(&["not_a_language"]).is_err());
+        let error = manager
+            .ensure_languages(&[" eng ", "not_a_language", " zz", " "])
+            .expect_err("unknown languages must be rejected");
+        assert!(error.to_string().contains("not_a_language, zz"), "{error}");
+        assert_eq!(
+            temp_dir.path().read_dir().unwrap().count(),
+            0,
+            "nothing is downloaded before every language is validated"
+        );
         assert_eq!(manager.ensure_languages(&[]).unwrap(), 0);
     }
 }

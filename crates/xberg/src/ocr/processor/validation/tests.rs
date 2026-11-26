@@ -145,8 +145,8 @@ fn test_tessdata_search_dirs_uses_only_the_given_environment_values() {
     let mut expected = vec![
         "/given/override".to_string(),
         "/given/prefix".to_string(),
-        given_cache(&["tessdata", "fast"]),
         given_cache(&["tessdata"]),
+        given_cache(&["tessdata", "fast"]),
     ];
     expected.extend(SYSTEM_TESSDATA_PATHS.iter().map(|path| (*path).to_string()));
     assert_eq!(dirs, expected);
@@ -184,7 +184,13 @@ fn test_fast_search_dirs_never_hold_the_built_in_best_directory() {
 
     assert!(dirs.contains(&"/given/system/fast".to_string()));
     assert!(!dirs.contains(&"/given/system/best".to_string()), "{dirs:?}");
+    #[cfg(unix)]
     assert_eq!(SYSTEM_TESSDATA_DIRS.best, ["/usr/share/xberg/tessdata/best"]);
+    #[cfg(not(unix))]
+    assert!(
+        SYSTEM_TESSDATA_DIRS.best.is_empty(),
+        "the built-in best directory is Unix-only"
+    );
     assert!(!SYSTEM_TESSDATA_DIRS.fast.contains(&"/usr/share/xberg/tessdata/best"));
 }
 
@@ -250,7 +256,8 @@ fn test_best_request_never_resolves_to_a_fast_only_directory() {
 
     assert_eq!(
         find(TessdataModel::Fast).as_deref(),
-        cache.path().join("tessdata").join("fast").to_str()
+        cache.path().join("tessdata").to_str(),
+        "the flat cache comes first for fast"
     );
     assert_eq!(
         find(TessdataModel::Best),
@@ -371,8 +378,8 @@ fn test_tessdata_env_reads_tessdata_prefix_and_xberg_cache_dir() {
         dirs[..3],
         [
             "/looked/up/prefix".to_string(),
-            cache_tessdata.join("fast").to_string_lossy().into_owned(),
             cache_tessdata.to_string_lossy().into_owned(),
+            cache_tessdata.join("fast").to_string_lossy().into_owned(),
         ]
     );
 }
@@ -399,8 +406,8 @@ fn test_tessdata_search_dirs_omits_system_paths_when_the_switch_is_off() {
         [
             "/given/override".to_string(),
             "/given/prefix".to_string(),
-            given_cache(&["tessdata", "fast"]),
             given_cache(&["tessdata"]),
+            given_cache(&["tessdata", "fast"]),
         ]
     );
 }
@@ -425,9 +432,152 @@ fn test_materialize_eng_from_bundled_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let langs = vec!["eng".to_string()];
 
-    materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[]).unwrap();
+    materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[], &PINNED).unwrap();
     assert!(dir.path().join("eng.traineddata").exists());
     assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+}
+
+const NO_SYSTEM: SystemTessdataDirs<'static> = SystemTessdataDirs { fast: &[], best: &[] };
+
+fn cache_env(cache: &Path, model: TessdataModel) -> TessdataEnv {
+    TessdataEnv {
+        tessdata_prefix: None,
+        cache_dir: Some(cache.to_path_buf()),
+        system_paths: false,
+        model,
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest as _, Sha256};
+    hex::encode(Sha256::digest(bytes))
+}
+
+#[test]
+fn test_best_resolution_copies_a_verified_pack_from_the_fast_cache() {
+    let cache = tempfile::tempdir().unwrap();
+    let fast = model_cache_dir(cache.path(), TessdataModel::Fast);
+    std::fs::create_dir_all(&fast).unwrap();
+    std::fs::write(fast.join("zzz.traineddata"), b"shared model").unwrap();
+    let digest = sha256_hex(b"shared model");
+    let pin = [("zzz", digest.as_str(), 12)];
+    let pins = PinTables { fast: &pin, best: &pin };
+
+    let resolved = resolve_tessdata_path_with(
+        &["zzz".to_string()],
+        None,
+        &cache_env(cache.path(), TessdataModel::Best),
+        &NO_SYSTEM,
+        &pins,
+    )
+    .unwrap();
+
+    let best = model_cache_dir(cache.path(), TessdataModel::Best);
+    assert_eq!(resolved, best.to_str().unwrap());
+    assert_eq!(std::fs::read(best.join("zzz.traineddata")).unwrap(), b"shared model");
+}
+
+#[test]
+fn test_shared_packs_reach_the_best_directory_once_a_source_appears() {
+    let cache = tempfile::tempdir().unwrap();
+    let best = model_cache_dir(cache.path(), TessdataModel::Best);
+    let fast = model_cache_dir(cache.path(), TessdataModel::Fast);
+    std::fs::create_dir_all(&best).unwrap();
+    std::fs::write(best.join("eng.traineddata"), b"best english").unwrap();
+    let digest = sha256_hex(b"orientation");
+    let pin = [("osd", digest.as_str(), 11)];
+    let pins = PinTables { fast: &pin, best: &pin };
+    let resolve = || {
+        resolve_tessdata_path_with(
+            &["eng".to_string()],
+            None,
+            &cache_env(cache.path(), TessdataModel::Best),
+            &NO_SYSTEM,
+            &pins,
+        )
+        .unwrap()
+    };
+
+    assert_eq!(resolve(), best.to_str().unwrap());
+    assert!(!best.join("osd.traineddata").exists(), "nothing to adopt yet");
+
+    std::fs::create_dir_all(&fast).unwrap();
+    std::fs::write(fast.join("osd.traineddata"), b"orientation").unwrap();
+    assert_eq!(resolve(), best.to_str().unwrap());
+    assert_eq!(
+        std::fs::read(best.join("osd.traineddata")).unwrap(),
+        b"orientation",
+        "a directory is not skipped after an earlier attempt found no source"
+    );
+}
+
+#[test]
+fn test_shared_packs_never_adopt_an_unverified_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    std::fs::write(source.path().join("osd.traineddata"), b"wrong bytes").unwrap();
+    let digest = sha256_hex(b"orientation");
+    let pin = [("osd", digest.as_str(), 11)];
+    let pins = PinTables { fast: &pin, best: &pin };
+
+    adopt_shared_packs(
+        directory.path(),
+        TessdataModel::Best,
+        &[source.path().to_path_buf()],
+        &pins,
+    );
+
+    assert!(!directory.path().join("osd.traineddata").exists());
+}
+
+#[test]
+fn test_a_custom_pack_in_the_flat_cache_keeps_serving_fast_requests() {
+    let cache = tempfile::tempdir().unwrap();
+    let flat = cache.path().join("tessdata");
+    std::fs::create_dir_all(&flat).unwrap();
+    std::fs::write(flat.join("eng.traineddata"), b"custom english").unwrap();
+    std::fs::write(flat.join("fra.traineddata"), b"french").unwrap();
+    let env = cache_env(cache.path(), TessdataModel::Fast);
+
+    let resolved =
+        resolve_tessdata_path_with(&["eng".to_string(), "fra".to_string()], None, &env, &NO_SYSTEM, &PINNED).unwrap();
+
+    assert_eq!(resolved, flat.to_str().unwrap());
+    assert_eq!(std::fs::read(flat.join("eng.traineddata")).unwrap(), b"custom english");
+    assert!(!model_cache_dir(cache.path(), TessdataModel::Fast).exists());
+}
+
+#[test]
+fn test_a_flat_cache_holding_part_of_a_request_stays_the_fast_destination() {
+    let cache = tempfile::tempdir().unwrap();
+    let flat = cache.path().join("tessdata");
+    std::fs::create_dir_all(&flat).unwrap();
+    std::fs::write(flat.join("eng.traineddata"), b"custom english").unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::fs::write(elsewhere.path().join("fra.traineddata"), b"french").unwrap();
+    let elsewhere_dirs = [elsewhere.path().to_str().unwrap()];
+    let system = SystemTessdataDirs {
+        fast: &elsewhere_dirs,
+        best: &[],
+    };
+    let digest = sha256_hex(b"french");
+    let fast_pins = [("fra", digest.as_str(), 6)];
+    let pins = PinTables {
+        fast: &fast_pins,
+        best: &[],
+    };
+    let env = TessdataEnv {
+        system_paths: true,
+        ..cache_env(cache.path(), TessdataModel::Fast)
+    };
+
+    let resolved =
+        resolve_tessdata_path_with(&["eng".to_string(), "fra".to_string()], None, &env, &system, &pins).unwrap();
+
+    assert_eq!(resolved, flat.to_str().unwrap());
+    assert_eq!(std::fs::read(flat.join("eng.traineddata")).unwrap(), b"custom english");
+    assert_eq!(std::fs::read(flat.join("fra.traineddata")).unwrap(), b"french");
+    assert!(!model_cache_dir(cache.path(), TessdataModel::Fast).exists());
 }
 
 #[test]
