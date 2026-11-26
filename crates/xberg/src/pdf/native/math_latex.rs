@@ -65,6 +65,13 @@ const STACK_SHARE: f32 = 0.5;
 const ACCENT_SHARE: f32 = 0.5;
 /// Share of a limit's width that lies under or over its big operator.
 const LIMIT_SHARE: f32 = 0.3;
+/// Baseline distance, in ems, within which a prose span can share a formula's band.
+const PROSE_BAND_EM: f32 = 3.0;
+/// Components larger than this are left as they are: no formula has this many runs, and the
+/// row split is cubic in the worst case.
+const MAX_COMPONENT_PIECES: usize = 256;
+/// More than this many purely numeric text runs with no relation reads as a table row.
+const MAX_NUMERIC_RUNS: usize = 3;
 /// Nesting depth past which a group is spelled flat.
 const MAX_DEPTH: usize = 6;
 
@@ -277,10 +284,14 @@ impl Formula<'_> {
 }
 
 fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
-    let prose: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class == Class::Prose).collect();
+    let mut prose: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class == Class::Prose).collect();
+    prose.sort_by(|a, b| a.base.total_cmp(&b.base));
     let candidates: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class != Class::Prose).collect();
     let mut formulas = Vec::new();
     for component in connected_components(&candidates, &prose) {
+        if component.len() > MAX_COMPONENT_PIECES {
+            continue;
+        }
         for unit in split_rows(component) {
             if let Some(formula) = build_formula(unit, &prose) {
                 formulas.push(formula);
@@ -327,11 +338,21 @@ fn find(parent: &mut [usize], mut i: usize) -> usize {
     i
 }
 
+/// The prose pieces (sorted by baseline) whose baseline lies in `low..=high`.
+fn prose_near<'s, 'p, 'a>(prose: &'s [&'p Piece<'a>], low: f32, high: f32) -> &'s [&'p Piece<'a>] {
+    let start = prose.partition_point(|piece| piece.base < low);
+    let end = prose.partition_point(|piece| piece.base <= high);
+    &prose[start..end.max(start)]
+}
+
 fn is_prose_adjacent(piece: &Piece<'_>, prose: &[&Piece<'_>]) -> bool {
-    prose.iter().any(|other| {
-        (other.base - piece.base).abs() <= piece.size * SAME_ROW_EM / 2.0
-            && piece.gap(other) <= piece.size * PROSE_ADJACENT_EM
-    })
+    let reach = piece.size * SAME_ROW_EM / 2.0;
+    prose_near(prose, piece.base - reach, piece.base + reach)
+        .iter()
+        .any(|other| {
+            (other.base - piece.base).abs() <= piece.size * SAME_ROW_EM / 2.0
+                && piece.gap(other) <= piece.size * PROSE_ADJACENT_EM
+        })
 }
 
 fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, prose: &[&Piece<'_>]) -> bool {
@@ -355,11 +376,14 @@ fn prose_between(a: &Piece<'_>, b: &Piece<'_>, prose: &[&Piece<'_>]) -> bool {
         return false;
     }
     let (left, right) = (a.x1.min(b.x1), a.x0.max(b.x0));
-    prose.iter().any(|other| {
-        other.overlap(left, right) > 0.0
-            && a.bottom().max(b.bottom()) < other.top()
-            && a.top().min(b.top()) > other.bottom()
-    })
+    let reach = a.size.max(b.size) * PROSE_BAND_EM;
+    prose_near(prose, a.base.min(b.base) - reach, a.base.max(b.base) + reach)
+        .iter()
+        .any(|other| {
+            other.overlap(left, right) > 0.0
+                && a.bottom().max(b.bottom()) < other.top()
+                && a.top().min(b.top()) > other.bottom()
+        })
 }
 
 /// Split a component into formulas: an axis row and the scripts and stacked parts that hang
@@ -379,17 +403,19 @@ fn split_rows<'p, 'a>(component: Vec<&'p Piece<'a>>) -> Vec<Vec<&'p Piece<'a>>> 
                     .any(|glyph| piece.overlap(glyph.x0, glyph.x1) > size * AXIS_OVERLAP_EM)
         };
         let mut changed = true;
+        let mut members: std::collections::HashSet<usize> = unit.iter().map(|piece| piece.span).collect();
         while changed {
             changed = false;
             for &piece in &remaining {
-                if contains(&unit, piece) || covers_axis(piece) || !hangs_off(piece, &unit, base, size) {
+                if members.contains(&piece.span) || covers_axis(piece) || !hangs_off(piece, &unit, base, size) {
                     continue;
                 }
+                members.insert(piece.span);
                 unit.push(piece);
                 changed = true;
             }
         }
-        remaining.retain(|piece| !contains(&unit, piece));
+        remaining.retain(|piece| !members.contains(&piece.span));
         units.push(unit);
     }
     units
@@ -486,14 +512,17 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
         .map(|piece| piece.top())
         .fold(f32::NEG_INFINITY, f32::max);
     let bottom = members.iter().map(|piece| piece.bottom()).fold(f32::INFINITY, f32::min);
-    let display = !prose.iter().any(|other| {
+    let band = size * PROSE_BAND_EM;
+    let display = !prose_near(prose, bottom - band, top + band).iter().any(|other| {
         other.bottom() < top && other.top() > bottom && other.x0.max(x0) - other.x1.min(x1) < size * PROSE_DISTANCE_EM
     });
     let structured = has_structure(&members, size);
-    let operated = members
-        .iter()
-        .any(|piece| piece.text.chars().any(|c| is_relation(c) || is_operator(c)));
+    let related = members.iter().any(|piece| piece.text.chars().any(is_relation));
+    let operated = related || members.iter().any(|piece| piece.text.chars().any(is_operator));
     if !structured && !(display && operated) {
+        return None;
+    }
+    if !structured && !related && (only_operator_glyphs(&members) || reads_as_numeric_row(&members)) {
         return None;
     }
     let axis = axis_row(&members)?;
@@ -512,6 +541,29 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
         x1,
         size,
     })
+}
+
+/// Whether every math-font glyph is a binary operator, as a LaTeX table's `$-$3.4` minus is.
+fn only_operator_glyphs(members: &[&Piece<'_>]) -> bool {
+    members
+        .iter()
+        .filter(|piece| piece.is_math())
+        .flat_map(|piece| piece.text.chars())
+        .filter(|&c| !c.is_whitespace() && !is_unmapped(c))
+        .all(is_operator)
+}
+
+/// Several text runs that are all signed numbers: table cells, not a formula.
+fn reads_as_numeric_row(members: &[&Piece<'_>]) -> bool {
+    let numeric = |text: &str| {
+        let text = text.trim();
+        text.chars().any(|c| c.is_ascii_digit())
+            && text
+                .chars()
+                .all(|c| c.is_ascii_digit() || c.is_whitespace() || matches!(c, '.' | ',' | '%' | '−' | '-' | '+'))
+    };
+    let neutral: Vec<&&Piece<'_>> = members.iter().filter(|piece| piece.class == Class::Neutral).collect();
+    neutral.len() > MAX_NUMERIC_RUNS && neutral.iter().all(|piece| numeric(piece.text))
 }
 
 /// A math-font glyph that is more than a footnote or list mark.

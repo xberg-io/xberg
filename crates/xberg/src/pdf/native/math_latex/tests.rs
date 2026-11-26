@@ -216,3 +216,18 @@ fn should_not_touch_a_page_without_tex_math() {
     };
     assert!(rewrite_math_spans(&spans).is_none());
 }
+
+#[test]
+fn should_leave_a_table_column_of_negative_numbers_untouched() {
+    let mut spans = Vec::new();
+    for (row, value) in ["3.4", "12.5", "0.7"].iter().enumerate() {
+        let baseline = 700.0 - 15.0 * row as f32;
+        spans.push(span("Row", "CMR10", 10.0, 100.0, 20.0, baseline));
+        spans.push(span("−", "CMSY10", 10.0, 200.0, 7.8, baseline));
+        spans.push(span(value, "CMR10", 10.0, 208.0, 16.0, baseline));
+        spans.push(span("1.25", "CMR10", 10.0, 236.0, 18.0, baseline));
+        spans.push(span("−", "CMSY10", 10.0, 266.0, 7.8, baseline));
+        spans.push(span("4.0", "CMR10", 10.0, 274.0, 12.0, baseline));
+    }
+    assert!(rewrite_math_spans(&spans).is_none());
+}
