@@ -1577,7 +1577,11 @@ fn group_into_lines(spans: &[xberg_native_pdf::layout::TextSpan], order: &[usize
 /// split. Note this rejects the *widest* candidate outright rather than falling back to
 /// the next-widest one on the same line: a line whose only internal gap is that wide
 /// has no real gutter evidence to offer either way. ~keep
-fn widest_gap_midpoint(mut edges: impl Iterator<Item = (f32, f32)>, min_gutter: f32, max_gutter: f32) -> Option<f32> {
+pub(super) fn widest_gap_midpoint(
+    mut edges: impl Iterator<Item = (f32, f32)>,
+    min_gutter: f32,
+    max_gutter: f32,
+) -> Option<f32> {
     let (_, mut running_right) = edges.next()?;
     let mut best_gap = 0.0_f32;
     let mut best_split = None;
@@ -1603,7 +1607,7 @@ fn widest_gap_midpoint(mut edges: impl Iterator<Item = (f32, f32)>, min_gutter: 
 /// merges into a neighbouring span. Such a span occupies an x-range but carries no
 /// content, and must not be treated as column population or as evidence that a line
 /// runs through a gutter. ~keep
-fn span_has_ink(span: &xberg_native_pdf::layout::TextSpan) -> bool {
+pub(super) fn span_has_ink(span: &xberg_native_pdf::layout::TextSpan) -> bool {
     !span.text.trim().is_empty()
 }
 

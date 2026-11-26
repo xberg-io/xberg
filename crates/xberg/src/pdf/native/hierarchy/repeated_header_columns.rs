@@ -9,6 +9,7 @@
 
 use xberg_native_pdf::layout::TextSpan;
 
+use super::super::text::widest_gap_midpoint;
 use super::{
     MIN_COLUMN_GUTTER_PTS, MIN_TWO_COLUMN_CONTENT_WIDTH_PTS, PROSE_LINE_Y_TOLERANCE_PTS, content_bounds,
     group_spans_into_lines, has_balanced_vertical_support, is_usable_span, side_support,
@@ -112,24 +113,11 @@ fn widest_empty_corridor_mid(spans: &[&TextSpan], start: f32, end: f32) -> Optio
         .filter(|&(left, right)| right > start && left < end)
         .collect();
     extents.sort_by(|left, right| left.0.total_cmp(&right.0));
-    let mut covered_to = start;
-    let mut best: Option<(f32, f32)> = None;
-    let mut consider = |gap_left: f32, gap_right: f32| {
-        if best.is_none_or(|(left, right)| gap_right - gap_left > right - left) {
-            best = Some((gap_left, gap_right));
-        }
-    };
-    for (left, right) in extents {
-        if left > covered_to {
-            consider(covered_to, left);
-        }
-        covered_to = covered_to.max(right);
-    }
-    if end > covered_to {
-        consider(covered_to, end);
-    }
-    let (gap_left, gap_right) = best?;
-    (gap_right - gap_left >= MIN_COLUMN_GUTTER_PTS).then_some((gap_left + gap_right) * 0.5)
+    // Zero-width edges at `start` and `end` make the corridor's own ends gap boundaries. ~keep
+    let edges = std::iter::once((start, start))
+        .chain(extents)
+        .chain(std::iter::once((end, end)));
+    widest_gap_midpoint(edges, MIN_COLUMN_GUTTER_PTS, f32::INFINITY)
 }
 
 #[cfg(test)]

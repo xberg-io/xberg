@@ -8,6 +8,7 @@
 
 use xberg_native_pdf::layout::TextSpan;
 
+use super::super::text::span_has_ink;
 use crate::table_core::overlap::{
     STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
     extents_overlap, overlap_columns,
@@ -47,10 +48,6 @@ fn glyph_height(span: &TextSpan) -> f32 {
     span.bbox.height
 }
 
-fn is_ink(span: &TextSpan) -> bool {
-    !span.text.trim().is_empty()
-}
-
 fn is_upright(span: &TextSpan) -> bool {
     span.rotation_degrees == 0.0
         && span.bbox.y.is_finite()
@@ -66,7 +63,7 @@ fn sequence_rows(spans: &[TextSpan]) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
     let mut row_anchor: Option<usize> = None;
     for (index, span) in spans.iter().enumerate() {
-        if !is_ink(span)
+        if !span_has_ink(span)
             && let Some(row) = rows.last_mut()
         {
             row.end = index + 1;
@@ -74,7 +71,7 @@ fn sequence_rows(spans: &[TextSpan]) -> Vec<Row> {
         }
         let joins = row_anchor.is_some_and(|anchor| {
             let anchor = &spans[anchor];
-            is_ink(span)
+            span_has_ink(span)
                 && (span.bbox.y - anchor.bbox.y).abs()
                     <= SAME_ROW_FRACTION * glyph_height(anchor).min(glyph_height(span))
         });
@@ -86,13 +83,16 @@ fn sequence_rows(spans: &[TextSpan]) -> Vec<Row> {
             start: index,
             end: index + 1,
         });
-        row_anchor = is_ink(span).then_some(index);
+        row_anchor = span_has_ink(span).then_some(index);
     }
     rows
 }
 
 fn ink_spans<'a>(spans: &'a [TextSpan], row: &Row) -> Vec<&'a TextSpan> {
-    spans[row.start..row.end].iter().filter(|span| is_ink(span)).collect()
+    spans[row.start..row.end]
+        .iter()
+        .filter(|span| span_has_ink(span))
+        .collect()
 }
 
 /// True when `lower` is the next row of a stacked band that `upper` belongs to: both rows hold
@@ -127,14 +127,25 @@ fn reorder_band(band: &mut [TextSpan]) {
     let extents: Vec<(f32, f32)> = band
         .iter()
         .map(|span| {
-            let width = if is_ink(span) { span.bbox.width.max(0.0) } else { 0.0 };
+            let width = if span_has_ink(span) {
+                span.bbox.width.max(0.0)
+            } else {
+                0.0
+            };
             (span.bbox.x, span.bbox.x + width)
         })
         .collect();
     let columns = overlap_columns(&extents);
     let stacked = columns
         .iter()
-        .filter(|column| column.members.iter().filter(|&&index| is_ink(&band[index])).count() >= 2)
+        .filter(|column| {
+            column
+                .members
+                .iter()
+                .filter(|&&index| span_has_ink(&band[index]))
+                .count()
+                >= 2
+        })
         .count();
     if stacked < STACKED_BAND_MIN_STACKED_COLUMNS {
         return;
