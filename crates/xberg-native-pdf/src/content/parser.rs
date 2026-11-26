@@ -5866,15 +5866,74 @@ mod tests {
         );
     }
 
-    #[test]
-    fn page_operator_visit_matches_the_collected_operators() {
-        let page = b"q 1 0 0 rg 1 0 0 1 5 5 cm 0 0 m 10 0 l s q 0 0 1 RG 0 0 4 4 re W n Q BT /F1 9 Tf (x) Tj ET \
-                     % c\n0 0 4 4 re f /Fm0 Do Q 3 w [2 1] 0 d 1 0 0 1 re B*";
-        let expected = parse_content_stream_paths_only(page).unwrap();
-        assert!(expected.len() > 10, "{expected:?}");
+    fn visited_page_operators(page: &[u8]) -> Vec<Operator> {
         let mut visited = Vec::new();
         visit_page_path_operators(page, |op| visited.push(op));
-        assert_eq!(visited, expected);
+        visited
+    }
+
+    #[test]
+    fn page_operator_visit_yields_the_stream_path_operators_in_order() {
+        let page = b"q 1 0 0 rg 1 0 0 1 5 5 cm 0 0 m 10 0 l s q 0 0 1 RG 0 0 4 4 re W n Q BT /F1 9 Tf (x) Tj ET \
+                     0 0 4 4 re f /Fm0 Do Q 3 w [2 1] 0 d 1 0 0 1 re B";
+        let rect = |x, y, width, height| Operator::Rectangle { x, y, width, height };
+        let expected = vec![
+            Operator::SaveState,
+            Operator::SetFillRgb { r: 1.0, g: 0.0, b: 0.0 },
+            Operator::Cm {
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 1.0,
+                e: 5.0,
+                f: 5.0,
+            },
+            Operator::MoveTo { x: 0.0, y: 0.0 },
+            Operator::LineTo { x: 10.0, y: 0.0 },
+            Operator::ClosePath,
+            Operator::Stroke,
+            Operator::SaveState,
+            Operator::SetStrokeRgb { r: 0.0, g: 0.0, b: 1.0 },
+            rect(0.0, 0.0, 4.0, 4.0),
+            Operator::ClipNonZero,
+            Operator::EndPath,
+            Operator::RestoreState,
+            rect(0.0, 0.0, 4.0, 4.0),
+            Operator::Fill,
+            Operator::Do {
+                name: "Fm0".to_string(),
+            },
+            Operator::RestoreState,
+            Operator::SetLineWidth { width: 3.0 },
+            Operator::SetDash {
+                array: vec![2.0, 1.0],
+                phase: 0.0,
+            },
+            rect(1.0, 0.0, 0.0, 1.0),
+            Operator::FillStroke,
+        ];
+        assert_eq!(visited_page_operators(page), expected);
+    }
+
+    #[test]
+    fn page_operator_visit_ignores_operators_inside_comments() {
+        // A commented-out `BT` must not open a text object that hides the rest of the stream. ~keep
+        let page = b"q % 1 0 0 1 re f Q\n% BT (x) Tj\n0 0 m 5 5 l S";
+        assert_eq!(
+            visited_page_operators(page),
+            vec![
+                Operator::SaveState,
+                Operator::MoveTo { x: 0.0, y: 0.0 },
+                Operator::LineTo { x: 5.0, y: 5.0 },
+                Operator::Stroke,
+            ]
+        );
+    }
+
+    #[test]
+    fn page_operator_visit_stops_at_an_unterminated_text_object() {
+        let page = b"0 0 m BT /F1 9 Tf (x) Tj 5 5 l S";
+        assert_eq!(visited_page_operators(page), vec![Operator::MoveTo { x: 0.0, y: 0.0 }]);
     }
 
     #[test]
