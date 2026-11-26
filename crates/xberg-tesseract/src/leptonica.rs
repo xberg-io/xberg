@@ -497,13 +497,7 @@ impl Pix {
     /// Returns `TesseractError::InvalidParameterError` for non-grayscale input,
     /// or an OCR/null-pointer error if Leptonica cannot create the binary image.
     pub fn otsu_threshold(&self) -> Result<Pix> {
-        self.otsu_threshold_with_options(
-            self.width().max(Self::MINIMUM_OTSU_TILE_DIMENSION),
-            self.height().max(Self::MINIMUM_OTSU_TILE_DIMENSION),
-            0,
-            0,
-            Self::STANDARD_OTSU_SCORE_FRACTION,
-        )
+        self.global_otsu_threshold(Self::STANDARD_OTSU_SCORE_FRACTION)
     }
 
     fn otsu_threshold_with_options(
@@ -993,6 +987,9 @@ mod grayscale;
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
 mod binary;
+
+#[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+mod otsu;
 
 #[cfg(test)]
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
