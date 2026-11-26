@@ -272,7 +272,8 @@ impl PptxExtractor {
             if trimmed.is_empty() {
                 continue;
             }
-            if trimmed.starts_with("### Notes:") || trimmed == "Notes:" {
+            // Plain output writes the notes header and body as one block, "Notes:\n<body>".
+            if trimmed.starts_with("### Notes:") || trimmed.lines().next() == Some("Notes:") {
                 in_notes = true;
                 continue;
             }
@@ -1511,6 +1512,39 @@ mod tests {
 
         assert!(pages[2].speaker_notes.is_none());
         assert_eq!(pages[2].section_name.as_deref(), Some("Chapter 2"));
+    }
+
+    /// Speaker notes belong to `pages[].speaker_notes`; plain content must leave them out
+    /// exactly as markdown content does.
+    #[tokio::test]
+    async fn test_plain_content_leaves_out_speaker_notes_like_markdown() {
+        use crate::core::config::{ExtractionConfig, OutputFormat, PageConfig};
+        use crate::extraction::derive::derive_extraction_result;
+        use crate::plugins::InternalDocumentExtractor;
+
+        let pptx = crate::extraction::pptx::tests::create_pptx_with_sections_and_notes(
+            &[("Title", Some("Intro notes."))],
+            &[("Chapter 1", &[1])],
+        );
+        let mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+        for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+            let config = ExtractionConfig {
+                pages: Some(PageConfig::default()),
+                output_format: output_format.clone(),
+                ..Default::default()
+            };
+            let internal_doc = PptxExtractor::new()
+                .extract_content(&pptx, mime, &config)
+                .await
+                .expect("extraction failed");
+            let result = derive_extraction_result(internal_doc, true, output_format);
+
+            assert!(!result.content.contains("Intro notes."), "{:?}", result.content);
+            assert!(!result.content.contains("Notes:"), "{:?}", result.content);
+            let pages = result.pages.as_ref().expect("pages should be populated");
+            assert_eq!(pages[0].speaker_notes.as_deref(), Some("Intro notes."));
+        }
     }
 
     /// GH#639: PPTX had no top-level archive entry-count check at all, so this fails
