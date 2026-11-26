@@ -2,12 +2,84 @@ use super::auto_ocr::auto_ocr_args;
 use super::*;
 use crate::adapter::FrameworkAdapter;
 
+/// The harness's default `--timeout`, so these tests exercise the production default.
+fn default_run_timeout() -> Duration {
+    crate::config::BenchmarkConfig::default().timeout
+}
+
+fn default_extraction_timeout_secs() -> u64 {
+    extraction_timeout_secs(default_run_timeout())
+}
+
 fn merged_benchmark_config(tesseract_ocr_enabled: bool) -> xberg::ExtractionConfig {
     xberg::core::config::merge::merge_config_json(
         &xberg::ExtractionConfig::default(),
-        benchmark_config_json(tesseract_ocr_enabled),
+        &benchmark_config_json(tesseract_ocr_enabled, default_extraction_timeout_secs()),
     )
     .unwrap()
+}
+
+fn config_json_arg(args: &[String]) -> &str {
+    &args[args.iter().position(|arg| arg == "--config-json").unwrap() + 1]
+}
+
+fn emitted_extraction_timeout_secs(args: &[String]) -> Option<u64> {
+    let config: serde_json::Value = serde_json::from_str(config_json_arg(args)).unwrap();
+    config
+        .get("extraction_timeout_secs")
+        .and_then(serde_json::Value::as_u64)
+}
+
+#[test]
+fn default_run_timeout_keeps_the_historical_xberg_extraction_limit() {
+    assert_eq!(default_run_timeout(), std::time::Duration::from_secs(1800));
+    for tesseract_ocr_enabled in [false, true] {
+        let args = benchmark_base_args(
+            false,
+            "markdown",
+            tesseract_ocr_enabled,
+            default_extraction_timeout_secs(),
+        );
+        assert_eq!(emitted_extraction_timeout_secs(&args), Some(1740));
+    }
+}
+
+#[test]
+fn xberg_extraction_limit_follows_the_run_timeout() {
+    let run_timeout = std::time::Duration::from_secs(7200);
+    for tesseract_ocr_enabled in [false, true] {
+        let args = benchmark_base_args(
+            false,
+            "markdown",
+            tesseract_ocr_enabled,
+            extraction_timeout_secs(run_timeout),
+        );
+        assert_eq!(emitted_extraction_timeout_secs(&args), Some(7140));
+    }
+    for backend in AutoOcrBackend::ALL {
+        let args = auto_ocr_args(
+            backend,
+            OutputFormat::Markdown,
+            false,
+            extraction_timeout_secs(run_timeout),
+        );
+        assert_eq!(emitted_extraction_timeout_secs(&args), Some(7140), "{backend:?}");
+    }
+    let steady = steady_extraction_config(
+        XbergPipeline::Baseline,
+        OutputFormat::Markdown,
+        false,
+        XbergPdfBackend::Native,
+        None,
+        run_timeout,
+    )
+    .unwrap();
+    assert_eq!(steady.extraction_timeout_secs, Some(7140));
+}
+
+#[test]
+fn a_run_timeout_below_the_margin_never_yields_a_zero_xberg_limit() {
+    assert_eq!(extraction_timeout_secs(std::time::Duration::from_secs(30)), 1);
 }
 
 fn create_executable_file(directory: &Path) -> PathBuf {
@@ -173,19 +245,21 @@ fn benchmark_descriptors_are_eligible_when_xberg_supports_their_extensions() {
 #[test]
 fn benchmark_invocations_disable_user_config_discovery() {
     for batch in [false, true] {
-        let args = benchmark_base_args(batch, "markdown", false);
+        let args = benchmark_base_args(batch, "markdown", false, default_extraction_timeout_secs());
         assert!(args.iter().any(|arg| arg == "--no-config-discovery"));
     }
 }
 
 #[test]
 fn tesseract_benchmark_args_do_not_override_nested_config() {
-    let args = benchmark_base_args(false, "markdown", true);
+    let args = benchmark_base_args(false, "markdown", true, default_extraction_timeout_secs());
 
     assert!(!args.iter().any(|arg| arg == "--ocr"));
     assert!(!args.iter().any(|arg| arg == "--ocr-backend"));
-    let config_index = args.iter().position(|arg| arg == "--config-json").unwrap();
-    assert_eq!(args[config_index + 1], TESSERACT_BENCHMARK_CONFIG_JSON);
+    assert_eq!(
+        config_json_arg(&args),
+        tesseract_benchmark_config_json(default_extraction_timeout_secs())
+    );
 }
 
 /// The native leg must keep producing exactly today's framework name, or existing committed
@@ -236,6 +310,7 @@ fn ocr_only_pipeline_is_rejected_when_ocr_is_disabled() {
         false,
         false,
         XbergPdfBackend::Native,
+        default_run_timeout(),
     ) {
         Ok(_) => panic!("OCR-only adapter should not be created when OCR is disabled"),
         Err(error) => error,
@@ -251,6 +326,7 @@ fn steady_baseline_and_layout_configs_match_cli_semantics() {
         false,
         XbergPdfBackend::Native,
         None,
+        default_run_timeout(),
     )
     .unwrap();
     assert!(!baseline.use_cache);
@@ -264,6 +340,7 @@ fn steady_baseline_and_layout_configs_match_cli_semantics() {
         true,
         XbergPdfBackend::Native,
         Some(3),
+        default_run_timeout(),
     )
     .unwrap();
     assert_eq!(layout.output_format, xberg::OutputFormat::Markdown);
@@ -289,10 +366,17 @@ fn layout_pipelines_differ_only_in_the_selected_model() {
 #[test]
 fn steady_layout_configs_select_their_detector() {
     let model = |pipeline| {
-        steady_extraction_config(pipeline, OutputFormat::Markdown, true, XbergPdfBackend::Native, None)
-            .unwrap()
-            .layout
-            .map(|layout| layout.model)
+        steady_extraction_config(
+            pipeline,
+            OutputFormat::Markdown,
+            true,
+            XbergPdfBackend::Native,
+            None,
+            default_run_timeout(),
+        )
+        .unwrap()
+        .layout
+        .map(|layout| layout.model)
     };
     assert_eq!(model(XbergPipeline::Layout), Some(xberg::LayoutDetectionModel::RtDetr));
     assert_eq!(
@@ -306,6 +390,7 @@ fn steady_layout_configs_select_their_detector() {
         true,
         XbergPdfBackend::Native,
         None,
+        default_run_timeout(),
     )
     .unwrap();
     assert!(layout_v3.use_layout_for_markdown);
@@ -327,6 +412,7 @@ fn only_layout_adapters_reject_a_failed_layout_pass() {
             true,
             XbergPdfBackend::Native,
             None,
+            default_run_timeout(),
         )
         .unwrap()
     };
@@ -379,7 +465,12 @@ fn auto_ocr_variants_configure_ocr_without_forcing_it() {
             auto_ocr_framework_name(backend, OutputFormat::Markdown, true),
             format!("{name}-batch")
         );
-        let args = auto_ocr_args(backend, OutputFormat::Markdown, false);
+        let args = auto_ocr_args(
+            backend,
+            OutputFormat::Markdown,
+            false,
+            default_extraction_timeout_secs(),
+        );
         assert!(!args.iter().any(|arg| arg == "--force-ocr"), "{name}: {args:?}");
         let config_json = &args[args.iter().position(|arg| arg == "--config-json").unwrap() + 1];
         let config: xberg::ExtractionConfig = serde_json::from_str(config_json).unwrap();
@@ -421,7 +512,13 @@ fn forced_ocr_variants_still_force_ocr() {
 
 #[test]
 fn auto_ocr_adapter_is_rejected_when_ocr_is_disabled() {
-    let error = match create_xberg_auto_ocr_adapter(AutoOcrBackend::Tesseract, OutputFormat::Markdown, false, false) {
+    let error = match create_xberg_auto_ocr_adapter(
+        AutoOcrBackend::Tesseract,
+        OutputFormat::Markdown,
+        false,
+        false,
+        default_run_timeout(),
+    ) {
         Ok(_) => panic!("auto-ocr adapter should not be created when OCR is disabled"),
         Err(error) => error,
     };
@@ -437,6 +534,7 @@ fn steady_adapter_rejects_unimplemented_pipeline() {
         true,
         XbergPdfBackend::Native,
         None,
+        default_run_timeout(),
     ) {
         Ok(_) => panic!("unsupported steady pipeline must fail closed"),
         Err(error) => error,
@@ -453,6 +551,7 @@ fn warm_batch_adapter_has_no_misleading_single_file_cold_probe() {
         false,
         XbergPdfBackend::Native,
         None,
+        default_run_timeout(),
     )
     .unwrap();
 
@@ -468,9 +567,11 @@ fn steady_and_cold_probe_share_forced_tesseract_config() {
         true,
         XbergPdfBackend::Native,
         Some(4),
+        default_run_timeout(),
     )
     .unwrap();
-    let cold: xberg::ExtractionConfig = serde_json::from_str(benchmark_config_json(true)).unwrap();
+    let cold: xberg::ExtractionConfig =
+        serde_json::from_str(&benchmark_config_json(true, default_extraction_timeout_secs())).unwrap();
 
     assert!(steady.force_ocr);
     assert!(cold.force_ocr);

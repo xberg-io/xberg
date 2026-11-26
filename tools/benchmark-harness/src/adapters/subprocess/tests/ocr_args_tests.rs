@@ -268,12 +268,12 @@ fn single_file_tesseract_override_synthesizes_config_json_for_cli_only_ocr() {
 
 #[test]
 fn single_file_tesseract_override_rewrites_config_json_with_no_preexisting_ocr_key() {
-    // BLOCKER 1 regression: the base `--config-json` (e.g. `NATIVE_BENCHMARK_CONFIG_JSON`)
+    // BLOCKER 1 regression: the base `--config-json` (e.g. the native benchmark config)
     // has no `ocr` key at all, but `--ocr true` was force-upgraded in; the existing
     // `use_cache` field must survive the rewrite alongside the new materialized `ocr` key.
     let args = vec![
         "--config-json".to_string(),
-        r#"{"extraction_timeout_secs":1740,"use_cache":false}"#.to_string(),
+        r#"{"extraction_timeout_secs":7140,"use_cache":false}"#.to_string(),
         "--ocr".to_string(),
         "true".to_string(),
         "--force-ocr".to_string(),
@@ -285,6 +285,11 @@ fn single_file_tesseract_override_rewrites_config_json_with_no_preexisting_ocr_k
     let config: serde_json::Value = serde_json::from_str(&rewritten[config_index + 1]).unwrap();
 
     assert_eq!(config.pointer("/use_cache"), Some(&serde_json::json!(false)));
+    assert_eq!(
+        config.pointer("/extraction_timeout_secs"),
+        Some(&serde_json::json!(7140)),
+        "the run-derived extraction limit must survive the rewrite"
+    );
     assert_eq!(config.pointer("/ocr/backend"), Some(&serde_json::json!("tesseract")));
     assert_eq!(config.pointer("/ocr/language"), Some(&serde_json::json!(["eng"])));
     assert_eq!(
@@ -474,13 +479,65 @@ fn forced_ocr_uses_existing_behavior_for_malformed_xberg_config_json() {
 }
 
 mod auto_ocr_force_ocr {
-    use super::super::support::test_build_identity;
+    use super::super::support::{default_run_timeout, test_build_identity};
     use crate::adapters::subprocess::SubprocessAdapter;
     use crate::adapters::xberg::{AutoOcrBackend, adapter_with_identity, auto_ocr_adapter_with_identity};
     use crate::types::{OcrStatus, OutputFormat, XbergPdfBackend, XbergPipeline};
+    use std::time::Duration;
 
     fn auto_adapter(backend: AutoOcrBackend, batch: bool) -> SubprocessAdapter {
-        auto_ocr_adapter_with_identity(backend, OutputFormat::Markdown, batch, test_build_identity()).unwrap()
+        auto_ocr_adapter_with_identity(
+            backend,
+            OutputFormat::Markdown,
+            batch,
+            default_run_timeout(),
+            test_build_identity(),
+        )
+        .unwrap()
+    }
+
+    fn baseline_adapter(batch: bool, run_timeout: Duration) -> SubprocessAdapter {
+        adapter_with_identity(
+            XbergPipeline::Baseline,
+            OutputFormat::Markdown,
+            batch,
+            false,
+            XbergPdfBackend::Native,
+            run_timeout,
+            test_build_identity(),
+        )
+        .unwrap()
+    }
+
+    fn emitted_extraction_timeout_secs(args: &[String]) -> Option<u64> {
+        let config_json = &args[args.iter().position(|arg| arg == "--config-json").unwrap() + 1];
+        let config: serde_json::Value = serde_json::from_str(config_json).unwrap();
+        config
+            .get("extraction_timeout_secs")
+            .and_then(serde_json::Value::as_u64)
+    }
+
+    /// Xberg's own limit tracks the run's `--timeout` in every request path, keeping the
+    /// historical 1740 s at the 1800 s default. ~keep
+    #[test]
+    fn xberg_requests_derive_their_extraction_limit_from_the_run_timeout() {
+        for (run_timeout, expected) in [(default_run_timeout(), 1740), (Duration::from_secs(7200), 7140)] {
+            for batch in [false, true] {
+                let adapter = baseline_adapter(batch, run_timeout);
+                assert_eq!(
+                    emitted_extraction_timeout_secs(&adapter.request_args(false)),
+                    Some(expected),
+                    "{} request_args",
+                    adapter.name
+                );
+                assert_eq!(
+                    emitted_extraction_timeout_secs(&adapter.single_file_request_args(false)),
+                    Some(expected),
+                    "{} single_file_request_args",
+                    adapter.name
+                );
+            }
+        }
     }
 
     fn forces_ocr(args: &[String]) -> bool {
@@ -529,6 +586,7 @@ mod auto_ocr_force_ocr {
                     batch,
                     true,
                     XbergPdfBackend::Native,
+                    default_run_timeout(),
                     test_build_identity(),
                 )
                 .unwrap();

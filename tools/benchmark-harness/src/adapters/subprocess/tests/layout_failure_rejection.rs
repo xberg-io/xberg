@@ -9,7 +9,7 @@ use crate::adapters::subprocess::SubprocessAdapter;
 use crate::adapters::xberg::adapter_with_identity;
 use crate::types::{OutputFormat, XbergPdfBackend, XbergPipeline};
 
-use super::support::test_build_identity;
+use super::support::{default_run_timeout, test_build_identity};
 
 const LAYOUT_FAILURE: &str = "layout detection failed (model not found); document extracted without layout hints";
 
@@ -38,6 +38,7 @@ fn adapter_for(pipeline: XbergPipeline) -> SubprocessAdapter {
         false,
         true,
         XbergPdfBackend::Native,
+        default_run_timeout(),
         test_build_identity(),
     )
     .unwrap()

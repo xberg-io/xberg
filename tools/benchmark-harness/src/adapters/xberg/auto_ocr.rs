@@ -2,8 +2,8 @@
 //! per-page trigger decides which pages are OCR'd.
 
 use super::{
-    NATIVE_BENCHMARK_CONFIG_JSON, assemble_adapter, base_args_with_config, format_slug, locate_xberg_cli,
-    probe_xberg_build_id,
+    assemble_adapter, base_args_with_config, extraction_timeout_secs, format_slug, locate_xberg_cli,
+    native_benchmark_config_json, probe_xberg_build_id,
 };
 use crate::{
     adapter::ExecutableBuildIdentity,
@@ -11,17 +11,22 @@ use crate::{
     error::Result,
     types::{OutputFormat, XbergPdfBackend},
 };
+use std::time::Duration;
 
 /// Tesseract is configured but OCR is not forced, so xberg's own per-page trigger decides which
 /// pages get OCR'd.
-const AUTO_OCR_TESSERACT_BENCHMARK_CONFIG_JSON: &str = r#"{
-    "extraction_timeout_secs":1740,
+fn auto_ocr_tesseract_benchmark_config_json(extraction_timeout_secs: u64) -> String {
+    format!(
+        r#"{{
+    "extraction_timeout_secs":{extraction_timeout_secs},
     "use_cache":false,
-    "ocr":{
+    "ocr":{{
         "enabled":true,
         "backend":"tesseract"
-    }
-}"#;
+    }}
+}}"#
+    )
+}
 
 /// OCR engine behind an auto-OCR variant, which leaves `force_ocr` unset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +55,7 @@ pub fn create_xberg_auto_ocr_adapter(
     output_format: OutputFormat,
     batch: bool,
     ocr_enabled: bool,
+    run_timeout: Duration,
 ) -> Result<SubprocessAdapter> {
     if !ocr_enabled {
         return Err(crate::Error::Config(format!(
@@ -64,7 +70,7 @@ pub fn create_xberg_auto_ocr_adapter(
         build_id,
         path: cli_path,
     };
-    auto_ocr_adapter_with_identity(backend, output_format, batch, build_identity)
+    auto_ocr_adapter_with_identity(backend, output_format, batch, run_timeout, build_identity)
 }
 
 /// Builds the auto-OCR adapter for a located executable. It ignores a fixture's `requires_ocr`,
@@ -73,9 +79,10 @@ pub(crate) fn auto_ocr_adapter_with_identity(
     backend: AutoOcrBackend,
     output_format: OutputFormat,
     batch: bool,
+    run_timeout: Duration,
     build_identity: ExecutableBuildIdentity,
 ) -> Result<SubprocessAdapter> {
-    let mut args = auto_ocr_args(backend, output_format, batch);
+    let mut args = auto_ocr_args(backend, output_format, batch, extraction_timeout_secs(run_timeout));
     args.push("--pdf-backend".to_string());
     args.push(XbergPdfBackend::Native.as_str().to_string());
 
@@ -103,17 +110,28 @@ pub fn is_auto_ocr_framework(framework: &str) -> bool {
     })
 }
 
-pub(super) fn auto_ocr_args(backend: AutoOcrBackend, output_format: OutputFormat, batch: bool) -> Vec<String> {
+pub(super) fn auto_ocr_args(
+    backend: AutoOcrBackend,
+    output_format: OutputFormat,
+    batch: bool,
+    extraction_timeout_secs: u64,
+) -> Vec<String> {
     let content_format = match output_format {
         OutputFormat::Markdown => "markdown",
         OutputFormat::Plaintext => "plain",
     };
     match backend {
-        AutoOcrBackend::Tesseract => {
-            base_args_with_config(batch, content_format, AUTO_OCR_TESSERACT_BENCHMARK_CONFIG_JSON)
-        }
+        AutoOcrBackend::Tesseract => base_args_with_config(
+            batch,
+            content_format,
+            &auto_ocr_tesseract_benchmark_config_json(extraction_timeout_secs),
+        ),
         AutoOcrBackend::Paddle => {
-            let mut args = base_args_with_config(batch, content_format, NATIVE_BENCHMARK_CONFIG_JSON);
+            let mut args = base_args_with_config(
+                batch,
+                content_format,
+                &native_benchmark_config_json(extraction_timeout_secs),
+            );
             args.extend([
                 "--ocr".to_string(),
                 "true".to_string(),

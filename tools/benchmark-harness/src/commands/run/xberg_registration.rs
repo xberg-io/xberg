@@ -187,11 +187,24 @@ fn build_planned_adapter(
 ) -> Result<Arc<dyn FrameworkAdapter>> {
     match planned {
         PlannedAdapter::Pipeline { pipeline, pdf_backend } => configure_subprocess_adapter(
-            create_xberg_adapter(pipeline, context.format, context.batch_mode, context.ocr, pdf_backend),
+            create_xberg_adapter(
+                pipeline,
+                context.format,
+                context.batch_mode,
+                context.ocr,
+                pdf_backend,
+                context.config.timeout,
+            ),
             context,
         ),
         PlannedAdapter::AutoOcr(backend) => configure_subprocess_adapter(
-            create_xberg_auto_ocr_adapter(backend, context.format, context.batch_mode, context.ocr),
+            create_xberg_auto_ocr_adapter(
+                backend,
+                context.format,
+                context.batch_mode,
+                context.ocr,
+                context.config.timeout,
+            ),
             context,
         ),
         PlannedAdapter::SteadyState { pipeline, pdf_backend } => create_xberg_steady_adapter(
@@ -201,6 +214,7 @@ fn build_planned_adapter(
             context.ocr,
             pdf_backend,
             context.config.xberg_max_threads,
+            context.config.timeout,
         )
         .map(|adapter| Arc::new(adapter) as Arc<dyn FrameworkAdapter>),
     }

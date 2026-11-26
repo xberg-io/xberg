@@ -17,6 +17,7 @@ use crate::{
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use which::which;
 
@@ -42,27 +43,55 @@ const SCEPTRE_TRACT_OPTIONS_JSON: &str = r#"{"model":{"backend":"tract"}}"#;
 /// data is emitted and discarded; cold-start attribution needs the parse, a result field, and
 /// reporting wired together before it is available.
 const STAGE_TIMING_ENV_VAR: &str = "XBERG_EMIT_STAGE_TIMING";
-const NATIVE_BENCHMARK_CONFIG_JSON: &str = r#"{"extraction_timeout_secs":1740,"use_cache":false}"#;
-const TESSERACT_BENCHMARK_CONFIG_JSON: &str = r#"{
-    "extraction_timeout_secs":1740,
+/// Xberg's own extraction limit stays this far below the harness `--timeout`, so Xberg reports
+/// its timeout before the harness kills the process (1800 s keeps the historical 1740 s).
+const EXTRACTION_TIMEOUT_MARGIN_SECS: u64 = 60;
+
+/// `extraction_timeout_secs` passed to Xberg for a run whose per-invocation limit is `run_timeout`.
+pub(crate) fn extraction_timeout_secs(run_timeout: Duration) -> u64 {
+    run_timeout
+        .as_secs()
+        .saturating_sub(EXTRACTION_TIMEOUT_MARGIN_SECS)
+        .max(1)
+}
+
+fn native_benchmark_config_json(extraction_timeout_secs: u64) -> String {
+    format!(r#"{{"extraction_timeout_secs":{extraction_timeout_secs},"use_cache":false}}"#)
+}
+
+fn tesseract_benchmark_config_json(extraction_timeout_secs: u64) -> String {
+    format!(
+        r#"{{
+    "extraction_timeout_secs":{extraction_timeout_secs},
     "use_cache":false,
     "force_ocr":true,
-    "ocr":{
+    "ocr":{{
         "enabled":true,
         "backend":"tesseract"
-    }
-}"#;
+    }}
+}}"#
+    )
+}
 
-fn benchmark_config_json(tesseract_ocr_enabled: bool) -> &'static str {
+fn benchmark_config_json(tesseract_ocr_enabled: bool, extraction_timeout_secs: u64) -> String {
     if tesseract_ocr_enabled {
-        TESSERACT_BENCHMARK_CONFIG_JSON
+        tesseract_benchmark_config_json(extraction_timeout_secs)
     } else {
-        NATIVE_BENCHMARK_CONFIG_JSON
+        native_benchmark_config_json(extraction_timeout_secs)
     }
 }
 
-fn benchmark_base_args(batch: bool, content_format: &str, tesseract_ocr_enabled: bool) -> Vec<String> {
-    base_args_with_config(batch, content_format, benchmark_config_json(tesseract_ocr_enabled))
+fn benchmark_base_args(
+    batch: bool,
+    content_format: &str,
+    tesseract_ocr_enabled: bool,
+    extraction_timeout_secs: u64,
+) -> Vec<String> {
+    base_args_with_config(
+        batch,
+        content_format,
+        &benchmark_config_json(tesseract_ocr_enabled, extraction_timeout_secs),
+    )
 }
 
 fn base_args_with_config(batch: bool, content_format: &str, config_json: &str) -> Vec<String> {
@@ -224,6 +253,8 @@ fn push_pipeline_args(args: &mut Vec<String>, pipeline: XbergPipeline) {
 /// * `pdf_backend` - PDF engine to select via `--pdf-backend`. `Native` reproduces today's
 ///   behavior and framework name exactly; `Pdfium` appends a `-pdfium` suffix to the framework
 ///   name so it never collides with (or silently replaces) an existing `Native` cohort.
+/// * `run_timeout` - The run's per-invocation `--timeout`; Xberg's own extraction limit is
+///   derived from it by [`extraction_timeout_secs`].
 ///
 /// # Returns
 /// * `Ok(SubprocessAdapter)` - Configured adapter ready for extraction
@@ -234,6 +265,7 @@ pub fn create_xberg_adapter(
     batch: bool,
     ocr_enabled: bool,
     pdf_backend: XbergPdfBackend,
+    run_timeout: Duration,
 ) -> Result<SubprocessAdapter> {
     if !ocr_enabled && pipeline_requires_ocr(pipeline) {
         return Err(crate::Error::Config(format!(
@@ -248,7 +280,15 @@ pub fn create_xberg_adapter(
         build_id,
         path: cli_path,
     };
-    adapter_with_identity(pipeline, output_format, batch, ocr_enabled, pdf_backend, build_identity)
+    adapter_with_identity(
+        pipeline,
+        output_format,
+        batch,
+        ocr_enabled,
+        pdf_backend,
+        run_timeout,
+        build_identity,
+    )
 }
 
 /// Builds the adapter for a located executable; split from [`create_xberg_adapter`] so the
@@ -259,6 +299,7 @@ pub(crate) fn adapter_with_identity(
     batch: bool,
     ocr_enabled: bool,
     pdf_backend: XbergPdfBackend,
+    run_timeout: Duration,
     build_identity: ExecutableBuildIdentity,
 ) -> Result<SubprocessAdapter> {
     let content_format = match output_format {
@@ -271,7 +312,12 @@ pub(crate) fn adapter_with_identity(
             pipeline,
             XbergPipeline::Baseline | XbergPipeline::Layout | XbergPipeline::LayoutV3
         );
-    let mut args = benchmark_base_args(batch, content_format, tesseract_ocr_enabled);
+    let mut args = benchmark_base_args(
+        batch,
+        content_format,
+        tesseract_ocr_enabled,
+        extraction_timeout_secs(run_timeout),
+    );
 
     push_pipeline_args(&mut args, pipeline);
 
@@ -359,6 +405,7 @@ pub fn create_xberg_steady_adapter(
     ocr_enabled: bool,
     pdf_backend: XbergPdfBackend,
     max_threads: Option<usize>,
+    run_timeout: Duration,
 ) -> Result<NativeAdapter> {
     if !matches!(
         pipeline,
@@ -370,7 +417,14 @@ pub fn create_xberg_steady_adapter(
         )));
     }
 
-    let config = steady_extraction_config(pipeline, output_format, ocr_enabled, pdf_backend, max_threads)?;
+    let config = steady_extraction_config(
+        pipeline,
+        output_format,
+        ocr_enabled,
+        pdf_backend,
+        max_threads,
+        run_timeout,
+    )?;
     let name = xberg_steady_framework_name(pipeline, output_format, batch, pdf_backend);
     let reject_layout_failures = pipeline_runs_layout(pipeline);
     if batch {
@@ -381,10 +435,10 @@ pub fn create_xberg_steady_adapter(
             adapter
         });
     }
+    let cold_adapter = create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend, run_timeout)?;
     let cold_adapter = match max_threads {
-        Some(max_threads) => create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend)?
-            .with_xberg_max_threads(max_threads),
-        None => create_xberg_adapter(pipeline, output_format, false, ocr_enabled, pdf_backend)?,
+        Some(max_threads) => cold_adapter.with_xberg_max_threads(max_threads),
+        None => cold_adapter,
     };
     let adapter = NativeAdapter::with_identity_and_cold_adapter(name, config, cold_adapter);
     Ok(if reject_layout_failures {
@@ -400,8 +454,12 @@ fn steady_extraction_config(
     ocr_enabled: bool,
     pdf_backend: XbergPdfBackend,
     max_threads: Option<usize>,
+    run_timeout: Duration,
 ) -> Result<xberg::ExtractionConfig> {
-    let mut config: xberg::ExtractionConfig = serde_json::from_str(benchmark_config_json(ocr_enabled))?;
+    let mut config: xberg::ExtractionConfig = serde_json::from_str(&benchmark_config_json(
+        ocr_enabled,
+        extraction_timeout_secs(run_timeout),
+    ))?;
     if let Some(ocr) = config.ocr.as_mut()
         && ocr.backend == "tesseract"
     {
