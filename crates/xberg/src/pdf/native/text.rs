@@ -1366,7 +1366,11 @@ const MIN_DENSE_COLUMN_CONTENT_WIDTH_PTS: f32 = 200.0;
 // full justification would silently stop being repaired. 2% gives 11.9pt on
 // A4, still far above the intra-line word spacing (~3-5pt at a 10pt font) that
 // is the only thing this must not mistake for a column boundary.
-const MIN_DENSE_COLUMN_GUTTER_FRACTION: f32 = 0.02;
+//
+// 1.9%, not 2%: 2% of a US Letter page is 12.24pt, exactly the IEEE template's 0.17in
+// column gap, and justified glyphs leave 11.96pt of it as ink gap (2303.08597), so no
+// IEEE Letter page ever reached this repair. 1.9% is 11.63pt on Letter, 11.31pt on A4.
+const MIN_DENSE_COLUMN_GUTTER_FRACTION: f32 = 0.019;
 const MIN_DENSE_COLUMN_GUTTER_PTS: f32 = 10.0;
 // GH#1655: a gutter has a maximum plausible width too, not just a minimum. Without a
 // cap, `widest_gap_midpoint` accepts a producer-emitted blank line (two whitespace
@@ -4916,6 +4920,25 @@ mod tests {
                 "for readers seeking further detail here",
             ]
         );
+    }
+
+    /// 2303.08597: an IEEE Letter page keeps 11.96pt of its 0.17in column gap free of ink,
+    /// just under 2% of the page width.
+    #[test]
+    fn ieee_letter_column_gap_is_a_dense_gutter() {
+        let left_line = |row: usize| format!("Left column line {row} carries justified running prose");
+        let right_line = |row: usize| format!("Right column line {row} carries justified running prose");
+        let mut spans = Vec::new();
+        for row in 0..8 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(span_with_width(&left_line(row), 48.96, y, 251.06, 10.0, 10.0));
+            spans.push(span_with_width(&right_line(row), 311.98, y, 251.06, 10.0, 10.0));
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = (0..8).map(left_line).chain((0..8).map(right_line)).collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
     }
 
     /// 2305.09790 page 1: only the indented abstract shares lines with the right column, so its
