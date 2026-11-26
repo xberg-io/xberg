@@ -133,6 +133,35 @@ sudo apt-get install tesseract-ocr-fra  # French
 tesseract --list-langs
 ```
 
+### Tesseract model sets: fast and best
+
+Tesseract publishes two model sets under Apache-2.0: `tessdata_fast` (integer LSTM models) and
+`tessdata_best` (float LSTM models, about three times larger and slower). `ocr.tessdata_model`
+chooses which one xberg resolves and downloads. The default is `fast`.
+
+| Setting | Value |
+| ------- | ----- |
+| Config file / JSON | `ocr.tessdata_model = "fast"` or `"best"` |
+| Environment | `XBERG_OCR_TESSDATA_MODEL=best` |
+| CLI | `--ocr-tessdata-model best` |
+
+xberg looks for every requested language in one directory, in this order:
+
+1. `ocr.tessdata_path`, then `TESSDATA_PREFIX`. These are your choice and are used as given,
+   whichever model set they hold; `tessdata_model` does not apply to them.
+2. xberg's cache for the chosen set: `XBERG_CACHE_DIR/tessdata/fast/` or `XBERG_CACHE_DIR/tessdata/best/`.
+3. For `fast` only: the flat `XBERG_CACHE_DIR/tessdata/` that earlier releases downloaded into, then
+   the system directories (Homebrew, `apt`, the Docker images). Those hold `tessdata_fast`, so they
+   never serve a `best` request.
+4. Otherwise xberg downloads the missing languages into the set's cache directory, pinned to one
+   upstream revision per set and checked against a SHA-256 digest.
+
+Each set keeps its own files, so a request never mixes sets and the OCR result cache keeps separate
+entries per set. `xberg cache warm --tessdata-model best --tessdata-languages eng,deu` prefetches
+`best` models for an offline host. WebAssembly and mobile builds always default to `fast`; the Wasm
+package bundles only `tessdata_fast` English and rejects `best` unless you pass the model bytes in
+`tessdata_bytes`.
+
 ### Tesseract in Wasm
 
 The Wasm package has no packaged helper that wires up a Tesseract backend for you (there is no
