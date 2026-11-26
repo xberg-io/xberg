@@ -108,6 +108,8 @@ pub fn compute_quality_with_structure(
         return compute_quality(extracted, ground_truth);
     }
 
+    // Leading front matter is metadata, not body text, for TF1 and SF1 alike. ~keep
+    let extracted = crate::markdown_quality::strip_leading_front_matter(extracted);
     let mut metrics = compute_quality(extracted, ground_truth);
 
     if let Some(md_gt) = ground_truth_markdown {

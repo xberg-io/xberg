@@ -76,6 +76,36 @@ pub(crate) fn md_parser_options() -> pulldown_cmark::Options {
     opts
 }
 
+/// The markdown after a leading YAML front-matter block, or all of it when it has none.
+///
+/// Front matter is document metadata, not body content, whichever framework writes it. The
+/// block is an opening `---` line, a non-blank first line, and a closing `---` or `...` line,
+/// and only one at the very start counts: a later `---` stays a thematic break. That is why
+/// this is not pulldown-cmark's `ENABLE_YAML_STYLE_METADATA_BLOCKS`, which also takes a
+/// `---`-fenced block in the middle of a document as metadata.
+pub(crate) fn strip_leading_front_matter(md: &str) -> &str {
+    let mut lines = md.split_inclusive('\n');
+    let Some(opening) = lines.next() else {
+        return md;
+    };
+    if opening.trim_end() != "---" {
+        return md;
+    }
+    let mut consumed = opening.len();
+    for (index, line) in lines.enumerate() {
+        consumed += line.len();
+        let trimmed = line.trim_end();
+        let closes = trimmed == "---" || trimmed == "...";
+        if index == 0 && (closes || trimmed.is_empty()) {
+            return md;
+        }
+        if closes {
+            return &md[consumed..];
+        }
+    }
+    md
+}
+
 /// The TeX of an `Event::InlineMath`: pulldown-cmark reads code math, `` $`x`$ ``, as inline
 /// math that keeps its backticks.
 pub(crate) fn inline_math_tex(text: &str) -> &str {
@@ -84,7 +114,8 @@ pub(crate) fn inline_math_tex(text: &str) -> &str {
         .unwrap_or(text)
 }
 
-/// Parse a markdown string into a sequence of typed blocks using pulldown-cmark.
+/// Parse a markdown string into a sequence of typed blocks using pulldown-cmark, after
+/// [`strip_leading_front_matter`].
 ///
 /// This uses a proper CommonMark parser, so it correctly handles all markdown
 /// variants: fenced and indented code blocks, ATX and setext headings, different
@@ -93,7 +124,7 @@ pub fn parse_markdown_blocks(md: &str) -> Vec<MdBlock> {
     use pulldown_cmark::Parser;
 
     let mut state = BlockAccumulator::default();
-    for event in Parser::new_ext(md, md_parser_options()) {
+    for event in Parser::new_ext(strip_leading_front_matter(md), md_parser_options()) {
         if state.handle_block_tag(&event) || state.handle_table_tag(&event) || state.handle_inline_tag(&event) {
             continue;
         }
@@ -476,6 +507,55 @@ mod tests {
         assert_eq!(blocks[1].block_type, MdBlockType::Heading2);
         assert_eq!(blocks[2].block_type, MdBlockType::Heading3);
         assert_eq!(blocks[3].block_type, MdBlockType::Paragraph);
+    }
+
+    #[test]
+    fn leading_front_matter_is_not_parsed_as_a_break_and_a_heading() {
+        let with_front_matter = "---\ntitle: Complex Table Test\nmeta-generator: pandoc\n---\n\n# Report\n\nBody.\n";
+        let blocks = parse_markdown_blocks(with_front_matter);
+        let without = parse_markdown_blocks("# Report\n\nBody.\n");
+        assert_eq!(
+            blocks
+                .iter()
+                .map(|b| (b.block_type, b.content.as_str()))
+                .collect::<Vec<_>>(),
+            without
+                .iter()
+                .map(|b| (b.block_type, b.content.as_str()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_dashed_block_after_the_start_stays_a_break_and_a_setext_heading() {
+        let md = "Intro.\n\n---\ntitle: X\n---\n";
+        assert_eq!(strip_leading_front_matter(md), md);
+        let blocks = parse_markdown_blocks(md);
+        assert!(
+            blocks
+                .iter()
+                .any(|b| b.block_type == MdBlockType::Heading2 && b.content == "title: X"),
+            "{:?}",
+            blocks
+                .iter()
+                .map(|b| (b.block_type, b.content.clone()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn markdown_without_front_matter_is_left_untouched() {
+        for md in [
+            "",
+            "# Title\n\nBody.\n",
+            "-----\n\nname: Ada\n",
+            "---\n\ntitle: blank first line\n---\n",
+            "---\nnever closed\n",
+            " ---\nindented: yes\n---\n",
+        ] {
+            assert_eq!(strip_leading_front_matter(md), md, "{md:?}");
+        }
+        assert_eq!(strip_leading_front_matter("---\na: b\n...\nBody"), "Body");
     }
 
     #[test]

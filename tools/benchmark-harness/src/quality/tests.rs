@@ -534,3 +534,41 @@ fn should_expose_reading_order_score_via_compute_quality_without_moving_quality_
         "reading_order_score is report-only and must not move quality_score"
     );
 }
+
+#[test]
+fn should_exclude_leading_front_matter_from_markdown_text_and_structure_scores() {
+    let ground_truth = "Report\n\nBody text here.";
+    let ground_truth_markdown = "# Report\n\nBody text here.\n";
+    let body = "# Report\n\nBody text here.\n";
+    let with_front_matter = format!("---\ntitle: Complex Table Test\nmeta-viewport: width=device-width\n---\n\n{body}");
+
+    let stripped = compute_quality_with_structure(
+        &with_front_matter,
+        ground_truth,
+        Some(ground_truth_markdown),
+        OutputFormat::Markdown,
+    );
+    let plain_body =
+        compute_quality_with_structure(body, ground_truth, Some(ground_truth_markdown), OutputFormat::Markdown);
+
+    assert_eq!(stripped.f1_score_text, 1.0);
+    assert_eq!(stripped.f1_score_layout, plain_body.f1_score_layout);
+    assert_eq!(stripped.quality_score, plain_body.quality_score);
+    assert_eq!(
+        structural_sidecar::score_markdown(&with_front_matter, ground_truth_markdown).sf1,
+        structural_sidecar::score_markdown(body, ground_truth_markdown).sf1
+    );
+}
+
+#[test]
+fn should_score_markdown_without_front_matter_exactly_as_before() {
+    let ground_truth = "Title\n\nOne two three.\n\nFour five.";
+    let extracted = "# Title\n\nOne two three.\n\n-----\n\nFour five six.\n";
+
+    let metrics = compute_quality_with_structure(extracted, ground_truth, None, OutputFormat::Markdown);
+
+    assert_eq!(
+        metrics.f1_score_text,
+        compute_quality(extracted, ground_truth).f1_score_text
+    );
+}
