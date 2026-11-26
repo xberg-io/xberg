@@ -120,8 +120,7 @@ jobs:
           set -euo pipefail
           CARGO_TARGET_DIR="$RUNNER_TEMP/order-file-target" python3 scripts/ci/rust/order_file.py generate \
             --work-dir "$RUNNER_TEMP/order-file" --out "$RUNNER_TEMP/xberg.order" \
-            -- --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract \
-            --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'
+            -- --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'
           rm -rf "$RUNNER_TEMP/order-file-target"
 
       # `ort-dynamic` matches the released CLI: ONNX Runtime is not linked and loads on first
