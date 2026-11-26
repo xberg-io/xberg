@@ -22,7 +22,7 @@ use crate::aggregate::{
     NewConsolidatedResults, PerFixtureRow, PerformancePercentiles, SCHEMA_VERSION, comparison_for_cohort,
     extract_framework_and_mode,
 };
-use crate::bench_matrix::{Cohort, CohortContract, ExecutionMode, MatrixEntry};
+use crate::bench_matrix::{Cohort, CohortContract, ExecutionMode, MatrixEntry, MatrixProfile};
 use crate::fixture::Fixture;
 use crate::provenance::RunProvenance;
 use crate::types::{BenchmarkResult, ErrorKind, OcrStatus, OutputFormat, PerformanceMetrics, QualityMetrics};
@@ -57,13 +57,25 @@ pub struct ValidateArtifactsArgs {
     pub run_id: Option<String>,
     /// Benchmark iterations every `provenance.json`/`results.json` must record.
     pub iterations: usize,
+    /// Which cell set the run produced; see [`Cohort::contract_for`].
+    pub profile: MatrixProfile,
 }
 
 /// Validate one cohort's benchmark artifact contract, dispatching to artifact or aggregate mode.
 ///
 /// Returns a human-readable summary line on success, matching the Python script's stdout.
 pub fn validate(args: &ValidateArtifactsArgs) -> Result<String> {
-    let contract = args.cohort.contract();
+    let contract = args.cohort.contract_for(args.profile);
+    // An empty contract would accept an empty directory, so a cohort the profile does not run
+    // is a caller error, never a pass.
+    require(
+        !contract.matrix.is_empty(),
+        format!(
+            "cohort {} has no cells in the {:?} profile",
+            args.cohort.as_str(),
+            args.profile
+        ),
+    )?;
     match &args.aggregated_file {
         Some(aggregated_file) => {
             let default_fixtures_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");

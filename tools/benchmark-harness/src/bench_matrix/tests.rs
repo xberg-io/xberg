@@ -352,3 +352,40 @@ fn workflow_cohort_manifests_exist_and_pinned_ones_resolve() {
         }
     }
 }
+
+#[test]
+fn full_profile_contract_is_the_release_contract() {
+    for cohort in Cohort::ALL {
+        let full: Vec<String> = cohort
+            .contract()
+            .matrix
+            .into_iter()
+            .map(|entry| entry.artifact)
+            .collect();
+        let profiled: Vec<String> = cohort
+            .contract_for(MatrixProfile::Full)
+            .matrix
+            .into_iter()
+            .map(|entry| entry.artifact)
+            .collect();
+        assert_eq!(profiled, full, "{}", cohort.as_str());
+    }
+}
+
+#[test]
+fn smoke_profile_keeps_exactly_the_smoke_cells_all_required() {
+    let expected: [(Cohort, usize); 3] = [(Cohort::Native, 4), (Cohort::Ocr, 1), (Cohort::Images, 1)];
+    let mut seen = HashSet::new();
+    for cohort in Cohort::ALL {
+        let smoke = cohort.contract_for(MatrixProfile::Smoke);
+        let count = expected
+            .iter()
+            .find(|(candidate, _)| *candidate == cohort)
+            .map_or(0, |(_, count)| *count);
+        assert_eq!(smoke.matrix.len(), count, "{} smoke cells", cohort.as_str());
+        assert!(smoke.matrix.iter().all(|entry| !entry.optional), "{}", cohort.as_str());
+        seen.extend(smoke.matrix.into_iter().map(|entry| entry.artifact));
+    }
+    let listed: HashSet<String> = SMOKE_ARTIFACTS.iter().map(|artifact| (*artifact).to_string()).collect();
+    assert_eq!(seen, listed, "every smoke artifact must name a release-contract cell");
+}

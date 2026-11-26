@@ -437,6 +437,9 @@ benchmark-harness validate-artifacts \
 benchmark-harness cohort-contract --cohort native
 ```
 
+Both commands take `--profile full|smoke` (default `full`). `smoke` restricts the contract to
+`bench_matrix::SMOKE_ARTIFACTS`, the cells a `profile: smoke` Benchmarks run produces.
+
 ### `consolidate` -- Merge multi-job results
 
 Combines benchmark results from parallel CI jobs into a single aggregated report with percentiles.

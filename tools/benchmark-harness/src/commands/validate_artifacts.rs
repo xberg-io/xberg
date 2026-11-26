@@ -1,6 +1,6 @@
 //! `validate-artifacts`: validates the benchmark artifact/aggregate contract for one cohort.
 
-use crate::cli::CliCohort;
+use crate::cli::{CliCohort, CliMatrixProfile};
 use benchmark_harness::Result;
 use benchmark_harness::validate_artifacts::{ValidateArtifactsArgs, validate};
 use clap::Args;
@@ -48,6 +48,10 @@ pub(crate) struct ValidateArtifactsCliArgs {
     /// Benchmark iterations every provenance.json/results.json must record
     #[arg(long, default_value = "3")]
     pub(crate) iterations: usize,
+
+    /// Which matrix profile the run produced; `smoke` expects exactly the smoke cells
+    #[arg(long, value_enum, default_value = "full")]
+    pub(crate) profile: CliMatrixProfile,
 }
 
 pub(crate) fn execute(cli_args: ValidateArtifactsCliArgs) -> Result<()> {
@@ -60,6 +64,7 @@ pub(crate) fn execute(cli_args: ValidateArtifactsCliArgs) -> Result<()> {
         source_sha: cli_args.source_sha,
         run_id: cli_args.run_id,
         iterations: cli_args.iterations,
+        profile: cli_args.profile.into(),
     };
 
     let message = validate(&args)?;

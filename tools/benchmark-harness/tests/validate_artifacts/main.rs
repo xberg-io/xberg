@@ -7,7 +7,7 @@
 //! BLAKE3 digest and byte length, which the synthetic bytes provide consistently.
 
 use benchmark_harness::aggregate::{FileTypeAggregation, NewConsolidatedResults, RankedFramework};
-use benchmark_harness::bench_matrix::{Cohort, CohortContract};
+use benchmark_harness::bench_matrix::{Cohort, CohortContract, MatrixProfile};
 use benchmark_harness::consolidate::RunProvenanceRecord;
 use benchmark_harness::provenance::{
     CorpusProvenance, FixtureProvenance, FrameworkProvenance, RepositoryProvenance, RunProvenance, TimingProvenance,
@@ -392,7 +392,12 @@ struct ArtifactScenario {
 }
 
 fn artifact_scenario(cohort: Cohort) -> ArtifactScenario {
-    let contract = cohort.contract();
+    artifact_scenario_for(cohort, MatrixProfile::Full)
+}
+
+/// A conformant artifact tree holding exactly `profile`'s cells, validated as `profile`.
+fn artifact_scenario_for(cohort: Cohort, profile: MatrixProfile) -> ArtifactScenario {
+    let contract = cohort.contract_for(profile);
     let tree = materialize_fixture_tree(cohort, &contract);
     let artifacts_dir = tree.cohort_manifest.parent().expect("root").join("artifacts");
     std::fs::create_dir_all(&artifacts_dir).expect("create artifacts dir");
@@ -414,6 +419,7 @@ fn artifact_scenario(cohort: Cohort) -> ArtifactScenario {
         source_sha: Some(SOURCE_SHA.to_string()),
         run_id: Some(RUN_ID.to_string()),
         iterations: ITERATIONS,
+        profile,
     };
 
     ArtifactScenario {
@@ -592,5 +598,6 @@ fn aggregate_args(cohort: Cohort, aggregated_file: PathBuf) -> ValidateArtifacts
         source_sha: None,
         run_id: None,
         iterations: ITERATIONS,
+        profile: MatrixProfile::Full,
     }
 }

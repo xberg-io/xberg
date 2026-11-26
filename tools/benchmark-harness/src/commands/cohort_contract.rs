@@ -4,10 +4,10 @@
 //! source of truth in `bench_matrix`.
 
 use benchmark_harness::Result;
-use benchmark_harness::bench_matrix::Cohort;
+use benchmark_harness::bench_matrix::{Cohort, MatrixProfile};
 
-pub(crate) fn cohort_contract_summary(cohort: Cohort) -> serde_json::Value {
-    let contract = cohort.contract();
+pub(crate) fn cohort_contract_summary(cohort: Cohort, profile: MatrixProfile) -> serde_json::Value {
+    let contract = cohort.contract_for(profile);
     let required = contract.matrix.iter().filter(|entry| !entry.optional).count();
     let optional = contract.matrix.iter().filter(|entry| entry.optional).count();
     let matrix = contract
@@ -35,8 +35,8 @@ pub(crate) fn cohort_contract_summary(cohort: Cohort) -> serde_json::Value {
     })
 }
 
-pub(crate) fn execute(cohort: Cohort) -> Result<()> {
-    let summary = cohort_contract_summary(cohort);
+pub(crate) fn execute(cohort: Cohort, profile: MatrixProfile) -> Result<()> {
+    let summary = cohort_contract_summary(cohort, profile);
     let json = serde_json::to_string(&summary)
         .map_err(|error| benchmark_harness::Error::Benchmark(format!("serialize cohort contract: {error}")))?;
     println!("{json}");
