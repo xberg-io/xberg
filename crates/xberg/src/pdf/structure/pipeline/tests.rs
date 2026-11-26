@@ -6541,6 +6541,69 @@ fn outline_recovery_splits_a_title_stacked_over_its_first_subsection() {
     );
 }
 
+fn sized_line(text: &str, font_size: f32) -> PdfLine {
+    let mut segment = seg(text, 0.0, 100.0);
+    segment.font_size = font_size;
+    let mut sized = line(vec![segment]);
+    sized.dominant_font_size = font_size;
+    sized
+}
+
+/// medium.pdf: a two-column page welded each column into one paragraph, so the bold `Methods`
+/// and the smaller sans sub-section titles under it sat inside body text, after a full stop,
+/// and no outline entry matched a paragraph. A title that only repeats a word of the body,
+/// or follows an unfinished sentence, stays in place.
+#[test]
+fn outline_recovery_splits_titles_out_of_a_welded_column() {
+    let column = para(vec![
+        sized_line("The outcome of treatment was related to IL28B variation.", 9.76),
+        bold_line("Methods", 10.26),
+        sized_line("Samples", 9.17),
+        sized_line("Pre-treatment serum samples from patients who were", 9.76),
+        sized_line("treated were investigated in this study as", 9.76),
+        sized_line("Statistical analysis", 9.17),
+        sized_line("of the cohort was planned. Each sample was", 9.76),
+        sized_line("sequenced in both directions.", 9.76),
+        sized_line("Statistical analysis", 9.17),
+        sized_line("Statistical significance was evaluated by Fisher's exact test.", 9.76),
+    ]);
+    let mut pages = vec![vec![column]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("Methods", 0, 1),
+        PdfOutlineEntry::test_entry("Samples", 1, 1),
+        PdfOutlineEntry::test_entry("Statistical analysis", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    let summary: Vec<(String, Option<u8>)> = pages[0]
+        .iter()
+        .map(|paragraph| (paragraph_text_raw(paragraph), paragraph.heading_level))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            (
+                "The outcome of treatment was related to IL28B variation.".to_string(),
+                None
+            ),
+            ("Methods".to_string(), Some(2)),
+            ("Samples".to_string(), Some(3)),
+            (
+                "Pre-treatment serum samples from patients who were treated were investigated in this study as \
+Statistical analysis of the cohort was planned. Each sample was sequenced in both directions."
+                    .to_string(),
+                None
+            ),
+            ("Statistical analysis".to_string(), Some(3)),
+            (
+                "Statistical significance was evaluated by Fisher's exact test.".to_string(),
+                None
+            ),
+        ]
+    );
+}
+
 #[test]
 fn outline_recovery_rejects_ambiguous_titles() {
     let mut pages = vec![vec![

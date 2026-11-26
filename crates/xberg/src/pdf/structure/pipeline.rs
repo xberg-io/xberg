@@ -9140,7 +9140,7 @@ fn split_stacked_outline_titles(all_pages: &mut [Vec<PdfParagraph>], outline_ent
         let mut index = 0;
         while index < page.len() {
             let split_at = (page[index].heading_level.is_none() && page[index].lines.len() > 1)
-                .then(|| stacked_title_line_count(&page[index], titles))
+                .then(|| outline_title_split_line(&page[index], titles))
                 .flatten();
             if let Some(line_count) = split_at {
                 let mut title = page[index].clone();
@@ -9157,28 +9157,62 @@ fn split_stacked_outline_titles(all_pages: &mut [Vec<PdfParagraph>], outline_ent
     }
 }
 
-/// How many leading lines of `paragraph` spell one of `titles`, when fewer than all of them
-/// do and those lines are set apart from the rest as a title is: bold, or in a larger size.
-fn stacked_title_line_count(paragraph: &PdfParagraph, titles: &ahash::AHashSet<String>) -> Option<usize> {
-    let mut prefix = String::new();
-    for (index, line) in paragraph.lines.iter().enumerate().take(paragraph.lines.len() - 1) {
-        for segment in &line.segments {
-            prefix.push(' ');
-            prefix.push_str(&segment.text);
+/// Most visual lines an outline title found inside a paragraph, after a sentence, may span.
+const MAX_INTERIOR_OUTLINE_TITLE_LINES: usize = 3;
+
+/// The line index at which to cut `paragraph` so an outline title of its page stands alone.
+///
+/// Leading lines that spell a title, set apart from the rest as a title is, are cut after the
+/// title (see [`split_stacked_outline_titles`]). A title can also sit inside a paragraph: a
+/// two-column article whose run of lines carries no break signal welds whole columns, section
+/// titles included (medium.pdf: `... IL28B variation. Methods Samples Pre-treatment serum ...`).
+/// There the cut goes before the title when the line ahead of it ends a sentence; the title's
+/// own leading cut then follows on the remainder.
+fn outline_title_split_line(paragraph: &PdfParagraph, titles: &ahash::AHashSet<String>) -> Option<usize> {
+    let line_count = paragraph.lines.len();
+    for start in 0..line_count - 1 {
+        if start > 0 && !line_ends_sentence(&paragraph.lines[start - 1]) {
+            continue;
         }
-        if titles.contains(&normalize_outline_title(&prefix)) {
-            let (title_lines, rest) = paragraph.lines.split_at(index + 1);
-            let title_size = title_lines
-                .iter()
-                .map(|line| line.dominant_font_size)
-                .fold(0.0, f32::max);
-            let rest_size = rest.iter().map(|line| line.dominant_font_size).fold(0.0, f32::max);
-            let set_apart =
-                title_lines.iter().all(|line| line.is_bold) || title_size > rest_size + SPARSE_FONT_TIER_TOLERANCE;
-            return set_apart.then_some(index + 1);
+        let max_end = if start == 0 {
+            line_count - 1
+        } else {
+            (start + MAX_INTERIOR_OUTLINE_TITLE_LINES).min(line_count - 1)
+        };
+        let mut prefix = String::new();
+        for end in start..max_end {
+            for segment in &paragraph.lines[end].segments {
+                prefix.push(' ');
+                prefix.push_str(&segment.text);
+            }
+            if titles.contains(&normalize_outline_title(&prefix)) {
+                if outline_title_set_apart(&paragraph.lines[start..=end], &paragraph.lines[end + 1..]) {
+                    return Some(if start == 0 { end + 1 } else { start });
+                }
+                break;
+            }
         }
     }
     None
+}
+
+/// Whether title lines stand apart from the lines after them as a title does: bold, or in
+/// another size tier (a smaller sans run-in title over serif body counts as much as a larger one).
+fn outline_title_set_apart(title_lines: &[super::types::PdfLine], rest: &[super::types::PdfLine]) -> bool {
+    let title_size = title_lines
+        .iter()
+        .map(|line| line.dominant_font_size)
+        .fold(0.0, f32::max);
+    let rest_size = rest.iter().map(|line| line.dominant_font_size).fold(0.0, f32::max);
+    title_lines.iter().all(|line| line.is_bold) || (title_size - rest_size).abs() > SPARSE_FONT_TIER_TOLERANCE
+}
+
+fn line_ends_sentence(line: &super::types::PdfLine) -> bool {
+    let last = line.segments.last().map_or("", |segment| segment.text.trim_end());
+    matches!(
+        last.chars().last(),
+        Some('.' | '?' | '!' | ':' | ';' | '\u{3002}' | '\u{FF1F}' | '\u{FF01}')
+    )
 }
 
 /// Bounds follow `finalize_paragraph`'s baseline-to-baseline-plus-height convention, so a split
