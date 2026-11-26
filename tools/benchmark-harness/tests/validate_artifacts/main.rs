@@ -178,7 +178,11 @@ fn supports_extension(framework: &str, extension: &str) -> bool {
         return true;
     }
     let supported: &[&str] = match framework {
-        "liteparse" => &["pdf"],
+        "liteparse" => &[
+            "pdf", "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg", "doc", "docx", "docm", "dot",
+            "dotm", "dotx", "odt", "ott", "rtf", "pages", "ppt", "pptx", "pptm", "pot", "potm", "potx", "odp", "otp",
+            "key", "xls", "xlsx", "xlsm", "xlsb", "ods", "ots", "csv", "tsv", "numbers",
+        ],
         "pymupdf4llm" => &["pdf", "epub", "fb2", "png", "jpg", "jpeg", "bmp", "tiff", "tif"],
         "docling" => &[
             "pdf", "docx", "pptx", "xlsx", "html", "md", "csv", "png", "jpg", "jpeg", "tiff", "tif", "bmp",

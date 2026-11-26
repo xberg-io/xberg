@@ -69,6 +69,8 @@ fn liteparse_batch_provenance_hashes_normalized_semantic_arguments() {
         "--num-workers".to_string(),
         "4".to_string(),
         "--quiet".to_string(),
+        "--ocr-backend".to_string(),
+        "tesseract".to_string(),
         "--no-ocr".to_string(),
     ];
 

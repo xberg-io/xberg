@@ -71,6 +71,10 @@ impl SubprocessAdapter {
             "--num-workers".to_string(),
             self.batch_workers.to_string(),
             "--quiet".to_string(),
+            // lit defaults to ocria-nano once that model package is pulled; pin Tesseract, the
+            // engine family xberg uses by default, so results do not depend on host model state.
+            "--ocr-backend".to_string(),
+            "tesseract".to_string(),
         ];
         if disable_ocr {
             args.push("--no-ocr".to_string());

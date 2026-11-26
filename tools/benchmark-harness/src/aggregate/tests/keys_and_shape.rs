@@ -7,8 +7,8 @@ use crate::types::OcrStatus;
 
 #[test]
 fn format_support_matrix_marks_declared_unsupported_pairs() {
-    // Corpus spans pdf/docx/html/rtf; xberg reads all four, liteparse is pdf-only, and
-    // docling reads pdf/docx/html but not rtf.
+    // Corpus spans pdf/docx/html/rtf; xberg reads all four, liteparse reads pdf and the
+    // LibreOffice-converted docx/rtf but not html, and docling reads pdf/docx/html but not rtf.
     let results = vec![
         create_test_result("xberg-markdown-baseline", "pdf", OcrStatus::NotUsed, 10, 1.0, 1024),
         create_test_result("xberg-markdown-baseline", "docx", OcrStatus::NotUsed, 10, 1.0, 1024),
@@ -37,8 +37,8 @@ fn format_support_matrix_marks_declared_unsupported_pairs() {
     );
     assert_eq!(
         support.unsupported.get("liteparse"),
-        Some(&vec!["docx".to_string(), "html".to_string(), "rtf".to_string()]),
-        "liteparse is pdf-only, so every non-pdf corpus format is unsupported"
+        Some(&vec!["html".to_string()]),
+        "liteparse declares docx/rtf through LibreOffice but has no html reader"
     );
     assert_eq!(
         support.unsupported.get("docling"),

@@ -38,7 +38,7 @@ fn coverage_adjusted_quality(value: f64, performance: &PerformancePercentiles) -
 /// # Semantics (Bug A: mismatched per-framework corpora)
 ///
 /// Frameworks in real benchmark runs attempt wildly different sets of file types (e.g.
-/// `liteparse` is PDF-only, `docling` never attempts `json`/`txt`, `xberg` runs the full
+/// `mineru` is PDF/image-only, `docling` never attempts `json`/`txt`, `xberg` runs the full
 /// corpus). Naively weighting each framework's own quality mean by whatever file types *it*
 /// happened to attempt makes the "overall" ranking compare non-comparable bases — a framework
 /// that only ever attempted its best file type would look artificially strong.

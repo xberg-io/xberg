@@ -497,7 +497,7 @@ pub struct ConsolidationMetadata {
     /// File types the "overall" markdown quality ranking is actually computed over: the
     /// intersection of file types every markdown candidate framework attempted. When this
     /// degenerates to a single type (e.g. `["pdf"]`, because a PDF-only framework like
-    /// liteparse/mineru is in the pool), `quality_ranking_markdown` is NOT a true all-format
+    /// mineru is in the pool), `quality_ranking_markdown` is NOT a true all-format
     /// "overall" ranking — it reflects only these types. Consumers must read it accordingly.
     #[serde(default)]
     pub shared_corpus_markdown: Vec<String>,

@@ -1580,6 +1580,8 @@ jobs:
       matrix:
         mode: [single-file, batch]
         output_format: [markdown, plaintext]
+        # PDF cohorts only, so no LibreOffice is installed: the harness routes liteparse's
+        # office formats only when a LibreOffice binary is discoverable, and images always.
         cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4]
     steps:
       - uses: actions/checkout@v7

@@ -32,7 +32,22 @@ const _: () = assert!(MINERU_EXTRACTION_TIMEOUT_SECS + PYTHON_TIMEOUT_MARGIN_SEC
 const _: () = assert!(MINERU_MAX_TIMEOUT_SECS > PYMUPDF4LLM_MAX_TIMEOUT_SECS);
 const LITEPARSE_BINARY: &str = "lit";
 const LITEPARSE_VERSION_PREFIX: &str = "lit ";
-const LITEPARSE_REQUIRED_BATCH_OPTIONS: [&str; 3] = ["--format", "--no-ocr", "--num-workers"];
+const LITEPARSE_REQUIRED_BATCH_OPTIONS: [&str; 4] = ["--format", "--no-ocr", "--num-workers", "--ocr-backend"];
+/// Formats `lit` 2.21 rasterizes natively (`IMAGE_EXTENSIONS` in liteparse's `src/conversion.rs`).
+const LITEPARSE_IMAGE_FORMATS: [&str; 9] = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg"];
+/// Formats `lit` 2.21 converts to PDF through LibreOffice (its office, presentation and
+/// spreadsheet extension lists); without a LibreOffice binary every one of them fails.
+const LITEPARSE_LIBREOFFICE_FORMATS: [&str; 28] = [
+    "doc", "docx", "docm", "dot", "dotm", "dotx", "odt", "ott", "rtf", "pages", "ppt", "pptx", "pptm", "pot", "potm",
+    "potx", "odp", "otp", "key", "xls", "xlsx", "xlsm", "xlsb", "ods", "ots", "csv", "tsv", "numbers",
+];
+/// Commands `lit` resolves on PATH before its fixed install locations, in its own order.
+const LIBREOFFICE_COMMANDS: [&str; 2] = ["libreoffice", "soffice"];
+const LIBREOFFICE_INSTALL_PATHS: [&str; 3] = [
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    "/Applications/LibreOffice.app/Contents/MacOS/libreoffice",
+    "C:\\Program Files\\Libreoffice\\program\\soffice.exe",
+];
 const MINERU_BATCH_CAPABILITY: BatchCapability = BatchCapability {
     entry_point: BatchEntryPoint::MineruParser,
     timing_scope: BatchTimingScope::ColdEndToEndSubprocess,
@@ -46,7 +61,9 @@ const MINERU_BATCH_CAPABILITY: BatchCapability = BatchCapability {
 /// Format lists are based on comprehensive research of each framework's actual capabilities.
 fn get_supported_formats(framework_name: &str) -> Vec<String> {
     match framework_name {
-        "liteparse" => vec!["pdf".to_string()],
+        // Declared capability with LibreOffice present; the adapter routes only what this host can
+        // convert (see `liteparse_runtime_formats`).
+        "liteparse" => liteparse_runtime_formats(true),
 
         "pymupdf4llm" => vec![
             "pdf", "epub", "fb2", "svg", "txt", "png", "jpg", "jpeg", "bmp", "tiff", "tif",
@@ -199,6 +216,8 @@ pub fn create_markitdown_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
 /// - Single-file mode: `lit parse <file> --format text|markdown` per file
 /// - Batch mode: `lit batch-parse <input_dir> <output_dir> --format text|markdown`
 /// - Both plaintext and markdown output formats
+/// - PDF and images always; office formats only when a LibreOffice binary is discoverable,
+///   so a host without one never routes fixtures that would fail on the missing converter.
 pub fn create_liteparse_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let liteparse_command = which::which(LITEPARSE_BINARY).map_err(|_| {
         crate::Error::Config("lit (liteparse) not found. Install with: cargo install liteparse".to_string())
@@ -210,7 +229,12 @@ pub fn create_liteparse_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> 
     let mut args = vec![script_path.to_string_lossy().to_string()];
     args.push(ocr_flag(ocr_enabled));
 
-    let supported_formats = get_supported_formats("liteparse");
+    let libreoffice = discover_libreoffice();
+    match &libreoffice {
+        Some(path) => tracing::info!(libreoffice = %path.display(), "liteparse office formats enabled"),
+        None => tracing::info!("liteparse office formats disabled: no LibreOffice binary found"),
+    }
+    let supported_formats = liteparse_runtime_formats(libreoffice.is_some());
     Ok(SubprocessAdapter::with_batch_capability(
         "liteparse",
         command,
@@ -227,6 +251,42 @@ pub fn create_liteparse_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> 
     .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS))
     .with_native_batch_command(liteparse_command)
     .with_format_aware(true))
+}
+
+/// Formats the liteparse adapter routes: PDF and natively rasterized images always, plus the
+/// LibreOffice-converted formats when `office_converter_available`.
+fn liteparse_runtime_formats(office_converter_available: bool) -> Vec<String> {
+    let office: &[&str] = if office_converter_available {
+        &LITEPARSE_LIBREOFFICE_FORMATS
+    } else {
+        &[]
+    };
+    std::iter::once("pdf")
+        .chain(LITEPARSE_IMAGE_FORMATS)
+        .chain(office.iter().copied())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Finds the LibreOffice binary `lit` would use, mirroring its lookup order.
+fn discover_libreoffice() -> Option<PathBuf> {
+    let install_paths = LIBREOFFICE_INSTALL_PATHS.map(Path::new);
+    discover_libreoffice_with(|command| which::which(command).ok(), &install_paths)
+}
+
+fn discover_libreoffice_with(
+    lookup_command: impl Fn(&str) -> Option<PathBuf>,
+    install_paths: &[&Path],
+) -> Option<PathBuf> {
+    LIBREOFFICE_COMMANDS
+        .iter()
+        .find_map(|command| lookup_command(command))
+        .or_else(|| {
+            install_paths
+                .iter()
+                .find(|path| path.is_file())
+                .map(|path| path.to_path_buf())
+        })
 }
 
 fn verify_liteparse_cli(command: &Path) -> Result<()> {
@@ -631,7 +691,7 @@ if [ "$1" = "--version" ]; then
   exit 0
 fi
 if [ "$1" = "batch-parse" ] && [ "$2" = "--help" ]; then
-  echo "--format --no-ocr --num-workers"
+  echo "--format --no-ocr --num-workers --ocr-backend"
   exit 0
 fi
 exit 2
@@ -639,6 +699,99 @@ exit 2
         );
 
         assert!(verify_liteparse_cli(&command).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn liteparse_probe_rejects_cli_without_ocr_backend_selector() {
+        let (_temp, command) = fake_liteparse(
+            r#"
+if [ "$1" = "--version" ]; then
+  echo "lit 2.8.0"
+  exit 0
+fi
+if [ "$1" = "batch-parse" ] && [ "$2" = "--help" ]; then
+  echo "--format --no-ocr --num-workers"
+  exit 0
+fi
+exit 2
+"#,
+        );
+
+        let error = verify_liteparse_cli(&command).expect_err("the pinned OCR backend flag must be supported");
+        assert!(error.to_string().contains("native batch-parse interface"));
+    }
+
+    #[test]
+    fn liteparse_routes_pdf_and_images_without_libreoffice() {
+        let formats = liteparse_runtime_formats(false);
+
+        assert_eq!(
+            formats,
+            ["pdf", "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg"]
+        );
+        for office in ["docx", "doc", "pptx", "xlsx", "odt", "rtf", "csv"] {
+            assert!(
+                !formats.iter().any(|format| format == office),
+                "{office} needs LibreOffice and must not be routed without it"
+            );
+        }
+    }
+
+    #[test]
+    fn liteparse_routes_office_formats_when_libreoffice_is_available() {
+        let formats = liteparse_runtime_formats(true);
+
+        assert_eq!(
+            formats.len(),
+            1 + LITEPARSE_IMAGE_FORMATS.len() + LITEPARSE_LIBREOFFICE_FORMATS.len()
+        );
+        for format in [
+            "pdf", "png", "jpg", "docx", "doc", "pptx", "ppt", "xlsx", "odt", "rtf", "csv", "tsv",
+        ] {
+            assert!(formats.iter().any(|item| item == format), "{format} must be routed");
+        }
+        for unsupported in ["html", "md", "txt", "epub", "eml", "msg", "json", "jp2", "heif"] {
+            assert!(
+                !formats.iter().any(|item| item == unsupported),
+                "lit 2.21 rejects .{unsupported} as an unsupported file format"
+            );
+        }
+    }
+
+    #[test]
+    fn liteparse_declared_formats_include_libreoffice_conversions() {
+        assert_eq!(declared_supported_formats("liteparse"), liteparse_runtime_formats(true));
+    }
+
+    #[test]
+    fn libreoffice_discovery_prefers_path_commands_in_lit_order() {
+        let found = discover_libreoffice_with(
+            |command| (command != "libreoffice").then(|| PathBuf::from(format!("/usr/bin/{command}"))),
+            &[],
+        );
+
+        assert_eq!(found, Some(PathBuf::from("/usr/bin/soffice")));
+    }
+
+    #[test]
+    fn libreoffice_discovery_falls_back_to_existing_install_path() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let installed = temp.path().join("soffice");
+        std::fs::write(&installed, b"").expect("write fake soffice");
+        let missing = temp.path().join("missing-soffice");
+
+        let found = discover_libreoffice_with(|_| None, &[missing.as_path(), installed.as_path()]);
+
+        assert_eq!(found, Some(installed));
+    }
+
+    #[test]
+    fn libreoffice_discovery_reports_none_without_any_binary() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let missing = temp.path().join("soffice");
+
+        assert_eq!(discover_libreoffice_with(|_| None, &[missing.as_path()]), None);
     }
 
     #[cfg(unix)]

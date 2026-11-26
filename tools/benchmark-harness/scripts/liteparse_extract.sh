@@ -11,6 +11,7 @@ for arg in "$@"; do
     FORMAT="${arg#--format=}"
     ;;
   --ocr)
+    # lit OCRs by default; only --no-ocr turns it off, so OCR on means passing no flag.
     OCR_FLAG=""
     ;;
   --no-ocr)
@@ -47,14 +48,18 @@ if [ ! -f "$FILE_PATH" ]; then
   exit 1
 fi
 
+# lit defaults to ocria-nano once that model package is pulled; pin Tesseract, the engine
+# family xberg uses by default, so results do not depend on host model state.
+OCR_BACKEND_FLAGS="--ocr-backend tesseract"
+
 START=$(date +%s%N)
 
 if command -v timeout &>/dev/null; then
-  CONTENT=$(timeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet)
+  CONTENT=$(timeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_BACKEND_FLAGS $OCR_FLAG --quiet)
 elif command -v gtimeout &>/dev/null; then
-  CONTENT=$(gtimeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet)
+  CONTENT=$(gtimeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_BACKEND_FLAGS $OCR_FLAG --quiet)
 else
-  CONTENT=$(lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet)
+  CONTENT=$(lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_BACKEND_FLAGS $OCR_FLAG --quiet)
 fi
 
 END=$(date +%s%N)
