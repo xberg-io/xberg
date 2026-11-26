@@ -4449,8 +4449,8 @@ pub(super) mod tests {
         let _unregister = Unregister;
 
         // Pin the free-memory figure the batch width is computed from. Letter pages cost about
-        // 21 MB each here, and the route reserves the document plus 512 MB, so a runner with
-        // less than roughly 700 MB free would size the batch below the budget and fail this on
+        // 29 MB each here, and the route reserves the document plus 512 MB, so a runner with
+        // less than roughly 750 MB free would size the batch below the budget and fail this on
         // its host size rather than on the behaviour under test. 8 GB is far above the bound,
         // so the width is decided by the thread budget, which is the thing being asserted.
         let _memory = PinnedAvailableMemory::set(8 * 1024 * 1024 * 1024);
@@ -4480,6 +4480,294 @@ pub(super) mod tests {
             observed, BUDGET,
             "expected {BUDGET} pages in flight at once for a {BUDGET}-thread budget over {PAGES} pages, \
              saw {observed}; a width of 4 means the batch is sized by max_content_size again"
+        );
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn batch_width_follows_the_recognition_sessions_that_read_it() {
+        assert_eq!(
+            bound_batch_to_recognition(8, None),
+            8,
+            "no admission limit keeps the width"
+        );
+        assert_eq!(bound_batch_to_recognition(8, Some(1)), 1);
+        assert_eq!(bound_batch_to_recognition(8, Some(3)), 3);
+        assert_eq!(
+            bound_batch_to_recognition(8, Some(0)),
+            1,
+            "a zero session count still reads one page per batch"
+        );
+        assert_eq!(
+            bound_batch_to_recognition(2, Some(8)),
+            2,
+            "more sessions than pages must not widen a batch memory or the thread budget narrowed"
+        );
+    }
+
+    /// The renderer's RGBA bitmap is resident beside the decoded RGB raster, the encoder's RGB
+    /// clone and the PNG buffer: 4 + 3 + 3 + 4 bytes a pixel plus the encoder's fixed buffer.
+    /// Leaving the RGBA bitmap out read 87 MB for a 300 DPI A4 scan whose render wave measured
+    /// about 115 MB a page.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn page_working_set_counts_the_rgba_render_bitmap() {
+        let images_config = crate::core::config::ImageExtractionConfig {
+            target_dpi: 300,
+            auto_adjust_dpi: false,
+            min_dpi: 72,
+            max_dpi: 300,
+            ..Default::default()
+        };
+        // Letter at 300 DPI is 2550x3300.
+        let pixels: usize = 2550 * 3300;
+
+        assert_eq!(
+            ocr_page_working_set_bytes(612.0, 792.0, Some(&images_config)),
+            pixels * (4 + 3 + 3 + 4) + 256 * 1024
+        );
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    struct PinnedRecognitionSessions;
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    impl PinnedRecognitionSessions {
+        fn set(sessions: usize) -> Self {
+            assert_ne!(sessions, 0, "zero means 'not pinned', so it cannot be pinned");
+            TEST_RECOGNITION_SESSIONS.store(sessions, std::sync::atomic::Ordering::SeqCst);
+            Self
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    impl Drop for PinnedRecognitionSessions {
+        fn drop(&mut self) {
+            TEST_RECOGNITION_SESSIONS.store(0, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Reads every page it is handed at once and answers with the width of the raster it read,
+    /// so a test can tell which page's raster each read came from.
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    struct RasterWidthProbeBackend {
+        name: &'static str,
+        in_flight: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        peak: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    impl crate::plugins::Plugin for RasterWidthProbeBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for RasterWidthProbeBackend {
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            use std::sync::atomic::Ordering;
+
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(now, Ordering::SeqCst);
+            let width = image::load_from_memory(image_bytes).map_or(0, |image| image.width());
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            self.in_flight.fetch_sub(1, Ordering::SeqCst);
+            Ok(crate::types::ExtractedDocument {
+                content: format!("recognised page text with enough real words on it to clear the noise gate {width}"),
+                ..Default::default()
+            })
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[test]
+    #[serial_test::serial]
+    fn recognition_sessions_bound_only_the_direct_route() {
+        let probe: std::sync::Arc<dyn crate::plugins::OcrBackend> = std::sync::Arc::new(RasterWidthProbeBackend {
+            name: "recognition-session-gate-probe-backend",
+            in_flight: Default::default(),
+            peak: Default::default(),
+            calls: Default::default(),
+        });
+        let pipeline = crate::core::config::OcrPipelineConfig {
+            stages: Vec::new(),
+            quality_thresholds: Default::default(),
+        };
+
+        assert_eq!(
+            mixed_route_recognition_sessions(None, Some(&probe)),
+            None,
+            "a custom backend has no admission limit, so its batch keeps the thread budget's width"
+        );
+        assert_eq!(mixed_route_recognition_sessions(None, None), None);
+
+        let _pin = PinnedRecognitionSessions::set(2);
+        assert_eq!(mixed_route_recognition_sessions(None, Some(&probe)), Some(2));
+        assert_eq!(
+            mixed_route_recognition_sessions(Some(&pipeline), Some(&probe)),
+            None,
+            "the pipeline route reads through its stages' backends, so no one admission limit bounds it"
+        );
+    }
+
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[test]
+    #[serial_test::serial]
+    fn builtin_tesseract_batch_follows_the_process_recognition_limit() {
+        crate::plugins::ensure_ocr_backends_initialized();
+        let tesseract = crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .get("tesseract")
+            .expect("the built-in Tesseract backend must be registered");
+
+        assert_eq!(
+            mixed_route_recognition_sessions(None, Some(&tesseract)),
+            Some(crate::core::config::concurrency::recognition_concurrency())
+        );
+    }
+
+    /// A batch renders all of its pages before any is read and keeps every raster until the
+    /// batch's last read finishes, so the reads in flight at once are the rasters the route holds
+    /// at once. With recognition admitting two pages, an eight-page batch rendered six pages only
+    /// to wait. The unbounded run is the control: the same probe must see the full thread budget
+    /// there, or the bound assertion would pass on a route that never went wide. Both widths must
+    /// return the same text, per-page reads, warnings and failures, and each page must carry the
+    /// read of its own raster.
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn mixed_ocr_holds_no_more_rasters_than_recognition_reads() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        const BACKEND: &str = "mixed-ocr-recognition-width-probe-backend";
+        const PAGES: usize = 16;
+        const BUDGET: usize = 8;
+        const SESSIONS: usize = 2;
+
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
+        crate::plugins::register_ocr_backend(Arc::new(RasterWidthProbeBackend {
+            name: BACKEND,
+            in_flight: Arc::clone(&in_flight),
+            peak: Arc::clone(&peak),
+            calls: Arc::clone(&calls),
+        }))
+        .expect("registering the recognition-width probe backend must succeed");
+        struct Unregister;
+        impl Drop for Unregister {
+            fn drop(&mut self) {
+                let _ = crate::plugins::unregister_ocr_backend(BACKEND);
+            }
+        }
+        let _unregister = Unregister;
+        let _memory = PinnedAvailableMemory::set(8 * 1024 * 1024 * 1024);
+
+        // Every page is 8pt wider than the one before, so each renders to a distinct width.
+        let media_boxes: Vec<(u32, u32)> = (0..PAGES as u32).map(|page| (200 + 8 * page, 200)).collect();
+        let pdf = build_minimal_pdf_with_media_boxes(&media_boxes);
+        let ocr_pages: Vec<u32> = (1..=PAGES as u32).collect();
+        let mut config = ExtractionConfig::default();
+        config.ocr = Some(crate::core::config::OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        });
+        config.concurrency = Some(crate::core::config::ConcurrencyConfig {
+            max_threads: Some(BUDGET),
+            max_concurrent_ocr: None,
+        });
+
+        let bounded = {
+            let _sessions = PinnedRecognitionSessions::set(SESSIONS);
+            extract_mixed_ocr_native("native", &[], &ocr_pages, &pdf, &config, None)
+                .await
+                .expect("the bounded per-page OCR route must complete")
+        };
+        let bounded_peak = peak.swap(0, Ordering::SeqCst);
+        let bounded_calls = calls.swap(0, Ordering::SeqCst);
+
+        let unbounded = extract_mixed_ocr_native("native", &[], &ocr_pages, &pdf, &config, None)
+            .await
+            .expect("the unbounded per-page OCR route must complete");
+        let unbounded_peak = peak.load(Ordering::SeqCst);
+        let unbounded_calls = calls.load(Ordering::SeqCst);
+
+        assert_eq!(
+            unbounded_peak, BUDGET,
+            "control: without a recognition bound the probe must see the {BUDGET}-page batch"
+        );
+        assert_eq!(
+            bounded_peak, SESSIONS,
+            "with {SESSIONS} recognition sessions the route must hold {SESSIONS} rasters at once, saw {bounded_peak}"
+        );
+        assert_eq!(
+            (bounded_calls, unbounded_calls),
+            (PAGES, PAGES),
+            "every page is read once"
+        );
+
+        assert_eq!(
+            bounded.0, unbounded.0,
+            "the combined text must not depend on batch width"
+        );
+        let sorted = |reads: &ahash::AHashMap<u32, String>| -> std::collections::BTreeMap<u32, String> {
+            reads.iter().map(|(page, text)| (*page, text.clone())).collect()
+        };
+        assert_eq!(sorted(&bounded.1), sorted(&unbounded.1));
+        assert_eq!(format!("{:?}", bounded.8), format!("{:?}", unbounded.8), "warnings");
+        assert_eq!(
+            format!("{:?}", bounded.9),
+            format!("{:?}", unbounded.9),
+            "page failures"
+        );
+
+        let widths: Vec<u32> = sorted(&bounded.1)
+            .into_iter()
+            .map(|(page, text)| {
+                text.rsplit(' ')
+                    .next()
+                    .and_then(|width| width.trim().parse().ok())
+                    .unwrap_or_else(|| panic!("page {page} must carry its raster width, got {text:?}"))
+            })
+            .collect();
+        assert_eq!(widths.len(), PAGES, "every page must have a read: {widths:?}");
+        assert!(
+            widths.windows(2).all(|pair| pair[0] < pair[1]),
+            "each page must carry the read of its own raster, in page order: {widths:?}"
         );
     }
 
