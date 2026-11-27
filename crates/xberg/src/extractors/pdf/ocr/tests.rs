@@ -9708,27 +9708,43 @@ Name: ___
         assert!(heuristically_restructured_ocr_pages(&pages, &[1000.0, 1000.0], &[], &config).is_some());
     }
 
-    /// Three OCR pages, each a large-font title, two body paragraphs and a "Page N of 3" folio
-    /// in the bottom margin.
+    /// Four OCR pages, each a large-font title and two body paragraphs; pages 2 to 4 end in a
+    /// "Page N of 4" folio in the bottom margin, so no running footer spans every page.
     #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
     fn folio_footed_ocr_pages() -> Vec<Vec<crate::pdf::structure::types::PdfParagraph>> {
-        (1..=3)
-            .map(|page| {
+        const PAGES: [(&str, &str, &str); 4] = [
+            (
+                "ANNUAL REPORT OVERVIEW",
+                "This report summarises the packaging commitments the organisation made this year.",
+                "Each commitment is scored against a published framework of five performance levels.",
+            ),
+            (
+                "REPORTING FRAMEWORK",
+                "The framework groups thirteen criteria into leadership, outcomes and operations.",
+                "Members answer every core criterion and as many recommended criteria as they can.",
+            ),
+            (
+                "OUR COMMITMENTS",
+                "The action plan below is a public commitment to improving packaging sustainability.",
+                "Members are encouraged to keep an internal plan with the steps behind each target.",
+            ),
+            (
+                "SIGN OFF",
+                "The chief financial officer approved this report on behalf of the whole organisation.",
+                "Questions about the report can be sent to the covenant office by email or by phone.",
+            ),
+        ];
+        PAGES
+            .iter()
+            .enumerate()
+            .map(|(index, (title, first, second))| {
                 let mut doc = crate::types::internal::InternalDocument::new("test");
-                doc.push_element(ocr_font_block(&format!("SECTION NUMBER {page}"), "28", 10.0, 50.0));
-                doc.push_element(ocr_font_block(
-                    "This page describes the commitments the organisation made for the reporting year.",
-                    "11",
-                    60.0,
-                    90.0,
-                ));
-                doc.push_element(ocr_font_block(
-                    "Further prose explains how each commitment will be tracked and reported on later.",
-                    "11",
-                    100.0,
-                    130.0,
-                ));
-                doc.push_element(ocr_font_block(&format!("Page {page} of 3"), "11", 955.0, 975.0));
+                doc.push_element(ocr_font_block(title, "28", 10.0, 50.0));
+                doc.push_element(ocr_font_block(first, "11", 60.0, 90.0));
+                doc.push_element(ocr_font_block(second, "11", 100.0, 130.0));
+                if index > 0 {
+                    doc.push_element(ocr_font_block(&format!("Page {} of 4", index + 1), "11", 955.0, 975.0));
+                }
                 crate::pdf::structure::adapters::ocr_doc_to_paragraphs(
                     &doc,
                     1000,
@@ -9785,17 +9801,17 @@ Name: ___
     #[test]
     fn heuristically_restructured_ocr_pages_keeps_folios_and_the_headings_found() {
         let pages = folio_footed_ocr_pages();
-        assert!(!segment_structure_text(&pages, false).contains("Page 2 of 3"));
-        assert!(segment_structure_text(&pages, true).contains("Page 2 of 3"));
+        assert!(!segment_structure_text(&pages, false).contains("Page 2 of 4"));
+        assert!(segment_structure_text(&pages, true).contains("Page 2 of 4"));
 
         let config = ExtractionConfig {
             output_format: crate::core::config::OutputFormat::Markdown,
             ..ExtractionConfig::default()
         };
-        let doc = heuristically_restructured_ocr_pages(&pages, &[1000.0, 1000.0, 1000.0], &[], &config)
+        let doc = heuristically_restructured_ocr_pages(&pages, &[1000.0; 4], &[], &config)
             .expect("the retention gate must accept a pass that kept every folio");
 
-        assert!(crate::rendering::render_plain(&doc).contains("Page 2 of 3"));
+        assert!(crate::rendering::render_plain(&doc).contains("Page 2 of 4"));
         assert!(
             doc.elements
                 .iter()
