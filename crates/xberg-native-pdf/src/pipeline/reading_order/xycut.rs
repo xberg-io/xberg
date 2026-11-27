@@ -335,6 +335,9 @@ fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) 
         y_buckets.last_mut().expect("just pushed above").push(index);
     }
     let mut lines: Vec<Vec<usize>> = Vec::new();
+    // Collected at the first wide gap: a region of table cells has a wide gap in every row
+    // and no script-sized span at all, and scanning the region per gap was quadratic. ~keep
+    let mut script_candidates: Option<Vec<usize>> = None;
     for mut bucket in y_buckets {
         // A bucket is in `y` order, and a right-column line set up to 1pt higher sorts before
         // the left column's line, so the gap test below needs `x` order. ~keep
@@ -351,7 +354,7 @@ fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) 
                     && !(bridge_scripts
                         && script_fills_gap(
                             all_spans,
-                            indices,
+                            script_candidates.get_or_insert_with(|| script_sized_spans(all_spans, indices)),
                             (run_right, all_spans[index].bbox.left()),
                             all_spans[last].bbox.y,
                             max_font,
@@ -369,6 +372,24 @@ fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) 
         }
     }
     lines
+}
+
+/// The spans of `indices`, in order, small enough to be a script mark beside some line of the
+/// region: `SCRIPT_FONT_RATIO` of its largest font at most. A line's font is never larger than
+/// that, so every span `script_fills_gap` accepts for any line is among them. ~keep
+fn script_sized_spans(all_spans: &[TextSpan], indices: &[usize]) -> Vec<usize> {
+    let largest_font = indices
+        .iter()
+        .map(|&i| all_spans[i].font_size)
+        .fold(f32::NEG_INFINITY, f32::max);
+    indices
+        .iter()
+        .copied()
+        .filter(|&i| {
+            let font_size = all_spans[i].font_size;
+            font_size > 0.0 && font_size <= largest_font * SCRIPT_FONT_RATIO
+        })
+        .collect()
 }
 
 /// Whether a script-sized span (a superscript or subscript, which sorts into a `y` bucket of
@@ -652,6 +673,44 @@ impl XYCutStrategy {
         let synth_groups = self.partition_indexed(&synthetic, &synth_indices);
 
         self.expand_blocks(synth_groups, spans, &synthetic_origin)
+    }
+
+    /// Order `spans` for reading, consuming them. This is [`ReadingOrderStrategy::apply`]
+    /// without the `Result`: the XY-cut cannot fail, so a caller that owns its spans can
+    /// hand them over without keeping a copy for an error path. `column_gutter` is as for
+    /// [`Self::partition_region`]. ~keep
+    pub fn order_spans(&self, mut spans: Vec<TextSpan>, column_gutter: Option<f32>) -> Vec<OrderedTextSpan> {
+        // Detects multi-line heading runs and partitions with each
+        // wrapped heading standing as a single atomic block. The groups
+        // are ORIGINAL-span indices either way, so the move-out below
+        // works on the input Vec. ~keep
+        let heading_runs = self.find_heading_runs(&spans, column_gutter);
+
+        let index_groups: Vec<Vec<usize>> = if heading_runs.is_empty() {
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            self.partition_indexed(&spans, &indices)
+        } else {
+            self.partition_with_heading_runs(&mut spans, &heading_runs)
+        };
+
+        // Build result — moves spans out by index (no extra clone) ~keep
+        let mut ordered = Vec::with_capacity(spans.len());
+        // Convert spans to indexable storage for O(1) moves ~keep
+        let mut span_slots: Vec<Option<TextSpan>> = spans.into_iter().map(Some).collect();
+        let mut order_index = 0usize;
+
+        for (group_idx, group) in index_groups.iter().enumerate() {
+            for &i in group {
+                if let Some(span) = span_slots[i].take() {
+                    ordered.push(
+                        OrderedTextSpan::with_info(span, order_index, ReadingOrderInfo::xycut()).with_group(group_idx),
+                    );
+                    order_index += 1;
+                }
+            }
+        }
+
+        ordered
     }
 
     /// Detect contiguous bold/large-font runs that span ≥ 2 lines with
@@ -966,6 +1025,69 @@ impl XYCutStrategy {
             .collect()
     }
 
+    /// `partition_indexed` over `spans` with every heading run standing as one wide span,
+    /// answered as groups of ORIGINAL indices: what partitioning `synthesize_for_partition`'s
+    /// list and mapping the groups back through its origins gives, without cloning a span.
+    /// A run's first span in slice order carries the run's union bbox and joined text while
+    /// the partition runs, and the run's other spans are left out of the index list -- the
+    /// partition reads spans only through that list, and never an index's own value. `spans`
+    /// is as it was on return. ~keep
+    fn partition_with_heading_runs(&self, spans: &mut [TextSpan], runs: &[HeadingRun]) -> Vec<Vec<usize>> {
+        let mut in_run: Vec<Option<usize>> = vec![None; spans.len()];
+        for (r_idx, run) in runs.iter().enumerate() {
+            for &i in &run.span_indices {
+                in_run[i] = Some(r_idx);
+            }
+        }
+
+        let mut indices: Vec<usize> = Vec::with_capacity(spans.len());
+        let mut placeholders: Vec<(usize, Rect, String)> = Vec::with_capacity(runs.len());
+        let mut emitted_run = vec![false; runs.len()];
+        for (i, run_of_span) in in_run.iter().enumerate() {
+            match *run_of_span {
+                None => indices.push(i),
+                Some(r_idx) if !emitted_run[r_idx] => {
+                    let run = &runs[r_idx];
+                    let mut combined_text = String::new();
+                    for (k, &si) in run.span_indices.iter().enumerate() {
+                        if k > 0 {
+                            combined_text.push(' ');
+                        }
+                        combined_text.push_str(&spans[si].text);
+                    }
+                    placeholders.push((i, run.combined_bbox, combined_text));
+                    indices.push(i);
+                    emitted_run[r_idx] = true;
+                }
+                Some(_) => {}
+            }
+        }
+
+        for (i, bbox, text) in &mut placeholders {
+            std::mem::swap(&mut spans[*i].bbox, bbox);
+            std::mem::swap(&mut spans[*i].text, text);
+        }
+        let groups = self.partition_indexed(spans, &indices);
+        for (i, bbox, text) in placeholders {
+            spans[i].bbox = bbox;
+            spans[i].text = text;
+        }
+
+        groups
+            .into_iter()
+            .map(|group| {
+                let mut out = Vec::with_capacity(group.len());
+                for i in group {
+                    match in_run[i] {
+                        Some(r_idx) => out.extend(runs[r_idx].span_indices.iter().copied()),
+                        None => out.push(i),
+                    }
+                }
+                out
+            })
+            .collect()
+    }
+
     /// Index-based recursive partitioning — returns groups of indices into the input span slice.
     ///
     /// Avoids cloning TextSpan at every recursive split level. Spans are only
@@ -1138,7 +1260,9 @@ impl XYCutStrategy {
         // split entirely: `partition_region` already does the same for Y-bands via
         // `find_vertical_split_indexed` peeling ahead of `detect_two_column_prose`, for the
         // same reason. ~keep
-        if let Some(bands) = self.peel_full_width_line_bands(all_spans, indices) {
+        // One line grouping per node: the peel and the column cut both read it. ~keep
+        let lines = group_indices_into_lines(all_spans, indices);
+        if let Some(bands) = self.peel_full_width_line_bands(all_spans, indices, &lines) {
             let mut result = Vec::new();
             for band in bands {
                 result.extend(self.partition_indexed_depth(all_spans, &band, depth + 1));
@@ -1146,19 +1270,21 @@ impl XYCutStrategy {
             return result;
         }
 
-        let split_h = |s: &Self, sp: &[TextSpan], idx: &[usize]| s.find_horizontal_split_indexed(sp, idx);
-        let split_v = |s: &Self, sp: &[TextSpan], idx: &[usize]| s.find_vertical_split_indexed(sp, idx);
+        let split = |horizontal: bool| {
+            if horizontal {
+                self.find_horizontal_split_with_lines(all_spans, indices, Some(&lines))
+            } else {
+                self.find_vertical_split_indexed(all_spans, indices)
+            }
+        };
 
-        let first_split = if self.prefer_horizontal { split_h } else { split_v };
-        let second_split = if self.prefer_horizontal { split_v } else { split_h };
-
-        if let Some((a, b)) = first_split(self, all_spans, indices) {
+        if let Some((a, b)) = split(self.prefer_horizontal) {
             let mut result = self.partition_indexed_depth(all_spans, &a, depth + 1);
             result.extend(self.partition_indexed_depth(all_spans, &b, depth + 1));
             return result;
         }
 
-        if let Some((a, b)) = second_split(self, all_spans, indices) {
+        if let Some((a, b)) = split(!self.prefer_horizontal) {
             let mut result = self.partition_indexed_depth(all_spans, &a, depth + 1);
             result.extend(self.partition_indexed_depth(all_spans, &b, depth + 1));
             return result;
@@ -1473,6 +1599,14 @@ impl XYCutStrategy {
         indices: &[usize],
         region_kind: RegionKind,
     ) -> Option<f32> {
+        // Positive identification of prose — required by the
+        // classifier to avoid the google_doc 2-col table
+        // sub-region false positive. Tested first: nothing below
+        // can answer `Some` without it. ~keep
+        if region_kind != RegionKind::Prose {
+            return None;
+        }
+
         if indices.len() < 8 {
             return None;
         }
@@ -1604,13 +1738,6 @@ impl XYCutStrategy {
             return None;
         }
 
-        // Positive identification of prose — required by the
-        // classifier to avoid the google_doc 2-col table
-        // sub-region false positive. ~keep
-        if region_kind != RegionKind::Prose {
-            return None;
-        }
-
         // Gutter midpoint as the cut. The cluster centres are the left
         // edges of the two columns; the gutter sits between the right
         // edge of column 1 and the left edge of column 2. We don't
@@ -1655,6 +1782,19 @@ impl XYCutStrategy {
         indices: &[usize],
         region_kind: RegionKind,
     ) -> Option<f32> {
+        // Prose gate — same safety as `detect_two_column_prose`.
+        // Tables with narrow cell gaps fail the classifier
+        // (`mean_chars < 8` → `Table`), preventing the gap-cluster
+        // signal from misfiring on tabular content. Short-verse
+        // two-column bodies now also pass this gate: although
+        // their `mean_chars <= 20`, `classify_region_kind`'s short-line
+        // central-corridor admission arm returns `Prose` for them, so a
+        // routed short-verse body is cut here rather than re-collapsed.
+        // Tested first: nothing below can answer `Some` without it. ~keep
+        if region_kind != RegionKind::Prose {
+            return None;
+        }
+
         if indices.len() < 24 {
             return None;
         }
@@ -1787,19 +1927,6 @@ impl XYCutStrategy {
             return None;
         }
 
-        // Prose gate — same safety as `detect_two_column_prose`.
-        // Tables with narrow cell gaps fail the classifier
-        // (`mean_chars < 8` → `Table`), preventing the gap-cluster
-        // signal from misfiring on tabular content. Short-verse
-        // two-column bodies now also pass this gate: although
-        // their `mean_chars <= 20`, `classify_region_kind`'s short-line
-        // central-corridor admission arm returns `Prose` for them, so a
-        // routed short-verse body is cut here rather than re-collapsed.
-        // ~keep
-        if region_kind != RegionKind::Prose {
-            return None;
-        }
-
         Some(best_center)
     }
 
@@ -1822,9 +1949,15 @@ impl XYCutStrategy {
     ///
     /// A line (already a continuous run of ink -- see `group_indices_into_lines`) is
     /// full-width when its inked extent reaches `FULL_WIDTH_LINE_FRACTION` of the region's
-    /// own width. GH#1808. ~keep
-    fn peel_full_width_line_bands(&self, all_spans: &[TextSpan], indices: &[usize]) -> Option<Vec<Vec<usize>>> {
-        let lines = group_indices_into_lines(all_spans, indices);
+    /// own width. GH#1808.
+    ///
+    /// `lines` is `group_indices_into_lines(all_spans, indices)`. ~keep
+    fn peel_full_width_line_bands(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: &[Vec<usize>],
+    ) -> Option<Vec<Vec<usize>>> {
         if lines.len() < MIN_PEELED_FULL_WIDTH_LINES {
             return None;
         }
@@ -1889,11 +2022,18 @@ impl XYCutStrategy {
     /// entirely on one side is unaffected: its majority side is trivially its only side, so
     /// this partitions identically to a per-span `left edge < split_x` test there. Ties (a
     /// line whose inked width splits exactly evenly) go left, matching the pre-existing
-    /// left-edge bias. GH#1808. ~keep
-    fn partition_lines_at(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> (Vec<usize>, Vec<usize>) {
-        let lines = group_indices_into_lines(all_spans, indices);
-        let mut goes_right: std::collections::HashMap<usize, bool> = std::collections::HashMap::new();
-        for line in &lines {
+    /// left-edge bias. GH#1808.
+    ///
+    /// `lines` is `group_indices_into_lines(all_spans, indices)`. ~keep
+    fn partition_lines_at(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: &[Vec<usize>],
+        split_x: f32,
+    ) -> (Vec<usize>, Vec<usize>) {
+        let mut goes_right = vec![false; all_spans.len()];
+        for line in lines {
             let mut left_width = 0.0f32;
             let mut right_width = 0.0f32;
             for &i in line {
@@ -1903,16 +2043,13 @@ impl XYCutStrategy {
             }
             let line_goes_right = right_width > left_width;
             for &i in line {
-                goes_right.insert(i, line_goes_right);
+                goes_right[i] = line_goes_right;
             }
         }
         // `Iterator::partition` sends predicate-true items into its FIRST returned vec, so
         // the predicate must test "belongs on the left" to produce `(left, right)` in that
         // order -- inverted, this silently swaps every region's two sides. ~keep
-        indices
-            .iter()
-            .copied()
-            .partition(|i| !goes_right.get(i).copied().unwrap_or(false))
+        indices.iter().copied().partition(|&i| !goes_right[i])
     }
 
     fn straddling_line_count(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> usize {
@@ -2132,6 +2269,18 @@ impl XYCutStrategy {
         all_spans: &[TextSpan],
         indices: &[usize],
     ) -> Option<(Vec<usize>, Vec<usize>)> {
+        self.find_horizontal_split_with_lines(all_spans, indices, None)
+    }
+
+    /// `find_horizontal_split_indexed` for a caller that already holds
+    /// `group_indices_into_lines(all_spans, indices)`; `None` groups them here, and only once
+    /// a candidate cut has survived the checks that do not need lines. ~keep
+    fn find_horizontal_split_with_lines(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: Option<&[Vec<usize>]>,
+    ) -> Option<(Vec<usize>, Vec<usize>)> {
         let profile = self.horizontal_projection_indexed(all_spans, indices)?;
 
         let split_x = if let Some((vs, ve, vw)) = self.find_valley(&profile) {
@@ -2204,7 +2353,15 @@ impl XYCutStrategy {
         // to the side holding the majority of its inked width, so a line entirely on one
         // side partitions exactly as `left edge < split_x` already did (unaffected), and
         // only a straddling line's assignment changes. ~keep
-        let (left, right) = self.partition_lines_at(all_spans, indices, split_x);
+        let grouped;
+        let lines: &[Vec<usize>] = match lines {
+            Some(lines) => lines,
+            None => {
+                grouped = group_indices_into_lines(all_spans, indices);
+                &grouped
+            }
+        };
+        let (left, right) = self.partition_lines_at(all_spans, indices, lines, split_x);
 
         if left.is_empty() || right.is_empty() {
             return None;
@@ -2282,11 +2439,11 @@ impl XYCutStrategy {
             return None;
         }
 
-        if self.cuts_label_value_rows(all_spans, indices, split_x) {
+        if self.cuts_label_value_rows(all_spans, lines, split_x) {
             return None;
         }
 
-        if self.cuts_numeric_table_rows(all_spans, indices, split_x) {
+        if self.cuts_numeric_table_rows(all_spans, lines, split_x) {
             return None;
         }
 
@@ -2310,9 +2467,9 @@ impl XYCutStrategy {
     /// a column line is a full column wide -- so a real gutter is unaffected. Cutting here
     /// would read every label before any value, so the caller falls back to a row cut.
     /// Rows on one exact baseline are not counted: they were never joined by the line
-    /// grouping either, and their handling is left as it was. ~keep
-    fn cuts_label_value_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
-        let lines = group_indices_into_lines(all_spans, indices);
+    /// grouping either, and their handling is left as it was. `lines` is the region's
+    /// `group_indices_into_lines`. ~keep
+    fn cuts_label_value_rows(&self, all_spans: &[TextSpan], lines: &[Vec<usize>], split_x: f32) -> bool {
         let extent = |line: &[usize]| -> (f32, f32, f32, f32) {
             line.iter().fold((f32::MAX, f32::MIN, f32::MIN, 0.0f32), |acc, &i| {
                 let span = &all_spans[i];
@@ -2326,7 +2483,7 @@ impl XYCutStrategy {
         };
         let mut left_lines = 0usize;
         let mut right_lines = 0usize;
-        for line in &lines {
+        for line in lines {
             let (line_min, line_max, _, _) = extent(line);
             if line_max <= split_x {
                 left_lines += 1;
@@ -2364,9 +2521,8 @@ impl XYCutStrategy {
     /// because two prose columns share baselines; a prose line is neither a number nor short,
     /// so it never counts here. Cutting would read a table column by column (1602.03238 page
     /// 24 read the first value column before the second), so the caller falls back to a row
-    /// cut. ~keep
-    fn cuts_numeric_table_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
-        let lines = group_indices_into_lines(all_spans, indices);
+    /// cut. `lines` is the region's `group_indices_into_lines`. ~keep
+    fn cuts_numeric_table_rows(&self, all_spans: &[TextSpan], lines: &[Vec<usize>], split_x: f32) -> bool {
         let run = |line: &[usize]| -> (f32, f32, f32, f32, bool) {
             let (left, right, y, font) = line.iter().fold((f32::MAX, f32::MIN, f32::MIN, 0.0f32), |acc, &i| {
                 let span = &all_spans[i];
@@ -2823,52 +2979,7 @@ struct ProjectionProfile {
 
 impl ReadingOrderStrategy for XYCutStrategy {
     fn apply(&self, spans: Vec<TextSpan>, context: &ReadingOrderContext) -> Result<Vec<OrderedTextSpan>> {
-        // Detects multi-line heading runs and routes the
-        // partition through synthetic-span space so the splitter treats
-        // each wrapped heading as a single atomic block. When no
-        // headings are found we use the original index-only path that
-        // avoids span clones during recursion. ~keep
-        let heading_runs = self.find_heading_runs(&spans, context.column_gutter);
-
-        let index_groups: Vec<Vec<usize>> = if heading_runs.is_empty() {
-            let indices: Vec<usize> = (0..spans.len()).collect();
-            self.partition_indexed(&spans, &indices)
-        } else {
-            let (synthetic, synthetic_origin) = self.synthesize_for_partition(&spans, &heading_runs);
-            let synth_indices: Vec<usize> = (0..synthetic.len()).collect();
-            let synth_groups = self.partition_indexed(&synthetic, &synth_indices);
-            // Project synthetic-space groups back to ORIGINAL-span
-            // indices (so the move-out below works on the input Vec). ~keep
-            synth_groups
-                .into_iter()
-                .map(|group| {
-                    let mut out = Vec::with_capacity(group.len());
-                    for synth_idx in group {
-                        out.extend(synthetic_origin[synth_idx].iter().copied());
-                    }
-                    out
-                })
-                .collect()
-        };
-
-        // Build result — moves spans out by index (no extra clone) ~keep
-        let mut ordered = Vec::with_capacity(spans.len());
-        // Convert spans to indexable storage for O(1) moves ~keep
-        let mut span_slots: Vec<Option<TextSpan>> = spans.into_iter().map(Some).collect();
-        let mut order_index = 0usize;
-
-        for (group_idx, group) in index_groups.iter().enumerate() {
-            for &i in group {
-                if let Some(span) = span_slots[i].take() {
-                    ordered.push(
-                        OrderedTextSpan::with_info(span, order_index, ReadingOrderInfo::xycut()).with_group(group_idx),
-                    );
-                    order_index += 1;
-                }
-            }
-        }
-
-        Ok(ordered)
+        Ok(self.order_spans(spans, context.column_gutter))
     }
 
     fn name(&self) -> &'static str {
@@ -3064,6 +3175,27 @@ mod tests {
         for (y, expected) in [(90.0, true), (89.875, false)] {
             let script = make_span_text(162.0, y, 7.0, 7.0, "i", 7.0);
             assert_eq!(script_fills_gap(&[script], &[0], (159.0, 172.0), 100.0, 10.0), expected);
+        }
+    }
+
+    #[test]
+    fn script_sized_spans_keeps_every_span_a_line_of_the_region_could_take_as_a_script() {
+        let fonts = [10.0, 7.0, 12.0, 9.0, 0.0, f32::NAN, 9.7];
+        let spans: Vec<TextSpan> = fonts
+            .iter()
+            .map(|&font| make_span_text(0.0, 0.0, 5.0, 5.0, "x", font))
+            .collect();
+        let indices = [6, 5, 4, 3, 2, 1, 0];
+        assert_eq!(script_sized_spans(&spans, &indices), vec![3, 1]);
+
+        for &line_font in &fonts {
+            for &i in &indices {
+                let fills = script_fills_gap(&spans, &[i], (-1.0, 6.0), 0.0, line_font);
+                assert!(
+                    !fills || script_sized_spans(&spans, &indices).contains(&i),
+                    "span {i} is a script beside a {line_font} pt line but was not collected"
+                );
+            }
         }
     }
 
@@ -3836,6 +3968,44 @@ mod tests {
             runs_single.is_empty(),
             "single-line bold runs must not produce a HeadingRun"
         );
+    }
+
+    /// `partition_with_heading_runs` must answer exactly what the synthetic-list route does,
+    /// and hand the spans back untouched. The heading's second line comes first in the slice
+    /// and its first line mid-slice, so the placeholder slot is not the run's first span and
+    /// the synthetic list's indices run one behind the originals past the omitted span. ~keep
+    #[test]
+    fn partition_with_heading_runs_matches_the_synthetic_route_and_restores_spans() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![make_bold_span(72.0, 484.0, 220.0, "Advantages of Vari-linear", 14.0)];
+        for row in 0..8 {
+            if row == 4 {
+                spans.push(make_bold_span(72.0, 500.0, 180.0, "2.3 Performance and", 14.0));
+            }
+            let y = 460.0 - row as f32 * 14.0;
+            spans.push(make_body_span(72.0, y, 260.0, 12.0));
+            spans.push(make_body_span(362.0, y + 10.0, 260.0, 12.0));
+        }
+
+        let runs = strategy.find_heading_runs(&spans, None);
+        assert_eq!(runs.len(), 1, "the fixture must hold one heading run: {runs:?}");
+        assert_eq!(runs[0].span_indices, vec![9, 0]);
+
+        let (synthetic, origins) = strategy.synthesize_for_partition(&spans, &runs);
+        let synth_indices: Vec<usize> = (0..synthetic.len()).collect();
+        let expected: Vec<Vec<usize>> = strategy
+            .partition_indexed(&synthetic, &synth_indices)
+            .into_iter()
+            .map(|group| group.into_iter().flat_map(|k| origins[k].iter().copied()).collect())
+            .collect();
+        assert!(expected.len() > 1, "the fixture must split: {expected:?}");
+
+        let before: Vec<(String, Rect)> = spans.iter().map(|span| (span.text.clone(), span.bbox)).collect();
+        let groups = strategy.partition_with_heading_runs(&mut spans, &runs);
+        let after: Vec<(String, Rect)> = spans.iter().map(|span| (span.text.clone(), span.bbox)).collect();
+
+        assert_eq!(groups, expected);
+        assert_eq!(after, before, "the placeholder bbox and text outlived the partition");
     }
 
     /// fix-543 unit: the canonical repro shape — left-column 2-line
@@ -5203,7 +5373,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let bands = strategy
-            .peel_full_width_line_bands(&spans, &indices)
+            .peel_full_width_line_bands(&spans, &indices, &group_indices_into_lines(&spans, &indices))
             .expect("an 8-line full-width legend must be peeled off as its own band(s)");
 
         assert_eq!(bands.len(), 2, "expected exactly [column band, legend band]: {bands:?}");
@@ -5256,7 +5426,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let bands = strategy
-            .peel_full_width_line_bands(&spans, &indices)
+            .peel_full_width_line_bands(&spans, &indices, &group_indices_into_lines(&spans, &indices))
             .expect("the single-span legend must still be peeled off");
         assert_eq!(bands.len(), 2);
         assert_eq!(
@@ -5293,7 +5463,8 @@ mod tests {
         }
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy.partition_lines_at(&spans, &indices, 200.0);
+        let (left, right) =
+            strategy.partition_lines_at(&spans, &indices, &group_indices_into_lines(&spans, &indices), 200.0);
 
         assert_eq!(left, vec![0, 1], "only the two clear-left lines belong on the left");
         let mut expected_right: Vec<usize> = vec![2, 3];
@@ -5322,7 +5493,8 @@ mod tests {
         }
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy.partition_lines_at(&spans, &indices, 200.0);
+        let (left, right) =
+            strategy.partition_lines_at(&spans, &indices, &group_indices_into_lines(&spans, &indices), 200.0);
 
         assert_eq!(left, vec![0, 2, 4], "the left column's lines");
         assert_eq!(right, vec![1, 3, 5], "the right column's lines");
@@ -5341,7 +5513,8 @@ mod tests {
         ];
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy.partition_lines_at(&spans, &indices, 402.0);
+        let (left, right) =
+            strategy.partition_lines_at(&spans, &indices, &group_indices_into_lines(&spans, &indices), 402.0);
 
         assert_eq!(left, indices, "the whole line stays together on one side");
         assert!(right.is_empty(), "no span of the line is torn off: {right:?}");
