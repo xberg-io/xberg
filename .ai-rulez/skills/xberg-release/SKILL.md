@@ -49,7 +49,7 @@ with core** across four target families:
 
 - **Python → PyPI**: langchain, llama-index (readers + node-parser), crewai, txtai, surrealdb.
 - **Java → Maven Central**: spring-ai (`io.xberg:spring-ai-xberg`).
-- **npm → npm**: n8n-nodes-xberg, langchain-xberg, llamaindex-xberg (`@xberg-io/*`).
+- **npm → npm**: n8n-nodes-xberg, langchain-xberg (`@xberg-io/*`).
 - **Helm → chart**: `charts/xberg/Chart.yaml` (`version`, `appVersion`, the ArtifactHub image
   tag and prerelease flag) plus `charts/xberg/README.md`'s `--version`.
 

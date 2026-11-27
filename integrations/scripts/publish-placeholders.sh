@@ -22,7 +22,6 @@ VERSION="0.0.1"
 PACKAGES=(
   "@xberg-io/n8n-nodes-xberg|n8n community node for Xberg document extraction"
   "@xberg-io/langchain-xberg|LangChain.js document loader for Xberg document extraction"
-  "@xberg-io/llamaindex-xberg|LlamaIndex.TS reader and node parser for Xberg document extraction"
 )
 
 publish_one() {

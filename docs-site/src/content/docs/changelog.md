@@ -120,6 +120,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `chrono` with `jiff` for timestamps in `xberg`, `xberg-native-pdf` and `xberg-pdfium-render`, and drop calamine's `dates` feature and rmcp's default `chrono` feature. `PdfPageAnnotationCommon::set_creation_date` and `set_modification_date` in `xberg-pdfium-render` now take `jiff::Timestamp`. `chrono` remains only through `nom-exif` and `hf-hub` (RUSTSEC-2026-0543).
 - Upgrade `crawlberg` to 1.13.5 and `liter-llm` to 2.7.6, and `rmcp` to 3.12.
 
+### Removed
+
+- **integrations:** the `@xberg-io/llamaindex-xberg` npm package is retired because LlamaIndex TS is archived upstream and its `@llamaindex/*` packages are deprecated. The Python `llama-index-readers-xberg` and `llama-index-node-parser-xberg` packages are unchanged.
+
 ### Fixed
 
 - **ocr:** a table detected on a standalone image is placed before the first paragraph below its top edge instead of after every paragraph, so a summary under a table no longer reads before it. Tables are ordered top to bottom; images recognized rotated keep the previous order.

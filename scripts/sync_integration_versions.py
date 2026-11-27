@@ -93,7 +93,6 @@ MCP_PROXY_PACKAGE_JSON = "cli-proxy/npm/package.json"
 NPM_MANIFESTS = [
     "integrations/node/n8n-nodes-xberg/package.json",
     "integrations/node/langchain-xberg/package.json",
-    "integrations/node/llamaindex-xberg/package.json",
 ]
 
 # Published manifests whose own `version` is aligned with core. ~keep

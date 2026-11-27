@@ -31,7 +31,7 @@ These repository-specific facts override generic TypeScript conventions where th
   explicitly rather than assuming Zod is available.
 - The pnpm workspace uses the root lockfile. Packages under `integrations/node/` are outside that workspace and use
   their own npm lockfiles. Determine ownership before installing or updating dependencies.
-- `integrations/node/{langchain,llamaindex}-xberg` use tsup. The Node binding is built by napi-rs and the WASM binding
+- `integrations/node/langchain-xberg` uses tsup. The Node binding is built by napi-rs and the WASM binding
   by wasm-pack; do not add an application bundler to either binding.
 - Prefer `workspace:*` for new dependencies between packages that are actually in the pnpm workspace.
 - JavaScript dependency auditing is manual unless a current workflow says otherwise; do not claim an audit ran merely

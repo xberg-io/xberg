@@ -2,18 +2,14 @@
 title: "LlamaIndex"
 ---
 
-import { Tabs, TabItem } from "@astrojs/starlight/components";
-
 Xberg connects to [LlamaIndex](https://www.llamaindex.ai/) through a reader that turns any of 107 file
 formats into `Document` objects, and a node parser that splits those documents into structure-aware
-`TextNode` objects for indexing — available for both Python and TypeScript.
+`TextNode` objects for indexing.
 
 [![PyPI](https://img.shields.io/pypi/v/llama-index-readers-xberg)](https://pypi.org/project/llama-index-readers-xberg/)
-[![npm](https://img.shields.io/npm/v/@xberg-io/llamaindex-xberg)](https://www.npmjs.com/package/@xberg-io/llamaindex-xberg)
 [![License](https://img.shields.io/pypi/l/llama-index-readers-xberg)](https://github.com/xberg-io/xberg/blob/main/LICENSE)
 
 - **Python** — [`llama-index-readers-xberg`](https://pypi.org/project/llama-index-readers-xberg/) (`XbergReader`) and [`llama-index-node-parser-xberg`](https://pypi.org/project/llama-index-node-parser-xberg/) (`XbergNodeParser`).
-- **TypeScript** — [`@xberg-io/llamaindex-xberg`](https://www.npmjs.com/package/@xberg-io/llamaindex-xberg), exporting both `XbergReader` and `XbergNodeParser` (for [LlamaIndex.TS](https://ts.llamaindex.ai)).
 
 ## How it works
 
@@ -37,37 +33,17 @@ flowchart LR
 
 ## Installation
 
-<Tabs syncKey="lang">
-<TabItem label="Python">
-
 ```bash
 pip install llama-index-readers-xberg llama-index-node-parser-xberg
 ```
 
 Both require Python 3.11+ and `llama-index-core>=0.14.23,<0.15`. The reader pulls in `xberg`; the node parser has no direct `xberg` dependency.
 
-</TabItem>
-<TabItem label="TypeScript">
-
-`@llamaindex/core` is a peer dependency — install it alongside the package:
-
-```bash
-npm install @xberg-io/llamaindex-xberg @llamaindex/core
-```
-
-Requires Node.js 22+.
-
-</TabItem>
-</Tabs>
-
 ## Reader
 
-Call `loadData` with a path, a list of paths, or raw bytes. Passing a list extracts many files in one
+Call `load_data` with a path, a list of paths, or raw bytes. Passing a list extracts many files in one
 batched call. By default the reader skips files that fail extraction and logs a warning; set
-`raiseOnError` (`raise_on_error` in Python) to propagate failures instead.
-
-<Tabs syncKey="lang">
-<TabItem label="Python">
+`raise_on_error` to propagate failures instead.
 
 ```python
 from llama_index.readers.xberg import XbergReader
@@ -85,37 +61,11 @@ documents = await reader.aload_data(["a.pdf", "b.pdf"])
 documents = reader.load_data(data=pdf_bytes, mime_type="application/pdf")
 ```
 
-</TabItem>
-<TabItem label="TypeScript">
-
-```ts
-import { XbergReader } from "@xberg-io/llamaindex-xberg";
-
-const reader = new XbergReader();
-const documents = await reader.loadData("report.pdf");
-
-console.log(documents[0].metadata.file_type); // "application/pdf"
-console.log(documents[0].metadata.total_pages); // 12
-console.log(documents[0].metadata.detected_languages); // ["en"]
-
-// Batch and in-memory bytes
-const many = await reader.loadData(["report.pdf", "slides.pptx", "data.xlsx"]);
-const fromBytes = await reader.loadData({ data: pdfBytes, mimeType: "application/pdf" });
-```
-
-`loadData` is async and runs on Xberg's native async extraction end to end.
-
-</TabItem>
-</Tabs>
-
 ## Node parser
 
 `XbergNodeParser` prefers Xberg's native chunks. Enable chunking on the reader, then parse the
 documents into nodes. If a document has no chunks, the parser uses structural elements; documents with
 neither pass through unchanged with a warning. Each node keeps a `SOURCE` relationship to its parent.
-
-<Tabs syncKey="lang">
-<TabItem label="Python">
 
 ```python
 from xberg import ChunkingConfig, ExtractionConfig
@@ -137,32 +87,7 @@ print(nodes[0].metadata["heading_path"])  # ["Introduction"]
 print(nodes[0].metadata["page_number"])   # 1
 ```
 
-</TabItem>
-<TabItem label="TypeScript">
-
-```ts
-import { XbergReader, XbergNodeParser } from "@xberg-io/llamaindex-xberg";
-
-const reader = new XbergReader({
-  extractionConfig: { chunking: { maxCharacters: 1000, overlap: 200 } },
-});
-const documents = await reader.loadData("report.pdf");
-
-const parser = new XbergNodeParser();
-const nodes = parser.getNodesFromDocuments(documents);
-
-console.log(nodes[0].metadata.chunk_type); // e.g. "heading"
-console.log(nodes[0].metadata.heading_path); // ["Introduction"]
-console.log(nodes[0].metadata.page_number); // 1
-```
-
-</TabItem>
-</Tabs>
-
 ## Full pipeline
-
-<Tabs syncKey="lang">
-<TabItem label="Python">
 
 Compose reader and parser into a `VectorStoreIndex` or `IngestionPipeline`:
 
@@ -187,22 +112,6 @@ sdr = SimpleDirectoryReader(
 documents = sdr.load_data()
 ```
 
-</TabItem>
-<TabItem label="TypeScript">
-
-Feed the parsed nodes into any LlamaIndex.TS index:
-
-```ts
-import { VectorStoreIndex } from "llamaindex";
-
-const nodes = new XbergNodeParser().getNodesFromDocuments(documents);
-const index = await VectorStoreIndex.init({ nodes });
-```
-
-</TabItem>
-</Tabs>
-
-For the complete options, see the package READMEs
-([Python](https://github.com/xberg-io/xberg/tree/main/integrations/python/llama-index),
-[TypeScript](https://github.com/xberg-io/xberg/tree/main/integrations/node/llamaindex-xberg)) and the
+For the complete options, see the
+[package README](https://github.com/xberg-io/xberg/tree/main/integrations/python/llama-index) and the
 [Xberg docs](https://docs.xberg.io).

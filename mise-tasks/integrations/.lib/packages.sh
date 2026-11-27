@@ -28,7 +28,6 @@ py_build_dirs=(
 node_dirs=(
   integrations/node/n8n-nodes-xberg
   integrations/node/langchain-xberg
-  integrations/node/llamaindex-xberg
 )
 py_test_packages=(
   python/crewai
@@ -41,7 +40,6 @@ py_test_packages=(
 node_test_packages=(
   n8n-nodes-xberg
   langchain-xberg
-  llamaindex-xberg
 )
 
 # Test one Python integration against the LOCALLY-BUILT xberg wheel, never the released artifact.

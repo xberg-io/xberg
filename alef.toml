@@ -1399,13 +1399,6 @@ traineddata = "traineddata"
 # class. Library code is deliberately NOT covered by these globs. ~keep
 "scripts/**" = ["no-console"]
 "crates/xberg-wasm/scripts/**" = ["no-console"]
-# The llamaindex reader/node-parser document a `raiseOnError: false` mode whose contract is to
-# warn and skip rather than throw, mirroring `logger.warning` in the Python packages. Node ships
-# no logging facility and the package takes no logger dependency, so `console.warn` (stderr) is
-# the implementation of that documented behaviour, not stray debug output. ~keep
-"integrations/node/llamaindex-xberg/src/nodeParser.ts" = ["no-console"]
-"integrations/node/llamaindex-xberg/src/reader.ts" = ["no-console"]
-"integrations/node/llamaindex-xberg/src/readerMapping.ts" = ["no-console"]
 
 [[crates]]
 name = "xberg"
