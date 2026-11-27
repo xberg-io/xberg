@@ -178,18 +178,14 @@ impl PdfDocument {
         let paginating = bottom_pagination.is_some();
         // The page's operators are visited straight from the content stream instead of being
         // collected first; only the focused separator query hands over a ready list. ~keep
-        let page_content;
-        let separator_ops;
-        if paginating {
+        let (separator_ops, page_content) = if paginating {
             let Some(operators) = self.separator_operators(page_dict) else {
                 return Ok(Vec::new());
             };
-            separator_ops = Some(operators);
-            page_content = None;
+            (Some(operators), None)
         } else {
-            separator_ops = None;
-            page_content = match self.cached_page_content(page_index) {
-                Ok(data) => Some(data),
+            match self.cached_page_content(page_index) {
+                Ok(data) => (None, Some(data)),
                 Err(error) => {
                     tracing::warn!(
                         target: crate::LOG_TARGET_ROOT,
@@ -201,8 +197,8 @@ impl PdfDocument {
                     );
                     return Ok(Vec::new());
                 }
-            };
-        }
+            }
+        };
 
         let mut extractor = PathExtractor::new();
         let mut state_stack = PathGraphicsStateStack::new();
