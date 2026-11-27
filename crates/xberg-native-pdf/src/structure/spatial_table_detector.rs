@@ -2608,18 +2608,25 @@ const MAX_UNRULED_CELL_X_GAP: f32 = 60.0;
 /// Fewest distinct row bands that must hold text in an unruled strip for it to be a column.
 const MIN_TEXT_COLUMN_ROW_BANDS: usize = 2;
 
-/// Whether text centred between `x1` and `x2` falls in at least `MIN_TEXT_COLUMN_ROW_BANDS`
-/// distinct row bands of `ys`. A single caption or margin note in a gutter is one band.
+/// Whether text centred strictly between `x1` and `x2` falls in at least
+/// `MIN_TEXT_COLUMN_ROW_BANDS` distinct row bands of `ys`. A single caption or margin note in a
+/// gutter is one band, and text of a neighbouring column (centred left or right of the strip)
+/// is not the strip's. A centre belongs to the band that contains it exactly; the snap
+/// tolerance only places a centre on a rule.
 fn strip_holds_text_column(x1: f32, x2: f32, ys: &[f32], text_centers: &[(f32, f32)]) -> bool {
     let mut bands = std::collections::BTreeSet::new();
     for &(cx, cy) in text_centers {
-        if cx < x1 - SNAP_TOL || cx > x2 + SNAP_TOL {
+        if cx <= x1 || cx >= x2 {
             continue;
         }
-        if let Some(band) = ys
+        let band = ys
             .windows(2)
-            .position(|pair| cy >= pair[0] - SNAP_TOL && cy <= pair[1] + SNAP_TOL)
-        {
+            .position(|pair| cy >= pair[0] && cy < pair[1])
+            .or_else(|| {
+                ys.windows(2)
+                    .position(|pair| cy >= pair[0] - SNAP_TOL && cy <= pair[1] + SNAP_TOL)
+            });
+        if let Some(band) = band {
             bands.insert(band);
             if bands.len() >= MIN_TEXT_COLUMN_ROW_BANDS {
                 return true;
@@ -2793,7 +2800,18 @@ fn build_cells_from_intersections(
                     && (h_edges.is_empty()
                         || xs[nxi] - xs[xi] <= MAX_UNRULED_CELL_X_GAP
                         || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi])
-                        || strip_holds_text_column(xs[xi], xs[nxi], &ys, text_centers))
+                        || {
+                            // Only the rows this strip is connected through count: crossings at
+                            // both its X ends, unbroken, around the candidate cell. ~keep
+                            let (mut lo, mut hi) = (yi, nyi);
+                            while lo > 0 && has(xi, lo - 1) && has(nxi, lo - 1) {
+                                lo -= 1;
+                            }
+                            while hi + 1 < ny && has(xi, hi + 1) && has(nxi, hi + 1) {
+                                hi += 1;
+                            }
+                            strip_holds_text_column(xs[xi], xs[nxi], &ys[lo..=hi], text_centers)
+                        })
                 {
                     cells.push(IntersectionCell {
                         x1: xs[xi],
@@ -8455,6 +8473,46 @@ mod tests {
         let mut span = create_test_span("v", 100.0, 5.0, 10.0, 10.0);
         span.wmode = 1;
         assert!(horizontal_text_centers(&[span]).is_empty());
+    }
+
+    #[test]
+    fn text_of_a_neighbouring_column_is_not_gutter_text() {
+        let (pts, h_edges, v_edges) = gutter_fixture();
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[(39.0, 10.0), (39.0, 30.0)]);
+        assert_eq!(cell_boxes(&cells), SPLIT_CELLS);
+    }
+
+    #[test]
+    fn a_two_line_caption_inside_one_row_band_is_not_a_text_column() {
+        let (pts, h_edges, v_edges) = gutter_fixture();
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[(140.0, 22.0), (140.0, 24.0)]);
+        assert_eq!(cell_boxes(&cells), SPLIT_CELLS);
+    }
+
+    #[test]
+    fn text_of_a_separate_lower_grid_is_not_evidence_for_the_upper_gutter() {
+        let (mut pts, mut h_edges, mut v_edges) = gutter_fixture();
+        let edge = |coord, start, end| Edge { coord, start, end };
+        for y in [100.0, 120.0, 140.0] {
+            for x in [100.0, 180.0] {
+                pts.push(Intersection { x, y });
+            }
+            h_edges.push(edge(y, 100.0, 180.0));
+        }
+        v_edges.push(edge(100.0, 100.0, 140.0));
+        v_edges.push(edge(180.0, 100.0, 140.0));
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[(140.0, 110.0), (140.0, 130.0)]);
+        assert_eq!(
+            cell_boxes(&cells),
+            [
+                (0.0, 0.0, 40.0, 20.0),
+                (240.0, 0.0, 280.0, 20.0),
+                (0.0, 20.0, 40.0, 40.0),
+                (240.0, 20.0, 280.0, 40.0),
+                (100.0, 100.0, 180.0, 120.0),
+                (100.0, 120.0, 180.0, 140.0),
+            ]
+        );
     }
 
     #[test]
