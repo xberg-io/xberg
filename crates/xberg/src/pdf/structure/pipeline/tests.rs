@@ -7233,6 +7233,23 @@ fn test_case1_trailing_hyphen_full_line() {
     assert_eq!(p.lines[1].segments[0].text, "is great");
 }
 
+/// A hyphen drawn as its own run ends the line: the stem sits in the segment before it.
+#[test]
+fn a_hyphen_run_after_the_word_stem_welds_the_wrapped_word() {
+    let mut p = para(vec![
+        line(vec![full_line_seg("insects at mea"), {
+            let mut hyphen = seg("-", 480.0, 10.0);
+            hyphen.baseline_y = 20.0;
+            hyphen
+        }]),
+        line(vec![seg("sure stages were", 10.0, 200.0)]),
+    ]);
+    dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+    assert_eq!(p.lines[0].segments[0].text, "insects at measure");
+    assert_eq!(p.lines[0].segments[1].text, "");
+    assert_eq!(p.lines[1].segments[0].text, "stages were");
+}
+
 #[test]
 fn test_case2_no_hyphen_full_line_no_join() {
     let mut p = para(vec![
