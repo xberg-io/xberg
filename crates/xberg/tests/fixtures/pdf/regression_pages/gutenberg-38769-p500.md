@@ -7,7 +7,7 @@ Example. Develop the theory of the binomial series
 | 1 + | x + | x2 + · · · = f ( m, x ) , |
 |  | 1 | 2 |
 
-where −1 \< x \< 1, in a similar manner, starting from the equation
+where $−1 < x < 1$, in a similar manner, starting from the equation
 
 ′ ′
 
@@ -17,13 +17,15 @@ f(m, x)f(m , x) = f(m + m , x) (Ex. lxxxi. 6).
 
 # MISCELLANEOUS EXAMPLES ON CHAPTER IX
 
-10 21
+1. Given that log~10~e = .4343 and that 2<sup>10</sup> and 3<sup>21</sup> are nearly equal to powers of 10, calculate log~10~2 and log~10~3 to four places of decimals. (Math. Trip. 1905.)
 
-1. Given that log~10~e = .4343 and that 2 and 3 are nearly equal to powers of 10, calculate log~10~2 and log~10~3 to four places of decimals. (Math. Trip. 1905.)
-
+$$
 √
+$$
 
+$$
 √
+$$
 
 1 1 3 π
 
@@ -39,21 +41,19 @@ have 10<sup>p</sup> = n<sup>q</sup>, which is impossible, since 10<sup>p</sup> e
 
 a
 
-n = 10 N, where N is not divisible by 10, then log~10~N and therefore log~10~n = a + log~10~N cannot be rational.]
+$n = 10 N$, where N is not divisible by 10, then log~10~N and therefore $log10n = a + log10N$ cannot be rational.]
 
 4. For what values of x are the functions log x, log log x, log log log x, . . . (a) equal to 0 (b) equal to 1 (c) not defined? Consider also the same question for the functions lx, llx, lllx, . . . , where lx = log |x|.
-5. Show that log x −
+5. Show that
 
-?
+$$
+n n log x − log( x + 1) + log( x + 2) −
+$$
 
-n n
-
-n
-
-log( x + 1) + log( x + 2) −
-
-- \+ ( − 1) log( x + n ) 1 2
+- \+ ( − 1) n log( x + n ) 1 2
 
 is negative and increases steadily towards 0 as x increases from 0 towards ∞.
+
+?
 
 A considerable number of these examples are taken from Bromwich's Infinite Series.

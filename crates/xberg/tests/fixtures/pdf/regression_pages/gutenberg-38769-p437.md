@@ -6,7 +6,9 @@ series; at any rate the proof of ? 185 fails completely, as it depended essen- P
 
 187. Tests of convergence for conditionally convergent series. It is not to be expected that we should be able to find tests for conditional convergence as simple and general as those of ?? 167 et seq. It is naturally a much more difficult matter to formulate tests of convergence for series whose convergence, as is shown by equation (1) above, depends essentially on the cancelling of the positive by the negative terms. In the first instance there are no comparison tests for convergence of conditionally convergent series. P P For suppose we wish to infer the convergence of v~n~ from that of u~n~. We have to compare
 
+$$
 v 0 + v 1 +
+$$
 
 - \+ v n , u 0 + u 1 +
 - \+ u n .

@@ -13,9 +13,9 @@
 
 Differential of an Inverse Function.
 
-Consider the function (see p. 13) y = 3x; it can be expressed in the y form x = ; this latter form is called the inverse function to the one 3 originally given. dy y dx 1 If y = 3x, = 3; if x = , = , and we see that dx 3 dy 3 dy 1 dy dx = or × = 1. dx dx dx dy dy dy
+Consider the function (see $p. 13) y = 3x$; it can be expressed in the y form x = ; this latter form is called the inverse function to the one 3 originally given. dy y dx 1 If $y = 3x, = 3$; if x = , = , and we see that dx 3 dy 3 dy 1 dy dx = or × = 1. dx dx dx dy dy dy
 
-Consider y = 4x<sup>2</sup>, = 8x; the inverse function is dx
+Consider $y = 4x2, = 8x$; the inverse function is dx
 
 1
 

@@ -42,35 +42,29 @@ Chapter 2 | Descriptive Statistics
 
 1.00
 
-**Find the 28**<sup>**th**</sup> **percentile** . Notice the 0.28 in the "cumulative relative frequency" column. Twenty-eight percent of
+**Find the 28**<sup>**th**</sup>**percentile**
 
-th
+. Notice the 0.28 in the "cumulative relative frequency" column. Twenty-eight percent of 50 data values is 14 values. There are 14 values less than the 28<sup>th</sup>percentile. They include the two 4s, the five 5s, and the seven 6s. The 28<sup>th</sup> percentile is between the last six and the first seven.
 
-50 data values is 14 values. There are 14 values less than the 28 percentile. They include the two 4s, the five 5s,
+**The 28**<sup>**th**</sup>
 
-and the seven 6s. The 28<sup>th</sup> percentile is between the last six and the first seven. **The 28**<sup>**th**</sup> **percentile is 6.5.**
+**percentile is 6.5.**
 
-**Find the median** . Look again at the "cumulative relative frequency" column and find 0.52. The median is the
+**Find the median** . Look again at the "cumulative relative frequency" column and find 0.52. The median is the 50<sup>th</sup>percentile or the second quartile. 50% of 50 is 25. There are 25 values less than the median. They include the two 4s, the five 5s, the seven 6s, and eleven of the 7s. The median or 50<sup>th</sup>percentile is between the 25<sup>th</sup>, or seven, and 26<sup>th</sup>, or seven, values.
 
-50<sup>th</sup> percentile or the second quartile. 50% of 50 is 25. There are 25 values less than the median. They include the
+**The median is seven.**
 
-th
+**Find the third quartile** . The third quartile is the same as the 75<sup>th</sup>percentile. You can "eyeball" this answer. If you
 
-two 4s, the five 5s, the seven 6s, and eleven of the 7s. The median or 50 percentile is between the 25<sup>th</sup>, or seven,
+look at the "cumulative relative frequency" column, you find 0.52 and 0.80. When you have all the fours, fives, sixes and sevens, you have 52% of the data. When you include all the 8s, you have 80% of the data.
 
-and 26<sup>th</sup>, or seven, values. **The median is seven.**
+**The 75**<sup>**th**</sup>
 
-**Find the third quartile** . The third quartile is the same as the 75<sup>th</sup> percentile. You can "eyeball" this answer. If you
+**percentile, then, must be an eight** . Another way to look at the problem is to find 75% of 50, which is 37.5, and round up to 38. The third quartile, *Q*~3~, is the 38<sup>th</sup>value, which is an eight. You can check this answer by counting the values. (There are 37 values below the third quartile and 12 values above.)
 
-look at the "cumulative relative frequency" column, you find 0.52 and 0.80. When you have all the fours, fives,
+**2.16** Forty bus drivers were asked how many hours they spend each day running their routes (rounded to the nearest hour). Find the 65<sup>th</sup>
 
-sixes and sevens, you have 52% of the data. When you include all the 8s, you have 80% of the data. **The 75**<sup>**th**</sup> **percentile, then, must be an eight** . Another way to look at the problem is to find 75% of 50, which is 37.5, and
-
-round up to 38. The third quartile, *Q*~3~, is the 38<sup>th</sup> value, which is an eight. You can check this answer by counting the values. (There are 37 values below the third quartile and 12 values above.)
-
-hour). Find the 65<sup>th</sup> percentile.
-
-# 2.16 Forty bus drivers were asked how many hours they spend each day running their routes (rounded to the nearest
+percentile.
 
 | (hours) |  | Frequency | Frequency |
 | --- | --- | --- | --- |

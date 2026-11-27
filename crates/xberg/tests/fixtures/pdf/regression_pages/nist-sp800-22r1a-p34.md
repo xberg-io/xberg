@@ -8,7 +8,7 @@ Note that large values of χ *( obs )* (and hence, small *P-values* ) would have
 
 ### 2.5.7 Input Size Recommendation
 
-The probabilities for *M = Q = 32* have been calculated and inserted into the test code. Other choices of *M* and *Q* may be selected, but the probabilities would need to be calculated. The minimum number of bits to be tested must be such that *n* ≥ *38MQ* (i.e., at least 38 matrices are created). For *M = Q = 32* , each sequence to be tested should consist of a minimum of 38,912 bits.
+The probabilities for $M = Q = 32$ have been calculated and inserted into the test code. Other choices of *M* and *Q* may be selected, but the probabilities would need to be calculated. The minimum number of bits to be tested must be such that $n ≥ 38MQ$ (i.e., at least 38 matrices are created). For $M = Q = 32$ , each sequence to be tested should consist of a minimum of 38,912 bits.
 
 ### 2.5.8 Example
 
@@ -20,11 +20,7 @@ The probabilities for *M = Q = 32* have been calculated and inserted into the te
 
 ### 2.6.1 Test Purpose
 
-*N* = 97 *F*~*M*~ = 23, *F*~*M-1*~ = 60, N – F~M~ – *F*~*M-1*~= 14
-
-*2*
-
-χ = 1.2619656 *P-value* = 0.532069 Since *P-value* ≥ *0.01* , accept the sequence as random.
+$N = 97$ *F*~*M*~ = 23, *F*~*M-1*~ = 60, N – F~M~ – *F*~*M-1*~= $14 χ2 = 1.2619656$ *P-value* = 0.532069 Since *P-value* ≥ *0.01* , accept the sequence as random.
 
 ### 2.6 Discrete Fourier Transform (Spectral) Test
 

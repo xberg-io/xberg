@@ -2,15 +2,7 @@
 
 # Multi-Person Indoor Localization by CSI
 
-nd rd th
-
-1<sup>st</sup> Zhiyuan He, 2 Ke Deng, 3 Jiangchao Gong, 4<sup>th</sup> Yi Zhou, 5 Desheng Wang Wuhan National Laboratory for Optoelectronics Huazhong University of Science and Technology Wuhan, China
-
-nd rd
-
-1<sup>st</sup> zedyuanhe@hust.edu.cn, 2 sheepsui@hust.edu.cn, 3 m202272478@hust.edu.cn
-
-4<sup>th</sup> u202014002@hust.edu.cn, 5<sup>th</sup> dswang@hust.edu.cn
+1<sup>st</sup> Zhiyuan He, 2<sup>nd</sup> Ke Deng, 3<sup>rd</sup> Jiangchao Gong, 4<sup>th</sup> Yi Zhou, 5<sup>th</sup> Desheng Wang Wuhan National Laboratory for Optoelectronics Huazhong University of Science and Technology Wuhan, China 1<sup>st</sup> zedyuanhe@hust.edu.cn, 2<sup>nd</sup> sheepsui@hust.edu.cn, 3<sup>rd</sup> m202272478@hust.edu.cn 4<sup>th</sup> u202014002@hust.edu.cn, 5<sup>th</sup> dswang@hust.edu.cn
 
 **Abstract—Passive indoor localization, integral to smart build-**
 

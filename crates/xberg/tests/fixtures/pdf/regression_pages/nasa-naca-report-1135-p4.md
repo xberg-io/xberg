@@ -38,11 +38,11 @@ It can be shown that ----c_
 
 ## _T\\_/.
 
-*T c_c,=[(_)r+p] _(Op,_* (13a) *s--s,----c,* In _/,_, *R* In --Pp, \\bv/r *c_--co=R* [therm peril (13b) ----c_ In *T--Rln* -p [peg] (23a) *Ir p_* The ratio of specific heats is defined as =C, In *P--c_.ln* --P
+$T c_c,=&#91;(&#95;)r+p&#93;$ _(Op,_ (13a) *s--s,----c,* In _/,_, *R* In --Pp, \\bv/r *c_--co=R* [therm peril (13b) ----c_ In *T--Rln* -p [peg] (23a) *Ir p_* The ratio of specific heats is defined as =C, In *P--c_.ln* --P
 
 *Pr.*
 
-*P,* Cp (14) C_ *T/T_* According to the kinetic theory of gases, for many gases over *s--s,=c,* In (p/p,)___ a moderate range of temperature, ----c_ In *T/T,* [perf] (23b) (p/p_) (_-_)_ *n+2* (15)
+*P,* Cp (14) C_ *T/T_* According to the kinetic theory of gases, for many gases over $s--s,=c$, In (p/p,)___ a moderate range of temperature, ----c_ In *T/T,* [perf] (23b) (p/p_) (_-_)_ *n+2* (15)
 
 n
 
@@ -54,7 +54,7 @@ where *n* is the number of effective degrees of freedom of the gas molecule. Use
 
 ***p_***
 
-*dh* _ n *.yR pr* _ *c_=_T=C,_=_-* 1 [therm perf] (16) The second law of thermodynamics requires that *du R* [therm peril
+*dh* _ n *.yR pr* _ $c_=&#95;T=C,&#95;=&#95;- 1$ [therm perf] (16) The second law of thermodynamics requires that *du R* [therm peril
 
 **(17)**
 
@@ -78,4 +78,4 @@ equation **of** state *dh---du+p dv+v dp=dq+v dp*
 
 ***P=RT*** **[therm perfl (26) p**
 
-i_p _p Dynamic equation *dh=(c,+R)dT=c,dT* [therm perf] (19b) 1 *dp-_VdV=O* (27) *h=(c,-t-R)T-t-u,=c,T+u,* [peril (20) *p*
+i_p _p Dynamic equation *dh=(c,+R)dT=c,dT* [therm perf] (19b) 1 *dp-_VdV=O* $(27) h=(c,-t-R)T-t-u,=c,T+u$, [peril (20) *p*

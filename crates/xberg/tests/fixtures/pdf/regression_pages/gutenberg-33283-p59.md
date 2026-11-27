@@ -4,11 +4,11 @@
 
 Let us try the effect of repeating several times over the operation of differentiating a function (see p. 13). Begin with a concrete case.
 
-Let y = x<sup>5</sup>.
+Let $y = x5$.
 
 First differentiation, 5x<sup>4</sup>.
 
-Second differentiation, 5 × 4x<sup>3</sup> = 20x<sup>3</sup>.
+Second differentiation, $5 × 4x3 = 20x3$.
 
 | Third differentiation, | 5 × 4 × 3x2 = 60x2 . |
 | --- | --- |

@@ -22,11 +22,15 @@ Lavanya V Salian, Samala Rathan, Debojyoti Ghosh
 
 X<sup>N</sup> a~n~ ˆ ˆ ˆ (5.1) α~F~f~j~−1 + f~j~ + α~F~f~j~+1 = (f~j~+n + f~j~−n) 2
 
+$$
 n=0
+$$
 
 where f~j~ denotes the given value at point j, and f~j~ˆ denotes the value after filtering. The most natural formulation of the problem involves the transfer function associated with the equation (5.1). P~N~ a~n~cos(nω)
 
+$$
 n=0
+$$
 
 (5.2) T(ω) = 1 + 2α~F~ cos(ω) To determine the unknown coefficients, we require the exclusion of the highest-frequency mode by imposing the condition T(π) = 0. For adaptability, we maintain α~F~ as an unrestricted parameter. Subsequently, the remaining N equations can be deduced by equating the Taylor series coefficients of the left and right sides. Through this process, equation (5.1) yields a 2N-th order formula within a 2N + 1 point stencil. It is important to note that T(ω) is real, signifying that the filter alters only the amplitude of each wave component without impacting the phase. Here α~F~ is a free parameter that satisfies |α~F~| \< 0.5. The coefficients of a family of 8th-order (F8), 10th-order (F10), and 12th-order filter (F12) are given in the Table 7.
 

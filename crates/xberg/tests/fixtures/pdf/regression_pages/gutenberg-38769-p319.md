@@ -26,9 +26,11 @@ The reader is of course familiar with the idea of an 'area', and in particular w
 
 (P RP′) + (NN′RP) = (NN′P′P), (N~1~ NP P~1~) \< (ONP P~0~), and so on. Taking all this for granted it is obvious that the area ONP P~0~ is a function of x; we denote it by Φ(x). Also Φ(x) is a continuous function. For
 
+$$
 Φ(x + h) − Φ(x) = (NN′P′P)
+$$
 
-= (NN′RP) + (P RP′) = hϕ(x) + (P RP′).
+$$= (NN′RP) + (P RP′) = hϕ(x) + (P RP′).$$
 
 ′
 

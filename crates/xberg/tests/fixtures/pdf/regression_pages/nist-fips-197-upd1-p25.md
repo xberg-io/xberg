@@ -1,8 +1,8 @@
 # 5.2 KEYEXPANSION()
 
-KEYEXPANSION() is a routine that is applied to the key to generate 4 ∗(Nr +1) words. Thus, four words are generated for each of the Nr +1 applications of ADDROUNDKEY() within the specifcation of CIPHER(), as described in Section 5.1.4. The output of the routine consists of a linear array of words, denoted by w[i], where i is in the range 0 ≤ i \< 4 ∗(Nr +1).
+KEYEXPANSION() is a routine that is applied to the key to generate 4 ∗(Nr +1) words. Thus, four words are generated for each of the Nr +1 applications of ADDROUNDKEY() within the specifcation of CIPHER(), as described in Section 5.1.4. The output of the routine consists of a linear array of words, denoted by w[i], where i is in the range $0 ≤ i < 4$ ∗(Nr +1).
 
-KEYEXPANSION() invokes 10 fxed words denoted by Rcon[j] for 1 ≤ j ≤ 10. These 10 words are called the round constants. For AES-128, a distinct round constant is called in the generation of each of the 10 round keys. For AES-192 and AES-256, the key expansion routine calls the frst eight and seven of these same constants, respectively. The values of Rcon[j] are given in hexadecimal notation in Table 5:
+KEYEXPANSION() invokes 10 fxed words denoted by Rcon[j] for $1 ≤ j ≤ 10$. These 10 words are called the round constants. For AES-128, a distinct round constant is called in the generation of each of the 10 round keys. For AES-192 and AES-256, the key expansion routine calls the frst eight and seven of these same constants, respectively. The values of Rcon[j] are given in hexadecimal notation in Table 5:
 
 **Table 5. Round constants**
 
@@ -14,9 +14,13 @@ KEYEXPANSION() invokes 10 fxed words denoted by Rcon[j] for 1 ≤ j ≤ 10. Thes
 | 4 | [08,00,00,00] | 9 | [1b,00,00,00] |
 | 5 | [10,00,00,00] | 10 | [36,00,00,00] |
 
-j−1
+j 1
 
-The value of the left-most byte of Rcon[j] in polynomial form is x . Note that for j \> 0, these
+The value of the left-most byte of Rcon[j] in polynomial form is x
+
+−
+
+. Note that for $j > 0$, these
 
 j−1
 

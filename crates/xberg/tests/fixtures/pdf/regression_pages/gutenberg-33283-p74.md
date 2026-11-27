@@ -12,7 +12,7 @@ When t = 3.03, θ = 6.28; ω = 2 − 2.754 = −0.754 rad./sec.;
 
 The velocity is reversed. The wheel is evidently at rest between
 
-these two instants; it is at rest when ω = 0, that is when 0 = 2 − 0.3t<sup>3</sup>, or when t = 2.58 sec., it has performed
+these two instants; it is at rest when $ω = 0$, that is when $0 = 2 − 0.3t3$, or when $t = 2.58 sec$., it has performed
 
 θ 3 + 2 × 2.58 − 0.1 × 2.58<sup>3</sup> = = 1.025 revolutions. 2π 6.28
 
@@ -34,7 +34,7 @@ Ans. = 2bt + 4ct ; = 2b + 12ct . dt dt<sup>2</sup>
 
 2
 
-in feet, expressed by the equation s = 16 t . Draw a curve showing the relation between s and t . Also determine the velocity of the body at the following times from its being let drop:
+in feet, expressed by the equation $s = 16 t$ . Draw a curve showing the relation between s and t . Also determine the velocity of the body at the following times from its being let drop:
 
 - t = 2 seconds;
 - t = 4 . 6 seconds;

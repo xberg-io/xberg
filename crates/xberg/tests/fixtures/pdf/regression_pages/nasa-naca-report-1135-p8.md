@@ -16,13 +16,13 @@ TABLES, AND
 
 **2**
 
-_=_-- (_-t- 1) 2 *M,'* =(7M, 2- 1) (M,2+5)
+$$&#95;=&#95;-- (&#95;-t- 1) 2 M,' =(7M, 2- 1) (M,2+5)$$
 
 #### (95)
 
 36M, _
 
-1 *u2+* _ *p_=l* **2** ,
+$1 u2+ &#95; p_=l 2$ ,
 
 **7**
 
@@ -32,7 +32,7 @@ _m 2u2-vT--1 p2
 
 |  |  | (5'--1) M,2+ 2 | M,2+ 5 (96) |
 | --- | --- | --- | --- |
-| 1U12nt_ __1 1 at 2 =_ 1 u2_+__ | 1 a22 | M22" 25" M_ 2 -- (5" -- 1 )---_ 7 M, 2- | 1 |
+| 1U12nt_ __1 1 at 2 =_ 1 u2_+__ | 1 a22 | M22" 25" M_ 2 -- (5" -- 1 )---_7 M, 2- | 1 |
 
 together with the requirement that the entropy does not *p_* 25" decrease:
 
@@ -46,9 +46,7 @@ It follows immediately from the energy relation (86) that total enthalpy, total 
 
 *M12--(7-* l)
 
-_-_ [(5"_
-
-- 1\) 7_
+# _-_ [(5"_1) 7_
 
 *M_2+21 -l'-'*
 
@@ -68,7 +66,7 @@ relations" (33) for adiabatic flow) also the critical speed of
 
 p2 [-45"M,2--2(v--I)']'-_=[5(7M'2--1)] _
 
-# _=L (_i-)__ a 36M,2
+# _=L (_i-)_ _ a 36M,2
 
 sound and limiting speed:
 
@@ -84,19 +82,21 @@ sound and limiting speed:
 
 **7**
 
-*T,,= T,* 2.1
+$T,,= T, 2.1$
 
-### [- (5"+1) M, * -- [_ _+\! .T -1
+### [- (5"+ 1) M, * -- [_ _+\! .T -1
 
 ### =L(_ i-)_,-_ 2]'-' L2,_M,'-(5"- l)j [adiab, perf] (88b)
 
-*ah=at2*
+$$
+ah=at2
+$$
 
 7
 
 **5**
 
-*6*1=6*2*
+$6&#42;1=6&#42;2$
 
 **/**
 
@@ -114,9 +114,11 @@ sound and limiting speed:
 
 Combining equations relation
 
-p,2 F(5"+I)/,27_F 5"+1 i]'-' *p-7,* =L-
+$$
+p,2 F(5"+I)/,27_F 5"+1 i]'-' p-7, =L-
+$$
 
-*uau2--_a,2=P2--P_* [adiab, per/] (89)
+$uau2--&#95;a,2=P2--P_$ [adiab, per/] (89)
 
 ***p_--Pl***
 

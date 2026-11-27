@@ -1,6 +1,8 @@
 [IX : 212] THE LOGARITHMIC AND EXPONENTIAL FUNCTIONS 474
 
+$$
 ∞
+$$
 
 P x<sup>n</sup>
 
@@ -23,7 +25,9 @@ e
 
 8. Show that
 
+$$
 ∞ ∞
+$$
 
 X X n<sup>3</sup> n<sup>4</sup> x
 
@@ -33,29 +37,33 @@ x<sup>n</sup> = (x + 3x<sup>2</sup> + x<sup>3</sup>)e , x<sup>n</sup> = (x + 7x<
 
 1 1 3 3 3
 
-and that if S n = 1 + 2 +
+and that if $S n = 1 + 2$ +
 
 - \+ n then
 
+$$
 ∞
+$$
 
-X
-
-x<sup>n</sup>
-
-1
-
-S~n~ = (4x + 14x<sup>2</sup> + 8x<sup>3</sup> + x<sup>4</sup>)e<sup>x</sup>. 4 n\!
+X x<sup>n</sup>
 
 1
 
-In particular the last series is equal to zero when x = −2. (Math. Trip. 1904.) P P P
+$$
+Sn = (4x + 14x2 + 8x3 + x4)ex. 4 n!
+$$
+
+1
+
+In particular the last series is equal to zero when $x = −2$. (Math. Trip. 1904.) P P P
 
 9. Prove that (n/n\!) = e, (n<sup>2</sup>/n\!) = 2e, (n<sup>3</sup>/n\!) = 5e, and that P
 
 (n<sup>k</sup>/n\!), where k is any positive integer, is a positive integral multiple of e.
 
+$$
 ∞
+$$
 
 P (n − 1)x<sup>n</sup>
 
@@ -73,21 +81,19 @@ x 3
 
 x
 
-x → 0, evaluate the limit, and draw the graph of the function e + . x + a
+$x → 0$, evaluate the limit, and draw the graph of the function e + . x + a
 
 1 1 1
 
 12. Draw the graphs of 1 + x, 1 + x + x<sup>2</sup>, 1 + x + x<sup>2</sup> + x<sup>3</sup>, and compare 2 2 6
 
-them with that of e<sup>x</sup>.
+them with that of e<sup>x</sup>. x<sup>n</sup> x<sup>n</sup>
 
-x<sup>n</sup> x<sup>n</sup>
+x
 
-−x n
-
-13. Prove that e − 1 + x − + · · · − (−1) is positive or negative 2\! n\! according as n is odd or even. Deduce the exponential theorem.
+13. Prove that e<sup>−</sup> − 1 + x − + · · · − (−1)<sup>n</sup> is positive or negative 2\! n\! according as n is odd or even. Deduce the exponential theorem.
 14. If
 
 x x
 
-X~0~ = e , X~1~ = e<sup>x</sup> − 1, X~2~ = e − 1 − x, X~3~ = e<sup>x</sup> − 1 − x − (x<sup>2</sup>/2\!), . . . ,
+$X0 = e$ , X~1~ = e<sup>x</sup> − $1, X2 = e − 1 − x, X3$ = e<sup>x</sup> − 1 − x − (x<sup>2</sup>/2\!), . . . ,

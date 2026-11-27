@@ -12,7 +12,9 @@ substrate complex and free enzyme remain constant, the system can be expressed a
 
 we designed three different observations (Fig 6, Observation) with a known [E~0~] value of
 
-5.0 × 10<sup>−4</sup>. Specifically, we obtained RCS data from 12 trajectories of S(t) and P(t) which were
+## 5.0 × 10<sup>−4</sup>
+
+. Specifically, we obtained RCS data from 12 trajectories of S(t) and P(t) which were
 
 **Table 1. Parameter values for different distribution types within the target cell-limited model using synthetic data.**
 

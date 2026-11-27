@@ -14,9 +14,7 @@
 
 ## McGill University Stanford University Amazon AI
 
-1 5,6
-
-sudarsh0@purdue.edu hi@aman.ai
+1 5,6 sudarsh0@purdue.edu hi@aman.ai
 
 ## Abstract
 

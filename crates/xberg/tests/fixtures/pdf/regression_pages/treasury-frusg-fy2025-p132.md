@@ -1,10 +1,6 @@
 # Legal Contingencies and Environmental and Disposal Contingencies
 
-**Legal Contingencies and Environmental and Disposal Contingencies as of September 30, 2025, and 2024 2025 2024 Estimated Range of Loss Estimated Range of Loss**
-
-2
-
-**for Certain Cases** <sup>2</sup> **for Certain Cases Accrued Accrued**
+**Legal Contingencies and Environmental and Disposal Contingencies as of September 30, 2025, and 2024 2025 2024 Estimated Range of Loss Estimated Range of Loss for Certain Cases** <sup>2</sup> **for Certain Cases** <sup>2</sup> **Accrued Accrued**
 
 (In billions of dollars)
 

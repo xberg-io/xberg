@@ -8,7 +8,7 @@ Divide (1) by 4 and (2) by 5, and we have
 | Subtract, | 5x | = 10 , 000 . |
 | Therefore | x | = 2000 . |
 
-Substitute the value of x in (1), y = 6. Therefore the sum is ?2000, and the rate 6
+Substitute the value of x in $(1), y = 6$. Therefore the sum is ?2000, and the rate 6
 
 1. A sum of money, at simple interest, amounted in 5 years to ?3000, and in 6 years to ?3100. Find the sum and the rate of interest.
 2. A sum of money, at simple interest, amounted in 10 months to ?1680, and in 18 months to ?1744. Find the sum and the rate of interest.

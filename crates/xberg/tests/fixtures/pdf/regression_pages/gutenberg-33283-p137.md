@@ -4,7 +4,7 @@
 
 It is useful to check the results obtained. The simplest way is to replace x by a single value, say +1, both in the given expression and in the partial fractions obtained.
 
-Whenever the denominator contains but a power of a single factor, a very quick method is as follows: 4x + 1 Taking, for example, , let x + 1 = z; then x = z − 1. (x + 1)<sup>3</sup> Replacing, we get 4(z − 1) + 1 4z − 3 4 3 = = − . z<sup>3</sup> z<sup>3</sup> z<sup>2</sup> z<sup>3</sup> The partial fractions are, therefore, 4 3 − . (x + 1)<sup>2</sup> (x + 1)<sup>3</sup>
+Whenever the denominator contains but a power of a single factor, a very quick method is as follows: 4x + 1 Taking, for example, , let $x + 1 = z$; then $x = z − 1. (x + 1)3$ Replacing, we get 4(z − 1) + 1 4z − 3 4 3 = = − . z<sup>3</sup> z<sup>3</sup> z<sup>2</sup> z<sup>3</sup> The partial fractions are, therefore, 4 3 − . (x + 1)<sup>2</sup> (x + 1)<sup>3</sup>
 
 | Application to differentiation. Let it be required to differentiate |  |
 | --- | --- |

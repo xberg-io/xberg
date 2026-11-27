@@ -1,4 +1,6 @@
-10<sup>0</sup> *L*~*x*~= *L*~*y*~=10, *t* =4 CDW
+$$
+100 Lx= Ly=10, t =4 CDW
+$$
 
 1 10
 
@@ -18,7 +20,7 @@ bility operators in two dimensions.
 
 FIG. 6: The autocorrelation functions for two suscepti-
 
-=4.0
+$$=4.0$$
 
 3.5
 
@@ -46,13 +48,15 @@ susceptibility from EEcorr
 
 12
 
+$$
 ED, L=6 ED, L=8 QMC, L=6 QMC, L=8
+$$
 
 2.0 2.5 3.0 3.5 4.0
 
 *t*
 
-ED, L=6
+ED, $L=6$
 
 2
 
@@ -64,15 +68,15 @@ ED, L=6
 
 *h*
 
-14 ED, L=8
+14 ED, $L=8$
 
-\+ *n*
+$$+ n$$
 
 12
 
 susceptibility from CDW
 
-QMC, L=6
+QMC, $L=6$
 
 *w*
 
@@ -82,7 +86,7 @@ QMC, L=6
 
 *n*
 
-QMC, L=8 8 6
+QMC, $L=8 8 6$
 
 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
 
@@ -102,11 +106,11 @@ ted for the U(1) theory in one dimension.
 
 1.0
 
-ED, L=6
+ED, $L=6$
 
 0.5
 
-ED, L=8 0 0 25 0 5 0 0 QMC, L=6
+ED, $L=8 0 0 25 0 5 0 0$ QMC, $L=6$
 
 0.0
 
@@ -133,7 +137,7 @@ ED, L=8 0 0 25 0 5 0 0 QMC, L=6
 | MC | -0.28(2) | 0.04(4) | 0.68(3) | 1.76(1) | 2.432(1) |
 | ED -0.255 0.057 0.681 1.766 2.4322 |  |  |  |  |  |
 
-EEcorr QMC, L=8
+EEcorr QMC, $L=8$
 
 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
 
@@ -141,17 +145,9 @@ EEcorr QMC, L=8
 
 FIG. 8: Comparison of Meron Cluster QMC values with the ED values for χ~EEcorr~ (top), χ~CDW~ (middle), and the ¯ bare ψψ (bottom). tions: 1 X 1 1
 
-x+y
+$$+y$$
 
-χ~CDW~ = (−1) n~x~ − n~y~ − L~t~ 2 2
-
-x,y,t
-
-X 1 ¯
-
-x
-
-ψψ = (−1) n~x~ (27) L~t~
+χ~CDW~ = (−1)<sup>x</sup> n~x~ − n~y~ − L~t~ 2 2 x,y,t X 1 ¯ψψ = (−1)<sup>x</sup>n~x~ (27) L~t~
 
 x,y,t
 
@@ -159,7 +155,9 @@ X 1 TABLE III: Results for the observables χ , χ
 
 3 3 EEcorr CDW
 
-χ = s~x,x~
+$$
+χ = sx,x
+$$
 
 - s~y,y~
 

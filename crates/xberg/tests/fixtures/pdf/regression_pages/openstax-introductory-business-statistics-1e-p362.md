@@ -1,6 +1,6 @@
 354 Chapter 8 | Confidence Intervals
 
-cases, it is common to use the sample standard deviation, *s* , as an estimate of *σ* . The normal distribution creates accurate confidence intervals when *σ* is known, but it is not as accurate when *s* is used as an estimate. In this case, the Student's t-distribution is much better. Define a t-score using the following formula: - *x* - *µ t* = *s n* The *t* -score follows the Student's t-distribution with *n* – 1 degrees of freedom. The confidence interval under this
+cases, it is common to use the sample standard deviation, *s* , as an estimate of *σ* . The normal distribution creates accurate confidence intervals when *σ* is known, but it is not as accurate when *s* is used as an estimate. In this case, the Student's t-distribution is much better. Define a t-score using the following formula: - $x - µ t = s n$ The *t* -score follows the Student's t-distribution with *n* – 1 degrees of freedom. The confidence interval under this
 
 - ⎛ ⎞ *s α* distribution is calculated with *x* ± *t*~*α*~ where *t*~*α*~ is the *t* -score with area to the right equal to , *s* is the sample ⎝ ⎠ *n* 2
 
@@ -18,7 +18,9 @@ Sometimes researchers know in advance that they want to estimate a population me
 
 2
 
-*Z*~*α*~*σ*<sup>2</sup> *n* =
+$$
+Zασ2 n =
+$$
 
 ⎛- ⎞2
 
@@ -26,7 +28,7 @@ Sometimes researchers know in advance that they want to estimate a population me
 
 ⎝ ⎠
 
-with a specific tolerance level is given by 2 *Z*~*α*~pq *n* = *e*<sup>2</sup>
+with a specific tolerance level is given by 2 *Z*~*α*~pq $n = e2$
 
 # FORMULA REVIEW
 
@@ -42,7 +44,9 @@ The general form for a confidence interval for a single mean, population standar
 
 - ⎛ ⎞ - ⎛ ⎞
 
-*s s x* - *t*~v,α~ ≤ *µ* ≤ *x* + *t* ⎝ *n*<sup>⎠</sup> ~v,α~⎝ *n*<sup>⎠</sup>
+$$
+s s x - tv,α ≤ µ ≤ x + t ⎝ n⎠ v,α⎝ n⎠
+$$
 
 **8.3 A Confidence Interval for A Population Proportion**
 

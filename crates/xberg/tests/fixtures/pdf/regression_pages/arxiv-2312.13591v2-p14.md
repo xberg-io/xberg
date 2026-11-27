@@ -72,15 +72,13 @@ bottom molecular pentaquarks in chiral effective field theory, JHEP **11** , 108
 
 14 ph].
 
-- [36] H.-X. Chen, L.-S. Geng, W.-H. Liang, E. Oset, E. Wang, and J.-J. Xie, Looking for a hidden-charm pentaquark state with
+- [36] H.-X. Chen, L.-S. Geng, W.-H. Liang, E. Oset, E. Wang, and J.-J. Xie, Looking for a hidden-charm pentaquark state with strangeness S = −1 from Ξ<sup>−</sup> decay into J/ψK<sup>−</sup>Λ, Phys. b Rev. C
 
-− −
+**93** , 065203 (2016), arXiv:1510.01803 [hep-ph].
 
-strangeness S = −1 from Ξ decay into J/ψK Λ, Phys. b Rev. C **93** , 065203 (2016), arXiv:1510.01803 [hep-ph].
+- [37] J.-X. Lu, E. Wang, J.-J. Xie, L.-S. Geng, and E. Oset, The Λ → J/ψK<sup>0</sup> ~b~ Λ reaction and a hidden-charm pentaquark state with strangeness, Phys. Rev. D
 
-- [37] J.-X. Lu, E. Wang, J.-J. Xie, L.-S. Geng, and E. Oset, The
-
-Λ~b~ → J/ψK<sup>0</sup>Λ reaction and a hidden-charm pentaquark state with strangeness, Phys. Rev. D **93** , 094009 (2016), arXiv:1601.00075 [hep-ph].
+**93** , 094009 (2016), arXiv:1601.00075 [hep-ph].
 
 - [38] R. Chen, J. He, and X. Liu, Possible strange hidden-charm
 
@@ -96,19 +94,13 @@ strangeness S = −1 from Ξ decay into J/ψK Λ, Phys. b Rev. C **93** , 065203
 
 **101** , 034018 (2020), arXiv:1912.12592 [hep-ph].
 
-- [41] R. Aaij et al. (LHCb), Evidence of a J/ψΛ structure and ob-
-
-− − −
-
-servation of excited Ξ states in the Ξ → J/ψΛK decay, ~b~ Sci. Bull.
+- [41] R. Aaij et al. (LHCb), Evidence of a J/ψΛ structure and observation of excited Ξ<sup>−</sup> states in the Ξ<sup>−</sup> → J/ψΛK<sup>−</sup> decay, b Sci. Bull.
 
 **66** , 1278 (2021), arXiv:2012.10380 [hep-ex].
 
-- [42] R. Aaij et al. (LHCb), Observation of a J/ψΛ Resonance Consistent with a Strange Pentaquark Candidate in
+- [42] R. Aaij et al. (LHCb), Observation of a J/ψΛ Resonance Consistent with a Strange Pentaquark Candidate in B<sup>−</sup> → J/ψΛ¯p Decays, Phys. Rev. Lett.
 
-−
-
-B → J/ψΛ¯p Decays, Phys. Rev. Lett. **131** , 031901 (2023), arXiv:2210.10346 [hep-ex].
+**131** , 031901 (2023), arXiv:2210.10346 [hep-ex].
 
 - [43] H.-X. Chen, W. Chen, X. Liu, and X.-H. Liu, Establishing the first hidden-charm pentaquark with strangeness, Eur. Phys. J. C
 

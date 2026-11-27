@@ -20,6 +20,8 @@ Let x stand for the number of dollars John has; then x + 8 is the number of doll
 
 But 24 is the number of dollars they both have.
 
+$$
 ∴ x + (x + 8) = 24.
+$$
 
-Removing the parenthesis, x + x + 8 = 24.
+Removing the parenthesis, $x + x + 8 = 24$.
