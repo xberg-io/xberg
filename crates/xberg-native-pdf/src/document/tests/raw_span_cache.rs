@@ -297,24 +297,32 @@ fn preserved_geometry_is_paired_only_when_announced_while_the_passes_run() {
     assert_eq!(page_span_interpretations() - before, 1, "release ends the pairing");
 }
 
-/// A budget that holds every page's flattened entry and nothing more still holds them all with
-/// preserved reads paired: a preserved entry only takes its page's share of the budget.
-#[test]
-fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
-    const PAGES: usize = 4;
-    let pdf = many_pages_pdf(PAGES);
-    let unpaired = PdfDocument::from_bytes(pdf.clone()).unwrap();
+/// The page-pass cache bytes of the flattened entries of pages `0..pages` as a paired read stores
+/// them: an unpaired read's entry plus the shared, empty CMSY witness list a paired read captures.
+fn paired_flattened_bytes(pdf: &[u8], pages: usize) -> usize {
+    let unpaired = PdfDocument::from_bytes(pdf.to_vec()).unwrap();
     unpaired.begin_page_passes();
-    for page in 0..PAGES {
+    for page in 0..pages {
         drop(unpaired.extract_spans_raw(page).unwrap());
     }
-    let flattened_bytes = unpaired
+    let unpaired_bytes = unpaired
         .raw_page_spans_cache
         .lock()
         .unwrap()
         .as_ref()
         .unwrap()
         .used_bytes();
+    let witness_block = 2 * size_of::<usize>() + size_of::<Vec<crate::layout::TextSpan>>();
+    unpaired_bytes + pages * witness_block
+}
+
+/// A budget that holds every page's flattened entry and nothing more still holds them all with
+/// preserved reads paired: a preserved entry only takes its page's share of the budget.
+#[test]
+fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
+    const PAGES: usize = 4;
+    let pdf = many_pages_pdf(PAGES);
+    let flattened_bytes = paired_flattened_bytes(&pdf, PAGES);
 
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     doc.begin_page_passes();
@@ -340,18 +348,7 @@ fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
 fn a_flattened_read_skips_the_preserved_finish_the_budget_would_refuse() {
     const PAGES: usize = 4;
     let pdf = many_pages_pdf(PAGES);
-    let unpaired = PdfDocument::from_bytes(pdf.clone()).unwrap();
-    unpaired.begin_page_passes();
-    for page in 0..2 {
-        drop(unpaired.extract_spans_raw(page).unwrap());
-    }
-    let two_pages_bytes = unpaired
-        .raw_page_spans_cache
-        .lock()
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .used_bytes();
+    let two_pages_bytes = paired_flattened_bytes(&pdf, 2);
 
     let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
     doc.begin_page_passes();
