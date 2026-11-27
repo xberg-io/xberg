@@ -618,7 +618,8 @@ fn grid_spans() -> Vec<TextSpan> {
 fn detected(lines: &[PathContent], spans: &[TextSpan]) -> Vec<Table> {
     let config = crate::structure::spatial_table_detector::TableDetectionConfig::default();
     let centers = crate::structure::spatial_table_detector::horizontal_text_centers(spans);
-    crate::structure::spatial_table_detector::detect_intersections(spans, lines, &config, &centers, None)
+    let edges = crate::structure::spatial_table_detector::extract_edges(lines);
+    crate::structure::spatial_table_detector::detect_intersections(spans, lines, &edges, &config, &centers, None)
 }
 
 fn header_flags(tables: &[Table]) -> Vec<bool> {

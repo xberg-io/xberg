@@ -3386,6 +3386,7 @@ fn detect_tables_from_intersections(
     detect_intersections(
         spans,
         lines,
+        &extract_edges(lines),
         config,
         &horizontal_text_centers(spans),
         Some(&mut RecoveredIntersection::default()),
@@ -3398,14 +3399,17 @@ struct RecoveredIntersection {
     double_rule: bool,
 }
 
+/// `edges` are `extract_edges(lines)`, computed once by the caller.
 fn detect_intersections(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
+    edges: &(Vec<Edge>, Vec<Edge>),
     config: &TableDetectionConfig,
     text_centers: &[(f32, f32)],
     mut recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
-    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, spans, text_centers, config);
+    let (groups, v_edges, cells_are_intersections) =
+        build_grid_from_edges(edges.0.clone(), edges.1.clone(), spans, text_centers, config);
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
@@ -3476,7 +3480,7 @@ fn detect_intersections(
     // Use merged H-edges (to detect full-width lines) but only snap (do NOT
     // join) V-edges — joining would merge separate per-section V-segments
     // into a single long edge, hiding the section boundary discontinuity. ~keep
-    let (mut h_edges, mut v_edges) = extract_edges(lines);
+    let (mut h_edges, mut v_edges) = edges.clone();
     snap_and_merge(&mut h_edges);
     snap_edges(&mut v_edges);
     #[cfg(test)]
@@ -3512,7 +3516,18 @@ fn detect_intersections(
     tables
 }
 
-/// Steps 1-4: extract edges, find intersections, build cells, and group them
+#[cfg(test)]
+fn build_grid_from_lines(
+    lines: &[crate::elements::PathContent],
+    spans: &[TextSpan],
+    text_centers: &[(f32, f32)],
+    config: &TableDetectionConfig,
+) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
+    let (h_edges, v_edges) = extract_edges(lines);
+    build_grid_from_edges(h_edges, v_edges, spans, text_centers, config)
+}
+
+/// Steps 1-4: from the extracted edges, find intersections, build cells, and group them
 /// into per-table cell groups with their grid boundaries.
 ///
 /// Returns one `(group_cells, xs, ys, num_cols)` tuple per table group, plus the V edges used
@@ -3522,13 +3537,13 @@ fn detect_intersections(
 /// `spans` close the open outer columns of interior-ruled tables; `text_centers` are the
 /// centres of their unrotated horizontal spans (`horizontal_text_centers`), computed once by
 /// the caller, and keep an unruled text column inside a ruled table.
-fn build_grid_from_lines(
-    lines: &[crate::elements::PathContent],
+fn build_grid_from_edges(
+    mut h_edges: Vec<Edge>,
+    mut v_edges: Vec<Edge>,
     spans: &[TextSpan],
     text_centers: &[(f32, f32)],
     config: &TableDetectionConfig,
 ) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
-    let (mut h_edges, mut v_edges) = extract_edges(lines);
     snap_and_merge(&mut h_edges);
     snap_and_merge(&mut v_edges);
     let open_column_edges = open_outer_column_edges(&h_edges, &v_edges, spans);
@@ -5228,7 +5243,16 @@ fn tables_from_horizontal_rules(
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
-    let (mut h_edges, _) = extract_edges(lines);
+    tables_from_horizontal_edges(spans, lines, extract_edges(lines).0, config)
+}
+
+/// `h_edges` are the horizontal edges `extract_edges(lines)` yields.
+fn tables_from_horizontal_edges(
+    spans: &[TextSpan],
+    lines: &[crate::elements::PathContent],
+    mut h_edges: Vec<Edge>,
+    config: &TableDetectionConfig,
+) -> Vec<Table> {
     if h_edges.is_empty() || has_vertical_ruling_evidence(lines, &h_edges) {
         return Vec::new();
     }
@@ -5402,11 +5426,12 @@ fn detect_with_unmodified_paths(
     recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
     let text_centers = horizontal_text_centers(spans);
+    let edges = extract_edges(lines);
     if matches!(
         (config.horizontal_strategy, config.vertical_strategy),
         (TableStrategy::Lines, TableStrategy::Lines)
     ) {
-        let mut tables = detect_intersections(spans, lines, config, &text_centers, recovery);
+        let mut tables = detect_intersections(spans, lines, &edges, config, &text_centers, recovery);
         if tables.is_empty() {
             for cluster in group_lines_into_clusters(lines, config) {
                 tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
@@ -5419,7 +5444,7 @@ fn detect_with_unmodified_paths(
     }
     // Both / hybrid strategy: try intersection-based first, then cluster, then H-rule bounded,
     // then text fallback. ~keep
-    let mut final_tables = detect_intersections(spans, lines, config, &text_centers, recovery);
+    let mut final_tables = detect_intersections(spans, lines, &edges, config, &text_centers, recovery);
     if final_tables.is_empty() {
         let clusters = group_lines_into_clusters(lines, config);
         for cluster in clusters {
@@ -5429,7 +5454,7 @@ fn detect_with_unmodified_paths(
     // When intersection and cluster pipelines found nothing, try H-rule bounded detection:
     // use horizontal lines as table region boundaries with text-edge column detection. ~keep
     if final_tables.is_empty() {
-        final_tables = tables_from_horizontal_rules(spans, lines, config);
+        final_tables = tables_from_horizontal_edges(spans, lines, edges.0, config);
     }
     // Filter out invalid line-based tables BEFORE overlap checking so that
     // spurious line-based tables don't shadow valid text-based ones. ~keep
