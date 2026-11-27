@@ -1225,8 +1225,16 @@ fn push_paragraph_element_by_kind(
     }
 
     if para.is_formula {
-        let text = get_text(para);
-        return builder.push_formula(&text, page, bbox);
+        if para.layout_class == Some(LayoutHintClass::Formula) || !paragraph_has_scripts(para) {
+            let text = get_text(para);
+            return builder.push_formula(&text, page, bbox);
+        }
+        // Display math carries only text, so the native exponents and indices of an equation
+        // the font heuristic marked are written into its TeX source instead of annotations.
+        let (text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
+        if let Some(tex) = scripts_as_tex(&text, &annotations) {
+            return builder.push_formula(&tex, page, bbox);
+        }
     }
 
     if para.is_list_item {
@@ -1324,19 +1332,40 @@ fn push_text_with_inline_math(
         return builder.push_paragraph(text, annotations, page, bbox);
     }
 
+    let scripts: Vec<&TextAnnotation> = annotations
+        .iter()
+        .filter(|annotation| matches!(annotation.kind, AnnotationKind::Superscript | AnnotationKind::Subscript))
+        .collect();
     let spans: Vec<(usize, usize)> = spans
         .into_iter()
         .map(|(start, end)| (start as usize, end as usize))
+        .filter(|&(start, end)| math_span_holds_its_scripts(text, &scripts, start, end))
         .collect();
+    if spans.is_empty() {
+        return builder.push_paragraph(text, annotations, page, bbox);
+    }
     let mut marked = String::with_capacity(text.len() + 2 * spans.len());
+    let mut start_map = vec![0usize; text.len() + 1];
+    let mut end_map = vec![0usize; text.len() + 1];
     let mut math_annotations = Vec::with_capacity(spans.len());
+    let mut converted = Vec::new();
     let mut cursor = 0usize;
     for &(start, end) in &spans {
-        marked.push_str(&text[cursor..start]);
+        copy_mapped(&mut marked, text, cursor, start, &mut start_map, &mut end_map);
+        end_map[start] = marked.len();
         let delimited_start = marked.len();
         marked.push('$');
-        marked.push_str(&text[start..end]);
+        start_map[start] = marked.len();
+        let inside: Vec<&TextAnnotation> = scripts
+            .iter()
+            .copied()
+            .filter(|script| script.start as usize >= start && script.end as usize <= end)
+            .collect();
+        append_math_source(&mut marked, text, start, end, &inside, &mut start_map, &mut end_map);
+        converted.extend(inside.iter().map(|script| (script.start, script.end)));
+        end_map[end] = marked.len();
         marked.push('$');
+        start_map[end] = marked.len();
         math_annotations.push(TextAnnotation {
             start: delimited_start as u32,
             end: marked.len() as u32,
@@ -1344,32 +1373,105 @@ fn push_text_with_inline_math(
         });
         cursor = end;
     }
-    marked.push_str(&text[cursor..]);
-    shift_annotations_for_math_delimiters(&mut annotations, &spans);
+    copy_mapped(&mut marked, text, cursor, text.len(), &mut start_map, &mut end_map);
+    start_map[text.len()] = marked.len();
+    end_map[text.len()] = marked.len();
+    annotations.retain(|annotation| !converted.contains(&(annotation.start, annotation.end)));
+    for annotation in annotations.iter_mut() {
+        annotation.start = start_map[annotation.start as usize] as u32;
+        annotation.end = end_map[annotation.end as usize] as u32;
+    }
     annotations.extend(math_annotations);
     let index = builder.push_paragraph(&marked, annotations, page, bbox);
     builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, text);
     index
 }
 
-/// Move annotation ranges from the source text onto `marked`, which carries a `$` before
-/// and after every math span.
-///
-/// A start moves past a delimiter inserted at or before it; an end stops before a closing
-/// delimiter inserted exactly at it. An annotation over a math run therefore keeps
-/// covering the run's characters instead of one of its delimiters, and every boundary
-/// stays on a UTF-8 character boundary because the insertion points already are.
-fn shift_annotations_for_math_delimiters(annotations: &mut [TextAnnotation], spans: &[(usize, usize)]) {
-    for annotation in annotations.iter_mut() {
-        let start = annotation.start as usize;
-        let end = annotation.end as usize;
-        let start_shift = spans.iter().filter(|(span_start, _)| *span_start <= start).count()
-            + spans.iter().filter(|(_, span_end)| *span_end <= start).count();
-        let end_shift = spans.iter().filter(|(span_start, _)| *span_start < end).count()
-            + spans.iter().filter(|(_, span_end)| *span_end < end).count();
-        annotation.start = (start + start_shift) as u32;
-        annotation.end = (end + end_shift) as u32;
+/// Whether a script annotation is an exponent or index worth writing as TeX: it follows a
+/// character of its base directly and holds a letter or digit (not a stray `=` or bracket).
+fn script_reads_as_index(text: &str, script: &TextAnnotation) -> bool {
+    let (start, end) = (script.start as usize, script.end as usize);
+    text.get(..start)
+        .and_then(|before| before.chars().next_back())
+        .is_some_and(|ch| !ch.is_whitespace())
+        && text
+            .get(start..end)
+            .is_some_and(|body| body.chars().any(char::is_alphanumeric))
+}
+
+/// Whether every script annotation touching `start..end` lies inside it behind a base and
+/// clear of the others, so the run can carry them as `^{..}` and `_{..}`.
+fn math_span_holds_its_scripts(text: &str, scripts: &[&TextAnnotation], start: usize, end: usize) -> bool {
+    let touching: Vec<&&TextAnnotation> = scripts
+        .iter()
+        .filter(|script| (script.start as usize) < end && (script.end as usize) > start)
+        .collect();
+    touching.iter().enumerate().all(|(index, script)| {
+        script.start as usize > start
+            && script.end as usize <= end
+            && script.end > script.start
+            && script_reads_as_index(text, script)
+            && touching[index + 1..]
+                .iter()
+                .all(|other| script.end <= other.start || other.end <= script.start)
+    })
+}
+
+/// Copy `text[from..to]` onto `out`, recording where each source offset lands.
+fn copy_mapped(out: &mut String, text: &str, from: usize, to: usize, start_map: &mut [usize], end_map: &mut [usize]) {
+    for (offset, ch) in text[from..to].char_indices() {
+        start_map[from + offset] = out.len();
+        end_map[from + offset] = out.len();
+        out.push(ch);
     }
+}
+
+/// Append `text[start..end]` as TeX source: each script annotation inside it becomes
+/// `^{..}` or `_{..}`. `scripts` must satisfy [`math_span_holds_its_scripts`].
+fn append_math_source(
+    out: &mut String,
+    text: &str,
+    start: usize,
+    end: usize,
+    scripts: &[&TextAnnotation],
+    start_map: &mut [usize],
+    end_map: &mut [usize],
+) {
+    let mut ordered: Vec<&&TextAnnotation> = scripts.iter().collect();
+    ordered.sort_by_key(|script| script.start);
+    let mut cursor = start;
+    for script in ordered {
+        let (script_start, script_end) = (script.start as usize, script.end as usize);
+        copy_mapped(out, text, cursor, script_start, start_map, end_map);
+        start_map[script_start] = out.len();
+        end_map[script_start] = out.len();
+        out.push_str(if script.kind == AnnotationKind::Superscript {
+            "^{"
+        } else {
+            "_{"
+        });
+        copy_mapped(out, text, script_start, script_end, start_map, end_map);
+        out.push('}');
+        cursor = script_end;
+    }
+    copy_mapped(out, text, cursor, end, start_map, end_map);
+}
+
+/// The whole of `text` as TeX source with its script annotations written as `^{..}` and
+/// `_{..}`, or `None` when one has no base or overlaps another.
+fn scripts_as_tex(text: &str, annotations: &[TextAnnotation]) -> Option<String> {
+    let scripts: Vec<&TextAnnotation> = annotations
+        .iter()
+        .filter(|annotation| matches!(annotation.kind, AnnotationKind::Superscript | AnnotationKind::Subscript))
+        .collect();
+    if !math_span_holds_its_scripts(text, &scripts, 0, text.len()) {
+        return None;
+    }
+    let mut out = String::with_capacity(text.len() + 3 * scripts.len());
+    let mut start_map = vec![0usize; text.len() + 1];
+    let mut end_map = vec![0usize; text.len() + 1];
+    append_math_source(&mut out, text, 0, text.len(), &scripts, &mut start_map, &mut end_map);
+    Some(out)
 }
 
 // The caller has matched a source CMSY glyph. Require the complete bounded
@@ -4342,6 +4444,142 @@ mod tests {
             "\u{03B1}",
             "the annotation must cover the same character once the delimiters are inserted"
         );
+    }
+
+    fn script_note(text: &str, marker: &str, kind: AnnotationKind) -> TextAnnotation {
+        let start = text.find(marker).unwrap() as u32;
+        TextAnnotation {
+            start,
+            end: start + marker.len() as u32,
+            kind,
+        }
+    }
+
+    /// A math span has no place for a script annotation, so the script moves into the TeX
+    /// source as `^{..}` and the other annotations follow their text.
+    #[test]
+    fn inline_math_writes_a_covered_script_into_its_source() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = "Let y = x5 and see Fig.";
+        let annotations = vec![
+            script_note(text, "5", AnnotationKind::Superscript),
+            script_note(text, "Fig", AnnotationKind::Italic),
+        ];
+        push_text_with_inline_math(&mut builder, text, annotations, None, None);
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "Let $y = x^{5}$ and see Fig.");
+        assert!(
+            element
+                .annotations
+                .iter()
+                .all(|annotation| annotation.kind != AnnotationKind::Superscript)
+        );
+        let italic = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind == AnnotationKind::Italic)
+            .unwrap();
+        assert_eq!(&element.text[italic.start as usize..italic.end as usize], "Fig");
+    }
+
+    #[test]
+    fn inline_math_writes_a_subscript_as_an_index() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = "so x1 = 0 here";
+        push_text_with_inline_math(
+            &mut builder,
+            text,
+            vec![script_note(text, "1", AnnotationKind::Subscript)],
+            None,
+            None,
+        );
+        assert_eq!(builder.build().elements[0].text, "so $x_{1} = 0$ here");
+    }
+
+    /// A run whose script has no base inside it cannot be written as TeX, so the paragraph keeps
+    /// its text and its annotation.
+    #[test]
+    fn inline_math_leaves_a_run_alone_when_a_script_straddles_its_edge() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = "Let y = x5 here.";
+        let straddling = TextAnnotation {
+            start: text.find('5').unwrap() as u32,
+            end: text.find('5').unwrap() as u32 + 3,
+            kind: AnnotationKind::Superscript,
+        };
+        push_text_with_inline_math(&mut builder, text, vec![straddling], None, None);
+        let document = builder.build();
+        assert_eq!(document.elements[0].text, text);
+        assert_eq!(document.elements[0].annotations.len(), 1);
+    }
+
+    #[test]
+    fn scripts_as_tex_writes_superscripts_subscripts_and_refuses_a_baseless_script() {
+        let text = "E = mc2 + a1";
+        let annotations = [
+            script_note(text, "2", AnnotationKind::Superscript),
+            script_note(text, "1", AnnotationKind::Subscript),
+        ];
+        assert_eq!(
+            scripts_as_tex(text, &annotations).as_deref(),
+            Some("E = mc^{2} + a_{1}")
+        );
+        let baseless = [TextAnnotation {
+            start: 0,
+            end: 1,
+            kind: AnnotationKind::Superscript,
+        }];
+        assert_eq!(scripts_as_tex(text, &baseless), None);
+        assert_eq!(scripts_as_tex("x = 1", &[]).as_deref(), Some("x = 1"));
+    }
+
+    fn scripted_equation(layout_class: Option<LayoutHintClass>) -> PdfParagraph {
+        let base = SegmentData {
+            width: 30.0,
+            font_size: 12.0,
+            ..plain_segment("E = mc")
+        };
+        let exponent = SegmentData {
+            x: 30.0,
+            y: 703.0,
+            width: 4.0,
+            height: 8.0,
+            font_size: 8.0,
+            baseline_y: 703.0,
+            ..plain_segment("2")
+        };
+        let mut para = make_paragraph("", None);
+        para.lines[0].segments = vec![base, exponent];
+        para.is_formula = true;
+        para.layout_class = layout_class;
+        para
+    }
+
+    /// The font heuristic marks an equation line; its native exponent reaches display math as TeX.
+    #[test]
+    fn a_heuristic_equation_with_a_native_exponent_is_display_math_with_the_exponent() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        let para = scripted_equation(None);
+        push_paragraph_element_by_kind(&mut builder, &para, None, &Default::default());
+        let document = builder.build();
+        assert_eq!(document.elements[0].kind, ElementKind::Formula);
+        assert_eq!(document.elements[0].text, "E = mc^{2}");
+    }
+
+    /// A line the layout model classed as a formula keeps its text as recognised.
+    #[test]
+    fn a_layout_formula_with_a_native_exponent_keeps_its_text() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        let para = scripted_equation(Some(LayoutHintClass::Formula));
+        push_paragraph_element_by_kind(&mut builder, &para, None, &Default::default());
+        let document = builder.build();
+        assert_eq!(document.elements[0].kind, ElementKind::Formula);
+        assert_eq!(document.elements[0].text, "E = mc2");
     }
 
     /// A paragraph with no inline math run keeps its annotations byte for byte.

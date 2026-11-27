@@ -33,9 +33,11 @@ pub(super) fn is_phrase(text: &str) -> bool {
     trimmed.chars().count() > 3 || trimmed.contains(char::is_whitespace)
 }
 
-/// Whether a raised span is wide enough to carry more than one glyph.
+/// Whether a raised span carries more than one glyph: two or more characters, wide enough
+/// that they are not a lone mark. A single wide glyph (the minus of `10^-4`, `m`) advances
+/// past `RUN_MIN_WIDTH_EM` too, so the width alone cannot tell it from a run.
 fn is_multi_glyph_run(text: &str, width: f32, font_size: f32) -> bool {
-    !text.trim().is_empty() && font_size > 0.0 && width > font_size * RUN_MIN_WIDTH_EM
+    text.chars().filter(|ch| !ch.is_whitespace()).count() > 1 && font_size > 0.0 && width > font_size * RUN_MIN_WIDTH_EM
 }
 
 /// Base-line Y each span snaps to for reading order, or `None` when it stays on its own line.
@@ -180,6 +182,17 @@ mod tests {
 
         let lone: Vec<OrderingSpan<'_>> = vec![("base", 100.0, 700.0, 20.0, 12.0), ("f", 120.0, 704.56, 4.0, 8.0)];
         assert_eq!(ordering_script_baselines(&lone), [None, None]);
+    }
+
+    #[test]
+    fn should_leave_a_lone_wide_minus_raw_beside_its_exponent_digit() {
+        // `10` then a raised `\u{2212}` (0.65em wide) and `4`: the minus advances past 0.6em but is one glyph.
+        let exponent: Vec<OrderingSpan<'_>> = vec![
+            ("10", 221.96, 700.0, 9.5, 10.0),
+            ("\u{2212}", 231.42, 704.4, 4.31, 6.67),
+            ("4", 235.73, 704.4, 3.55, 6.67),
+        ];
+        assert_eq!(ordering_script_baselines(&exponent)[1], None);
     }
 
     #[test]

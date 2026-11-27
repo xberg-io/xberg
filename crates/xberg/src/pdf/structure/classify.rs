@@ -335,6 +335,9 @@ const FORMULA_MIN_MATH_CHARS: usize = 3;
 
 /// Mark paragraphs whose text reads as a standalone equation.
 ///
+/// A fragment of an equation, a legend or a row of numbers carries math characters without
+/// a relation joining two operands; only a line with one is written as display math.
+///
 /// This is the font-independent half of `classify_paragraphs`, split out so the
 /// heuristic extraction path — which has no structure tree and therefore never
 /// runs `classify_paragraphs` — classifies an equation line the same way. Without
@@ -381,6 +384,7 @@ fn reads_as_formula(text: &str) -> bool {
     (math_char_count >= FORMULA_MIN_MATH_CHARS
         || (math_char_count as f64 / total_chars as f64) >= FORMULA_MIN_MATH_DENSITY)
         && reads_as_equation_structure(text)
+        && super::math_inline::relations_join_operands(text)
 }
 
 /// Whether `text` is structured as an equation line rather than a sentence.
@@ -3891,6 +3895,49 @@ mod tests {
         assert!(
             !paragraphs[0].is_formula,
             "a sentence carrying symbols is prose, so inline math can annotate it"
+        );
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_keeps_number_records_and_equation_fragments_paragraphs() {
+        for text in [
+            "2.078075267D+04 2.859351226D+00 1.901912370D+00 7.301045660D-03-9.139769870D-06",
+            "=4.0",
+            "ED, L=6 ED, L=8 QMC, L=6 QMC, L=8",
+        ] {
+            let mut paragraphs = vec![make_text_paragraph(12.0, text, false)];
+            classify_formula_paragraphs(&mut paragraphs);
+            assert!(!paragraphs[0].is_formula, "{text} has no relation joining two operands");
+        }
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_marks_equations_with_symbol_operands() {
+        for text in [
+            "xy = z",
+            "A = \u{221E}",
+            "E = mc^2",
+            "lim x \u{2192} \u{221E}",
+            "A \u{222A} B = C",
+            "\u{2211} x\u{2208}S f(x) \u{2264} \u{221E}",
+        ] {
+            let mut paragraphs = vec![make_text_paragraph(12.0, text, false)];
+            classify_formula_paragraphs(&mut paragraphs);
+            assert!(paragraphs[0].is_formula, "{text} is an equation line");
+        }
+    }
+
+    #[test]
+    fn classify_paragraphs_applies_the_same_relation_gate_as_the_heuristic_path() {
+        let heading_map = vec![(12.0, None)];
+        let mut equation = vec![make_text_paragraph(12.0, "E = mc^2", false)];
+        classify_paragraphs(&mut equation, &heading_map);
+        assert!(equation[0].is_formula);
+        let mut fragment = vec![make_text_paragraph(12.0, "=4.0 \u{00B1}", false)];
+        classify_paragraphs(&mut fragment, &heading_map);
+        assert!(
+            !fragment[0].is_formula,
+            "a relation with no left operand is not an equation line"
         );
     }
 
