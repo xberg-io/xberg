@@ -62,12 +62,11 @@ impl<'doc> TextExtractor<'doc> {
         // rationale (unchanged, just split out for file size). ~keep
         let ligature_glyph = buffer.is_lone_ligature();
         let text = std::mem::take(&mut buffer.unicode);
-        let stream_text = (!text.is_ascii()).then(|| text.clone());
-        let text = Self::correct_tj_buffer_rtl_order(text, &buffer);
+        let (text, reordered) = Self::correct_tj_buffer_rtl_order(text, &buffer);
         // The widths are in stream order; once the text is reversed they no
         // longer describe its characters, and an empty list is the shape every
         // consumer already tolerates. ~keep
-        if stream_text.is_some_and(|before| before != text) {
+        if reordered {
             buffer.char_widths.clear();
         }
 
@@ -136,14 +135,17 @@ impl<'doc> TextExtractor<'doc> {
     /// only ever sums *positive* glyph widths — TJ kerning offsets never
     /// subtract from it) is true for nearly every non-empty RTL buffer and
     /// so was unconditionally reversing every RTL run regardless of its
-    /// actual source order. ~keep
-    fn correct_tj_buffer_rtl_order(text: String, buffer: &TjBuffer) -> String {
+    /// actual source order.
+    ///
+    /// Returns the corrected text and whether it differs from the stream
+    /// order it arrived in. ~keep
+    fn correct_tj_buffer_rtl_order(text: String, buffer: &TjBuffer) -> (String, bool) {
         if text.len() <= 1 {
-            return text;
+            return (text, false);
         }
         let has_rtl = text.chars().any(|c| crate::text::rtl_detector::is_rtl_text(c as u32));
         if !has_rtl {
-            return text;
+            return (text, false);
         }
         let chars: Vec<char> = text.chars().collect();
         let verdict = if chars.len() == buffer.char_widths.len() && !buffer.char_widths.is_empty() {
@@ -158,12 +160,14 @@ impl<'doc> TextExtractor<'doc> {
         } else {
             crate::text::bidi::RunOrder::Ambiguous
         };
-        crate::text::bidi::apply_rtl_verdict(
+        let corrected = crate::text::bidi::apply_rtl_verdict(
             &text,
             verdict,
             buffer.accumulated_width > 0.0,
             matches!(buffer.render_mode, 3 | 7),
-        )
+        );
+        let reordered = corrected != text;
+        (corrected, reordered)
     }
 
     /// Calculate total width of TJ buffer using PDF spec formula.
