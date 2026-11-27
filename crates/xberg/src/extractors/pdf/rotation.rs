@@ -18,7 +18,8 @@
 //!
 //! This does not fully close GH#1358. What is repaired here is assembly
 //! *within* each same-rotation run: word order along the run's own advance
-//! axis, and the word gaps between fragments. Reading order *between* regions
+//! axis, the word gaps between fragments and, on the hint-free path, the
+//! top-to-bottom order of the run's lines. Reading order *between* regions
 //! on a rotated page — which rotated block precedes which — is layout-hint
 //! work and lives in `super::reading_order`, unchanged.
 
@@ -96,7 +97,9 @@ pub(crate) fn upright_reading_origin(span: &TextSpan) -> (f32, f32) {
 /// [`ROTATED_LINE_CROSS_TOLERANCE_RATIO`] of the run's own font extent count
 /// as the same line), sorts each line strictly by advance-axis position, and
 /// inserts a space wherever the advance-axis gap between consecutive spans
-/// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff.
+/// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff. It keeps the line
+/// order it is given, so a layout-hint order passes through unchanged; the
+/// hint-free repair orders lines itself in [`assemble_in_reading_frames`].
 ///
 /// Unrotated spans take the old code path verbatim (back-to-back
 /// concatenation, no reordering, no inserted separators), so this function is
@@ -173,6 +176,273 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
         append_rotated_line(text, spans, &indices[line_start..line_end]);
         line_start = line_end;
     }
+}
+
+/// A span of a rotated run reduced to the keys ordering needs, computed once:
+/// its advance-axis extent and its cross-axis position in the upright frame.
+#[derive(Clone, Copy)]
+struct Placed {
+    index: usize,
+    start: f32,
+    end: f32,
+    cross: f32,
+}
+
+/// Body height assumed for a run none of whose spans reports a usable height.
+const FALLBACK_BODY_HEIGHT: f32 = 10.0;
+
+/// An advance-axis gap wider than this many body heights can be a gutter.
+const GUTTER_MIN_HEIGHTS: f32 = 1.5;
+
+/// A gutter must not exceed this fraction of the narrower neighbouring block.
+/// Table cells sit further apart than they are wide, columns of prose sit
+/// closer together than they are wide, and that is the only thing telling an
+/// aligned-baseline pair of columns from a table row.
+const GUTTER_MAX_BLOCK_FRACTION: f32 = 0.5;
+
+/// Most lines peeled off each end when a title and a footer both span the columns.
+const MAX_BAND_LINES: usize = 3;
+
+/// Fewest lines a column must hold for a gutter to cut it off.
+const MIN_LINES_PER_COLUMN: usize = 2;
+
+/// Deepest nesting of column and band cuts tried on one run.
+const MAX_CUT_DEPTH: usize = 6;
+
+/// The run's body height: the median of its usable span heights. Line and
+/// gutter tolerances scale with it, so a superscript marker or a zero-height
+/// span neither splits a line nor gets one of its own.
+fn body_height(spans: &[TextSpan], run: &[usize]) -> f32 {
+    let mut heights: Vec<f32> = run
+        .iter()
+        .filter_map(|&index| spans.get(index))
+        .map(|span| span.height)
+        .filter(|height| height.is_finite() && *height > 0.0)
+        .collect();
+    if heights.is_empty() {
+        return FALLBACK_BODY_HEIGHT;
+    }
+    heights.sort_by(f32::total_cmp);
+    heights[heights.len() / 2]
+}
+
+/// Group spans into lines by cross-axis proximity, top line first. Each line
+/// keeps its members in cross order; assembly sorts them along the advance axis.
+fn cluster_lines(placed: &[Placed], tolerance: f32) -> Vec<Vec<Placed>> {
+    let mut sorted = placed.to_vec();
+    sorted.sort_by(|a, b| b.cross.total_cmp(&a.cross));
+    let mut lines: Vec<Vec<Placed>> = Vec::new();
+    let mut anchor = f32::NAN;
+    for span in sorted {
+        match lines.last_mut().filter(|_| (anchor - span.cross).abs() <= tolerance) {
+            Some(line) => line.push(span),
+            None => {
+                anchor = span.cross;
+                lines.push(vec![span]);
+            }
+        }
+    }
+    lines
+}
+
+/// Where `placed` (sorted by advance start) splits into side-by-side columns:
+/// the index of the first span of the right-hand part. The cut is a gap in the
+/// union of the spans' advance extents that is wider than a gutter and no wider
+/// than [`GUTTER_MAX_BLOCK_FRACTION`] of the narrower block beside it, and that
+/// `accept` takes; a gutter `accept` turns down does not stop the search.
+fn column_cut(placed: &[Placed], body: f32, accept: impl Fn(usize) -> bool) -> Option<usize> {
+    let mut blocks: Vec<(f32, f32, usize)> = Vec::new();
+    for (position, span) in placed.iter().enumerate() {
+        match blocks.last_mut() {
+            Some(block) if span.start <= block.1 => block.1 = block.1.max(span.end),
+            _ => blocks.push((span.start, span.end, position)),
+        }
+    }
+    blocks
+        .windows(2)
+        .filter(|pair| is_gutter((pair[0].0, pair[0].1), (pair[1].0, pair[1].1), body))
+        .map(|pair| pair[1].2)
+        .find(|&cut| accept(cut))
+}
+
+/// True when the gap between two neighbouring advance-axis blocks is a gutter.
+fn is_gutter(left: (f32, f32), right: (f32, f32), body: f32) -> bool {
+    let gap = right.0 - left.1;
+    let narrower = (left.1 - left.0).min(right.1 - right.0);
+    gap > body * GUTTER_MIN_HEIGHTS && gap <= narrower * GUTTER_MAX_BLOCK_FRACTION
+}
+
+/// Merge the extent `start..end` into the sorted, disjoint `blocks`.
+fn insert_extent(blocks: &mut Vec<(f32, f32)>, start: f32, end: f32) {
+    let first = blocks.partition_point(|block| block.1 < start);
+    let (mut low, mut high) = (start, end);
+    let mut last = first;
+    while last < blocks.len() && blocks[last].0 <= end {
+        low = low.min(blocks[last].0);
+        high = high.max(blocks[last].1);
+        last += 1;
+    }
+    blocks.splice(first..last, [(low, high)]);
+}
+
+fn has_gutter(blocks: &[(f32, f32)], body: f32) -> bool {
+    blocks.windows(2).any(|pair| is_gutter(pair[0], pair[1], body))
+}
+
+fn by_start(placed: &[Placed]) -> Vec<Placed> {
+    let mut sorted = placed.to_vec();
+    sorted.sort_by(|a, b| a.start.total_cmp(&b.start));
+    sorted
+}
+
+/// Order `placed` as lines: side-by-side columns one after the other, left to
+/// right, and a band that spans the columns (a title, a footer) before or after
+/// the columns it spans. Without a column or band cut, lines read top to bottom.
+///
+/// A column cut needs at least [`MIN_LINES_PER_COLUMN`] lines on each side, so a
+/// single row of cells, a header row or a letter-spaced heading stays one line.
+/// A title and a footer around the columns are found only when each is at most
+/// [`MAX_BAND_LINES`] lines. Cutting stops at [`MAX_CUT_DEPTH`] levels of nesting; a page more deeply
+/// divided than that keeps its remaining blocks in top-to-bottom line order.
+fn order_block(placed: &[Placed], body: f32, depth: usize) -> Vec<Vec<usize>> {
+    let tolerance = body * ROTATED_LINE_CROSS_TOLERANCE_RATIO;
+    let lines = cluster_lines(placed, tolerance);
+    let as_indices = |lines: Vec<Vec<Placed>>| -> Vec<Vec<usize>> {
+        lines
+            .into_iter()
+            .map(|line| line.into_iter().map(|span| span.index).collect())
+            .collect()
+    };
+    if depth >= MAX_CUT_DEPTH || lines.len() < 2 {
+        return as_indices(lines);
+    }
+
+    let sorted = by_start(placed);
+    let two_columns = |cut: usize| {
+        cluster_lines(&sorted[..cut], tolerance).len() >= MIN_LINES_PER_COLUMN
+            && cluster_lines(&sorted[cut..], tolerance).len() >= MIN_LINES_PER_COLUMN
+    };
+    if let Some(cut) = column_cut(&sorted, body, two_columns) {
+        let mut ordered = order_block(&sorted[..cut], body, depth + 1);
+        ordered.extend(order_block(&sorted[cut..], body, depth + 1));
+        return ordered;
+    }
+
+    // Whether the lines from k down, or the lines above k, hold a gutter: one
+    // sweep each way, merging extents as lines are added.
+    let count = lines.len();
+    let mut below = vec![false; count + 1];
+    let mut extents: Vec<(f32, f32)> = Vec::new();
+    for k in (0..count).rev() {
+        for span in &lines[k] {
+            insert_extent(&mut extents, span.start, span.end);
+        }
+        below[k] = has_gutter(&extents, body);
+    }
+    let mut above = vec![false; count + 1];
+    extents.clear();
+    for k in 0..count {
+        for span in &lines[k] {
+            insert_extent(&mut extents, span.start, span.end);
+        }
+        above[k + 1] = has_gutter(&extents, body);
+    }
+    // A band above the columns first, then a band below them.
+    let band_cut = (1..count)
+        .find(|&k| below[k])
+        .or_else(|| (1..count).rev().find(|&k| above[k]));
+    if let Some(k) = band_cut {
+        return order_parts(&[&lines[..k], &lines[k..]], body, depth);
+    }
+
+    // A title and a footer together close the gutter from both sides: look for
+    // columns in what is left once up to MAX_BAND_LINES lines are peeled off each end.
+    for top in 1..=MAX_BAND_LINES {
+        for bottom in 1..=MAX_BAND_LINES {
+            if top + bottom >= count {
+                continue;
+            }
+            let mut extents: Vec<(f32, f32)> = Vec::new();
+            for span in lines[top..count - bottom].iter().flatten() {
+                insert_extent(&mut extents, span.start, span.end);
+            }
+            if has_gutter(&extents, body) {
+                return order_parts(
+                    &[&lines[..top], &lines[top..count - bottom], &lines[count - bottom..]],
+                    body,
+                    depth,
+                );
+            }
+        }
+    }
+    as_indices(lines)
+}
+
+/// Order each group of lines as its own block, one after the other.
+fn order_parts(parts: &[&[Vec<Placed>]], body: f32, depth: usize) -> Vec<Vec<usize>> {
+    parts
+        .iter()
+        .flat_map(|part| {
+            let members: Vec<Placed> = part.iter().flatten().copied().collect();
+            order_block(&members, body, depth + 1)
+        })
+        .collect()
+}
+
+/// Order one rotated run as lines, top to bottom in its own upright frame.
+///
+/// The span order a caller holds follows page axes, which for a rotated run
+/// reads lines backwards or column by column (GH#3423). Spans are keyed once,
+/// then ordered by [`order_block`]: columns of prose stay apart, table rows
+/// read across.
+fn order_rotated_run(spans: &[TextSpan], run: &[usize]) -> Vec<Vec<usize>> {
+    let placed: Vec<Placed> = run
+        .iter()
+        .filter_map(|&index| {
+            let span = spans.get(index)?;
+            let (start, cross) = upright_reading_origin(span);
+            Some(Placed {
+                index,
+                start,
+                end: start + span.width,
+                cross,
+            })
+        })
+        .collect();
+    order_block(&placed, body_height(spans, run), 0)
+}
+
+/// Assemble a page's spans for the hint-free repair: every maximal rotated
+/// run is ordered into its reading frame by [`order_rotated_run`] and written
+/// one line per row; upright runs are written verbatim in the given order.
+/// Runs are ordered one at a time, so a rotated block split in two by upright
+/// spans between its members is not ordered as a whole.
+fn assemble_in_reading_frames(spans: &[TextSpan], order: &[usize]) -> String {
+    let mut text = String::new();
+    let mut run_start = 0;
+    while run_start < order.len() {
+        let rotation = span_rotation(spans, order[run_start]);
+        let mut run_end = run_start + 1;
+        while run_end < order.len() && same_rotation(span_rotation(spans, order[run_end]), rotation) {
+            run_end += 1;
+        }
+        if run_start > 0 && !text.is_empty() && !text.ends_with(char::is_whitespace) {
+            text.push(' ');
+        }
+        let run = &order[run_start..run_end];
+        if is_unrotated(rotation) {
+            append_run(&mut text, spans, run, rotation);
+        } else {
+            for line in order_rotated_run(spans, run) {
+                if !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                append_rotated_line(&mut text, spans, &line);
+            }
+        }
+        run_start = run_end;
+    }
+    text
 }
 
 /// Sort one rotated-frame line by advance-axis position and join it,
@@ -293,11 +563,13 @@ fn upright_text_has_multiple_rows(spans: &[TextSpan]) -> bool {
 ///
 /// This is the hint-free half of the GH#1358 fix: sideways tables and rotated
 /// captions read word-reversed and glued, and [`assemble_reading_order_text`]
-/// needs only `rotation_degrees` to undo it. Ordering is deliberately left at
-/// identity — the span order the caller already has — because deciding a
-/// *better* cross-region order is the part that genuinely needs layout hints,
-/// and `super::reading_order`'s hint-free geometric fallback is rotation-blind
-/// by design and so cannot supply it.
+/// needs only `rotation_degrees` to undo it. Lines of each rotated run are
+/// first ordered top to bottom in the run's own frame, with side-by-side
+/// columns kept apart ([`order_rotated_run`], GH#3423). Cross-region order
+/// between separate runs stays the caller's identity order: deciding a
+/// *better* one is the part that genuinely needs layout hints, and
+/// `super::reading_order`'s hint-free geometric fallback is rotation-blind by
+/// design and so cannot supply it.
 ///
 /// Returns `None` when the page has no rotated spans, so the caller can leave
 /// that page's existing text completely untouched. That is the safety
@@ -313,7 +585,7 @@ pub(crate) fn repair_rotated_page_text(spans: &[TextSpan]) -> Option<String> {
     }
 
     let identity_order: Vec<usize> = (0..spans.len()).collect();
-    Some(assemble_reading_order_text(spans, &identity_order))
+    Some(assemble_in_reading_frames(spans, &identity_order))
 }
 
 #[cfg(test)]
@@ -680,3 +952,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod line_order_tests;
