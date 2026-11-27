@@ -1556,7 +1556,10 @@ impl<'a> MixedOcrContext<'a> {
             content,
             config,
             routing.preprocessing_render_dpi,
-            direct_route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
+            match routing.effective_pipeline.as_ref() {
+                Some(pipeline) => pipeline_route_recognition_sessions(pipeline),
+                None => direct_route_recognition_sessions(None, routing.backend.as_ref()),
+            },
         )
         .await;
 
@@ -2337,9 +2340,9 @@ pub(super) fn bound_batch_to_recognition(batch_size: usize, recognition_sessions
 
 /// Recognition sessions that bound this route's batch width, or `None` when nothing does.
 ///
-/// Only the direct route to the built-in Tesseract backend has an admission limit: the
-/// pipeline route reads through stages that may each be a different backend, and a custom
-/// backend reads every page it is handed at once.
+/// Only the direct route to the built-in Tesseract backend has an admission limit here: a
+/// custom backend reads every page it is handed at once. The pipeline route is bounded by
+/// [`pipeline_route_recognition_sessions`].
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn direct_route_recognition_sessions(
     effective_pipeline: Option<&crate::core::config::OcrPipelineConfig>,
@@ -2375,6 +2378,39 @@ pub(super) fn direct_route_recognition_sessions(
 /// process-wide limit itself is latched by the first extraction and cannot be set per test.
 ///
 /// Zero means "not set". Process-wide, so every test that sets it is `#[serial]`.
+/// Recognition sessions that bound the pipeline route's batch width, or `None` when nothing does.
+///
+/// Every stage must be the built-in Tesseract backend, so every read of every page waits on the
+/// same admission limit. A pipeline with any other stage (a VLM, a custom backend) reads pages
+/// that Tesseract's sessions do not gate, and narrowing its batch would only serialise them.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn pipeline_route_recognition_sessions(pipeline: &crate::core::config::OcrPipelineConfig) -> Option<usize> {
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    {
+        let registry = crate::plugins::registry::get_ocr_backend_registry().read();
+        pipeline_stages_all_match(pipeline, |name| {
+            registry
+                .get(name)
+                .is_ok_and(|backend| registry.is_builtin_tesseract(&backend))
+        })
+        .then(crate::core::config::concurrency::recognition_concurrency)
+    }
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    {
+        let _ = pipeline;
+        None
+    }
+}
+
+/// Whether the pipeline has stages and `is_tesseract` accepts the backend of every one.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn pipeline_stages_all_match(
+    pipeline: &crate::core::config::OcrPipelineConfig,
+    is_tesseract: impl Fn(&str) -> bool,
+) -> bool {
+    !pipeline.stages.is_empty() && pipeline.stages.iter().all(|stage| is_tesseract(&stage.backend))
+}
+
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) static TEST_RECOGNITION_SESSIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 

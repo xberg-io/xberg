@@ -4485,6 +4485,40 @@ pub(super) mod tests {
 
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[test]
+    fn pipeline_batch_is_bounded_only_when_every_stage_is_tesseract() {
+        let stage = |backend: &str| crate::core::config::OcrPipelineStage {
+            backend: backend.to_string(),
+            priority: 100,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        };
+        let pipeline = |backends: &[&str]| crate::core::config::OcrPipelineConfig {
+            stages: backends.iter().map(|backend| stage(backend)).collect(),
+            quality_thresholds: Default::default(),
+        };
+        let is_tesseract = |name: &str| name == "tesseract";
+
+        assert!(pipeline_stages_all_match(&pipeline(&["tesseract"]), is_tesseract));
+        assert!(pipeline_stages_all_match(
+            &pipeline(&["tesseract", "tesseract"]),
+            is_tesseract
+        ));
+        assert!(
+            !pipeline_stages_all_match(&pipeline(&["tesseract", "vlm"]), is_tesseract),
+            "a stage that no recognition session gates leaves the batch width alone"
+        );
+        assert!(
+            !pipeline_stages_all_match(&pipeline(&[]), is_tesseract),
+            "a pipeline without stages has nothing to bound"
+        );
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
     fn batch_width_follows_the_recognition_sessions_that_read_it() {
         assert_eq!(
             bound_batch_to_recognition(8, None),
