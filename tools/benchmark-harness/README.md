@@ -100,6 +100,10 @@ split ownership have been verified; do not use either model's predictions as tru
 Token-level bag-of-words F1 between extracted text and ground truth.
 
 - Tokenization: lowercase, split on whitespace, keep alphanumeric tokens plus `.` and `,`
+- CJK (Han, Hiragana, Katakana, Hangul) runs become character bigrams. Spaces and tabs between
+  two CJK characters are removed from ground truth and output alike before splitting, so an OCR
+  engine that emits a space after every glyph scores the same as one that does not; line breaks
+  stay bigram boundaries, and spacing next to Latin text or digits is unchanged
 - Separate numeric-token F1 for number-heavy documents (financial, scientific)
 - Combined score: `quality_score = 0.6 * f1_text + 0.4 * f1_numeric`
 
