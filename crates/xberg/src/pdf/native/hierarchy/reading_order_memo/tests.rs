@@ -1,6 +1,8 @@
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::TextSpan;
 
+#[cfg(not(target_arch = "wasm32"))]
+use super::ReadingOrderMemoShare;
 use super::{ReadingOrderMemoScope, SpanEncodings, computed_orders, fingerprint, output_positions, stored_positions};
 
 fn same_spans(left: &[TextSpan], right: &[TextSpan]) -> bool {
@@ -101,6 +103,39 @@ fn nothing_is_kept_outside_a_scope_or_past_the_budget() {
     let before = computed_orders();
     ordered(&spans, PAGE_WIDTH);
     assert_eq!(computed_orders() - before, 1, "an ended scope keeps no order");
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn threads_racing_on_one_page_are_each_served_the_order_of_their_own_input() {
+    let spans = two_column_page();
+    let mut moved = spans.clone();
+    moved[3].bbox.x += 0.001;
+    let inputs = [
+        (spans, PAGE_WIDTH),
+        (moved.clone(), PAGE_WIDTH),
+        (moved, PAGE_WIDTH + 1.0),
+    ];
+    let fresh: Vec<_> = inputs.iter().map(|(spans, width)| fresh_order(spans, *width)).collect();
+    let _memo = ReadingOrderMemoScope::begin(usize::MAX);
+    let share = ReadingOrderMemoShare::of_current_thread();
+
+    std::thread::scope(|scope| {
+        for thread in 0..4 {
+            let (share, inputs, fresh) = (share.clone(), &inputs, &fresh);
+            scope.spawn(move || {
+                let _guard = share.enter();
+                for round in 0..30 {
+                    let pick = (thread + round) % inputs.len();
+                    let (spans, width) = &inputs[pick];
+                    assert!(
+                        same_spans(&ordered(spans, *width), &fresh[pick]),
+                        "thread {thread} round {round} must get the fresh order of input {pick}"
+                    );
+                }
+            });
+        }
+    });
 }
 
 type Mutation = (&'static str, Box<dyn Fn(&mut TextSpan)>);
