@@ -116,7 +116,8 @@ impl<'doc> TextExtractor<'doc> {
                                         }
                                     },
                                 )
-                                .is_some() =>
+                                .is_some()
+                                && !(self.xobject_depth == 0 && Self::tm_parts_ocr_layer_words(buffer, e)) =>
                         {
                             // Fixed-pitch word-gap recovery (GH#1770). This
                             // continuation path glues consecutive Tm+Tj glyph

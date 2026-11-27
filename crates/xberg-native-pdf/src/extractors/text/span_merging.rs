@@ -751,7 +751,7 @@ impl<'doc> TextExtractor<'doc> {
 /// Separately shown words measured 0.03 to 0.18 em apart (scanned.pdf); one word that a producer
 /// split into abutting strings (`(wor)` `(ld)`) sits at 0 up to coordinate rounding. Half the
 /// smallest measured word gap stays clear of both. ~keep
-const OCR_LAYER_MIN_WORD_GAP_EM: f32 = 0.015;
+pub(super) const OCR_LAYER_MIN_WORD_GAP_EM: f32 = 0.015;
 
 /// Vertical size of one [`InkRows`] bucket, in points: about half a body line, so a gap query
 /// reads only the few buckets its band overlaps.

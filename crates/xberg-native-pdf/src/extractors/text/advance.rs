@@ -837,6 +837,20 @@ impl<'doc> TextExtractor<'doc> {
         gap >= severe_overlap_pt && gap <= edge_rounding_error(e)
     }
 
+    /// Whether a `Tm` that continues an OCR-layer run (render mode 3) shows the next string at least
+    /// `OCR_LAYER_MIN_WORD_GAP_EM` past the run's last glyph. Such a layer shows each recognised word
+    /// as its own string at the word's box, so the run ends there and the span merge decides the word
+    /// break, as for strings a `Td` apart; a word split into abutting strings stays one run. ~keep
+    pub(super) fn tm_parts_ocr_layer_words(buffer: &TjBuffer, e: f32) -> bool {
+        let start = buffer.start_matrix;
+        if buffer.render_mode != 3 || buffer.wmode != 0 || start.b != 0.0 || start.a <= 0.0 {
+            return false;
+        }
+        let end = buffer.ends_at_continuing_tm().unwrap_or(buffer.accumulated_width);
+        let gap = (Self::text_space_advance(start, 0, e) - end) * buffer.user_h_scale;
+        gap >= super::span_merging::OCR_LAYER_MIN_WORD_GAP_EM * buffer.effective_font_size
+    }
+
     /// Restate the run in the unit of the new horizontal scale `a`, so that the glyphs it holds keep
     /// their user-space width and the glyphs to come are measured in the new unit: the widths scale by
     /// the old `a` over the new one, the user-space scale by the inverse, and the pen reads from `e`
