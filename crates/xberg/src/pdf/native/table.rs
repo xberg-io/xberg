@@ -1101,15 +1101,24 @@ fn reconstruct_page_region_tables(
         // cuts one table into one word region per ruled band. Rejoin those
         // bands before reconstruction when their column tracks agree and the
         // page's ruling continues across the gap. ~keep
-        let mut merged = regions[index].clone();
+        let mut merged: Option<Vec<crate::pdf::table_reconstruct::HocrWord>> = None;
         let mut end = index + 1;
-        while end < regions.len() && ruled_bands_continue(&merged, &regions[end], ruling_paths, page_height) {
-            merged.extend(regions[end].iter().cloned());
+        while end < regions.len()
+            && ruled_bands_continue(
+                merged.as_deref().unwrap_or(&regions[index]),
+                &regions[end],
+                ruling_paths,
+                page_height,
+            )
+        {
+            merged
+                .get_or_insert_with(|| regions[index].clone())
+                .extend(regions[end].iter().cloned());
             end += 1;
         }
-        if end > index + 1
+        if let Some(merged) = &merged
             && let Some((table, grid)) =
-                reconstruct_ruled_band_table(&merged, page_height, page_number, allow_single_column, ruling_paths)
+                reconstruct_ruled_band_table(merged, page_height, page_number, allow_single_column, ruling_paths)
         {
             tables.push((table, Some(grid), true));
             definition_tables.push(false);
@@ -3077,7 +3086,7 @@ fn cluster_words_into_vertical_regions_with_rules(
     let row_tolerance_f = row_tolerance as f32;
     let row_gap_split = median_height as f32 * ROW_GAP_SPLIT_HEIGHT_FACTOR + ROW_CENTER_ROUNDING_SLACK;
 
-    let mut sorted = words.to_vec();
+    let mut sorted: Vec<&crate::pdf::table_reconstruct::HocrWord> = words.iter().collect();
     sorted.sort_by(|left, right| row_center(left).total_cmp(&row_center(right)));
 
     let mut regions: Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> = Vec::new();
@@ -3086,10 +3095,10 @@ fn cluster_words_into_vertical_regions_with_rules(
 
     let mut idx = 0;
     while idx < sorted.len() {
-        let row_yc = row_center(&sorted[idx]);
+        let row_yc = row_center(sorted[idx]);
         let mut end = idx + 1;
         while end < sorted.len() {
-            if (row_center(&sorted[end]) - row_yc).abs() <= row_tolerance_f {
+            if (row_center(sorted[end]) - row_yc).abs() <= row_tolerance_f {
                 end += 1;
             } else {
                 break;
@@ -3102,7 +3111,7 @@ fn cluster_words_into_vertical_regions_with_rules(
         {
             regions.push(std::mem::take(&mut current));
         }
-        current.extend(sorted[idx..end].iter().cloned());
+        current.extend(sorted[idx..end].iter().map(|word| (*word).clone()));
         last_row_yc = Some(row_yc);
         idx = end;
     }
