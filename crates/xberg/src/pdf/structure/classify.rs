@@ -3914,6 +3914,8 @@ mod tests {
     #[test]
     fn classify_formula_paragraphs_marks_equations_with_symbol_operands() {
         for text in [
+            "xy = z",
+            "A = \u{221E}",
             "E = mc^2",
             "lim x \u{2192} \u{221E}",
             "A \u{222A} B = C",
