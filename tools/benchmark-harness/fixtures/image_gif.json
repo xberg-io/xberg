@@ -4,6 +4,7 @@
 	"file_size": 284525,
 	"expected_frameworks": ["xberg", "tika"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "GIF image with text for OCR testing",
 		"category": "image"
 	},

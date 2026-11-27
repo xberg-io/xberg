@@ -426,6 +426,7 @@ fn build_per_fixture_results(results: &[BenchmarkResult]) -> Vec<PerFixtureRow> 
             system_load: result.system_load,
             iterations: result.iterations.clone(),
             statistics: result.statistics.clone(),
+            fixture_family: result.fixture_family.clone(),
         });
     }
 

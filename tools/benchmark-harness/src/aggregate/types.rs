@@ -339,6 +339,10 @@ pub struct PerFixtureRow {
     /// (v2.8.0+).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statistics: Option<crate::types::DurationStatistics>,
+    /// Content family declared by the fixture (`metadata.family`); `null` when the document is its
+    /// own family (v2.13.0+).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixture_family: Option<String>,
 }
 
 /// Cross-framework comparison rankings and deltas.
@@ -650,6 +654,11 @@ pub struct PerformancePercentiles {
     /// result in the group carries a quality score; absent from pre-2.13.0 aggregates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quality_including_failures: Option<QualityPercentiles>,
+    /// Per-document and family-clustered means over the same results as
+    /// `quality_including_failures` (v2.13.0+). `None` when no result carries a quality score;
+    /// absent from pre-2.13.0 aggregates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_means: Option<QualityMeans>,
     /// Pages-per-second percentiles, derived from `PdfMetadata.page_count` divided by wall-clock
     /// duration. `None` when no result in this group carries a known PDF page count (e.g.
     /// non-PDF file types, or a page count the harness could not detect). For a native batch,
@@ -743,6 +752,30 @@ pub struct QualityPercentiles {
     /// Number of results whose `quality.reading_order_score` is present (v2.12.0+).
     #[serde(default)]
     pub reading_order_sample_count: usize,
+}
+
+/// Per-document and family-clustered quality means (v2.13.0+), over successful results plus
+/// zero-overlap failures (see [`PerformancePercentiles::quality_including_failures`]).
+///
+/// The corpus holds families of fixtures with the same content: one image in several encodings or
+/// rotations, a page as an image and as a scanned PDF. A per-document mean counts that content once
+/// per copy, so a family of eleven copies outweighs ten distinct documents. The family mean
+/// averages each family first and then the families, so every distinct content counts once. A
+/// result without a `fixture_family` is its own family, so the two means agree on a corpus without
+/// declared families.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QualityMeans {
+    /// Results behind the means.
+    pub document_count: usize,
+    /// Distinct families among them.
+    pub family_count: usize,
+    pub f1_text_mean: f64,
+    pub f1_text_family_mean: f64,
+    pub quality_score_mean: f64,
+    pub quality_score_family_mean: f64,
+    /// `None` when no result carries SF1 (plaintext output, or no markdown ground truth).
+    pub f1_layout_mean: Option<f64>,
+    pub f1_layout_family_mean: Option<f64>,
 }
 
 /// Minimum sample count required to report a `p95` value without fabricating precision the

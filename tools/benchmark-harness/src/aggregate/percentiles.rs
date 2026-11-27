@@ -4,14 +4,14 @@
 
 use super::failures::is_framework_fault_failure;
 use super::types::{
-    DurationPercentiles, MIN_SAMPLES_FOR_P95, MIN_SAMPLES_FOR_P99, Percentiles, PerformancePercentiles,
+    DurationPercentiles, MIN_SAMPLES_FOR_P95, MIN_SAMPLES_FOR_P99, Percentiles, PerformancePercentiles, QualityMeans,
     QualityPercentiles, SystemLoadPercentiles,
 };
 use crate::stats::{percentile_r7, sanitize_f64};
 use crate::types::{
     BenchmarkResult, ErrorKind, expand_performance_iterations, has_quality_result, successful_performance_samples,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Build a `Percentiles` group from a slice of values (need not be pre-sorted).
 ///
@@ -317,6 +317,69 @@ fn build_quality_percentiles(results: &[&BenchmarkResult]) -> Option<QualityPerc
     })
 }
 
+/// Family a result is clustered under: its declared `fixture_family`, else its own document.
+fn family_key(result: &BenchmarkResult) -> String {
+    match &result.fixture_family {
+        Some(family) => format!("family:{family}"),
+        None => format!("document:{}", result.file_path.display()),
+    }
+}
+
+/// `(family, value)` for every result whose quality carries a finite `metric`.
+fn family_values(
+    results: &[&BenchmarkResult],
+    metric: impl Fn(&crate::types::QualityMetrics) -> Option<f64>,
+) -> Vec<(String, f64)> {
+    results
+        .iter()
+        .filter_map(|result| {
+            let value = metric(result.quality.as_ref()?)?;
+            value.is_finite().then(|| (family_key(result), value))
+        })
+        .collect()
+}
+
+/// `(mean over values, mean over per-family means)`, or `None` when `values` is empty.
+fn document_and_family_means(values: &[(String, f64)]) -> Option<(f64, f64)> {
+    if values.is_empty() {
+        return None;
+    }
+    let document_mean = values.iter().map(|(_, value)| value).sum::<f64>() / values.len() as f64;
+    let mut by_family: BTreeMap<&str, (f64, usize)> = BTreeMap::new();
+    for (family, value) in values {
+        let (sum, count) = by_family.entry(family.as_str()).or_insert((0.0, 0));
+        *sum += value;
+        *count += 1;
+    }
+    let family_mean = by_family.values().map(|(sum, count)| sum / *count as f64).sum::<f64>() / by_family.len() as f64;
+    Some((sanitize_f64(document_mean), sanitize_f64(family_mean)))
+}
+
+/// Per-document and family-clustered quality means over `results`, or `None` when none of them
+/// carries a quality score.
+fn build_quality_means(results: &[&BenchmarkResult]) -> Option<QualityMeans> {
+    let quality_scores = family_values(results, |quality| Some(quality.quality_score));
+    let (quality_score_mean, quality_score_family_mean) = document_and_family_means(&quality_scores)?;
+    let (f1_text_mean, f1_text_family_mean) =
+        document_and_family_means(&family_values(results, |quality| Some(quality.f1_score_text)))?;
+    let layout = document_and_family_means(&family_values(results, |quality| quality.f1_score_layout));
+    let family_count = quality_scores
+        .iter()
+        .map(|(family, _)| family.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    Some(QualityMeans {
+        document_count: quality_scores.len(),
+        family_count,
+        f1_text_mean,
+        f1_text_family_mean,
+        quality_score_mean,
+        quality_score_family_mean,
+        f1_layout_mean: layout.map(|(mean, _)| mean),
+        f1_layout_family_mean: layout.map(|(_, family_mean)| family_mean),
+    })
+}
+
 /// Calculate percentiles for a group of results
 ///
 /// Performance and raw quality percentiles use only successful samples. Quality rankings apply
@@ -361,6 +424,7 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
     let quality = build_quality_percentiles(&successful);
     let quality_scored: Vec<&BenchmarkResult> = results.iter().copied().filter(|r| has_quality_result(r)).collect();
     let quality_including_failures = build_quality_percentiles(&quality_scored);
+    let quality_means = build_quality_means(&quality_scored);
 
     PerformancePercentiles {
         successful_sample_count: successful.len(),
@@ -381,6 +445,7 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
         extraction_duration: performance_metrics.extraction_duration,
         quality,
         quality_including_failures,
+        quality_means,
         pages_per_sec: performance_metrics.pages_per_sec,
         cpu_seconds: performance_metrics.cpu_seconds,
         batch_size,

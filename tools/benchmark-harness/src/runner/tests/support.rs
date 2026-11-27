@@ -81,6 +81,7 @@ impl RecordingBatchAdapter {
             ocr_status: OcrStatus::NotUsed,
             extracted_text: Some("ok".to_string()),
             system_load: None,
+            fixture_family: None,
         }
     }
 }
@@ -138,6 +139,7 @@ impl FrameworkAdapter for StatefulWarmAdapter {
             ocr_status: OcrStatus::NotUsed,
             extracted_text: (!timed_out).then(|| format!("call-{call}")),
             system_load: None,
+            fixture_family: None,
         })
     }
 }
@@ -323,6 +325,7 @@ impl FrameworkAdapter for ScriptedTextAdapter {
             ocr_status: OcrStatus::NotUsed,
             extracted_text: Some(self.text.clone()),
             system_load: None,
+            fixture_family: None,
         })
     }
 }
@@ -332,24 +335,32 @@ impl FrameworkAdapter for ScriptedTextAdapter {
 /// `extracted_text`. Mirrors the fixture/ground-truth setup used by
 /// `standard_single_and_batch_runners_populate_numeric_tf1_and_sf1`.
 pub(super) async fn run_scripted_quality_case(ground_truth_text: &str, extracted_text: &str) -> BenchmarkResult {
+    run_scripted_quality_case_in_family(ground_truth_text, extracted_text, None).await
+}
+
+/// [`run_scripted_quality_case`] for a fixture that declares `metadata.family` when `family` is set.
+pub(super) async fn run_scripted_quality_case_in_family(
+    ground_truth_text: &str,
+    extracted_text: &str,
+    family: Option<&str>,
+) -> BenchmarkResult {
     let temp = tempfile::tempdir().unwrap();
     std::fs::write(temp.path().join("document.pdf"), b"pdf").unwrap();
     std::fs::write(temp.path().join("ground_truth.txt"), ground_truth_text).unwrap();
     let fixture_path = temp.path().join("fixture.json");
-    std::fs::write(
-        &fixture_path,
-        serde_json::json!({
-            "document": "document.pdf",
-            "file_type": "pdf",
-            "file_size": 3,
-            "ground_truth": {
-                "text_file": "ground_truth.txt",
-                "source": "manual"
-            }
-        })
-        .to_string(),
-    )
-    .unwrap();
+    let mut fixture = serde_json::json!({
+        "document": "document.pdf",
+        "file_type": "pdf",
+        "file_size": 3,
+        "ground_truth": {
+            "text_file": "ground_truth.txt",
+            "source": "manual"
+        }
+    });
+    if let Some(family) = family {
+        fixture["metadata"] = serde_json::json!({ "family": family });
+    }
+    std::fs::write(&fixture_path, fixture.to_string()).unwrap();
 
     let mut registry = AdapterRegistry::new();
     registry
@@ -399,6 +410,7 @@ impl SequenceAdapter {
             ocr_status: OcrStatus::Unknown,
             extracted_text: success.then(|| "successful payload".to_string()),
             system_load: None,
+            fixture_family: None,
         }
     }
 }
@@ -545,6 +557,7 @@ impl FrameworkAdapter for FailedWarmupAdapter {
             ocr_status: OcrStatus::Unknown,
             extracted_text: None,
             system_load: None,
+            fixture_family: None,
         })
     }
 
@@ -612,6 +625,7 @@ impl FrameworkAdapter for NonFatalWarmupFailureAdapter {
             },
             extracted_text: if is_warmup_call { None } else { Some("ok".to_string()) },
             system_load: None,
+            fixture_family: None,
         })
     }
 }

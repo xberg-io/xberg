@@ -368,6 +368,12 @@ pub struct BenchmarkResult {
     /// field or were constructed outside a measurement path.
     #[serde(default)]
     pub system_load: Option<crate::system_load::SystemLoad>,
+
+    /// Content family of the fixture this result came from (`metadata.family`): fixtures that
+    /// render the same source content share one. `None` when the fixture declares none, in which
+    /// case the document is its own family. Absent from results that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixture_family: Option<String>,
 }
 
 impl BenchmarkResult {

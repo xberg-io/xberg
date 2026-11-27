@@ -130,6 +130,7 @@ fn test_calculate_percentiles_extraction_duration_no_extraction_some_failed() {
         extracted_text: None,
         system_load: None,
         output_format: OutputFormat::Markdown,
+        fixture_family: None,
     };
 
     let result2 = create_test_result("framework1", "pdf", OcrStatus::NotUsed, 100, 1_000_000.0, 10_000_000);
@@ -554,4 +555,94 @@ fn test_fully_failed_bucket_ranks_below_succeeding_framework() {
         .find(|r| r.framework_mode.contains("framework-ok"))
         .expect("framework-ok must appear in pdf_quality_ranking_markdown");
     assert!(pdf_ok.rank < pdf_crashed.rank);
+}
+
+fn document_with_quality(name: &str, family: Option<&str>, quality_score: f64) -> BenchmarkResult {
+    let mut result = result_with_quality("fw", "png", quality_score, true);
+    result.file_path = PathBuf::from(format!("{name}.png"));
+    result.fixture_family = family.map(str::to_string);
+    result
+}
+
+/// Three copies of one image and one distinct document: the per-document mean counts the image
+/// three times, the family mean once.
+#[test]
+fn quality_means_weight_a_fixture_family_once() {
+    let results = [
+        document_with_quality("ocr_image_gif", Some("ocr_image"), 1.0),
+        document_with_quality("ocr_image_jp2", Some("ocr_image"), 1.0),
+        document_with_quality("ocr_image_webp", Some("ocr_image"), 1.0),
+        document_with_quality("receipt", None, 0.0),
+    ];
+    let refs: Vec<&BenchmarkResult> = results.iter().collect();
+
+    let means = calculate_percentiles(&refs).quality_means.expect("quality means");
+
+    assert_eq!(means.document_count, 4);
+    assert_eq!(means.family_count, 2);
+    assert!((means.f1_text_mean - 0.75).abs() < 1e-9);
+    assert!((means.f1_text_family_mean - 0.5).abs() < 1e-9);
+    assert!((means.quality_score_mean - 0.75).abs() < 1e-9);
+    assert!((means.quality_score_family_mean - 0.5).abs() < 1e-9);
+    assert_eq!(means.f1_layout_mean, Some(0.75));
+    assert_eq!(means.f1_layout_family_mean, Some(0.5));
+}
+
+#[test]
+fn quality_means_agree_when_no_family_is_declared() {
+    let results = [
+        document_with_quality("a", None, 0.2),
+        document_with_quality("b", None, 0.4),
+        document_with_quality("c", None, 0.9),
+    ];
+    let refs: Vec<&BenchmarkResult> = results.iter().collect();
+
+    let means = calculate_percentiles(&refs).quality_means.expect("quality means");
+
+    assert_eq!(means.family_count, 3);
+    assert!((means.f1_text_mean - means.f1_text_family_mean).abs() < 1e-12);
+    assert!((means.quality_score_mean - 0.5).abs() < 1e-9);
+}
+
+/// A zero-overlap copy inside a family pulls that family's mean down instead of dropping out.
+#[test]
+fn quality_means_count_a_zero_overlap_family_member_at_zero() {
+    let mut zero_overlap = document_with_quality("ocr_image_webp", Some("ocr_image"), 0.0);
+    zero_overlap.success = false;
+    zero_overlap.error_kind = ErrorKind::ZeroOverlap;
+    zero_overlap.error_message = Some("extraction produced no ground-truth token overlap".to_string());
+    let results = [
+        document_with_quality("ocr_image_gif", Some("ocr_image"), 1.0),
+        zero_overlap,
+        document_with_quality("receipt", None, 1.0),
+    ];
+    let refs: Vec<&BenchmarkResult> = results.iter().collect();
+
+    let means = calculate_percentiles(&refs).quality_means.expect("quality means");
+
+    assert_eq!(means.document_count, 3);
+    assert!((means.f1_text_mean - 2.0 / 3.0).abs() < 1e-9);
+    assert!((means.f1_text_family_mean - 0.75).abs() < 1e-9);
+}
+
+#[test]
+fn quality_means_are_absent_without_quality_scores() {
+    let failed = result_with_quality("fw", "pdf", 0.0, false);
+
+    assert!(calculate_percentiles(&[&failed]).quality_means.is_none());
+}
+
+#[test]
+fn per_fixture_rows_carry_the_fixture_family() {
+    let aggregated = aggregate_new_format(&[
+        document_with_quality("ocr_image_gif", Some("ocr_image"), 1.0),
+        document_with_quality("receipt", None, 1.0),
+    ]);
+
+    let families: Vec<(&str, Option<&str>)> = aggregated
+        .per_fixture_results
+        .iter()
+        .map(|row| (row.fixture_id.as_str(), row.fixture_family.as_deref()))
+        .collect();
+    assert_eq!(families, [("ocr_image_gif", Some("ocr_image")), ("receipt", None)]);
 }

@@ -6,6 +6,7 @@
     "xberg"
   ],
   "metadata": {
+    "family": "ndl_meiji_vertical",
     "description": "NDL Meiji-era vertical Japanese page",
     "category": "image-ocr-realgt",
     "dataset": "ndl-pdm-ocr",

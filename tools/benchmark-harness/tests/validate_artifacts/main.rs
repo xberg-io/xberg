@@ -381,6 +381,7 @@ fn build_results(
                 },
                 extracted_text: None,
                 system_load: None,
+                fixture_family: descriptor["metadata"]["family"].as_str().map(str::to_string),
             }
         })
         .collect()

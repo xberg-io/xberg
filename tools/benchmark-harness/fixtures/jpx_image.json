@@ -4,6 +4,7 @@
 	"file_size": 62261,
 	"expected_frameworks": ["xberg"],
 	"metadata": {
+		"family": "complex_document",
 		"description": "JPEG 2000 extended image of complex document (JPX extension)",
 		"category": "image",
 		"size_class": "small",

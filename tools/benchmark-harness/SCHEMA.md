@@ -122,6 +122,9 @@ suppression and dispersion contract (v2.10.0+):
   "quality_including_failures": {
     /* QualityPercentiles */
   }, // Optional (v2.13.0+); successes plus zero_overlap failures at their scored TF1 of 0
+  "quality_means": {
+    /* QualityMeans */
+  }, // Optional (v2.13.0+); per-document and family-clustered means over the same results
   "success_rate_percent": 84.0,
   "pages_per_sec": { "p50": 12.5, "p95": 8.0, "p99": 5.0, "sample_count": 40, "std_dev": 1.1 }, // Optional (v2.7.0+, PDF only)
   "cpu_seconds": { "p50": 1.2, "p95": 2.1, "p99": 3.4, "sample_count": 38, "std_dev": 0.6 }, // v2.7.0+
@@ -194,6 +197,31 @@ drops out of the second configuration's distribution instead of pulling it down.
 `quality_including_failures` when comparing quality without a coverage adjustment. Failures
 without a scored output (`empty_content`, `framework_errors`, timeouts) are in neither block.
 
+## QualityMeans (v2.13.0+)
+
+Per-document and family-clustered means over the results behind `quality_including_failures`
+(successes plus zero-overlap failures):
+
+```json
+{
+  "document_count": 24,
+  "family_count": 12,
+  "f1_text_mean": 0.81,
+  "f1_text_family_mean": 0.74,
+  "quality_score_mean": 0.79,
+  "quality_score_family_mean": 0.72,
+  "f1_layout_mean": 0.55, // null when no result carries SF1
+  "f1_layout_family_mean": 0.49
+}
+```
+
+The corpus holds families of fixtures with the same content (`fixture_family`, declared as
+`metadata.family` in the fixture): one image in eleven encodings, a page in four rotations and as
+a PDF, a text as native PDF, rendered image and scan. A per-document mean counts that content once
+per copy. The family mean first averages each family's results, then averages the families, so each
+distinct content counts once and the result is a cluster mean over independent units. A result
+without a declared family is its own family, so both means agree on a corpus without families.
+
 ## SystemLoadPercentiles (v2.7.0+)
 
 A contention qualifier aggregated from `BenchmarkResult.system_load` snapshots in the group.
@@ -261,6 +289,7 @@ The batch dedup that collapses a native batch to one `performance_sample_count` 
   "system_load": {
     /* SystemLoad — Optional, v2.8.0+ */
   },
+  "fixture_family": "ocr_image", // Optional, v2.13.0+; the fixture's metadata.family, omitted when it declares none
   "iterations": [
     {
       "iteration": 1,
@@ -514,6 +543,10 @@ the current version.
 - **`layout_impact` / `head_to_head` pairing**: zero-overlap rows now pair (and leave the
   `*_only` lists) instead of being dropped, so `paired_fixture_count`, `shared_fixture_count` and
   the quality and timing deltas can move between 2.12.0 and 2.13.0 on the same results.
+- **`PerformancePercentiles.quality_means`** and **`PerFixtureRow.fixture_family`**: per-document
+  and family-clustered quality means (see QualityMeans). Results carry `fixture_family` from the
+  fixture's `metadata.family`; `validate-artifacts` rejects a row whose family differs from its
+  fixture's.
 - **CJK tokenization** (scoring, not schema): spaces and tabs between two CJK characters are
   removed from ground truth and output before TF1 tokenization, so TF1, `quality_score` and SF1 of
   documents with CJK text can change for every framework. Do not compare CJK scores across this

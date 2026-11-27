@@ -146,6 +146,7 @@ fn minimal_result(success: bool, error_kind: ErrorKind, duration_ms: u64, throug
         ocr_status: OcrStatus::NotUsed,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 

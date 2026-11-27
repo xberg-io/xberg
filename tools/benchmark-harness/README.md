@@ -151,6 +151,17 @@ Fixtures are JSON files organized by format directory under `fixtures/`:
 `metadata.opt_in: true` keeps a fixture out of directory scans (`-f fixtures/` without `--cohort`); it runs only
 when a cohort manifest or `PROFILING_FIXTURES` names it. The long performance-only PDFs use it.
 
+`metadata.family` names the content a fixture shares with others: one image in several encodings
+(`ocr_image`: gif, jp2, jpg, mj2, pbm, pgm, pnm, ppm, tif, tiff, webp; `invoice_image`: jpg, jpm),
+rotations and PDF renderings of one page (`ocr_test`, `complex_document`), one text as native PDF,
+rendered PNG and scan (`rtl_arabic`, `rtl_hebrew`), and the five NDL Meiji pages
+(`ndl_meiji_vertical`): different pages, but one dataset, era and script, so they are clustered
+rather than counted as five independent documents. Results and aggregate rows carry it as `fixture_family`, and
+each aggregate group reports a family-clustered mean next to the per-document mean (`quality_means`,
+see [SCHEMA.md](SCHEMA.md)), so eleven copies of one image weigh as one document rather than eleven. A
+fixture without a family is its own. Give a new fixture the family of any existing fixture that
+renders the same content.
+
 ### Ground Truth Coverage
 
 | Format      | Fixtures | With Markdown GT |

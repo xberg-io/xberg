@@ -154,6 +154,7 @@ fn test_framework_size_enrichment_with_suffix_stripping() {
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     };
 
     let mut result_async = BenchmarkResult {
@@ -178,6 +179,7 @@ fn test_framework_size_enrichment_with_suffix_stripping() {
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     };
 
     let mut result_batch = BenchmarkResult {
@@ -202,6 +204,7 @@ fn test_framework_size_enrichment_with_suffix_stripping() {
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     };
 
     assert!(result_sync.framework_capabilities.installation_size.is_none());

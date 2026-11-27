@@ -49,6 +49,7 @@ fn create_benchmark_result(
         extracted_text: None,
         system_load: None,
         output_format: OutputFormat::Markdown,
+        fixture_family: None,
     }
 }
 
@@ -99,6 +100,7 @@ fn test_write_json() {
         extracted_text: None,
         system_load: None,
         output_format: OutputFormat::Markdown,
+        fixture_family: None,
     }];
 
     write_json(&results, &output_path).unwrap();

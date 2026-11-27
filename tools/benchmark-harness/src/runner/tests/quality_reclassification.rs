@@ -1,7 +1,7 @@
 //! Tests for the `run()` quality-scoring pass: zero-overlap reclassification and the cases
 //! that must be left alone (genuinely empty content, a real match, an empty ground truth).
 
-use super::support::run_scripted_quality_case;
+use super::support::{run_scripted_quality_case, run_scripted_quality_case_in_family};
 use crate::Result;
 use crate::adapter::FrameworkAdapter;
 use crate::config::{BenchmarkConfig, BenchmarkMode};
@@ -102,6 +102,7 @@ async fn genuinely_empty_result_keeps_empty_content_and_is_not_reclassified() {
                 ocr_status: OcrStatus::NotUsed,
                 extracted_text: None,
                 system_load: None,
+                fixture_family: None,
             })
         }
     }
@@ -157,4 +158,18 @@ async fn empty_ground_truth_is_not_reclassified() {
         "empty ground truth must never be reclassified as a failure"
     );
     assert_eq!(result.error_kind, ErrorKind::None);
+}
+
+#[tokio::test]
+async fn result_carries_the_fixture_family_its_fixture_declares() {
+    let result = run_scripted_quality_case_in_family("expected text", "expected text", Some("ocr_image")).await;
+
+    assert_eq!(result.fixture_family.as_deref(), Some("ocr_image"));
+}
+
+#[tokio::test]
+async fn result_has_no_fixture_family_when_its_fixture_declares_none() {
+    let result = run_scripted_quality_case("expected text", "expected text").await;
+
+    assert_eq!(result.fixture_family, None);
 }

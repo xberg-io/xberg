@@ -3,6 +3,9 @@
   "file_type": "png",
   "file_size": 41384,
   "expected_frameworks": [],
+  "metadata": {
+    "family": "ocr_test"
+  },
   "ground_truth": {
     "text_file": "../../../test_documents/ground_truth/images/ocr_test_rotated_270.txt",
     "markdown_file": "../../../test_documents/ground_truth/images/ocr_test_rotated_270.md",

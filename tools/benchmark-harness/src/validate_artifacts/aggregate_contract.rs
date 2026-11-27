@@ -487,6 +487,7 @@ fn benchmark_result_from_row(row: &PerFixtureRow, path: &Path) -> Result<Benchma
         ocr_status,
         extracted_text: None,
         system_load: row.system_load,
+        fixture_family: row.fixture_family.clone(),
     })
 }
 
@@ -756,6 +757,16 @@ fn validate_one_aggregate_row(
         .position(|stem| *stem == row.fixture_id)
         .ok_or_else(|| contract_error(format!("{}: row has unknown fixture identity", path.display())))?;
     let quality_expectation = &context.quality_expectations[fixture_index];
+    require(
+        row.fixture_family == quality_expectation.family,
+        format!(
+            "{}: fixture row {} family {:?} does not match the fixture's declared family {:?}",
+            path.display(),
+            row.fixture_id,
+            row.fixture_family,
+            quality_expectation.family
+        ),
+    )?;
     if row.success {
         require(
             row.error_kind.is_none() && row.error_message.is_none(),

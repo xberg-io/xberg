@@ -56,6 +56,7 @@ fn make_benchmark_result(
         ocr_status: if ocr { OcrStatus::Used } else { OcrStatus::NotUsed },
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 

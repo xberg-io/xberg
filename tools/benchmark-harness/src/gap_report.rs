@@ -497,6 +497,7 @@ mod tests {
             ocr_status: Default::default(),
             extracted_text: None,
             system_load: None,
+            fixture_family: None,
         }
     }
 

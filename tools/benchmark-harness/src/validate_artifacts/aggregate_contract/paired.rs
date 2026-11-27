@@ -233,6 +233,7 @@ mod tests {
             },
             extracted_text: None,
             system_load: None,
+            fixture_family: None,
         }
     }
 
