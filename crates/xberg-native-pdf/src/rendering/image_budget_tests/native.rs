@@ -175,7 +175,12 @@ fn a_flate_page_renders_the_same_through_the_native_path_as_through_the_masked_r
             };
             let (native, masked) = (render(false), render(true));
             assert!(
-                native.data.as_chunks::<4>().0.iter().any(|pixel| pixel[..3] != [255, 255, 255]),
+                native
+                    .data
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|pixel| pixel[..3] != [255, 255, 255]),
                 "{color_space} at {placement}: the image must be drawn"
             );
             assert!(

@@ -57,12 +57,12 @@ once_cell = { workspace = true }
 utf16string = "0.2"
 vecmath = "1"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-libloading = "0.9"
-
 # `Timestamp::now()` (annotation dates) panics on wasm32-unknown-unknown without the `js` clock source. ~keep
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 jiff = { workspace = true, features = ["js"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libloading = "0.9"
 
 [build-dependencies]
 # Use rustfmt to avoid coupling bindgen's syn major to the optional prettyplease dependency. ~keep

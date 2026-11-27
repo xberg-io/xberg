@@ -9,9 +9,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vector_line_cap_from_core`, `try_convert_vector_line_join_from_core`, `try_convert_vector_segment_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
+// These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_tessdata_model_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vector_line_cap_from_core`, `try_convert_vector_line_join_from_core`, `try_convert_vector_segment_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `ParsedDimension`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -1363,6 +1363,9 @@ Future<VlmFallbackPolicy> createVlmFallbackPolicyFromJson({
 
 Future<OcrStrategy> createOcrStrategyFromJson({required String json}) =>
     RustLib.instance.api.crateCreateOcrStrategyFromJson(json: json);
+
+Future<TessdataModel> createTessdataModelFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTessdataModelFromJson(json: json);
 
 Future<PdfBackend> createPdfBackendFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePdfBackendFromJson(json: json);
@@ -4159,6 +4162,12 @@ class ConcurrencyConfig {
   /// ceiling instead. On hosts with more than 8 cores and no cgroup quota,
   /// set `max_threads` explicitly to use the additional cores — the
   /// default will not scale past 8 on its own.
+  ///
+  /// The shared Tokio runtime's worker count also follows this budget, but it
+  /// is sized once, by the first caller. A direct embedding or reranking call
+  /// made before any extraction builds it from the automatic budget, and a
+  /// later `max_threads` does not resize it. `TOKIO_WORKER_THREADS`, when set
+  /// to a nonzero count, takes precedence.
   final PlatformInt64? maxThreads;
 
   /// Maximum number of Tesseract recognition sessions that run at once.
@@ -8542,6 +8551,13 @@ class ExtractionConfig {
   /// [`Self::disable_ocr`] to hard-disable OCR regardless of the detected content.
   final OcrConfig? ocr;
 
+  /// Tesseract model set (`"fast"` or `"best"`) for any OCR this extraction performs,
+  /// automatic and fallback OCR included. `ocr.tessdata_model` overrides it; `None` means
+  /// `fast`. Setting it does not enable OCR. `XBERG_OCR_TESSDATA_MODEL` sets it for every CLI
+  /// command that extracts (see `ExtractionConfig::apply_env_tessdata_model`). See
+  /// `OcrConfig::tessdata_model` for how a set is resolved.
+  final TessdataModel? tessdataModel;
+
   /// Force OCR even for searchable PDFs
   final bool forceOcr;
 
@@ -8943,6 +8959,7 @@ class ExtractionConfig {
     required this.useCache,
     required this.enableQualityProcessing,
     this.ocr,
+    this.tessdataModel,
     required this.forceOcr,
     required this.ocrStrategy,
     this.forceOcrPages,
@@ -9003,6 +9020,7 @@ class ExtractionConfig {
       useCache.hashCode ^
       enableQualityProcessing.hashCode ^
       ocr.hashCode ^
+      tessdataModel.hashCode ^
       forceOcr.hashCode ^
       ocrStrategy.hashCode ^
       forceOcrPages.hashCode ^
@@ -9065,6 +9083,7 @@ class ExtractionConfig {
           useCache == other.useCache &&
           enableQualityProcessing == other.enableQualityProcessing &&
           ocr == other.ocr &&
+          tessdataModel == other.tessdataModel &&
           forceOcr == other.forceOcr &&
           ocrStrategy == other.ocrStrategy &&
           forceOcrPages == other.forceOcrPages &&
@@ -14031,6 +14050,22 @@ class OcrConfig {
   /// the standard resolution chain: TESSDATA_PREFIX env, cache dir, system paths.
   final String? tessdataPath;
 
+  /// Tesseract model set for this OCR section: `"fast"` or `"best"`. `None` (the default)
+  /// inherits `ExtractionConfig::tessdata_model`, else `fast`.
+  ///
+  /// Applies only to the directories xberg manages. An explicit `tessdata_path` or
+  /// `TESSDATA_PREFIX` that holds every requested language is used as given, whichever set it
+  /// contains (a `best` request logs a warning then). Otherwise `fast` searches the older flat
+  /// `<cache>/tessdata`, `<cache>/tessdata/fast` and the system tessdata directories, and
+  /// downloads into `<cache>/tessdata/fast` (or into the flat cache when it already holds some
+  /// of the requested languages); `best` searches `<cache>/tessdata/best` and, on Unix,
+  /// `/usr/share/xberg/tessdata/best`, and downloads into `<cache>/tessdata/best`, because
+  /// system packages ship `tessdata_fast`. Every download is pinned and SHA-256 verified. With
+  /// `best`, OSD and the script retries (Han, Khmer, vertical Japanese) use only models in the
+  /// `best` directories. REST and MCP callers cannot change it. WebAssembly refuses `best`
+  /// unless the model bytes come in `tessdata_bytes`.
+  final TessdataModel? tessdataModel;
+
   /// Repair OCR tokens that are clearly numeric but mis-punctuated: a dropped thousands
   /// separator, a decimal point misread for a grouping comma, or one number split into two
   /// tokens at a rendering gap (GH#1789).
@@ -14058,6 +14093,26 @@ class OcrConfig {
   /// `"tsv"`, because it would re-punctuate the bare coordinate integers in that markup.
   final bool numericRepair;
 
+  /// Read a standalone camera photo again with the built-in PaddleOCR backend when the default
+  /// Tesseract read of it is sparse and unreliable, and keep the PaddleOCR read when its text
+  /// keeps at least the word- and number-shaped tokens Tesseract read with confidence (and at
+  /// least four), is about as word-like as Tesseract's read, and passes the OCR quality gate.
+  ///
+  /// Defaults to `true`. It applies only to a JPEG or WebP whose pixel size is not a standard
+  /// page at a scan resolution (PNG, BMP, GIF and TIFF images, and HEIC, which reaches OCR as
+  /// PNG, never qualify). The request must use `backend = "tesseract"` and leave every other
+  /// OCR choice unset: no `tesseract_config` (even a default one), `element_config`,
+  /// `paddle_ocr_settings`, `paddle_ocr_config`, `tessdata_path`, `tessdata_bytes`,
+  /// `numeric_repair`, backend tuning, `pipeline`, `vlm_fallback`, layout detection or
+  /// `include_document_structure`, and one Latin-script language. Tesseract must have read
+  /// between 1 and 80 words with word confidences that fail the sparse-text robustness check.
+  /// It needs a build with PaddleOCR and models already in the local cache: this re-read never
+  /// downloads a model, so the output for such a photo depends on whether the models are
+  /// cached, and the extraction cache keys on their state. An explicit `backend = "tesseract"`
+  /// with no other setting cannot be told apart from the default, so set this to `false` to
+  /// keep Tesseract's read on every image. A backend other than `tesseract` is never replaced.
+  final bool imagePaddleFallback;
+
   const OcrConfig({
     required this.enabled,
     required this.backend,
@@ -14078,7 +14133,9 @@ class OcrConfig {
     this.securityLimits,
     this.tessdataBytes,
     this.tessdataPath,
+    this.tessdataModel,
     required this.numericRepair,
+    required this.imagePaddleFallback,
   });
 
   @override
@@ -14102,7 +14159,9 @@ class OcrConfig {
       securityLimits.hashCode ^
       tessdataBytes.hashCode ^
       tessdataPath.hashCode ^
-      numericRepair.hashCode;
+      tessdataModel.hashCode ^
+      numericRepair.hashCode ^
+      imagePaddleFallback.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -14128,7 +14187,9 @@ class OcrConfig {
           securityLimits == other.securityLimits &&
           tessdataBytes == other.tessdataBytes &&
           tessdataPath == other.tessdataPath &&
-          numericRepair == other.numericRepair;
+          tessdataModel == other.tessdataModel &&
+          numericRepair == other.numericRepair &&
+          imagePaddleFallback == other.imagePaddleFallback;
 }
 
 /// A unified OCR element representing detected text with full metadata.
@@ -16525,6 +16586,18 @@ class PdfConfig {
   /// is set.
   final PlanRegionConfig? planRegions;
 
+  /// Keep white text that sits on no painted content.
+  ///
+  /// By default the native backend drops text filled white (in a device or
+  /// calibrated colour space) where no non-white path, image or Form paint lies
+  /// under it, since it is invisible on the page: hidden duplicate headers,
+  /// blanked cells, stamps. A page that paints content the check cannot resolve
+  /// (a shading, a pattern, a fill in another colour space) keeps all its text.
+  /// Each extraction that drops such text says how many spans on which pages in
+  /// a `pdf_white_text` processing warning. Set this to `true` to keep the text.
+  /// Native backend only. Default: `false`.
+  final bool keepWhiteText;
+
   const PdfConfig({
     required this.extractImages,
     required this.extractTables,
@@ -16541,6 +16614,7 @@ class PdfConfig {
     required this.backend,
     required this.extractVectorGeometry,
     this.planRegions,
+    required this.keepWhiteText,
   });
 
   @override
@@ -16559,7 +16633,8 @@ class PdfConfig {
       readingOrder.hashCode ^
       backend.hashCode ^
       extractVectorGeometry.hashCode ^
-      planRegions.hashCode;
+      planRegions.hashCode ^
+      keepWhiteText.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -16580,7 +16655,8 @@ class PdfConfig {
           readingOrder == other.readingOrder &&
           backend == other.backend &&
           extractVectorGeometry == other.extractVectorGeometry &&
-          planRegions == other.planRegions;
+          planRegions == other.planRegions &&
+          keepWhiteText == other.keepWhiteText;
 }
 
 /// A form field extracted from a PDF's AcroForm or XFA structure.
@@ -19729,6 +19805,29 @@ enum TableOverlapPreference {
 
   /// Prefer the layout (TATR/SLANeXT) table when it overlaps a native table.
   layout,
+}
+
+/// Which upstream Tesseract model set (`tessdata_fast` or `tessdata_best`) xberg resolves and
+/// downloads language data from.
+///
+/// The set only selects among the directories xberg manages: an explicit
+/// [`OcrConfig::tessdata_path`] or the `TESSDATA_PREFIX` environment variable is used as given,
+/// whatever this says. Each set has its own cache directory (`<cache>/tessdata/fast`,
+/// `<cache>/tessdata/best`), so a request for one set never reads the other's files. System
+/// tessdata directories (apt, Homebrew) ship `tessdata_fast` and are searched only for
+/// [`TessdataModel::Fast`]; [`TessdataModel::Best`] also reads the read-only
+/// `/usr/share/xberg/tessdata/best` an image can provide.
+///
+/// Values are lowercase in every form (config files, JSON, environment, CLI).
+///
+/// WebAssembly does not bundle or download `tessdata_best`: it refuses `Best` unless the caller
+/// supplies the model bytes in `tessdata_bytes`.
+enum TessdataModel {
+  /// `tessdata_fast`: integer LSTM models, the smallest and fastest set.
+  fast,
+
+  /// `tessdata_best`: float LSTM models, about three times larger and slower than `fast`.
+  best,
 }
 
 /// Tesseract OCR configuration.

@@ -22,11 +22,7 @@ pub fn is_rfc3339(value: &str) -> bool {
     let separator_ok = matches!(bytes.get(10), Some(b'T' | b't'));
     let offset_ok = match bytes.last() {
         Some(b'Z' | b'z') => true,
-        _ => {
-            bytes.len() >= 6
-                && matches!(bytes[bytes.len() - 6], b'+' | b'-')
-                && bytes[bytes.len() - 3] == b':'
-        }
+        _ => bytes.len() >= 6 && matches!(bytes[bytes.len() - 6], b'+' | b'-') && bytes[bytes.len() - 3] == b':',
     };
     separator_ok && offset_ok && value.parse::<jiff::Timestamp>().is_ok()
 }

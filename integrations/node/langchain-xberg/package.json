@@ -1,6 +1,6 @@
 {
   "name": "@xberg-io/langchain-xberg",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "LangChain.js document loader for Xberg — extract text, tables, and metadata from 107 document formats with optional OCR.",
   "keywords": [
     "langchain",
@@ -53,7 +53,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@xberg-io/xberg": "1.5.4",
+    "@xberg-io/xberg": "1.5.5",
     "fast-glob": "^3.3.3"
   },
   "peerDependencies": {

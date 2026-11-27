@@ -13,6 +13,9 @@ public func documentStructureIsEmptyFromJson<GenericIntoRustString: IntoRustStri
 public func drawing_set_text_noop(_ client: DrawingSetTextRef) {
     __swift_bridge__$drawing_set_text_noop(client.ptr)
 }
+public func extractionConfigEffectiveTessdataModelFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> RustString {
+    try { let val = __swift_bridge__$extraction_config_effective_tessdata_model_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
 public func extractionConfigValidateFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> RustString {
     try { let val = __swift_bridge__$extraction_config_validate_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
@@ -45,6 +48,9 @@ public func metadataIsEmptyFromJson<GenericIntoRustString: IntoRustString>(_ jso
 }
 public func multiVectorEmbeddingIsWellFormedFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> RustString {
     try { let val = __swift_bridge__$multi_vector_embedding_is_well_formed_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
+public func ocrConfigEffectiveTessdataModelFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> RustString {
+    try { let val = __swift_bridge__$ocr_config_effective_tessdata_model_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
 public func paddleOcrConfigWithCacheDirFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString, _ path: GenericIntoRustString) throws -> RustString {
     try { let val = __swift_bridge__$paddle_ocr_config_with_cache_dir_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = path.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
@@ -1872,6 +1878,9 @@ public func tableModelFromJson<GenericIntoRustString: IntoRustString>(_ json: Ge
 public func tableOverlapPreferenceFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TableOverlapPreference {
     try { let val = __swift_bridge__$table_overlap_preference_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TableOverlapPreference(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
+public func tessdataModelFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TessdataModel {
+    try { let val = __swift_bridge__$tessdata_model_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TessdataModel(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
 public func textDirectionFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> TextDirection {
     try { let val = __swift_bridge__$text_direction_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return TextDirection(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
@@ -2708,6 +2717,9 @@ public func __alef_phantom_vec_summary_strategy() -> RustVec<SummaryStrategy> {
 }
 public func __alef_phantom_vec_table_chunking_mode() -> RustVec<TableChunkingMode> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_table_chunking_mode())
+}
+public func __alef_phantom_vec_tessdata_model() -> RustVec<TessdataModel> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_tessdata_model())
 }
 public func __alef_phantom_vec_text_direction() -> RustVec<TextDirection> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_text_direction())
@@ -6378,11 +6390,6 @@ public class ConversionOptions: ConversionOptionsRefMut {
         }
     }
 }
-extension ConversionOptions {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ heading_style: HeadingStyle, _ list_indent_type: ListIndentType, _ list_indent_width: UInt, _ bullets: GenericIntoRustString, _ strong_em_symbol: GenericIntoRustString, _ escape_asterisks: Bool, _ escape_underscores: Bool, _ escape_misc: Bool, _ escape_ascii: Bool, _ code_language: GenericIntoRustString, _ autolinks: Bool, _ expand_abbreviations: Bool, _ include_blockquote_citations: Bool, _ default_title: Bool, _ br_in_tables: Bool, _ compact_tables: Bool, _ highlight_style: HighlightStyle, _ extract_metadata: Bool, _ whitespace_mode: WhitespaceMode, _ strip_newlines: Bool, _ wrap: Bool, _ wrap_width: UInt, _ convert_as_inline: Bool, _ sub_symbol: GenericIntoRustString, _ sup_symbol: GenericIntoRustString, _ newline_style: NewlineStyle, _ code_block_style: CodeBlockStyle, _ keep_inline_images_in: RustVec<GenericIntoRustString>, _ preprocessing: PreprocessingOptions, _ encoding: GenericIntoRustString, _ debug: Bool, _ strip_tags: RustVec<GenericIntoRustString>, _ preserve_tags: RustVec<GenericIntoRustString>, _ skip_images: Bool, _ inline_data_media: InlineDataMedia, _ hidden_content: HiddenContent, _ url_escape_style: UrlEscapeStyle, _ link_style: LinkStyle, _ output_format: HtmlToMarkdownRsOutputFormat, _ include_document_structure: Bool, _ extract_images: Bool, _ max_image_size: UInt64, _ max_input_size: Optional<UInt64>, _ capture_svg: Bool, _ infer_dimensions: Bool, _ max_depth: Optional<UInt>, _ exclude_selectors: RustVec<GenericIntoRustString>, _ tier_strategy: TierStrategy, _ base_url: Optional<GenericIntoRustString>) {
-        self.init(ptr: __swift_bridge__$ConversionOptions$new({heading_style.isOwned = false; return heading_style.ptr;}(), {list_indent_type.isOwned = false; return list_indent_type.ptr;}(), list_indent_width, { let rustString = bullets.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = strong_em_symbol.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), escape_asterisks, escape_underscores, escape_misc, escape_ascii, { let rustString = code_language.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), autolinks, expand_abbreviations, include_blockquote_citations, default_title, br_in_tables, compact_tables, {highlight_style.isOwned = false; return highlight_style.ptr;}(), extract_metadata, {whitespace_mode.isOwned = false; return whitespace_mode.ptr;}(), strip_newlines, wrap, wrap_width, convert_as_inline, { let rustString = sub_symbol.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = sup_symbol.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {newline_style.isOwned = false; return newline_style.ptr;}(), {code_block_style.isOwned = false; return code_block_style.ptr;}(), { let val = keep_inline_images_in; val.isOwned = false; return val.ptr }(), {preprocessing.isOwned = false; return preprocessing.ptr;}(), { let rustString = encoding.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), debug, { let val = strip_tags; val.isOwned = false; return val.ptr }(), { let val = preserve_tags; val.isOwned = false; return val.ptr }(), skip_images, {inline_data_media.isOwned = false; return inline_data_media.ptr;}(), {hidden_content.isOwned = false; return hidden_content.ptr;}(), {url_escape_style.isOwned = false; return url_escape_style.ptr;}(), {link_style.isOwned = false; return link_style.ptr;}(), {output_format.isOwned = false; return output_format.ptr;}(), include_document_structure, extract_images, max_image_size, max_input_size.intoFfiRepr(), capture_svg, infer_dimensions, max_depth.intoFfiRepr(), { let val = exclude_selectors; val.isOwned = false; return val.ptr }(), {tier_strategy.isOwned = false; return tier_strategy.ptr;}(), { if let rustString = optionalStringIntoRustString(base_url) { rustString.isOwned = false; return rustString.ptr } else { return nil } }()))
-    }
-}
 public class ConversionOptionsRefMut: ConversionOptionsRef {
     public override init(ptr: UnsafeMutableRawPointer) {
         super.init(ptr: ptr)
@@ -6582,6 +6589,10 @@ extension ConversionOptionsRef {
 
     public func __alef_owned_vec_exclude_selectors() -> RustVec<RustString> {
         RustVec(ptr: __swift_bridge__$ConversionOptions$exclude_selectors(ptr))
+    }
+
+    public func dataAsElements() -> RustString {
+        RustString(ptr: __swift_bridge__$ConversionOptions$data_as_elements(ptr))
     }
 
     public func tierStrategy() -> RustString {
@@ -11894,6 +11905,10 @@ extension ExtractionConfigRef {
 
     public func ocr() -> Optional<OcrConfig> {
         { let val = __swift_bridge__$ExtractionConfig$ocr(ptr); if val != nil { return OcrConfig(ptr: val!) } else { return nil } }()
+    }
+
+    public func tessdataModel() -> Optional<RustString> {
+        { let val = __swift_bridge__$ExtractionConfig$tessdata_model(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 
     public func forceOcr() -> Bool {
@@ -18844,8 +18859,16 @@ extension OcrConfigRef {
         { let val = __swift_bridge__$OcrConfig$tessdata_path(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 
+    public func tessdataModel() -> Optional<RustString> {
+        { let val = __swift_bridge__$OcrConfig$tessdata_model(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    }
+
     public func numericRepair() -> Bool {
         __swift_bridge__$OcrConfig$numeric_repair(ptr)
+    }
+
+    public func imagePaddleFallback() -> Bool {
+        __swift_bridge__$OcrConfig$image_paddle_fallback(ptr)
     }
 }
 extension OcrConfig: Vectorizable {
@@ -22477,6 +22500,10 @@ extension PdfConfigRef {
 
     public func planRegions() -> Optional<PlanRegionConfig> {
         { let val = __swift_bridge__$PdfConfig$plan_regions(ptr); if val != nil { return PlanRegionConfig(ptr: val!) } else { return nil } }()
+    }
+
+    public func keepWhiteText() -> Bool {
+        __swift_bridge__$PdfConfig$keep_white_text(ptr)
     }
 }
 extension PdfConfig: Vectorizable {
@@ -38232,6 +38259,86 @@ extension TableOverlapPreference: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_TableOverlapPreference$len(vecPtr)
+    }
+}
+
+
+public class TessdataModel: TessdataModelRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$TessdataModel$_free(ptr)
+        }
+    }
+}
+public class TessdataModelRefMut: TessdataModelRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class TessdataModelRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension TessdataModelRef {
+    public func to_string() -> RustString {
+        RustString(ptr: __swift_bridge__$TessdataModel$to_string(ptr))
+    }
+}
+extension TessdataModel: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_TessdataModel$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_TessdataModel$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: TessdataModel) {
+        __swift_bridge__$Vec_TessdataModel$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_TessdataModel$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (TessdataModel(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<TessdataModelRef> {
+        let pointer = __swift_bridge__$Vec_TessdataModel$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return TessdataModelRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<TessdataModelRefMut> {
+        let pointer = __swift_bridge__$Vec_TessdataModel$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return TessdataModelRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<TessdataModelRef> {
+        UnsafePointer<TessdataModelRef>(OpaquePointer(__swift_bridge__$Vec_TessdataModel$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_TessdataModel$len(vecPtr)
     }
 }
 
