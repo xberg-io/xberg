@@ -9446,7 +9446,6 @@ mod mixed_pdf_table_model_warning {
 
     const CACHE_ROOT: &str = "XBERG_TABLE_MODEL_WARNING_TEST_HF_CACHE";
     const BACKEND_NAME: &str = "mixed-pdf-table-model-warning-test-backend";
-    const LAYOUT_MODEL_REPO_DIR: &str = "models--xberg-io--layout-models";
     const ROWS: [[&str; 4]; 7] = [
         ["Region", "Q1 revenue", "Q2 revenue", "Change"],
         ["North", "12,400", "13,050", "+5.2%"],
@@ -9609,24 +9608,24 @@ mod mixed_pdf_table_model_warning {
             eprintln!("XBERG_SKIP_LIVE_HF=1, skipping");
             return;
         }
+        // The model comes from the Xberg cache once `xberg cache warm` has run, else from the
+        // Hugging Face cache. The child reads only a private Xberg cache that holds this one
+        // model (`<XBERG_CACHE_DIR>/layout/rtdetr/model.onnx`, where `LayoutModelManager::new(None)`
+        // looks first) and an empty offline Hugging Face cache, so no table model resolves.
         let layout_model = crate::layout::LayoutModelManager::new(None)
             .ensure_rtdetr_model()
             .expect("the layout model must be available");
-        let repo_dir = layout_model
-            .ancestors()
-            .find(|dir| dir.file_name().is_some_and(|name| name == LAYOUT_MODEL_REPO_DIR))
-            .expect("the layout model must sit in the Hugging Face cache layout");
-        let relative = layout_model
-            .strip_prefix(repo_dir.parent().expect("the repository directory has a parent"))
-            .expect("the layout model sits under its repository directory");
         let cache = tempfile::TempDir::new().unwrap();
-        let staged = cache.path().join(relative);
+        let staged = cache.path().join("layout").join("rtdetr").join("model.onnx");
         std::fs::create_dir_all(staged.parent().expect("the staged model has a parent")).unwrap();
         std::fs::copy(&layout_model, &staged).expect("copy the layout model into the private cache");
+        let hf_cache = cache.path().join("huggingface");
+        std::fs::create_dir_all(&hf_cache).unwrap();
 
         crate::utils::test_support::run_child_test(child, CACHE_ROOT, cache.path(), |command| {
             command
-                .env("HF_HUB_CACHE", cache.path())
+                .env("XBERG_CACHE_DIR", cache.path())
+                .env("HF_HUB_CACHE", &hf_cache)
                 .env("HF_HUB_OFFLINE", "1")
                 .env_remove("HUGGINGFACE_HUB_OFFLINE");
         });
