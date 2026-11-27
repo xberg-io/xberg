@@ -61,7 +61,9 @@ refresh() {
     (
       cd "$dir"
       case "$lang:$mode" in
-      python:update) uv sync --upgrade-package "*" --no-prerelease --no-install-project --no-install-workspace ;;
+      # uv 0.13 rejects a glob for --upgrade-package and the --no-prerelease flag; version ranges in
+      # pyproject.toml keep update within the current majors. ~keep
+      python:update) uv sync --upgrade --prerelease disallow --no-install-project --no-install-workspace ;;
       python:upgrade) uv sync --upgrade --no-install-project --no-install-workspace ;;
       ruby:update) bundle update --conservative ;;
       ruby:upgrade) bundle update ;;
