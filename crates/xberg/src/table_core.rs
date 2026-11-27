@@ -627,6 +627,7 @@ fn collapse_stacked_header_band(
 /// The row centres [`reconstruct_table_with_columns`] builds its grid on: the detected rows,
 /// with a leading stacked header band read as one row. `median_height` is
 /// [`median_word_height`] of `words`.
+#[cfg(feature = "pdf")]
 pub(crate) fn table_row_positions(words: &[HocrWord], row_threshold_ratio: f64, median_height: u32) -> Vec<u32> {
     collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height).0
 }
