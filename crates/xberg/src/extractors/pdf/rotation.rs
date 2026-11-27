@@ -61,13 +61,6 @@ pub(crate) const ATOMIC_FRAGMENT_GAP_RATIO: f32 = 0.15;
 /// [`upright_reading_origin`] produces.
 const ROTATED_LINE_CROSS_TOLERANCE_RATIO: f32 = 0.5;
 
-/// True when two spans sit on one rotated-frame line. The smaller height sets
-/// the tolerance, so a tall span can never pull itself onto a row its smaller
-/// neighbours are too far from to join.
-fn same_frame_line(cross_a: f32, height_a: f32, cross_b: f32, height_b: f32) -> bool {
-    (cross_a - cross_b).abs() <= height_a.min(height_b).max(f32::EPSILON) * ROTATED_LINE_CROSS_TOLERANCE_RATIO
-}
-
 /// Rotate a span's page-space origin into its own upright reading frame.
 ///
 /// Mirrors [`crate::pdf::native::span_geometry::upright_origin`] (which
@@ -101,13 +94,12 @@ pub(crate) fn upright_reading_origin(span: &TextSpan) -> (f32, f32) {
 /// (rotated body text beside an upright footer, for example) must not have
 /// one frame forced across the boundary — then, for a rotated run, further
 /// splits it into "lines" using cross-axis proximity (spans within
-/// [`ROTATED_LINE_CROSS_TOLERANCE_RATIO`] of the smaller font extent count
-/// as the same line), sorts each line strictly by advance-axis position,
+/// [`ROTATED_LINE_CROSS_TOLERANCE_RATIO`] of the run's own font extent count
+/// as the same line), sorts each line strictly by advance-axis position, and
 /// inserts a space wherever the advance-axis gap between consecutive spans
-/// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff, and separates
-/// lines with a newline. It keeps the line order it is given: a caller that
-/// holds a layout-hint order passes it through unchanged, and the hint-free
-/// caller first orders lines with [`order_in_reading_frames`].
+/// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff. It keeps the line
+/// order it is given, so a layout-hint order passes through unchanged; the
+/// hint-free repair orders lines itself in [`assemble_in_reading_frames`].
 ///
 /// Unrotated spans take the old code path verbatim (back-to-back
 /// concatenation, no reordering, no inserted separators), so this function is
@@ -170,14 +162,15 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
                 break;
             };
             let (_, candidate_cross) = upright_reading_origin(candidate);
-            if !same_frame_line(anchor_cross, anchor.height, candidate_cross, candidate.height) {
+            let tolerance = anchor.height.max(candidate.height).max(f32::EPSILON) * ROTATED_LINE_CROSS_TOLERANCE_RATIO;
+            if (candidate_cross - anchor_cross).abs() > tolerance {
                 break;
             }
             line_end += 1;
         }
 
-        if !first_line && !text.is_empty() && !text.ends_with('\n') {
-            text.push('\n');
+        if !first_line && !text.is_empty() && !text.ends_with(char::is_whitespace) {
+            text.push(' ');
         }
         first_line = false;
         append_rotated_line(text, spans, &indices[line_start..line_end]);
@@ -185,32 +178,143 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
     }
 }
 
-/// One rotated-frame line while a run is being ordered: its member spans, the
-/// advance-axis extent they cover and the cross-axis position that ranks it.
-struct FrameLine {
-    members: Vec<usize>,
+/// A span of a rotated run reduced to the keys ordering needs, computed once:
+/// its advance-axis extent and its cross-axis position in the upright frame.
+#[derive(Clone, Copy)]
+struct Placed {
+    index: usize,
     start: f32,
     end: f32,
     cross: f32,
 }
 
-/// Order one rotated run top to bottom in its own upright frame.
+/// Body height assumed for a run none of whose spans reports a usable height.
+const FALLBACK_BODY_HEIGHT: f32 = 10.0;
+
+/// An advance-axis gap wider than this many body heights can be a gutter.
+const GUTTER_MIN_HEIGHTS: f32 = 1.5;
+
+/// A gutter must not exceed this fraction of the narrower neighbouring block.
+/// Table cells sit further apart than they are wide, columns of prose sit
+/// closer together than they are wide, and that is the only thing telling an
+/// aligned-baseline pair of columns from a table row.
+const GUTTER_MAX_BLOCK_FRACTION: f32 = 0.5;
+
+/// Deepest nesting of column and band cuts tried on one run.
+const MAX_CUT_DEPTH: usize = 6;
+
+/// The run's body height: the median of its usable span heights. Line and
+/// gutter tolerances scale with it, so a superscript marker or a zero-height
+/// span neither splits a line nor gets one of its own.
+fn body_height(spans: &[TextSpan], run: &[usize]) -> f32 {
+    let mut heights: Vec<f32> = run
+        .iter()
+        .filter_map(|&index| spans.get(index))
+        .map(|span| span.height)
+        .filter(|height| height.is_finite() && *height > 0.0)
+        .collect();
+    if heights.is_empty() {
+        return FALLBACK_BODY_HEIGHT;
+    }
+    heights.sort_by(f32::total_cmp);
+    heights[heights.len() / 2]
+}
+
+/// Group spans into lines by cross-axis proximity, top line first. Each line
+/// keeps its members in cross order; assembly sorts them along the advance axis.
+fn cluster_lines(placed: &[Placed], tolerance: f32) -> Vec<Vec<Placed>> {
+    let mut sorted = placed.to_vec();
+    sorted.sort_by(|a, b| b.cross.total_cmp(&a.cross));
+    let mut lines: Vec<Vec<Placed>> = Vec::new();
+    let mut anchor = f32::NAN;
+    for span in sorted {
+        match lines.last_mut().filter(|_| (anchor - span.cross).abs() <= tolerance) {
+            Some(line) => line.push(span),
+            None => {
+                anchor = span.cross;
+                lines.push(vec![span]);
+            }
+        }
+    }
+    lines
+}
+
+/// Where `placed` (sorted by advance start) splits into side-by-side columns:
+/// the index of the first span of the right-hand part. The cut is a gap in the
+/// union of the spans' advance extents that is wider than a gutter and no wider
+/// than [`GUTTER_MAX_BLOCK_FRACTION`] of the narrower block beside it.
+fn column_cut(placed: &[Placed], body: f32) -> Option<usize> {
+    let mut blocks: Vec<(f32, f32, usize)> = Vec::new();
+    for (position, span) in placed.iter().enumerate() {
+        match blocks.last_mut() {
+            Some(block) if span.start <= block.1 => block.1 = block.1.max(span.end),
+            _ => blocks.push((span.start, span.end, position)),
+        }
+    }
+    blocks.windows(2).find_map(|pair| {
+        let gap = pair[1].0 - pair[0].1;
+        let narrower = (pair[0].1 - pair[0].0).min(pair[1].1 - pair[1].0);
+        (gap > body * GUTTER_MIN_HEIGHTS && gap <= narrower * GUTTER_MAX_BLOCK_FRACTION).then_some(pair[1].2)
+    })
+}
+
+fn by_start(placed: &[Placed]) -> Vec<Placed> {
+    let mut sorted = placed.to_vec();
+    sorted.sort_by(|a, b| a.start.total_cmp(&b.start));
+    sorted
+}
+
+/// Order `placed` as lines: side-by-side columns one after the other, left to
+/// right, and a band that spans the columns (a title, a footer) before or after
+/// the columns it spans. Without a column or band cut, lines read top to bottom.
+fn order_block(placed: &[Placed], body: f32, depth: usize) -> Vec<Vec<usize>> {
+    let tolerance = body * ROTATED_LINE_CROSS_TOLERANCE_RATIO;
+    let as_indices = |lines: Vec<Vec<Placed>>| -> Vec<Vec<usize>> {
+        lines
+            .into_iter()
+            .map(|line| line.into_iter().map(|span| span.index).collect())
+            .collect()
+    };
+    if depth >= MAX_CUT_DEPTH || placed.len() < 2 {
+        return as_indices(cluster_lines(placed, tolerance));
+    }
+
+    let sorted = by_start(placed);
+    if let Some(cut) = column_cut(&sorted, body) {
+        let mut ordered = order_block(&sorted[..cut], body, depth + 1);
+        ordered.extend(order_block(&sorted[cut..], body, depth + 1));
+        return ordered;
+    }
+
+    let lines = cluster_lines(placed, tolerance);
+    let has_columns = |from: usize, to: usize| {
+        let members: Vec<Placed> = lines[from..to].iter().flatten().copied().collect();
+        column_cut(&by_start(&members), body).is_some()
+    };
+    // A band above the columns first, then a band below them.
+    let band_cut = (1..lines.len())
+        .find(|&k| has_columns(k, lines.len()))
+        .or_else(|| (1..lines.len()).rev().find(|&k| has_columns(0, k)));
+    match band_cut {
+        Some(k) => {
+            let top: Vec<Placed> = lines[..k].iter().flatten().copied().collect();
+            let bottom: Vec<Placed> = lines[k..].iter().flatten().copied().collect();
+            let mut ordered = order_block(&top, body, depth + 1);
+            ordered.extend(order_block(&bottom, body, depth + 1));
+            ordered
+        }
+        None => as_indices(lines),
+    }
+}
+
+/// Order one rotated run as lines, top to bottom in its own upright frame.
 ///
 /// The span order a caller holds follows page axes, which for a rotated run
-/// reads lines backwards or column by column (GH#3423). Lines are clustered by
-/// cross-axis proximity, then lines whose advance-axis extents overlap form one
-/// block; blocks that do not overlap (side-by-side columns) are emitted one
-/// after the other, left to right, so their lines never interleave. Every key
-/// is computed once, up front.
-fn order_rotated_run(spans: &[TextSpan], run: &[usize]) -> Vec<usize> {
-    struct Placed {
-        index: usize,
-        start: f32,
-        end: f32,
-        cross: f32,
-        height: f32,
-    }
-    let mut placed: Vec<Placed> = run
+/// reads lines backwards or column by column (GH#3423). Spans are keyed once,
+/// then ordered by [`order_block`]: columns of prose stay apart, table rows
+/// read across.
+fn order_rotated_run(spans: &[TextSpan], run: &[usize]) -> Vec<Vec<usize>> {
+    let placed: Vec<Placed> = run
         .iter()
         .filter_map(|&index| {
             let span = spans.get(index)?;
@@ -220,63 +324,19 @@ fn order_rotated_run(spans: &[TextSpan], run: &[usize]) -> Vec<usize> {
                 start,
                 end: start + span.width,
                 cross,
-                height: span.height,
             })
         })
         .collect();
-    placed.sort_by(|a, b| b.cross.total_cmp(&a.cross));
-
-    let mut lines: Vec<FrameLine> = Vec::new();
-    let mut anchor: Option<(f32, f32)> = None;
-    for span in &placed {
-        let same_line = anchor.is_some_and(|(cross, height)| same_frame_line(cross, height, span.cross, span.height));
-        match lines.last_mut().filter(|_| same_line) {
-            Some(line) => {
-                line.members.push(span.index);
-                line.start = line.start.min(span.start);
-                line.end = line.end.max(span.end);
-            }
-            None => {
-                anchor = Some((span.cross, span.height));
-                lines.push(FrameLine {
-                    members: vec![span.index],
-                    start: span.start,
-                    end: span.end,
-                    cross: span.cross,
-                });
-            }
-        }
-    }
-
-    let mut by_start: Vec<usize> = (0..lines.len()).collect();
-    by_start.sort_by(|&a, &b| lines[a].start.total_cmp(&lines[b].start));
-    let mut blocks: Vec<Vec<usize>> = Vec::new();
-    let mut block_end = f32::NEG_INFINITY;
-    for line in by_start {
-        if blocks.is_empty() || lines[line].start >= block_end {
-            blocks.push(vec![line]);
-            block_end = lines[line].end;
-        } else if let Some(block) = blocks.last_mut() {
-            block.push(line);
-            block_end = block_end.max(lines[line].end);
-        }
-    }
-
-    let mut ordered = Vec::with_capacity(run.len());
-    for mut block in blocks {
-        block.sort_by(|&a, &b| lines[b].cross.total_cmp(&lines[a].cross));
-        for line in block {
-            ordered.extend_from_slice(&lines[line].members);
-        }
-    }
-    ordered
+    order_block(&placed, body_height(spans, run), 0)
 }
 
-/// Order a page's spans for assembly: each maximal rotated run is reordered
-/// into its reading frame by [`order_rotated_run`], upright runs keep their
-/// incoming order and every run stays where it was.
-fn order_in_reading_frames(spans: &[TextSpan], order: &[usize]) -> Vec<usize> {
-    let mut ordered = Vec::with_capacity(order.len());
+/// Assemble a page's spans for the hint-free repair: every maximal rotated
+/// run is ordered into its reading frame by [`order_rotated_run`] and written
+/// one line per row; upright runs are written verbatim in the given order.
+/// Runs are ordered one at a time, so a rotated block split in two by upright
+/// spans between its members is not ordered as a whole.
+fn assemble_in_reading_frames(spans: &[TextSpan], order: &[usize]) -> String {
+    let mut text = String::new();
     let mut run_start = 0;
     while run_start < order.len() {
         let rotation = span_rotation(spans, order[run_start]);
@@ -284,15 +344,23 @@ fn order_in_reading_frames(spans: &[TextSpan], order: &[usize]) -> Vec<usize> {
         while run_end < order.len() && same_rotation(span_rotation(spans, order[run_end]), rotation) {
             run_end += 1;
         }
+        if run_start > 0 && !text.is_empty() && !text.ends_with(char::is_whitespace) {
+            text.push(' ');
+        }
         let run = &order[run_start..run_end];
         if is_unrotated(rotation) {
-            ordered.extend_from_slice(run);
+            append_run(&mut text, spans, run, rotation);
         } else {
-            ordered.extend(order_rotated_run(spans, run));
+            for line in order_rotated_run(spans, run) {
+                if !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                append_rotated_line(&mut text, spans, &line);
+            }
         }
         run_start = run_end;
     }
-    ordered
+    text
 }
 
 /// Sort one rotated-frame line by advance-axis position and join it,
@@ -435,10 +503,7 @@ pub(crate) fn repair_rotated_page_text(spans: &[TextSpan]) -> Option<String> {
     }
 
     let identity_order: Vec<usize> = (0..spans.len()).collect();
-    Some(assemble_reading_order_text(
-        spans,
-        &order_in_reading_frames(spans, &identity_order),
-    ))
+    Some(assemble_in_reading_frames(spans, &identity_order))
 }
 
 #[cfg(test)]
@@ -917,15 +982,146 @@ mod tests {
             assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("A 1\nB 2"));
         }
 
+        fn wide(text: &str, advance: f32, cross: f32, width: f32) -> TextSpan {
+            TextSpan {
+                width,
+                ..at(text, 90.0, advance, cross)
+            }
+        }
+
+        /// Two columns of prose, `rows` lines each, `gutter` apart, drawn on shared baselines.
+        fn aligned_columns(gutter: f32, width: f32, rows: usize) -> Vec<TextSpan> {
+            (0..rows)
+                .flat_map(|row| {
+                    let cross = 100.0 - 20.0 * row as f32;
+                    [
+                        wide(&format!("A{}", row + 1), 0.0, cross, width),
+                        wide(&format!("B{}", row + 1), width + gutter, cross, width),
+                    ]
+                })
+                .collect()
+        }
+
+        #[test]
+        fn should_keep_columns_apart_when_their_baselines_align() {
+            let spans = aligned_columns(30.0, 200.0, 3);
+            assert_eq!(
+                repair_rotated_page_text(&spans).as_deref(),
+                Some("A1\nA2\nA3\nB1\nB2\nB3")
+            );
+        }
+
+        #[test]
+        fn should_read_a_full_width_title_before_the_two_columns_under_it() {
+            let mut spans = aligned_columns(30.0, 200.0, 3);
+            spans.push(wide("Title", 0.0, 130.0, 430.0));
+            spans.reverse();
+            assert_eq!(
+                repair_rotated_page_text(&spans).as_deref(),
+                Some("Title\nA1\nA2\nA3\nB1\nB2\nB3")
+            );
+        }
+
+        #[test]
+        fn should_read_a_full_width_footer_after_the_two_columns_above_it() {
+            let mut spans = aligned_columns(30.0, 200.0, 3);
+            spans.push(wide("Footer", 0.0, 20.0, 430.0));
+            assert_eq!(
+                repair_rotated_page_text(&spans).as_deref(),
+                Some("A1\nA2\nA3\nB1\nB2\nB3\nFooter")
+            );
+        }
+
+        #[test]
+        fn should_read_a_ragged_table_with_missing_cells_row_by_row() {
+            let cell = |text: &str, advance: f32, cross: f32| wide(text, advance, cross, 40.0);
+            let spans = vec![
+                cell("h", 100.0, 60.0),
+                cell("c", 200.0, 100.0),
+                cell("d", 0.0, 80.0),
+                cell("a", 0.0, 100.0),
+                cell("i", 200.0, 60.0),
+                cell("b", 100.0, 100.0),
+                cell("f", 200.0, 80.0),
+            ];
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("a b c\nd f\nh i"));
+        }
+
+        #[test]
+        fn should_not_cut_at_a_gap_of_exactly_one_and_a_half_body_heights() {
+            let spans = aligned_columns(15.0, 200.0, 2);
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("A1 B1\nA2 B2"));
+        }
+
+        #[test]
+        fn should_cut_at_a_gutter_just_under_half_the_narrower_column() {
+            let spans = aligned_columns(29.0, 60.0, 2);
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("A1\nA2\nB1\nB2"));
+        }
+
+        #[test]
+        fn should_not_cut_at_a_gutter_just_over_half_the_narrower_column() {
+            let spans = aligned_columns(31.0, 60.0, 2);
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("A1 B1\nA2 B2"));
+        }
+
+        #[test]
+        fn should_read_touching_spans_as_one_block() {
+            let spans = vec![
+                wide("a", 0.0, 100.0, 100.0),
+                wide("b", 100.0, 100.0, 100.0),
+                wide("c", 0.0, 80.0, 100.0),
+                wide("d", 100.0, 80.0, 100.0),
+            ];
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("ab\ncd"));
+        }
+
+        #[test]
+        fn should_keep_a_half_height_superscript_on_its_line() {
+            let marker = TextSpan {
+                height: HEIGHT / 2.0,
+                ..at("2", 90.0, 80.0, 103.3)
+            };
+            let spans = vec![at("x", 90.0, 0.0, 100.0), marker, at("y", 90.0, 40.0, 100.0)];
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("x y 2"));
+        }
+
+        #[test]
+        fn should_not_give_a_zero_or_nan_height_span_its_own_line() {
+            for height in [0.0, f32::NAN] {
+                let odd = TextSpan {
+                    height,
+                    ..at("y", 90.0, 40.0, 101.0)
+                };
+                let spans = vec![at("x", 90.0, 0.0, 100.0), odd, at("z", 90.0, 80.0, 100.0)];
+                assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("x y z"), "{height}");
+            }
+        }
+
+        #[test]
+        fn should_order_a_run_whose_spans_all_lack_a_height() {
+            let blank = |text: &str, advance: f32, cross: f32| TextSpan {
+                height: 0.0,
+                ..at(text, 90.0, advance, cross)
+            };
+            let spans = vec![
+                blank("c", 0.0, 80.0),
+                blank("b", 40.0, 100.0),
+                blank("d", 40.0, 80.0),
+                blank("a", 0.0, 100.0),
+            ];
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("a b\nc d"));
+        }
+
         #[test]
         fn should_keep_side_by_side_columns_with_offset_baselines_apart() {
             let spans = vec![
-                at("B1", 90.0, 200.0, 90.0),
-                at("A1", 90.0, 0.0, 100.0),
-                at("B2", 90.0, 200.0, 70.0),
-                at("A2", 90.0, 0.0, 80.0),
-                at("B3", 90.0, 200.0, 50.0),
-                at("A3", 90.0, 0.0, 60.0),
+                wide("B1", 230.0, 90.0, 200.0),
+                wide("A1", 0.0, 100.0, 200.0),
+                wide("B2", 230.0, 70.0, 200.0),
+                wide("A2", 0.0, 80.0, 200.0),
+                wide("B3", 230.0, 50.0, 200.0),
+                wide("A3", 0.0, 60.0, 200.0),
             ];
             assert_eq!(
                 repair_rotated_page_text(&spans).as_deref(),
@@ -936,9 +1132,10 @@ mod tests {
         #[test]
         fn should_keep_a_layout_hint_order_for_a_rotated_run() {
             let spans = table(90.0);
-            // A hint order that reads the bottom row first must survive assembly.
+            // A hint order that reads the bottom row first must survive assembly, with the
+            // hint path's space between lines.
             let order = vec![4, 5, 0, 1, 2, 3];
-            assert_eq!(assemble_reading_order_text(&spans, &order), "e f\na b\nc d");
+            assert_eq!(assemble_reading_order_text(&spans, &order), "e f a b c d");
         }
     }
 }
