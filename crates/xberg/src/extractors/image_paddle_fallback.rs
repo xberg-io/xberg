@@ -424,6 +424,10 @@ async fn retry_with(
         return Ok((primary, None));
     };
     if !sparse_unreliable_read(&primary) {
+        tracing::debug!(
+            consulted = false,
+            "PaddleOCR image fallback not consulted: the Tesseract read is reliable"
+        );
         return Ok((primary, None));
     }
     let config = paddle_read_config(effective);
@@ -432,13 +436,18 @@ async fn retry_with(
         return Ok((primary, None));
     }
     let thresholds = original.effective_thresholds();
-    let (selected, adopted) = read_if_better(
-        cancel,
-        async || paddle.process_image_owned(bytes, &config).await,
-        primary,
-        &thresholds,
+    let span = tracing::debug_span!("xberg::ocr::paddle_fallback", adopted = tracing::field::Empty);
+    let (selected, adopted) = tracing::Instrument::instrument(
+        read_if_better(
+            cancel,
+            async || paddle.process_image_owned(bytes, &config).await,
+            primary,
+            &thresholds,
+        ),
+        span.clone(),
     )
     .await?;
+    span.record("adopted", adopted);
     Ok((selected, adopted.then_some(paddle)))
 }
 

@@ -117,8 +117,10 @@ pub(crate) fn extract_text_and_metadata(
 ) -> Result<NativeUnifiedExtractionResult> {
     let page_config = extraction_config.and_then(|c| c.pages.as_ref());
     let margins = PageMarginFractions::from_extraction_config(extraction_config);
-    let (text, boundaries, page_contents, evidence) =
-        extract_text_from_native_document(doc, page_config, extraction_config, margins)?;
+    let (text, boundaries, page_contents, evidence) = {
+        let _span = tracing::debug_span!("xberg::pdf::text_pass").entered();
+        extract_text_from_native_document(doc, page_config, extraction_config, margins)?
+    };
 
     let scanned_min_confidence = extraction_config
         .map(|c| c.ocr_strategy.effective_min_confidence())
@@ -142,8 +144,10 @@ pub(crate) fn extract_text_and_metadata(
         quality_thresholds: &ocr_quality_thresholds,
         provenance_counts: evidence.provenance_counts.as_deref(),
     });
-    let metadata =
-        super::metadata::extract_metadata_from_native_document(doc, boundaries.as_deref(), &text, scan_grading)?;
+    let metadata = {
+        let _span = tracing::debug_span!("xberg::pdf::metadata_pass", scan_grading = scan_grading.is_some()).entered();
+        super::metadata::extract_metadata_from_native_document(doc, boundaries.as_deref(), &text, scan_grading)?
+    };
 
     Ok((text, boundaries, page_contents, metadata, evidence.financial_rows))
 }
@@ -336,7 +340,10 @@ fn extract_page_texts_until(
             }
             break;
         }
-        let page = extract_one_page_text(doc, page_idx, &excluded_layers, options)?;
+        let page = {
+            let _span = tracing::trace_span!("xberg::pdf::text_pass_page", page_index = page_idx).entered();
+            extract_one_page_text(doc, page_idx, &excluded_layers, options)?
+        };
         #[cfg(test)]
         hold_after_marked_page(&page.text, cancel_token, || stop(page_idx + 1));
         texts.push(page.text);

@@ -382,6 +382,7 @@ fn extract_annotations_with_empty_body_fallback(
     Option<AnnotationTextFallback>,
     Vec<crate::types::ProcessingWarning>,
 ) {
+    let _span = tracing::debug_span!("xberg::pdf::annotations", requested).entered();
     if requested {
         let (annotations, warnings) = crate::pdf::native::annotations::extract_annotations(doc);
         return ((!annotations.is_empty()).then_some(annotations), None, warnings);

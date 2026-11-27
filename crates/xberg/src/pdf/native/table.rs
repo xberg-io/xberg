@@ -248,10 +248,17 @@ pub(crate) fn extract_ruled_tables(
 ) -> Result<RuledTableExtraction> {
     use xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig;
 
+    let span = tracing::debug_span!(
+        "xberg::pdf::ruled_tables",
+        page_count = tracing::field::Empty,
+        tables = tracing::field::Empty
+    );
+    let _entered = span.enter();
     let page_count = doc
         .doc
         .page_count()
         .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
+    span.record("page_count", page_count);
     let strict_config = TableDetectionConfig::strict();
     let bordered_config = bordered_table_config();
 
@@ -261,6 +268,7 @@ pub(crate) fn extract_ruled_tables(
     let mut recovered_only = HashMap::new();
     let mut bordered_warnings = Vec::new();
     for page_idx in 0..page_count {
+        let _page_span = tracing::trace_span!("xberg::pdf::ruled_tables_page", page_index = page_idx).entered();
         let page_number = (page_idx + 1) as u32;
         let extracted = doc
             .doc
@@ -337,6 +345,7 @@ pub(crate) fn extract_ruled_tables(
     }
 
     append_bordered_tables(&mut strict, bordered);
+    span.record("tables", strict.len());
     strict_warnings.extend(bordered_warnings);
     Ok(RuledTableExtraction {
         tables: strict,
@@ -942,6 +951,7 @@ pub(crate) fn extract_tables_heuristic(
     artifacts: crate::pdf::native::hierarchy::ArtifactRetention,
     page_paths: &mut TablePagePaths,
 ) -> Result<HeuristicTableExtraction> {
+    let _span = tracing::debug_span!("xberg::pdf::heuristic_tables", skipped_pages = skip_pages.len()).entered();
     let (per_page_segments, used_structure_tree) =
         crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts, |page_idx| {
             skip_pages.contains(&((page_idx + 1) as u32))

@@ -4380,6 +4380,7 @@ pub(crate) fn extract_document_structure_from_native_pages(
     schemas: &[crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
+    let _span = tracing::debug_span!("xberg::pdf::structure_pipeline", pages = native_pages.len()).entered();
     // The pages keep only their script owners, prose rows and math glyphs from here on: every
     // later pass is handed the segments that survived paragraph assembly instead. ~keep
     let segments = native_pages

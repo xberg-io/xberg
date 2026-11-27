@@ -1412,10 +1412,13 @@ pub(super) fn read_pages<T: Send>(count: usize, read: impl Fn(usize) -> Result<T
     {
         use rayon::prelude::*;
         let memo = reading_order_memo::ReadingOrderMemoShare::of_current_thread();
+        // Worker threads do not inherit the caller's span, so each page names its stage explicitly. ~keep
+        let stage = tracing::Span::current();
         let pages: Vec<Result<T>> = (0..count)
             .into_par_iter()
             .map(|page| {
                 let _memo = memo.enter();
+                let _span = tracing::trace_span!(parent: &stage, "xberg::pdf::page_read", page_index = page).entered();
                 read(page)
             })
             .collect();
@@ -1423,7 +1426,12 @@ pub(super) fn read_pages<T: Send>(count: usize, read: impl Fn(usize) -> Result<T
     }
     #[cfg(target_arch = "wasm32")]
     {
-        (0..count).map(read).collect()
+        (0..count)
+            .map(|page| {
+                let _span = tracing::trace_span!("xberg::pdf::page_read", page_index = page).entered();
+                read(page)
+            })
+            .collect()
     }
 }
 
@@ -1433,6 +1441,7 @@ type PageHeadingRoles = Vec<HashMap<u32, Option<u8>>>;
 /// Each page's MCID heading roles from a reliable structure tree, or `None` when the document
 /// has no structure tree its headings can be read from.
 pub(super) fn structure_tree_page_roles(doc: &NativeDocument) -> Result<Option<PageHeadingRoles>> {
+    let _span = tracing::debug_span!("xberg::pdf::structure_tree_roles").entered();
     let Some(all_page_content) = reliable_heading_content(doc) else {
         return Ok(None);
     };
