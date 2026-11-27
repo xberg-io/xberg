@@ -4287,13 +4287,18 @@ fn build_document_structure(
 
 pub(crate) fn extract_document_structure_from_native_pages(
     native_document: &xberg_native_pdf::PdfDocument,
-    native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
+    mut native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     table_plan: NativeTablePlan<'_>,
     schemas: &[crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
-    let segments = native_pages.iter().map(|page| page.segments.clone()).collect();
+    // The pages keep only their script owners, prose rows and math glyphs from here on: every
+    // later pass is handed the segments that survived paragraph assembly instead. ~keep
+    let segments = native_pages
+        .iter_mut()
+        .map(|page| std::mem::take(&mut page.segments))
+        .collect();
     build_document_structure_with_native(
         segments,
         Some(native_pages),
