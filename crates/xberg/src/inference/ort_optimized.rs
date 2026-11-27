@@ -15,12 +15,14 @@
 //! - it is saved and reused only for a source file this process has just verified against the
 //!   digest its model manager requires ([`crate::model_download::pinned_file`]), and is not
 //!   published if that file changed while ONNX Runtime read it;
-//! - a sidecar records the graph's size and SHA-256, checked before every load. ONNX Runtime
-//!   builds the session from the bytes that were checked, read from one open descriptor, never by
-//!   opening the path again. Hashing a graph of hundreds of megabytes costs tens of milliseconds,
-//!   so once a graph has verified, the sidecar also records its file identity (device, inode,
-//!   nanosecond mtime and ctime); a load whose descriptor shows that identity before and after
-//!   the read skips the hash. Any write through the file system changes the ctime, so a changed
+//! - a sidecar records the graph's size and SHA-256, checked before every load. The graph is
+//!   opened once; it is checked through that descriptor and ONNX Runtime reads it through
+//!   `/dev/fd/N`, which duplicates the descriptor (macOS) or reopens its inode (Linux), never the
+//!   cache path, so a file swapped in after the check is not what loads. The descriptor must show
+//!   the checked identity again after the session is built. Hashing a graph of hundreds of
+//!   megabytes costs tens of milliseconds, so once a graph has verified, the sidecar also records
+//!   its file identity (device, inode, nanosecond mtime and ctime), and a load that finds it
+//!   unchanged skips the hash. Any write through the file system changes the ctime, so a changed
 //!   graph is hashed again. The identity is recorded only once the ctime is [`STAMP_SETTLE`]
 //!   old, so a write within the same coarse timestamp tick cannot go unnoticed;
 //! - the cache directory must be a real directory owned by this user and not writable by group or
@@ -37,7 +39,7 @@
 //! is never writable is reported once per process.
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -210,7 +212,8 @@ fn load_saved(
     match slot.verified_graph() {
         Ok(Some(graph)) => {
             let loaded = with_level(configure()?, GraphOptimizationLevel::Disable)
-                .and_then(|mut builder| builder.commit_from_memory(&graph.bytes));
+                .map_err(|error| error.to_string())
+                .and_then(|builder| graph.commit(builder));
             match loaded {
                 Ok(session) => {
                     tracing::debug!(
@@ -334,21 +337,6 @@ fn sha256_hex(parts: &[&[u8]]) -> String {
         hasher.update(part);
     }
     hex::encode(hasher.finalize())
-}
-
-/// The `len` bytes of `file`, with their SHA-256 when `hash` is set, read from its current offset.
-fn read_graph(file: &fs::File, len: u64, hash: bool) -> Result<(Vec<u8>, Option<String>), String> {
-    use sha2::{Digest, Sha256};
-    let capacity = usize::try_from(len).map_err(|_| format!("{len} bytes do not fit in memory"))?;
-    let mut bytes = Vec::with_capacity(capacity);
-    Read::take(file, len.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .map_err(|e| format!("read failed: {e}"))?;
-    if bytes.len() as u64 != len {
-        return Err(format!("expected {len} bytes, read {}", bytes.len()));
-    }
-    let digest = hash.then(|| hex::encode(Sha256::digest(&bytes)));
-    Ok((bytes, digest))
 }
 
 /// SHA-256 of `file`, which must hold exactly `len` bytes.
@@ -516,13 +504,61 @@ impl Record {
     }
 }
 
-/// A published graph that passed its checks: the bytes to build the session from.
-#[derive(Debug, PartialEq, Eq)]
+/// A published graph that passed its checks, held open: the session is built from this
+/// descriptor, never by opening the path again.
+#[derive(Debug)]
 struct Graph {
     path: PathBuf,
-    bytes: Vec<u8>,
-    /// Whether the bytes were hashed, rather than trusted by an unchanged recorded identity.
+    file: fs::File,
+    size: u64,
+    /// The identity that was checked; the descriptor must still show it once the session is built.
+    stamp: Stamp,
+    /// Whether the file was hashed, rather than trusted by an unchanged recorded identity.
     hashed: bool,
+}
+
+impl Graph {
+    /// Build a session from the checked descriptor and confirm the file did not change meanwhile.
+    ///
+    /// ONNX Runtime reads the file through [`Graph::descriptor_path`], so it holds no extra copy
+    /// of the graph. Without `/dev/fd` (a Linux container without `/proc`) the bytes are read
+    /// from the descriptor and parsed from memory instead, a transient copy of the graph's size.
+    fn commit(&self, mut builder: SessionBuilder) -> Result<Session, String> {
+        let session = match self.descriptor_path()? {
+            Some(path) => builder.commit_from_file(path),
+            None => builder.commit_from_memory(&self.read()?),
+        }
+        .map_err(|error| error.to_string())?;
+        let after = self.file.metadata().map(|metadata| Stamp::of(&metadata));
+        if after.ok() != Some(self.stamp) {
+            return Err("graph changed while it was loaded".to_string());
+        }
+        Ok(session)
+    }
+
+    /// `/dev/fd/N` for the checked descriptor, rewound, or `None` when this system has no
+    /// `/dev/fd`. Opening it duplicates the descriptor (macOS, sharing its offset, hence the
+    /// rewind) or reopens the inode it refers to (Linux); neither resolves the cache path.
+    fn descriptor_path(&self) -> Result<Option<PathBuf>, String> {
+        use std::os::fd::AsRawFd;
+        let path = PathBuf::from(format!("/dev/fd/{}", self.file.as_raw_fd()));
+        if !path.exists() {
+            return Ok(None);
+        }
+        (&self.file)
+            .seek(SeekFrom::Start(0))
+            .map_err(|e| format!("graph: rewind failed: {e}"))?;
+        Ok(Some(path))
+    }
+
+    /// The whole graph, read from the checked descriptor.
+    fn read(&self) -> Result<Vec<u8>, String> {
+        let len = usize::try_from(self.size).map_err(|_| format!("graph: {} bytes do not fit in memory", self.size))?;
+        let mut bytes = vec![0; len];
+        std::os::unix::fs::FileExt::read_exact_at(&self.file, &mut bytes, 0)
+            .map_err(|e| format!("graph: read failed: {e}"))?;
+        Ok(bytes)
+    }
 }
 
 /// One model's entry in the saved-graph cache.
@@ -592,9 +628,9 @@ impl Slot {
         Ok(true)
     }
 
-    /// The published graph for this key, after checking its sidecar, ownership, size and digest,
-    /// read once from the descriptor that was checked. `Ok(None)` means nothing is published;
-    /// `Err` means the entry is unusable.
+    /// The published graph for this key, open, after checking its sidecar, ownership, size and
+    /// digest through that descriptor. `Ok(None)` means nothing is published; `Err` means the
+    /// entry is unusable.
     fn verified_graph(&self) -> Result<Option<Graph>, String> {
         let meta = match open_entry(&self.meta_path()) {
             Ok(file) => file,
@@ -625,26 +661,28 @@ impl Slot {
         if metadata.len() != record.size {
             return Err(format!("graph: {} bytes, sidecar says {}", metadata.len(), record.size));
         }
-        let before = Stamp::of(&metadata);
-        let hash = record.stamp != Some(before);
-        let (bytes, digest) = read_graph(&graph, record.size, hash).map_err(|e| format!("graph: {e}"))?;
-        // Unchanged identity across the read means the bytes are the file the stamp describes.
-        let after = graph.metadata().map(|metadata| Stamp::of(&metadata));
-        if after.as_ref().ok() != Some(&before) {
-            return Err("graph: changed while it was read".to_string());
-        }
-        if let Some(digest) = digest {
+        let stamp = Stamp::of(&metadata);
+        let hashed = record.stamp != Some(stamp);
+        if hashed {
+            let digest = sha256_of(&graph, record.size).map_err(|e| format!("graph: {e}"))?;
+            // An unchanged identity across the hash means the digest describes this file.
+            let after = graph.metadata().map(|metadata| Stamp::of(&metadata));
+            if after.ok() != Some(stamp) {
+                return Err("graph: changed while it was hashed".to_string());
+            }
             if digest != record.sha256 {
                 return Err("graph: digest does not match its sidecar".to_string());
             }
-            if before.settled(self.settle) {
-                self.record_stamp(record, before);
+            if stamp.settled(self.settle) {
+                self.record_stamp(record, stamp);
             }
         }
         Ok(Some(Graph {
             path,
-            bytes,
-            hashed: hash,
+            file: graph,
+            size: metadata.len(),
+            stamp,
+            hashed,
         }))
     }
 

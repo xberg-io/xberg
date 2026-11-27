@@ -130,7 +130,7 @@ fn nothing_published_is_not_an_error() {
     let root = TempDir::new().unwrap();
     let slot = slot(&root);
     slot.prepare_dir().unwrap();
-    assert_eq!(slot.verified_graph(), Ok(None));
+    assert!(matches!(slot.verified_graph(), Ok(None)));
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn a_graph_without_its_sidecar_is_not_used() {
     save(&slot, b"optimized graph");
 
     fs::remove_file(slot.meta_path()).unwrap();
-    assert_eq!(slot.verified_graph(), Ok(None));
+    assert!(matches!(slot.verified_graph(), Ok(None)));
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn discard_removes_the_entry() {
     slot.discard();
     assert!(!graph.exists());
     assert!(!slot.meta_path().exists());
-    assert_eq!(slot.verified_graph(), Ok(None));
+    assert!(matches!(slot.verified_graph(), Ok(None)));
 }
 
 /// Backdates `slot`'s sidecar so publish order is unambiguous at any mtime granularity.
@@ -331,8 +331,8 @@ fn racing_publishers_leave_a_valid_entry() {
     }
 
     let graph = slot.verified_graph().unwrap().expect("one writer's graph is published");
-    assert!(payloads.contains(&graph.bytes));
-    assert_eq!(fs::read(&graph.path).unwrap(), graph.bytes);
+    assert!(payloads.contains(&graph.read().unwrap()));
+    assert_eq!(fs::read(&graph.path).unwrap(), graph.read().unwrap());
 }
 
 #[test]
@@ -390,7 +390,7 @@ fn a_settled_graph_is_hashed_once_then_trusted_by_its_identity() {
 
     let second = slot.verified_graph().unwrap().unwrap();
     assert!(!second.hashed, "an unchanged identity skips the hash");
-    assert_eq!(second.bytes, b"optimized graph");
+    assert_eq!(second.read().unwrap(), b"optimized graph");
     assert_eq!(second.path, first.path);
 }
 
@@ -437,6 +437,34 @@ fn a_graph_changed_after_its_identity_was_recorded_is_hashed_again() {
     assert!(!slot.verified_graph().unwrap().unwrap().hashed);
 }
 
+/// Replaces the file at `path` with `bytes` under a new inode, as another writer of the cache could.
+fn swap_in(root: &TempDir, path: &Path, bytes: &[u8]) {
+    let replacement = root.path().join("swapped-in");
+    fs::write(&replacement, bytes).unwrap();
+    fs::rename(&replacement, path).unwrap();
+}
+
+#[test]
+fn a_path_swapped_after_verification_does_not_change_what_loads() {
+    let root = TempDir::new().unwrap();
+    let slot = slot(&root);
+    save(&slot, b"optimized graph");
+    let graph = slot.verified_graph().unwrap().unwrap();
+
+    swap_in(&root, &graph.path, b"swapped-in bytes");
+
+    assert_eq!(fs::read(&graph.path).unwrap(), b"swapped-in bytes");
+    for _ in 0..2 {
+        // Twice: on macOS reading /dev/fd/N moves the shared offset, which the next call rewinds.
+        let through = graph
+            .descriptor_path()
+            .unwrap()
+            .expect("/dev/fd exists on Linux and macOS");
+        assert_eq!(fs::read(through).unwrap(), b"optimized graph");
+    }
+    assert_eq!(graph.read().unwrap(), b"optimized graph");
+}
+
 #[test]
 fn a_staging_failure_is_warned_once_per_directory() {
     let root = TempDir::new().unwrap();
@@ -474,72 +502,6 @@ fn a_read_only_cache_dir_cannot_stage() {
         "but cannot stage, which is what gets warned about"
     );
     fs::set_permissions(&slot.dir, fs::Permissions::from_mode(0o700)).unwrap();
-}
-
-/// Times loading published graphs of several sizes with and without the hash. Run in release:
-/// `cargo test -p xberg --release --lib -- --ignored --nocapture graph_verification_cost`.
-/// `XBERG_ORT_GRAPH_BENCH_MIB` overrides the sizes (comma-separated MiB, default `16,169,512`).
-#[test]
-#[ignore = "measurement, not a check; run explicitly in release"]
-fn graph_verification_cost() {
-    const RUNS: usize = 7;
-    let sizes: Vec<usize> = std::env::var("XBERG_ORT_GRAPH_BENCH_MIB")
-        .unwrap_or_else(|_| "16,169,512".to_string())
-        .split(',')
-        .map(|mib| mib.trim().parse().expect("sizes are integers in MiB"))
-        .collect();
-    let millis = |mut runs: Vec<Duration>| {
-        runs.sort();
-        (runs[0].as_secs_f64() * 1e3, runs[runs.len() / 2].as_secs_f64() * 1e3)
-    };
-    println!("size_mib\tread_min_ms\tread_med_ms\thashed_min_ms\thashed_med_ms\tstamped_min_ms\tstamped_med_ms");
-    for mib in sizes {
-        let root = TempDir::new().unwrap();
-        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
-        let bytes: Vec<u8> = (0..mib << 20)
-            .map(|_| {
-                state ^= state << 13;
-                state ^= state >> 7;
-                state ^= state << 17;
-                state as u8
-            })
-            .collect();
-        let hashing = Slot {
-            settle: Duration::MAX,
-            ..slot(&root)
-        };
-        let stamping = Slot::new(
-            root.path().join("cache"),
-            &root.path().join("stamped.onnx"),
-            &"a".repeat(64),
-            "recipe v1",
-            &platform(),
-        );
-        let stamping = Slot {
-            settle: Duration::ZERO,
-            ..stamping
-        };
-        let path = save(&hashing, &bytes);
-        save(&stamping, &bytes);
-
-        let time = |load: &dyn Fn()| {
-            load();
-            (0..RUNS)
-                .map(|_| {
-                    let start = std::time::Instant::now();
-                    load();
-                    start.elapsed()
-                })
-                .collect::<Vec<_>>()
-        };
-        let read = millis(time(&|| assert_eq!(fs::read(&path).unwrap().len(), bytes.len())));
-        let hashed = millis(time(&|| assert!(hashing.verified_graph().unwrap().unwrap().hashed)));
-        let stamped = millis(time(&|| assert!(!stamping.verified_graph().unwrap().unwrap().hashed)));
-        println!(
-            "{mib}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.1}",
-            read.0, read.1, hashed.0, hashed.1, stamped.0, stamped.1
-        );
-    }
 }
 
 /// Protobuf encoding helpers for a model built in memory.
@@ -580,6 +542,23 @@ mod tiny_model {
         n.extend(bytes(4, op.as_bytes()));
         n
     }
+    /// `Y = X + ReduceSum(W)` with `W` an initializer of `floats` floats, so the file is about
+    /// `4 * floats` bytes and loading it allocates the weight.
+    pub(super) fn large(floats: usize) -> Vec<u8> {
+        let raw: Vec<u8> = (0..floats).flat_map(|i| ((i % 251) as f32).to_le_bytes()).collect();
+        let weight = [int(1, floats as u64), int(2, 1), bytes(8, b"W"), bytes(9, &raw)].concat();
+        let graph = [
+            bytes(1, &node("ReduceSum", &["W"], "S", "sum0")),
+            bytes(1, &node("Add", &["X", "S"], "Y", "add0")),
+            bytes(2, b"large"),
+            bytes(5, &weight),
+            bytes(11, &value_info("X", 8)),
+            bytes(12, &value_info("Y", 8)),
+        ]
+        .concat();
+        [int(1, 8), bytes(8, &int(2, 13)), bytes(7, &graph)].concat()
+    }
+
     /// `Y = (X + X) * (X + X) + X` over `[N, 8]` floats, opset 13.
     pub(super) fn onnx() -> Vec<u8> {
         let graph = [
@@ -684,6 +663,50 @@ fn a_forged_entry_that_fails_to_load_is_replaced() {
 }
 
 #[test]
+fn a_swapped_graph_path_still_loads_the_verified_graph() {
+    if crate::ort_discovery::test_ort_environment("a_swapped_graph_path_still_loads_the_verified_graph").is_none() {
+        return;
+    }
+    let root = TempDir::new().unwrap();
+    let (model, pinned) = pinned_model(&root, "tiny.onnx", &tiny_model::onnx());
+    let slot = Slot::new(
+        root.path().join("cache"),
+        &model,
+        &pinned.sha256,
+        "test",
+        &Platform::current(),
+    );
+    let accel = cpu();
+    let configure = || super::super::ort_backend::session_builder(Some(&accel), 1, true);
+    let disabled = || with_level(configure().unwrap(), GraphOptimizationLevel::Disable).unwrap();
+    commit_with_cache(&model, &pinned, &slot, &configure).unwrap();
+
+    let graph = slot.verified_graph().unwrap().expect("the graph was saved");
+    swap_in(&root, &graph.path, b"not an onnx graph");
+    let mut session = graph
+        .commit(disabled())
+        .expect("the checked descriptor still holds the graph");
+    assert_eq!(
+        run_tiny(&mut session),
+        run_tiny(&mut online(&configure, &model).unwrap())
+    );
+
+    // A change to the checked file itself between the check and the load is refused, even one
+    // that leaves the graph loadable.
+    slot.discard();
+    commit_with_cache(&model, &pinned, &slot, &configure).unwrap();
+    let graph = slot.verified_graph().unwrap().expect("the graph was saved again");
+    fs::File::options()
+        .write(true)
+        .open(&graph.path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(1_000))
+        .unwrap();
+    let error = graph.commit(disabled()).unwrap_err();
+    assert!(error.contains("changed while it was loaded"), "{error}");
+}
+
+#[test]
 fn a_model_changed_after_verification_is_not_saved() {
     if crate::ort_discovery::test_ort_environment("a_model_changed_after_verification_is_not_saved").is_none() {
         return;
@@ -706,7 +729,7 @@ fn a_model_changed_after_verification_is_not_saved() {
     let (_, outcome) = commit_with_cache(&model, &pinned, &slot, &configure).unwrap();
 
     assert_eq!(outcome, Outcome::Online);
-    assert_eq!(slot.verified_graph(), Ok(None));
+    assert!(matches!(slot.verified_graph(), Ok(None)));
     let leftovers = entries(&slot.dir).len();
     assert_eq!(leftovers, 0, "no staging file is left behind");
 }
@@ -874,3 +897,6 @@ fn saved_layout_graphs_reproduce_online_outputs_bit_for_bit() {
         "XBERG_REQUIRE_TRACT_PARITY is set but a saved layout graph was not compared"
     );
 }
+
+#[path = "measure.rs"]
+mod measure;
