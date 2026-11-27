@@ -5331,6 +5331,24 @@ fn seg(text: &str, x: f32, width: f32) -> SegmentData {
     }
 }
 
+/// `super::finalize_paragraph` with its lines built from copies of the run, where
+/// `blocks_to_paragraphs` moves the run itself.
+fn finalize_paragraph(
+    lines: &[&SegmentData],
+    heading_map: &[(f32, Option<u8>)],
+    gap_info: &crate::pdf::structure::classify::GapInfo,
+) -> Option<PdfParagraph> {
+    let pending = super::finalize_paragraph(lines, heading_map, gap_info)?;
+    Some(pending.into_paragraph(&mut lines.iter().map(|segment| (*segment).clone())))
+}
+
+fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<PdfLine> {
+    build_pdf_lines(
+        &pdf_line_spans(segments),
+        &mut segments.iter().map(|segment| (*segment).clone()),
+    )
+}
+
 fn inline_seg(text: &str, x: f32, baseline_y: f32, is_bold: bool) -> SegmentData {
     let mut segment = seg(text, x, 20.0);
     segment.baseline_y = baseline_y;
