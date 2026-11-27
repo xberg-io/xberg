@@ -409,7 +409,7 @@ fn download_file(
 
 /// Atomically publish `bytes` at `output_path` without replacing an existing pack. Returns whether
 /// this call created the file.
-fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool> {
+pub(crate) fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool> {
     let directory = output_path
         .parent()
         .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidInput, "missing language pack directory"))?;

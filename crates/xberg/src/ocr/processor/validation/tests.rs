@@ -469,6 +469,39 @@ fn test_materialize_eng_from_bundled_bytes() {
     materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[], &provision).unwrap();
     assert!(dir.path().join("eng.traineddata").exists());
     assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert_eq!(
+        std::fs::read(dir.path().join("eng.traineddata")).unwrap(),
+        xberg_tesseract::bundled_eng_traineddata().unwrap()
+    );
+    assert_eq!(
+        dir.path().read_dir().unwrap().count(),
+        1,
+        "the model is published by rename, leaving no temporary file"
+    );
+}
+
+#[test]
+fn test_publishing_a_model_never_exposes_a_partial_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("eng.traineddata");
+    let bytes = vec![7_u8; 1 << 20];
+
+    let seen_partial = std::thread::scope(|scope| {
+        let reader = scope.spawn(|| {
+            loop {
+                match std::fs::metadata(&target) {
+                    Ok(metadata) => break metadata.len() != bytes.len() as u64,
+                    Err(_) => std::thread::yield_now(),
+                }
+            }
+        });
+        assert!(crate::ocr::tessdata_download::publish(&bytes, &target).unwrap());
+        reader.join().unwrap()
+    });
+
+    assert!(!seen_partial, "the file must appear with its full length");
+    assert!(!crate::ocr::tessdata_download::publish(b"other", &target).unwrap());
+    assert_eq!(std::fs::read(&target).unwrap(), bytes);
 }
 
 const NO_SYSTEM: SystemTessdataDirs<'static> = SystemTessdataDirs { fast: &[], best: &[] };

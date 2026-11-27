@@ -526,7 +526,9 @@ fn materialize_missing_languages(
             && lang == "eng"
             && let Some(bundled_bytes) = xberg_tesseract::bundled_eng_traineddata()
         {
-            std::fs::write(&traineddata_path, bundled_bytes).map_err(|e| {
+            // ~keep Other threads accept this directory as soon as the file exists, so it must
+            // never be visible half-written.
+            crate::ocr::tessdata_download::publish(bundled_bytes, &traineddata_path).map_err(|e| {
                 OcrError::TesseractInitializationFailed(format!(
                     "Failed to write bundled eng.traineddata to '{}': {}",
                     traineddata_path.display(),
