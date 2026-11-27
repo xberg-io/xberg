@@ -138,6 +138,16 @@ fn test_a_language_that_is_a_path_never_reaches_the_file_system() {
         assert!(matches!(error, OcrError::InvalidLanguageCode(_)), "{language}: {error}");
     }
     assert!(!cache.path().join("tessdata").exists(), "nothing may be created");
+    let outside_pack = ["../secret".to_string()];
+    let explicit_env = TessdataEnv {
+        tessdata_prefix: Some(directory.to_str().unwrap().to_owned()),
+        ..cache_env(cache.path(), TessdataModel::Fast)
+    };
+    assert_eq!(existing_tessdata_dir_for(&outside_pack, None, &explicit_env), None);
+    assert_eq!(
+        first_directory_holding(&[directory.to_str().unwrap().to_owned()], &outside_pack),
+        None
+    );
     assert!(matches!(
         validate_language_and_traineddata("eng+../secret", directory.to_str().unwrap()),
         Err(OcrError::InvalidLanguageCode(_))

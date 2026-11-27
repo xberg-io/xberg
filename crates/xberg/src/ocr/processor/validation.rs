@@ -495,6 +495,8 @@ fn first_serving_dir(
     system: &SystemTessdataDirs<'_>,
     pins: &PinTables<'_>,
 ) -> Option<String> {
+    // ~keep The offline probe is reached without the resolver's check, from cache keys too.
+    require_language_names(languages).ok()?;
     tessdata_search_dirs_with(override_path, tessdata_env, system)
         .into_iter()
         .find(|dir| {
@@ -551,6 +553,7 @@ fn pack_serves(pack: &Path, _lang: &str, _verified_best: bool, _pins: &PinTables
 
 /// The first of `directories` that holds a `.traineddata` for every one of `languages`.
 pub(crate) fn first_directory_holding(directories: &[String], languages: &[String]) -> Option<String> {
+    require_language_names(languages).ok()?;
     directories
         .iter()
         .find(|dir| all_languages_exist(dir, languages).unwrap_or(false))
