@@ -335,6 +335,9 @@ fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) 
         y_buckets.last_mut().expect("just pushed above").push(index);
     }
     let mut lines: Vec<Vec<usize>> = Vec::new();
+    // Collected at the first wide gap: a region of table cells has a wide gap in every row
+    // and no script-sized span at all, and scanning the region per gap was quadratic. ~keep
+    let mut script_candidates: Option<Vec<usize>> = None;
     for mut bucket in y_buckets {
         // A bucket is in `y` order, and a right-column line set up to 1pt higher sorts before
         // the left column's line, so the gap test below needs `x` order. ~keep
@@ -351,7 +354,7 @@ fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) 
                     && !(bridge_scripts
                         && script_fills_gap(
                             all_spans,
-                            indices,
+                            script_candidates.get_or_insert_with(|| script_sized_spans(all_spans, indices)),
                             (run_right, all_spans[index].bbox.left()),
                             all_spans[last].bbox.y,
                             max_font,
@@ -369,6 +372,24 @@ fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) 
         }
     }
     lines
+}
+
+/// The spans of `indices`, in order, small enough to be a script mark beside some line of the
+/// region: `SCRIPT_FONT_RATIO` of its largest font at most. A line's font is never larger than
+/// that, so every span `script_fills_gap` accepts for any line is among them. ~keep
+fn script_sized_spans(all_spans: &[TextSpan], indices: &[usize]) -> Vec<usize> {
+    let largest_font = indices
+        .iter()
+        .map(|&i| all_spans[i].font_size)
+        .fold(f32::NEG_INFINITY, f32::max);
+    indices
+        .iter()
+        .copied()
+        .filter(|&i| {
+            let font_size = all_spans[i].font_size;
+            font_size > 0.0 && font_size <= largest_font * SCRIPT_FONT_RATIO
+        })
+        .collect()
 }
 
 /// Whether a script-sized span (a superscript or subscript, which sorts into a `y` bucket of
@@ -3098,6 +3119,27 @@ mod tests {
         for (y, expected) in [(90.0, true), (89.875, false)] {
             let script = make_span_text(162.0, y, 7.0, 7.0, "i", 7.0);
             assert_eq!(script_fills_gap(&[script], &[0], (159.0, 172.0), 100.0, 10.0), expected);
+        }
+    }
+
+    #[test]
+    fn script_sized_spans_keeps_every_span_a_line_of_the_region_could_take_as_a_script() {
+        let fonts = [10.0, 7.0, 12.0, 9.0, 0.0, f32::NAN, 9.7];
+        let spans: Vec<TextSpan> = fonts
+            .iter()
+            .map(|&font| make_span_text(0.0, 0.0, 5.0, 5.0, "x", font))
+            .collect();
+        let indices = [6, 5, 4, 3, 2, 1, 0];
+        assert_eq!(script_sized_spans(&spans, &indices), vec![3, 1]);
+
+        for &line_font in &fonts {
+            for &i in &indices {
+                let fills = script_fills_gap(&spans, &[i], (-1.0, 6.0), 0.0, line_font);
+                assert!(
+                    !fills || script_sized_spans(&spans, &indices).contains(&i),
+                    "span {i} is a script beside a {line_font} pt line but was not collected"
+                );
+            }
         }
     }
 
