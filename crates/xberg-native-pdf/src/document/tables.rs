@@ -188,7 +188,7 @@ impl PdfDocument {
         gather_in_place(spans, order);
     }
 
-    pub(crate) fn reorder_rowspan_labels(spans: &mut Vec<crate::layout::TextSpan>) {
+    pub(crate) fn reorder_rowspan_labels(spans: &mut [crate::layout::TextSpan]) {
         use std::collections::HashMap;
 
         if spans.len() < 10 {
