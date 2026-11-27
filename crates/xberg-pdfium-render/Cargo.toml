@@ -60,6 +60,10 @@ vecmath = "1"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.9"
 
+# `Timestamp::now()` (annotation dates) panics on wasm32-unknown-unknown without the `js` clock source. ~keep
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+jiff = { workspace = true, features = ["js"] }
+
 [build-dependencies]
 # Use rustfmt to avoid coupling bindgen's syn major to the optional prettyplease dependency. ~keep
 bindgen = { version = "0.73", default-features = false, features = ["runtime", "logging"], optional = true }

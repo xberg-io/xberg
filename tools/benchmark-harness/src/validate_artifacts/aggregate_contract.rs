@@ -530,7 +530,7 @@ fn validate_derived_aggregate_fields(
             && aggregate.metadata.file_type_count == rebuilt.metadata.file_type_count
             && aggregate.metadata.shared_corpus_markdown == rebuilt.metadata.shared_corpus_markdown
             && aggregate.metadata.shared_corpus_plaintext == rebuilt.metadata.shared_corpus_plaintext
-            && aggregate.metadata.timestamp.parse::<jiff::Timestamp>().is_ok()
+            && crate::timestamp::is_rfc3339(&aggregate.metadata.timestamp)
             && aggregate.metadata.disk_size_conflicts == rebuilt.metadata.disk_size_conflicts,
         format!("{}: consolidation metadata mismatch", path.display()),
     )

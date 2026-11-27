@@ -13,6 +13,24 @@ pub fn now_local_rfc3339() -> String {
     jiff::Zoned::now().strftime(RFC3339_OFFSET).to_string()
 }
 
+/// Strict RFC 3339 check: `T` separator and a `Z` or `+HH:MM` / `-HH:MM` offset.
+///
+/// `jiff::Timestamp` parsing alone also accepts a space separator and an offset
+/// without minutes, which RFC 3339 rejects.
+pub fn is_rfc3339(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let separator_ok = matches!(bytes.get(10), Some(b'T' | b't'));
+    let offset_ok = match bytes.last() {
+        Some(b'Z' | b'z') => true,
+        _ => {
+            bytes.len() >= 6
+                && matches!(bytes[bytes.len() - 6], b'+' | b'-')
+                && bytes[bytes.len() - 3] == b':'
+        }
+    };
+    separator_ok && offset_ok && value.parse::<jiff::Timestamp>().is_ok()
+}
+
 fn format_utc_rfc3339(ts: jiff::Timestamp) -> String {
     ts.strftime(RFC3339_UTC).to_string()
 }
@@ -30,16 +48,28 @@ mod tests {
     }
 
     #[test]
+    fn is_rfc3339_rejects_what_jiff_alone_accepts() {
+        assert!(is_rfc3339("2023-07-15T16:30:00Z"));
+        assert!(is_rfc3339("2023-07-15T16:30:00.123456789+00:00"));
+        assert!(is_rfc3339("2023-07-15T16:30:00-04:00"));
+        assert!(!is_rfc3339("2023-07-15 16:30:00-04"));
+        assert!(!is_rfc3339("2023-07-15T16:30:00-04"));
+        assert!(!is_rfc3339("2023-07-15T16:30:00"));
+        assert!(!is_rfc3339("not a timestamp"));
+        assert!(!is_rfc3339(""));
+    }
+
+    #[test]
     fn now_utc_is_parseable() {
         let now = now_utc_rfc3339();
         assert!(now.ends_with("+00:00"), "{now}");
-        now.parse::<jiff::Timestamp>().expect("RFC 3339 timestamp");
+        assert!(is_rfc3339(&now), "{now}");
     }
 
     #[test]
     fn now_local_is_parseable_with_numeric_offset() {
         let now = now_local_rfc3339();
-        now.parse::<jiff::Timestamp>().expect("RFC 3339 timestamp");
+        assert!(is_rfc3339(&now), "{now}");
         let offset = &now[now.len() - 6..];
         assert!(offset.starts_with('+') || offset.starts_with('-'), "{now}");
         assert_eq!(&offset[3..4], ":", "{now}");

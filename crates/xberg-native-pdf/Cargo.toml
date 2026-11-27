@@ -117,6 +117,8 @@ zeroize = "1"
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"] }
+# `Timestamp::now()` panics on wasm32-unknown-unknown without the `js` clock source (cbom_json). ~keep
+jiff = { version = "0.2", features = ["js"] }
 
 # Mirrors fontdb's own target gating for this dependency: Linux/BSD system-font
 # discovery (src/vendor/fontdb) reads the host's fontconfig config to resolve
