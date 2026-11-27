@@ -71,3 +71,39 @@ fn should_map_real_rotated_script_spans_into_a_narrow_ruled_cell_gh2275() {
         vec![crate::types::builder::superscript(10, 11)]
     );
 }
+
+fn span(text: &str, x: f32, baseline: f32, width: f32, font_size: f32) -> TextSpan {
+    TextSpan {
+        text: text.to_owned(),
+        bbox: Rect::new(x, baseline, width, font_size),
+        font_size,
+        ..TextSpan::default()
+    }
+}
+
+/// The row above a short cell reaches into the script margin: its text must not hide the cell's own
+/// raised `2` (the `R2` label of a regression table).
+#[test]
+fn should_keep_a_cell_script_when_the_row_above_falls_in_the_script_margin() {
+    let spans = PageSpans {
+        spans: vec![
+            span("R", 40.0, 381.4, 5.0, 8.0),
+            span("2", 45.1, 384.9, 3.0, 5.3),
+            span("N", 40.0, 393.9, 5.0, 8.0),
+        ],
+        margin: 8.0 * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR,
+    };
+    let cell = TableCell {
+        text: "R2".to_owned(),
+        spans: Vec::new(),
+        colspan: 1,
+        rowspan: 1,
+        mcids: Vec::new(),
+        bbox: Some(Rect::new(36.0, 378.6, 60.0, 12.5)),
+        is_header: false,
+    };
+    assert_eq!(
+        cell_annotations(&cell, "R2", &spans),
+        vec![crate::types::builder::superscript(1, 2)]
+    );
+}

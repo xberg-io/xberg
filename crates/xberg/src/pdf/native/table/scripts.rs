@@ -93,36 +93,50 @@ fn cell_annotations(cell: &TableCell, text: &str, spans: &PageSpans) -> Vec<Text
     let end = spans
         .spans
         .partition_point(|span| page_advance_midpoint(span).1 <= bounds.y + bounds.height + spans.margin);
-    let selected: Vec<_> = spans.spans[start..end]
-        .iter()
-        .filter(|span| {
-            let (x, y) = page_advance_midpoint(span);
-            let margin = span.font_size * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR;
-            x >= bounds.x
-                && x <= bounds.x + bounds.width
-                && y >= bounds.y - margin
-                && y <= bounds.y + bounds.height + margin
+    let nearby = &spans.spans[start..end];
+    // A script sits half outside a short cell, but the neighbouring row's text can then fall inside
+    // the same margin, so the cell's own spans are tried first and the margin only when they do not
+    // spell the cell text.
+    [false, true]
+        .into_iter()
+        .find_map(|with_margin| {
+            let selected: Vec<_> = nearby
+                .iter()
+                .filter(|span| {
+                    let (x, y) = page_advance_midpoint(span);
+                    let margin = if with_margin {
+                        span.font_size * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+                    } else {
+                        0.0
+                    };
+                    x >= bounds.x
+                        && x <= bounds.x + bounds.width
+                        && y >= bounds.y - margin
+                        && y <= bounds.y + bounds.height + margin
+                })
+                .collect();
+            let selected = sort_spans_in_reading_order(selected);
+            let mut source = Vec::new();
+            for (index, span) in selected.iter().enumerate() {
+                let kind = script_kind(&selected, index);
+                source.extend(
+                    span.text
+                        .chars()
+                        .filter(|c| !c.is_whitespace())
+                        .map(|c| (c, kind.clone())),
+                );
+            }
+            project_annotations(text, source)
         })
-        .collect();
-    let selected = sort_spans_in_reading_order(selected);
-    let mut source = Vec::new();
-    for (index, span) in selected.iter().enumerate() {
-        let kind = script_kind(&selected, index);
-        source.extend(
-            span.text
-                .chars()
-                .filter(|c| !c.is_whitespace())
-                .map(|c| (c, kind.clone())),
-        );
-    }
-    project_annotations(text, source)
+        .unwrap_or_default()
 }
 
-fn project_annotations(text: &str, source: Vec<(char, Option<AnnotationKind>)>) -> Vec<TextAnnotation> {
+/// The annotations of `source`'s scripts on `text`, or `None` when `source` does not spell `text`.
+fn project_annotations(text: &str, source: Vec<(char, Option<AnnotationKind>)>) -> Option<Vec<TextAnnotation>> {
     // Projection requires identical characters; nearby unrelated text cannot invent cell formatting. ~keep
     let target: Vec<_> = text.char_indices().filter(|(_, c)| !c.is_whitespace()).collect();
     if source.len() != target.len() || source.iter().zip(&target).any(|((a, _), (_, b))| a != b) {
-        return Vec::new();
+        return None;
     }
     let mut annotations: Vec<TextAnnotation> = Vec::new();
     for ((_, kind), (offset, character)) in source.into_iter().zip(target) {
@@ -131,7 +145,7 @@ fn project_annotations(text: &str, source: Vec<(char, Option<AnnotationKind>)>) 
             .ok()
             .zip(u32::try_from(offset + character.len_utf8()).ok())
         else {
-            return Vec::new();
+            return Some(Vec::new());
         };
         if let Some(last) = annotations.last_mut()
             && last.kind == kind
@@ -142,7 +156,7 @@ fn project_annotations(text: &str, source: Vec<(char, Option<AnnotationKind>)>) 
             annotations.push(TextAnnotation { start, end, kind });
         }
     }
-    annotations
+    Some(annotations)
 }
 
 fn script_kind(spans: &[&TextSpan], index: usize) -> Option<AnnotationKind> {
