@@ -8,7 +8,6 @@ use crate::pdf::document::page::annotation::objects::PdfPageAnnotationObjects;
 use crate::pdf::document::page::annotation::private::internal::{PdfAnnotationFlags, PdfPageAnnotationPrivateStyle};
 use crate::pdf::points::PdfPoints;
 use crate::pdf::rect::PdfRect;
-use chrono::prelude::*;
 
 #[cfg(doc)]
 use crate::pdf::document::page::PdfPage;
@@ -78,13 +77,13 @@ pub trait PdfPageAnnotationCommon {
     fn creation_date(&self) -> Option<String>;
 
     /// Sets the date and time when this [PdfPageAnnotation] was originally created.
-    fn set_creation_date(&mut self, date: DateTime<Utc>) -> Result<(), PdfiumError>;
+    fn set_creation_date(&mut self, date: jiff::Timestamp) -> Result<(), PdfiumError>;
 
     /// Returns the date and time when this [PdfPageAnnotation] was last modified, if any.
     fn modification_date(&self) -> Option<String>;
 
     /// Sets the date and time when this [PdfPageAnnotation] was last modified.
-    fn set_modification_date(&mut self, date: DateTime<Utc>) -> Result<(), PdfiumError>;
+    fn set_modification_date(&mut self, date: jiff::Timestamp) -> Result<(), PdfiumError>;
 
     /// Returns the color of any filled paths in this [PdfPageAnnotation].
     fn fill_color(&self) -> Result<PdfColor, PdfiumError>;
@@ -328,7 +327,7 @@ where
     }
 
     #[inline]
-    fn set_creation_date(&mut self, date: DateTime<Utc>) -> Result<(), PdfiumError> {
+    fn set_creation_date(&mut self, date: jiff::Timestamp) -> Result<(), PdfiumError> {
         self.set_creation_date_impl(date)
     }
 
@@ -338,7 +337,7 @@ where
     }
 
     #[inline]
-    fn set_modification_date(&mut self, date: DateTime<Utc>) -> Result<(), PdfiumError> {
+    fn set_modification_date(&mut self, date: jiff::Timestamp) -> Result<(), PdfiumError> {
         self.set_modification_date_impl(date)
     }
 

@@ -68,7 +68,6 @@ candle-nn = { version = "0.11.1", default-features = false }
 candle-transformers = { version = "0.11.1", default-features = false }
 cc = "1.11"
 cfb = "0.16"
-chrono = "0.4"
 clap = { version = "4.6", features = ["derive", "color", "suggestions"] }
 comrak = { version = "1.2", default-features = false }
 crawlberg = { version = "1.13.4", default-features = false }
@@ -82,6 +81,7 @@ hex = "0.4.3"
 html-to-markdown-rs = { version = "3.23.3", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.15"
+jiff = "0.2"
 
 libc = "0.2.191"
 # Builds a bundled zlib from source (`static`) for the target, so the vendored

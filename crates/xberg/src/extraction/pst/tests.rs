@@ -104,6 +104,12 @@ fn test_filetime_known_date() {
 }
 
 #[test]
+fn test_filetime_sub_second_part_is_truncated() {
+    let filetime: i64 = 133_549_776_000_000_000 + 9_999_999;
+    assert_eq!(windows_filetime_to_string(filetime), "2024-03-15T12:00:00Z");
+}
+
+#[test]
 fn test_filetime_before_unix_epoch_is_invalid() {
     let filetime: i64 = 116_444_735_999_999_999;
     let result = windows_filetime_to_string(filetime);

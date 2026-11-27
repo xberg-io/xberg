@@ -59,6 +59,12 @@ fn component(alg: AlgorithmId) -> serde_json::Value {
     })
 }
 
+/// RFC 3339 UTC timestamp with a `+00:00` offset and a fractional-seconds part
+/// only when non-zero (the shape `chrono::DateTime::to_rfc3339` produced).
+fn format_rfc3339(ts: jiff::Timestamp) -> String {
+    ts.strftime("%Y-%m-%dT%H:%M:%S%.f+00:00").to_string()
+}
+
 /// A CycloneDX 1.6 Cryptographic Bill of Materials (JSON string) of
 /// every algorithm exercised so far this process.
 ///
@@ -72,7 +78,7 @@ pub fn cbom_json() -> String {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
         "metadata": {
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": format_rfc3339(jiff::Timestamp::now()),
             "tools": {
                 "components": [{
                     "type": "application",
@@ -92,6 +98,22 @@ pub fn cbom_json() -> String {
 mod tests {
     use super::*;
     use crate::crypto::record_algorithm_use;
+
+    #[test]
+    fn rfc3339_timestamp_has_utc_offset_and_optional_fraction() {
+        let whole = jiff::Timestamp::new(1_700_000_000, 0).unwrap();
+        assert_eq!(format_rfc3339(whole), "2023-11-14T22:13:20+00:00");
+        let frac = jiff::Timestamp::new(1_700_000_000, 123_456_789).unwrap();
+        assert_eq!(format_rfc3339(frac), "2023-11-14T22:13:20.123456789+00:00");
+    }
+
+    #[test]
+    fn cbom_timestamp_is_parseable_rfc3339() {
+        let v: serde_json::Value = serde_json::from_str(&cbom_json()).expect("valid JSON");
+        let ts = v["metadata"]["timestamp"].as_str().expect("timestamp string");
+        assert!(ts.ends_with("+00:00"), "{ts}");
+        ts.parse::<jiff::Timestamp>().expect("RFC 3339 timestamp");
+    }
 
     #[test]
     fn cbom_is_well_formed_cyclonedx_listing_exercised_algorithms() {

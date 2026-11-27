@@ -58,7 +58,7 @@ impl PoolMetricsReport {
         serde_json::to_string_pretty(&serde_json::json!({
             "metadata": {
                 "version": "1.0",
-                "timestamp": chrono::Local::now().to_rfc3339(),
+                "timestamp": crate::timestamp::now_local_rfc3339(),
             },
             "summary": {
                 "total_files": self.total_files,

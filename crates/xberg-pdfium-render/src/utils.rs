@@ -154,24 +154,26 @@ pub(crate) mod pixels {
 }
 
 pub(crate) mod dates {
-    use chrono::prelude::*;
-    use std::fmt::Display;
+    use jiff::tz::TimeZone;
+    use jiff::{Timestamp, Zoned};
 
-    /// Converts a [DateTime] to a formatted PDF date string, as defined in The PDF Reference
+    /// Converts a [Zoned] date and time to a formatted PDF date string, as defined in The PDF Reference
     /// Manual, sixth edition, section 3.8.3, on page 160.
     #[inline]
-    pub(crate) fn date_time_to_pdf_string<T, O>(date: DateTime<T>) -> String
-    where
-        T: TimeZone<Offset = O>,
-        O: Display,
-    {
-        let date_part = date.format("%Y%m%d%H%M%S");
+    pub(crate) fn date_time_to_pdf_string(date: &Zoned) -> String {
+        let date_part = date.strftime("%Y%m%d%H%M%S");
 
-        let timezone_part = format!("{}'", date.format("%:z"))
+        let timezone_part = format!("{}'", date.strftime("%:z"))
             .replace("+00:00'", "Z00'00'")
             .replace(':', "'");
 
         format!("D:{date_part}{timezone_part}")
+    }
+
+    /// Converts a UTC [Timestamp] to a formatted PDF date string.
+    #[inline]
+    pub(crate) fn timestamp_to_pdf_string(date: Timestamp) -> String {
+        date_time_to_pdf_string(&date.to_zoned(TimeZone::UTC))
     }
 }
 
@@ -422,7 +424,6 @@ mod tests {
     use crate::utils::dates::*;
     use crate::utils::pixels::*;
     use crate::utils::utf16le::*;
-    use chrono::prelude::*;
 
     #[test]
     fn test_unaligned_bgr_to_rgba() {
@@ -525,25 +526,26 @@ mod tests {
 
     #[test]
     fn test_date_time_to_pdf_date_string() {
-        assert_eq!(
-            date_time_to_pdf_string(Utc.with_ymd_and_hms(1998, 12, 23, 19, 52, 00).unwrap()),
-            "D:19981223195200Z00'00'"
-        );
+        let utc = jiff::civil::date(1998, 12, 23).at(19, 52, 0, 0).in_tz("UTC").unwrap();
+        assert_eq!(date_time_to_pdf_string(&utc), "D:19981223195200Z00'00'");
 
-        assert_eq!(
-            date_time_to_pdf_string(
-                FixedOffset::west_opt(8 * 3600)
-                    .unwrap()
-                    .from_local_datetime(
-                        &NaiveDate::from_ymd_opt(1998, 12, 23)
-                            .unwrap()
-                            .and_hms_opt(19, 52, 00)
-                            .unwrap()
-                    )
-                    .unwrap()
-            ),
-            "D:19981223195200-08'00'"
-        )
+        let west = jiff::civil::date(1998, 12, 23)
+            .at(19, 52, 0, 0)
+            .to_zoned(jiff::tz::TimeZone::fixed(jiff::tz::offset(-8)))
+            .unwrap();
+        assert_eq!(date_time_to_pdf_string(&west), "D:19981223195200-08'00'");
+
+        let east = jiff::civil::date(1998, 12, 23)
+            .at(19, 52, 0, 0)
+            .to_zoned(jiff::tz::TimeZone::fixed(jiff::tz::offset(5)))
+            .unwrap();
+        assert_eq!(date_time_to_pdf_string(&east), "D:19981223195200+05'00'");
+    }
+
+    #[test]
+    fn test_timestamp_to_pdf_date_string_is_utc() {
+        let ts = jiff::Timestamp::new(914_442_720, 0).unwrap();
+        assert_eq!(timestamp_to_pdf_string(ts), "D:19981223195200Z00'00'");
     }
 
     #[test]

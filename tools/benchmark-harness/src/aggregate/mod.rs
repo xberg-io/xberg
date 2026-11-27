@@ -100,7 +100,7 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         file_type_count: grouped.file_types.len(),
         shared_corpus_markdown: resolve_shared_corpus_file_types(&competitive_aggregations, OutputFormat::Markdown),
         shared_corpus_plaintext: resolve_shared_corpus_file_types(&competitive_aggregations, OutputFormat::Plaintext),
-        timestamp: chrono::Utc::now().to_rfc3339(),
+        timestamp: crate::timestamp::now_utc_rfc3339(),
         disk_size_conflicts: grouped.disk_size_conflicts,
     };
 
@@ -151,7 +151,7 @@ fn empty_consolidated_results() -> NewConsolidatedResults {
             file_type_count: 0,
             shared_corpus_markdown: Vec::new(),
             shared_corpus_plaintext: Vec::new(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
+            timestamp: crate::timestamp::now_utc_rfc3339(),
             disk_size_conflicts: Vec::new(),
         },
         run_provenance: Vec::new(),
