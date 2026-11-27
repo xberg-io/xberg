@@ -4968,13 +4968,18 @@ fn build_document_structure_with_native(
     recover_headings_from_outline(&mut all_page_paragraphs, outline_entries);
     // Runs after heading recovery (so recovered headings are excluded) and
     // immediately before the deletion pass it feeds. It needs every page in
-    // hand, which is why it cannot live in `process_single_page`.
-    mark_validated_page_numbers(
-        &mut all_page_paragraphs,
-        &page_heights,
-        include_headers,
-        include_footers,
-    );
+    // hand, which is why it cannot live in `process_single_page`. OCR text keeps its page
+    // numbers (`page_number`'s module docs): the OCR heading pass is discarded unless every
+    // character of its input survives, so deleting "Page 3 of 5" here threw away all of
+    // nougat_005's headings. ~keep
+    if !ocr_text {
+        mark_validated_page_numbers(
+            &mut all_page_paragraphs,
+            &page_heights,
+            include_headers,
+            include_footers,
+        );
+    }
     for page in &mut all_page_paragraphs {
         retain_page_furniture_safely(page);
     }
