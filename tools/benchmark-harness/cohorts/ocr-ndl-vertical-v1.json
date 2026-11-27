@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "name": "ocr-ndl-vertical-v1",
+  "batch_size": 10,
+  "ocr_enabled": true,
+  "fixtures": [
+    "ndl_meiji_vertical_01.json",
+    "ndl_meiji_vertical_02.json",
+    "ndl_meiji_vertical_03.json",
+    "ndl_meiji_vertical_04.json",
+    "ndl_meiji_vertical_05.json",
+    "ndl_meiji_vertical_06.json",
+    "ndl_meiji_vertical_07.json",
+    "ndl_meiji_vertical_08.json",
+    "ndl_meiji_vertical_09.json",
+    "ndl_meiji_vertical_10.json",
+    "ndl_meiji_vertical_11.json",
+    "ndl_meiji_vertical_12.json",
+    "ndl_meiji_vertical_13.json",
+    "ndl_meiji_vertical_14.json",
+    "ndl_meiji_vertical_15.json",
+    "ndl_meiji_vertical_16.json",
+    "ndl_meiji_vertical_17.json",
+    "ndl_meiji_vertical_18.json",
+    "ndl_meiji_vertical_19.json",
+    "ndl_meiji_vertical_20.json"
+  ]
+}
