@@ -412,6 +412,7 @@ pub(crate) fn adoption_sources_beside(flat: &Path, model: TessdataModel) -> Vec<
 
 /// The size and modification time of each candidate source file, to tell whether a failed
 /// adoption is worth retrying.
+#[cfg(not(target_arch = "wasm32"))]
 type SourceState = Vec<Option<(u64, std::time::SystemTime)>>;
 
 /// Copy the packs both sets share (`osd`, `equ`) into the managed directory from verified local
