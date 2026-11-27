@@ -25,7 +25,7 @@ fn save(slot: &Slot, bytes: &[u8]) -> PathBuf {
     fs::write(&staged, bytes).unwrap();
     slot.publish(&staged).unwrap();
     assert!(!staged.exists(), "publishing moves the staged file");
-    slot.verified_graph().unwrap().expect("a published graph verifies")
+    slot.verified_graph().unwrap().expect("a published graph verifies").path
 }
 
 fn mode(path: &Path) -> u32 {
@@ -171,6 +171,7 @@ fn a_malformed_or_foreign_sidecar_is_rejected() {
         (valid.replace(&slot.key, &"0".repeat(32)), "another key"),
         (valid.replace("size=15", "size=0"), "implausible size"),
         (format!("{valid}extra=1\n"), "malformed"),
+        (valid.replace("stamp=-", "stamp=1:2:3"), "malformed"),
         ("x".repeat(MAX_META_BYTES as usize + 1), "too large"),
     ] {
         fs::write(&meta, &text).unwrap();
@@ -262,7 +263,7 @@ fn a_model_keeps_its_newest_keys_and_drops_older_ones() {
     assert!(!slots[0].meta_path().exists());
     for (slot, graph) in slots.iter().zip(&graphs).skip(1) {
         assert!(graph.exists(), "a newer key's graph is kept");
-        assert_eq!(slot.verified_graph().unwrap().as_ref(), Some(graph));
+        assert_eq!(slot.verified_graph().unwrap().map(|g| g.path).as_ref(), Some(graph));
     }
     assert!(other_graph.exists(), "another model's graph is kept");
 }
@@ -330,7 +331,8 @@ fn racing_publishers_leave_a_valid_entry() {
     }
 
     let graph = slot.verified_graph().unwrap().expect("one writer's graph is published");
-    assert!(payloads.contains(&fs::read(graph).unwrap()));
+    assert!(payloads.contains(&graph.bytes));
+    assert_eq!(fs::read(&graph.path).unwrap(), graph.bytes);
 }
 
 #[test]
@@ -339,12 +341,166 @@ fn sidecar_records_round_trip_and_reject_bad_digests() {
         key: "k".repeat(32),
         size: 42,
         sha256: "0123456789abcdef".repeat(4),
+        stamp: None,
     };
     assert_eq!(Record::parse(&record.render()), Some(record));
-    let upper = format!("{CACHE_SCHEMA}\nkey=k\nsize=1\nsha256={}\n", "A".repeat(64));
+    let stamped = Record {
+        key: "k".repeat(32),
+        size: 42,
+        sha256: "0123456789abcdef".repeat(4),
+        stamp: Some(Stamp {
+            dev: 16_777_234,
+            ino: 9_876_543,
+            mtime: 1_764_000_000,
+            mtime_nsec: 123_456_789,
+            ctime: -1,
+            ctime_nsec: 999_999_999,
+        }),
+    };
+    assert_eq!(Record::parse(&stamped.render()), Some(stamped));
+    let upper = format!("{CACHE_SCHEMA}\nkey=k\nsize=1\nsha256={}\nstamp=-\n", "A".repeat(64));
     assert_eq!(Record::parse(&upper), None);
-    let short = format!("{CACHE_SCHEMA}\nkey=k\nsize=1\nsha256={}\n", "a".repeat(63));
+    let short = format!("{CACHE_SCHEMA}\nkey=k\nsize=1\nsha256={}\nstamp=-\n", "a".repeat(63));
     assert_eq!(Record::parse(&short), None);
+    let unstamped = format!("{CACHE_SCHEMA}\nkey=k\nsize=1\nsha256={}\n", "a".repeat(64));
+    assert_eq!(Record::parse(&unstamped), None, "a v2 sidecar without a stamp line");
+}
+
+/// A slot whose graphs count as settled at once, so the first verified load records the identity.
+fn settled_slot(root: &TempDir) -> Slot {
+    Slot {
+        settle: Duration::ZERO,
+        ..slot(root)
+    }
+}
+
+#[test]
+fn a_settled_graph_is_hashed_once_then_trusted_by_its_identity() {
+    let root = TempDir::new().unwrap();
+    let slot = settled_slot(&root);
+    slot.prepare_dir().unwrap();
+    let staged = slot.create_staging().unwrap();
+    fs::write(&staged, b"optimized graph").unwrap();
+    slot.publish(&staged).unwrap();
+    assert!(fs::read_to_string(slot.meta_path()).unwrap().ends_with("stamp=-\n"));
+
+    let first = slot.verified_graph().unwrap().unwrap();
+    assert!(first.hashed, "a fresh entry has no recorded identity");
+    assert!(!fs::read_to_string(slot.meta_path()).unwrap().contains("stamp=-"));
+
+    let second = slot.verified_graph().unwrap().unwrap();
+    assert!(!second.hashed, "an unchanged identity skips the hash");
+    assert_eq!(second.bytes, b"optimized graph");
+    assert_eq!(second.path, first.path);
+}
+
+#[test]
+fn an_unsettled_graph_keeps_being_hashed() {
+    let root = TempDir::new().unwrap();
+    let slot = Slot {
+        settle: Duration::MAX,
+        ..slot(&root)
+    };
+    save(&slot, b"optimized graph");
+
+    let graph = slot.verified_graph().unwrap().unwrap();
+    assert!(
+        graph.hashed,
+        "a graph changed within the settle time is not trusted by identity"
+    );
+    assert!(fs::read_to_string(slot.meta_path()).unwrap().ends_with("stamp=-\n"));
+}
+
+#[test]
+fn a_graph_changed_after_its_identity_was_recorded_is_hashed_again() {
+    let root = TempDir::new().unwrap();
+    let slot = settled_slot(&root);
+    let graph = save(&slot, b"optimized graph");
+    assert!(!slot.verified_graph().unwrap().unwrap().hashed);
+
+    // Same size, written in place, with an mtime that cannot match the recorded one.
+    let file = fs::File::options().write(true).open(&graph).unwrap();
+    std::os::unix::fs::FileExt::write_all_at(&file, b"optimized GRAPH", 0).unwrap();
+    file.set_modified(std::time::SystemTime::now() - Duration::from_secs(1_000))
+        .unwrap();
+    drop(file);
+    let error = slot.verified_graph().unwrap_err();
+    assert!(error.contains("digest does not match"), "{error}");
+
+    // Same bytes as published, under a new inode: hashed, accepted, and stamped again.
+    let replacement = root.path().join("replacement");
+    fs::write(&replacement, b"optimized graph").unwrap();
+    fs::set_permissions(&replacement, fs::Permissions::from_mode(0o600)).unwrap();
+    fs::rename(&replacement, &graph).unwrap();
+    let reloaded = slot.verified_graph().unwrap().unwrap();
+    assert!(reloaded.hashed, "another inode is not the recorded file");
+    assert!(!slot.verified_graph().unwrap().unwrap().hashed);
+}
+
+/// Times loading published graphs of several sizes with and without the hash. Run in release:
+/// `cargo test -p xberg --release --lib -- --ignored --nocapture graph_verification_cost`.
+/// `XBERG_ORT_GRAPH_BENCH_MIB` overrides the sizes (comma-separated MiB, default `16,169,512`).
+#[test]
+#[ignore = "measurement, not a check; run explicitly in release"]
+fn graph_verification_cost() {
+    const RUNS: usize = 7;
+    let sizes: Vec<usize> = std::env::var("XBERG_ORT_GRAPH_BENCH_MIB")
+        .unwrap_or_else(|_| "16,169,512".to_string())
+        .split(',')
+        .map(|mib| mib.trim().parse().expect("sizes are integers in MiB"))
+        .collect();
+    let millis = |mut runs: Vec<Duration>| {
+        runs.sort();
+        (runs[0].as_secs_f64() * 1e3, runs[runs.len() / 2].as_secs_f64() * 1e3)
+    };
+    println!("size_mib\tread_min_ms\tread_med_ms\thashed_min_ms\thashed_med_ms\tstamped_min_ms\tstamped_med_ms");
+    for mib in sizes {
+        let root = TempDir::new().unwrap();
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        let bytes: Vec<u8> = (0..mib << 20)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state as u8
+            })
+            .collect();
+        let hashing = Slot {
+            settle: Duration::MAX,
+            ..slot(&root)
+        };
+        let stamping = Slot::new(
+            root.path().join("cache"),
+            &root.path().join("stamped.onnx"),
+            &"a".repeat(64),
+            "recipe v1",
+            &platform(),
+        );
+        let stamping = Slot {
+            settle: Duration::ZERO,
+            ..stamping
+        };
+        let path = save(&hashing, &bytes);
+        save(&stamping, &bytes);
+
+        let time = |load: &dyn Fn()| {
+            load();
+            (0..RUNS)
+                .map(|_| {
+                    let start = std::time::Instant::now();
+                    load();
+                    start.elapsed()
+                })
+                .collect::<Vec<_>>()
+        };
+        let read = millis(time(&|| assert_eq!(fs::read(&path).unwrap().len(), bytes.len())));
+        let hashed = millis(time(&|| assert!(hashing.verified_graph().unwrap().unwrap().hashed)));
+        let stamped = millis(time(&|| assert!(!stamping.verified_graph().unwrap().unwrap().hashed)));
+        println!(
+            "{mib}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.1}\t{:.1}",
+            read.0, read.1, hashed.0, hashed.1, stamped.0, stamped.1
+        );
+    }
 }
 
 /// Protobuf encoding helpers for a model built in memory.

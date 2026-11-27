@@ -74,9 +74,15 @@ Rules:
   entries on every save.
 * **Integrity.** A sidecar records the schema, key, size and SHA-256 of the
   graph; the graph file is named by its digest. Before every load the sidecar
-  and graph are opened without following symlinks, the size must match and be
-  at most 2 GiB (the protobuf limit), and the full graph is re-hashed. A
-  mismatch or load failure deletes the entry and rebuilds online from the
+  and graph are opened without following symlinks and the size must match and
+  be at most 2 GiB (the protobuf limit). The graph is read once from that
+  descriptor and ONNX Runtime builds the session from those bytes
+  (`commit_from_memory`), so the bytes checked are the bytes loaded. The first
+  load that hashes a graph whose ctime is at least two seconds old records the
+  file's identity (device, inode, nanosecond mtime and ctime) in the sidecar;
+  a load whose descriptor shows that identity before and after the read skips
+  the hash, and any other load hashes the bytes. A mismatch, a change during
+  the read, or a load failure deletes the entry and rebuilds online from the
   verified model.
 * **Filesystem hygiene.** The directory is `<cache base>/ort-optimized`,
   resolved like every other cache (`XBERG_CACHE_DIR` or the platform cache),
@@ -130,9 +136,10 @@ Rules:
   root can swap the root between the check and the open; the checks cover
   the root and its entries only. The default root is under the user's own
   cache directory; an `XBERG_CACHE_DIR` in shared space must sit below a
-  directory other users cannot rename. The window between re-hashing a graph and
-  ONNX Runtime opening it needs write access to the 0700 directory, which
-  only the cache owner has. Network filesystems with weak rename or fsync
+  directory other users cannot rename. A graph changed without a change to its
+  ctime, mtime or inode (block-device writes, media corruption) is trusted by
+  identity until it is next hashed; the first needs the cache owner or root,
+  the second is caught only if ONNX Runtime rejects the graph. Network filesystems with weak rename or fsync
   semantics may lose an entry, which only costs a rebuild.
 
 ### Consequences
@@ -143,8 +150,11 @@ Rules:
   model verified in the same process, and detects any change to a saved graph.
 * Good, because every failure, including a refused directory, degrades to the
   previous online build.
-* Bad, because each load re-hashes the saved graph (about 70-80 ms for a
-  169 MB graph with hardware SHA-256) on top of the existing source-model hash.
+* Good, because a warm load costs a stat and a read of the graph, which ONNX
+  Runtime would read anyway; only the first load after a graph settles pays
+  the hash (about 70-80 ms for a 169 MB graph with hardware SHA-256).
+* Bad, because the graph is held in memory while ONNX Runtime parses it, a
+  transient extra copy of its size.
 * Bad, because the cache owner can substitute a graph, which the pinned model
   hash alone prevented.
 * Bad, because a saved graph roughly doubles the on-disk footprint of each
@@ -154,8 +164,11 @@ Rules:
 
 `inference::ort_optimized` unit tests cover the key inputs, owner-only modes,
 refusal of group/world-writable and symlinked directories and entries,
-tampered, truncated, oversized, malformed and foreign sidecars, discard,
-eviction, sweeping, the entry cap and racing publishers. ORT-backed tests on a
+tampered, truncated, oversized, malformed and foreign sidecars, recording and
+trusting a settled graph's identity, re-hashing a graph rewritten in place or
+replaced, discard, eviction, sweeping,
+the entry cap and racing publishers; the ignored `graph_verification_cost`
+test measures load time with and without the hash. ORT-backed tests on a
 model built in memory prove the save-then-load cycle, a forged entry that
 fails to load being replaced, a model changed after verification not being
 saved, and bit-identical outputs. `saved_layout_graphs_reproduce_online_outputs_bit_for_bit`

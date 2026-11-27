@@ -15,7 +15,14 @@
 //! - it is saved and reused only for a source file this process has just verified against the
 //!   digest its model manager requires ([`crate::model_download::pinned_file`]), and is not
 //!   published if that file changed while ONNX Runtime read it;
-//! - a sidecar records the graph's size and SHA-256, and both are checked before every load;
+//! - a sidecar records the graph's size and SHA-256, checked before every load. ONNX Runtime
+//!   builds the session from the bytes that were checked, read from one open descriptor, never by
+//!   opening the path again. Hashing a graph of hundreds of megabytes costs tens of milliseconds,
+//!   so once a graph has verified, the sidecar also records its file identity (device, inode,
+//!   nanosecond mtime and ctime); a load whose descriptor shows that identity before and after
+//!   the read skips the hash. Any write through the file system changes the ctime, so a changed
+//!   graph is hashed again. The identity is recorded only once the ctime is [`STAMP_SETTLE`]
+//!   old, so a write within the same coarse timestamp tick cannot go unnoticed;
 //! - the cache directory must be a real directory owned by this user and not writable by group or
 //!   others, and every entry a regular file with the same properties, opened without following
 //!   symlinks. Anything else disables the cache for that build with a warning.
@@ -41,7 +48,7 @@ use crate::model_download::PinnedFile;
 use crate::ort_discovery::OrtSessionError;
 
 /// Changed whenever the key inputs, the sidecar or the file naming change, so older entries miss.
-const CACHE_SCHEMA: &str = "xberg-ort-optimized v2";
+const CACHE_SCHEMA: &str = "xberg-ort-optimized v3";
 const CACHE_MODULE: &str = "ort-optimized";
 /// Set to `0`, `false`, `off` or `no` to always optimise online.
 const DISABLE_ENV: &str = "XBERG_ORT_OPTIMIZED_CACHE";
@@ -59,6 +66,10 @@ const KEYS_PER_MODEL: usize = 4;
 const DIR_MODE: u32 = 0o700;
 const FILE_MODE: u32 = 0o600;
 const SHA256_HEX_LEN: usize = 64;
+/// How old a graph's ctime must be before its identity is recorded: at least the coarsest
+/// timestamp granularity of a common file system (FAT's 2 s), so a later write in place cannot
+/// share the recorded ctime.
+const STAMP_SETTLE: Duration = Duration::from_secs(2);
 
 static STAGING_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -140,25 +151,8 @@ fn commit_with_cache(
         }
     }
 
-    match slot.verified_graph() {
-        Ok(Some(graph)) => {
-            match with_level(configure()?, GraphOptimizationLevel::Disable).and_then(|mut b| b.commit_from_file(&graph))
-            {
-                Ok(session) => {
-                    tracing::debug!(model = %model.display(), graph = %graph.display(), "ORT session: loaded saved optimized graph");
-                    return Ok((session, Outcome::Loaded));
-                }
-                Err(error) => {
-                    tracing::warn!(graph = %graph.display(), %error, "ORT saved graph failed to load; rebuilding");
-                    slot.discard();
-                }
-            }
-        }
-        Ok(None) => {}
-        Err(reason) => {
-            tracing::warn!(dir = %slot.dir.display(), %reason, "ORT saved graph rejected; rebuilding");
-            slot.discard();
-        }
+    if let Some(session) = load_saved(model, slot, configure)? {
+        return Ok((session, Outcome::Loaded));
     }
 
     // Creating the staging file up front also proves the directory is writable before the
@@ -201,6 +195,42 @@ fn commit_with_cache(
             Ok((session, Outcome::Online))
         }
     }
+}
+
+/// A session built from this slot's verified saved graph, or `None` when there is none or it
+/// was unusable and has been discarded.
+fn load_saved(
+    model: &Path,
+    slot: &Slot,
+    configure: &impl Fn() -> Result<SessionBuilder, OrtSessionError>,
+) -> Result<Option<Session>, OrtSessionError> {
+    match slot.verified_graph() {
+        Ok(Some(graph)) => {
+            let loaded = with_level(configure()?, GraphOptimizationLevel::Disable)
+                .and_then(|mut builder| builder.commit_from_memory(&graph.bytes));
+            match loaded {
+                Ok(session) => {
+                    tracing::debug!(
+                        model = %model.display(),
+                        graph = %graph.path.display(),
+                        hashed = graph.hashed,
+                        "ORT session: loaded saved optimized graph"
+                    );
+                    return Ok(Some(session));
+                }
+                Err(error) => {
+                    tracing::warn!(graph = %graph.path.display(), %error, "ORT saved graph failed to load; rebuilding");
+                    slot.discard();
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(reason) => {
+            tracing::warn!(dir = %slot.dir.display(), %reason, "ORT saved graph rejected; rebuilding");
+            slot.discard();
+        }
+    }
+    Ok(None)
 }
 
 /// The parts of the host that change which optimised graph ONNX Runtime produces.
@@ -275,6 +305,21 @@ fn sha256_hex(parts: &[&[u8]]) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// The `len` bytes of `file`, with their SHA-256 when `hash` is set, read from its current offset.
+fn read_graph(file: &fs::File, len: u64, hash: bool) -> Result<(Vec<u8>, Option<String>), String> {
+    use sha2::{Digest, Sha256};
+    let capacity = usize::try_from(len).map_err(|_| format!("{len} bytes do not fit in memory"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    Read::take(file, len.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("read failed: {e}"))?;
+    if bytes.len() as u64 != len {
+        return Err(format!("expected {len} bytes, read {}", bytes.len()));
+    }
+    let digest = hash.then(|| hex::encode(Sha256::digest(&bytes)));
+    Ok((bytes, digest))
+}
+
 /// SHA-256 of `file`, which must hold exactly `len` bytes.
 fn sha256_of(file: &fs::File, len: u64) -> Result<String, String> {
     use sha2::{Digest, Sha256};
@@ -340,18 +385,80 @@ fn create_entry(path: &Path) -> std::io::Result<fs::File> {
         .open(path)
 }
 
+/// The identity of a graph file: any write through the file system changes the ctime, and a
+/// replacement has another inode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Stamp {
+    dev: u64,
+    ino: u64,
+    mtime: i64,
+    mtime_nsec: i64,
+    ctime: i64,
+    ctime_nsec: i64,
+}
+
+impl Stamp {
+    fn of(metadata: &fs::Metadata) -> Self {
+        Self {
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+            mtime: metadata.mtime(),
+            mtime_nsec: metadata.mtime_nsec(),
+            ctime: metadata.ctime(),
+            ctime_nsec: metadata.ctime_nsec(),
+        }
+    }
+
+    /// Whether the last change is at least `settle` old, so a later write gets another ctime.
+    fn settled(&self, settle: Duration) -> bool {
+        let (Ok(secs), Ok(nanos)) = (u64::try_from(self.ctime), u32::try_from(self.ctime_nsec)) else {
+            return false;
+        };
+        std::time::UNIX_EPOCH
+            .checked_add(Duration::new(secs, nanos))
+            .is_some_and(|changed| changed.elapsed().is_ok_and(|age| age >= settle))
+    }
+
+    fn render(&self) -> String {
+        format!(
+            "{}:{}:{}.{}:{}.{}",
+            self.dev, self.ino, self.mtime, self.mtime_nsec, self.ctime, self.ctime_nsec
+        )
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        let mut fields = text.split(':');
+        let dev = fields.next()?.parse().ok()?;
+        let ino = fields.next()?.parse().ok()?;
+        let (mtime, mtime_nsec) = fields.next()?.split_once('.')?;
+        let (ctime, ctime_nsec) = fields.next()?.split_once('.')?;
+        fields.next().is_none().then_some(())?;
+        Some(Self {
+            dev,
+            ino,
+            mtime: mtime.parse().ok()?,
+            mtime_nsec: mtime_nsec.parse().ok()?,
+            ctime: ctime.parse().ok()?,
+            ctime_nsec: ctime_nsec.parse().ok()?,
+        })
+    }
+}
+
 /// The sidecar recorded beside a published graph.
 #[derive(Debug, PartialEq, Eq)]
 struct Record {
     key: String,
     size: u64,
     sha256: String,
+    /// The graph file's identity when it last hashed to `sha256`; `None` until it has settled.
+    stamp: Option<Stamp>,
 }
 
 impl Record {
     fn render(&self) -> String {
+        let stamp = self.stamp.as_ref().map_or_else(|| "-".to_string(), Stamp::render);
         format!(
-            "{CACHE_SCHEMA}\nkey={}\nsize={}\nsha256={}\n",
+            "{CACHE_SCHEMA}\nkey={}\nsize={}\nsha256={}\nstamp={stamp}\n",
             self.key, self.size, self.sha256
         )
     }
@@ -362,11 +469,29 @@ impl Record {
         let key = lines.next()?.strip_prefix("key=")?.to_string();
         let size = lines.next()?.strip_prefix("size=")?.parse::<u64>().ok()?;
         let sha256 = lines.next()?.strip_prefix("sha256=")?.to_string();
+        let stamp = match lines.next()?.strip_prefix("stamp=")? {
+            "-" => None,
+            stamp => Some(Stamp::parse(stamp)?),
+        };
         let well_formed = lines.next().is_none()
             && sha256.len() == SHA256_HEX_LEN
             && sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-        well_formed.then_some(Self { key, size, sha256 })
+        well_formed.then_some(Self {
+            key,
+            size,
+            sha256,
+            stamp,
+        })
     }
+}
+
+/// A published graph that passed its checks: the bytes to build the session from.
+#[derive(Debug, PartialEq, Eq)]
+struct Graph {
+    path: PathBuf,
+    bytes: Vec<u8>,
+    /// Whether the bytes were hashed, rather than trusted by an unchanged recorded identity.
+    hashed: bool,
 }
 
 /// One model's entry in the saved-graph cache.
@@ -376,6 +501,8 @@ struct Slot {
     /// Shared by every key for the same source path, so superseded entries can be found.
     prefix: String,
     key: String,
+    /// [`STAMP_SETTLE`], shortened by tests.
+    settle: Duration,
 }
 
 impl Slot {
@@ -393,7 +520,12 @@ impl Slot {
             source_sha256.as_bytes(),
         ])[..32]
             .to_string();
-        Self { dir, prefix, key }
+        Self {
+            dir,
+            prefix,
+            key,
+            settle: STAMP_SETTLE,
+        }
     }
 
     fn meta_path(&self) -> PathBuf {
@@ -429,9 +561,10 @@ impl Slot {
         Ok(true)
     }
 
-    /// The published graph for this key, after checking its sidecar, ownership, size and digest.
-    /// `Ok(None)` means nothing is published; `Err` means the entry is unusable.
-    fn verified_graph(&self) -> Result<Option<PathBuf>, String> {
+    /// The published graph for this key, after checking its sidecar, ownership, size and digest,
+    /// read once from the descriptor that was checked. `Ok(None)` means nothing is published;
+    /// `Err` means the entry is unusable.
+    fn verified_graph(&self) -> Result<Option<Graph>, String> {
         let meta = match open_entry(&self.meta_path()) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -461,22 +594,69 @@ impl Slot {
         if metadata.len() != record.size {
             return Err(format!("graph: {} bytes, sidecar says {}", metadata.len(), record.size));
         }
-        let digest = sha256_of(&graph, record.size).map_err(|e| format!("graph: {e}"))?;
-        if digest != record.sha256 {
-            return Err("graph: digest does not match its sidecar".to_string());
+        let before = Stamp::of(&metadata);
+        let hash = record.stamp != Some(before);
+        let (bytes, digest) = read_graph(&graph, record.size, hash).map_err(|e| format!("graph: {e}"))?;
+        // Unchanged identity across the read means the bytes are the file the stamp describes.
+        let after = graph.metadata().map(|metadata| Stamp::of(&metadata));
+        if after.as_ref().ok() != Some(&before) {
+            return Err("graph: changed while it was read".to_string());
         }
-        Ok(Some(path))
+        if let Some(digest) = digest {
+            if digest != record.sha256 {
+                return Err("graph: digest does not match its sidecar".to_string());
+            }
+            if before.settled(self.settle) {
+                self.record_stamp(record, before);
+            }
+        }
+        Ok(Some(Graph {
+            path,
+            bytes,
+            hashed: hash,
+        }))
     }
 
-    /// A new, empty owner-only file for ONNX Runtime to write the graph into.
-    fn create_staging(&self) -> std::io::Result<PathBuf> {
-        let path = self.dir.join(format!(
+    /// Record `stamp` for a graph that just hashed to its sidecar's digest, so later loads that
+    /// find the same identity skip the hash. Failing to only costs the next load a hash.
+    fn record_stamp(&self, record: Record, stamp: Stamp) {
+        let record = Record {
+            stamp: Some(stamp),
+            ..record
+        };
+        if let Err(error) = self.write_sidecar(&record, &self.staging_path().with_extension("meta.tmp")) {
+            tracing::debug!(dir = %self.dir.display(), %error, "ORT saved graph: identity not recorded");
+        }
+    }
+
+    /// Write `record` to `staging`, then rename it over this key's sidecar.
+    fn write_sidecar(&self, record: &Record, staging: &Path) -> std::io::Result<()> {
+        let written = create_entry(staging)
+            .and_then(|mut file| {
+                file.write_all(record.render().as_bytes())?;
+                file.sync_all()
+            })
+            .and_then(|()| fs::rename(staging, self.meta_path()));
+        if written.is_err() {
+            let _ = fs::remove_file(staging);
+        }
+        written
+    }
+
+    /// A staging name unique to this process and call, swept by [`Slot::evict`] once orphaned.
+    fn staging_path(&self) -> PathBuf {
+        self.dir.join(format!(
             ".{}-{}.{}.{}.tmp",
             self.prefix,
             self.key,
             std::process::id(),
             STAGING_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
+        ))
+    }
+
+    /// A new, empty owner-only file for ONNX Runtime to write the graph into.
+    fn create_staging(&self) -> std::io::Result<PathBuf> {
+        let path = self.staging_path();
         create_entry(&path)?;
         Ok(path)
     }
@@ -496,22 +676,16 @@ impl Slot {
         drop(graph);
 
         fs::rename(staged, self.graph_path(&sha256)).map_err(|e| format!("rename graph: {e}"))?;
+        // The graph was just written, so its ctime has not settled; a later load that hashes it
+        // records its identity.
         let record = Record {
             key: self.key.clone(),
             size,
             sha256,
+            stamp: None,
         };
-        let meta_tmp = staged.with_extension("meta.tmp");
-        let written = create_entry(&meta_tmp)
-            .and_then(|mut file| {
-                file.write_all(record.render().as_bytes())?;
-                file.sync_all()
-            })
-            .and_then(|()| fs::rename(&meta_tmp, self.meta_path()));
-        if let Err(error) = written {
-            let _ = fs::remove_file(&meta_tmp);
-            return Err(format!("sidecar: {error}"));
-        }
+        self.write_sidecar(&record, &staged.with_extension("meta.tmp"))
+            .map_err(|error| format!("sidecar: {error}"))?;
         if let Ok(dir) = fs::File::open(&self.dir) {
             let _ = dir.sync_all();
         }
