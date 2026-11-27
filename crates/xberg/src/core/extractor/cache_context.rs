@@ -100,6 +100,23 @@ async fn fingerprint_with_reader(
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
     let has_paddle_fallback = paddle_fallback_requested(dependencies);
     let has_tessdata = dependencies.iter().any(|dependency| !dependency.tessdata.is_empty());
+    // ~keep Tessdata identities alone are stat calls once the pin-check memo holds the packs'
+    // digests, so they skip the blocking-pool hop every cached PDF and image would pay.
+    if has_tessdata
+        && !(has_orientation_models || has_script_retry || has_paddle_fallback)
+        && let Some(result) =
+            crate::ocr::tessdata_download::without_reading_packs(|| tessdata_context(dependencies, cancel))
+    {
+        return match result {
+            Ok(context) => Ok(Some(context)),
+            Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+            Err(error) => {
+                super::cacheability::invalidate_current();
+                tracing::warn!(%error, "Cannot identify the Tesseract model files; bypassing result cache");
+                Ok(None)
+            }
+        };
+    }
     if has_orientation_models || has_script_retry || has_paddle_fallback || has_tessdata {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
@@ -967,6 +984,50 @@ mod tests {
             "a new snapshot must re-read changed model bytes"
         );
     }
+    #[test]
+    fn tessdata_identities_alone_do_not_wait_for_the_blocking_pool() {
+        use std::future::Future;
+        use std::sync::mpsc;
+
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("eng.traineddata"), b"model fixture").unwrap();
+        let dependencies = [CacheDependency {
+            tessdata: vec![ModelSelection {
+                languages: vec!["eng".into()],
+                directory: Some(root.path().into()),
+                tessdata_model: crate::core::config::TessdataModel::Fast,
+                mixed_pdf_khmer: false,
+                vertical_japanese_retry: false,
+            }],
+            ..Default::default()
+        }];
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let blocker = runtime.spawn_blocking(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        started_rx.recv().unwrap();
+
+        let context = runtime.block_on(async {
+            let mut pending = Box::pin(fingerprint(&dependencies, None));
+            let first_poll =
+                std::future::poll_fn(|context| std::task::Poll::Ready(pending.as_mut().poll(context))).await;
+            release_tx.send(()).unwrap();
+            blocker.await.unwrap();
+            first_poll
+        });
+        let std::task::Poll::Ready(context) = context else {
+            panic!("the tessdata context must not queue behind the occupied blocking worker");
+        };
+        assert!(context.unwrap().unwrap().starts_with(":tessdata-v1:"));
+    }
+
     #[test]
     fn cancellation_while_queued_prevents_the_model_job_and_all_stream_reads() {
         use std::future::Future;

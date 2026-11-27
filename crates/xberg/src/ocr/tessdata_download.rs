@@ -296,6 +296,31 @@ fn warn_blocked_once(path: &Path, model: TessdataModel, error: &std::io::Error) 
 type SeenDigest = (FileStamp, String);
 static DIGESTS: LazyLock<Mutex<HashMap<PathBuf, SeenDigest>>> = LazyLock::new(Default::default);
 
+std::thread_local! {
+    /// Set while [`without_reading_packs`] runs on this thread.
+    static MEMO_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether a digest was asked for under [`MEMO_ONLY`] that the memo did not hold.
+    static MEMO_MISSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `compute` with every pack digest taken from the memo, never by reading a file: stat calls
+/// only, cheap enough for an async thread. `None` when it asked for a digest the memo did not
+/// hold, since its answer then treated that file as unverified.
+pub(crate) fn without_reading_packs<T>(compute: impl FnOnce() -> T) -> Option<T> {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            MEMO_ONLY.with(|memo_only| memo_only.set(self.0));
+        }
+    }
+
+    let _restore = Restore(MEMO_ONLY.with(|memo_only| memo_only.replace(true)));
+    let missed_outside = MEMO_MISSED.with(|missed| missed.replace(false));
+    let result = compute();
+    let missed = MEMO_MISSED.with(|missed| missed.replace(missed_outside));
+    (!missed).then_some(result)
+}
+
 /// The SHA-256 of the regular file at `path`, read once per (path, [`FileStamp`]) in this
 /// process. `metadata` is what the caller just read for `path`.
 fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> {
@@ -304,6 +329,10 @@ fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> 
         && *seen == state
     {
         return Some(digest.clone());
+    }
+    if MEMO_ONLY.with(std::cell::Cell::get) {
+        MEMO_MISSED.with(|missed| missed.set(true));
+        return None;
     }
     let file = std::fs::File::open(path).ok()?;
     if !file.metadata().ok()?.is_file() {
@@ -954,6 +983,35 @@ mod tests {
             pins.classify("eng", &pack),
             VerifiedSet::Unknown,
             "the memo must not vouch for the bytes it read before"
+        );
+    }
+
+    #[test]
+    fn a_memo_only_pass_never_reads_a_pack_and_reports_a_miss() {
+        use super::{PinTables, VerifiedSet, without_reading_packs};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+
+        assert_eq!(without_reading_packs(|| pins.classify("eng", &pack)), None, "cold memo");
+        assert_eq!(
+            without_reading_packs(|| pins.classify("custom", &pack)),
+            Some(VerifiedSet::Unknown),
+            "a language with no pin needs no digest"
+        );
+        assert_eq!(
+            pins.classify("eng", &pack),
+            VerifiedSet::Fast,
+            "outside, the file is read"
+        );
+        assert_eq!(
+            without_reading_packs(|| pins.classify("eng", &pack)),
+            Some(VerifiedSet::Fast),
+            "warm memo"
         );
     }
 
