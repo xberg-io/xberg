@@ -9,9 +9,11 @@
 use crate::core::config::TessdataModel;
 use crate::ocr::error::OcrError;
 use sha2::{Digest as _, Sha256};
+use std::collections::HashMap;
 use std::io::{ErrorKind, Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 mod pins;
 
@@ -21,6 +23,9 @@ const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const RETRY_BACKOFF: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
 const MAX_TRAINEDDATA_BYTES: u64 = 64 * 1024 * 1024;
+/// How long a failed download is remembered. An offline host otherwise spends the whole retry
+/// budget (about 93 s) per language on every image.
+const FAILURE_TTL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, thiserror::Error)]
 enum DownloadError {
@@ -149,13 +154,117 @@ pub(crate) fn ensure_language_pack(
     output_dir: &Path,
     sources: &[PathBuf],
 ) -> Result<bool, OcrError> {
-    if output_dir.join(format!("{lang}.traineddata")).is_file() {
+    materialize_once(&output_dir.join(format!("{lang}.traineddata")), || {
+        if PINNED.adopt(lang, model, output_dir, sources) {
+            return Ok(true);
+        }
+        download_missing_language_pack(lang, model, output_dir)
+    })
+}
+
+/// Run `materialize` unless `output_path` is already a file, one caller at a time per path in
+/// this process, so the pages of one document do not each download the same pack. A caller that
+/// waited finds the file and returns `Ok(false)`.
+fn materialize_once(
+    output_path: &Path,
+    materialize: impl FnOnce() -> Result<bool, OcrError>,
+) -> Result<bool, OcrError> {
+    static IN_FLIGHT: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = LazyLock::new(Default::default);
+
+    if output_path.is_file() {
         return Ok(false);
     }
-    if PINNED.adopt(lang, model, output_dir, sources) {
-        return Ok(true);
+    let flight = Arc::clone(
+        IN_FLIGHT
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .entry(output_path.to_path_buf())
+            .or_default(),
+    );
+    let _alone = flight.lock().unwrap_or_else(PoisonError::into_inner);
+    if output_path.is_file() {
+        return Ok(false);
     }
-    download_missing_language_pack(lang, model, output_dir)
+    materialize()
+}
+
+/// Download failures of this process per (set, language), so a pack that just failed to download
+/// is not requested again until [`FAILURE_TTL`] has passed.
+struct FailureMemo {
+    ttl: Duration,
+    failed: Mutex<HashMap<(TessdataModel, String), (Instant, String)>>,
+}
+
+impl FailureMemo {
+    fn new(ttl: Duration) -> Self {
+        Self {
+            ttl,
+            failed: Mutex::default(),
+        }
+    }
+
+    /// The message of a failure recorded less than the time to live before `now`.
+    fn recent(&self, lang: &str, model: TessdataModel, now: Instant) -> Option<String> {
+        let mut failed = self.failed.lock().unwrap_or_else(PoisonError::into_inner);
+        let key = (model, lang.to_owned());
+        match failed.get(&key) {
+            Some((at, message)) if now.saturating_duration_since(*at) < self.ttl => Some(message.clone()),
+            Some(_) => {
+                failed.remove(&key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    fn record(&self, lang: &str, model: TessdataModel, now: Instant, message: String) {
+        self.failed
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert((model, lang.to_owned()), (now, message));
+    }
+}
+
+static DOWNLOAD_FAILURES: LazyLock<FailureMemo> = LazyLock::new(|| FailureMemo::new(FAILURE_TTL));
+
+/// Run `download` unless the same pack failed to download within the memo's time to live.
+///
+/// A transfer or integrity failure is remembered: it is a property of the (set, language) pack,
+/// not of the directory. A failure to write the file is not, since another directory may work.
+fn download_unless_failed_recently(
+    memo: &FailureMemo,
+    lang: &str,
+    model: TessdataModel,
+    now: impl Fn() -> Instant,
+    download: impl FnOnce() -> Result<bool, DownloadError>,
+) -> Result<bool, OcrError> {
+    if let Some(message) = memo.recent(lang, model, now()) {
+        return Err(download_failure(
+            lang,
+            model,
+            &format!(
+                "{message} (not retried: a failed download is retried after {} s)",
+                memo.ttl.as_secs()
+            ),
+        ));
+    }
+    download().map_err(|error| {
+        let message = error.to_string();
+        if !matches!(error, DownloadError::Publish(_)) {
+            memo.record(lang, model, now(), message.clone());
+        }
+        download_failure(lang, model, &message)
+    })
+}
+
+fn download_failure(lang: &str, model: TessdataModel, cause: &str) -> OcrError {
+    OcrError::TesseractInitializationFailed(format!(
+        "Failed to download pinned {} language pack '{lang}': {cause}. To provide it without a download, run \
+         `xberg cache warm --tessdata-model {model} --tessdata-languages {lang}` where the network is \
+         reachable, or point TESSDATA_PREFIX or ocr.tessdata_path at a directory that holds \
+         {lang}.traineddata",
+        model.repository()
+    ))
 }
 
 /// Publish a copy of `source` at `output_path` when the bytes read from it are exactly `size`
@@ -221,18 +330,15 @@ fn download_missing_language_pack(lang: &str, model: TessdataModel, output_dir: 
             source_language(lang)
         ),
     ];
-    download_with_retries(
-        &download_agent(),
-        [&urls[0], &urls[1]],
-        &output_path,
-        sha256,
-        size,
-        std::thread::sleep,
-    )
-    .map_err(|error| {
-        OcrError::TesseractInitializationFailed(format!(
-            "Failed to download pinned {repository} language pack '{lang}': {error}"
-        ))
+    download_unless_failed_recently(&DOWNLOAD_FAILURES, lang, model, Instant::now, || {
+        download_with_retries(
+            &download_agent(),
+            [&urls[0], &urls[1]],
+            &output_path,
+            sha256,
+            size,
+            std::thread::sleep,
+        )
     })
 }
 
@@ -563,6 +669,102 @@ mod tests {
         assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[]).unwrap());
         assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn a_failed_download_is_not_repeated_until_its_memo_expires() {
+        use super::{DownloadError, FailureMemo, TessdataModel, download_unless_failed_recently};
+
+        let memo = FailureMemo::new(Duration::from_secs(60));
+        let start = Instant::now();
+        let clock = std::cell::Cell::new(start);
+        let calls = std::cell::Cell::new(0_u32);
+        let fetch = |lang: &str, model, outcome: fn() -> Result<bool, DownloadError>| {
+            download_unless_failed_recently(
+                &memo,
+                lang,
+                model,
+                || clock.get(),
+                || {
+                    calls.set(calls.get() + 1);
+                    outcome()
+                },
+            )
+        };
+        fn unreachable() -> Result<bool, DownloadError> {
+            Err(DownloadError::Request(ureq::Error::ConnectionFailed))
+        }
+
+        for _ in 0..5 {
+            let message = fetch("eng", TessdataModel::Best, unreachable).unwrap_err().to_string();
+            for remedy in [
+                "xberg cache warm --tessdata-model best --tessdata-languages eng",
+                "TESSDATA_PREFIX",
+                "ocr.tessdata_path",
+            ] {
+                assert!(message.contains(remedy), "{message}");
+            }
+        }
+        assert_eq!(calls.get(), 1, "one failure answers the following requests");
+
+        assert!(fetch("eng", TessdataModel::Fast, unreachable).is_err());
+        assert!(fetch("deu", TessdataModel::Best, unreachable).is_err());
+        assert_eq!(calls.get(), 3, "the memo is per set and language");
+
+        clock.set(start + Duration::from_secs(59));
+        assert!(fetch("eng", TessdataModel::Best, unreachable).is_err());
+        assert_eq!(calls.get(), 3);
+        clock.set(start + Duration::from_secs(60));
+        assert!(fetch("eng", TessdataModel::Best, || Ok(true)).unwrap());
+        assert_eq!(calls.get(), 4, "the download is tried again once the memo expires");
+    }
+
+    #[test]
+    fn a_failure_to_write_the_pack_is_not_remembered() {
+        use super::{DownloadError, FailureMemo, TessdataModel, download_unless_failed_recently};
+
+        let memo = FailureMemo::new(Duration::from_secs(60));
+        let now = Instant::now();
+        let read_only = || {
+            Err(DownloadError::Publish(std::io::Error::from(
+                std::io::ErrorKind::PermissionDenied,
+            )))
+        };
+
+        assert!(download_unless_failed_recently(&memo, "eng", TessdataModel::Best, || now, read_only).is_err());
+        assert!(
+            download_unless_failed_recently(&memo, "eng", TessdataModel::Best, || now, || Ok(true)).unwrap(),
+            "another directory may be writable"
+        );
+    }
+
+    #[test]
+    fn concurrent_requests_for_one_pack_materialize_it_once() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let start = std::sync::Barrier::new(8);
+
+        let published: Vec<bool> = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        start.wait();
+                        super::materialize_once(&output, || {
+                            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            std::thread::sleep(Duration::from_millis(50));
+                            std::fs::write(&output, PAYLOAD).unwrap();
+                            Ok(true)
+                        })
+                        .unwrap()
+                    })
+                })
+                .collect();
+            workers.into_iter().map(|worker| worker.join().unwrap()).collect()
+        });
+
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(published.iter().filter(|created| **created).count(), 1);
     }
 
     #[test]
