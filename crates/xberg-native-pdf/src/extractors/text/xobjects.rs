@@ -60,21 +60,45 @@ impl<'doc> TextExtractor<'doc> {
         Ok(self.cached_xobject_refs.get(name).copied().flatten())
     }
 
-    /// Quantize a CTM to 6 millipoint-rounded i64 values so it can be used as
-    /// a HashSet/HashMap key without floating-point equality hazards.
-    /// Rounds to nearest millipoint instead of truncating with `as i64`, so
-    /// floating-point noise in the same logical CTM produces a stable key
-    /// (truncation alone could send 0.99999... / 1.00001... to different
-    /// buckets). Split out of `process_xobject` unchanged, for file size. ~keep
-    fn quantize_ctm(ctm: Matrix) -> [i64; 6] {
+    /// Quantize a CTM to 6 i64 values so it can be used as a HashSet/HashMap
+    /// key without floating-point equality hazards. The translation rounds to
+    /// the nearest millipoint. The linear part keeps five significant digits
+    /// instead: a millipoint grid sent every scale below 0.0005 to zero, so two
+    /// distinct small-scale placements of one Form shared a key and the second
+    /// was dropped as a duplicate or replayed the first one's cached spans.
+    /// Rounding (not truncating) keeps float noise around decimal values such
+    /// as 0.99999... / 1.00001... in one bucket. ~keep
+    pub(crate) fn quantize_ctm(ctm: Matrix) -> [i64; 6] {
+        let magnitude = ctm.a.abs().max(ctm.b.abs()).max(ctm.c.abs()).max(ctm.d.abs());
+        let linear = |value: f32| Self::significant_key(value, magnitude);
         [
-            (ctm.a * 1000.0).round() as i64,
-            (ctm.b * 1000.0).round() as i64,
-            (ctm.c * 1000.0).round() as i64,
-            (ctm.d * 1000.0).round() as i64,
+            linear(ctm.a),
+            linear(ctm.b),
+            linear(ctm.c),
+            linear(ctm.d),
             (ctm.e * 1000.0).round() as i64,
             (ctm.f * 1000.0).round() as i64,
         ]
+    }
+
+    /// Encode `value` as decimal exponent and five-digit mantissa, sign applied
+    /// to the whole key. Values below 1e-5 of the matrix magnitude are rotation
+    /// noise and encode as zero.
+    fn significant_key(value: f32, magnitude: f32) -> i64 {
+        const DIGITS: i32 = 5;
+        const MANTISSA_CEILING: i64 = 100_000;
+        if !value.is_finite() || value.abs() <= magnitude * 1e-5 {
+            return 0;
+        }
+        let abs = f64::from(value.abs());
+        let mut exponent = abs.log10().floor() as i32;
+        let mut mantissa = (abs / 10f64.powi(exponent - (DIGITS - 1))).round() as i64;
+        if mantissa >= MANTISSA_CEILING {
+            mantissa /= 10;
+            exponent += 1;
+        }
+        let key = (i64::from(exponent + 64) << 20) | mantissa;
+        if value < 0.0 { -key } else { key }
     }
 
     /// Parse /Matrix from a Form XObject dict. Defaults to identity per ISO
@@ -177,8 +201,8 @@ impl<'doc> TextExtractor<'doc> {
         // different Y positions, or the pattern where each page's
         // content stream sets a different `cm` translation before calling `Do`).
         //
-        // The CTM is encoded as 6 millipoint-rounded i64 values so it can be
-        // stored in a HashSet without floating-point equality hazards.
+        // The CTM is encoded by `quantize_ctm` so it can be stored in a
+        // HashSet without floating-point equality hazards.
         // Infinite-recursion cycles are still prevented because a truly recursive
         // call re-enters with the *same* XObject ref AND the same CTM at that
         // nesting depth; the depth limiter (MAX_XOBJECT_DEPTH) provides a
