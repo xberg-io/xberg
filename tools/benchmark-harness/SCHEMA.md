@@ -925,6 +925,43 @@ environment does not already define the variable. It is omitted when nothing was
 non-Xberg rows, Linux and Windows, a user-set value, and in-process rows, which start no process.
 Older sidecars without the field still load, and it does not change the schema version.
 
+`tessdata` is an optional top-level object recording the Tesseract language packs the run's Xberg
+Tesseract rows resolve (every `xberg-*` framework except the PaddleOCR and Sceptre ones), captured
+before execution from the harness environment, which the Xberg processes inherit:
+
+```json
+"tessdata": {
+  "requested_model": "best",
+  "requests": [
+    {
+      "languages": "deu+eng",
+      "directory": "<cache>/tessdata/best",
+      "packs": [
+        { "language": "deu", "bytes": 8628461, "sha256": "…" },
+        { "language": "eng", "bytes": 15400601, "sha256": "…" }
+      ]
+    }
+  ]
+}
+```
+
+- `requested_model` is the `--tessdata-model` value. `frameworks[].tessdata_model` still records
+  it per framework and only when it is not `fast`.
+- `requests` has one entry per distinct OCR language request among the fixtures those rows run
+  (`metadata.ocr_language`, or `eng` when a fixture pins none), sorted by `languages`.
+- `directory` names the first directory in Xberg's search order that holds every pack of the
+  request, without a local path: `TESSDATA_PREFIX`, `<cache>/tessdata`, `<cache>/tessdata/fast`,
+  `<cache>/tessdata/best`, or a system or image directory such as `/usr/share/tessdata`. It is
+  `null`, with empty `packs`, when no searched directory holds them all; Xberg then downloads the
+  pinned packs of the requested set on first use.
+- `packs` gives each `<language>.traineddata` file's byte size and SHA-256, the identity Xberg
+  pins its packs by. Each file is read once per run. The harness does not classify a pack as
+  `fast` or `best`: two runs used the same models when their `packs` are equal, and a digest can
+  be checked against the pins in `crates/xberg/src/ocr/tessdata_download/pins.rs`.
+
+The field is omitted when the run has no Xberg Tesseract row with a fixture to run. Older sidecars
+without it still load, and it does not change the schema version.
+
 #### Run provenance migration from schema 2 to schema 3
 
 - Added required measurement-contract identity through `FrameworkProvenance.timing_regime` and

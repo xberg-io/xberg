@@ -410,6 +410,33 @@ process starts, and record no `xberg_env`; their memory and timing therefore ref
 allocator configuration, not the launchers'. To measure a launcher-equivalent in-process run, set
 `MallocMaxMagazines=1` in the environment that starts the harness.
 
+`--tessdata-model fast|best` (default `fast`) selects the Tesseract model set of every Xberg row.
+Xberg CLI rows always receive `--ocr-tessdata-model <set>`, `fast` included, so the set never
+comes from an inherited `XBERG_OCR_TESSDATA_MODEL`. A run that selects an Xberg framework while
+that variable holds a different or invalid value is refused before anything executes: unset it,
+or pass the `--tessdata-model` you mean to measure.
+
+Before any framework runs, the OCR preflight checks that every requested language pack is in a
+directory Xberg searches for the selected set, in Xberg's own order, so nothing is downloaded
+inside a timed row: `TESSDATA_PREFIX`, then for `fast` `<cache>/tessdata`, `<cache>/tessdata/fast`
+and the system tessdata packages, and for `best` only `<cache>/tessdata/best` and, on Unix,
+`/usr/share/xberg/tessdata/best`. `<cache>` is `XBERG_CACHE_DIR` (an empty value is a cache
+relative to the working directory, as in Xberg) or the platform cache directory under `xberg`,
+and `XBERG_TESSDATA_SYSTEM_PATHS=0` removes the system and image directories.
+
+`--tessdata-model best` is refused while `TESSDATA_PREFIX` is set. Xberg reads an explicit
+`TESSDATA_PREFIX` directory as given for either set, and the harness cannot verify that its packs
+are `tessdata_best`, so the rows could be measured on fast models and recorded as best. Unset the
+variable and provision the packs with
+`xberg cache warm --tessdata-model best --tessdata-languages <codes>`.
+
+Provenance records what those rows actually resolve, not only the set they asked for:
+`provenance.json` carries a top-level `tessdata` object with the requested set and, per OCR
+language request among the fixtures, the directory Xberg resolves it to (as a path-free label
+such as `TESSDATA_PREFIX` or `<cache>/tessdata/best`) and each `<language>.traineddata` file's
+byte size and SHA-256. Two result sets were measured on the same models when those entries are
+equal; see [SCHEMA.md](SCHEMA.md#run-provenance-sidecar).
+
 The remote comparative workflow publishes eight independently validated cohorts. The pinned matrix
 contract contains these cell counts:
 

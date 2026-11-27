@@ -176,6 +176,17 @@ fn other_requests_pass_the_plaintext_layout_check() {
 }
 
 #[test]
+fn the_ambient_tessdata_model_check_covers_every_selection_that_runs_xberg() {
+    assert!(selects_xberg(&[]));
+    assert!(selects_xberg(&[
+        "docling".to_string(),
+        "xberg-markdown-baseline".to_string()
+    ]));
+    assert!(selects_xberg(&["xberg-rust-steady-state".to_string()]));
+    assert!(!selects_xberg(&["docling".to_string(), "tika".to_string()]));
+}
+
+#[test]
 fn build_config_carries_the_selected_tessdata_model() {
     use clap::Parser as _;
 

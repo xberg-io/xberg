@@ -20,8 +20,10 @@ impl SubprocessAdapter {
             args.extend(["--max-threads".to_string(), max_threads.to_string()]);
         }
     }
+    /// Names the set on every xberg invocation, `fast` included: the CLI flag overrides
+    /// `XBERG_OCR_TESSDATA_MODEL`, so an inherited value cannot move a row off the recorded set.
     pub(super) fn append_xberg_tessdata_model(&self, args: &mut Vec<String>) {
-        if self.is_xberg() && self.tessdata_model != xberg::TessdataModel::Fast {
+        if self.is_xberg() {
             args.extend([
                 "--ocr-tessdata-model".to_string(),
                 self.tessdata_model.as_str().to_string(),

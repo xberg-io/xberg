@@ -508,6 +508,7 @@ fn sample_provenance() -> RunProvenance {
         },
         fixed_batch_size: None,
         coverage: None,
+        tessdata: None,
     }
 }
 
