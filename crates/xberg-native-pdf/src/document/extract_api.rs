@@ -37,20 +37,21 @@ pub(super) struct RawSpanKey {
 }
 
 /// What one content interpretation produced, including its effects on the
-/// document, so a cached copy can reproduce them exactly.
+/// document, so a cached copy can reproduce them exactly. The page-pass cache
+/// and the paired preserved entry share the parts they only read.
 pub(super) struct InterpretedPage {
-    spans: Vec<crate::layout::TextSpan>,
+    spans: Arc<Vec<crate::layout::TextSpan>>,
     /// MCIDs whose in-stream `/ActualText` applied, or `None` when the page was
     /// skipped before the extractor ran and the per-page entry was left alone.
-    mc_actualtext: Option<HashSet<u32>>,
+    mc_actualtext: Option<Arc<HashSet<u32>>>,
     /// CMSY glyph witnesses, present when the extractor ran with capture on:
     /// on request, and for every preserved-geometry read while the page passes
     /// run. Capture only reads the span after it is built and touches no
     /// document state an uncaptured read would not, so the spans and the
     /// document effects are the same either way.
-    cmsy: Option<Vec<crate::layout::TextSpan>>,
+    cmsy: Option<Arc<Vec<crate::layout::TextSpan>>>,
     /// Structured warnings the interpretation pushed into the document's sink.
-    warnings: Vec<crate::extractors::warnings::Warning>,
+    warnings: Arc<Vec<crate::extractors::warnings::Warning>>,
     /// Recoveries the interpretation charged to the document.
     recovered: crate::extractors::recovery_tally::RecoverySnapshot,
     /// `(origin x, font size, snapped baseline, raw baseline)` of each script span the read snapped onto its base.
@@ -63,10 +64,10 @@ pub(super) struct InterpretedPage {
 impl InterpretedPage {
     fn skipped() -> Self {
         Self {
-            spans: Vec::new(),
+            spans: Arc::default(),
             mc_actualtext: None,
             cmsy: None,
-            warnings: Vec::new(),
+            warnings: Arc::default(),
             recovered: Default::default(),
             script_baselines: Vec::new(),
             preserved: None,
@@ -80,13 +81,16 @@ impl InterpretedPage {
 
     /// A lower bound of [`Self::estimated_bytes`] read without walking the spans.
     fn minimum_bytes(&self) -> usize {
-        size_of::<Self>() + self.spans.len() * size_of::<crate::layout::TextSpan>()
+        size_of::<Self>() + self.shared_block_bytes() + self.spans.len() * size_of::<crate::layout::TextSpan>()
     }
 
+    /// Every shared part is charged in full to each entry that holds it, so an entry
+    /// sharing parts with another is overcounted, never undercounted.
     fn estimated_bytes(&self) -> usize {
         size_of::<Self>()
+            + self.shared_block_bytes()
             + estimated_span_bytes(&self.spans)
-            + self.cmsy.as_ref().map_or(0, estimated_span_bytes)
+            + self.cmsy.as_deref().map_or(0, estimated_span_bytes)
             + self
                 .mc_actualtext
                 .as_ref()
@@ -97,6 +101,16 @@ impl InterpretedPage {
                 .iter()
                 .map(|warning| warning.message.capacity())
                 .sum::<usize>()
+    }
+
+    /// The heap blocks of the shared parts: their reference counts and the collections themselves.
+    fn shared_block_bytes(&self) -> usize {
+        const fn arc_block<T>() -> usize {
+            2 * size_of::<usize>() + size_of::<T>()
+        }
+        arc_block::<Vec<crate::layout::TextSpan>>() * (1 + usize::from(self.cmsy.is_some()))
+            + self.mc_actualtext.as_ref().map_or(0, |_| arc_block::<HashSet<u32>>())
+            + arc_block::<Vec<crate::extractors::warnings::Warning>>()
     }
 }
 
@@ -360,8 +374,11 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
     ) -> Result<Vec<crate::layout::TextSpan>> {
-        self.cached_page_spans_with_mc_actualtext(page_index, script_geometry, cmsy)
-            .map(|(spans, _)| spans)
+        let page = self.cached_page_read(page_index, script_geometry, cmsy)?;
+        Ok(match Arc::try_unwrap(page) {
+            Ok(page) => Arc::unwrap_or_clone(page.spans),
+            Err(page) => Vec::clone(&page.spans),
+        })
     }
 
     fn cached_page_spans_with_mc_actualtext(
@@ -370,6 +387,24 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
     ) -> Result<(Vec<crate::layout::TextSpan>, Option<HashSet<u32>>)> {
+        let page = self.cached_page_read(page_index, script_geometry, cmsy)?;
+        Ok(match Arc::try_unwrap(page) {
+            Ok(page) => (
+                Arc::unwrap_or_clone(page.spans),
+                page.mc_actualtext.map(Arc::unwrap_or_clone),
+            ),
+            Err(page) => (Vec::clone(&page.spans), page.mc_actualtext.as_deref().cloned()),
+        })
+    }
+
+    /// The read behind [`Self::cached_page_spans`], shared with the page-pass cache when it holds
+    /// the page, so a caller that only reads the spans copies none of them.
+    fn cached_page_read(
+        &self,
+        page_index: usize,
+        script_geometry: ScriptGeometry,
+        cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<Arc<InterpretedPage>> {
         let key = RawSpanKey {
             page_index,
             script_geometry,
@@ -383,14 +418,11 @@ impl PdfDocument {
             )
         };
         if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
-            self.warning_sink.extend(page.warnings.iter().cloned());
-            self.recovery_counts().charge(&page.recovered);
-            self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
-            self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
+            self.replay_read_effects(page_index, Some(script_geometry), &page);
             if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
                 output.clone_from(witnesses);
             }
-            return Ok((page.spans.clone(), page.mc_actualtext.clone()));
+            return Ok(page);
         }
         // A flattened read while preserved reads are expected finishes the preserved spans from
         // the same content run and caches them, unless that page is already cached. ~keep
@@ -432,21 +464,22 @@ impl PdfDocument {
                 })
             });
         let mut page = page?;
-        page.warnings = warnings;
+        page.warnings = Arc::new(warnings);
         page.recovered = recovered;
-        self.record_mc_actualtext(page_index, page.mc_actualtext.clone());
+        self.record_mc_actualtext(page_index, page.mc_actualtext.as_deref().cloned());
         self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
         if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
             output.clone_from(witnesses);
         }
         let preserved = page.preserved.take();
+        let page = Arc::new(page);
         // The flattened entry is admitted first: the later passes read it more often. ~keep
         self.retain_interpretation(key, &page);
         if let Some(preserved) = preserved {
             // The preserved read shares the content run, so it has the same document effects;
             // only the flattened read records script baselines. ~keep
             let preserved = InterpretedPage {
-                spans: preserved,
+                spans: Arc::new(preserved),
                 mc_actualtext: page.mc_actualtext.clone(),
                 cmsy: page.cmsy.clone(),
                 warnings: page.warnings.clone(),
@@ -469,7 +502,19 @@ impl PdfDocument {
                 cache.insert(preserved_key, std::sync::Arc::new(preserved), bytes);
             }
         }
-        Ok((page.spans, page.mc_actualtext))
+        Ok(page)
+    }
+
+    /// Repeat the document effects `page`'s interpretation had, as a cache hit does: push its
+    /// warnings (the sink collapses repeats as it did for them), charge its recoveries, and record
+    /// its MC-scope /ActualText entry and, for `Some` geometry, its script baselines.
+    fn replay_read_effects(&self, page_index: usize, script_geometry: Option<ScriptGeometry>, page: &InterpretedPage) {
+        self.warning_sink.extend(page.warnings.iter().cloned());
+        self.recovery_counts().charge(&page.recovered);
+        self.record_mc_actualtext(page_index, page.mc_actualtext.as_deref().cloned());
+        if let Some(script_geometry) = script_geometry {
+            self.record_script_baselines(page_index, script_geometry, &page.script_baselines);
+        }
     }
 
     /// Whether a paired read of `page_index` could still cache its preserved entry. Pairing
@@ -494,24 +539,14 @@ impl PdfDocument {
             <= limit
     }
 
-    /// Copy `page` into the page-pass cache when the passes run and its budget
-    /// admits it. The admission checks run before the copy, the first without
-    /// walking the spans, so a page past the budget costs neither.
-    fn retain_interpretation(&self, key: RawSpanKey, page: &InterpretedPage) {
+    /// Share `page` with the page-pass cache when the passes run and its budget
+    /// admits it. The first admission check runs without walking the spans.
+    fn retain_interpretation(&self, key: RawSpanKey, page: &Arc<InterpretedPage>) {
         let Some(bytes) = self.admitted_bytes(&key, page, usize::MAX) else {
             return;
         };
-        let copy = InterpretedPage {
-            spans: page.spans.clone(),
-            mc_actualtext: page.mc_actualtext.clone(),
-            cmsy: page.cmsy.clone(),
-            warnings: page.warnings.clone(),
-            recovered: page.recovered,
-            script_baselines: page.script_baselines.clone(),
-            preserved: None,
-        };
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
-            cache.insert(key, std::sync::Arc::new(copy), bytes);
+            cache.insert(key, Arc::clone(page), bytes);
         }
     }
 
@@ -587,8 +622,8 @@ impl PdfDocument {
             false,
             false,
         )?;
-        self.record_mc_actualtext(page_index, page.mc_actualtext);
-        Ok(page.spans)
+        self.record_mc_actualtext(page_index, page.mc_actualtext.map(Arc::unwrap_or_clone));
+        Ok(Arc::unwrap_or_clone(page.spans))
     }
 
     /// Store the MCIDs whose in-stream /ActualText applied during a page's
@@ -753,12 +788,12 @@ impl PdfDocument {
         } else {
             (extractor.extract_text_spans(&content_data)?, None)
         };
-        let cmsy = capture_cmsy.then(|| extractor.cmsy_witnesses.take().unwrap_or_default());
+        let cmsy = capture_cmsy.then(|| Arc::new(extractor.cmsy_witnesses.take().unwrap_or_default()));
         Ok(InterpretedPage {
-            spans,
-            mc_actualtext: Some(extractor.take_mc_actualtext_mcids()),
+            spans: Arc::new(spans),
+            mc_actualtext: Some(Arc::new(extractor.take_mc_actualtext_mcids())),
             cmsy,
-            warnings: Vec::new(),
+            warnings: Arc::default(),
             recovered: Default::default(),
             script_baselines: std::mem::take(&mut extractor.raw_script_baselines),
             preserved,
