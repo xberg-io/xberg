@@ -1208,9 +1208,7 @@ fn post_process_table_inner(
     // others hold values (nougat_005 page 1 read its SUMMARY and INDICATORS columns as a
     // 16-row table, row by row). ~keep
     if !definition_grid && !has_recurring_numeric_tracks(&processed) {
-        let wrapping_columns = (0..processed[0].len())
-            .filter(|&column| column_wrap_count(&processed[1..], column) >= MIN_COLUMN_WRAPS_FOR_PROSE)
-            .count();
+        let wrapping_columns = independent_wrapping_columns(&processed[1..], processed[0].len());
         if wrapping_columns >= 2 {
             tracing::debug!(
                 target: "xberg::table_reconstruct",
@@ -2583,18 +2581,44 @@ const MIN_COLUMN_WRAPS_FOR_PROSE: usize = 2;
 /// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label.
 const MIN_WRAPPED_LINE_WORDS: usize = 3;
 
-/// How many times `column` continues a sentence from one data row into the next: a cell of at
-/// least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause punctuation,
-/// followed by a cell that starts lowercase.
-fn column_wrap_count(data_rows: &[Vec<String>], column: usize) -> usize {
+/// The row transitions at which `column` continues a sentence from one data row into the next: a
+/// cell of at least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause
+/// punctuation or a closing bracket (a finished item such as `square meter (m 2 )`), followed by a cell that starts lowercase.
+fn column_wrap_rows(data_rows: &[Vec<String>], column: usize) -> Vec<usize> {
     data_rows
         .windows(2)
-        .filter(|pair| {
+        .enumerate()
+        .filter(|(_, pair)| {
             let above = pair[0].get(column).map_or("", |cell| cell.trim());
             let below = pair[1].get(column).map_or("", |cell| cell.trim());
             above.split_whitespace().count() >= MIN_WRAPPED_LINE_WORDS
-                && !above.ends_with(['.', '?', '!', ':', ';'])
+                && !above.ends_with(['.', '?', '!', ':', ';', ')', ']'])
                 && below.chars().next().is_some_and(char::is_lowercase)
+        })
+        .map(|(row, _)| row)
+        .collect()
+}
+
+/// How many columns wrap their own sentences down the rows, independently of one another.
+///
+/// A record that wraps puts the continuation of each long cell on the same row, so the wraps of
+/// one column then fall on transitions another column wraps at too. Prose columns run on
+/// separate lines, each wrapping at rows the others do not.
+fn independent_wrapping_columns(data_rows: &[Vec<String>], columns: usize) -> usize {
+    let wraps: Vec<Vec<usize>> = (0..columns)
+        .map(|column| column_wrap_rows(data_rows, column))
+        .filter(|rows| rows.len() >= MIN_COLUMN_WRAPS_FOR_PROSE)
+        .collect();
+    wraps
+        .iter()
+        .enumerate()
+        .filter(|(index, rows)| {
+            rows.iter().any(|row| {
+                wraps
+                    .iter()
+                    .enumerate()
+                    .all(|(other, others)| other == *index || !others.contains(row))
+            })
         })
         .count()
 }
@@ -4476,6 +4500,82 @@ mod tests {
             .collect();
         // Two columns, as the OCR grid of that page is after its empty tracks merge away.
         assert!(post_process_table_inner(table, 2, false, None, false).is_none());
+    }
+
+    /// A wrapped record continues its long cells on the same row, so two wrapping columns that wrap
+    /// in lock step stay a table (a civil-penalty schedule: citation, description, amount).
+    #[test]
+    fn wrapped_cells_that_continue_on_the_same_rows_stay_a_table() {
+        let rows: [[&str; 3]; 8] = [
+            ["Citation", "Description", "Amount"],
+            [
+                "(4) 12 U.S.C. 1782",
+                "Tier 1 CMP for inadvertent failure to submit",
+                "$4,596.",
+            ],
+            ["", "shares and charges due to the insurance fund", ""],
+            [
+                "(5) 12 U.S.C. 1783",
+                "Tier 2 CMP for non-inadvertent failure to submit",
+                "$2,297,385 or 1% of the total assets",
+            ],
+            [
+                "",
+                "mission of false or misleading statement",
+                "union, whichever is less.",
+            ],
+            [
+                "(6) 12 U.S.C. 1784",
+                "Tier 3 CMP for failure to submit a certified statement",
+                "$62,829 or 1% of the total assets",
+            ],
+            [
+                "",
+                "false or misleading statement done knowingly",
+                "union, whichever is less.",
+            ],
+            [
+                "(7) 12 U.S.C. 1785",
+                "Non-compliance with insurance logo requirements.",
+                "$157.",
+            ],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert!(post_process_table_inner(table, 3, false, None, false).is_some());
+    }
+
+    /// A unit conversion table lists lowercase names that end in a closing bracket: each row is a
+    /// complete item, not a wrapped line.
+    #[test]
+    fn lowercase_unit_names_ending_in_a_bracket_are_not_wrapped_lines() {
+        let rows: [[&str; 3]; 10] = [
+            ["Multiply", "By", "To obtain"],
+            ["acre", "4,047", "square meter (m 2 )"],
+            ["acre", "0.4047", "hectare (ha)"],
+            ["acre", "0.4047", "square hectometer (hm 2 )"],
+            ["acre", "0.004047", "square kilometer (km 2 )"],
+            ["square mile (mi 2 )", "259.0", "hectare (ha)"],
+            ["square mile (mi 2 )", "2.590", "square kilometer (km 2 )"],
+            [
+                "acre-foot per year (acre-ft/yr)",
+                "1,233",
+                "cubic meter per year (m 3 /yr)",
+            ],
+            [
+                "acre-foot per year (acre-ft/yr)",
+                "0.001233",
+                "cubic hectometer per year (hm 3 /yr)",
+            ],
+            ["inch per year (in/yr)", "25.4", "millimeter per year (mm/yr)"],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table[1..], 3), 0);
     }
 
     #[test]
