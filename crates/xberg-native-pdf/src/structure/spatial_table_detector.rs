@@ -3475,6 +3475,9 @@ fn detect_intersections(
     header_source_diagnostic::event("intersection_before_merge", || {
         header_source_diagnostic::tables(&tables)
     });
+    if tables.is_empty() {
+        return tables;
+    }
     // Post-merge: split tables at section dividers — full-width horizontal
     // lines that indicate separate form sections within a single grid.
     // Use merged H-edges (to detect full-width lines) but only snap (do NOT
@@ -5425,12 +5428,17 @@ fn detect_with_unmodified_paths(
     config: &TableDetectionConfig,
     recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
-    let text_centers = horizontal_text_centers(spans);
-    let edges = extract_edges(lines);
-    if matches!(
+    let line_only = matches!(
         (config.horizontal_strategy, config.vertical_strategy),
         (TableStrategy::Lines, TableStrategy::Lines)
-    ) {
+    );
+    // Without a rule there is no intersection grid, no line cluster and no leftover rule. ~keep
+    if line_only && lines.is_empty() {
+        return Vec::new();
+    }
+    let text_centers = horizontal_text_centers(spans);
+    let edges = extract_edges(lines);
+    if line_only {
         let mut tables = detect_intersections(spans, lines, &edges, config, &text_centers, recovery);
         if tables.is_empty() {
             for cluster in group_lines_into_clusters(lines, config) {
