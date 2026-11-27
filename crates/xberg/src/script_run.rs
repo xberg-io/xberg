@@ -60,6 +60,7 @@ pub(crate) const SCRIPT_RUN_MAX_WIDE_WIDTH_EM: f32 = 3.0;
 /// `font_size` is the larger of the two runs' font sizes; `smaller_font_size` is the smaller.
 /// Deliberately requires a *non-zero* offset — a run at the identical baseline is a same-size
 /// style transition, not a script run, and is handled by the caller's own on-baseline path.
+#[cfg(test)]
 pub(crate) fn is_script_run_baseline_offset(baseline_delta: f32, font_size: f32, smaller_font_size: f32) -> bool {
     is_script_offset_within(
         baseline_delta,

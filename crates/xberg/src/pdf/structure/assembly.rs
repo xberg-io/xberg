@@ -1316,8 +1316,8 @@ fn push_paragraph_element_by_kind(
         let (normalized, removed_prefix_len) = normalize_list_text(&text);
         let annotations = shift_annotations_after_prefix_removal(annotations, removed_prefix_len, normalized.len());
         let (normalized, annotations, plain) =
-            if crate::pdf::native::math_latex::sentinels::contains_sentinel(&normalized) {
-                resolve_native_math(&normalized, annotations, builder.inline_math())
+            if crate::pdf::native::math_latex::sentinels::contains_sentinel(normalized) {
+                resolve_native_math(normalized, annotations, builder.inline_math())
             } else {
                 (normalized.to_owned(), annotations, None)
             };
