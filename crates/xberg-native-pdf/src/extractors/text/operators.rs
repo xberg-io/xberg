@@ -589,14 +589,7 @@ impl<'doc> TextExtractor<'doc> {
                 self.flush_tj_span_buffer()?;
                 self.state_stack.restore();
                 self.forget_drawn_end();
-                let current_font = self
-                    .state_stack
-                    .current()
-                    .font_name
-                    .as_ref()
-                    .and_then(|name| self.fonts.get(name))
-                    .cloned();
-                self.set_cached_current_font(current_font);
+                self.restore_cached_current_font();
                 if !self.excluded_inks.is_empty() {
                     let cs = self.state_stack.current().fill_color_space.clone();
                     self.inside_excluded_ink = self.is_excluded_ink_color_space(&cs);

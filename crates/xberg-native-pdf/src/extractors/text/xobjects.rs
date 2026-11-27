@@ -620,14 +620,7 @@ impl<'doc> TextExtractor<'doc> {
                 if let Some(fonts) = saved_fonts {
                     self.fonts = fonts;
                 }
-                let current_font = self
-                    .state_stack
-                    .current()
-                    .font_name
-                    .as_ref()
-                    .and_then(|name| self.fonts.get(name))
-                    .cloned();
-                self.set_cached_current_font(current_font);
+                self.restore_cached_current_font();
 
                 if let Some(res) = saved_resources {
                     self.resources = Some(res);
