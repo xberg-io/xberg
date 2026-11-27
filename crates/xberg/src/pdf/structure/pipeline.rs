@@ -2620,7 +2620,12 @@ fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_del
         baseline_delta,
         font_size,
         raised.font_size,
-        raised.width,
+        // One wide glyph (the minus of `10^-4`) advances past a lone digit but is still a lone mark.
+        if raised.text.chars().filter(|ch| !ch.is_whitespace()).count() > 1 {
+            raised.width
+        } else {
+            0.0
+        },
         raised.font_size,
     )
 }
