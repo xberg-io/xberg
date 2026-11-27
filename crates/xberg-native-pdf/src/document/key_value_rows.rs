@@ -138,6 +138,29 @@ fn value_tracks(
     tracks
 }
 
+/// Whether more spans than there are labels start in the labels' own column between the first and
+/// the last label. Form keys stand alone in their column; captions heading entries written under
+/// them do not, and a prose column beside them brackets every caption, so pairing the two would
+/// interleave the caption entries with the prose lines (scanned.pdf's committee sidebar). ~keep
+fn label_column_holds_other_text(spans: &[crate::layout::TextSpan], labels: &[usize], tolerance: f32) -> bool {
+    let label_x = spans[labels[labels.len() / 2]].bbox.x;
+    let top = spans[labels[0]].bbox.y;
+    let bottom = spans[labels[labels.len() - 1]].bbox.y;
+    let others = spans
+        .iter()
+        .enumerate()
+        .filter(|(index, span)| {
+            !labels.contains(index)
+                && is_horizontal_ltr(span)
+                && !span.text.trim().is_empty()
+                && (span.bbox.x - label_x).abs() <= tolerance
+                && span.bbox.y < top
+                && span.bbox.y > bottom
+        })
+        .count();
+    others > labels.len()
+}
+
 /// Find only repeated LTR form rows whose wrapped values bracket a centred label.
 /// The centred-line requirement keeps ordinary aligned tables and columns byte-identical. ~keep
 fn find_key_value_blocks(spans: &[crate::layout::TextSpan]) -> Vec<KeyValueBlock> {
@@ -161,6 +184,9 @@ fn find_key_value_blocks(spans: &[crate::layout::TextSpan]) -> Vec<KeyValueBlock
             let candidates = build_key_value_blocks(spans, &labels, &values, MIN_LABELS);
             let mut accepted = false;
             for block in candidates {
+                if label_column_holds_other_text(spans, &block.labels, TRACK_TOLERANCE) {
+                    continue;
+                }
                 let members = block.labels.iter().chain(block.values.iter().flatten());
                 if members.clone().any(|index| used.contains(index)) {
                     continue;

@@ -162,3 +162,34 @@ fn key_value_repair_handles_two_non_overlapping_blocks() {
         assert!(label < upper && upper < lower, "{prefix} block order: {texts:?}");
     }
 }
+
+#[test]
+fn key_value_repair_leaves_captioned_entries_beside_a_prose_column_unchanged() {
+    let mut spans = Vec::new();
+    for (caption, label) in ["President:", "Past-President:", "Treasurer:", "Member-at-Large:"]
+        .into_iter()
+        .enumerate()
+    {
+        let top = 700.0 - caption as f32 * 60.0;
+        spans.push(key_value_span(label, 81.0, top));
+        for line in 1..=4 {
+            spans.push(key_value_span(
+                &format!("entry {caption}.{line}"),
+                81.0,
+                top - line as f32 * 11.0,
+            ));
+        }
+    }
+    for line in 0..24 {
+        spans.push(key_value_span(
+            &format!("prose line {line}"),
+            215.0,
+            705.0 - line as f32 * 11.5,
+        ));
+    }
+    let original: Vec<String> = spans.iter().map(|span| span.text.clone()).collect();
+
+    super::super::reorder_ltr_key_value_rows(&mut spans);
+
+    assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), original);
+}
