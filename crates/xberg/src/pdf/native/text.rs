@@ -2881,6 +2881,76 @@ fn is_numeric_cell(text: &str) -> bool {
             .all(|character| character.is_ascii_digit() || matches!(character, '.' | ',' | '%'))
 }
 
+/// Fewest rows with a number on each side of a split that make it a table's cell gap.
+const MIN_NUMERIC_TABLE_ROWS_AT_SPLIT: usize = 3;
+/// Widest left cell, in ems of its own type, that is a row label rather than prose.
+const MAX_TABLE_LABEL_CELL_EM: f32 = 8.0;
+
+/// True when every word of `text` is a table number: digits with separators, a sign, a
+/// percent sign, enclosing parentheses or brackets, or an exponent (`(5.2E-4)`).
+fn is_table_number(text: &str) -> bool {
+    let mut words = text.split_whitespace().peekable();
+    words.peek().is_some()
+        && words.all(|word| {
+            let bare = word
+                .trim_matches(|character| matches!(character, '(' | ')' | '[' | ']' | '%' | '+' | '±'))
+                .replace(',', "")
+                .replace('\u{2212}', "-");
+            bare.chars().any(|character| character.is_ascii_digit()) && bare.parse::<f64>().is_ok()
+        })
+}
+
+/// True when the split at `split_x` runs between a numeric table's value cells: at least
+/// [`MIN_NUMERIC_TABLE_ROWS_AT_SPLIT`] lines have a number just right of it and a number or a
+/// short label just left of it, and they are at least three in five of the lines with ink on
+/// both sides of it.
+///
+/// 1602.03238 page 22 is a single column page with two centred four-column price tables. Every
+/// row's widest gap is the one before its last value column, so the rows out-voted the page
+/// and the tables were read as a block of three columns followed by the fourth. A prose column
+/// beside the gutter is never a number, so a two-column page keeps its split even when a table
+/// sits in one of its columns. The XY-cut refuses the same cut (`cuts_numeric_table_rows` in
+/// xberg-native-pdf's reading order). ~keep
+fn split_separates_numeric_table_cells(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    split_x: f32,
+) -> bool {
+    let mut paired = 0usize;
+    let mut numeric = 0usize;
+    for line in lines {
+        let mut left: Option<&TextSpan> = None;
+        let mut right: Option<&TextSpan> = None;
+        let mut crossed = false;
+        for span in line
+            .iter()
+            .map(|&index| &spans[index])
+            .filter(|span| span_has_ink(span))
+        {
+            if span.bbox.right() <= split_x {
+                if left.is_none_or(|nearest| span.bbox.right() > nearest.bbox.right()) {
+                    left = Some(span);
+                }
+            } else if span.bbox.left() >= split_x {
+                if right.is_none_or(|nearest| span.bbox.left() < nearest.bbox.left()) {
+                    right = Some(span);
+                }
+            } else {
+                crossed = true;
+            }
+        }
+        let (false, Some(left), Some(right)) = (crossed, left, right) else {
+            continue;
+        };
+        paired += 1;
+        let left_is_cell = is_table_number(&left.text) || left.bbox.width < MAX_TABLE_LABEL_CELL_EM * left.font_size;
+        if left_is_cell && is_table_number(&right.text) {
+            numeric += 1;
+        }
+    }
+    numeric >= MIN_NUMERIC_TABLE_ROWS_AT_SPLIT && numeric * 5 >= paired * 3
+}
+
 /// Left-edge x positions that at least `MIN_DENSE_COLUMN_SPLIT_LINES` distinct
 /// rows agree on — the region's column grid.
 fn strong_column_edges(spans: &[xberg_native_pdf::layout::TextSpan], rows: &[SpanLine]) -> Vec<f32> {
@@ -3126,6 +3196,14 @@ pub(crate) fn reorder_dense_two_column_page(spans: &mut [xberg_native_pdf::layou
     };
     let split_x = snap_split_left_of_hanging_labels(spans, &lines, page_width, detected_split_x);
     let split_x = redirect_split_out_of_content(spans, &lines, page_width, split_x);
+    if split_separates_numeric_table_cells(spans, &lines, split_x) {
+        tracing::debug!(
+            target: "xberg::pdf::column_split",
+            split_x,
+            "dense two-column split refused between a numeric table's value cells"
+        );
+        return false;
+    }
 
     let bands = build_bands(spans, &lines, NO_WIDTH_FURNITURE, split_x);
     let Some(final_order) = emit_band_order(spans, bands, split_x) else {
@@ -3904,6 +3982,11 @@ mod tests {
     /// The first page's column-aware text, or `None` when the fixture is absent; a missing
     /// fixture fails the test under `XBERG_REQUIRE_TEST_FIXTURES=1`.
     fn extract_fixture_page(relative: &str) -> Option<String> {
+        extract_fixture_page_at(relative, 0)
+    }
+
+    /// Page `page_index`'s column-aware text, or `None` when the fixture is absent.
+    fn extract_fixture_page_at(relative: &str, page_index: usize) -> Option<String> {
         let Some(bytes) = crate::utils::read_test_fixture(relative) else {
             assert!(
                 std::env::var_os("XBERG_REQUIRE_TEST_FIXTURES").is_none_or(|value| value != "1"),
@@ -3911,15 +3994,15 @@ mod tests {
             );
             return None;
         };
-        let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("RTL PDF fixture must parse");
+        let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("PDF fixture must parse");
         Some(
             extract_page_text_column_aware(
                 &document,
-                0,
+                page_index,
                 &std::collections::HashSet::new(),
                 NativePageTextOptions::default(),
             )
-            .expect("RTL PDF fixture must extract")
+            .expect("PDF fixture must extract")
             .text,
         )
     }
@@ -5529,6 +5612,103 @@ mod tests {
         assert_eq!(
             spans.iter().map(|span| span.text.as_str()).collect::<Vec<_>>(),
             original.iter().map(String::as_str).collect::<Vec<_>>()
+        );
+    }
+
+    /// 1602.03238 page 22: a fee column and three price columns, each price with its relative
+    /// error in parentheses, centred on a single column page.
+    fn centred_price_table() -> Vec<TextSpan> {
+        let mut spans = vec![
+            span_with_width("α", 175.4, 650.0, 5.9, 9.0, 9.0),
+            span_with_width("MC", 225.1, 650.0, 14.6, 9.0, 9.0),
+            span_with_width("ADI (M", 294.1, 650.0, 27.0, 9.0, 9.0),
+            span_with_width(")", 333.0, 650.0, 3.6, 9.0, 9.0),
+            span_with_width("GHQC (M", 371.4, 650.0, 34.0, 9.0, 9.0),
+        ];
+        for (row, fee) in ["0", "25", "50", "75", "100", "125", "150", "175", "200"]
+            .into_iter()
+            .enumerate()
+        {
+            let y = 636.0 - row as f32 * 14.25;
+            spans.push(span_with_width(fee, 171.5, y, 13.7, 9.0, 9.0));
+            spans.push(span_with_width("1.064589 (5.2E-4)", 197.3, y, 70.5, 9.0, 9.0));
+            spans.push(span_with_width("1.06389 (6.6E-4)", 282.2, y, 66.1, 9.0, 9.0));
+            spans.push(span_with_width("1.06434 (2.3E-4)", 365.0, y, 66.1, 9.0, 9.0));
+        }
+        spans
+    }
+
+    #[test]
+    fn a_split_before_a_tables_last_value_column_is_a_cell_gap() {
+        let spans = centred_price_table();
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert!(split_separates_numeric_table_cells(&spans, &lines, 357.8));
+    }
+
+    #[test]
+    fn a_gutter_beside_a_table_in_one_column_is_not_a_cell_gap() {
+        let mut spans = Vec::new();
+        for row in 0..9 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(span_with_width("12.5", 48.0, y, 20.0, 9.0, 9.0));
+            spans.push(span_with_width("(3.1E-4)", 220.0, y, 34.0, 9.0, 9.0));
+            spans.push(span_with_width(
+                &format!("right column prose line {row} reads on"),
+                312.0,
+                y,
+                250.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert!(!split_separates_numeric_table_cells(&spans, &lines, 290.0));
+    }
+
+    #[test]
+    fn table_numbers_take_signs_exponents_and_parentheses_but_not_words() {
+        for number in [
+            "1.064589",
+            "(5.2E-4)",
+            "1.06434 (2.3E-4)",
+            "−0.3",
+            "20%",
+            "1,250.00",
+            "[12]",
+        ] {
+            assert!(is_table_number(number), "{number}");
+        }
+        for text in ["GHQC (M", "inf", "NaN", "1/g", "Table 5:", "", "E"] {
+            assert!(!is_table_number(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_centred_price_table_keeps_its_rows_whole_on_a_single_column_page() {
+        let Some(text) = extract_fixture_page_at(".corpus-cache/pdf/1602.03238.pdf", 21) else {
+            return;
+        };
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let positions: Vec<usize> = [
+            "1.06389 (6.6E-4)",
+            "1.06434 (2.3E-4)",
+            "1.052354",
+            "1.04526 (4.5E-4)",
+            "1.04495",
+        ]
+        .into_iter()
+        .map(|anchor| {
+            text.find(anchor)
+                .unwrap_or_else(|| panic!("missing {anchor:?} in {text:?}"))
+        })
+        .collect();
+        assert!(
+            positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "a price table was read column by column: {text:?}"
         );
     }
 
