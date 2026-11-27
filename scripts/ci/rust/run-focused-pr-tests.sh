@@ -2,13 +2,14 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr, pdf-sparse-paddle, office-pages, api-jobs or pdf-table-paint}"
+suite="${1:?expected pdf-ocr, pdf-sparse-paddle, office-pages, api-jobs, pdf-table-paint or pdf-regression-pages}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
 pdf-sparse-paddle) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types,paddle-ocr-tract" ;;
 office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
 pdf-table-paint) features="pdf,layout-detection" ;;
+pdf-regression-pages) features="full,formula-recognition,bundle-tessdata-eng" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
   exit 2
@@ -707,6 +708,23 @@ pdf-table-paint)
     aligned_flank_rules_require_at_least_eighteen_of_twenty_visible_columns; do
     run_exact "$table_module::structure::tests::$name" --lib
   done
+  ;;
+pdf-regression-pages)
+  # ~keep The snapshots are written with the default features on, as the test's TEST_COMMAND
+  # names, so this suite runs the whole test file rather than run_exact's --no-default-features.
+  expected=24
+  cargo_args=(test --locked -p xberg --features "$features" --test pdf_regression_pages)
+  cargo "${cargo_args[@]}" -- --list --color never 2>&1 | tee "$log_dir/list.log"
+  if ! grep -Fxq "$expected tests, 0 benchmarks" "$log_dir/list.log"; then
+    printf 'Expected exactly %s collected regression page tests\n' "$expected" >&2
+    exit 1
+  fi
+  cargo "${cargo_args[@]}" -- --color never 2>&1 | tee "$log_dir/run.log"
+  if ! grep -Fq "test result: ok. $expected passed; 0 failed; 0 ignored;" "$log_dir/run.log"; then
+    printf 'Expected exactly %s executed regression page tests\n' "$expected" >&2
+    exit 1
+  fi
+  passed=$((passed + expected))
   ;;
 esac
 if [ "$passed" -ne "$expected" ]; then

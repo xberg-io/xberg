@@ -21,8 +21,11 @@
 
 #![allow(clippy::print_stderr)]
 // ~keep: test/bench binaries print by design; org logging policy exempts tests
-// Some features change native Markdown output, so the snapshots hold only for CI's x86_64 Linux
-// and macOS feature list (scripts/ci/rust/run-unit-tests.sh); `full` implies `pdf`.
+// Some features change native Markdown output, so the snapshots are written under this feature
+// list, which the focused `pdf-regression-pages` suite runs on pull requests from this repository
+// and on pushes to main (scripts/ci/rust/run-focused-pr-tests.sh); CI Rust's x86_64 Linux and
+// macOS legs also run them with `classification-onnx` added (scripts/ci/rust/run-unit-tests.sh).
+// `full` implies `pdf`.
 #![cfg(all(feature = "full", feature = "formula-recognition", feature = "bundle-tessdata-eng"))]
 
 mod helpers;
