@@ -374,6 +374,31 @@ struct EngineModels<'a> {
     rec: &'a ResolvedRecModel,
 }
 
+/// The engine a read uses: its pool key and the models it loads, both decided by the read's
+/// `use_angle_cls`, so the classifier is loaded exactly for the engines whose key says so.
+struct EnginePlan {
+    pool_key: String,
+    angle_classifier: bool,
+}
+
+impl EnginePlan {
+    fn new(config: &PaddleOcrConfig, engine_key: String) -> Self {
+        let angle_classifier = config.use_angle_cls;
+        Self {
+            pool_key: classifier_pool_key(engine_key, angle_classifier),
+            angle_classifier,
+        }
+    }
+
+    fn models<'a>(&self, shared: &'a SharedModelPaths, rec: &'a ResolvedRecModel) -> EngineModels<'a> {
+        EngineModels {
+            det_model: &shared.det_model,
+            cls_model: self.angle_classifier.then_some(shared.cls_model.as_path()),
+            rec,
+        }
+    }
+}
+
 fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::AccelerationConfig>) -> String {
     use crate::core::config::acceleration::ExecutionProviderType;
 
@@ -871,13 +896,12 @@ impl PaddleOcrBackend {
         let backend = Self::effective_backend(config)?;
         let resolved = model_manager.resolve_rec_model_versioned(version, family, tier)?;
         let options = crate::ort_options::ort_session_options();
-        let angle_classifier = config.use_angle_cls;
-        let pool_key = classifier_pool_key(
+        let plan = EnginePlan::new(
+            config,
             engine_pool_key(version, tier, &resolved.model_key, accel, backend, &options),
-            angle_classifier,
         );
 
-        let init_cell = init_cell_for_key(engine_pool, &pool_key).map_err(|error| crate::XbergError::Plugin {
+        let init_cell = init_cell_for_key(engine_pool, &plan.pool_key).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to acquire engine pool lock: {error}"),
             plugin_name: "paddle-ocr".to_string(),
         })?;
@@ -885,12 +909,7 @@ impl PaddleOcrBackend {
             let shared = Self::get_or_init_shared_paths(model_manager, shared_paths, config)?;
             #[cfg(feature = "paddle-ocr-ort")]
             let _options_guard = PaddleOptionsGuard::set(options);
-            let models = EngineModels {
-                det_model: &shared.det_model,
-                cls_model: angle_classifier.then_some(shared.cls_model.as_path()),
-                rec: &resolved,
-            };
-            Self::initialize_engine(family, tier, models, accel.cloned(), backend)
+            Self::initialize_engine(family, tier, plan.models(&shared, &resolved), accel.cloned(), backend)
         })?;
 
         Ok(Arc::clone(engine))
@@ -2688,6 +2707,39 @@ mod tests {
         assert!(Arc::ptr_eq(&plain, &init_cell_for_key(&pool, &key(false)).unwrap()));
         assert!(Arc::ptr_eq(&classified, &init_cell_for_key(&pool, &key(true)).unwrap()));
         assert_eq!(pool.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn an_engine_loads_the_angle_classifier_exactly_when_its_pool_key_says_so() {
+        let shared = SharedModelPaths {
+            det_model: PathBuf::from("det/model.onnx"),
+            cls_model: PathBuf::from("cls/model.onnx"),
+        };
+        let rec = ResolvedRecModel {
+            model_dir: PathBuf::from("rec/model.onnx"),
+            dict_file: PathBuf::from("rec/dict.txt"),
+            model_key: "v6:small".to_string(),
+        };
+        let plan = |use_angle_cls| {
+            let config = PaddleOcrConfig {
+                use_angle_cls,
+                ..PaddleOcrConfig::default()
+            };
+            EnginePlan::new(&config, "v6/small/latin/cpu/ort".to_string())
+        };
+
+        let plain = plan(false);
+        let plain_models = plain.models(&shared, &rec);
+        assert_eq!(plain.pool_key, "v6/small/latin/cpu/ort");
+        assert_eq!(plain_models.cls_model, None);
+        assert_eq!(plain_models.det_model, Path::new("det/model.onnx"));
+        assert!(std::ptr::eq(plain_models.rec, &rec));
+
+        let classified = plan(true);
+        let classified_models = classified.models(&shared, &rec);
+        assert_eq!(classified.pool_key, "v6/small/latin/cpu/ort/cls");
+        assert_eq!(classified_models.cls_model, Some(Path::new("cls/model.onnx")));
+        assert_eq!(classified_models.det_model, Path::new("det/model.onnx"));
     }
 
     #[cfg(feature = "paddle-ocr-ort")]
