@@ -2529,7 +2529,7 @@ fn a_segment_that_only_a_later_table_carries_is_suppressed() {
 }
 
 /// A formula the math pass rebuilt from glyphs inside a table spells its TeX, not the cell words, but
-/// the table carries the same glyphs: the formula is not printed again after the table.
+/// the table carries the same words: the formula is not printed again after the table.
 #[test]
 fn a_native_formula_segment_inside_a_table_is_suppressed() {
     use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
@@ -2539,6 +2539,30 @@ fn a_native_formula_segment_inside_a_table_is_suppressed() {
     let filtered = filter_segments_by_table_bboxes(vec![formula, outside], &[covering]);
     assert_eq!(filtered.len(), 1, "only the formula under the table is carried");
     assert!(filtered[0].text.contains('x'));
+}
+
+/// A formula over the table that no cell spells (a column the grid omitted) is kept.
+#[test]
+fn a_native_formula_segment_the_table_does_not_spell_is_kept() {
+    use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+    let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["Number", "log ϵ"]])).expect("box");
+    let omitted = printed_at(&format!("{INLINE_OPEN}y^{{2}}+3z{INLINE_CLOSE}"), 10.0, 10.0);
+    let filtered = filter_segments_by_table_bboxes(vec![omitted], &[covering]);
+    assert_eq!(filtered.len(), 1);
+}
+
+/// Prose beside inline math over the table is kept unless the table carries its words too.
+#[test]
+fn a_mixed_prose_and_formula_segment_the_table_does_not_spell_is_kept() {
+    use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+    let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["Number", "log ϵ"]])).expect("box");
+    let mixed = printed_at(
+        &format!("see the {INLINE_OPEN}\\log_{{\\epsilon}}{INLINE_CLOSE} rule"),
+        10.0,
+        10.0,
+    );
+    let filtered = filter_segments_by_table_bboxes(vec![mixed], &[covering]);
+    assert_eq!(filtered.len(), 1);
 }
 
 /// Tables that the document build emits for one page of text and the given native tables.
@@ -7259,8 +7283,46 @@ fn a_hyphen_run_after_the_word_stem_welds_the_wrapped_word() {
     ]);
     dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
     assert_eq!(p.lines[0].segments[0].text, "insects at measure");
-    assert_eq!(p.lines[0].segments[1].text, "");
+    assert_eq!(p.lines[0].segments.len(), 1);
     assert_eq!(p.lines[1].segments[0].text, "stages were");
+}
+
+fn hyphen_run_paragraph(stem: &str, continuation: &str) -> PdfParagraph {
+    let mut hyphen = seg("-", 480.0, 10.0);
+    hyphen.baseline_y = 20.0;
+    para(vec![
+        line(vec![full_line_seg(stem), hyphen]),
+        line(vec![seg(continuation, 10.0, 200.0)]),
+    ])
+}
+
+/// A numeric stem keeps its hyphen (`5-year`), and the emptied hyphen run leaves no stray space.
+#[test]
+fn a_hyphen_run_after_a_number_keeps_the_compound_hyphen() {
+    let mut p = hyphen_run_paragraph("a", "year plan");
+    p.lines[0].segments[0].text = "over a 5".to_string();
+    dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+    assert_eq!(p.lines[0].segments[0].text, "over a 5-year");
+    assert_eq!(p.lines[0].segments.len(), 1);
+    assert_eq!(paragraph_text(&p), "over a 5-year plan");
+}
+
+/// A stem ending in a space is no word: the lone hyphen is a dash and nothing is joined.
+#[test]
+fn a_hyphen_run_after_a_space_is_not_welded() {
+    let mut p = hyphen_run_paragraph("insects at ", "ture stages");
+    dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+    assert_eq!(p.lines[0].segments[0].text, "insects at ");
+    assert_eq!(p.lines[0].segments[1].text, "-");
+    assert_eq!(p.lines[1].segments[0].text, "ture stages");
+}
+
+/// The welded word joins its line without a trailing space where the hyphen run stood.
+#[test]
+fn a_welded_hyphen_run_leaves_no_double_space() {
+    let mut p = hyphen_run_paragraph("insects at mea", "sure stages");
+    dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+    assert_eq!(paragraph_text(&p), "insects at measure stages");
 }
 
 #[test]

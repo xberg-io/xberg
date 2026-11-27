@@ -6709,8 +6709,50 @@ fn covers_and_carries_with(seg: &SegmentData, table: &TableCoverage, row_holds: 
     }
     #[cfg(test)]
     CARRY_CHECKS.with(|checks| checks.set(checks.get() + 1));
-    // A formula's text is its TeX, which no cell spells; the grid carries the glyphs it was built from.
-    crate::pdf::native::math_latex::sentinels::contains_sentinel(seg_text) || table.carries_with(seg_text, row_holds)
+    // A formula's text is its TeX, which no cell spells: its words and function names are what the grid
+    // can carry. Every one must be there, so a formula in a column the grid omitted is kept.
+    if crate::pdf::native::math_latex::sentinels::contains_sentinel(seg_text) {
+        let spelled = tex_as_cell_text(seg_text);
+        return table.carries_with(&spelled, |normalized| {
+            table.rows.iter().any(|row| row.contains(normalized))
+        });
+    }
+    table.carries_with(seg_text, row_holds)
+}
+
+/// Function names a TeX command stands for in printed text, kept when commands are stripped.
+const TEX_FUNCTION_NAMES: [&str; 11] = [
+    "sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "exp", "lim", "max",
+];
+
+/// A segment holding math as the words a table cell would spell: sentinels, TeX commands (but
+/// not the function names they print) and the script and group marks removed.
+fn tex_as_cell_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if crate::pdf::native::math_latex::sentinels::is_sentinel(ch) {
+            out.push(' ');
+        } else if ch == '\\' {
+            let mut name = String::new();
+            while let Some(&next) = chars.peek() {
+                if !next.is_ascii_alphabetic() {
+                    break;
+                }
+                name.push(next);
+                chars.next();
+            }
+            if TEX_FUNCTION_NAMES.contains(&name.as_str()) {
+                out.push_str(&name);
+            }
+            out.push(' ');
+        } else if matches!(ch, '{' | '}' | '^' | '_') {
+            out.push(' ');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -8981,9 +9023,7 @@ fn dehyphenate_line_breaks(
         match stem_segment {
             Some(index) => {
                 let line = &mut para.lines[i];
-                if let Some(last) = line.segments.last_mut() {
-                    last.text.clear();
-                }
+                line.segments.pop();
                 let stem = &mut line.segments[index];
                 if keeps_hyphen {
                     stem.text.push('-');
