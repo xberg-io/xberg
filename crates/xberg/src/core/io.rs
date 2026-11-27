@@ -58,7 +58,7 @@ impl AsRef<[u8]> for FileBytes {
 
 impl FileBytes {
     /// Whether the bytes are a file mapping rather than a heap buffer.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
     pub(crate) fn is_mapped(&self) -> bool {
         match &self.inner {
             FileBytesInner::Heap(_) => false,
