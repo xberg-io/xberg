@@ -63,13 +63,11 @@ pub(crate) fn horizontal_rule_center_y(
 /// Left edge, right edge and vertical centre, in PDF user space, of a horizontal rule of
 /// any width.
 pub(crate) fn horizontal_rule_extent(path: &xberg_native_pdf::elements::PathContent) -> Option<(f32, f32, f32)> {
-    (rule_orientation(path) == Some(RuleOrientation::Horizontal)).then(|| {
-        (
-            path.bbox.x,
-            path.bbox.x + path.bbox.width,
-            path.bbox.y + path.bbox.height * 0.5,
-        )
-    })
+    (rule_orientation(path) == Some(RuleOrientation::Horizontal)).then_some((
+        path.bbox.x,
+        path.bbox.x + path.bbox.width,
+        path.bbox.y + path.bbox.height * 0.5,
+    ))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
