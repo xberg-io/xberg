@@ -275,7 +275,12 @@ fn decode_png_predictor(data: &[u8], params: &DecodeParams) -> Result<Vec<u8>> {
             "Failed to reserve {output_size} bytes for PNG predictor output: {error}"
         ))
     })?;
-    let bpp = params.colors;
+    // Bytes per complete pixel, at least one (PNG spec, filter algorithms). ~keep
+    let bpp = params
+        .colors
+        .saturating_mul(params.bits_per_component)
+        .div_ceil(8)
+        .max(1);
 
     for row_idx in 0..row_count {
         let row_start = row_idx * bytes_per_row;
@@ -529,5 +534,34 @@ mod tests {
         // 0xFE (0xFF + 0xFF). The per-row tag=None must suppress that. ~keep
         assert_eq!(result.len(), 710);
         assert!(result.iter().all(|&b| b == 0xFF));
+    }
+
+    /// PNG filters predict from the corresponding byte of the previous pixel, which for 16-bit
+    /// samples is two bytes back (RFC 2083 §6: bpp = ceil(colors * bits / 8)), not `colors`.
+    #[test]
+    fn test_png_sub_predictor_16bpc_uses_two_byte_pixels() {
+        let params = DecodeParams {
+            predictor: 11,
+            columns: 2,
+            colors: 1,
+            bits_per_component: 16,
+        };
+        // Samples 0x0102, 0x0304 Sub-filtered against the previous pixel's bytes. ~keep
+        let encoded = vec![1, 0x01, 0x02, 0x02, 0x02];
+        assert_eq!(decode_predictor(&encoded, &params).unwrap(), vec![1, 2, 3, 4]);
+    }
+
+    /// Three 4-bit components pack one pixel into 1.5 bytes, so the filter distance rounds up to
+    /// two bytes rather than the three `colors` would give.
+    #[test]
+    fn test_png_sub_predictor_sub_byte_rgb_rounds_bpp_up() {
+        let params = DecodeParams {
+            predictor: 11,
+            columns: 2,
+            colors: 3,
+            bits_per_component: 4,
+        };
+        let encoded = vec![1, 0x10, 0x20, 0x30];
+        assert_eq!(decode_predictor(&encoded, &params).unwrap(), vec![0x10, 0x20, 0x40]);
     }
 }
