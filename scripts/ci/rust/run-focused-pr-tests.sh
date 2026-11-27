@@ -9,7 +9,7 @@ pdf-sparse-paddle) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-ty
 office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
 pdf-table-paint) features="pdf,layout-detection" ;;
-pdf-regression-pages) features="full,formula-recognition,bundle-tessdata-eng" ;;
+pdf-regression-pages) features="pdf" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
   exit 2
