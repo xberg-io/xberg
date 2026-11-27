@@ -1844,6 +1844,62 @@ fn band_lines_around_table_gap_split(
         .map(|(_, band)| band)
 }
 
+/// Fewest lines that must share both edges of a gap narrower than the dense gutter floor
+/// before it counts as gutter evidence.
+const MIN_ALIGNED_NARROW_GUTTER_LINES: usize = 3;
+/// Shortest run of text, as a fraction of the page width, that must end at a narrow gap for
+/// the gap to be a justified column's right margin.
+const MIN_NARROW_GUTTER_COLUMN_FRACTION: f32 = 0.35;
+
+/// The edges of `line`'s widest gap when it is narrower than `min_gutter` but at least
+/// `MIN_DENSE_COLUMN_GUTTER_PTS` wide and closes a run of text at least
+/// [`MIN_NARROW_GUTTER_COLUMN_FRACTION`] of the page wide: a justified column line ending at
+/// a gutter below the page-relative floor.
+fn narrow_justified_gutter(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    line: &SpanLine,
+    min_gutter: f32,
+    page_width: f32,
+) -> Option<(f32, f32)> {
+    let mut edges = line
+        .iter()
+        .map(|&index| (spans[index].bbox.left(), spans[index].bbox.right()));
+    let (line_left, mut running_right) = edges.next()?;
+    let mut widest: Option<(f32, f32)> = None;
+    for (left, right) in edges {
+        if widest.is_none_or(|(gap_left, gap_right)| left - running_right > gap_right - gap_left) {
+            widest = Some((running_right, left));
+        }
+        running_right = running_right.max(right);
+    }
+    let (gap_left, gap_right) = widest?;
+    let gap = gap_right - gap_left;
+    (gap >= MIN_DENSE_COLUMN_GUTTER_PTS
+        && gap < min_gutter
+        && gap_left - line_left >= page_width * MIN_NARROW_GUTTER_COLUMN_FRACTION)
+        .then_some((gap_left, gap_right))
+}
+
+/// Midpoints of the narrow gaps whose two edges at least
+/// [`MIN_ALIGNED_NARROW_GUTTER_LINES`] gaps share within `DENSE_COLUMN_SPLIT_SNAP_X_TOLERANCE_PTS`.
+///
+/// 2303.08597: the IEEE Letter template sets its columns 0.17in apart, and justified glyphs
+/// leave 11.96pt of it free of ink, just under the 2% (12.24pt) floor, so no line of its
+/// first page voted and the abstract was read interleaved with the introduction. Lowering the
+/// floor admits every 11-12pt gap on every page, among them table cell gaps (GH#1762). A
+/// justified column instead ends every full line at one x and the next column starts every
+/// line at one x, so the narrow gap repeats edge for edge; a word space or a table's cell gap
+/// beside a short label does not. ~keep
+fn aligned_narrow_gutter_votes(gaps: &[(f32, f32)]) -> impl Iterator<Item = f32> + '_ {
+    let aligned = |a: &(f32, f32), b: &(f32, f32)| {
+        (a.0 - b.0).abs() <= DENSE_COLUMN_SPLIT_SNAP_X_TOLERANCE_PTS
+            && (a.1 - b.1).abs() <= DENSE_COLUMN_SPLIT_SNAP_X_TOLERANCE_PTS
+    };
+    gaps.iter()
+        .filter(move |&gap| gaps.iter().filter(|&other| aligned(gap, other)).count() >= MIN_ALIGNED_NARROW_GUTTER_LINES)
+        .map(|&(left, right)| (left + right) / 2.0)
+}
+
 /// Establish the page's gutter x-position from independent per-line evidence.
 ///
 /// Each line is checked in isolation for an internal gap at least
@@ -1899,6 +1955,14 @@ fn detect_split_x(spans: &[xberg_native_pdf::layout::TextSpan], lines: &[SpanLin
             (!vote_is_a_grid_cell_gap(spans, line, &grid_columns, midpoint)).then_some(midpoint)
         })
         .collect();
+    let narrow_gaps: Vec<(f32, f32)> = voting_lines()
+        .filter(|&line| !line_has_grid_row_gaps(spans, line, min_gutter))
+        .filter_map(|line| {
+            let (left, right) = narrow_justified_gutter(spans, line, min_gutter, page_width)?;
+            (!vote_is_a_grid_cell_gap(spans, line, &grid_columns, (left + right) / 2.0)).then_some((left, right))
+        })
+        .collect();
+    midpoints.extend(aligned_narrow_gutter_votes(&narrow_gaps));
     if midpoints.len() < MIN_DENSE_COLUMN_SPLIT_LINES {
         return sole_whitespace_gutter(spans, lines, page_width);
     }
@@ -4998,6 +5062,77 @@ mod tests {
                 "additional citations appear in the appendix",
                 "for readers seeking further detail here",
             ]
+        );
+    }
+
+    /// 2303.08597: an IEEE Letter page keeps 11.96pt of its 0.17in column gap free of ink,
+    /// just under 2% of the page width, at the same x on every full line.
+    #[test]
+    fn ieee_letter_column_gap_is_a_dense_gutter() {
+        let left_line = |row: usize| format!("Left column line {row} carries justified running prose");
+        let right_line = |row: usize| format!("Right column line {row} carries justified running prose");
+        let mut spans = Vec::new();
+        for row in 0..8 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(span_with_width(&left_line(row), 48.96, y, 251.06, 10.0, 10.0));
+            spans.push(span_with_width(&right_line(row), 311.98, y, 251.06, 10.0, 10.0));
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = (0..8).map(left_line).chain((0..8).map(right_line)).collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// The same narrow gaps vote only where they repeat edge for edge: staggered gaps of the
+    /// same width are word or cell spacing, not one gutter.
+    #[test]
+    fn staggered_narrow_gaps_are_not_a_dense_gutter() {
+        let mut spans = Vec::new();
+        for row in 0..8 {
+            let y = 700.0 - row as f32 * 12.0;
+            let left_width = 230.0 + row as f32 * 3.0;
+            spans.push(span_with_width(
+                "left text run of this line",
+                48.96,
+                y,
+                left_width,
+                10.0,
+                10.0,
+            ));
+            spans.push(span_with_width(
+                "right text run of this line",
+                48.96 + left_width + 11.96,
+                y,
+                200.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert_eq!(detect_split_x(&spans, &lines, 612.0), None);
+    }
+
+    /// A narrow gap after a short run is a table's cell gap however well it repeats.
+    #[test]
+    fn a_narrow_gap_after_a_short_run_is_not_a_justified_gutter() {
+        let spans = vec![
+            span_with_width("label cell", 171.5, 700.0, 150.0, 9.0, 9.0),
+            span_with_width("value", 333.5, 700.0, 40.0, 9.0, 9.0),
+        ];
+        let line: SpanLine = vec![0, 1];
+
+        assert_eq!(narrow_justified_gutter(&spans, &line, 12.24, 612.0), None);
+        let wide = vec![
+            span_with_width("a justified column line", 48.96, 700.0, 251.06, 10.0, 10.0),
+            span_with_width("its neighbour", 311.98, 700.0, 100.0, 10.0, 10.0),
+        ];
+        let gap = narrow_justified_gutter(&wide, &line, 12.24, 612.0).expect("a justified line's gutter");
+        assert!(
+            (gap.0 - 300.02).abs() < 0.01 && (gap.1 - 311.98).abs() < 0.01,
+            "{gap:?}"
         );
     }
 
