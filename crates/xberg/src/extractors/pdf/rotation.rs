@@ -61,6 +61,13 @@ pub(crate) const ATOMIC_FRAGMENT_GAP_RATIO: f32 = 0.15;
 /// [`upright_reading_origin`] produces.
 const ROTATED_LINE_CROSS_TOLERANCE_RATIO: f32 = 0.5;
 
+/// True when two spans sit on one rotated-frame line. The smaller height sets
+/// the tolerance, so a tall span can never pull itself onto a row its smaller
+/// neighbours are too far from to join.
+fn same_frame_line(cross_a: f32, height_a: f32, cross_b: f32, height_b: f32) -> bool {
+    (cross_a - cross_b).abs() <= height_a.min(height_b).max(f32::EPSILON) * ROTATED_LINE_CROSS_TOLERANCE_RATIO
+}
+
 /// Rotate a span's page-space origin into its own upright reading frame.
 ///
 /// Mirrors [`crate::pdf::native::span_geometry::upright_origin`] (which
@@ -94,7 +101,7 @@ pub(crate) fn upright_reading_origin(span: &TextSpan) -> (f32, f32) {
 /// (rotated body text beside an upright footer, for example) must not have
 /// one frame forced across the boundary — then, for a rotated run, further
 /// splits it into "lines" using cross-axis proximity (spans within
-/// [`ROTATED_LINE_CROSS_TOLERANCE_RATIO`] of the run's own font extent count
+/// [`ROTATED_LINE_CROSS_TOLERANCE_RATIO`] of the smaller font extent count
 /// as the same line), sorts each line strictly by advance-axis position,
 /// inserts a space wherever the advance-axis gap between consecutive spans
 /// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff, and separates
@@ -163,8 +170,7 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
                 break;
             };
             let (_, candidate_cross) = upright_reading_origin(candidate);
-            let tolerance = anchor.height.max(candidate.height).max(f32::EPSILON) * ROTATED_LINE_CROSS_TOLERANCE_RATIO;
-            if (candidate_cross - anchor_cross).abs() > tolerance {
+            if !same_frame_line(anchor_cross, anchor.height, candidate_cross, candidate.height) {
                 break;
             }
             line_end += 1;
@@ -223,9 +229,7 @@ fn order_rotated_run(spans: &[TextSpan], run: &[usize]) -> Vec<usize> {
     let mut lines: Vec<FrameLine> = Vec::new();
     let mut anchor: Option<(f32, f32)> = None;
     for span in &placed {
-        let same_line = anchor.is_some_and(|(cross, height)| {
-            (cross - span.cross).abs() <= height.max(span.height).max(f32::EPSILON) * ROTATED_LINE_CROSS_TOLERANCE_RATIO
-        });
+        let same_line = anchor.is_some_and(|(cross, height)| same_frame_line(cross, height, span.cross, span.height));
         match lines.last_mut().filter(|_| same_line) {
             Some(line) => {
                 line.members.push(span.index);
@@ -896,6 +900,21 @@ mod tests {
                     "jitter {jitter}"
                 );
             }
+        }
+
+        #[test]
+        fn should_not_let_a_taller_span_join_a_row_its_neighbours_are_too_far_from() {
+            let tall = |text: &str, advance: f32, cross: f32| TextSpan {
+                height: 2.0 * HEIGHT,
+                ..at(text, 90.0, advance, cross)
+            };
+            let spans = vec![
+                at("A", 90.0, 0.0, 100.0),
+                at("1", 90.0, 60.0, 100.0),
+                at("B", 90.0, 0.0, 90.0),
+                tall("2", 60.0, 91.0),
+            ];
+            assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("A 1\nB 2"));
         }
 
         #[test]
