@@ -149,10 +149,20 @@ async fn non_osd_and_other_backend_stages_keep_the_original_empty_context() {
         psm: Some(1),
         ..Default::default()
     });
-    let dependency = CacheDependency::for_config(&config, Some("image/png"));
+    let mut dependency = CacheDependency::for_config(&config, Some("image/png"));
     assert!(dependency.model.is_none());
     assert!(dependency.stage_models.is_empty());
     assert!(!dependency.uncertifiable);
+    assert_eq!(
+        dependency
+            .tessdata
+            .iter()
+            .map(|selection| selection.languages.join("+"))
+            .collect::<Vec<_>>(),
+        ["eng", "jpn_vert"],
+        "every Tesseract stage's models are keyed, whatever its mode"
+    );
+    dependency.tessdata.clear();
     let context = fingerprint_with_reader(&[dependency], None, |_, _| {
         panic!("no effective OSD stage may read models")
     })

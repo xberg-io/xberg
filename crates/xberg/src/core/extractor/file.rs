@@ -924,7 +924,12 @@ fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String 
     normalized.use_cache = true;
     normalized.cache_namespace = None;
     normalized.cache_ttl_secs = None;
+    // ~keep An unset set, the default one and a set named on the top level or in the `ocr`
+    // section run the same OCR, so they hash as the effective set.
+    let tessdata_model = normalized.effective_tessdata_model();
+    normalized.tessdata_model = Some(tessdata_model);
     if let Some(ocr) = normalized.ocr.as_mut() {
+        ocr.tessdata_model = Some(tessdata_model);
         if let Some(tesseract_config) = ocr.tesseract_config.as_mut() {
             tesseract_config.use_cache = true;
         }
@@ -1193,6 +1198,36 @@ mod cache_key_tests {
             hash_extraction_config(&b, "image/png"),
             "tessdata_bytes (serde-skipped) must be part of the cache key"
         );
+    }
+
+    #[test]
+    fn every_spelling_of_one_effective_tessdata_model_shares_a_cache_key() {
+        use crate::core::config::{OcrConfig, TessdataModel};
+
+        let (fast, best) = (Some(TessdataModel::Fast), Some(TessdataModel::Best));
+        let key = |top_level, section: Option<Option<TessdataModel>>| {
+            let config = ExtractionConfig {
+                tessdata_model: top_level,
+                ocr: section.map(|tessdata_model| OcrConfig {
+                    tessdata_model,
+                    ..OcrConfig::default()
+                }),
+                ..Default::default()
+            };
+            hash_extraction_config(&config, "application/pdf")
+        };
+
+        assert_eq!(key(None, None), key(fast, None), "an unset set is the default one");
+        assert_ne!(key(None, None), key(best, None));
+        let section_fast = key(None, Some(None));
+        for (top_level, section) in [(fast, None), (None, fast), (fast, fast), (best, fast)] {
+            assert_eq!(section_fast, key(top_level, Some(section)), "{top_level:?} {section:?}");
+        }
+        let section_best = key(best, Some(None));
+        assert_ne!(section_fast, section_best);
+        for (top_level, section) in [(None, best), (fast, best), (best, best)] {
+            assert_eq!(section_best, key(top_level, Some(section)), "{top_level:?} {section:?}");
+        }
     }
 
     #[test]

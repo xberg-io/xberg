@@ -12,6 +12,11 @@ pub(crate) struct CacheDependency {
     stage_models: Vec<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     script_retry: Option<ModelSelection>,
+    /// The Tesseract models a request may read when OCR runs. Their resolved directory and the
+    /// identity of their files enter the key, so text read with one set of model files is never
+    /// served for another.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    tessdata: Vec<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     uncertifiable: bool,
     /// The OCR configuration of a request the image PaddleOCR fallback may run for; its model
@@ -27,6 +32,7 @@ impl CacheDependency {
             let dependency = Self {
                 model: ModelSelection::for_config(config, mime),
                 script_retry: ModelSelection::for_script_retry(config, mime),
+                tessdata: ModelSelection::for_tessdata(config, mime),
                 #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
                 paddle_image_fallback: crate::extractors::image::paddle_fallback_model_request(config, mime),
                 ..Self::default()
@@ -93,7 +99,8 @@ async fn fingerprint_with_reader(
         .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty());
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
     let has_paddle_fallback = paddle_fallback_requested(dependencies);
-    if has_orientation_models || has_script_retry || has_paddle_fallback {
+    let has_tessdata = dependencies.iter().any(|dependency| !dependency.tessdata.is_empty());
+    if has_orientation_models || has_script_retry || has_paddle_fallback || has_tessdata {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
@@ -109,6 +116,7 @@ async fn fingerprint_with_reader(
             };
             context.push_str(&retry_context);
             context.push_str(&paddle_fallback_context(&dependencies));
+            context.push_str(&tessdata_context(&dependencies, worker_cancel.as_ref())?);
             Ok(Some(context))
         }))
         .await;
@@ -170,6 +178,96 @@ fn paddle_fallback_context(dependencies: &[CacheDependency]) -> String {
     {
         let _ = dependencies;
         String::new()
+    }
+}
+
+/// The resolved directory and model-file identity of every Tesseract selection the requests may
+/// run OCR with, or nothing when none may.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn tessdata_context(dependencies: &[CacheDependency], cancel: Option<&CancellationToken>) -> crate::Result<String> {
+    use crate::ocr::processor::validation::TessdataEnv;
+
+    let mut hash = blake3::Hasher::new();
+    let mut any = false;
+    for (index, dependency) in dependencies.iter().enumerate() {
+        for selection in &dependency.tessdata {
+            check_cancelled(cancel)?;
+            any = true;
+            hash.update(&(index as u64).to_le_bytes());
+            let env = TessdataEnv::from_process().for_model(selection.tessdata_model);
+            hash_tessdata_selection(&mut hash, selection, &env);
+        }
+    }
+    Ok(if any {
+        format!(":tessdata-v1:{}", hash.finalize().to_hex())
+    } else {
+        String::new()
+    })
+}
+
+/// Hash the model set of `selection`, the directory that serves it and the identity (size and
+/// modification time) of each of its model files there.
+///
+/// Stats files only: it never creates a directory, downloads or reads a model, since it runs for
+/// requests that may not reach OCR at all. A selection that no directory serves yet (the engine
+/// would download its packs) is keyed on its set, languages and candidate directories instead;
+/// once the packs exist the key changes, so nothing read before is served after.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn hash_tessdata_selection(
+    hash: &mut blake3::Hasher,
+    selection: &ModelSelection,
+    env: &crate::ocr::processor::validation::TessdataEnv,
+) {
+    use crate::ocr::processor::validation::{
+        canonical_tessdata_dir, existing_tessdata_dir_for, hash_pack_identities, tessdata_search_dirs,
+    };
+
+    fn frame(hash: &mut blake3::Hasher, bytes: &[u8]) {
+        hash.update(&(bytes.len() as u64).to_le_bytes());
+        hash.update(bytes);
+    }
+
+    frame(hash, selection.tessdata_model.as_str().as_bytes());
+    let languages: Vec<&str> = selection
+        .languages
+        .iter()
+        .flat_map(|entry| entry.split('+'))
+        .map(str::trim)
+        .collect();
+    // ~keep The engine expands the wildcard to every model installed beside English.
+    let wildcard = matches!(languages.as_slice(), [all] if *all == "*" || all.eq_ignore_ascii_case("all"));
+    let required: Vec<String> = if wildcard {
+        vec![crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_owned()]
+    } else {
+        languages.iter().map(|language| (*language).to_owned()).collect()
+    };
+    let override_path = selection.directory.as_deref();
+    let Some(directory) = existing_tessdata_dir_for(&required, override_path, env) else {
+        hash.update(&[0]);
+        for candidate in tessdata_search_dirs(override_path, env) {
+            frame(hash, candidate.as_bytes());
+        }
+        for language in &languages {
+            frame(hash, language.as_bytes());
+        }
+        return;
+    };
+    let directory = canonical_tessdata_dir(&directory);
+    hash.update(&[1]);
+    frame(hash, directory.as_os_str().as_encoded_bytes());
+    if wildcard {
+        let mut installed: Vec<String> = std::fs::read_dir(&directory)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.ok()?.file_name().into_string().ok()?;
+                name.strip_suffix(".traineddata").map(str::to_owned)
+            })
+            .collect();
+        installed.sort();
+        hash_pack_identities(hash, &directory, installed.iter().map(String::as_str));
+    } else {
+        hash_pack_identities(hash, &directory, languages.iter().copied());
     }
 }
 
@@ -287,6 +385,57 @@ impl ModelSelection {
                 .and_then(|tesseract| tesseract.psm)
                 .is_none_or(|psm| matches!(psm, 3 | 11)),
         })
+    }
+
+    /// The Tesseract models the request may read when OCR runs: those of the `ocr` section, or of
+    /// the default one OCR runs with when there is none, and of each Tesseract pipeline stage.
+    /// Empty when OCR cannot run for the request. Read from the config alone.
+    ///
+    /// The backend is not asked: other backends still read with Tesseract for orientation and
+    /// recovery probes, and a selection whose models are never used only costs a few `stat` calls.
+    fn for_tessdata(config: &ExtractionConfig, mime: Option<&str>) -> Vec<Self> {
+        if !config.use_cache || config.effective_disable_ocr() {
+            return Vec::new();
+        }
+        let mime = mime.map(|mime| mime.split(';').next().unwrap_or_default().trim());
+        if mime.is_some_and(|mime| mime.eq_ignore_ascii_case("text/plain")) {
+            return Vec::new();
+        }
+        let image = mime.is_some_and(|mime| {
+            mime.split('/')
+                .next()
+                .is_some_and(|kind| kind.eq_ignore_ascii_case("image"))
+        });
+        let pdf = cfg!(feature = "pdf") && mime.is_some_and(|mime| mime.eq_ignore_ascii_case("application/pdf"));
+        if !(image || pdf || mime.is_none_or(str::is_empty) || config.runs_ocr_on_embedded_images()) {
+            return Vec::new();
+        }
+        let default_ocr = config.ocr_or_default();
+        let ocr: &crate::core::config::OcrConfig = &default_ocr;
+        let tessdata_model = ocr.effective_tessdata_model();
+        let selection = move |languages, directory| Self {
+            languages,
+            directory,
+            tessdata_model,
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        #[cfg_attr(not(feature = "pdf"), allow(unused_mut))]
+        let mut selections = vec![selection(ocr.effective_tesseract_language(), ocr.tessdata_path.clone())];
+        #[cfg(feature = "pdf")]
+        if let Some(pipeline) = &ocr.pipeline {
+            for stage in pipeline.stages.iter().take(MAX_MODEL_SELECTIONS) {
+                let inputs = crate::extractors::pdf::ocr::stage_model_inputs::StageModelInputs::new(ocr, stage);
+                if inputs.backend() != "tesseract" {
+                    continue;
+                }
+                let stage = selection(inputs.languages(), inputs.directory().map(std::path::Path::to_path_buf));
+                if !selections.contains(&stage) {
+                    selections.push(stage);
+                }
+            }
+        }
+        selections
     }
 
     fn for_config(config: &ExtractionConfig, mime: Option<&str>) -> Option<Self> {
@@ -496,6 +645,7 @@ mod tests {
     async fn orientation_context(config: &ExtractionConfig) -> Option<String> {
         let mut dependency = CacheDependency::for_config(config, Some("application/pdf"));
         dependency.script_retry = None;
+        dependency.tessdata.clear();
         fingerprint(&[dependency], None).await.unwrap()
     }
 
@@ -575,6 +725,148 @@ mod tests {
                 .is_none()
         );
         assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn every_request_that_may_run_ocr_selects_its_tesseract_models() {
+        let selected = |config: &ExtractionConfig, mime: Option<&str>| {
+            CacheDependency::for_config(config, mime)
+                .tessdata
+                .iter()
+                .map(|selection| (selection.languages.join("+"), selection.tessdata_model))
+                .collect::<Vec<_>>()
+        };
+        let fast = crate::core::config::TessdataModel::Fast;
+        let best = crate::core::config::TessdataModel::Best;
+        let docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+        let default = ExtractionConfig::default();
+        for mime in [
+            Some("application/pdf"),
+            Some("image/png"),
+            Some("IMAGE/JPEG; q=1"),
+            None,
+        ] {
+            assert_eq!(selected(&default, mime), [("eng".to_string(), fast)], "{mime:?}");
+        }
+        assert!(selected(&default, Some(docx)).is_empty(), "no OCR, no model dependency");
+        assert!(selected(&default, Some("text/plain")).is_empty());
+
+        let top_level = ExtractionConfig {
+            tessdata_model: Some(best),
+            ..Default::default()
+        };
+        assert_eq!(
+            selected(&top_level, Some("application/pdf")),
+            [("eng".to_string(), best)],
+            "the inherited set reaches a request with no ocr section"
+        );
+
+        let mut with_section = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                language: vec!["deu".into(), "fra".into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(selected(&with_section, Some(docx)), [("deu+fra".to_string(), fast)]);
+        with_section.use_cache = false;
+        assert!(selected(&with_section, Some("image/png")).is_empty());
+        with_section.use_cache = true;
+        with_section.disable_ocr = true;
+        assert!(selected(&with_section, Some("image/png")).is_empty());
+    }
+
+    #[test]
+    fn tessdata_context_follows_the_model_files_without_creating_or_reading_anything() {
+        use crate::ocr::processor::validation::TessdataEnv;
+
+        let models = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let english = models.path().join("eng.traineddata");
+        std::fs::write(&english, b"first model").unwrap();
+        let selection = |tessdata_model| ModelSelection {
+            languages: vec!["eng".into()],
+            directory: None,
+            tessdata_model,
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        let env = |prefix: Option<String>, tessdata_model| TessdataEnv {
+            tessdata_prefix: prefix,
+            cache_dir: Some(cache.path().into()),
+            system_paths: false,
+            model: tessdata_model,
+        };
+        let context = |prefix: Option<String>, tessdata_model| {
+            let mut hash = blake3::Hasher::new();
+            hash_tessdata_selection(&mut hash, &selection(tessdata_model), &env(prefix, tessdata_model));
+            hash.finalize()
+        };
+        let fast = crate::core::config::TessdataModel::Fast;
+        let best = crate::core::config::TessdataModel::Best;
+        let prefix = || Some(models.path().to_str().unwrap().to_owned());
+
+        let through_prefix = context(prefix(), best);
+        assert_eq!(through_prefix, context(prefix(), best));
+        assert_eq!(
+            through_prefix,
+            context(
+                prefix().map(|path| format!("{path}{}", std::path::MAIN_SEPARATOR)),
+                best
+            ),
+            "one directory, one context"
+        );
+        assert_ne!(
+            through_prefix,
+            context(prefix(), fast),
+            "the requested set is part of the context"
+        );
+
+        let unset = context(None, best);
+        assert_ne!(
+            through_prefix, unset,
+            "text read through TESSDATA_PREFIX must not be served once the prefix is unset"
+        );
+        assert_eq!(unset, context(None, best));
+        assert_ne!(unset, context(None, fast));
+        assert_eq!(
+            cache.path().read_dir().unwrap().count(),
+            0,
+            "computing a key must not create cache directories or download"
+        );
+
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&english, b"a replaced model").unwrap();
+        assert_ne!(through_prefix, context(prefix(), best), "a pack replaced in place");
+    }
+
+    #[test]
+    fn wildcard_tessdata_context_follows_every_installed_model() {
+        use crate::ocr::processor::validation::TessdataEnv;
+
+        let models = tempfile::tempdir().unwrap();
+        std::fs::write(models.path().join("eng.traineddata"), b"english").unwrap();
+        let selection = ModelSelection {
+            languages: vec!["all".into()],
+            directory: Some(models.path().into()),
+            tessdata_model: Default::default(),
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        let context = || {
+            let mut hash = blake3::Hasher::new();
+            hash_tessdata_selection(&mut hash, &selection, &TessdataEnv::from_lookup(|_| None));
+            hash.finalize()
+        };
+
+        let english_only = context();
+        std::fs::write(models.path().join("deu.traineddata"), b"german").unwrap();
+        assert_ne!(
+            english_only,
+            context(),
+            "an added model changes what the wildcard reads"
+        );
     }
 
     #[cfg(unix)]
@@ -820,7 +1112,8 @@ mod explicit_mode_tests {
 
         let mut no_retry = config.clone();
         no_retry.ocr.as_mut().unwrap().language = vec!["chi_sim".into()];
-        let no_retry = CacheDependency::for_config(&no_retry, Some("image/png"));
+        let mut no_retry = CacheDependency::for_config(&no_retry, Some("image/png"));
+        no_retry.tessdata.clear();
         assert_eq!(fingerprint(&[no_retry], None).await.unwrap().as_deref(), Some(""));
 
         std::fs::remove_file(han).unwrap();
@@ -860,8 +1153,9 @@ mod explicit_mode_tests {
             let ocr = config.ocr.as_mut().unwrap();
             ocr.tesseract_config.as_mut().unwrap().output_format = "hocr".into();
             ocr.tessdata_path = Some("unavailable-model-root".into());
-            let dependency = CacheDependency::for_config(&config, Some("image/png"));
+            let mut dependency = CacheDependency::for_config(&config, Some("image/png"));
             assert!(dependency.model.is_none());
+            dependency.tessdata.clear();
             assert_eq!(fingerprint(&[dependency], None).await.unwrap().as_deref(), Some(""));
         }
     }
