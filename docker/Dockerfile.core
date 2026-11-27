@@ -172,7 +172,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # tessdata_best for the `best` target, at the revision and digests pinned in
 # crates/xberg/src/ocr/tessdata_download/pins.rs (scripts/ci/tessdata/generate_best_manifest.py).
-# The zero mtimes keep the copied layer identical across builds. ~keep
+# The zero mtimes keep the copied layer identical across builds. Modes are set here, not with
+# COPY --chmod, which would also apply 0444 to the directories COPY creates and make them
+# untraversable for the nonroot user. ~keep
 FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS tessdata-best
 
 RUN apt-get update && \
@@ -193,7 +195,10 @@ RUN set -eu; \
     mkdir models license; \
     mv ./*.traineddata models/; \
     mv LICENSE license/; \
-    find models license -type f -exec touch -d @0 {} +
+    chown -R root:root models license; \
+    chmod 0755 models license; \
+    chmod 0444 models/* license/LICENSE; \
+    find models license -exec touch -h -d @0 {} +
 
 FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS runtime
 
@@ -319,8 +324,8 @@ FROM runtime AS best
 
 LABEL org.opencontainers.image.description="Xberg document intelligence - core-best variant"
 
-COPY --link --chmod=0444 --from=tessdata-best /tessdata-best/models/*.traineddata /usr/share/xberg/tessdata/best/
-COPY --link --chmod=0444 --from=tessdata-best /tessdata-best/license/LICENSE /usr/local/share/licenses/tessdata_best/LICENSE
+COPY --link --from=tessdata-best /tessdata-best/models/ /usr/share/xberg/tessdata/best/
+COPY --link --from=tessdata-best /tessdata-best/license/ /usr/local/share/licenses/tessdata_best/
 
 ENV XBERG_OCR_TESSDATA_MODEL=best
 
