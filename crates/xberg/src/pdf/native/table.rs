@@ -8151,15 +8151,15 @@ mod tests {
 
     #[test]
     fn gutter_band_on_a_ruled_page_is_still_refused_gh1760() {
-        // #1399's ruling-line signal is counted per page, not per region, so a paper
-        // whose real table is ruled would otherwise admit every short band on the same
-        // page. The evidence requirement is therefore tested ahead of it. ~keep
+        // Rules are credited to the nearest candidate they span, so a ruled table beside this
+        // band can still lend it a framing pair: enough for #1399's ruled branch, not a rule
+        // between every row. The evidence requirement must refuse the band. ~keep
         let tables = reconstruct_region_tables(
             &gh1760_band_region(),
             GH1760_PAGE_HEIGHT,
             1,
             false,
-            6,
+            2,
             &source_columns::PageRules::new(&[], true),
         );
         assert!(
