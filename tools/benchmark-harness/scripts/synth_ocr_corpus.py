@@ -40,7 +40,7 @@ import shutil
 import subprocess
 import sys
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DATASET = "xberg-synth-scan-v1"
@@ -75,6 +75,8 @@ TABLE_MIN_CELLS = 3
 
 EXCLUDED_PREFIXES = ("pdf_scanned/", "user_reports/", "ordinance-2197.pdf")
 EXCLUDED_SUBSTRINGS = ("from-oss-fuzz",)
+EXTRA_PREFIX = "sources:"
+SOURCES_MANIFEST = "sources.json"
 
 # Single-letter words are dropped: in technical text they are variables ("a", "v", "k"), which made
 # code-heavy English pages score as Czech or Polish.
@@ -244,25 +246,84 @@ def seeded_rng(seed: int, *parts: object) -> random.Random:
     return random.Random(stable_key(seed, *parts))  # noqa: S311
 
 
-def source_pdfs(corpus: Path) -> list[str]:
-    """Native PDFs pinned in corpus.lock.json, minus scans, user reports, fuzz inputs and byte-identical
-    copies (the same upstream file vendored under several directories; the first path wins).
+@dataclass
+class Sources:
+    """Where source PDFs come from: the pinned corpus, plus an optional uncommitted directory of extra
+    native PDFs whose `sources.json` records each file's URL and licence.
+
+    Document ids are corpus-relative paths, or `sources:<path>` for the extra directory.
     """
-    objects = json.loads((corpus / "corpus.lock.json").read_text(encoding="utf-8"))["objects"]
-    seen: set[str] = set()
-    paths = []
-    for rel in sorted(objects):
-        if (
-            not rel.lower().endswith(".pdf")
-            or rel.startswith(EXCLUDED_PREFIXES)
-            or any(part in rel for part in EXCLUDED_SUBSTRINGS)
-            or objects[rel]["sha256"] in seen
-            or not (corpus / rel).is_file()
-        ):
-            continue
-        seen.add(objects[rel]["sha256"])
-        paths.append(rel)
-    return paths
+
+    corpus: Path
+    extra: Path | None = None
+    provenance: dict[str, dict[str, str]] = field(default_factory=dict)
+    shas: dict[str, str] = field(default_factory=dict)
+
+    def resolve(self, doc: str) -> Path:
+        """Filesystem path of a document id."""
+        if doc.startswith(EXTRA_PREFIX):
+            if self.extra is None:
+                raise SystemExit(f"{doc} needs --sources")
+            return self.extra / doc.removeprefix(EXTRA_PREFIX)
+        return self.corpus / doc
+
+    def origin(self, doc: str) -> dict[str, str]:
+        """Provenance recorded in fixtures: URL and licence for extra PDFs, the corpus pin otherwise."""
+        if doc.startswith(EXTRA_PREFIX):
+            return self.provenance[doc]
+        return {"origin": "xberg-io/test_documents", "pinned_in": "corpus.lock.json"}
+
+    def documents(self) -> list[str]:
+        """Corpus PDFs pinned in corpus.lock.json (minus scans, user reports and fuzz inputs), then extra
+        PDFs; byte-identical copies are dropped, the first id wins.
+        """
+        objects = json.loads((self.corpus / "corpus.lock.json").read_text(encoding="utf-8"))["objects"]
+        seen: set[str] = set()
+        docs = []
+        for rel in sorted(objects):
+            if (
+                not rel.lower().endswith(".pdf")
+                or rel.startswith(EXCLUDED_PREFIXES)
+                or any(part in rel for part in EXCLUDED_SUBSTRINGS)
+                or objects[rel]["sha256"] in seen
+                or not (self.corpus / rel).is_file()
+            ):
+                continue
+            seen.add(objects[rel]["sha256"])
+            self.shas[rel] = objects[rel]["sha256"]
+            docs.append(rel)
+        for doc, sha in sorted(self._extra_documents().items()):
+            if sha not in seen:
+                seen.add(sha)
+                self.shas[doc] = sha
+                docs.append(doc)
+        return docs
+
+    def _extra_documents(self) -> dict[str, str]:
+        if self.extra is None:
+            return {}
+        manifest = self.extra / SOURCES_MANIFEST
+        if not manifest.is_file():
+            raise SystemExit(f"--sources {self.extra} has no {SOURCES_MANIFEST} recording URL and licence per PDF")
+        entries = json.loads(manifest.read_text(encoding="utf-8"))
+        pdfs = sorted(p.relative_to(self.extra).as_posix() for p in self.extra.rglob("*.pdf") if p.is_file())
+        missing = [rel for rel in pdfs if not _valid_provenance(entries.get(rel))]
+        if missing:
+            raise SystemExit(f"{SOURCES_MANIFEST} lacks a url and license for: {', '.join(missing)}")
+        for rel in pdfs:
+            entry = entries[rel]
+            self.provenance[EXTRA_PREFIX + rel] = {
+                key: str(entry[key]) for key in ("url", "license", "note") if key in entry
+            }
+        return {EXTRA_PREFIX + rel: sha256_file(self.extra / rel) for rel in pdfs}
+
+    def fingerprint(self, docs: list[str]) -> str:
+        """Hash of the document set; a changed set invalidates the cached inventory."""
+        return hashlib.sha256(json.dumps([(doc, self.shas[doc]) for doc in docs]).encode()).hexdigest()
+
+
+def _valid_provenance(entry: object) -> bool:
+    return isinstance(entry, dict) and all(isinstance(entry.get(key), str) and entry[key] for key in ("url", "license"))
 
 
 # Tokenization mirrors benchmark-harness src/quality/mod.rs `tokenize` closely enough for
@@ -597,8 +658,8 @@ def sampled_pages(rel: str, pages: int, seed: int) -> list[int]:
     return sorted(seeded_rng(seed, rel).sample(range(1, pages + 1), MAX_PAGES_PER_DOC))
 
 
-def inventory_document(corpus: Path, rel: str, seed: int) -> list[dict[str, object]]:
-    pdf = corpus / rel
+def inventory_document(sources: Sources, rel: str, seed: int) -> list[dict[str, object]]:
+    pdf = sources.resolve(rel)
     try:
         pages = page_count(pdf)
     except (subprocess.SubprocessError, OSError) as err:
@@ -673,22 +734,25 @@ def exclusion_reasons(row: dict[str, object]) -> list[str]:
 
 def cmd_inventory(args: argparse.Namespace) -> Path:
     out = args.out / "inventory.jsonl"
-    if out.exists() and not args.force:
+    stamp = args.out / "inventory.sources.sha256"
+    docs = args.sources.documents()
+    if not docs:
+        raise SystemExit(f"no source PDFs found under {args.corpus}; fetch the corpus first")
+    fingerprint = args.sources.fingerprint(docs)
+    if out.exists() and stamp.exists() and stamp.read_text().strip() == fingerprint and not args.force:
         print(f"inventory cached: {out}", file=sys.stderr)
         return out
     args.out.mkdir(parents=True, exist_ok=True)
-    docs = source_pdfs(args.corpus)
-    if not docs:
-        raise SystemExit(f"no source PDFs found under {args.corpus}; fetch the corpus first")
     rows: list[dict[str, object]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for i, doc_rows in enumerate(pool.map(lambda rel: inventory_document(args.corpus, rel, args.seed), docs)):
+        for i, doc_rows in enumerate(pool.map(lambda rel: inventory_document(args.sources, rel, args.seed), docs)):
             rows.extend(doc_rows)
             if (i + 1) % 50 == 0:
                 print(f"inventory: {i + 1}/{len(docs)} documents", file=sys.stderr)
     with out.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    stamp.write_text(fingerprint + "\n")
     print(f"inventory: {len(docs)} documents, {len(rows)} pages -> {out}", file=sys.stderr)
     return out
 
@@ -753,18 +817,27 @@ def page_id(row: dict[str, object]) -> str:
     return f"{stem}_{digest}_p{int(row['page']):03d}"
 
 
-def degradation_params(seed: int, pid: str, dpi: int) -> dict[str, float | int]:
-    rng = seeded_rng(seed, pid, dpi)
+DEGRADATION_PROFILES = {
+    "mild": {"rotate_deg": 1.0, "blur_sigma": (0.3, 0.8), "noise_attenuate": (0.15, 0.35), "jpeg_quality": (60, 85)},
+    "harsh": {"rotate_deg": 1.0, "blur_sigma": (0.6, 1.6), "noise_attenuate": (0.3, 0.7), "jpeg_quality": (30, 50)},
+}
+
+
+def degradation_params(seed: int, pid: str, dpi: int, profile: str) -> dict[str, float | int | str]:
+    # The mild key omits the profile name so its parameters match corpora built before profiles existed.
+    rng = seeded_rng(seed, pid, dpi) if profile == "mild" else seeded_rng(seed, pid, dpi, profile)
+    spec = DEGRADATION_PROFILES[profile]
     return {
-        "rotate_deg": round(rng.uniform(-1.0, 1.0), 2),
-        "blur_sigma": round(rng.uniform(0.3, 0.8) * dpi / 300, 2),
-        "noise_attenuate": round(rng.uniform(0.15, 0.35), 2),
-        "jpeg_quality": rng.randint(60, 85),
+        "profile": profile,
+        "rotate_deg": round(rng.uniform(-spec["rotate_deg"], spec["rotate_deg"]), 2),
+        "blur_sigma": round(rng.uniform(*spec["blur_sigma"]) * dpi / 300, 2),
+        "noise_attenuate": round(rng.uniform(*spec["noise_attenuate"]), 2),
+        "jpeg_quality": rng.randint(*spec["jpeg_quality"]),
         "magick_seed": rng.randint(1, 2**31 - 1),
     }
 
 
-def render_variant(corpus: Path, out: Path, row: dict[str, object], variant: dict[str, object], seed: int) -> dict:
+def render_variant(sources: Sources, out: Path, row: dict[str, object], variant: dict[str, object], seed: int) -> dict:
     pid = page_id(row)
     dpi = int(variant["dpi"])
     images = out / "images"
@@ -783,15 +856,15 @@ def render_variant(corpus: Path, out: Path, row: dict[str, object], variant: dic
                 "-gray",
                 "-png",
                 "-singlefile",
-                str(corpus / str(row["doc"])),
+                str(sources.resolve(str(row["doc"]))),
                 str(partial),
             ]
         )
         partial.with_suffix(".png").replace(clean_png)
     if not variant["degraded"]:
         return {"path": clean_png, "params": None}
-    params = degradation_params(seed, pid, dpi)
-    target = images / f"{pid}_scan{dpi}.jpg"
+    params = degradation_params(seed, pid, dpi, str(variant["profile"]))
+    target = images / f"{pid}_{variant['name']}.jpg"
     if not target.exists():
         partial = images / f".partial_{target.name}"
         run(
@@ -824,13 +897,14 @@ def render_variant(corpus: Path, out: Path, row: dict[str, object], variant: dic
 
 VARIANTS = (
     {"name": "clean300", "dpi": 300, "degraded": False},
-    {"name": "scan150", "dpi": 150, "degraded": True},
-    {"name": "scan200", "dpi": 200, "degraded": True},
-    {"name": "scan300", "dpi": 300, "degraded": True},
+    {"name": "scan150", "dpi": 150, "degraded": True, "profile": "mild"},
+    {"name": "scan200", "dpi": 200, "degraded": True, "profile": "mild"},
+    {"name": "scan300", "dpi": 300, "degraded": True, "profile": "mild"},
+    {"name": "harsh", "dpi": 100, "degraded": True, "profile": "harsh"},
 )
 
 
-def write_ground_truth(corpus: Path, out: Path, row: dict[str, object]) -> Path:
+def write_ground_truth(sources: Sources, out: Path, row: dict[str, object]) -> Path:
     target = out / "ground_truth" / f"{page_id(row)}.txt"
     if not target.exists():
         text = run(
@@ -841,7 +915,7 @@ def write_ground_truth(corpus: Path, out: Path, row: dict[str, object]) -> Path:
                 "-l",
                 str(row["page"]),
                 *TEXT_FLAGS,
-                str(corpus / str(row["doc"])),
+                str(sources.resolve(str(row["doc"]))),
                 "-",
             ]
         )
@@ -858,10 +932,10 @@ def ocr_language(row: dict[str, object]) -> str:
     return code
 
 
-def build_fixture(corpus: Path, out: Path, row: dict, variant: dict, *, seed: int, sha: str, versions: dict) -> str:
+def build_fixture(sources: Sources, out: Path, row: dict, variant: dict, *, seed: int, versions: dict) -> str:
     pid = page_id(row)
-    gt = write_ground_truth(corpus, out, row)
-    image = render_variant(corpus, out, row, variant, seed)
+    gt = write_ground_truth(sources, out, row)
+    image = render_variant(sources, out, row, variant, seed)
     path: Path = image["path"]
     name = f"synth_{str(row['lang']).lower().replace('-', '_')}_{pid}_{variant['name']}"
     fixture = {
@@ -883,7 +957,8 @@ def build_fixture(corpus: Path, out: Path, row: dict, variant: dict, *, seed: in
             "degradation": image["params"],
             "source_document": row["doc"],
             "source_page": row["page"],
-            "source_sha256": sha,
+            "source_sha256": sources.shas[str(row["doc"])],
+            "source_provenance": sources.origin(str(row["doc"])),
             "seed": seed,
             "gt_extractor": f"{versions['pdftotext']}: pdftotext {' '.join(TEXT_FLAGS)} (reading-order mode)",
         },
@@ -917,16 +992,11 @@ def cmd_build(args: argparse.Namespace) -> None:
     for sub in ("images", "ground_truth", "fixtures", "cohorts"):
         (args.out / sub).mkdir(parents=True, exist_ok=True)
     versions = tool_versions()
-    shas = {doc: sha256_file(args.corpus / doc) for doc in sorted({str(r["doc"]) for r in selected})}
 
     def build_page(row: dict[str, object]) -> list[tuple[str, str]]:
         # Variants of one page share the clean render, so they run sequentially in one task.
-        sha = shas[str(row["doc"])]
         return [
-            (
-                variant["name"],
-                build_fixture(args.corpus, args.out, row, variant, seed=args.seed, sha=sha, versions=versions),
-            )
+            (variant["name"], build_fixture(args.sources, args.out, row, variant, seed=args.seed, versions=versions))
             for variant in VARIANTS
         ]
 
@@ -979,7 +1049,14 @@ def write_manifest(args: argparse.Namespace, rows: list, selected: list, version
             if count < args.per_stratum
         },
         "pages": [
-            {"id": page_id(r), "doc": r["doc"], "page": r["page"], "lang": r["lang"], "layout": r["layout"]}
+            {
+                "id": page_id(r),
+                "doc": r["doc"],
+                "page": r["page"],
+                "lang": r["lang"],
+                "layout": r["layout"],
+                "provenance": args.sources.origin(str(r["doc"])),
+            }
             for r in selected
         ],
     }
@@ -989,7 +1066,6 @@ def write_manifest(args: argparse.Namespace, rows: list, selected: list, version
 
 def cmd_verify(args: argparse.Namespace) -> None:
     manifest = json.loads((args.out / "manifest.json").read_text(encoding="utf-8"))
-    corpus = args.corpus
     fixtures = sorted((args.out / "fixtures").glob(f"*_{args.variant}.json"))
     # Keyed without the variant so every variant samples the same pages.
     sample = seeded_rng(args.seed, "verify").sample(fixtures, min(args.samples, len(fixtures)))
@@ -1006,7 +1082,7 @@ def cmd_verify(args: argparse.Namespace) -> None:
             "layout": meta["layout"],
             "tf1": round(token_f1(ocr, gt_default), 3),
         }
-        pdf = corpus / meta["source_document"]
+        pdf = args.sources.resolve(meta["source_document"])
         span = ["-f", str(meta["source_page"]), "-l", str(meta["source_page"]), *TEXT_FLAGS]
         for mode, flags in (("default", []), ("layout", ["-layout"]), ("raw", ["-raw"])):
             gt = gt_default if mode == "default" else run(["pdftotext", *span, *flags, str(pdf), "-"])
@@ -1032,6 +1108,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("stage", choices=("inventory", "build", "verify"))
     parser.add_argument("--corpus", type=Path, default=Path(__file__).resolve().parents[3] / "test_documents")
+    parser.add_argument(
+        "--sources",
+        type=Path,
+        help=f"extra native PDFs outside corpus.lock.json; {SOURCES_MANIFEST} there maps each PDF to its url and license",
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--per-stratum", type=int, default=DEFAULT_PER_STRATUM)
@@ -1042,6 +1123,7 @@ def main() -> int:
     args = parser.parse_args()
     TEXT_FLAGS.extend(pdftotext_text_flags())
     args.corpus, args.out = args.corpus.resolve(), args.out.resolve()
+    args.sources = Sources(args.corpus, args.sources.resolve() if args.sources else None)
     if args.stage == "inventory":
         cmd_inventory(args)
     elif args.stage == "build":

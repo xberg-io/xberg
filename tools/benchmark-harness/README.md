@@ -636,8 +636,9 @@ from changing the selected OCR runtime.
 
 `scripts/synth_ocr_corpus.py` builds a stratified OCR corpus from native PDFs in `test_documents` (those pinned in
 `corpus.lock.json`, minus `pdf_scanned/`, `user_reports/` and fuzz inputs). Each selected page is rendered with
-`pdftoppm` as a clean 300 dpi grayscale PNG and as degraded "scans" at 150, 200 and 300 dpi (seeded ImageMagick
-rotation within ±1°, blur, Gaussian noise and JPEG quality 60-85). Ground truth is poppler `pdftotext` in its default
+`pdftoppm` as a clean 300 dpi grayscale PNG, as mildly degraded "scans" at 150, 200 and 300 dpi (seeded ImageMagick
+rotation within ±1°, blur, Gaussian noise and JPEG quality 60-85) and as a harsh 100 dpi scan (twice the blur and
+noise, JPEG quality 30-50). Ground truth is poppler `pdftotext` in its default
 reading-order mode, one file per page, with `ground_truth.source = "pdf_text_layer"`; no xberg output is used.
 Default mode is chosen over `-layout`, which interleaves the lines of side-by-side columns, and `-raw`, which follows
 content-stream order: the harness reading-order score compares OCR order with ground-truth order, and OCR engines emit
@@ -653,12 +654,19 @@ white text). Selection gives every detected language and every layout class (`si
 ```bash
 python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py build --out /tmp/ocr-corpus
 python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py verify --out /tmp/ocr-corpus --samples 10
+python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py build --out /tmp/ocr-corpus --sources /tmp/extra-pdfs
 ```
 
+`--sources DIR` adds native PDFs that are not in `corpus.lock.json` (for example downloads kept outside the
+repository). `DIR/sources.json` must map every PDF's path relative to `DIR` to its provenance,
+`{"eu/act-fr.pdf": {"url": "https://...", "license": "...", "note": "optional"}}`; a PDF without a `url` and `license`
+stops the run. Each fixture records its source's provenance in `metadata.source_provenance`, and files identical to a
+corpus PDF are skipped.
+
 The output directory holds `images/`, `ground_truth/`, `fixtures/` (paths relative to the fixture), `cohorts/`
-(`ocr-synth-{clean300,scan150,scan200,scan300}-v1`), `inventory.jsonl` (every inspected page with its checks) and
+(`ocr-synth-{clean300,scan150,scan200,scan300,harsh}-v1`), `inventory.jsonl` (every inspected page with its checks) and
 `manifest.json` (seed, tool versions, exclusion counts, stratum counts, under-filled strata). Output is deterministic
-for a fixed `--seed`, corpus and tool versions. `verify` OCRs clean 300 dpi samples with plain `tesseract` and reports
+for a fixed `--seed`, source set and tool versions. `verify` OCRs the same sampled pages for any `--variant` with plain `tesseract` and reports
 token F1 plus reading-order agreement against each `pdftotext` mode; run the harness on the fixtures for real scores.
 
 ## Development
