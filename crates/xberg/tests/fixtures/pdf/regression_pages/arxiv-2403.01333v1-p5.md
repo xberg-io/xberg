@@ -1,16 +1,16 @@
 |  |  | 10 5  |
 | --- | --- | --- |
-| 0 . 0 | 0 . 0 0 . 0 | 1 . 0 4 |
-|   − 32 . 1699 | − 0 . 0358 − 131 . 646 − 3 . 1099   | 10 |
+| 0.0 | 0.0 0.0 | 1.0 4 |
+|   − 32.1699 | − 0.0358 − 131.646 − 3.1099   | 10 |
 | A := |  | , |
-|  0 . 0 | − 0 . 0002 − 1 . 5333 0 . 9281  | 10 3 |
-| 0 . 0 | 0 . 0003 − 4 . 6719 − 1 . 9076 |  |
+|  0.0 | − 0.0002 − 1.5333 0.9281  | 10 3 |
+| 0.0 | 0.0003 − 4.6719 − 1.9076 |  |
 |  |  | 10 2 |
-| 0 . 0 | 0 . 0 0 . 0 |  |
-|   0 . 0016 | 0 . 0525 0 . 1574   | 10 1 |
+| 0.0 | 0.0 0.0 |  |
+|   0.0016 | 0.0525 0.1574   | 10 1 |
 | Bu := | , |  |
-|  − 0 . 0 − 0 . 0031 | 0 . 0008  |  |
-| 0 . 0 − 0 . 4503 | − 0 . 0614 | 10 0 |
+|  − 0.0 − 0.0031 | 0.0008  |  |
+| 0.0 − 0.4503 | − 0.0614 | 10 0 |
 |   |  |  |
 | 0 |  | 10 -1 |
 |  1  |  |  |
@@ -18,56 +18,122 @@
 |  0  |  |  |
 | 0 |  | 10 -3 |
 | The control objective is to keep perturbations in the flight- |  | Actuator |
-| path angle θ − α and V t to be small due to the disturbance in |  | Fig. 3. Minimum actuator cutoff frequencies (rad/s). |
+| path angle θ − α and Vt to be small due to the disturbance in |  | Fig. 3. Minimum actuator cutoff frequencies (rad/s). |
 | Vt , in the H2 and H ∞ sense. Therefore, |  |  |
 |  | 1 0 − 1 0 0 |  |
 | Cz := W z | , Dd := | , 1 |
 |  | 0 1 0 0 0 | 10 |
 
-**C D**~**d**~ **where W**~**z**~ **:= diag 11.46 0.1 , scales z such that the desired closed-loop performance, defined by the H or H**
-
-¯
-
-**d norm of the transfer function from w**~**a**~
-
-¯
-
-**one.**
-
 $$
-2 ∞
+A:={}^{-32.1699}{}^{-0.0358}{}^{-131.646}\frac{-3.1099}{0.9281},
 $$
 
-**→ z, is bounded by Results from theorems 1 and 2, will quantify the maximum actuator degradation in thrust (T), elevator (δ**~**e**~**), and leading-edge flap (δ**~**lef**~**).**
-
-- B. **Simulation Results The numerical values for the minimum actuator cut-off frequencies and dc gains, and maximum actuator noises are shown in table I, and are plotted in Fig.3, Fig.4, and Fig.5. as**
-
-**p**
-
 $$
-ω∗
+B_{u}:=\frac{0.0016}{-0.0}
 $$
 
-**(rad/s) kx → x**~**F**~ **k**<sup>**∗**</sup> **1/ κ**<sup>**∗**</sup> **c i ∞ i**
+$$
+B_{d}:=\frac{1}{0}.
+$$
 
-**Actuator H**~2~ **H**~**∞**~ **H**~2~ **H**~**∞**~ **H**~2~ **H**~**∞**~ **T 0.0033 2.4381 2.4945 0.0207 0.7157 0.0402 δ**~**e**~
+$V_{t}$ $V_{t}$
 
-**12.9757 16079.2678 16.1579 0.1707 0.0246 0.0014 δ**~**lef**~ **2.0541 2033.7134 17.8508 0.4800 0.0468 0.0027**
+$$
+C_{z}:=W_{z}\frac{1}{0}\frac{0}{1}{}^{-1}\frac{0}{0},D_{d}:=\frac{0}{0},
+$$
 
-**TABLE I PARAMETERS THAT QUANTIFY MAXIMUM ACTUATOR DEGRADATION FOR A GIVEN CLOSED**
+where $W_{z}:=\mathrm{diag}11.460.1$ , scales **z** such that the desired closed-loop performance, defined by the $\mathcal{H}&#95;{2}$ or $\mathcal{H}&#95;{\infty}$
 
-- **-LOOP PERFORMANCE (γ = 0.5).**
+**¯ d**
 
-**Table 1 indicates that the control rate for thrust is sigificantly lower than that for the elevator and leading-edge flap, with the elevator requiring a higher actuation rate compared to the leading-edge flap. Furthermore, the actuation rate resulting from the H**~**2**~ **formulation is substantially lower than that from the H**~**∞**~ **formulation. This discrepancy arises because the exogenous inputs are presumed to be broad-band, and the H**~**∞**~ **formulation attenuates disturbances across this broad range. Employing a frequency-weighted model for the exogenous signal is anticipated to yield improved results and will be explored in our future work.**
+**10**<sup>**0**</sup>
 
-**10**<sup>**0**</sup> **-1 10**
+norm of the transfer function from → **z** , is bounded by
 
-**10**<sup>**-2**</sup> **Actuator**
+$w_{a}$¯
 
-**Fig. 4. Minimum actuator dcgain.**
+one. Results from theorems 1 and 2, will quantify the maximum actuator degradation in thrust (T), elevator ($\delta_{e}$), and leading-
 
-**0 10 10**<sup>**-1**</sup> **-2 10**
+**-1 10**
 
-**-3 10 Actuator Fig. 5. Maximum actuator noise scaling.**
+edge flap ($\delta_{lef}).$
 
-**The control magnitude, which is quantified by the H**~**∞**~ **norm of the actuator dynamics, is significantly higher for the H**~**2**~ **closed-loop performance than the H**~**∞**~ **closed-loop**
+- B. **Simulation Results**
+
+The numerical values for the minimum actuator cut-off
+
+**10**<sup>**-2**</sup>
+
+frequencies and dc gains, and maximum actuator noises are
+
+**Actuator**
+
+shown in table I, and are plotted in Fig.3, Fig.4, and Fig.5. as $\omega^{&#42;}$ (rad/s) Actuator $\mathcal{H}&#95;{2}^{c}$
+
+$$
+\mathcal{H}_{\infty}
+$$
+
+T 0.0033 2.4381
+
+$$
+\delta_{e}
+$$
+
+12.9757 16079.2678
+
+$$
+\delta_{lef}
+$$
+
+2.0541 2033.7134
+
+Fig. 4. Minimum actuator dcgain.
+
+$$
+kx\rightarrow x_{F_{i}}k_{\infty}^{*}
+$$
+
+$$
+1/^{p}\kappa_{i}^{*}
+$$
+
+**0 10**
+
+$$
+\mathcal{H}_{2}\mathcal{H}_{2}
+$$
+
+$$
+\mathcal{H}_{\infty}
+$$
+
+$$
+\mathcal{H}_{\infty}
+$$
+
+2.4945 0.0207 0.7157 0.0402
+
+16.1579 0.1707 0.0246 0.0014
+
+**10**<sup>**-1**</sup>
+
+17.8508 0.4800 0.0468 0.0027
+
+TABLE I
+
+PARAMETERS THAT QUANTIFY MAXIMUM ACTUATOR DEGRADATION FOR A GIVEN CLOSED
+
+- \-LOOP PERFORMANCE (γ = 0.5).
+
+**-2 10**
+
+Table 1 indicates that the control rate for thrust is sigificantly lower than that for the elevator and leading-edge flap, with the elevator requiring a higher actuation rate compared to
+
+**-3 10**
+
+the leading-edge flap. Furthermore, the actuation rate resulting
+
+**Actuator**
+
+from the $\mathcal{H}&#95;{2}$ formulation is substantially lower than that from the $\mathcal{H}&#95;{\infty}$ formulation. This discrepancy arises because the Fig. 5. Maximum actuator noise scaling. exogenous inputs are presumed to be broad-band, and the $\mathcal{H}&#95;{\infty}$ formulation attenuates disturbances across this broad range. Employing a frequency-weighted model for the exogenous The control magnitude, which is quantified by the $\mathcal{H}&#95;{\infty}$ signal is anticipated to yield improved results and will be norm of the actuator dynamics, is significantly higher for explored in our future work. the $\mathcal{H}&#95;{2}$ closed-loop performance than the $\mathcal{H}&#95;{\infty}$ closed-loop

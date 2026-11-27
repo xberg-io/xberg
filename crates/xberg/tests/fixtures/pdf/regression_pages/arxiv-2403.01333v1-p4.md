@@ -1,247 +1,268 @@
-**the matrix inequality in (6) can be written as where λ**~**a**~ **≥ 0, λ**~**ω**~ **≥ 0, and λ**~**x**~ **≥ 0 are user-defined c F**
-
- 
-
-**weights, and W**~**d**~ **is a given scaling matrix for d(t). The**
-
-**1**
-
-**Y B**~**d**~ **Y B**~**u**~ **C**~**z**~ <sup>**T**</sup> **controller gain can be recovered as K :=** diag **(ω )**<sup>**−**</sup>
-
-**V .**
-
-**P + P**<sup>**T**</sup>
-
-**c**
-
- 0 0  0  
-
-**2**
-
- 
-
-**Proof. The condition for bounding the H norm W**<sup>**−**</sup>
-
-0 0
+the matrix inequality in (6) can be written as 
 
 $$
-≤ 0,
+YB_{d}YB_{u}
 $$
 
-**2**
-
-
-
-**d**
-
-
-
 $$
-∗ −γ
+C_{z}^{T}
 $$
 
-¯
+$$
+P+P^{T}
+$$
 
-**d**
+**0 0 0 0**
 
-  0
+$$
+0\leq0,
+$$
 
-**diag (κ )**
+ ∗
 
-0
+$$-\gamma\frac{W_{d}^{-2}}{0}$$
 
-**a**
+
 
-**from → z is given by XM**~**11**~ **+ w**~**a**~
+$$
+\mathrm{diag}(\kappa_{a})
+$$
 
-¯
+**0**
 
-**∗ ∗ −γI 2**
+∗ ∗
 
-**W**~**d**~ **0 M**<sup>**T**</sup> **X + XM M**<sup>**T**</sup> $12 X ≤ 0$, and 11 2 12 which is convex in Y , V , ω~**c**~**, and κ**~**a**~**, where**
+$$-\gamma I$$
 
-**0 W**~**a**~
+which is convex in $Y,V,\omega_{c}$ , and $\kappa_{a}$ , where
+
+$$
+YB_{u}
+$$
+
+$$
+P:={}^{YA}
+$$
+
+**V**
+
+$$-\mathrm{diag}(\omega_{c}){}^{.}$$
+
+**where** $\lambda_{a}\geq0,\lambda_{\omega_{c}}\geq0$**, and** $\lambda_{x_{F}}\geq0$ are user-defined weights, and $W_{d}$ is a given scaling matrix for d(t). The controller gain can be recovered as $K:=\mathrm{diag}(\omega_{c})^{-1}V.$ Proof.
+
+The condition for bounding the $\mathcal{H}&#95;{2}$ norm
+
+**d¯**
+
+from
+
+$$
+\rightarrow
+$$
+
+**z**
+
+is given by
+
+$XM_{11}+$ $w_{a}$¯
+
+$$
+M_{11}^{T}X+XM_{i^{12}}\frac{W_{d}^{2}}{0}{}_{W_{a}^{2}}{}^{0}M_{12}^{T}X
+$$
+
+$$
+\leq
+$$
+
+0, and h
+
+$$
+\mathrm{tr}M_{21}X^{-1}M_{21}^{T}
+$$
+
+≤ γ [15], which for the problem considered are the following LMIs   The DC gain matrix of the actuator is minimized, by
+
+$$
+YB_{d}YB_{u}
+$$
 
 h i
 
-**1**
-
-**tr M X**<sup>**−**</sup> **M**<sup>**T**</sup> **≤ γ [15], which for the problem Y A Y B**~**u**~
-
-**21 21 P := . V −diag(ω ) considered are the following LMIs c**
-
- 
-
-**The DC gain matrix of the actuator is minimized, by Y B**~**d**~ **Y B**~**u**~
-
-h i
-
-**P + P**<sup>**T**</sup>
-
-**T**
-
- 0 0 
-
-**minimizing a upper bound of tr V V , i.e., minimize γ**~**xF**~
-
- 
-
 $$
-≤ 0,
+P+P^{T}
 $$
 
-**2**
+**0 0**
 
- 
-
-**T**
-
-**W**<sup>**−**</sup>
-
-0
-
-**d**
-
-**such that $V V ≤ Q$ and tr [Q] ≤ γ**~**x**~ **and $Q ≥ 0$. The F ∗ −**
-
-0
-
-**diag (κ**~**a**~**) constraint on V can be expressed as the following LMI using**
-
- 
-
-**Schur complement, Q**~**1**~ **C**~**z**~
-
-0  
-
-**T**
+minimizing a upper bound of $\mathrm{tr}V^{T}V$ , i.e., minimize $\gamma_{x_{F}}$
 
 $$
-∗ Y 0 ≥ 0, tr [Q1] ≤ γ.
+\leq0,
 $$
 
-$Q V ≥ 0$.
+2
 
-**∗ ∗ I**
-
-### V I
-
-h i
-
-**T**
-
-**The actuator noise is maximized by minimizing kκ k , the Similar to theorem 1, tr $V V ≤ γ$ is equivalent**
-
-**a 2 x**~**F**~
-
-**control rate is minimized by minimizing kω k , and the con- T c 2**
-
-**Q**~**2**~ **V to ≥ 0 and tr $&#91;Q &#93; ≤ γ$ . Maximum actrol magnitude is minimized by minimizing γ . Therefore,**
-
-**2 xF x**~**F**~
-
-**V I the cost function for the optimization is**
-
-**tuator degradation is achieved by minimizing λ**~**a**~**kκ k**~**a**~ **+** ~**2**~ **λ**~**ωc**~ **kω k**~**c**~ **+ λ**~**xF**~**γ**~**xF**~**, where λ**~**a**~**, λ**~**ωc**~**, and λ**~**xF**~ **are user2 min λ**~**a**~**kκ k**~**a**~ **+ λ**~**ω**~ **kω k**~**c**~ **+ λ**~**x**~ **γ , 2 c 2 F x**~**F**~
+
 
 $$
-κ ,ω ,γ ,V ,Y ≥0,Q≥0
+{}_{-}W_{d}^{-}
 $$
 
-**defined weights.**
+**0**
 
-**a c xF**
+such that $V^{T}V\leq Q$ and $\mathrm{tr}&#91;Q&#93;\leq\gamma_{x_{F}}$ and **Q** ≥ 0. The ∗
 
-**where λ**~**a**~**, λ**~**ω**~ **, and λ**~**x**~ **are user-defined weights. c F**
-
-**Remark 3. In both theorem 1 and 2, the minimum control rate is given by the elements ω**~**c**~**, the minimum control magnitude**
-
-**We next present the result for H**~**2**~ **optimal closed-loop is characterized by γ**~**x**~ **, and the maximum actuator noise is F √ performance. characaterized by the scaling** diag **1/ κ , where the square-**
-
-**Theorem 2. For the system in (3) with $D = 0$, the state- root and the inverse are defined to be element-wise.**
-
-**d**
-
-**d Therefore, the optimal ω**~**c**~**, γ**~**x**~ **, and κ quantities maximum F feedback gain that guarantees → $z ≤ γ$ for a w**~**a**~ **actuator degradation (as defined above) for which a state-**
-
-**2**
-
-**given $γ ≥ 0$, with maximum actuator noise, and minimum feedback controller is able to achieve the user specifiedcontrol magnitude and rate, is given by the following convex performance in terms of the closed-loop systems H**~**2**~ **or H**~**∞**~ **optimization problem, norms.**
-
-- IV. **EXAMPLES**
+**0**
 
 $$
-min λakκ ka + λω kω kc + λ γ , 2 c
+\mathrm{diag}(\kappa_{a})
+$$
+
+constraint on **V** can be expressed as the following LMI using Schur complement,
+
+$$
+QC0
+$$
+
+$$&#42;^{1}Y^{z}0\geq0,\mathrm{tr}&#91;Q_{1}&#93;\leq\gamma.$$
+
+$$
+{}^{Q}{}^{V^{T}}\geq0.
+$$
+
+∗ ∗
+
+**I V I**
+
+h i The actuator noise is maximized by minimizing $k\kappa_{a}k_{2}$, the Similar to theorem 1, $\mathrm{tr}V^{T}V$ $\leq\gamma_{x_{F}}$ is equivalent control rate is minimized by minimizing $k\omega_{c}k_{2}$, and the con-
+
+$Q_{2}V^{T}$
+
+to ≥ 0 and $\mathrm{tr}&#91;Q_{2}&#93;\leq\gamma_{xF}$ . Maximum actrol magnitude is minimized by minimizing $\gamma_{x_{F}}$ . Therefore, the cost function for the optimization is
+
+$$
+{}_{\kappa_{a},\omega_{c},\gamma_{x}}\min{}_{\geq0,Q\geq0}\lambda_{a}k\kappa_{a}k_{2}+\lambda_{\omega_{c}}k\omega_{c}k_{2}+\lambda_{x_{F}}\gamma_{x_{F}},
 $$
 
 $$
-κ ,ω ,γ ,V ,Y ,Q1,Q a c xF 2
+{}_{F},V,Y
+$$
+
+where $\lambda_{a},\lambda_{\omega_{c}}$, and $\lambda_{x_{F}}$ are user-defined weights.
+
+**V I**
+
+tuator degradation is achieved by minimizing${}&#95;{\lambda_{x}}\lambda_{a}k\kappa_{a}k_{2}+$ $\lambda_{\omega_{c}}k\omega_{c}k_{2}+\lambda_{x_{F}}\gamma_{x_{F}}$ , where $\lambda_{a},\lambda_{\omega_{c}}$, and are user- F defined weights.
+
+Remark 3. In both theorem 1 and 2, the minimum control rate is given by the elements $\omega_{c}$, the minimum control magnitude
+
+We next present the result for $\mathcal{H}&#95;{2}$ optimal closed-loop
+
+**is characterized by** $\gamma_{x_{F}}$ **, and the maximum actuator noise is**
+
+√ performance. **characaterized by the scaling** diag 1/ **κ , where the square-**
+
+Theorem 2. For the system in (3) with $D_{d}=0$, the state- root and the inverse are defined to be element-wise.
+
+Therefore, the optimal $\omega_{c},\gamma_{x_{F}}$ , and κ quantities maximum feedback gain that guarantees
+
+$\frac{d}{w_{a}}\rightarrow z{}&#95;{2}\leq\gamma$ **for a**
+
+**actuator degradation (as defined above) for which a state-**
+
+**given** $γ ≥ 0$ **, with maximum actuator noise, and minimum**
+
+**feedback controller is able to achieve the user specifiedcontrol magnitude and rate, is given by the following convex optimization problem,**
+
+$$
+{}_{\kappa_{a},\omega_{c},\gamma_{x}}\min_{Y,Q_{1},Q_{2}}\lambda_{a}k\kappa_{a}k_{2}+\lambda_{\omega_{c}}k\omega_{c}k_{p}+\lambda_{x_{F}}\gamma_{x_{F}},
+$$
+
+$$
+{}_{F},V,
 $$
 
 **subject to**
 
  
 
-**Y B**~**d**~ **Y B**~**u**~ **P + P**<sup>**T**</sup>
-
- 0 0   
-
 $$
-≤ 0
+YB_{d}YB_{u}
 $$
 
-**2**
+$$
+P+P^{T}
+$$
 
- 
+**0 0**
 
-**W**<sup>**−**</sup>
+$$
+\leq0
+$$
 
-0
+2
 
-**d ∗ −**
+
 
-0 diag **(κ**~**a**~**)**  
+$$
+{}_{-}W_{d}^{-}
+$$
 
-**Q**~**1**~ **C**~**z**~
+**0**
 
-0
+∗
 
-**T**
+**0**
 
-**Q**~**2**~ **V**
+$$
+\mathrm{diag}(\kappa_{a})
+$$
 
- 
+$$
+QC0
+$$
 
-**∗ $Y 0 ≥ 0, ≥ 0$,**
+$$&#42;^{1}Y^{z}0\geq0,\frac{Q_{2}}{V}{}^{V^{T}}\geq0,$$
 
-### V I
+**I**
 
-### ∗ ∗ I
+∗ ∗
 
-**p x**~**F**~ **x**~**F**~
+**I**
 
-- A. **F-16 Flight Control Application We apply the results to the design of a full-state feedback controller for a model of the longitudinal motion of the F-16 aircraft. The model is based on the aerodynamics from the NASA Technical Report 1538 [16]. The nonlinear model is trimmed at 10000 ft at 900 ft/s for steady-level flight. The longitudinal states are θ (pitch angle), V**~**t**~ **(total velocity), α**
+$$
+\mathrm{tr}[Q_{1}]\leq\gamma,\mathrm{tr}[Q_{2}]\leq\gamma_{x_{F}},\kappa\in\mathbb{R}_{+}^{nu},\omega_{c}\in\mathbb{R}_{+}^{nu},\gamma_{x_{F}}\in\mathbb{R}_{+},
+$$
+
+$$
+V\in\mathbb{R}^{nu\times nx},Y\in\mathbb{S}_{+}^{nx},Q_{1}\in\mathbb{S}_{+}^{nz},Q_{2}\in\mathbb{S}_{+}^{nx},
+$$
+
+**with**
+
+$$
+YB_{u}
+$$
+
+$$
+P:={}^{YA}
+$$
+
+**V**
+
+$$-\mathrm{diag}(\omega_{c}){}^{,}$$
+
+**performance in terms of the closed-loop systems** $\mathcal{H}&#95;{2}$ **or** $\mathcal{H}&#95;{\infty}$
+
+**norms.**
+
+IV. EXAMPLES
+
+- A. **F-16 Flight Control Application**
+
+We apply the results to the design of a full-state feedback controller for a model of the longitudinal motion of the F-16 aircraft. The model is based on the aerodynamics from the NASA Technical Report 1538 [16]. The nonlinear model is trimmed at 10000 ft at 900 ft/s for steady-level flight. The longitudinal states are θ (pitch angle), $V_{t}$ (total velocity), α
 
 - 
-**¯ (angle-of-attack), q (pitch rate); with trim value $θ = 5.95$ ,**
+¯ (angle-of-attack), q (pitch rate); with trim value $θ = 5.95$ , ¯
 
-- 
-**¯V**~**t**~ **= 900 ft/s, α¯ = 5.95 , q¯ = 7.85 deg/s. The control variables are T (thrust), δ**~**e**~ **(elevator angle), and δ**~**lef**~ **(leading** tr $&#91;Q &#93; ≤ γ$, tr $&#91;Q &#93; ≤ γ$ , κ ∈ R<sup>**nu**</sup>**, ω ∈** R<sup>**nu**</sup>**, \$γ ∈** R~**+**~\$**,**
-
-**1 2 x**~**F**~ **+ c + x**~**F**~
-
-- 
-**¯ ¯ flap); with trim values $T = 10461.84$ lb, δ**~**e**~ **= −3.82 , and**
-
-$$
-×nx
-$$
-
-$$
-V ∈ Rnu , Y ∈ Snx, Q ∈ Snz, Q ∈ S+ nx,
-$$
-
-- 
-$$+ 1 + 2$$
-
-**δ**~**lef**~ **= 12.42 . We assume the aircraft experiences disturbance in the angle-of-attack α, with W**~**d**~ **= 0.01. with The open-loop system in (2) is given by the following Y A Y B**~**u**~ **P := , system matrices V −** diag **(ω**~**c**~**)**
+V${}&#95;{t}=900ft/s,\alpha=5.95^{\circ},q$¯ ¯ = 7.85 deg/s. The control variables are T (thrust), $\delta_{e}$ (elevator angle), and $\delta_{lef}$ (leading ¯ ¯ flap); with trim values T $=10461.84lb,\delta_{e}=-3.82^{\circ}$, and $\delta_{lef}=12.42^{\circ}$. We assume the aircraft experiences disturbance in the angle-of-attack α, with $W_{d}=0.01.$ The open-loop system in (2) is given by the following system matrices

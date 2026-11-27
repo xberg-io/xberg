@@ -18,19 +18,13 @@ Algorithm I: DIFNet's pipeline
 
 *N*
 
-$$
-s t 2πβ ft + sin π ft
-$$
+*s t* 2πβ *ft* + sin π *ft*
 
-$$
-( )=
-$$
+( )<sup>=</sup>
 
 exp(<sup>*j*</sup>
 
-###### ( <sup>2</sup> )
-
-)
+( <sup>2</sup> ))
 
 ## (<sup>*C*</sup> )
 
@@ -40,15 +34,15 @@ wbi
 
 *c n n*
 
-- A. *RFI signal model* Common RFI can be categorized into narrowband interference, chirp broadband interference and sinusoidal = broadband interference [6]. The narrowband interference can be expressed as:
+- A. *RFI signal model*
+
+Common RFI can be categorized into narrowband interference, chirp broadband interference and sinusoidal = broadband interference [6]. The narrowband interference can be expressed as:
 
 *N*
 
 sm $n =1$
 
-$$
- (4) J sin ππ f t + 2 mf t
-$$
+ (4) *J* sin ππ *f t* + 2 *mf t*
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
@@ -58,7 +52,7 @@ $$
 
 #### ∑∑~*nm*~ ~=1 =−∞~
 
-$$++ J cos ππ f t 2 mf t$$
+\++ *J* cos ππ *f t* 2 *mf t*
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
@@ -66,25 +60,19 @@ $$++ J cos ππ f t 2 mf t$$
 
 
 
-$$
-mk +2 k ∞
-$$
+*mk* +2 *k* ∞
 
 ( <sup>−</sup>1)
 
 β~*n*~ Where, *J*
 
-$$
-( β )=
-$$
+( <sup>β</sup> )<sup>=</sup>
 
 *s A* exp + *jf* 2πτ (1) . According to
 
 ##### (<sup>τ</sup>)<sup>=</sup> (<sup>*jf*</sup> 2πτ )
 
-$$
-2 mn ∑
-$$
+2 *mn*∑
 
 
 
@@ -92,7 +80,7 @@ nbi
 
 ## ∑ n
 
-$c n k =0 n =1$
+*c n k* =0 *n* =1
 
 *kmk* \!( +
 
@@ -104,9 +92,7 @@ Where, *f*~*c*~ is the carrier frequency, *A*~*n*~ is the amplitude, *f*~*n*~ is
 
 Formulas (1), (2), (4) can be uniformly expressed as: *s B* exp *f* + *jk* πτ (2)
 
-$$
-(τ )=
-$$
+(<sup>τ</sup>)<sup>=</sup>
 
 # (<sup>*j*</sup> 2πτ )
 
@@ -114,11 +100,9 @@ wbi~cm~
 
 ## ∑ n
 
-*cn $n* =1 *N* 2$
+*cn n* =1 *N* 2
 
-$$
-s D exp ππ ft + j k t (5)
-$$
+*s D* exp ππ *ft* + *j k t* (5)
 
 ( <sup>*t*</sup>)<sup>=</sup>
 

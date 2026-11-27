@@ -1,10 +1,4 @@
-And considering (3.22), we have the following estimate s
-
-(ℓ+1)
-
-$$
-¯ u¯i,h − E u¯i,h ≤ λi,h 1 + i,h
-$$
+And considering (3.22), we have the following estimate s ¯$u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$¯ ¯ ≤ λ~i,h~ 1 +
 
 a,h
 
@@ -12,51 +6,27 @@ a,h
 
 (ℓ+1) 2
 
-λ~1~ δ λδ~1 λ~ The following ∥·∥ -error estimate holds ~b~ \! 1 u¯~i,h~
+λ~1~ δ λ~1~δ ~λ~ The following $\parallel\cdot\parallel_{b}$-error estimate holds \!
 
-(ℓ+1)
-
-− E~i,h~ u¯~i,h~ ≤
-
-b
+$u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$¯ ¯ ${}&#95;{b}\leq1+\frac{1}{\lambda_{1}\delta_{\lambda}^{(\ell+1)}}\eta_{a}(W_{H})u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$
 
 From (3.23) and (3.24), the proof is completed.
 
-the following error estimates u¯~i,h~ − E
-
-(ℓ+1)
-
-u¯~i,h~ ≤
-
-i,h a,h (ℓ+1)
-
-u¯~i,h~ − E~i,h~ u¯~i,h~ ≤
-
-b
+the following error estimates $u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$¯ ¯
 
 $$
-1 +
+{}_{a,h}\leq
 $$
 
-(ℓ+1) a
+$u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$¯ ¯
 
 $$
-λδ1 λ
+{}_{b}\leq
 $$
 
-**Corollary 3.1.** Under the conditions of Theorem 3.2, the eigenfunction approximation u
+**Corollary 3.1.** Under the conditions of Theorem 3.2, the eigenfunction approximation $u_{i,h}^{(\ell+1)}$
 
-ℓ
-
-$$
-¯ γ(λi,h) u¯i,h − E ! 1 1 +
-$$
-
-a (ℓ+1)
-
-$$
-λδ1 λ
-$$
+¯$\gamma(\lambda_{i,h})^{\ell}$ $1+\frac{1}{\lambda_{1}\delta_{\lambda}^{(\ell+1)}}\eta_{a}(W_{H})u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$ $u_{i,h}-E_{i,h}^{(1)}u_{i,h}$¯ \!
 
 \!
 
@@ -66,92 +36,88 @@ $$
 
 (ℓ) a λ
 
-η (W~H~) u¯~i,h~ − E
+¯
 
 (ℓ) i,h
 
-− E~i,h~u¯~i,h~ .(3.23)
+− E~i,h~u~i,h~ ¯
 
-a,h
+$$
+{}_{a,h}.
+$$
 
-(ℓ+1)
+(3.23)
 
-u¯~i,h~ . (3.24)
+¯
 
-i,h a,h
+$$
+{}_{a,h}.
+$$
 
-- (1) u¯~i,h~ ,
+(3.24)
 
-i,h a,h
+¯
 
-η (W~H~) u¯~i,h~ − E
+$$
+{}_{a,h},
+$$
 
-(ℓ+1)
+¯
 
 has
 
-i,h
+(3.25) ¯
 
-(3.25)
+$$
+{}_{a,h},
+$$
 
-(ℓ+1)
-
-u¯~i,h~ , (3.26)
-
-i,h a,h
+(3.26)
 
 where s \! η<sup>2</sup>(W~H~) 1 ¯ ¯
 
 a 2
 
 $$
-γ(λi,h) = λi,h 1 + 1 + η (WH). (3.27) 2 a
+γ(λ_{i,h}) = λ_{i,h} 1 + 1 + η (W_{H}). (3.27) 2 a
 $$
 
 (ℓ+1) (ℓ)
 
-$$
-λ1 δ λδ λ 1 λ
-$$
-
-(ℓ)
-
-The error estimate for the eigenvalue approximation λ can be deduced from Theorem 3.2 and ~i,h~
+λ~1~ δ λ δ ~λ 1 λ~ The error estimate for the eigenvalue approximation $\lambda_{i,h}^{(\ell)}$ can be deduced from Theorem 3.2 and
 
 Remark 3.2.
 
 # 4 Numerical experiments
 
-In this section, numerical experiments are presented to validate our theoretical results. Here, we are concerned with the Laplace eigenvalue problem (2.1), where the computing domain is set to be the unit square $Ω = (0, 1) × (0, 1)$. W~H~ and V~h~ are chosen as the conforming linear element and the CR element spaces defined on the coarse mesh T~H~ and the fine mesh T~h~, respectively. The fine mesh T~h~ is obtained from the coarse mesh T~H~ by the regular refinement of uniform triangular mesh.
+In this section, numerical experiments are presented to validate our theoretical results. Here, we are concerned with the Laplace eigenvalue problem (2.1), where the computing domain is set to be the unit square Ω = (0$,1)\times(0,1).W_{H}$ and $V_{h}$ are chosen as the conforming linear element and the CR element spaces defined on the coarse mesh $\mathcal{T}&#95;{H}$ and the fine mesh $\mathcal{T}&#95;{h}$, respectively. The fine mesh $\mathcal{T}&#95;{h}$ is obtained from the coarse mesh $\mathcal{T}&#95;{H}$ by the regular refinement of uniform triangular mesh.
 
-Since the coarse space W~H~ is the conforming linear finite element space defined on the coarse mesh T~H~, together with the theories of the error estimates of CR element and conforming linear element [8, 11], it is known that the following estimate holds when the mesh size $h < H$, η~a~(W~H~) ≤ sup ∥T f − T~h~f∥~a,h~ + inf ∥T f − v~H~∥~a~
+Since the coarse space $W_{H}$ is the conforming linear finite element space defined on the coarse mesh $\mathcal{T}&#95;{H}$, together with the theories of the error estimates of CR element and conforming linear element [8, 11], it is known that the following estimate holds when the mesh size h \< H, η~a~(W~H~) ≤ sup ∥T f − T~h~f∥~a,h~ + inf ∥T f − v~H~∥~a~
+
+v
 
 $$
-v ∈W f∈L2(Ω),∥f∥b=1 H H
+\in W
 $$
 
-≤ CH, where the constant C depends on shape of the meshes T Based on Theorems 3.1 and 3.2, the convergence results can be concluded with the following inequalities
+f∈L<sup>2</sup>(Ω),∥f∥~b~=1 H H
 
-(ℓ+1)
+$$
+\leq CH,
+$$
 
-u¯~i,h~ − F~k,h~ u¯~i,h~
-
-a,h 2ℓ
-
-≤ C CH u¯~i,h~
+where the constant C depends on shape of the meshes $\mathcal{T}&#95;{H}$ Based on Theorems 3.1 and 3.2, the convergence results can be concluded with the following inequalities $u_{i,h}-F_{k,h}^{(\ell+1)}u_{i,h}$¯ ¯ ${}&#95;{a,h}\leq CCH^{2\ell}$ $u_{i,h}-F_{k,h}^{(1)}u_{i,h}$¯
 
 16
 
-and T~h~.
+and $\mathcal{T}&#95;{h}.$ ¯
 
-H
+$$
+{}_{a,h},
+$$
 
-(1)
+$$
+i=1,\cdot\cdot\cdot,k,
+$$
 
-− F~k,h~u¯~i,h~
-
-a,h
-
-, $i = 1$ ,
-
-- , k, (4.1)
+(4.1)

@@ -2,10 +2,10 @@ SIMULTANEOUS EQUATIONS OF THE FIRST DEGREE. 173
 
 Divide (1) by 4 and (2) by 5, and we have
 
-|  | 25x + xy = 62 , 000 |  |
+|  | 25x + xy = 62, 000 |  |
 | --- | --- | --- |
-|  | 20x + xy = 52 , 000 |  |
-| Subtract, | 5x | = 10 , 000 . |
+|  | 20x + xy = 52, 000 |  |
+| Subtract, | 5x | = 10, 000 . |
 | Therefore | x | = 2000 . |
 
 Substitute the value of x in $(1), y = 6$. Therefore the sum is ?2000, and the rate 6

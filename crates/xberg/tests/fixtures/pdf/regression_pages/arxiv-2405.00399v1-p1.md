@@ -1,6 +1,4 @@
-# Enhanced Error Estimates for Augmented Subspace Method
-
-with Crouzeix-Raviart Element
+# Enhanced Error Estimates for Augmented Subspace Method with Crouzeix-Raviart Element
 
 ∗ † §
 
@@ -16,12 +14,8 @@ In this paper, we present some enhanced error estimates for augmented subspace m
 
 ## 1 Introduction
 
-Solving large-scale eigenvalue problems is a basic and challenging task in the field of scientific and engineering computing. Compared with linear boundary value problems, it is always more difficult to solve eigenvalue problems because it requires more computational work and memory. In order to solve these large-scale sparse eigenvalue problems, Krylov subspace type methods (Implicitly Restarted Lanczos/Arnoldi Method (IRLM/IRAM) [25]), Preconditioned INVerse ITeration (PINVIT) method [7, 15, 18], Locally Optimal Block Preconditioned Conjugate Gradient
+Solving large-scale eigenvalue problems is a basic and challenging task in the field of scientific and engineering computing. Compared with linear boundary value problems, it is always more difficult to solve eigenvalue problems because it requires more computational work and memory. In order to solve these large-scale sparse eigenvalue problems, Krylov subspace type methods (Implicitly Restarted Lanczos/Arnoldi Method (IRLM/IRAM) [25]), Preconditioned INVerse IT-eration (PINVIT) method [7, 15, 18], Locally Optimal Block Preconditioned Conjugate Gradient (LOBPCG) method [19, 20], Jacobi-Davidson-type techniques [3] and Generalized Conjugate Gradient Eigensolver (GCGE) [21, 32] have been developed. All these popular methods include the orthogonalization steps during computing Rayleigh-Ritz problems which are always the bottlenecks for designing efficient parallel schemes for determining relatively many eigenpairs.
 
-- (LOBPCG) method [19, 20], Jacobi-Davidson-type techniques [3] and Generalized Conjugate Gradient Eigensolver (GCGE) [21, 32] have been developed. All these popular methods include the orthogonalization steps during computing Rayleigh-Ritz problems which are always the bottlenecks for designing efficient parallel schemes for determining relatively many eigenpairs.
-
-∗LSEC, ICMSEC, Academy of Mathematics and Systems Science, Chinese Academy of Sciences, Beijing 100190, China, and School of Mathematical Sciences, University of Chinese Academy of Sciences, Beijing 100049, China. ( guanzhijin@lsec.cc.ac.cn ) †
-
-LSEC, ICMSEC, Academy of Mathematics and Systems Science, Chinese Academy of Sciences, Beijing 100190, China, and School of Mathematical Sciences, University of Chinese Academy of Sciences, Beijing 100049, China. ( wangyifan@lsec.cc.ac.cn ) ‡LSEC, ICMSEC, Academy of Mathematics and Systems Science, Chinese Academy of Sciences, Beijing 100190, China, and School of Mathematical Sciences, University of Chinese Academy of Sciences, Beijing 100049, China. ( hhxie@lsec.cc.ac.cn ) §Department of Mathematics, Beijing University of Technology, Beijing 100124, China. (Corresponding author: zhoucg@bjut.edu.cn )
+∗LSEC, ICMSEC, Academy of Mathematics and Systems Science, Chinese Academy of Sciences, Beijing 100190, China, and School of Mathematical Sciences, University of Chinese Academy of Sciences, Beijing 100049, China. (guanzhijin@lsec.cc.ac.cn) †LSEC, ICMSEC, Academy of Mathematics and Systems Science, Chinese Academy of Sciences, Beijing 100190, China, and School of Mathematical Sciences, University of Chinese Academy of Sciences, Beijing 100049, China. (wangyifan@lsec.cc.ac.cn) ‡LSEC, ICMSEC, Academy of Mathematics and Systems Science, Chinese Academy of Sciences, Beijing 100190, China, and School of Mathematical Sciences, University of Chinese Academy of Sciences, Beijing 100049, China. (hhxie@lsec.cc.ac.cn) §Department of Mathematics, Beijing University of Technology, Beijing 100124, China. (Corresponding author: zhoucg@bjut.edu.cn)
 
 1

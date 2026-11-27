@@ -1,29 +1,24 @@
 1/2. The statistic is referred to a chi-squared distribution with the degrees of freedom equal to the number of substrings.
 
-The parameters of this test are *M* and *N* , so that *n* = *MN* , i.e., the original string is partitioned into *N* substrings, each of length *M* . For each of these substrings, the probability of ones is estimated by the observed relative frequency of 1's, π~*i*~, *i* = 1,…, *N* . The sum
+The parameters of this test are *M* and *N*, so that *n* = *MN*, i.e., the original string is partitioned into *N* substrings, each of length *M*. For each of these substrings, the probability of ones is estimated by the observed relative frequency of 1's, π~*i*~, *i* = 1,…,*N*. The sum
 
 *value* is
 
-2 *N*
-
- 1
-
-Χ<sup>2</sup>( *obs* ) = 4 *M*∑<sup>π</sup> − ~~
-
-*i*
-
-  2
-
-$i =1$
+|  | N  | 1  2 |
+| --- | --- | --- |
+| Χ (obs) = 4 M ∑ |  |  |
+| 2 |  π − |  |
+|  |  i | 2  |
+|  | i = 1 |  |
 
 under the randomness hypothesis has the Χ<sup>2</sup>-distribution with N degrees of freedom. The reported *P-*
 
 | ∫ ∞ | 2 − 1 | ∫ ∞ | − 1 |  |  |
 | --- | --- | --- | --- | --- | --- |
-| e − u / uN / 2 | du | e − uu N / 2 | du9 | N Χ ( obs ) |  |
+| e − u / uN / 2 | du | e − uu N / 2 | du9 | N Χ (obs) |  |
 | Χ 2 ( obs ) |  | 2 ( obs )/ 2 |  | 2 |  |
 |  | = | Χ | = igamc ( | , | ) . |
-| Γ ( N /2)2 N / 2 |  | Γ ( N /2) |  | 2 2 |  |
+| Γ( N /2)2 N / 2 |  | Γ( N /2) |  | 2 2 |  |
 
 **References for Test**
 
@@ -37,35 +32,31 @@ This variant of a classic nonparametric test looks at "runs" defined as substrin
 
 The specific test used here is based on the distribution of the total number of runs, *V*~*n*~. For the fixed proportion $π = ε / n$ (which by the Frequency test of Section 3.1 must have been established to be
 
-$$
 ∑
-$$
 
 *j j*
 
-1 2 close to $0.5: π − ≤ ). 2 n lim P$ ( *V*~*n*~ − 2 *nπ* (1− π)
+close to 0.5: π − 1 2 ≤ 2 *n* ). lim *P* ( *V*~*n*~ − 2 *nπ* (1− π)
 
 $$
 n →∞
 $$
 
-2 *nπ* (1− π) To evaluate *V*~*n*~, define for k = 1,…,n-1, $r ( k ) = 0$ if ε~*k*~ = ε and $r ( k ) = 1$ if $ε ≠ ε$ . Then
+2 *nπ* (1− π) To evaluate *V*~*n*~, define for k = 1,…,n-1, $r( k ) = 0$ if ε~*k*~ = ε and $r( k ) = 1$ if $ε ≠ ε$ . Then
 
 *n* −1
 
-*V*~*n*~ = *r* ( *k* ) + 1. The *P-value* reported is
+*V*~*n*~ = *r*( *k* ) + 1. The *P-value* reported is
 
 # ∑~*k*~ ~=~1
 
-*V* ( *obs* ) − 2 *nπ* (1− π)
+*V* (*obs*) − 2 *nπ* (1− π)
 
 *n*
 
 *erfc* ( 2 2 *nπ* (1− π)
 
-$$
-≤ z ) = Φ( z ).
-$$
+≤ $z) = Φ( z$ ).
 
 *k* +1 *k*
 
@@ -73,6 +64,4 @@ $$
 
 (2)
 
-$$
-k +1
-$$
+*k* +1

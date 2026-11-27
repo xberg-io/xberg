@@ -16,9 +16,9 @@ TABLES, AND
 
 **2**
 
-$$&#95;=&#95;-- (&#95;-t- 1) 2 M,' =(7M, 2- 1) (M,2+5)$$
+_=_-- (_-t- 1) 2 *M,'* =(7M, 2- 1) (M,2+5)
 
-#### (95)
+(95)
 
 36M, _
 
@@ -46,7 +46,7 @@ It follows immediately from the energy relation (86) that total enthalpy, total 
 
 *M12--(7-* l)
 
-# _-_ [(5"_1) 7_
+_-_ [(5"_1) 7_
 
 *M_2+21 -l'-'*
 
@@ -60,7 +60,7 @@ __ 5 _"
 
 7
 
-#### (98)
+(98)
 
 relations" (33) for adiabatic flow) also the critical speed of
 
@@ -82,7 +82,7 @@ sound and limiting speed:
 
 **7**
 
-$T,,= T, 2.1$
+*T,,= T,* 2.1
 
 ### [- (5"+ 1) M, * -- [_ _+\! .T -1
 
@@ -102,7 +102,7 @@ $6&#42;1=6&#42;2$
 
 ## V,.l=V,.2 j = \\ U
 
-## ,-_4_
+**,-_4_**
 
 */*
 
@@ -114,9 +114,7 @@ $6&#42;1=6&#42;2$
 
 Combining equations relation
 
-$$
-p,2 F(5"+I)/,27_F 5"+1 i]'-' p-7, =L-
-$$
+p,2 F(5"+I)/,27_F 5"+1 i]'-' $p-7, =L-$
 
 $uau2--&#95;a,2=P2--P_$ [adiab, per/] (89)
 
@@ -169,7 +167,7 @@ Many relations for normal shock waves are conveniently
 
 For weak expressed in terms of either upstream Mach number *M_* or the following ttm static-pressure ratio across the shock _---p2/px. The following relations apply to adiabatic flow of a completely _= perfect fluid. The last form of each equation holds for Ph
 
-## _=7/5.
+_=7/5.
 
 = **1 Parameter**
 
@@ -190,7 +188,7 @@ For weak expressed in terms of either upstream Mach number *M_* or the following
 
 (_-t-1) *M_* **2** _ 6M_ **2** (94)
 
-## =2_
+=2_
 
 _----_a *a..2_--'_--(5"* -I) *M,2+2--M'_%5*
 

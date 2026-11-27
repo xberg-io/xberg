@@ -28,13 +28,13 @@
 **Table 2.68Couples**
 
 - a. Fill in the relative frequency for each group.
-- b. Construct a histogram for the singles group. Scale the *x* -axis by $50 widths. Use relative frequency on the *y* -axis.
-- c. Construct a histogram for the couples group. Scale the *x* -axis by $50 widths. Use relative frequency on the *y* -axis.
+- b. Construct a histogram for the singles group. Scale the *x*-axis by $50 widths. Use relative frequency on the *y*-axis.
+- c. Construct a histogram for the couples group. Scale the *x*-axis by $50 widths. Use relative frequency on the *y*-axis.
 - d. Compare the two graphs:
 - i. List two similarities between the graphs.
 - ii. List two differences between the graphs.
 - iii. Overall, are the graphs more similar or different?
-- e. Construct a new graph for the couples by hand. Since each couple is paying for two individuals, instead of scaling the *x* -axis by $50, scale it by $100. Use relative frequency on the *y* -axis.
+- e. Construct a new graph for the couples by hand. Since each couple is paying for two individuals, instead of scaling the *x*-axis by $50, scale it by $100. Use relative frequency on the *y*-axis.
 - f. Compare the graph for the singles with the new graph for the couples:
 - i. List two similarities between the graphs.
 - ii. Overall, are the graphs more similar or different?

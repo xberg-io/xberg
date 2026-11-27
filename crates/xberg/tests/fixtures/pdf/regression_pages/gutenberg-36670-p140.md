@@ -2,6 +2,28 @@ FIRST STEPS IN ALGEBRA.
 
 132
 
+$$
+{}_{9.}x^{2}y_{2}^{2}+3xy_{\times}2c+1_{.}
+$$
+
+$$
+{}_{a^{2}}4c-1xy+3
+$$
+
+$$-100a-3$$
+
+$$
+{}^{10.}a^{2}-9{}^{\times}a-10^{.}
+$$
+
+$$
+{}_{11.}9x_{2}^{2}-4y^{2}{}_{\times}x+2_{.}
+$$
+
+$$
+x-43x-2y
+$$
+
 | 2a | 3b | 5c |  | x2 y2 + 3xy | 2c + 1 |  |
 | --- | --- | --- | --- | --- | --- | --- |
 | 5. | × | × . |  | 9. | × | . |
@@ -16,19 +38,21 @@ FIRST STEPS IN ALGEBRA.
 | 8. |  | × | . | 12. | ÷ | . |
 | x2 − 4a2 |  | x − a |  | 16a 2 − 9b2 | 4a − 3b |  |
 
+$$
+{}^{12.}16a^{2}-9b^{2}{}^{\div}4a-3b^{.}
+$$
+
 x<sup>2</sup> − 49 x + 7
 
-13. ÷ . (a + b)<sup>2</sup> − c<sup>2</sup> (a + b) − c
+**13.**
 
-$$
-x2 + 2x + 1 x + 1
-$$
+÷ . (a + b)<sup>2</sup> − c<sup>2</sup> (a + b) − c
+
+x<sup>2</sup> + 2x + 1 x + 1
 
 14. ÷ . x<sup>2</sup> − 25 x<sup>2</sup> + 5x
 
-$$
-a2 + 3a + 2 a2 + 7a + 12
-$$
+a<sup>2</sup> + 3a + 2 a<sup>2</sup> + 7a + 12
 
 15. × . a<sup>2</sup> + 5a + 6 a<sup>2</sup> + 9a + 20
 
@@ -36,16 +60,18 @@ y<sup>2</sup> − y − 30 y<sup>2</sup> − y − 2 y<sup>2</sup> + 6y
 
 16. × × . y<sup>2</sup> − 36 y<sup>2</sup> + 3y − 10 y<sup>2</sup> + y
 
-$$
-x2 − 2x + 1 x2 + 2xy + y2 x2 − 1
-$$
+x<sup>2</sup> − 2x + 1 x<sup>2</sup> + 2xy + y<sup>2</sup> x<sup>2</sup> − 1
 
 17. × ÷ . x<sup>2</sup> − y<sup>2</sup> x − 1 x<sup>2</sup> − xy
 
 a<sup>2</sup> − b<sup>2</sup> ab − 2b<sup>2</sup> (a − b)<sup>2</sup>
 
-18. × ÷ . a<sup>2</sup> − 3ab + 2b<sup>2</sup> a<sup>2</sup> + ab a(a − b)
+**18.**
+
+× ÷ . a<sup>2</sup> − 3ab + 2b<sup>2</sup> a<sup>2</sup> + ab a(a − b)
 
 (a + b)<sup>2</sup> − c<sup>2</sup> a<sup>2</sup>b<sup>2</sup>c<sup>2</sup> b<sup>2</sup>c<sup>2</sup>
 
-19. × ÷ . a<sup>2</sup> + ab − ac a<sup>2</sup> + ab + ac abc
+**19.**
+
+× ÷ . a<sup>2</sup> + ab − ac a<sup>2</sup> + ab + ac abc

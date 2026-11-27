@@ -7,7 +7,7 @@ Chapter 4 | Discrete Random Variables 239
 
 **81**
 
-- a. *X* \~ *G* (0.25)
+- a. *X* \~ *G*(0.25)
 
 1 1
 
@@ -15,33 +15,33 @@ Chapter 4 | Discrete Random Variables 239
 
 0.25
 
-1 − *p* 1 − 0.25
+- ii. Standard Deviation = σ = 1 −
 
-- ii. Standard Deviation = σ = = ≈ 3.4641
+$p = 1 − 0.25$
 
-*p*<sup>2</sup> 0.25<sup>2</sup>
+≈ 3.4641 *p*<sup>2</sup> 0.25<sup>2</sup>
 
-- c. *P* ( *x* = 10) = 0.0188
-- d. *P* ( *x* = 20) = 0.0011
-- e. *P* ( *x* ≤ 5) = 0.7627
+- c. *P*(*x* = 10) = 0.0188
+- d. *P*(*x* = 20) = 0.0011
+- e. *P*(*x* ≤ 5) = 0.7627
 
 **82**
 
-- a. *X* \~ *P* (5.5); *μ* = 5.5; *σ* = 5.5 ≈ 2.3452
-- b. *P* ( *x* ≤ 6) ≈ 0.6860
+- a. *X* \~ *P*(5.5); *μ* = 5.5; *σ* = 5.5 ≈ 2.3452
+- b. *P*(*x* ≤ 6) ≈ 0.6860
 - c. There is a 15.7% probability that the law staff will receive more calls than they can handle.
-- d. *P* ( *x* \> 8) = 1 – *P* ( *x* ≤ 8) ≈ 1 – 0.8944 = 0.1056
+- d. *P*(*x* \> 8) = 1 – *P*(*x* ≤ 8) ≈ 1 – 0.8944 = 0.1056
 
 **84** Let *X* = the number of defective bulbs in a string. Using the Poisson distribution:
 
 - *μ* = *np* = 100(0.03) = 3
-- *X* \~ *P* (3)
-- *P* ( *x* ≤ 4) ≈ 0.8153
+- *X* \~ *P*(3)
+- *P*(*x* ≤ 4) ≈ 0.8153
 
 Using the binomial distribution:
 
-- *X* \~ *B* (100, 0.03)
-- *P* ( *x* ≤ 4) = 0.8179
+- *X* \~ *B*(100, 0.03)
+- *P*(*x* ≤ 4) = 0.8179
 
 The Poisson approximation is very good—the difference between the probabilities is only 0.0026.
 

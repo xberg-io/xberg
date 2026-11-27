@@ -1,6 +1,6 @@
 22
 
-THE BUDGET FOR FISCAL YEAR 1997, HISTORICAL TABLES Table 1.2— **SUMMARY OF RECEIPTS, OUTLAYS, AND SURPLUSES OR DEFICITS(–) AS PERCENTAGES OF GDP: 1930–2002—Continued** Total On-Budget Off-Budget GDP (in bil- Year Surplus Surplus Surplus lions of Receipts Outlays or Receipts Outlays or Receipts Outlays or dollars) Deficit (–) Deficit (–) Deficit (–)
+THE BUDGET FOR FISCAL YEAR 1997, HISTORICAL TABLES Table 1.2—**SUMMARY OF RECEIPTS, OUTLAYS, AND SURPLUSES OR DEFICITS(–) AS PERCENTAGES OF GDP: 1930–2002—Continued** Total On-Budget Off-Budget GDP (in bil- Year Surplus Surplus Surplus lions of Receipts Outlays or Receipts Outlays or Receipts Outlays or dollars) Deficit (–) Deficit (–) Deficit (–)
 
 | 1985 ....................................................................................... | 3,967.7 | 18.5 | 23.9 | –5.4 | 13.8 | 19.4 | –5.6 | 4.7 | 4.5 | 0.2 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

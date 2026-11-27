@@ -4,48 +4,24 @@ The digital financial development on corporate leverage of Chinn's share-listed 
 
 **Table 2. Descriptive statistics.**
 
-| Variable | N | Mean | SD | Min |
-| --- | --- | --- | --- | --- |
-| LLEV | 27,739 | 0.430 | 0.210 | 0.0100 |
-| SLEV | 27,739 | 0.340 | 0.180 | 0 |
-| LLEV | 27,739 | 0.0900 | 0.0800 | -0.0900 |
-| DIF | 27,739 | 5.910 | 0.100 | 5.700 |
-| FIX | 27,739 | 0.210 | 0.160 | 0 |
-| ROA | 27,739 | 0.0400 | 0.0800 | -1.860 |
-| Cashflow | 27,739 | 0.0500 | 0.0800 | -1.940 |
-| Growth | 27,739 | 5.750 | 813.2 | -1.310 |
-| Tobinq | 27,739 | 2.160 | 2.870 | 0.150 |
-| Top1 | 27,739 | 0.350 | 0.150 | 0 |
-| Size | 27,739 | 22.19 | 1.330 | 15.58 |
-| Listage | 27,739 | 2.150 | 0.800 | 0 |
-| M2 | 27,739 | 11.40 | 3.350 | 6.990 |
-| GDP | 27,739 | 6.740 | 2 | 2.350 |
+| Role | Variable | N | Mean | SD | Min | Max |
+| --- | --- | --- | --- | --- | --- | --- |
+| Dependent variables [74, 80] | LLEV | 27,739 | 0.430 | 0.210 | 0.0100 | 1.760 |
+|  | SLEV | 27,739 | 0.340 | 0.180 | 0 | 1.400 |
+|  | LLEV | 27,739 | 0.0900 | 0.0800 | -0.0900 | 0.850 |
+| Key independent variables [81] | DIF | 27,739 | 5.910 | 0.100 | 5.700 | 6.070 |
+| Control variables [20, 26, 74] | FIX | 27,739 | 0.210 | 0.160 | 0 | 0.970 |
+|  | ROA | 27,739 | 0.0400 | 0.0800 | -1.860 | 0.880 |
+|  | Cashflow | 27,739 | 0.0500 | 0.0800 | -1.940 | 0.880 |
+|  | Growth | 27,739 | 5.750 | 813.2 | -1.310 | 130000 |
+|  | Tobinq | 27,739 | 2.160 | 2.870 | 0.150 | 259.1 |
+|  | Top1 | 27,739 | 0.350 | 0.150 | 0 | 0.900 |
+|  | Size | 27,739 | 22.19 | 1.330 | 15.58 | 28.64 |
+|  | Listage | 27,739 | 2.150 | 0.800 | 0 | 3.430 |
+|  | M2 | 27,739 | 11.40 | 3.350 | 6.990 | 18.95 |
+|  | GDP | 27,739 | 6.740 | 2 | 2.350 | 10.60 |
 
-**Role Max**
-
-Dependent variables [74, 80] 1.760
-
-1.400
-
-0.850
-
-Key independent variables [81] 6.070 Control variables [20, 26, 74] 0.970
-
-0.880
-
-0.880 130000
-
-259.1
-
-0.900
-
-28.64
-
-3.430
-
-18.95
-
-10.60 https://doi.org/10.1371/journal.pone.0302978.t002
+https://doi.org/10.1371/journal.pone.0302978.t002
 
 importance of regulatory environments and market conditions in shaping the effectiveness of digital financial solutions.
 

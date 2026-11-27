@@ -1,4 +1,4 @@
-For example, if $n = 20$ , $M = Q = 3$ , and $ε = 01011001001010101101$ , then partition the stream
+For example, if $n = 20, M = Q = 3$, and $ε = 01011001001010101101$, then partition the stream
 
  *n* 
 
@@ -10,13 +10,13 @@ into *N =*~~  *= 2* matrices of cardinality *M* · *Q* (3·3 = 9). Note th
 
 - (2) Determine the binary rank ( *R*~~) of each matrix, where  = 1,..., *N* . The method for determining the rank is described in Appendix A.
 
-For the example in this section, the rank of the first matrix is $2 ( R1 = 2$ ), and the rank of the second matrix is $3 ( R2 = 3$ ).
+For the example in this section, the rank of the first matrix is $2 (R_{1} = 2)$, and the rank of the second matrix is $3 (R_{2} = 3)$.
 
 - (3) Let *F*~*M*~ = the number of matrices with *R*~~= *M* (full rank),
 
 *F*~*M-1*~ = the number of matrices with *R*~~= *M-1* (full rank - 1), *N – F*~*M*~ *- F*~*M-1*~ = the number of matrices remaining.
 
-For the example in this section, *F*~*M*~ *= $F*~*3*~ *= 1* ( *R*~*2*~$ has the full rank of 3 *), F*~*M-1*~ *= F*~*2*~ *= 1* ( *R*~*1*~ has rank 2), and no matrix has any lower rank.
+For the example in this section, *F*~*M*~ *= $F_{*3} *= 1* (*R_{*2}$ has the full rank of 3 *), F*~*M-1*~ *= F*~*2*~ *= 1* (*R*~*1*~ has rank 2), and no matrix has any lower rank.
 
 - (4) Compute
 
@@ -26,7 +26,7 @@ For the example in this section, *F*~*M*~ *= $F*~*3*~ *= 1* ( *R*~*2*~$ has the 
 
 2 *M M* −1 *M M* −1
 
-χ ( *obs* ) = + + .
+χ (*obs* ) = + + .
 
 0.2888 *N* 0.5776 *N* 0.1336 *N*
 
@@ -38,7 +38,7 @@ For the example in this section,
 
 2
 
-χ ( *obs* ) = + + *= 0.596953.*
+χ (*obs* ) = + + *= 0.596953.*
 
 0.2888· 2 0.5776 · 2 0.1336 · 2
 
@@ -48,7 +48,7 @@ For the example in this section,
 
 2
 
- χ ( *obs* )  example is equal to *igamc* 1,  .   2 
+ χ (*obs* )  example is equal to *igamc* 1,  .   2 
 
 For the example in this section, *P-value = e*
 

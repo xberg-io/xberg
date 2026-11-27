@@ -4,7 +4,7 @@
 |  |  | millions of | number of |
 |  |  | dollars | employees |
 | 561510 | Travel Agencies<sup>10</sup> | $25.0 |  |
-| 561520 | Tour Operators10 | $25.0 |  |
+| 561520 | Tour Operators<sup>10</sup> | $25.0 |  |
 | 561591 | Convention and Visitors Bureaus | $25.0 |  |
 | 561599 | All Other Travel Arrangement and Reservation Services | $32.5 |  |
 | 561611 | Investigation and Personal Background Check Services | $25.0 |  |
@@ -18,7 +18,7 @@
 | 561740 | Carpet and Upholstery Cleaning Services | $8.5 |  |
 | 561790 | Other Services to Buildings and Dwellings | $9.0 |  |
 | 561910 | Packaging and Labeling Services | $19.5 |  |
-| 561920 | Convention and Trade Show Organizers10 | $20.0 |  |
+| 561920 | Convention and Trade Show Organizers<sup>10</sup> | $20.0 |  |
 | 561990 | All Other Support Services | $16.5 |  |
 | 562111 | Solid Waste Collection | $47.0 |  |
 | 562112 | Hazardous Waste Collection | $47.0 |  |
@@ -28,7 +28,7 @@
 | 562213 | Solid Waste Combustors and Incinerators | $47.0 |  |
 | 562219 | Other Nonhazardous Waste Treatment and Disposal | $47.0 |  |
 | 562910 | Remediation Services | $25.0 |  |
-| 562910 (Exception) | Environmental Remediation Services14 |  | 1,000 |
+| 562910 (Exception) | Environmental Remediation Services<sup>14</sup> |  | 1,000 |
 | 562920 | Materials Recovery Facilities | $25.0 |  |
 | 562991 | Septic Tank and Related Services | $9.0 |  |
 | 562998 | All Other Miscellaneous Waste Management Services | $16.5 |  |

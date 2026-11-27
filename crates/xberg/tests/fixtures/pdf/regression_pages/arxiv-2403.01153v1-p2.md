@@ -18,4 +18,10 @@ The proposed localization system is illustrated in Fig. 1. During the offline, C
 
 Fig. 2. CSI amplitude in two different scenarios. (a) CSI Measured in an Empty Room. (b) CSI Measured in a Room with Occupants.
 
-Consequently, the received CSI can be mathematically represented as: H(f, t) = H~s~(f, t) + H~m~(f, t) + H~n~(f, t) (1)
+Consequently, the received CSI can be mathematically represented as:
+
+$$
+H(f,t)=H_{s}(f,t)+H_{m}(f,t)+H_{n}(f,t)
+$$
+
+(1)

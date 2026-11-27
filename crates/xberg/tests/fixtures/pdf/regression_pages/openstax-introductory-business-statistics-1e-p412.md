@@ -1,6 +1,8 @@
 404
 
-**9.3 Distribution Needed for Hypothesis Testing Sample Size Test Statistic Sample Size**
+### 9.3 Distribution Needed for Hypothesis Testing
+
+**Sample Size Test Statistic Sample Size**
 
 \> 30 (σ unknown)
 
@@ -14,15 +16,15 @@ Chapter 9 | Hypothesis Testing with One Sample
 
 – \< 30 *X* - *µ*~0~ *t*~*c*~ = (σ unknown) *s* / *n* – \< 30 *X* - *µ*~0~ *Z*~*c*~ = (σ known) *σ* / *n*
 
-**Table 9.6 Test Statistics for Test of Means, Varying Sample Size, Population Known or Unknown**
+### Table 9.6 Test Statistics for Test of Means, Varying Sample Size, Population Known or Unknown
 
 – \> 30 *X* - *µ*~0~ *Z*~*c*~ = (σ known) *σ* / *n*
 
-**Table 9.6 Test Statistics for Test of Means, Varying Sample Size, Population Known or Unknown**
+### Table 9.6 Test Statistics for Test of Means, Varying Sample Size, Population Known or Unknown
 
 # PRACTICE
 
-**9.1 Null and Alternative Hypotheses**
+### 9.1 Null and Alternative Hypotheses
 
 1. You are testing that the mean speed of your cable Internet connection is more than three Megabits per second. What is the random variable? Describe in words.
 2. You are testing that the mean speed of your cable Internet connection is more than three Megabits per second. State the null and alternative hypotheses.

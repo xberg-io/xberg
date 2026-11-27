@@ -2,7 +2,7 @@ Chapter 2 | Descriptive Statistics 111
 
 92. Six hundred adult Americans were asked by telephone poll, "What do you think constitutes a middle-class income?"
 
-The results are in **Table 2.71** . Also, include left endpoint, but not the right endpoint.
+The results are in **Table 2.71**. Also, include left endpoint, but not the right endpoint.
 
 | Salary ($) | Relative Frequency |
 | --- | --- |
@@ -15,7 +15,7 @@ The results are in **Table 2.71** . Also, include left endpoint, but not the rig
 | 75,000–99,999 | 0.02 |
 | 100,000+ | 0.01 |
 
-### Table 2.71
+## Table 2.71
 
 - a. What percentage of the survey answered "not sure"?
 - b. What percentage think that middle-class is from $25,000 to $50,000?
@@ -25,7 +25,7 @@ The results are in **Table 2.71** . Also, include left endpoint, but not the rig
 - d. Find the 40<sup>th</sup> and 80<sup>th</sup> percentiles
 - e. Construct a bar graph of the data
 
-### 2.3 Measures of the Center of the Data
+## 2.3 Measures of the Center of the Data
 
 93. The most obese countries in the world have obesity rates that range from 11.4% to 74.6%. This data is summarized in
 
@@ -42,7 +42,7 @@ the following table.
 | 65.45–74.45 | 0 |
 | 74.45–83.45 | 1 |
 
-### Table 2.72
+## Table 2.72
 
 - a. What is the best estimate of the average obesity percentage for these countries?
 - b. The United States has an average obesity rate of 33.9%. Is this rate above average or below?

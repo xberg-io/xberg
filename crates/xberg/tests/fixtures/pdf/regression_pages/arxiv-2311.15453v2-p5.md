@@ -1,14 +1,12 @@
-5. **COMPLIANCE WITH ETHICAL STANDARDS**
+## 5\. COMPLIANCE WITH ETHICAL STANDARDS
 
 This research study was conducted retrospectively using human subject data made available in open access by [16, 17, 18]. Ethical approval was not required as confirmed by the license attached with the open-access data.
 
-6. **ACKNOWLEDGMENTS**
+## 6\. ACKNOWLEDGMENTS
 
-Bernhard Kainz received support by the ERC - project MIA- NORMAL 101083647, Matthew Baugh by a UKRI DTP award.
+Bernhard Kainz received support by the ERC - project MIA-NORMAL 101083647, Matthew Baugh by a UKRI DTP award.
 
-7. **REFERENCES**
-
-<!-- end list -->
+## 7\. REFERENCES
 
 - [1] Geert Litjens et al., "A Survey on Deep Learning in Medical Image Analysis," Medical image analysis, vol. vol. 42, pp. 60–88, 2017.
 - [2] Christoph Baur et al., "Autoencoders for Unsupervised Anomaly Segmentation in Brain MR Images: A Comparative Study," Medical image analysis, no. 02 Jan 2021, pp. 69:101952, 2021.

@@ -76,7 +76,7 @@ tered, recoverable, nanograms per liter
 
 acid (PFTA)
 
-- (M2PFTEDA) unfiltered, recoverable, nanograms per liter
+(M2PFTEDA) unfiltered, recoverable, nanograms per liter
 
 ## Perfluorotridecanoic acid
 
@@ -84,7 +84,7 @@ acid (PFTA)
 
 ## (PFTrDA)
 
-- (MPFDOA) unfiltered, recoverable, nanograms per liter
+(MPFDOA) unfiltered, recoverable, nanograms per liter
 
 ## Perfluoroundecanoic acid
 

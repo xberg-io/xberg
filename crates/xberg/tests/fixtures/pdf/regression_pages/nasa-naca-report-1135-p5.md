@@ -1,13 +1,3 @@
-| a 2 y _ | at 2 |  | of a single parameter. grouped according | These relations to which of | are given the various | below, parameters |
-| --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  | USEFUL RATIOS |  |  |
-|  |  |  | On the basis | of the above results, | useful relations | can be |
-| 3"-1 3" (,-; /p\\.V ) + | 2 3" (P') |  | derived expressing | various dimensionless | ratios as | functions |
-| 3"-- 1 _" 2 | 3"-- 1 | [adiab, perf] (32b) | (M, V/a,, V/a,, | or V/V,_) is used as the | independent | variable. |
-|  |  |  |  |  |  | 7 |
-| a 2 . V 2 | 1 {3"-+- 1_ |  | In each case the | second form of the | equation applies | for 3"=g. |
-| 3"zi+_-=_ | \\_1] a*_ |  | Parameter M.-- |  |  |  |
-
 .... :_ ;:7 , , -_,_ _ * "_: ' (;' _;_'*_, _- _" ._ _. _ " ,
 
 - " " \!. "2, _\\:'
@@ -23,29 +13,35 @@ FOR
 
 **AERONAUTICS PRESSURE-DENSITYRELATION**
 
-Energy equation From equations (27) and (28b) it follows that _P ----constant---- *p'* [isen, perf] (34) *dh+VdV=O )*
+Energy equation From equations (27) and (28b) it follows that
 
-*p_ pt* _
+*dh+VdV=O )* from which *cpdT+ VdV=O* t *p p_* 3,._d(P)+vdV:O_ [adiab, thermperf] (28b) Additional useful variables are defined as follows: Combination Speed of sound equation for
 
-from which *cpdT+ VdV=O* t *p (py" (T']v-1 (a'_* "_-' *p_ p,-----\\---/* --\\T-t/ --\\_/ [isen, perf] (35) 3,._d(P)+vdV:O_ [adiab, thermperf] (28b) BERNOULLIttS
-
-**EQUATION**
-
-Additional useful variables are defined as follows: Combination of equations (32b) and (35) gives Bernoulli's Speed of sound equation for compressible flow in the form
-
-*"y--1*
-
-3" *Pt P* _,'
-
-$$=$$
-
-3" *Pt*
+3"
 
 *I--*
 
-()
+=._,lv *P=_* [therm pert] (29b)
 
-[isen, perf] (36) =._,lv *P=_* [therm pert] (29b)
+_P ----constant---- *p'* [isen, perf] (34)
+
+*p_ pt* _
+
+*(py" (T']v-1 (a'_* "_-' *p,-----\\---/* --\\T-t/ --\\_/ [isen, perf] (35) BERNOULLIttS
+
+**EQUATION**
+
+of equations (32b) and (35) gives Bernoulli's compressible flow in the form
+
+*"y--1*
+
+*Pt P* _,'
+
+**=**
+
+3" *Pt* [isen, perf] (36)
+
+()
 
 **RELATIONSBETWEENLOCALAND** FREE-STREAM **CONDITIONS**
 
@@ -57,39 +53,65 @@ it **can** be shown that if *T* is in degrees Rankine *T ,* _--1 *V*
 
 **2**
 
-(=degrees Fahrenheit +459.6) (29c)
+(=degrees Fahrenheit +459.6) (29c) [adiab, perf] (37)
 
 # M:
 
-[adiab, perf] (37) Mach number *V*
+Mach number
 
 \!
 
-$M-=-- (30)$
+$V M-=-- (30)$
 
 *V* 2 _--1
 
-*a P--_I--_'--I M®2[(_._)--l]}* [isen, perf I (38) *p_* ( 2 Dynamic pressure
+*a P--_I--_'--I M®2[(_._)--l]}* [isen, perf I (38) *p_* ( 2
 
 I
 
-*p V* 2 1 _--_={1--"/2 -1 *M**2[(.V_)--I]}* v-t [isenperf] (39) (31 a) *q* -_ *o V* -_ In small-disturbance theory, where it is assumed that [therm perf] $(31b) (V--V.)<\<V$,, these equations take on the simplified form
+Dynamic pressure *p V* 2 1 _--_={1--"/2 -1 *M**2[(.V_)--I]}* v-t [isenperf] (39) (31 a) *q* -_ *o V* -_ In small-disturbance theory, where it is assumed that [therm perf] $(31b) (V--V.)<\<V$,,
 
 INTEGRATED
 
 **FORMS OF ENERGY EQUATION**
 
-(40) --_ 1 --(3'-- 1)M® _ *V--V®V®* [adiab, perf] Tile energy equation (28) can be integrated at once to obtain *P* --_1 **--3"M® 2** *V-- V®* [isen, perf] (41)
+\--_ Tile energy equation (28) can be integrated at once to obtain *P*
 
-*V* 2 *p_ V® h* **+_-:constant----ht**
+*V* 2 *p_ h* **+_-:constant----ht**
 
-[adiab] (32a) _ 1--M® _ *V-- V®* [isen, pert] (42)
-
-*V* 2
+[adiab] (32a)
 
 ***P*** **oo**
 
+*V* 2
+
+these equations take on the simplified form (40) 1 --(3'-- 1)M® _ *V--V®V®* [adiab, perf] --_1 **--3"M® 2** *V-- V®* [isen, perf] (41) *V®* _ 1--M® _ *V-- V®* [isen, pert] (42)
+
 *V®*
+
+**USEFUL RATIOS**
+
+On the basis of the above results, useful relations can be
+
+3" 2 3" (P')
+
+### 3"-1<sup>*/p\\.V*</sup>(,-; *)* +
+
+derived expressing various dimensionless ratios as functions of a single parameter. These relations are given below,
+
+*a* ***2*** *y* _ *at* **2**
+
+grouped according to which of the various parameters 3"-- 1 _" 2 3"-- 1 [adiab, perf] (32b) (M, *V/a,, V/a,,* or *V/V,_)* is used as the independent variable.
+
+7 In each case the second form of the equation applies for 3"=g.
+
+*a* **2** . *V* **2** 1 *{3"-+-* 1_
+
+3"zi+_-=_ \\_1] *a*_*
+
+**Parameter**
+
+*M.--*
 
 *a* **2** I7 **2** *Vm*
 
@@ -99,17 +121,19 @@ INTEGRATED
 
 ***/***
 
-*M2\\-I* [adiab, perf] (43) 7--1_2 2
+*M2\\-I* [adiab, perf] (43)
 
 w-
 
+7--1_2 2
+
 \-r 7
 
-The three reference speeds *at, a,,* and *V,,* are related by $.P={I+$ 3"-1 *M* _) _'-_ */ M_\\-i "*
+The three reference speeds *at, a,,* and *V,,* are related by
 
 **[isen, perf]**
 
-- (44) *p,* \\
+$.P={I+$ 3"-1 *M* _) _'-_ */ M_\\-i "* (44) *p,* \\
 
 ***2***
 
@@ -119,7 +143,7 @@ The three reference speeds *at, a,,* and *V,,* are related by $.P={I+$ 3"-1 *M* 
 
 **5**
 
-(V_\\ * _+1 *fl£-={* l "4-3"--1M ') "-'=(1-4-_-) ' [isen, perf] (45)
+(V_\\ * _+1 [isen, perf] (45) *fl£-={* l "4-3"--1M ') "-'=(1-4-_-) '
 
 ***p,***
 
@@ -129,6 +153,8 @@ The three reference speeds *at, a,,* and *V,,* are related by $.P={I+$ 3"-1 *M* 
 
 ### (v.y= z
 
-[adiab, pert] (46) *at]* 3"--1 _=(1--I-_-
+[adiab, pert] $(46) &#95;=(1--I-&#95;-$
 
 ## ) %1+w)
+
+*at]* 3"--1
