@@ -1213,16 +1213,32 @@ fn portable_artifact_component(component: &str) -> bool {
 ///
 /// ~keep Streams the file in 1 MiB chunks to avoid loading large model files (100MB+) entirely
 /// into memory. Returns `Ok(())` if the checksum matches or is empty (skip verification).
+///
+/// A file this process already hashed to `expected` is not hashed again while its
+/// [`VerifiedStamp`] is unchanged; a failed check is never remembered.
 #[cfg(model_download)]
 pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<(), String> {
     if expected.is_empty() {
         return Ok(());
     }
 
+    if let Ok(metadata) = std::fs::metadata(path)
+        && verified_earlier(path, &metadata, expected)
+    {
+        // A fresh hash would pin the file again, so a remembered one does too.
+        #[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+        record_pinned_file(expected, FileIdentity::of(&metadata));
+        tracing::trace!(label, "Checksum verified earlier in this process; file unchanged");
+        return Ok(());
+    }
+
     let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for checksum: {e}"))?;
+    let stamp_before = file.metadata().ok().and_then(|metadata| VerifiedStamp::of(&metadata));
     #[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
     let identity_before = file.metadata().ok().map(|metadata| FileIdentity::of(&metadata));
     let mut hasher = Sha256::new();
+    #[cfg(test)]
+    HASHED_FILES.with(|count| count.set(count.get() + 1));
 
     let mut buf = vec![0u8; 1024 * 1024];
     loop {
@@ -1252,9 +1268,98 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
     {
         record_pinned_file(&hash_hex, identity);
     }
+    if let Some(stamp) = stamp_before
+        && file
+            .metadata()
+            .is_ok_and(|metadata| VerifiedStamp::of(&metadata).as_ref() == Some(&stamp))
+        && stamp.settled()
+    {
+        remember_verified(path, stamp, hash_hex);
+    }
 
     tracing::debug!(label, "Checksum verified");
     Ok(())
+}
+
+#[cfg(all(test, model_download))]
+thread_local! {
+    /// Files hashed by [`verify_sha256`] on this thread, counted for the tests of its memo.
+    static HASHED_FILES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// What identifies the contents [`verify_sha256`] hashed at a path: the file's size and
+/// modification time, and on Unix also its device, inode and change time (which userland cannot
+/// set). A write, truncation, or a rename over the path changes it.
+#[cfg(model_download)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VerifiedStamp {
+    len: u64,
+    modified: std::time::SystemTime,
+    #[cfg(unix)]
+    inode: (u64, u64),
+    #[cfg(unix)]
+    changed: (i64, i64),
+}
+
+#[cfg(model_download)]
+impl VerifiedStamp {
+    /// `None` where the platform reports no modification time: such a file is hashed every time.
+    fn of(metadata: &std::fs::Metadata) -> Option<Self> {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+
+        Some(Self {
+            len: metadata.len(),
+            modified: metadata.modified().ok()?,
+            #[cfg(unix)]
+            inode: (metadata.dev(), metadata.ino()),
+            #[cfg(unix)]
+            changed: (metadata.ctime(), metadata.ctime_nsec()),
+        })
+    }
+
+    /// Whether the modification time is at least [`VERIFIED_STAMP_SETTLE`] in the past, so a
+    /// later write in place cannot land in the same timestamp tick and keep the stamp.
+    fn settled(&self) -> bool {
+        self.modified.elapsed().is_ok_and(|age| age >= VERIFIED_STAMP_SETTLE)
+    }
+}
+
+/// The coarsest timestamp granularity of a common file system (FAT's 2 s).
+#[cfg(model_download)]
+const VERIFIED_STAMP_SETTLE: Duration = Duration::from_secs(2);
+
+/// Verified files remembered per process; the memo is cleared when full.
+#[cfg(model_download)]
+const MAX_VERIFIED_FILES: usize = 256;
+
+/// The stamp and lowercase hex SHA-256 of each file [`verify_sha256`] hashed successfully, by
+/// path. In memory only, for the reason [`pinned_file`]'s record is: whoever can write the
+/// cache could write a record on disk, so every process hashes a model once before using it.
+#[cfg(model_download)]
+static VERIFIED_FILES: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<PathBuf, (VerifiedStamp, String)>>,
+> = std::sync::LazyLock::new(Default::default);
+
+#[cfg(model_download)]
+fn verified_earlier(path: &Path, metadata: &std::fs::Metadata, expected: &str) -> bool {
+    let Some(stamp) = VerifiedStamp::of(metadata) else {
+        return false;
+    };
+    VERIFIED_FILES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(path)
+        .is_some_and(|(seen, sha256)| *seen == stamp && sha256 == expected)
+}
+
+#[cfg(model_download)]
+fn remember_verified(path: &Path, stamp: VerifiedStamp, sha256: String) {
+    let mut files = VERIFIED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if files.len() >= MAX_VERIFIED_FILES && !files.contains_key(path) {
+        files.clear();
+    }
+    files.insert(path.to_path_buf(), (stamp, sha256));
 }
 
 /// Device, inode, size and nanosecond modification and change times of a file. A write,
@@ -1381,6 +1486,152 @@ mod pinned_file_tests {
             None,
             "an empty digest skips the check and pins nothing"
         );
+    }
+}
+
+#[cfg(all(test, model_download))]
+mod verified_memo_tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    const HOUR: Duration = Duration::from_secs(60 * 60);
+
+    fn sha256(payload: &[u8]) -> String {
+        hex::encode(Sha256::digest(payload))
+    }
+
+    fn hashed() -> usize {
+        HASHED_FILES.with(std::cell::Cell::get)
+    }
+
+    /// Writes `payload` with a modification time `age` in the past.
+    fn write_aged(path: &Path, payload: &[u8], age: Duration) {
+        std::fs::write(path, payload).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(SystemTime::now() - age)
+            .unwrap();
+    }
+
+    #[test]
+    fn an_unchanged_file_is_hashed_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        let before = hashed();
+
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+
+        assert_eq!(hashed() - before, 1);
+    }
+
+    #[test]
+    fn a_rewritten_file_is_hashed_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        let before = hashed();
+
+        // Same length, so only the timestamps tell the two files apart.
+        write_aged(&path, b"tampered weights", HOUR / 2);
+
+        let error = verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap_err();
+        assert!(error.contains("Checksum mismatch"), "{error}");
+        assert_eq!(hashed() - before, 1, "the rewritten file was read");
+
+        verify_sha256(&path, &sha256(b"tampered weights"), "model").unwrap();
+        verify_sha256(&path, &sha256(b"tampered weights"), "model").unwrap();
+        assert_eq!(hashed() - before, 2, "the new contents are remembered once verified");
+    }
+
+    #[test]
+    fn a_resized_file_is_hashed_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        let before = hashed();
+
+        write_aged(&path, b"verified weights and more", HOUR);
+
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap_err();
+        assert_eq!(hashed() - before, 1);
+    }
+
+    #[test]
+    fn a_failed_check_is_never_remembered() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        let before = hashed();
+
+        verify_sha256(&path, &sha256(b"other weights"), "model").unwrap_err();
+        verify_sha256(&path, &sha256(b"other weights"), "model").unwrap_err();
+
+        assert_eq!(hashed() - before, 2);
+    }
+
+    #[test]
+    fn a_remembered_file_still_fails_another_digest() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+        let before = hashed();
+
+        verify_sha256(&path, &sha256(b"other weights"), "model").unwrap_err();
+
+        assert_eq!(hashed() - before, 1);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+        assert_eq!(hashed() - before, 1, "the failed check kept the verified record");
+    }
+
+    #[test]
+    fn a_just_written_file_is_hashed_every_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        std::fs::write(&path, b"fresh weights").unwrap();
+        let before = hashed();
+
+        verify_sha256(&path, &sha256(b"fresh weights"), "model").unwrap();
+        verify_sha256(&path, &sha256(b"fresh weights"), "model").unwrap();
+
+        assert_eq!(hashed() - before, 2);
+    }
+
+    #[test]
+    fn a_missing_file_fails_after_it_was_verified() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+
+        let error = verify_sha256(&path, &sha256(b"weights"), "model").unwrap_err();
+        assert!(error.contains("Failed to open file for checksum"), "{error}");
+    }
+
+    #[cfg(all(unix, inference_ort, any(layout_detection, auto_rotate)))]
+    #[test]
+    fn a_remembered_file_stays_pinned() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+        let before = hashed();
+        PINNED_FILES.lock().unwrap().retain(|file| !file.still_at(&path));
+        assert_eq!(pinned_file(&path), None);
+
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+
+        assert_eq!(hashed() - before, 0);
+        assert_eq!(pinned_file(&path).expect("pinned again").sha256, sha256(b"weights"));
     }
 }
 
