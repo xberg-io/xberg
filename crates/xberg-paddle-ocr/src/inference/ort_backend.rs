@@ -232,18 +232,16 @@ mod tests {
         let path = scratch_model_path("not-a-model");
         std::fs::write(&path, b"not an ONNX model").expect("write the scratch file");
 
-        let from_file = OrtBackend::load_file(&path, 1, None)
-            .err()
-            .map(|error| error.to_string());
-        let from_memory = OrtBackend::load(b"not an ONNX model", 1, None)
-            .err()
-            .map(|error| error.to_string());
+        let from_file = OrtBackend::load_file(&path, 1, None).err();
+        let from_memory = OrtBackend::load(b"not an ONNX model", 1, None).err();
         let _ = std::fs::remove_file(&path);
 
-        // ONNX Runtime's parser rejected both, which a failure to create the session builder
-        // would not show.
-        for message in [from_file, from_memory] {
-            let message = message.expect("garbage is not a model").to_lowercase();
+        for error in [from_file, from_memory] {
+            let error = error.expect("garbage is not a model");
+            assert!(matches!(error, OcrError::Ort(_)), "{error:?}");
+            // ONNX Runtime's parser rejected it, which a failure to create the session builder
+            // would not show.
+            let message = error.to_string().to_lowercase();
             assert!(message.contains("protobuf parsing failed"), "{message}");
         }
     }
