@@ -248,8 +248,9 @@ fn cluster_lines(placed: &[Placed], tolerance: f32) -> Vec<Vec<Placed>> {
 /// Where `placed` (sorted by advance start) splits into side-by-side columns:
 /// the index of the first span of the right-hand part. The cut is a gap in the
 /// union of the spans' advance extents that is wider than a gutter and no wider
-/// than [`GUTTER_MAX_BLOCK_FRACTION`] of the narrower block beside it.
-fn column_cut(placed: &[Placed], body: f32) -> Option<usize> {
+/// than [`GUTTER_MAX_BLOCK_FRACTION`] of the narrower block beside it, and that
+/// `accept` takes; a gutter `accept` turns down does not stop the search.
+fn column_cut(placed: &[Placed], body: f32, accept: impl Fn(usize) -> bool) -> Option<usize> {
     let mut blocks: Vec<(f32, f32, usize)> = Vec::new();
     for (position, span) in placed.iter().enumerate() {
         match blocks.last_mut() {
@@ -259,7 +260,9 @@ fn column_cut(placed: &[Placed], body: f32) -> Option<usize> {
     }
     blocks
         .windows(2)
-        .find_map(|pair| is_gutter((pair[0].0, pair[0].1), (pair[1].0, pair[1].1), body).then_some(pair[1].2))
+        .filter(|pair| is_gutter((pair[0].0, pair[0].1), (pair[1].0, pair[1].1), body))
+        .map(|pair| pair[1].2)
+        .find(|&cut| accept(cut))
 }
 
 /// True when the gap between two neighbouring advance-axis blocks is a gutter.
@@ -315,10 +318,11 @@ fn order_block(placed: &[Placed], body: f32, depth: usize) -> Vec<Vec<usize>> {
     }
 
     let sorted = by_start(placed);
-    if let Some(cut) = column_cut(&sorted, body)
-        && cluster_lines(&sorted[..cut], tolerance).len() >= MIN_LINES_PER_COLUMN
-        && cluster_lines(&sorted[cut..], tolerance).len() >= MIN_LINES_PER_COLUMN
-    {
+    let two_columns = |cut: usize| {
+        cluster_lines(&sorted[..cut], tolerance).len() >= MIN_LINES_PER_COLUMN
+            && cluster_lines(&sorted[cut..], tolerance).len() >= MIN_LINES_PER_COLUMN
+    };
+    if let Some(cut) = column_cut(&sorted, body, two_columns) {
         let mut ordered = order_block(&sorted[..cut], body, depth + 1);
         ordered.extend(order_block(&sorted[cut..], body, depth + 1));
         return ordered;

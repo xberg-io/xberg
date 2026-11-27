@@ -294,11 +294,11 @@ fn should_read_a_large_heading_above_small_body_lines() {
         ..wide("Heading", 0.0, 150.0, 100.0)
     };
     let spans = vec![
-        wide("c", 0.0, 80.0, 40.0),
-        wide("b", 60.0, 100.0, 40.0),
+        wide("c", 0.0, 80.0, 30.0),
+        wide("b", 60.0, 100.0, 30.0),
         heading,
-        wide("d", 60.0, 80.0, 40.0),
-        wide("a", 0.0, 100.0, 40.0),
+        wide("d", 60.0, 80.0, 30.0),
+        wide("a", 0.0, 100.0, 30.0),
     ];
     assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("Heading\na b\nc d"));
 }
@@ -368,5 +368,19 @@ fn should_read_the_columns_between_a_title_and_a_footer() {
     assert_eq!(
         repair_rotated_page_text(&spans).as_deref(),
         Some("Title\nA1\nA2\nA3\nB1\nB2\nB3\nFooter")
+    );
+}
+
+#[test]
+fn should_keep_looking_for_a_gutter_after_one_that_leaves_a_single_line() {
+    let mut spans = vec![wide("Label", 0.0, 100.0, 60.0)];
+    for (row, cross) in [100.0, 80.0, 60.0].into_iter().enumerate() {
+        spans.push(wide(&format!("A{}", row + 1), 80.0, cross, 200.0));
+        spans.push(wide(&format!("B{}", row + 1), 310.0, cross, 200.0));
+    }
+    spans.reverse();
+    assert_eq!(
+        repair_rotated_page_text(&spans).as_deref(),
+        Some("Label A1\nA2\nA3\nB1\nB2\nB3")
     );
 }
