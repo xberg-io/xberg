@@ -37,8 +37,8 @@ pub(super) struct RawSpanKey {
 }
 
 /// What one content interpretation produced, including its effects on the
-/// document, so a cached copy can reproduce them exactly. The page-pass cache
-/// and the paired preserved entry share the parts they only read.
+/// document, so a cached copy can reproduce them exactly. The page-pass cache,
+/// the paired preserved entry and a [`RawPageSpans`] share the parts they only read.
 pub(super) struct InterpretedPage {
     spans: Arc<Vec<crate::layout::TextSpan>>,
     /// MCIDs whose in-stream `/ActualText` applied, or `None` when the page was
@@ -114,6 +114,33 @@ impl InterpretedPage {
     }
 }
 
+/// One page's raw flattened-geometry spans read once for several orderings, with what the read
+/// did to the document so each ordering after the first repeats it as another read would.
+///
+/// From [`PdfDocument::raw_page_spans`]; ordered by [`PdfDocument::order_raw_page_spans`].
+#[doc(hidden)]
+pub struct RawPageSpans {
+    page: usize,
+    read: Arc<InterpretedPage>,
+    /// Whether layers or inks were excluded: such a read bypasses the page-pass cache and
+    /// records no script baselines.
+    filtered: bool,
+    /// Set by the first ordering; every later one replays the read's document effects.
+    ordered: AtomicBool,
+}
+
+impl RawPageSpans {
+    /// Zero-based index of the page read.
+    pub fn page(&self) -> usize {
+        self.page
+    }
+
+    /// The raw spans in content-stream order, before off-page spans are dropped.
+    pub fn spans(&self) -> &[crate::layout::TextSpan] {
+        &self.read.spans
+    }
+}
+
 /// Estimated heap and inline bytes of a span vector, for byte-budgeted caches. A span's font name
 /// is shared with every other span in that font, so it is not charged per span.
 pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usize {
@@ -124,6 +151,16 @@ pub(super) fn estimated_span_bytes(spans: &Vec<crate::layout::TextSpan>) -> usiz
                 span.text.capacity() + (span.char_widths.capacity() + span.char_x_offsets.capacity()) * size_of::<f32>()
             })
             .sum::<usize>()
+}
+
+/// Whether `span` keeps a part inside `(left, right, bottom, top)`, the test
+/// [`PdfDocument::drop_offpage_spans`] applies.
+fn span_overlaps(span: &crate::layout::TextSpan, (left, right, bottom, top): (f32, f32, f32, f32)) -> bool {
+    let sx1 = span.bbox.x;
+    let sx2 = span.bbox.x + span.bbox.width;
+    let sy1 = span.bbox.y;
+    let sy2 = span.bbox.y + span.bbox.height;
+    sx2 > left && sx1 < right && sy2 > bottom && sy1 < top
 }
 
 /// The page-pass cache bytes a paired preserved entry of `page_index` may bring the cache to:
@@ -1003,8 +1040,8 @@ impl PdfDocument {
     /// ```
     ///
     /// **Rotation is handled differently here than in [`Self::extract_spans`].**
-    /// This function calls only `extract_spans_raw`/`_filtered` plus
-    /// `drop_offpage_spans` (see the comment in the body below) and deliberately
+    /// This function only reads the raw spans and drops the off-page ones as
+    /// `drop_offpage_spans` does (see the comment in `order_extracted_spans`) and deliberately
     /// skips `postprocess_spans`, so `map_span_into_rotated_frame` never runs on
     /// this path and every returned span's `page_rotation_applied` is always
     /// `0`. Bboxes here stay in raw user space even on a `/Rotate`d page; the
@@ -1022,15 +1059,109 @@ impl PdfDocument {
         excluded_layers: HashSet<String>,
         excluded_inks: HashSet<String>,
     ) -> Result<Vec<crate::layout::TextSpan>> {
-        // Extract raw spans using the common extraction logic. The unfiltered
-        // path is kept verbatim for empty sets so existing callers are unchanged. ~keep
-        let spans = if excluded_layers.is_empty() && excluded_inks.is_empty() {
-            self.extract_spans_raw(page_index)?
-        } else {
-            self.extract_spans_raw_filtered(page_index, excluded_layers, excluded_inks)?
-        };
+        let raw = self.raw_page_spans(page_index, excluded_layers, excluded_inks)?;
+        self.order_raw_page_spans(&raw, reading_order)
+    }
 
-        self.order_extracted_spans(page_index, reading_order, spans)
+    /// The raw spans [`Self::extract_spans_filtered_with_reading_order`] orders, read once so that
+    /// [`Self::order_raw_page_spans`] can order them several ways without reading the page again.
+    ///
+    /// Empty sets read through the page-pass cache, as the unfiltered call does; any exclusion
+    /// interprets the page with it. The read has the document effects that call's read has.
+    ///
+    /// # Errors
+    /// Returns an error when the page, fonts or content cannot be decoded.
+    #[doc(hidden)]
+    pub fn raw_page_spans(
+        &self,
+        page_index: usize,
+        excluded_layers: HashSet<String>,
+        excluded_inks: HashSet<String>,
+    ) -> Result<RawPageSpans> {
+        let filtered = !excluded_layers.is_empty() || !excluded_inks.is_empty();
+        let read = if filtered {
+            // Captured only so that a later ordering can repeat them; the pushes and charges
+            // still reach the document now. ~keep
+            let ((page, warnings), recovered) =
+                crate::extractors::recovery_tally::capture_recoveries(self.recovery_counts(), || {
+                    crate::extractors::warnings::capture_pushes(&self.warning_sink, || {
+                        self.interpret_page_spans(
+                            page_index,
+                            crate::extractors::TextExtractionConfig::default(),
+                            excluded_layers,
+                            excluded_inks,
+                            ScriptGeometry::Flatten,
+                            false,
+                            false,
+                            false,
+                        )
+                    })
+                });
+            let mut page = page?;
+            page.warnings = Arc::new(warnings);
+            page.recovered = recovered;
+            self.record_mc_actualtext(page_index, page.mc_actualtext.as_deref().cloned());
+            Arc::new(page)
+        } else {
+            self.cached_page_read(page_index, ScriptGeometry::Flatten, None)?
+        };
+        Ok(RawPageSpans {
+            page: page_index,
+            read,
+            filtered,
+            ordered: AtomicBool::new(false),
+        })
+    }
+
+    /// [`Self::extract_spans_filtered_with_reading_order`] over spans [`Self::raw_page_spans`]
+    /// read: equal to that call's result, and to its document effects when each ordering after
+    /// the first stands for another read.
+    ///
+    /// Every ordering records the read's MC-scope /ActualText entry again, which a read of the
+    /// page with other exclusions may have replaced since; every ordering after the first also
+    /// pushes the read's warnings, charges its recoveries and records its script baselines again,
+    /// as a cache hit does. Only the spans on the page are copied.
+    ///
+    /// # Errors
+    /// Returns an error when an ordering pass fails.
+    #[doc(hidden)]
+    pub fn order_raw_page_spans(
+        &self,
+        raw: &RawPageSpans,
+        reading_order: ReadingOrder,
+    ) -> Result<Vec<crate::layout::TextSpan>> {
+        if raw.ordered.swap(true, Ordering::Relaxed) {
+            let script_geometry = (!raw.filtered).then_some(ScriptGeometry::Flatten);
+            self.replay_read_effects(raw.page, script_geometry, &raw.read);
+        } else {
+            self.record_mc_actualtext(raw.page, raw.read.mc_actualtext.as_deref().cloned());
+        }
+        let spans = match self.offpage_span_bounds(raw.page) {
+            Some(bounds) => raw
+                .read
+                .spans
+                .iter()
+                .filter(|span| span_overlaps(span, bounds))
+                .cloned()
+                .collect(),
+            None => Vec::clone(&raw.read.spans),
+        };
+        self.order_onpage_spans(raw.page, reading_order, spans)
+    }
+
+    /// The bounds [`Self::drop_offpage_spans`] keeps a span within, `(left, right, bottom, top)`
+    /// with its edge tolerance applied, or `None` when the page has no visible box and every span
+    /// is kept. Mirrors that function so a borrowed slice is filtered without copying the spans
+    /// it drops.
+    fn offpage_span_bounds(&self, page_index: usize) -> Option<(f32, f32, f32, f32)> {
+        const EDGE_TOLERANCE_PT: f32 = 2.0;
+        let (llx, lly, urx, ury) = self.get_page_visible_box(page_index).ok()?;
+        Some((
+            llx.min(urx) - EDGE_TOLERANCE_PT,
+            llx.max(urx) + EDGE_TOLERANCE_PT,
+            lly.min(ury) - EDGE_TOLERANCE_PT,
+            lly.max(ury) + EDGE_TOLERANCE_PT,
+        ))
     }
 
     fn order_extracted_spans(
@@ -1053,7 +1184,16 @@ impl PdfDocument {
         // See this function's doc comment above for why adding that mapping back
         // in would make results wrong, not just more consistent. ~keep
         self.drop_offpage_spans(page_index, &mut spans);
+        self.order_onpage_spans(page_index, reading_order, spans)
+    }
 
+    /// [`Self::order_extracted_spans`] after off-page spans are dropped.
+    fn order_onpage_spans(
+        &self,
+        page_index: usize,
+        reading_order: ReadingOrder,
+        mut spans: Vec<crate::layout::TextSpan>,
+    ) -> Result<Vec<crate::layout::TextSpan>> {
         match reading_order {
             ReadingOrder::TopToBottom => {
                 crate::utils::sort_by_visual_rows(
