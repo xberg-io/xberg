@@ -69,8 +69,7 @@ async fn seen_models(config: &ExtractionConfig, from_file: bool) -> Vec<Option<T
         }
     })
     .await;
-    let seen = backend.seen.lock().unwrap().clone();
-    seen
+    backend.seen.lock().unwrap().clone()
 }
 
 #[tokio::test]

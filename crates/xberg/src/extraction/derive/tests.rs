@@ -330,7 +330,8 @@ fn test_record_groups_reach_document_structure_without_the_record_label() {
     let ds = derive_document_structure_inner(&mut doc);
     assert!(ds.validate().is_ok(), "validation: {:?}", ds.validate());
 
-    let groups: Vec<(Option<&str>, Option<&std::collections::HashMap<String, String>>)> = ds
+    type GroupView<'a> = (Option<&'a str>, Option<&'a std::collections::HashMap<String, String>>);
+    let groups: Vec<GroupView<'_>> = ds
         .body_roots()
         .map(|(_, node)| match &node.content {
             NodeContent::Group { label, .. } => (label.as_deref(), node.attributes.as_ref()),

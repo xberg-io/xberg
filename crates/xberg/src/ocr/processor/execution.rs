@@ -4440,7 +4440,7 @@ mod tests {
     fn default_page_preprocessing_binarizes_only_for_the_fast_model() {
         use crate::core::config::TessdataModel;
         let mut page = vec![u8::MAX; 80 * 20 * RGB_CHANNEL_COUNT];
-        for row in page.chunks_exact_mut(80 * RGB_CHANNEL_COUNT) {
+        for row in page.as_chunks_mut::<{ 80 * RGB_CHANNEL_COUNT }>().0 {
             row[..4 * RGB_CHANNEL_COUNT].fill(0);
         }
         assert!(should_apply_default_preprocessing(&page, 80, 20));
