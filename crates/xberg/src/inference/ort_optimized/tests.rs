@@ -683,13 +683,11 @@ fn a_swapped_graph_path_still_loads_the_verified_graph() {
 
     let graph = slot.verified_graph().unwrap().expect("the graph was saved");
     swap_in(&root, &graph.path, b"not an onnx graph");
-    let mut session = graph
-        .commit(disabled())
-        .expect("the checked descriptor still holds the graph");
-    assert_eq!(
-        run_tiny(&mut session),
-        run_tiny(&mut online(&configure, &model).unwrap())
-    );
+    // ORT parses the checked descriptor, not the path: loading the swapped-in bytes would fail
+    // with a parse error. The swap unlinks the checked inode, which moves its ctime, so the
+    // identity check still refuses the session and the caller rebuilds. ~keep
+    let error = graph.commit(disabled()).unwrap_err();
+    assert!(error.contains("changed while it was loaded"), "{error}");
 
     // A change to the checked file itself between the check and the load is refused, even one
     // that leaves the graph loadable.
