@@ -56,6 +56,26 @@ fn apply(transcript: &str, edits: &[OccurrenceEdit<'_>]) -> String {
 }
 
 #[test]
+fn serializer_joins_adjacent_cjk_words_and_reports_their_unspaced_byte_ranges() {
+    let words = [
+        positioned("停车", [100, 100, 160, 130]),
+        positioned("区", [162, 100, 190, 130]),
+        positioned("7.5", [200, 100, 240, 130]),
+        positioned("指标", [300, 100, 360, 130]),
+    ];
+    let mut seen = Vec::new();
+
+    let transcript =
+        render_inline_ocr_table_content_with_occurrences(&words, &[], &mut |id, range| seen.push((id, range)));
+
+    assert_eq!(transcript, "停车区 7.5 指标");
+    assert_eq!(seen, [(0, 0..6), (1, 6..9), (2, 10..13), (3, 14..20)]);
+    for (id, range) in seen {
+        assert_eq!(transcript.get(range), Some(words[id].text.as_str()));
+    }
+}
+
+#[test]
 fn serializer_omits_table_owned_occurrences_instead_of_claiming_a_byte_valid_lookalike() {
     let boxes = [
         [205, 155, 251, 173],

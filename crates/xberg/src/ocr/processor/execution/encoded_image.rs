@@ -67,7 +67,7 @@ pub(super) fn prepare_with_dpi_policy(
         policy: config.preprocessing.clone().map(Some).or_else(|| {
             config
                 .known_full_page_scan
-                .then(|| Some(super::known_full_page_scan_preprocessing()))
+                .then(|| Some(super::known_full_page_scan_preprocessing(config.tessdata_model)))
         }),
         maximum_pixels: u64::MAX,
     };
@@ -214,6 +214,7 @@ impl Preparation<'_> {
             height,
             self.config.preprocessing.as_ref(),
             self.config.known_full_page_scan,
+            self.config.tessdata_model,
         );
         let policy = preprocessing.as_deref();
         self.gray_input.set(

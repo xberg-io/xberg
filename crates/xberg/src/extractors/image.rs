@@ -102,6 +102,17 @@ const SPARSE_IMAGE_OCR_MAX_LOW_CONFIDENCE_RATIO: f64 = 0.30;
 ))]
 const SPARSE_IMAGE_OCR_CONFIDENCE_PERCENTILE: f64 = 0.10;
 
+/// Fewest usable words whose confidence distribution can vouch for a sparse read. Raw Tesseract
+/// reads of garbage pass the distribution gate with one to four words (ocr_test_rotated_90 psm 11:
+/// `NZ` at 0.66, `=` `=.` at 0.94; cord_receipt_02 psm 3 best: three words at 0.34-0.55;
+/// ocr_test_rotated_270 psm 11 best: four symbols at 0.83-0.96), while every genuine sparse page in
+/// the corpus reads at least fifteen words. ~keep
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
+const SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS: usize = 5;
+
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
 const LAYOUT_REGION_TESSERACT_PSM: i32 = 6;
 
@@ -1367,9 +1378,25 @@ fn should_retry_sparse_image_ocr(
     config: &crate::core::config::OcrConfig,
     result: &crate::types::ExtractedDocument,
 ) -> bool {
+    let word_count = usable_word_confidences(result).len();
     is_implicit_horizontal_tesseract(config)
-        && usable_word_confidences(result).len() <= SPARSE_IMAGE_OCR_WORD_LIMIT
-        && !has_robust_word_confidence_distribution(result)
+        && word_count <= SPARSE_IMAGE_OCR_WORD_LIMIT
+        && (word_count < SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS || !has_robust_word_confidence_distribution(result))
+}
+
+/// A retry that ran only because the primary read too few words to judge must add words to win:
+/// a confident short label read twice is kept as first read. ~keep
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
+fn should_select_sparse_fallback(
+    primary: &crate::types::ExtractedDocument,
+    fallback: &crate::types::ExtractedDocument,
+) -> bool {
+    has_robust_word_confidence_distribution(fallback)
+        && (!has_robust_word_confidence_distribution(primary)
+            || usable_word_confidences(fallback).len() > usable_word_confidences(primary).len())
 }
 
 #[cfg(all(
@@ -2791,7 +2818,7 @@ async fn process_whole_image_ocr(
         )
         .await;
     }
-    if !has_robust_word_confidence_distribution(&fallback) {
+    if !should_select_sparse_fallback(&primary, &fallback) {
         return Ok(apply_rtl_capture_public_policy(original_config, primary));
     }
     let mut selected = fallback;
@@ -6057,9 +6084,73 @@ mod tests {
         #[test]
         fn should_not_retry_sparse_primary_with_robust_word_confidences() {
             let config = crate::core::config::OcrConfig::default();
-            let result = result_with_word_confidences(&[0.90, 0.95]);
+            let result = result_with_word_confidences(&[0.90, 0.95, 0.90, 0.95, 0.90]);
 
             assert!(!should_retry_sparse_image_ocr(&config, &result));
+        }
+
+        /// ocr_test_rotated_90.png with tessdata_best: psm 11 read only `NZ` at 0.66, which passed the
+        /// distribution gate as its own mean and tenth percentile, so the 15-word retry never ran. ~keep
+        #[test]
+        fn should_retry_confident_primary_with_too_few_words_to_judge() {
+            let config = crate::core::config::OcrConfig::default();
+            let cases: [(&str, Vec<f64>, bool); 4] = [
+                ("one word at 0.66", vec![0.66], true),
+                (
+                    "four confident words",
+                    vec![0.95; SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS - 1],
+                    true,
+                ),
+                (
+                    "five confident words",
+                    vec![0.95; SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS],
+                    false,
+                ),
+                (
+                    "five words, all low",
+                    vec![0.10; SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS],
+                    true,
+                ),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    should_retry_sparse_image_ocr(&config, &result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_select_fallback_only_when_it_adds_words_to_a_confident_short_primary() {
+            let primary = result_with_word_confidences(&[0.66]);
+            let cases: [(&str, Vec<f64>, bool); 4] = [
+                ("fifteen confident words", vec![0.94; 15], true),
+                ("one confident word", vec![0.95], false),
+                ("two confident words", vec![0.95, 0.95], true),
+                ("fifteen low words", vec![0.10; 15], false),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    should_select_sparse_fallback(&primary, &result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_select_robust_fallback_over_a_low_confidence_primary_of_any_length() {
+            let primary = result_with_word_confidences(&[0.10, 0.10, 0.10]);
+
+            assert!(should_select_sparse_fallback(
+                &primary,
+                &result_with_word_confidences(&[0.95])
+            ));
+            assert!(!should_select_sparse_fallback(
+                &primary,
+                &result_with_word_confidences(&[0.10])
+            ));
         }
 
         #[test]
