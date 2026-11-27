@@ -1459,10 +1459,8 @@ impl PdfDocument {
         let mut line_start = body_start;
         let mut payload_skipped = false;
         loop {
-            let line_end = source[line_start..]
-                .iter()
-                .position(|byte| *byte == b'\n')
-                .map_or(source.len(), |newline| line_start + newline + 1);
+            let line_end =
+                memchr::memchr(b'\n', &source[line_start..]).map_or(source.len(), |newline| line_start + newline + 1);
             let bytes_read = line_end - line_start;
             let data_len = prefix.len() + (data_end - data_start);
 
@@ -1493,9 +1491,7 @@ impl PdfDocument {
             }
 
             let chunk = &source[line_start..line_end];
-            if chunk.contains(&b'e')
-                && let Some(endobj_pos) = find_substring(chunk, b"endobj")
-            {
+            if let Some(endobj_pos) = find_substring(chunk, b"endobj") {
                 data_end = line_start + endobj_pos;
                 break;
             }

@@ -2000,11 +2000,7 @@ pub fn parse_trailer<R: Read>(reader: &mut R) -> Result<Object> {
 ///
 /// Returns the index of the first occurrence, or None if not found.
 fn find_substring(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(0);
-    }
-
-    haystack.windows(needle.len()).position(|window| window == needle)
+    memchr::memmem::find(haystack, needle)
 }
 
 #[cfg(test)]
