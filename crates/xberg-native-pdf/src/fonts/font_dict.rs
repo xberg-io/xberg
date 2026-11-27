@@ -12653,6 +12653,24 @@ mod tests {
         );
     }
 
+    /// A Type0 font's UTF-8 CMap name is recognised in any letter case, with or without the
+    /// hyphen; a simple font never takes the UTF-8 route.
+    #[test]
+    fn utf8_cmap_names_match_in_any_case() {
+        use crate::fonts::unicode_decode::font_has_utf8_cmap;
+        let named = |name: &str| type0_font_without_program("Foo", Encoding::Standard(name.to_string()));
+
+        for name in ["UniJIS-UTF8-H", "Uni-Utf8-H", "uni-utf-8-v", "UTF-8", "utf8"] {
+            assert!(font_has_utf8_cmap(&named(name)), "{name}");
+        }
+        for name in ["UniJIS-UTF16-H", "Identity-H", "utf", "UTF_8", "utf-", "8ftu", ""] {
+            assert!(!font_has_utf8_cmap(&named(name)), "{name}");
+        }
+        let mut simple = named("UniJIS-UTF8-H");
+        simple.subtype = "TrueType".to_string();
+        assert!(!font_has_utf8_cmap(&simple));
+    }
+
     /// Only the first sighting of an unsupported predefined CMap name reports, however many
     /// glyphs and fonts ask afterwards.
     #[test]

@@ -75,6 +75,9 @@ pub struct CidCMap {
     chars: HashMap<u32, u16>,
     ranges: Vec<CidRangeEntry>,
     codespace: Vec<CodespaceRange>,
+    /// The distinct `n_bytes` of `codespace`, ascending. Derived once at parse
+    /// time because segmentation asks for it at every code.
+    widths: Vec<u8>,
 }
 
 impl CidCMap {
@@ -108,11 +111,8 @@ impl CidCMap {
 
     /// The distinct byte-widths declared by `begincodespacerange`, sorted
     /// ascending and deduplicated. Empty when no codespace was declared.
-    pub(crate) fn codespace_widths(&self) -> Vec<u8> {
-        let mut widths: Vec<u8> = self.codespace.iter().map(|r| r.n_bytes).collect();
-        widths.sort_unstable();
-        widths.dedup();
-        widths
+    pub(crate) fn codespace_widths(&self) -> &[u8] {
+        &self.widths
     }
 
     /// Number of bytes the code starting at `bytes[pos]` occupies, per the
@@ -136,7 +136,7 @@ impl CidCMap {
         if widths.is_empty() {
             return 1;
         }
-        for width in &widths {
+        for width in widths {
             let w = *width as usize;
             if w > remaining {
                 continue;
@@ -245,6 +245,9 @@ pub(crate) fn parse_cid_cmap(data: &[u8]) -> Result<CidCMap> {
             }
         }
     }
+    map.widths = map.codespace.iter().map(|r| r.n_bytes).collect();
+    map.widths.sort_unstable();
+    map.widths.dedup();
 
     for section in extract_sections(&content, "begincidchar", "endcidchar") {
         for line in significant_lines(section) {
@@ -312,6 +315,15 @@ mod tests {
         assert_eq!(map.code_length(&bytes, 1), 2);
         assert_eq!(map.code_length(&bytes, 3), 1);
         assert_eq!(map.code_length(&bytes, 4), 0);
+    }
+
+    #[test]
+    fn repeated_and_unordered_codespace_widths_are_reported_once_ascending() {
+        let data = b"4 begincodespacerange\n<8140> <9FFC>\n<00> <7F>\n<E040> <FCFC>\n<A0> <DF>\nendcodespacerange\n";
+        let map = parse_cid_cmap(data).unwrap();
+        assert_eq!(map.codespace_widths(), vec![1, 2]);
+        assert_eq!(map.code_length(&[0xE0, 0x40, 0xA1], 0), 2);
+        assert_eq!(map.code_length(&[0xE0, 0x40, 0xA1], 2), 1);
     }
 
     #[test]
