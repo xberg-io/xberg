@@ -762,9 +762,9 @@ impl<'doc> TextExtractor<'doc> {
     /// can use the return value to observe when a cache hit made this call a
     /// no-op instead of redoing the `Arc::make_mut` clone. ~keep
     pub fn share_truetype_cmaps(&mut self) -> usize {
-        let best_cmaps = crate::fonts::unicode_decode::best_truetype_cmaps(self.fonts.values().map(|f| &**f));
+        let donations = crate::fonts::truetype_cmap::truetype_cmap_donations(self.fonts.values().map(|f| &**f));
 
-        if best_cmaps.is_empty() {
+        if donations.is_empty() {
             return 0;
         }
 
@@ -783,7 +783,7 @@ impl<'doc> TextExtractor<'doc> {
             }
 
             let stripped = strip_subset_prefix(&font_arc.base_font);
-            if let Some((donor_cmap, _)) = best_cmaps.get(stripped) {
+            if let Some(donor_cmap) = donations.get(stripped) {
                 tracing::info!(target: LOG_TARGET,
                     "Sharing TrueType cmap ({} entries) to '{}' (Identity-H, no embedded font)",
                     donor_cmap.len(),

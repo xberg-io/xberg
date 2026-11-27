@@ -12596,6 +12596,63 @@ mod tests {
         FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict")
     }
 
+    fn truetype_font(base_font: &str, code: u16) -> FontInfo {
+        make_font(|f| {
+            f.base_font = base_font.to_string();
+            f.subtype = "TrueType".to_string();
+            f.is_truetype_font = true;
+            f.embedded_font_data = Some(Arc::new(truetype_program_with_cmap(code, 3)));
+        })
+    }
+
+    fn type0_font_without_program(base_font: &str, encoding: Encoding) -> FontInfo {
+        make_font(|f| {
+            f.base_font = base_font.to_string();
+            f.subtype = "Type0".to_string();
+            f.encoding = encoding;
+        })
+    }
+
+    /// With no Type0 Identity font sharing a base name with another font there is nothing to
+    /// donate, and no font's lazy cmap is parsed to find that out.
+    #[test]
+    fn cmap_donation_without_a_recipient_parses_no_cmap() {
+        let fonts = [
+            truetype_font("ABCDEF+Arial", 0x41),
+            truetype_font("Arial", 0x42),
+            type0_font_without_program("GHIJKL+Times", Encoding::Identity),
+            type0_font_without_program("MNOPQR+Arial", Encoding::Standard("90ms-RKSJ-H".to_string())),
+        ];
+
+        let donations = crate::fonts::truetype_cmap::truetype_cmap_donations(fonts.iter());
+
+        assert!(donations.is_empty());
+        for font in &fonts {
+            assert!(font.truetype_cmap.get().is_none(), "{} was parsed", font.base_font);
+        }
+    }
+
+    /// A Type0 Identity font without a cmap is offered the cmap of the font sharing its base
+    /// name; on equal coverage the smallest donor name wins, and unrelated fonts stay unparsed.
+    #[test]
+    fn cmap_donation_offers_a_recipient_the_best_donor_of_its_base_name() {
+        let fonts = [
+            truetype_font("CCCCCC+Arial", 0x41),
+            truetype_font("BBBBBB+Arial", 0x42),
+            type0_font_without_program("AAAAAA+Arial", Encoding::Standard("Identity-H".to_string())),
+            truetype_font("DDDDDD+Times", 0x43),
+        ];
+
+        let donations = crate::fonts::truetype_cmap::truetype_cmap_donations(fonts.iter());
+
+        assert_eq!(donations.keys().collect::<Vec<_>>(), ["Arial"]);
+        assert_eq!(donations["Arial"].get_unicode(3), Some('B'));
+        assert!(
+            fonts[3].truetype_cmap.get().is_none(),
+            "a font no recipient shares a name with stays unparsed"
+        );
+    }
+
     /// Only the first sighting of an unsupported predefined CMap name reports, however many
     /// glyphs and fonts ask afterwards.
     #[test]
