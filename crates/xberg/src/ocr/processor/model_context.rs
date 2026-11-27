@@ -406,7 +406,7 @@ impl ModelContext {
     pub(super) fn result_key(&self, config: &TesseractConfig) -> String {
         let mut base = super::config::hash_config(config, &self.directory);
         // ~keep The directory path alone keeps matching after a pack is replaced in place.
-        if let Some(identity) = self.identity {
+        if let Some(identity) = self.identity() {
             let mut hash = blake3::Hasher::new();
             hash.update(b"tesseract-primary-model-identity-v1");
             hash.update(base.as_bytes());
