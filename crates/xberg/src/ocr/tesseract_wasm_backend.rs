@@ -70,21 +70,22 @@ impl TesseractWasmBackend {
         })
     }
 
-    /// Resolve tessdata bytes for a language, consulting the cache, the
-    /// supplied OcrConfig, and the optional bundled-eng compile-time blob.
+    /// Resolve tessdata bytes for a language: the bytes the caller supplied in the `OcrConfig`,
+    /// else the cached or compile-time bundled English model.
     fn resolve_tessdata(&self, language: &str, config: &OcrConfig) -> Result<Vec<u8>> {
+        // ~keep Supplied bytes belong to one request: caching them under (set, language) would
+        // serve them to a later request that supplies other bytes or none.
+        if let Some(ref user_supplied) = config.tessdata_bytes
+            && let Some(bytes) = user_supplied.get(language)
+        {
+            return Ok(bytes.clone());
+        }
+
         let key = (config.effective_tessdata_model(), language.to_owned());
         if let Ok(cache) = self.tessdata_cache.lock()
             && let Some(cached) = cache.get(&key)
         {
             return Ok(cached.clone());
-        }
-
-        if let Some(ref user_supplied) = config.tessdata_bytes
-            && let Some(bytes) = user_supplied.get(language)
-        {
-            self.cache_tessdata(key, bytes.clone());
-            return Ok(bytes.clone());
         }
 
         require_bundled_model(config)?;
@@ -476,6 +477,45 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [7, 7, 7]);
+    }
+
+    #[test]
+    fn should_prefer_caller_supplied_bytes_over_an_earlier_resolution() {
+        let backend = TesseractWasmBackend::new().unwrap();
+        backend.cache_tessdata((TessdataModel::Fast, "eng".to_string()), vec![1_u8; 3]);
+        let supplying = |byte: u8| OcrConfig {
+            tessdata_bytes: Some(HashMap::from([("eng".to_string(), vec![byte; 3])])),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            backend.resolve_tessdata("eng", &OcrConfig::default()).unwrap(),
+            [1, 1, 1]
+        );
+        assert_eq!(backend.resolve_tessdata("eng", &supplying(7)).unwrap(), [7, 7, 7]);
+        assert_eq!(backend.resolve_tessdata("eng", &supplying(9)).unwrap(), [9, 9, 9]);
+        assert_eq!(
+            backend.resolve_tessdata("eng", &OcrConfig::default()).unwrap(),
+            [1, 1, 1],
+            "supplied bytes must not replace the shared entry"
+        );
+    }
+
+    #[test]
+    fn should_not_keep_caller_supplied_best_bytes_for_a_later_request() {
+        let backend = TesseractWasmBackend::new().unwrap();
+        let best = |tessdata_bytes| OcrConfig {
+            tessdata_model: Some(TessdataModel::Best),
+            tessdata_bytes,
+            ..Default::default()
+        };
+
+        let supplied = best(Some(HashMap::from([("eng".to_string(), vec![7_u8; 3])])));
+        assert_eq!(backend.resolve_tessdata("eng", &supplied).unwrap(), [7, 7, 7]);
+        assert!(matches!(
+            backend.resolve_tessdata("eng", &best(None)),
+            Err(crate::XbergError::MissingDependency(_))
+        ));
     }
 
     #[test]
