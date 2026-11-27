@@ -4970,7 +4970,6 @@ fn build_document_structure_with_native(
     let page_inputs: Vec<PageInput> = (0..page_count)
         .map(|i| {
             let heuristic_segments = std::mem::take(&mut all_page_segments[i]);
-            let paragraph_gap_ys = compute_paragraph_gap_ys(&heuristic_segments);
             PageInput {
                 page_index: i,
                 struct_paragraphs: None,
@@ -4995,7 +4994,8 @@ fn build_document_structure_with_native(
                 #[cfg(not(feature = "layout-detection"))]
                 isolated_folio_page_height: None,
                 needs_classify: false,
-                paragraph_gap_ys,
+                // Measured per page in `process_page`, off this sequential pass. ~keep
+                paragraph_gap_ys: Vec::new(),
                 include_headers,
                 include_footers,
                 include_footnotes,
@@ -5009,7 +5009,8 @@ fn build_document_structure_with_native(
         ));
     }
 
-    let process_page = |input| {
+    let process_page = |mut input: PageInput| {
+        input.paragraph_gap_ys = compute_paragraph_gap_ys(&input.heuristic_segments);
         let mut accepted_folio = None;
         let paragraphs =
             process_single_page_with_folio(input, &heading_map, doc_body_font_size, &witnesses, &mut accepted_folio);
