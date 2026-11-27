@@ -233,7 +233,7 @@ impl SubprocessAdapter {
         self.launcher_env = launcher_env;
         self
     }
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "macos"))]
     pub(crate) fn env(&self) -> &[(String, String)] {
         &self.env
     }
