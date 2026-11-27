@@ -3622,11 +3622,17 @@ fn build_grid_from_lines(
 /// Register tables (2026-14578's `PBR`) is 32pt. ~keep
 const MIN_OPEN_COLUMN_WIDTH: f32 = 20.0;
 
+/// Fewest distinct column rules crossing a run of horizontal rules for their overhang to be read as open outer
+/// columns. The Federal Register tables the rule serves have at least two; the IRS Publication 15-T
+/// percentage tables have a single rule between a MARRIED and a SINGLE half. ~keep
+const MIN_COLUMN_RULES_FOR_OPEN_COLUMNS: usize = 2;
+
 /// A horizontal rule whose end lies beyond the outermost vertical rule crossing it on one side.
 struct OpenRuleEnd {
     rule: Edge,
     end: f32,
     outermost: f32,
+    columns: Vec<f32>,
 }
 
 /// Vertical edges closing the outer columns of a table ruled only between its columns.
@@ -3648,16 +3654,22 @@ fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan
     for left_side in [true, false] {
         let mut groups: Vec<Vec<OpenRuleEnd>> = Vec::new();
         for rule in h_edges {
-            let crossing = v_edges.iter().filter(|v| {
-                v.coord > rule.start + SNAP_TOL
-                    && v.coord < rule.end - SNAP_TOL
-                    && rule.coord >= v.start - SNAP_TOL
-                    && rule.coord <= v.end + SNAP_TOL
-            });
+            let mut crossing: Vec<f32> = v_edges
+                .iter()
+                .filter(|v| {
+                    v.coord > rule.start + SNAP_TOL
+                        && v.coord < rule.end - SNAP_TOL
+                        && rule.coord >= v.start - SNAP_TOL
+                        && rule.coord <= v.end + SNAP_TOL
+                })
+                .map(|v| v.coord)
+                .collect();
+            crossing.sort_by(|a, b| crate::utils::safe_float_cmp(*a, *b));
+            crossing.dedup_by(|a, b| (*a - *b).abs() <= SNAP_TOL);
             let outermost = if left_side {
-                crossing.map(|v| v.coord).fold(f32::INFINITY, f32::min)
+                crossing.iter().copied().fold(f32::INFINITY, f32::min)
             } else {
-                crossing.map(|v| v.coord).fold(f32::NEG_INFINITY, f32::max)
+                crossing.iter().copied().fold(f32::NEG_INFINITY, f32::max)
             };
             let end = if left_side { rule.start } else { rule.end };
             if !outermost.is_finite() || (outermost - end).abs() < MIN_OPEN_COLUMN_WIDTH {
@@ -3673,6 +3685,7 @@ fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan
                 rule: *rule,
                 end,
                 outermost,
+                columns: crossing,
             };
             match groups.iter_mut().find(|group| (group[0].end - end).abs() <= SNAP_TOL) {
                 Some(group) => group.push(open_end),
@@ -3709,6 +3722,14 @@ fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan
                     let inner = run.iter().map(|open| open.outermost).fold(f32::NEG_INFINITY, f32::max);
                     (inner, first.end)
                 };
+                // One column rule makes two halves, not columns between rules: the columns inside a
+                // half are unruled and closing the outer edges would fuse them into one cell.
+                let mut columns: Vec<f32> = run.iter().flat_map(|open| open.columns.iter().copied()).collect();
+                columns.sort_by(|a, b| crate::utils::safe_float_cmp(*a, *b));
+                columns.dedup_by(|a, b| (*a - *b).abs() <= SNAP_TOL);
+                if columns.len() < MIN_COLUMN_RULES_FOR_OPEN_COLUMNS {
+                    continue;
+                }
                 let (bottom, top) = (first.rule.coord, last.rule.coord);
                 let holds_text = spans.iter().any(|span| {
                     let center_y = span.bbox.center().y;
@@ -6293,6 +6314,30 @@ mod tests {
         assert_eq!(groups[0].1.first().copied(), Some(45.));
         assert_eq!(groups[0].1.last().copied(), Some(567.));
         assert_eq!(groups[0].3, 5, "stub, three value columns and the last column");
+    }
+
+    /// IRS Publication 15-T: one column rule splits a MARRIED half from a SINGLE half, and each half
+    /// holds unruled value columns. Closing the outer edges would fuse each half into one cell.
+    #[test]
+    fn a_single_column_rule_adds_no_open_column_edge() {
+        use crate::elements::PathContent;
+        let lines = vec![
+            PathContent::line(45., 400., 567., 400.),
+            PathContent::line(45., 380., 567., 380.),
+            PathContent::line(45., 300., 567., 300.),
+            PathContent::line(306., 300., 306., 400.),
+        ];
+        let spans = vec![
+            create_test_span("MARRIED", 100., 385., 40., 9.),
+            create_test_span("$329", 100., 355., 20., 9.),
+            create_test_span("SINGLE", 400., 385., 40., 9.),
+            create_test_span("$123", 400., 355., 20., 9.),
+        ];
+        let (mut h_edges, mut v_edges) = extract_edges(&lines);
+        snap_and_merge(&mut h_edges);
+        snap_and_merge(&mut v_edges);
+
+        assert!(open_outer_column_edges(&h_edges, &v_edges, &spans).is_empty());
     }
 
     #[test]
