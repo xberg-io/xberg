@@ -5,7 +5,6 @@
 //! most accurate character-to-Unicode mapping.
 
 use super::adobe_glyph_list::ADOBE_GLYPH_LIST;
-use crate::cache::MutexExt;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::fonts::TrueTypeCMap;
@@ -477,11 +476,7 @@ fn unicode_keyed_predefined_collection(
 /// `B5-H`, `EUC-H`, …) and the UTF-8 predefined CMaps (`UniJIS-UTF8-H`, …) —
 /// none of these have a vendored charcode→CID table in this crate.
 fn warn_unsupported_predefined_cmap_once(name: &str, base_font: &str) {
-    static WARNED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
-        std::sync::OnceLock::new();
-    let warned = WARNED.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
-    let mut warned = warned.lock_or_recover();
-    if !warned.insert(name.to_string()) {
+    if !first_unsupported_predefined_cmap_warning(name) {
         return;
     }
     tracing::warn!(
@@ -494,6 +489,26 @@ fn warn_unsupported_predefined_cmap_once(name: &str, base_font: &str) {
          CID, which is only correct by coincidence. Glyph widths and any CID-keyed lookups for \
          this font are likely wrong."
     );
+}
+
+/// Records `name` as warned about; `true` only for the first call per name in the process.
+fn first_unsupported_predefined_cmap_warning(name: &str) -> bool {
+    static WARNED: std::sync::OnceLock<std::sync::RwLock<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let warned = WARNED.get_or_init(Default::default);
+    // `code_to_cid` reaches this per glyph, so a repeat must neither allocate nor
+    // exclude the other page threads. ~keep
+    if warned
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains(name)
+    {
+        return false;
+    }
+    warned
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(name.to_string())
 }
 
 impl FontInfo {
@@ -12579,6 +12594,20 @@ mod tests {
         let doc = crate::document::PdfDocument::from_bytes(pdf).expect("synthetic PDF must parse");
         let font_obj = doc.load_object(crate::object::ObjectRef::new(3, 0)).unwrap();
         FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict")
+    }
+
+    /// Only the first sighting of an unsupported predefined CMap name reports, however many
+    /// glyphs and fonts ask afterwards.
+    #[test]
+    fn unsupported_predefined_cmap_is_reported_once_per_name() {
+        let name = "Test-ReportedOncePerName-H";
+        let other = "Test-ReportedOncePerName-V";
+
+        assert!(first_unsupported_predefined_cmap_warning(name));
+        assert!(!first_unsupported_predefined_cmap_warning(name));
+        assert!(!first_unsupported_predefined_cmap_warning(name));
+        assert!(first_unsupported_predefined_cmap_warning(other));
+        assert!(!first_unsupported_predefined_cmap_warning(other));
     }
 
     /// Loading a Type0 font adopts its CIDFontType2 descendant's /FontFile2 without parsing the
