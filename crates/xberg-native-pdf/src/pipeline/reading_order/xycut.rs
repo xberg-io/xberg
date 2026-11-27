@@ -1138,7 +1138,9 @@ impl XYCutStrategy {
         // split entirely: `partition_region` already does the same for Y-bands via
         // `find_vertical_split_indexed` peeling ahead of `detect_two_column_prose`, for the
         // same reason. ~keep
-        if let Some(bands) = self.peel_full_width_line_bands(all_spans, indices) {
+        // One line grouping per node: the peel and the column cut both read it. ~keep
+        let lines = group_indices_into_lines(all_spans, indices);
+        if let Some(bands) = self.peel_full_width_line_bands(all_spans, indices, &lines) {
             let mut result = Vec::new();
             for band in bands {
                 result.extend(self.partition_indexed_depth(all_spans, &band, depth + 1));
@@ -1146,19 +1148,21 @@ impl XYCutStrategy {
             return result;
         }
 
-        let split_h = |s: &Self, sp: &[TextSpan], idx: &[usize]| s.find_horizontal_split_indexed(sp, idx);
-        let split_v = |s: &Self, sp: &[TextSpan], idx: &[usize]| s.find_vertical_split_indexed(sp, idx);
+        let split = |horizontal: bool| {
+            if horizontal {
+                self.find_horizontal_split_with_lines(all_spans, indices, Some(&lines))
+            } else {
+                self.find_vertical_split_indexed(all_spans, indices)
+            }
+        };
 
-        let first_split = if self.prefer_horizontal { split_h } else { split_v };
-        let second_split = if self.prefer_horizontal { split_v } else { split_h };
-
-        if let Some((a, b)) = first_split(self, all_spans, indices) {
+        if let Some((a, b)) = split(self.prefer_horizontal) {
             let mut result = self.partition_indexed_depth(all_spans, &a, depth + 1);
             result.extend(self.partition_indexed_depth(all_spans, &b, depth + 1));
             return result;
         }
 
-        if let Some((a, b)) = second_split(self, all_spans, indices) {
+        if let Some((a, b)) = split(!self.prefer_horizontal) {
             let mut result = self.partition_indexed_depth(all_spans, &a, depth + 1);
             result.extend(self.partition_indexed_depth(all_spans, &b, depth + 1));
             return result;
@@ -1823,9 +1827,15 @@ impl XYCutStrategy {
     ///
     /// A line (already a continuous run of ink -- see `group_indices_into_lines`) is
     /// full-width when its inked extent reaches `FULL_WIDTH_LINE_FRACTION` of the region's
-    /// own width. GH#1808. ~keep
-    fn peel_full_width_line_bands(&self, all_spans: &[TextSpan], indices: &[usize]) -> Option<Vec<Vec<usize>>> {
-        let lines = group_indices_into_lines(all_spans, indices);
+    /// own width. GH#1808.
+    ///
+    /// `lines` is `group_indices_into_lines(all_spans, indices)`. ~keep
+    fn peel_full_width_line_bands(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: &[Vec<usize>],
+    ) -> Option<Vec<Vec<usize>>> {
         if lines.len() < MIN_PEELED_FULL_WIDTH_LINES {
             return None;
         }
@@ -1890,11 +1900,18 @@ impl XYCutStrategy {
     /// entirely on one side is unaffected: its majority side is trivially its only side, so
     /// this partitions identically to a per-span `left edge < split_x` test there. Ties (a
     /// line whose inked width splits exactly evenly) go left, matching the pre-existing
-    /// left-edge bias. GH#1808. ~keep
-    fn partition_lines_at(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> (Vec<usize>, Vec<usize>) {
-        let lines = group_indices_into_lines(all_spans, indices);
-        let mut goes_right: std::collections::HashMap<usize, bool> = std::collections::HashMap::new();
-        for line in &lines {
+    /// left-edge bias. GH#1808.
+    ///
+    /// `lines` is `group_indices_into_lines(all_spans, indices)`. ~keep
+    fn partition_lines_at(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: &[Vec<usize>],
+        split_x: f32,
+    ) -> (Vec<usize>, Vec<usize>) {
+        let mut goes_right = vec![false; all_spans.len()];
+        for line in lines {
             let mut left_width = 0.0f32;
             let mut right_width = 0.0f32;
             for &i in line {
@@ -1904,16 +1921,13 @@ impl XYCutStrategy {
             }
             let line_goes_right = right_width > left_width;
             for &i in line {
-                goes_right.insert(i, line_goes_right);
+                goes_right[i] = line_goes_right;
             }
         }
         // `Iterator::partition` sends predicate-true items into its FIRST returned vec, so
         // the predicate must test "belongs on the left" to produce `(left, right)` in that
         // order -- inverted, this silently swaps every region's two sides. ~keep
-        indices
-            .iter()
-            .copied()
-            .partition(|i| !goes_right.get(i).copied().unwrap_or(false))
+        indices.iter().copied().partition(|&i| !goes_right[i])
     }
 
     fn straddling_line_count(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> usize {
@@ -2133,6 +2147,18 @@ impl XYCutStrategy {
         all_spans: &[TextSpan],
         indices: &[usize],
     ) -> Option<(Vec<usize>, Vec<usize>)> {
+        self.find_horizontal_split_with_lines(all_spans, indices, None)
+    }
+
+    /// `find_horizontal_split_indexed` for a caller that already holds
+    /// `group_indices_into_lines(all_spans, indices)`; `None` groups them here, and only once
+    /// a candidate cut has survived the checks that do not need lines. ~keep
+    fn find_horizontal_split_with_lines(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: Option<&[Vec<usize>]>,
+    ) -> Option<(Vec<usize>, Vec<usize>)> {
         let profile = self.horizontal_projection_indexed(all_spans, indices)?;
 
         let split_x = if let Some((vs, ve, vw)) = self.find_valley(&profile) {
@@ -2205,7 +2231,15 @@ impl XYCutStrategy {
         // to the side holding the majority of its inked width, so a line entirely on one
         // side partitions exactly as `left edge < split_x` already did (unaffected), and
         // only a straddling line's assignment changes. ~keep
-        let (left, right) = self.partition_lines_at(all_spans, indices, split_x);
+        let grouped;
+        let lines: &[Vec<usize>] = match lines {
+            Some(lines) => lines,
+            None => {
+                grouped = group_indices_into_lines(all_spans, indices);
+                &grouped
+            }
+        };
+        let (left, right) = self.partition_lines_at(all_spans, indices, lines, split_x);
 
         if left.is_empty() || right.is_empty() {
             return None;
@@ -2283,11 +2317,11 @@ impl XYCutStrategy {
             return None;
         }
 
-        if self.cuts_label_value_rows(all_spans, indices, split_x) {
+        if self.cuts_label_value_rows(all_spans, lines, split_x) {
             return None;
         }
 
-        if self.cuts_numeric_table_rows(all_spans, indices, split_x) {
+        if self.cuts_numeric_table_rows(all_spans, lines, split_x) {
             return None;
         }
 
@@ -2311,9 +2345,9 @@ impl XYCutStrategy {
     /// a column line is a full column wide -- so a real gutter is unaffected. Cutting here
     /// would read every label before any value, so the caller falls back to a row cut.
     /// Rows on one exact baseline are not counted: they were never joined by the line
-    /// grouping either, and their handling is left as it was. ~keep
-    fn cuts_label_value_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
-        let lines = group_indices_into_lines(all_spans, indices);
+    /// grouping either, and their handling is left as it was. `lines` is the region's
+    /// `group_indices_into_lines`. ~keep
+    fn cuts_label_value_rows(&self, all_spans: &[TextSpan], lines: &[Vec<usize>], split_x: f32) -> bool {
         let extent = |line: &[usize]| -> (f32, f32, f32, f32) {
             line.iter().fold((f32::MAX, f32::MIN, f32::MIN, 0.0f32), |acc, &i| {
                 let span = &all_spans[i];
@@ -2327,7 +2361,7 @@ impl XYCutStrategy {
         };
         let mut left_lines = 0usize;
         let mut right_lines = 0usize;
-        for line in &lines {
+        for line in lines {
             let (line_min, line_max, _, _) = extent(line);
             if line_max <= split_x {
                 left_lines += 1;
@@ -2365,9 +2399,8 @@ impl XYCutStrategy {
     /// because two prose columns share baselines; a prose line is neither a number nor short,
     /// so it never counts here. Cutting would read a table column by column (1602.03238 page
     /// 24 read the first value column before the second), so the caller falls back to a row
-    /// cut. ~keep
-    fn cuts_numeric_table_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
-        let lines = group_indices_into_lines(all_spans, indices);
+    /// cut. `lines` is the region's `group_indices_into_lines`. ~keep
+    fn cuts_numeric_table_rows(&self, all_spans: &[TextSpan], lines: &[Vec<usize>], split_x: f32) -> bool {
         let run = |line: &[usize]| -> (f32, f32, f32, f32, bool) {
             let (left, right, y, font) = line.iter().fold((f32::MAX, f32::MIN, f32::MIN, 0.0f32), |acc, &i| {
                 let span = &all_spans[i];
@@ -5204,7 +5237,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let bands = strategy
-            .peel_full_width_line_bands(&spans, &indices)
+            .peel_full_width_line_bands(&spans, &indices, &group_indices_into_lines(&spans, &indices))
             .expect("an 8-line full-width legend must be peeled off as its own band(s)");
 
         assert_eq!(bands.len(), 2, "expected exactly [column band, legend band]: {bands:?}");
@@ -5257,7 +5290,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let bands = strategy
-            .peel_full_width_line_bands(&spans, &indices)
+            .peel_full_width_line_bands(&spans, &indices, &group_indices_into_lines(&spans, &indices))
             .expect("the single-span legend must still be peeled off");
         assert_eq!(bands.len(), 2);
         assert_eq!(
@@ -5294,7 +5327,8 @@ mod tests {
         }
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy.partition_lines_at(&spans, &indices, 200.0);
+        let (left, right) =
+            strategy.partition_lines_at(&spans, &indices, &group_indices_into_lines(&spans, &indices), 200.0);
 
         assert_eq!(left, vec![0, 1], "only the two clear-left lines belong on the left");
         let mut expected_right: Vec<usize> = vec![2, 3];
@@ -5323,7 +5357,8 @@ mod tests {
         }
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy.partition_lines_at(&spans, &indices, 200.0);
+        let (left, right) =
+            strategy.partition_lines_at(&spans, &indices, &group_indices_into_lines(&spans, &indices), 200.0);
 
         assert_eq!(left, vec![0, 2, 4], "the left column's lines");
         assert_eq!(right, vec![1, 3, 5], "the right column's lines");
@@ -5342,7 +5377,8 @@ mod tests {
         ];
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy.partition_lines_at(&spans, &indices, 402.0);
+        let (left, right) =
+            strategy.partition_lines_at(&spans, &indices, &group_indices_into_lines(&spans, &indices), 402.0);
 
         assert_eq!(left, indices, "the whole line stays together on one side");
         assert!(right.is_empty(), "no span of the line is torn off: {right:?}");
