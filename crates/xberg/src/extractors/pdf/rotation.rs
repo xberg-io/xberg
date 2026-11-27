@@ -145,6 +145,18 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
         return;
     }
 
+    // Lines stack top to bottom in the run's upright frame, whatever order the
+    // spans arrived in: the caller's order follows page axes, which for a
+    // rotated run reads lines (and the cells of a rotated table) backwards or
+    // column by column (GH#3423). The sort is stable, so equal rows keep
+    // their incoming order.
+    let mut indices = indices.to_vec();
+    indices.sort_by(|&a, &b| {
+        let cross_a = spans.get(a).map_or(0.0, |span| upright_reading_origin(span).1);
+        let cross_b = spans.get(b).map_or(0.0, |span| upright_reading_origin(span).1);
+        cross_b.total_cmp(&cross_a)
+    });
+
     let mut line_start = 0;
     let mut first_line = true;
     while line_start < indices.len() {
