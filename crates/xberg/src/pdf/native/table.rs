@@ -3566,6 +3566,7 @@ fn reconstruct_region_table_traced(
             tracing::trace!(
                 page = page_number,
                 words = region.len(),
+                horizontal_rules,
                 ?reason,
                 "heuristic table region rejected"
             );
@@ -3706,6 +3707,13 @@ fn admit_region_grid(
         is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules)
     };
     if !well_formed {
+        tracing::trace!(
+            page = page_number,
+            definition_evidence,
+            horizontal_rules,
+            rows = cleaned.len(),
+            "heuristic table grid not well formed"
+        );
         return Err(HeuristicTableRejection::NotWellFormed {
             columns: cleaned.first().map_or(0, Vec::len),
         });
