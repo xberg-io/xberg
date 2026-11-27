@@ -61,7 +61,7 @@
 
 mod commands;
 mod input;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", test))]
 mod large_blocks;
 mod logging;
 mod output;
