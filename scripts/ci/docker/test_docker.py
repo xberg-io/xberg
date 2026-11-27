@@ -468,9 +468,13 @@ def expected_best_models() -> list[str]:
 
 
 def test_best_tessdata_layout(t: TestRunner) -> None:
-    t.start("tessdata_best models, license and environment")
+    t.start("tessdata_best models, license and environment, readable as the image user")
     models = expected_best_models()
     checks = f"""
+        test "$(id -un)" = xberg
+        test -r {BEST_TESSDATA_DIR}/eng.traineddata
+        test -r {BEST_TESSDATA_LICENSE}
+        test -z "$(find {BEST_TESSDATA_DIR} {BEST_TESSDATA_LICENSE} -type d ! -perm -0555)"
         test "${{XBERG_OCR_TESSDATA_MODEL:-}}" = best
         test -z "${{TESSDATA_PREFIX+set}}"
         test -s {BEST_TESSDATA_LICENSE}

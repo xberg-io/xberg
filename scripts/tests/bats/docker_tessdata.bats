@@ -58,3 +58,46 @@ assert_tessdata_contract() {
 	run assert_tessdata_contract "$XBERG_WORK/Dockerfile"
 	xberg_assert_status 1
 }
+
+# COPY --chmod also applies its mode to the directories COPY creates, including the parents of a
+# file destination, so 0444 there leaves the best models unreadable for the nonroot user.
+assert_best_copy_contract() {
+	local dockerfile="$1"
+	grep -Fxq 'COPY --link --from=tessdata-best /tessdata-best/models/ /usr/share/xberg/tessdata/best/' "$dockerfile" || return 1
+	grep -Fxq 'COPY --link --from=tessdata-best /tessdata-best/license/ /usr/local/share/licenses/tessdata_best/' "$dockerfile" || return 1
+	grep -Fq 'chmod 0755 models license' "$dockerfile" || return 1
+	grep -Fq 'chmod 0444 models/* license/LICENSE' "$dockerfile" || return 1
+	if grep -Eq '^COPY .*--chmod=' "$dockerfile"; then
+		printf '%s\n' 'COPY --chmod also sets the mode of the directories it creates' >&2
+		return 1
+	fi
+}
+
+@test "core Dockerfile should copy tessdata_best with traversable directories" {
+	assert_best_copy_contract "$REPOSITORY_ROOT/docker/Dockerfile.core"
+}
+
+@test "full Dockerfile should copy tessdata_best with traversable directories" {
+	assert_best_copy_contract "$REPOSITORY_ROOT/docker/Dockerfile.full"
+}
+
+@test "best copy contract should reject a COPY --chmod into the best directory" {
+	cp "$REPOSITORY_ROOT/docker/Dockerfile.core" "$XBERG_WORK/Dockerfile"
+	printf '%s\n' 'COPY --link --chmod=0444 --from=tessdata-best /tessdata-best/models/*.traineddata /usr/share/xberg/tessdata/best/' >>"$XBERG_WORK/Dockerfile"
+	run assert_best_copy_contract "$XBERG_WORK/Dockerfile"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'COPY --chmod also sets the mode of the directories it creates'
+}
+
+@test "best copy contract should reject a COPY --chmod onto a file below a new directory" {
+	cp "$REPOSITORY_ROOT/docker/Dockerfile.core" "$XBERG_WORK/Dockerfile"
+	printf '%s\n' 'COPY --link --chmod=0444 --from=tessdata-best /tessdata-best/license/LICENSE /usr/local/share/licenses/tessdata_best/LICENSE' >>"$XBERG_WORK/Dockerfile"
+	run assert_best_copy_contract "$XBERG_WORK/Dockerfile"
+	xberg_assert_status 1
+}
+
+@test "best copy contract should reject files left with their download modes" {
+	sed '/chmod 0444 models\/\* license\/LICENSE/d' "$REPOSITORY_ROOT/docker/Dockerfile.core" >"$XBERG_WORK/Dockerfile"
+	run assert_best_copy_contract "$XBERG_WORK/Dockerfile"
+	xberg_assert_status 1
+}
