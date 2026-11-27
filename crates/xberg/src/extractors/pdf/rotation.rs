@@ -200,6 +200,9 @@ const GUTTER_MIN_HEIGHTS: f32 = 1.5;
 /// aligned-baseline pair of columns from a table row.
 const GUTTER_MAX_BLOCK_FRACTION: f32 = 0.5;
 
+/// Fewest lines a column must hold for a gutter to cut it off.
+const MIN_LINES_PER_COLUMN: usize = 2;
+
 /// Deepest nesting of column and band cuts tried on one run.
 const MAX_CUT_DEPTH: usize = 6;
 
@@ -251,11 +254,33 @@ fn column_cut(placed: &[Placed], body: f32) -> Option<usize> {
             _ => blocks.push((span.start, span.end, position)),
         }
     }
-    blocks.windows(2).find_map(|pair| {
-        let gap = pair[1].0 - pair[0].1;
-        let narrower = (pair[0].1 - pair[0].0).min(pair[1].1 - pair[1].0);
-        (gap > body * GUTTER_MIN_HEIGHTS && gap <= narrower * GUTTER_MAX_BLOCK_FRACTION).then_some(pair[1].2)
-    })
+    blocks
+        .windows(2)
+        .find_map(|pair| is_gutter((pair[0].0, pair[0].1), (pair[1].0, pair[1].1), body).then_some(pair[1].2))
+}
+
+/// True when the gap between two neighbouring advance-axis blocks is a gutter.
+fn is_gutter(left: (f32, f32), right: (f32, f32), body: f32) -> bool {
+    let gap = right.0 - left.1;
+    let narrower = (left.1 - left.0).min(right.1 - right.0);
+    gap > body * GUTTER_MIN_HEIGHTS && gap <= narrower * GUTTER_MAX_BLOCK_FRACTION
+}
+
+/// Merge the extent `start..end` into the sorted, disjoint `blocks`.
+fn insert_extent(blocks: &mut Vec<(f32, f32)>, start: f32, end: f32) {
+    let first = blocks.partition_point(|block| block.1 < start);
+    let (mut low, mut high) = (start, end);
+    let mut last = first;
+    while last < blocks.len() && blocks[last].0 <= end {
+        low = low.min(blocks[last].0);
+        high = high.max(blocks[last].1);
+        last += 1;
+    }
+    blocks.splice(first..last, [(low, high)]);
+}
+
+fn has_gutter(blocks: &[(f32, f32)], body: f32) -> bool {
+    blocks.windows(2).any(|pair| is_gutter(pair[0], pair[1], body))
 }
 
 fn by_start(placed: &[Placed]) -> Vec<Placed> {
@@ -267,34 +292,57 @@ fn by_start(placed: &[Placed]) -> Vec<Placed> {
 /// Order `placed` as lines: side-by-side columns one after the other, left to
 /// right, and a band that spans the columns (a title, a footer) before or after
 /// the columns it spans. Without a column or band cut, lines read top to bottom.
+///
+/// A column cut needs at least [`MIN_LINES_PER_COLUMN`] lines on each side, so a
+/// single row of cells, a header row or a letter-spaced heading stays one line.
+/// Cutting stops at [`MAX_CUT_DEPTH`] levels of nesting; a page more deeply
+/// divided than that keeps its remaining blocks in top-to-bottom line order.
 fn order_block(placed: &[Placed], body: f32, depth: usize) -> Vec<Vec<usize>> {
     let tolerance = body * ROTATED_LINE_CROSS_TOLERANCE_RATIO;
+    let lines = cluster_lines(placed, tolerance);
     let as_indices = |lines: Vec<Vec<Placed>>| -> Vec<Vec<usize>> {
         lines
             .into_iter()
             .map(|line| line.into_iter().map(|span| span.index).collect())
             .collect()
     };
-    if depth >= MAX_CUT_DEPTH || placed.len() < 2 {
-        return as_indices(cluster_lines(placed, tolerance));
+    if depth >= MAX_CUT_DEPTH || lines.len() < 2 {
+        return as_indices(lines);
     }
 
     let sorted = by_start(placed);
-    if let Some(cut) = column_cut(&sorted, body) {
+    if let Some(cut) = column_cut(&sorted, body)
+        && cluster_lines(&sorted[..cut], tolerance).len() >= MIN_LINES_PER_COLUMN
+        && cluster_lines(&sorted[cut..], tolerance).len() >= MIN_LINES_PER_COLUMN
+    {
         let mut ordered = order_block(&sorted[..cut], body, depth + 1);
         ordered.extend(order_block(&sorted[cut..], body, depth + 1));
         return ordered;
     }
 
-    let lines = cluster_lines(placed, tolerance);
-    let has_columns = |from: usize, to: usize| {
-        let members: Vec<Placed> = lines[from..to].iter().flatten().copied().collect();
-        column_cut(&by_start(&members), body).is_some()
-    };
+    // Whether the lines from k down, or the lines above k, hold a gutter: one
+    // sweep each way, merging extents as lines are added.
+    let count = lines.len();
+    let mut below = vec![false; count + 1];
+    let mut extents: Vec<(f32, f32)> = Vec::new();
+    for k in (0..count).rev() {
+        for span in &lines[k] {
+            insert_extent(&mut extents, span.start, span.end);
+        }
+        below[k] = has_gutter(&extents, body);
+    }
+    let mut above = vec![false; count + 1];
+    extents.clear();
+    for k in 0..count {
+        for span in &lines[k] {
+            insert_extent(&mut extents, span.start, span.end);
+        }
+        above[k + 1] = has_gutter(&extents, body);
+    }
     // A band above the columns first, then a band below them.
-    let band_cut = (1..lines.len())
-        .find(|&k| has_columns(k, lines.len()))
-        .or_else(|| (1..lines.len()).rev().find(|&k| has_columns(0, k)));
+    let band_cut = (1..count)
+        .find(|&k| below[k])
+        .or_else(|| (1..count).rev().find(|&k| above[k]));
     match band_cut {
         Some(k) => {
             let top: Vec<Placed> = lines[..k].iter().flatten().copied().collect();

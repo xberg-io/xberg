@@ -266,3 +266,95 @@ fn should_keep_a_layout_hint_order_for_a_rotated_run() {
     let order = vec![4, 5, 0, 1, 2, 3];
     assert_eq!(assemble_reading_order_text(&spans, &order), "e f a b c d");
 }
+
+#[test]
+fn should_keep_a_one_row_table_on_one_line() {
+    let spans = vec![
+        wide("H3", 160.0, 100.0, 60.0),
+        wide("H1", 0.0, 100.0, 60.0),
+        wide("H2", 80.0, 100.0, 60.0),
+    ];
+    assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("H1 H2 H3"));
+}
+
+#[test]
+fn should_keep_a_one_row_tracked_heading_on_one_line() {
+    let spans: Vec<TextSpan> = ["T", "R", "A", "C", "K"]
+        .iter()
+        .enumerate()
+        .map(|(i, word)| wide(word, 70.0 * i as f32, 100.0, 50.0))
+        .collect();
+    assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("T R A C K"));
+}
+
+#[test]
+fn should_read_a_large_heading_above_small_body_lines() {
+    let heading = TextSpan {
+        height: 30.0,
+        ..wide("Heading", 0.0, 150.0, 100.0)
+    };
+    let spans = vec![
+        wide("c", 0.0, 80.0, 40.0),
+        wide("b", 60.0, 100.0, 40.0),
+        heading,
+        wide("d", 60.0, 80.0, 40.0),
+        wide("a", 0.0, 100.0, 40.0),
+    ];
+    assert_eq!(repair_rotated_page_text(&spans).as_deref(), Some("Heading\na b\nc d"));
+}
+
+#[test]
+fn should_read_a_mid_page_band_between_two_column_regions() {
+    let mut spans = aligned_columns(30.0, 200.0, 2);
+    spans.push(wide("Band", 0.0, 50.0, 430.0));
+    for (row, cross) in [30.0, 10.0].into_iter().enumerate() {
+        spans.push(wide(&format!("C{}", row + 1), 0.0, cross, 200.0));
+        spans.push(wide(&format!("D{}", row + 1), 230.0, cross, 200.0));
+    }
+    spans.reverse();
+    assert_eq!(
+        repair_rotated_page_text(&spans).as_deref(),
+        Some("A1\nA2\nB1\nB2\nBand\nC1\nC2\nD1\nD2")
+    );
+}
+
+#[test]
+fn should_read_three_columns_one_after_another() {
+    let spans: Vec<TextSpan> = (0..3)
+        .flat_map(|row| {
+            (0..3).map(move |column| {
+                wide(
+                    &format!("{}{}", ["A", "B", "C"][column], row + 1),
+                    125.0 * column as f32,
+                    100.0 - 20.0 * row as f32,
+                    100.0,
+                )
+            })
+        })
+        .collect();
+    assert_eq!(
+        repair_rotated_page_text(&spans).as_deref(),
+        Some("A1\nA2\nA3\nB1\nB2\nB3\nC1\nC2\nC3")
+    );
+}
+
+/// 5,000 spans in 500 lines with no band to find must not cost a re-sort per line.
+#[test]
+fn should_order_a_large_table_without_a_band_quickly() {
+    let (lines, cells) = (500, 10);
+    let spans: Vec<TextSpan> = (0..lines * cells)
+        .map(|n| {
+            let shuffled = (n * 7919) % (lines * cells);
+            let (row, column) = (shuffled / cells, shuffled % cells);
+            wide("x", 50.0 * column as f32, 5000.0 - 20.0 * row as f32, 30.0)
+        })
+        .collect();
+    let started = std::time::Instant::now();
+    let text = repair_rotated_page_text(&spans).expect("rotated page is repaired");
+    assert_eq!(text.lines().count(), lines);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(1),
+        "{:?}",
+        started.elapsed()
+    );
+}
