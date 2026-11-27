@@ -6863,7 +6863,9 @@ pub(super) fn adapt_batch_size_to_memory_inner(
         return configured;
     }
 
-    let reserved = document_size + 512 * 1024 * 1024;
+    let session_reserve =
+        usize::try_from(crate::core::config::concurrency::TESSERACT_SESSION_MEMORY_BYTES).unwrap_or(usize::MAX);
+    let reserved = document_size.saturating_add(session_reserve);
     let usable = available_bytes.saturating_sub(reserved);
     let memory_limited_batch = (usable / per_page_bytes).max(1);
     let result = configured.min(memory_limited_batch);
