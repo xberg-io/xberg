@@ -64,7 +64,16 @@ impl Run {
             };
         }
 
-        let mut result = self.text.clone();
+        // Markers wrap the text between the run's outer whitespace: a closing `**` after the
+        // paragraph's trailing newline is not right-flanking, so CommonMark shows it literally. ~keep
+        let text = self.text.as_str();
+        let core = text.trim();
+        if core.is_empty() {
+            return self.text.clone();
+        }
+        let leading = &text[..text.len() - text.trim_start().len()];
+        let trailing = &text[leading.len() + core.len()..];
+        let mut result = core.to_string();
 
         if self.formatting.bold {
             result = format!("**{}**", result);
@@ -79,7 +88,7 @@ impl Run {
             result = format!("~~{}~~", result);
         }
 
-        result
+        format!("{leading}{result}{trailing}")
     }
 }
 
