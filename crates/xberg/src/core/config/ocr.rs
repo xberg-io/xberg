@@ -1627,20 +1627,22 @@ fn validate_languages(languages: &[String]) -> Result<(), XbergError> {
     Ok(())
 }
 
-/// Whether `name` can name a Tesseract model: `/`-separated components of ASCII letters, digits,
-/// `_` and `-` (`eng`, `chi_sim`, `jpn_vert`, a user-trained `my_font`, upstream's
-/// `script/Latin`), or the `*` wildcard.
+/// Whether `name` can name a Tesseract model: one or two `/`-separated components of ASCII
+/// letters, digits, `_` and `-`, none starting with `-` (`eng`, `chi_sim`, `jpn_vert`, a
+/// user-trained `my_font`, upstream's `script/Latin`), or the `*` wildcard.
 ///
 /// The name is joined onto a tessdata directory as `<name>.traineddata`, so `..`, an absolute
 /// path, a drive prefix or a backslash must never reach that join. ~keep
 pub(crate) fn is_tesseract_language_name(name: &str) -> bool {
     name == "*"
-        || name.split('/').all(|component| {
-            !component.is_empty()
-                && component
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-        })
+        || (name.split('/').count() <= 2
+            && name.split('/').all(|component| {
+                !component.is_empty()
+                    && !component.starts_with('-')
+                    && component
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            }))
 }
 
 /// Validate every non-blank, `+`-separated entry of `tesseract_config.language` as a model name.
@@ -1878,6 +1880,9 @@ mod tests {
             "eng.traineddata",
             "/eng",
             "eng/",
+            "-eng",
+            "script/-Latin",
+            "script/Latin/x",
         ] {
             let message = with_language(language)
                 .validate()
