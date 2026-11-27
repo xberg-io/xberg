@@ -487,5 +487,8 @@ fn ctm_key_absorbs_float_noise_at_every_scale() {
     }
     assert_ne!(key(0.0001), key(0.0003));
     assert_ne!(key(0.0123), key(0.0124));
+    assert_ne!(key(10000.1), key(10000.3), "large scales keep the millipoint grid");
+    assert_eq!(key(0.5), key(0.5001), "components of 100 millipoints or more keep the millipoint grid");
+    assert_ne!(key(0.0991), key(0.0992));
     assert_eq!(key(-1.0)[0], -key(1.0)[0]);
 }

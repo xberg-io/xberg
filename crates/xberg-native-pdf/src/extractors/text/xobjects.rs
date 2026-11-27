@@ -62,15 +62,27 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Quantize a CTM to 6 i64 values so it can be used as a HashSet/HashMap
     /// key without floating-point equality hazards. The translation rounds to
-    /// the nearest millipoint. The linear part keeps five significant digits
-    /// instead: a millipoint grid sent every scale below 0.0005 to zero, so two
-    /// distinct small-scale placements of one Form shared a key and the second
-    /// was dropped as a duplicate or replayed the first one's cached spans.
+    /// the nearest millipoint, and so does a linear component that rounds to 100
+    /// millipoints or more. A smaller one keeps five significant digits instead: a
+    /// millipoint grid sent every scale below 0.0005 to zero, so two distinct
+    /// small-scale placements of one Form shared a key and the second was
+    /// dropped as a duplicate or replayed the first one's cached spans. Either
+    /// grid is at least as fine as the millipoint one wherever it applies, so no
+    /// two placements the millipoint key told apart share a key.
     /// Rounding (not truncating) keeps float noise around decimal values such
     /// as 0.99999... / 1.00001... in one bucket. ~keep
     pub(crate) fn quantize_ctm(ctm: Matrix) -> [i64; 6] {
         let magnitude = ctm.a.abs().max(ctm.b.abs()).max(ctm.c.abs()).max(ctm.d.abs());
-        let linear = |value: f32| Self::significant_key(value, magnitude);
+        // Below 100 millipoints the millipoint grid keeps under three digits. ~keep
+        const MILLIPOINT_FLOOR: i64 = 100;
+        let linear = |value: f32| {
+            let millipoints = (value * 1000.0).round() as i64;
+            if millipoints.abs() >= MILLIPOINT_FLOOR {
+                millipoints
+            } else {
+                Self::significant_key(value, magnitude)
+            }
+        };
         [
             linear(ctm.a),
             linear(ctm.b),
@@ -97,7 +109,9 @@ impl<'doc> TextExtractor<'doc> {
             mantissa /= 10;
             exponent += 1;
         }
-        let key = (i64::from(exponent + 64) << 20) | mantissa;
+        // The tag keeps these keys apart from millipoint keys of larger components. ~keep
+        const SIGNIFICANT_TAG: i64 = 1 << 50;
+        let key = SIGNIFICANT_TAG | (i64::from(exponent + 64) << 20) | mantissa;
         if value < 0.0 { -key } else { key }
     }
 
