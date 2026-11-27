@@ -3622,10 +3622,18 @@ fn build_grid_from_lines(
 /// Register tables (2026-14578's `PBR`) is 32pt. ~keep
 const MIN_OPEN_COLUMN_WIDTH: f32 = 20.0;
 
-/// Fewest distinct column rules crossing a run of horizontal rules for their overhang to be read as open outer
-/// columns. The Federal Register tables the rule serves have at least two; the IRS Publication 15-T
-/// percentage tables have a single rule between a MARRIED and a SINGLE half. ~keep
+/// Fewest distinct column rules crossing a run of horizontal rules for their overhang to be read as
+/// open outer columns without further evidence. With fewer, the strips beyond the rule are two halves
+/// that may each hold unruled value columns (the IRS Publication 15-T percentage tables), and the
+/// overhang is read as open columns only when no strip holds several text columns. ~keep
 const MIN_COLUMN_RULES_FOR_OPEN_COLUMNS: usize = 2;
+
+/// Smallest horizontal gap, in points, between two runs of text on one line for them to sit in
+/// different columns of an unruled strip. A phrase's word gaps stay under it.
+const MIN_TEXT_COLUMN_GAP: f32 = 10.0;
+
+/// Fewest gap-separated runs on one line for a strip to hold several text columns.
+const MIN_STRIP_TEXT_COLUMNS: usize = 3;
 
 /// A horizontal rule whose end lies beyond the outermost vertical rule crossing it on one side.
 struct OpenRuleEnd {
@@ -3645,7 +3653,8 @@ struct OpenRuleEnd {
 /// rules joined by column rules run on past their outermost column rule by
 /// `MIN_OPEN_COLUMN_WIDTH` to a common end, and text lies wholly in that strip between them,
 /// the end is a column edge. A table whose frame is drawn, or whose rules overhang an empty
-/// margin, is unchanged. ~keep
+/// margin, is unchanged, and so is one divided by a single column rule whose halves each hold
+/// several text columns. ~keep
 fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan]) -> Vec<Edge> {
     let mut edges = Vec::new();
     if spans.is_empty() {
@@ -3722,14 +3731,9 @@ fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan
                     let inner = run.iter().map(|open| open.outermost).fold(f32::NEG_INFINITY, f32::max);
                     (inner, first.end)
                 };
-                // One column rule makes two halves, not columns between rules: the columns inside a
-                // half are unruled and closing the outer edges would fuse them into one cell.
                 let mut columns: Vec<f32> = run.iter().flat_map(|open| open.columns.iter().copied()).collect();
                 columns.sort_by(|a, b| crate::utils::safe_float_cmp(*a, *b));
                 columns.dedup_by(|a, b| (*a - *b).abs() <= SNAP_TOL);
-                if columns.len() < MIN_COLUMN_RULES_FOR_OPEN_COLUMNS {
-                    continue;
-                }
                 let (bottom, top) = (first.rule.coord, last.rule.coord);
                 let holds_text = spans.iter().any(|span| {
                     let center_y = span.bbox.center().y;
@@ -3739,7 +3743,9 @@ fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan
                         && center_y > bottom
                         && center_y < top
                 });
-                if holds_text {
+                let halves_hold_columns = columns.len() < MIN_COLUMN_RULES_FOR_OPEN_COLUMNS
+                    && strip_holds_text_columns(spans, low, high, bottom, top);
+                if holds_text && !halves_hold_columns {
                     edges.push(Edge {
                         coord: first.end,
                         start: bottom,
@@ -3750,6 +3756,44 @@ fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan
         }
     }
     edges
+}
+
+/// Whether the strip `low..high` between `bottom` and `top` holds a line of text in several columns:
+/// at least [`MIN_STRIP_TEXT_COLUMNS`] runs on one line, each [`MIN_TEXT_COLUMN_GAP`] apart.
+fn strip_holds_text_columns(spans: &[TextSpan], low: f32, high: f32, bottom: f32, top: f32) -> bool {
+    let mut inside: Vec<&TextSpan> = spans
+        .iter()
+        .filter(|span| {
+            let center_y = span.bbox.center().y;
+            !span.text.trim().is_empty()
+                && span.bbox.left() >= low - SNAP_TOL
+                && span.bbox.right() <= high + SNAP_TOL
+                && center_y > bottom
+                && center_y < top
+        })
+        .collect();
+    inside.sort_by(|a, b| {
+        crate::utils::safe_float_cmp(b.bbox.center().y, a.bbox.center().y)
+            .then(crate::utils::safe_float_cmp(a.bbox.left(), b.bbox.left()))
+    });
+    let mut line_start = 0;
+    while line_start < inside.len() {
+        let line_y = inside[line_start].bbox.center().y;
+        let line_end = inside[line_start..]
+            .iter()
+            .position(|span| (span.bbox.center().y - line_y).abs() > SNAP_TOL)
+            .map_or(inside.len(), |offset| line_start + offset);
+        let line = &inside[line_start..line_end];
+        let runs = 1 + line
+            .windows(2)
+            .filter(|pair| pair[1].bbox.left() - pair[0].bbox.right() >= MIN_TEXT_COLUMN_GAP)
+            .count();
+        if runs >= MIN_STRIP_TEXT_COLUMNS {
+            return true;
+        }
+        line_start = line_end;
+    }
+    false
 }
 
 /// Tolerance for judging whether a V edge spans a row band's full height.
@@ -6316,28 +6360,49 @@ mod tests {
         assert_eq!(groups[0].3, 5, "stub, three value columns and the last column");
     }
 
-    /// IRS Publication 15-T: one column rule splits a MARRIED half from a SINGLE half, and each half
-    /// holds unruled value columns. Closing the outer edges would fuse each half into one cell.
-    #[test]
-    fn a_single_column_rule_adds_no_open_column_edge() {
+    fn single_divider_table() -> Vec<crate::elements::PathContent> {
         use crate::elements::PathContent;
-        let lines = vec![
+        vec![
             PathContent::line(45., 400., 567., 400.),
             PathContent::line(45., 380., 567., 380.),
             PathContent::line(45., 300., 567., 300.),
             PathContent::line(306., 300., 306., 400.),
-        ];
-        let spans = vec![
-            create_test_span("MARRIED", 100., 385., 40., 9.),
-            create_test_span("$329", 100., 355., 20., 9.),
-            create_test_span("SINGLE", 400., 385., 40., 9.),
-            create_test_span("$123", 400., 355., 20., 9.),
-        ];
-        let (mut h_edges, mut v_edges) = extract_edges(&lines);
+        ]
+    }
+
+    fn open_edges(lines: &[crate::elements::PathContent], spans: &[TextSpan]) -> Vec<Edge> {
+        let (mut h_edges, mut v_edges) = extract_edges(lines);
         snap_and_merge(&mut h_edges);
         snap_and_merge(&mut v_edges);
+        open_outer_column_edges(&h_edges, &v_edges, spans)
+    }
 
-        assert!(open_outer_column_edges(&h_edges, &v_edges, &spans).is_empty());
+    /// IRS Publication 15-T: one column rule splits a MARRIED half from a SINGLE half, and each half
+    /// holds unruled value columns. Closing the outer edges would fuse each half into one cell.
+    #[test]
+    fn a_single_column_rule_over_halves_with_text_columns_adds_no_open_column_edge() {
+        let mut spans = vec![
+            create_test_span("MARRIED", 100., 385., 40., 9.),
+            create_test_span("SINGLE", 400., 385., 40., 9.),
+        ];
+        for (offset, value) in [(0., "$0"), (50., "$329"), (100., "$0.00"), (150., "0%"), (200., "$0")] {
+            spans.push(create_test_span(value, 60. + offset, 355., 30., 9.));
+            spans.push(create_test_span(value, 320. + offset, 355., 30., 9.));
+        }
+        assert!(open_edges(&single_divider_table(), &spans).is_empty());
+    }
+
+    /// A term | definition table with one divider and horizontal rules but no frame still gets its
+    /// two columns: each strip holds one run of text per line.
+    #[test]
+    fn a_single_column_rule_over_two_plain_columns_still_closes_both_outer_columns() {
+        let spans = vec![
+            create_test_span("Term", 60., 385., 30., 9.),
+            create_test_span("Definition", 330., 385., 60., 9.),
+            create_test_span("alpha", 60., 355., 30., 9.),
+            create_test_span("the first letter", 330., 355., 90., 9.),
+        ];
+        assert_eq!(open_edges(&single_divider_table(), &spans).len(), 2);
     }
 
     #[test]
