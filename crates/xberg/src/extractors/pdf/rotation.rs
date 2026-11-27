@@ -105,6 +105,7 @@ pub(crate) fn upright_reading_origin(span: &TextSpan) -> (f32, f32) {
 /// concatenation, no reordering, no inserted separators), so this function is
 /// a byte-identical no-op whenever every span in `order` has
 /// `rotation_degrees == 0.0` — the overwhelming majority of pages.
+#[cfg(any(feature = "layout-detection", test))]
 pub(crate) fn assemble_reading_order_text(spans: &[TextSpan], order: &[usize]) -> String {
     let mut text = String::new();
     let mut run_start = 0;

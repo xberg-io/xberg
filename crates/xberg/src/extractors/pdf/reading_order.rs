@@ -31,8 +31,10 @@
 //! points with a bottom-left origin. See the repository-root `ATTRIBUTIONS.md`
 //! section "Docling reading order" for the license and copyright notice.
 
+pub(crate) use super::rotation::TextSpan;
+#[cfg(any(feature = "layout-detection", test))]
+pub(crate) use super::rotation::assemble_reading_order_text;
 use super::rotation::{ATOMIC_FRAGMENT_GAP_RATIO, upright_reading_origin};
-pub(crate) use super::rotation::{TextSpan, assemble_reading_order_text};
 #[cfg(feature = "layout-detection")]
 use crate::pdf::structure::types::{LayoutHint, LayoutHintClass, LayoutRegionPath, LayoutRegionTag};
 
