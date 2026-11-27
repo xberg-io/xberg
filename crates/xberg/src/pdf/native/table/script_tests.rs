@@ -81,19 +81,8 @@ fn span(text: &str, x: f32, baseline: f32, width: f32, font_size: f32) -> TextSp
     }
 }
 
-/// The row above a short cell reaches into the script margin: its text must not hide the cell's own
-/// raised `2` (the `R2` label of a regression table).
-#[test]
-fn should_keep_a_cell_script_when_the_row_above_falls_in_the_script_margin() {
-    let spans = PageSpans {
-        spans: vec![
-            span("R", 40.0, 381.4, 5.0, 8.0),
-            span("2", 45.1, 384.9, 3.0, 5.3),
-            span("N", 40.0, 393.9, 5.0, 8.0),
-        ],
-        margin: 8.0 * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR,
-    };
-    let cell = TableCell {
+fn short_cell() -> TableCell {
+    TableCell {
         text: "R2".to_owned(),
         spans: Vec::new(),
         colspan: 1,
@@ -101,9 +90,45 @@ fn should_keep_a_cell_script_when_the_row_above_falls_in_the_script_margin() {
         mcids: Vec::new(),
         bbox: Some(Rect::new(36.0, 378.6, 60.0, 12.5)),
         is_header: false,
-    };
+    }
+}
+
+fn page_spans_of(spans: Vec<TextSpan>) -> PageSpans {
+    PageSpans {
+        spans,
+        margin: 8.0 * crate::script_run::SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR,
+    }
+}
+
+/// The row above a short cell reaches into the script margin: its text must not hide the cell's own
+/// raised `2` (the `R2` label of a regression table).
+#[test]
+fn should_keep_a_cell_script_when_the_row_above_falls_in_the_script_margin() {
+    let spans = page_spans_of(vec![
+        span("R", 40.0, 381.4, 5.0, 8.0),
+        span("2", 45.1, 384.9, 3.0, 5.3),
+        span("N", 40.0, 392.5, 5.0, 8.0),
+    ]);
     assert_eq!(
-        cell_annotations(&cell, "R2", &spans),
+        cell_annotations(&short_cell(), "R2", &spans),
         vec![crate::types::builder::superscript(1, 2)]
     );
+}
+
+/// A script drawn just above the cell's top edge is outside the cell's own spans and is found only
+/// by the margin pass.
+#[test]
+fn should_find_a_cell_script_raised_above_the_cell_top_through_the_margin() {
+    let spans = page_spans_of(vec![span("R", 40.0, 387.5, 5.0, 8.0), span("2", 45.1, 391.2, 3.0, 5.3)]);
+    assert_eq!(
+        cell_annotations(&short_cell(), "R2", &spans),
+        vec![crate::types::builder::superscript(1, 2)]
+    );
+}
+
+/// Neighbouring text that no pass can fit to the cell text yields no annotation rather than a guess.
+#[test]
+fn should_annotate_nothing_when_a_neighbour_hides_the_cell_text() {
+    let spans = page_spans_of(vec![span("R", 40.0, 381.4, 5.0, 8.0), span("N", 40.0, 392.5, 5.0, 8.0)]);
+    assert!(cell_annotations(&short_cell(), "R2", &spans).is_empty());
 }
