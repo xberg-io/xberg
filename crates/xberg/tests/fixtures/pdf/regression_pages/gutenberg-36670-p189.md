@@ -1,18 +1,77 @@
 QUADRATIC EQUATIONS.
 
-181 17 19 Extract the root, x − = ± . 6 6 17 19 Reduce, x − = ± . 6 6 17 19 36 ∴ x = + = = 6, 6 6 6 17 19 2 1 or x = − = − = − . 6 6 6 3 1 The roots are 6 and − . 3 Verify by putting these numbers for x in the original equation.
+181
 
-1 x = 6. x = − 3 6 + 1 24 − 3 1 4 = . − + 1 − − 3 6 − 1 6 + 9 3 3 7 21 = . = 1 1 5 15 − − 1 − + 9 7 7 3 3 = 2 13 5 5 − = − . 4 26
+Extract the root,
+
+$$
+x-\frac{17}{6}=\pm\frac{19}{6}.
+$$
+
+Reduce,
+
+$$
+x-\frac{17}{6}=\pm\frac{19}{6}.
+$$
+
+$$
+∴x=\frac{17}{6}+\frac{19}{6}=\frac{36}{6}=6,
+$$
+
+or
+
+$$
+x=\frac{17}{6}-\frac{19}{6}=-\frac{2}{6}=-\frac{1}{3}.
+$$
+
+The roots are 6 and $-\frac{1}{3}.$ Verify by putting these numbers for x in the original equation.
+
+$$
+x=6._{-3}
+$$
+
+$$
+x=-\frac{1}{3}
+$$
+
+1 4
+
+$$
+\frac{6+1}{6-1}=\frac{24}{6+9}.
+$$
+
+7 5 = 21 15
+
+$$-&#95;{3}-1-&#95;{3}+9$$
+
+$$
+{}^{-}\frac{3}{1}^{+1}=^{-}\frac{3}{1}^{-3}.
+$$
+
+7 7 5 = 5
+
+$$-\frac{2}{4}=-\frac{13}{26}.$$
 
 **Exercise 72.**
 
 Solve:
 
-1. x<sup>2</sup> − 12x + 27 = 0. 6. 9x<sup>2</sup> − 24x + 16 = 0.
-2. x<sup>2</sup> − 6x + 8 = 0. 7. 6x<sup>2</sup> − 5x − 1 = 0.
+$$1.x^{2}-12x+27=0.$$
 
-2
+$$6.9x^{2}-24x+16=0.$$
 
-3. x<sup>2</sup> − 4 = 4x − 7. 8. 4x + 3 = x + 2x.
-4. 5x<sup>2</sup> − 4x − 1 = 0. 9. 16x<sup>2</sup> − 16x + 3 = 0.
-5. 4x − 3 = 2x − x<sup>2</sup>. 10. 3x<sup>2</sup> − 10x + 3 = 0.
+$$2.x^{2}-6x+8=0.$$
+
+$$7.6x^{2}-5x-1=0.$$
+
+$$3.x^{2}-4=4x-7.$$
+
+$$8.4x+3=x^{2}+2x.$$
+
+$$4.5x^{2}-4x-1=0.$$
+
+$$9.16x^{2}-16x+3=0.$$
+
+$$5.4x-3=2x-x^{2}.$$
+
+$$10.3x^{2}-10x+3=0.$$

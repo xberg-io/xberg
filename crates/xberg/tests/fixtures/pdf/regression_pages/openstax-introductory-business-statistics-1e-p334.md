@@ -60,11 +60,11 @@ d. The IQR for *X* is from _______ acres to _______ acres.
 
 55. Determine which of the following are true and which are false. Then, in complete sentences, justify your answers. –
 
-a. When the sample size is large, the mean of *X* is approximately equal to the mean of *Χ* . –
+a. When the sample size is large, the mean of *X* is approximately equal to the mean of *Χ*. –
 
 b. When the sample size is large, *X* is approximately normally distributed. –
 
-c. When the sample size is large, the standard deviation of *X* is approximately the same as the standard deviation of *Χ* .
+c. When the sample size is large, the standard deviation of *X* is approximately the same as the standard deviation of *Χ*.
 
 56. The percent of fat calories that a person in America consumes each day is normally distributed with a mean of about 36 – and a standard deviation of about ten. Suppose that 16 individuals are randomly chosen. Let *X* = average percent of fat calories. –
 

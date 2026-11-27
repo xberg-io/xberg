@@ -2,20 +2,18 @@
 
 THE BUDGET FOR FISCAL YEAR 2012, HISTORICAL TABLES
 
-**Table 2.5—COMPOSITION OF "OTHER RECEIPTS": 1940–2016—Continued**
+**Table 2.5—COMPOSITION OF " OTHER RECEIPTS" : 1940–2016—Continued**
 
-(in millions of dollars) Memorandum: Trust Fund Miscellaneous Receipts Amounts Included in "Other Total Customs Estate and Legislative Receipts" Fiscal Year "Other Duties and
+(in millions of dollars) Memorandum: Trust Fund Miscellaneous Receipts Amounts Included in "Other Legislative
 
-2
-
-Gift Taxes Proposals Federal Customs Receipts" Fees Total Reserve All Other Duties and All Other
-
-1
-
-Deposits Fees
-
-| 1994 ................................................................................. | 58,427 | 15,225 | 20,099 | 23,103 | 18,023 | 5,081 | .......... | 677 | 450 |
+| Fiscal Year | Total “Other | Estate and |  |  |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  | Gift Taxes |  |  |  |  | Proposals |  |  |
+|  |  |  |  |  | Federal |  |  | Customs |  |
+|  | Receipts” |  | Fees |  |  |  |  |  |  |
+|  |  |  |  | Total | Reserve | All Other |  | Duties and | All Other |
+|  |  |  |  |  | Deposits1 |  |  | Fees |  |
+| 1994 ................................................................................. | 58,427 | 15,225 | 20,099 | 23,103 | 18,023 | 5,081 | .......... | 677 | 450 |
 | 1995 ................................................................................. | 62,585 | 14,763 | 19,301 | 28,521 | 23,378 | 5,143 | .......... | 728 | 512 |
 | 1996 ................................................................................. | 61,384 | 17,189 | 18,670 | 25,525 | 20,477 | 5,048 | .......... | 760 | 459 |
 | 1997 ................................................................................. | 63,178 | 19,845 | 17,928 | 25,405 | 19,636 | 5,769 | .......... | 797 | 581 |
@@ -38,5 +36,7 @@ Deposits Fees
 | 2014 estimate .................................................................. | 152,129 | 24,957 | 35,728 | 91,444 | 38,211 | 53,233 | .......... | 1,840 | 1,067 |
 | 2015 estimate .................................................................. | 171,971 | 27,649 | 37,759 | 106,563 | 37,388 | 69,175 | .......... | 1,947 | 1,047 |
 | 2016 estimate .................................................................. | 183,626 | 30,005 | 39,437 | 114,184 | 41,023 | 73,161 | .......... | 2,016 | 1,025 |
-| 1 Deposits of earnings by the Federal Reserve System. |  |  |  |  |  |  |  |  |  |
-| 2 There are no proposals unclassified by receipts source category in the 2012 |  | Budget. |  |  |  |  |  |  |  |
+
+1Deposits of earnings by the Federal Reserve System.
+
+2There are no proposals unclassified by receipts source category in the 2012 Budget.

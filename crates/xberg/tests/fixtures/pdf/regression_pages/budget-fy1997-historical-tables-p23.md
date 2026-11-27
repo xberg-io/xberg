@@ -2,9 +2,11 @@ THE BUDGET FOR FISCAL YEAR 1997, HISTORICAL TABLES
 
 19
 
-Table 1.1— **SUMMARY OF RECEIPTS, OUTLAYS, AND SURPLUSES OR DEFICITS(–): 1789–2002**
+Table 1.1—**SUMMARY OF RECEIPTS, OUTLAYS, AND SURPLUSES OR DEFICITS(–): 1789–2002**
 
-(in millions of dollars) Total On-Budget Off-Budget Year Surplus or Surplus or Surplus or Receipts Outlays Receipts Outlays Receipts Outlays Deficit (–) Deficit (–) Deficit (–)
+Year
+
+(in millions of dollars) Total On-Budget Off-Budget Receipts Outlays Surplus or Deficit (–) Receipts Outlays Surplus or Deficit (–) Receipts Outlays Surplus or Deficit (–)
 
 | 1789–1849 ..................................................................... | 1,160 | 1,090 | 70 | 1,160 | 1,090 |  | 70 .................. .................. |  |  | .................. |  |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

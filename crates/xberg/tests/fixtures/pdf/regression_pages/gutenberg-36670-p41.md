@@ -6,9 +6,25 @@ But 32 is the number of oranges they together have.
 
 |  | ∴ x + 3x = 32; |
 | --- | --- |
-| or, | 4x = 32 , |
+| or, | 4x = 32, |
 | and | x = 8 . |
 | Since x = 8, | 3x = 24 . |
+
+$$
+∴x+3x=32;
+$$
+
+$$
+4x=32,
+$$
+
+$$
+x=8.
+$$
+
+$$
+3x=24.
+$$
 
 Therefore James has 8 oranges, and John has 24 oranges. Note. Beginners in stating the preceding problem generally write: Let x = what James had.
 
@@ -21,7 +37,11 @@ Let x stand for the number of dollars John has; then x + 8 is the number of doll
 But 24 is the number of dollars they both have.
 
 $$
-∴ x + (x + 8) = 24.
+∴x+(x+8)=24.
 $$
 
-Removing the parenthesis, $x + x + 8 = 24$.
+Removing the parenthesis,
+
+$$
+x+x+8=24.
+$$

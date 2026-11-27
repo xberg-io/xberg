@@ -2,52 +2,84 @@
 
 73
 
-Examples. 7 √ dv
+Examples. dv
 
-- (1) If z = 3x<sup>4</sup>; v = ; y = 1 + v, find . z<sup>2</sup> dx We have
-
-dy 1 dv 14 dz
-
-$$= √ ; = − ; = 12x3. dv 2 1 + v dz z3 dx$$
+- (1) If z=3x\^{4};v=\\frac{7}{z\^{2}};y=\^{\\sqrt{}}1+v, find dx\^{.} We have
 
 $$
-dy 168x3 28 = − √ = − √ . dx (2 1 + v)z3 3x5 9x8 + 7
+\frac{dy}{dv}=_{2}\sqrt{1+v1};\frac{dv}{dz}=-\frac{14}{z^{3}};
 $$
 
-1 t 7x<sup>2</sup> dv
-
-- (2) If t = √ ; x = t<sup>3</sup> + ; v = √ , find . 3 5 θ 2 x − 1 dθ
-
 $$
-dv 7x(5x − 6) dx dt 1 1 = p ; = 3t2 + ; = − √ .
+\frac{dz}{dx}=12x^{3}.
 $$
 
-3 2
+168
 
-dx 3 (x − 1)<sup>4</sup> dt dθ 10 θ<sup>3</sup>
+$$
+\frac{dy}{dx}=-_{(2}\sqrt{1+v)z^{3}}{}^{x^{3}}=-_{3x^{5}}\sqrt{9x^{8}+728}.
+$$
 
-1
+1 $dv_{.}$
 
-dv 7x(5x − 6)(3t<sup>2</sup> + )2 Hence = − p √ , dθ
+- (2) If t=_{5}\\sqrt{\\theta};x=t\^{3}+\\frac{t}{2};v=\\sqrt{x-17x\^{2}}, find ~3~ dθ
+
+7x(5 1
+
+$$
+\frac{dv}{dx}=_{3}p_{(x-1)^{4}}^{x-6)};
+$$
+
+$$
+\frac{dx}{dt}=3t^{2}+\frac{1}{2};
+$$
+
+$$
+\frac{dt}{d\theta}=-_{10}\sqrt{\theta^{3}}.
+$$
 
 3
 
-30 (x − 1)<sup>4</sup> θ<sup>3</sup> an expression in which x must be replaced by its value, and t by its value in terms of θ. √
+$$
+(5x{}^{2}+
+$$
 
-3a<sup>2</sup>x 1 − θ<sup>2</sup> √ 1 dϕ
+Hence
 
-- (3) If θ = √ ; ω = ; and ϕ = 3 − √ , find . x<sup>3</sup> 1 + θ ω 2 dx We get r
+$$
+\frac{dv}{d\theta}=-^{7x}{}_{30}p_{(x-1)^{4}}^{-6)(3t}\sqrt{\theta^{3}}{}^{2}{}^{{}^{1})},
+$$
+
+3
+
+an expression in which x must be replaced by its value, and t by its value in terms of${}&#95;{3a}\theta.\sqrt{}$ 1 $d\phi_{.}$
+
+- (3) If \\theta=\\sqrt{x\^{3}{}\^{2}x};\\omega=\\frac{1-\\theta\^{2}}{1+\\theta}; and \\phi=\^{\\sqrt{}}3-_{\\omega}\\sqrt{2}, find dx We get
+
+$$
+{}^{r}1-\theta
+$$
 
 1
 
 $$
-1 − θ √ 1
+\theta=3a^{2}x^{-\frac{1}{2}};\omega=
 $$
 
-1
+and $\phi=^{\sqrt{}}3-\sqrt{2}\omega^{-1}.$ $1+\theta^{;}$ 3a 1
 
-$θ = 3a2x− 2; ω$ = ; and $ϕ = 3 −√ ω−$ . 1 + θ 2
+$$
+\frac{d\theta}{dx}=-_{2}\sqrt{x^{3}2};
+$$
 
-dθ 3a<sup>2</sup> dω 1 = − √ ; = − √ dx 2 x<sup>3</sup> dθ (1 + θ) 1 − θ<sup>2</sup> (see example 5, p. 68); and dϕ 1 = √ . dω 2ω<sup>2</sup>
+$$
+\frac{d\omega}{d\theta}=-_{(1+\theta)}\sqrt{1-\theta^{2}}
+$$
 
-dθ 1 1 3a<sup>2</sup> So that = √ × √ × √ . dx 2 × ω<sup>2</sup> (1 + θ) 1 − θ<sup>2</sup> 2 x<sup>3</sup> Replace now first ω, then θ by its value.
+(see example 5, p. 68); and
+
+$$
+\frac{d\phi}{d\omega}=\sqrt{2\omega^{2}1}.
+$$
+
+1 3a So that $\frac{d\theta}{dx}=\sqrt{2\times\omega^{2}}{}^{1}\times_{(1+\theta)}\sqrt{1-\theta^{2}}\times_{2}\sqrt{x^{3}2}.$ Replace now first ω, then θ by its value.

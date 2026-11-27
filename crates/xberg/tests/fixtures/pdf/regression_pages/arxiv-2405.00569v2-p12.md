@@ -1,4 +1,6 @@
-12
+12 Lavanya V Salian, Samala Rathan, Debojyoti Ghosh
+
+$\omega_{f}$ $\epsilon_{t}=0.0001.$
 
 | Table 6. The shortest well-resolved wave ω f and resolving with tolerance error ϵ t = 0.0001. |  |  |  |  | efficiency | e of different schemes |  |  |  |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -16,23 +18,37 @@
 | TDCCS-TE-2 | 0.407 | 0.1294 | 0.854 | 0.2718 | 1.231 | 0.3917 | 1.585 |  | 0.5046 |
 | TDCCS-TE-3 | 0.407 | 0.1294 | 0.854 | 0.2718 | 1.234 | 0.3928 | 1.515 |  | 0.4823 |
 
-be expressed as
-
-Lavanya V Salian, Samala Rathan, Debojyoti Ghosh
-
-X<sup>N</sup> a~n~ ˆ ˆ ˆ (5.1) α~F~f~j~−1 + f~j~ + α~F~f~j~+1 = (f~j~+n + f~j~−n) 2
-
 $$
-n=0
+\omega_{f}
 $$
 
-where f~j~ denotes the given value at point j, and f~j~ˆ denotes the value after filtering. The most natural formulation of the problem involves the transfer function associated with the equation (5.1). P~N~ a~n~cos(nω)
-
 $$
-n=0
+\omega_{f}
 $$
 
-(5.2) T(ω) = 1 + 2α~F~ cos(ω) To determine the unknown coefficients, we require the exclusion of the highest-frequency mode by imposing the condition T(π) = 0. For adaptability, we maintain α~F~ as an unrestricted parameter. Subsequently, the remaining N equations can be deduced by equating the Taylor series coefficients of the left and right sides. Through this process, equation (5.1) yields a 2N-th order formula within a 2N + 1 point stencil. It is important to note that T(ω) is real, signifying that the filter alters only the amplitude of each wave component without impacting the phase. Here α~F~ is a free parameter that satisfies |α~F~| \< 0.5. The coefficients of a family of 8th-order (F8), 10th-order (F10), and 12th-order filter (F12) are given in the Table 7.
+$$
+\omega_{f}
+$$
+
+$$
+\omega_{f}
+$$
+
+be expressed as ˆ ˆ ˆ (5.1) `\alpha_{F}f_{j-1}+f`${}&#95;{j}+\alpha_{F}f_{j+1}=\frac{X_{a_{n}}^{N}}{n=0}&#95;{2}(f_{j+n}+f_{j-n})$
+
+where $f_{j}$ denotes the given value at point j, and $f_{j}$ˆ denotes the value after filtering. The most natural formulation of the problem involves the transfer function associated with the equation (5.1).
+
+$$
+P_{N}
+$$
+
+(5.2)
+
+$$
+T(\omega)=\frac{{}_{n=0}a_{n}\cos(n\omega)}{1+2\alpha_{F}\cos(\omega)}
+$$
+
+To determine the unknown coefficients, we require the exclusion of the highest-frequency mode by imposing the condition T(π) = 0. For adaptability, we maintain $\alpha_{F}$ as an unrestricted parameter. Subsequently, the remaining N equations can be deduced by equating the Taylor series coefficients of the left and right sides. Through this process, equation (5.1) yields a 2N-th order formula within a 2N + 1 point stencil. It is important to note that T(ω) is real, signifying that the filter alters only the amplitude of each wave component without impacting the phase. Here $\alpha_{F}$ is a free parameter that satisfies `|\alpha_{F}|<0.`5. The coefficients of a family of 8th-order (F8), 10th-order (F10), and 12th-order filter (F12) are given in the Table 7.
 
 Table 7. Coefficients for the filter formula.
 
@@ -46,3 +62,75 @@ Table 7. Coefficients for the filter formula.
 |  | (793+462α | ) (99+314α | ) | 495( − 1+2α | ) 55(1 − 2α | ) | 33( − 1+2α | ) | 3(1 − 2α ) | (-1+2α ) |  |
 | F-12 |  | F | F |  | F | F |  | F | F | F | 12 |
 |  | 1024 |  | 256 | 2048 |  | 512 | 1024 |  | 512 | 2048 |  |
+
+$$
+a_{{}^{0}\alpha_{F})}
+$$
+
+$$
+a_{{}^{1}\alpha_{F})}
+$$
+
+$$
+a_{2}{}_{\alpha_{F})}
+$$
+
+$$
+{}_{(1}a_{{}^{3}\alpha_{F})}
+$$
+
+$$
+{}_{(-}a_{{}^{4}\alpha_{F})}
+$$
+
+$$
+(193+126\alpha_{F})
+$$
+
+$$
+(105+302\alpha_{F})
+$$
+
+$$
+15(-1+2\alpha_{F})
+$$
+
+$$
+{}_{(1-}0_{\alpha_{F})}
+$$
+
+$$
+45(1-2\alpha_{F})
+$$
+
+$$
+5(-1+2\alpha_{F})
+$$
+
+$$
+0_{\alpha_{F})}
+$$
+
+$$
+(793+462\alpha_{F})
+$$
+
+$$
+(99+314\alpha_{F})
+$$
+
+$$
+495(-1+2\alpha_{F})
+$$
+
+$$
+55(1-2\alpha_{F})
+$$
+
+$$
+33(-1+2\alpha_{F})
+$$
+
+$$
+3(1-2\alpha_{F})
+$$

@@ -9,12 +9,10 @@ This appendix shows the development of the key schedule for each key size. Note 
 Key = 2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c for Nk = 4, which results in
 
 $$
-w0 = 2b7e1516 w1 = 28aed2a6 w2 = abf71588 w3 = 09cf4f3c
+w_{0} = 2b7e1516 w_{1} = 28aed2a6 w_{2} = abf71588 w_{3} = 09cf4f3c
 $$
 
-w[i] = i After After After XOR temp Rcon[i/Nk] w[i−Nk] temp⊕
-
-- (dec) ROTWORD() SUBWORD() with Rcon w[i−Nk]
+$w&#91;i&#93; = i$ (dec) temp After ROTWORD() After SUBWORD() Rcon[i/Nk] After with XOR Rcon w[i−Nk] temp⊕ w[i−Nk]
 
 | 4 | 09cf4f3c | cf4f3c09 | 8a84eb01 | 01000000 | 8b84eb01 | 2b7e1516 | a0fafe17 |
 | --- | --- | --- | --- | --- | --- | --- | --- |

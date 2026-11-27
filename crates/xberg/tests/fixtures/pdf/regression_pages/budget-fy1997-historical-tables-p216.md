@@ -2,21 +2,21 @@
 
 THE BUDGET FOR FISCAL YEAR 1997, HISTORICAL TABLES
 
-Table 12.3— **TOTAL OUTLAYS FOR GRANTS TO STATE AND LOCAL GOVERNMENTS BY FUNCTION, AGENCY, AND PROGRAM: 1940–2002— Continued**
+Table 12.3—**TOTAL OUTLAYS FOR GRANTS TO STATE AND LOCAL GOVERNMENTS BY FUNCTION, AGENCY, AND PROGRAM: 1940–2002— Continued**
 
 (in millions of dollars) 1968 1969 1970 1971 1972 1973 1974 1975 1976
 
-**050 NATIONAL DEFENSE**
+## 050 NATIONAL DEFENSE
 
 Defense—Military: Military construction, Army National Guard ....................................................... 1 8 10 8 19 26 33 34 51 Subtotal, Defense—Military ............................................................................ 1 8 10 8 19 26 33 34 51 Other Independent Agencies: Emergency planning and assistance (Defense-related activities) ..................... 26 26 27 26 26 31 32 39 38 **Total, 050** ....................................................................................................... 27 34 37 34 45 57 64 74 89
 
-**150 INTERNATIONAL AFFAIRS**
+## 150 INTERNATIONAL AFFAIRS
 
 Other Independent Agencies: Center for Cultural and Technical Interchange Between East and West ........ 6 6 5 5 5 6 7 ...............................
 
 **Total, 150** ....................................................................................................... 6 6 5 5 5 6 7 ...............................
 
-**270 ENERGY**
+## 270 ENERGY
 
 Energy: Emergency conservation and regulation ............................................................ 5 6 9 8 5 5 5 7 8 Other Independent Agencies: Tennessee Valley Authority fund ....................................................................... 13 15 16 20 26 27 31 37 48 **Total, 270** ....................................................................................................... 18 20 25 28 31 33 36 43 56
 

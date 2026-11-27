@@ -20,49 +20,67 @@ Cambridge Philos. Soc.. 47, pp. 276-284.
 
 # ( <sup>*m*</sup>) <sup>=</sup>( <sup>ε</sup>~*i*~
 
-**3.12 Approximate Entropy Test**
+### 3.12 Approximate Entropy Test
 
 ,…,ε
 
-## )<sup>, set</sup>
+# )<sup>, set</sup>
 
 *i* + *m* −1
 
-1 *C*~*i*~ $m = n +1− m$ Approximate entropy characteristics [1] are based on repeating patterns in the string. If \#{<sup>*j*</sup> :1≤ $j < n − m$ , *Y*
+1
 
-$$
-( m ) = Y( m) }= π
-$$
+*m*
+
+*C*~*i*~ = *n* +1− *m* Approximate entropy characteristics [1] are based on repeating patterns in the string. If \#{<sup>*j*</sup> :1≤ $j < n − m,Y$
+
+( <sup>*m*</sup> ) <sup>=</sup> *Y*( <sup>*m*</sup>) }<sup>=</sup> π
 
 *j i l*
 
 | and |  |
 | --- | --- |
 |  | 1 n + 1 − m |
-| Φ ( m ) = | ∑ logCim , |
+| Φ( m ) = | ∑ logCim , |
 | n + 1 − m |  |
 |  | i + 1 |
 
 logC
 
-( )
+*m*
 
-*C*<sup>*m*</sup>is the relative frequency of occurrences of the pattern *Y* ( *m* ) in the string, and -Φ<sup>*m*</sup> is the entropy of *i i* the empirical distribution arising on the set of all 2<sup>*m*</sup> possible patterns of length *m* ,
+*C*~*i*~ is the relative frequency of occurrences of the pattern *Y*~*i*~(*m*) in the string, and -Φ
 
-2<sup>*m*</sup> ( )
+*m*
+
+the empirical distribution arising on the set of all 2 possible patterns of length *m*,
+
+*m*
+
+2
+
+(*m*)
+
+is the entropy of
+
+( *m* )
 
 $$
-Φm = ∑π logπ ,
+Φ = ∑^{π} logπ ,
 $$
 
 $l l l =1$
 
-where π~*l*~ is the relative frequency of pattern $l = ( i1$, …, *i*~*m*~) in the string.
+where π~*l*~ is the relative frequency of pattern $l = (i_{1}$, …,*i*~*m*~) in the string.
 
-The approximate entropy *ApEn* of order *m* , $m ≥ 1$ is defined as
+The approximate entropy *ApEn* of order $m, m ≥ 1$ is defined as
 
-( ) ( +1)
+( *m* ) ( *m* +1)
 
-*ApEn*( <sup>*m*</sup>) <sup>=</sup> Φ<sup>*m*</sup> − Φ<sup>*m*</sup> with *ApEn* $(0) = -Φ(1)$. " *ApEn* ( *m* ) measures the logarithmic frequency with which blocks of length *m* that are close together remain close together for blocks augmented by one position. Thus, small values of *ApEn* ( *m* ) imply strong regularity, or persistence, in a sequence. Alternatively, large values of *ApEn* ( *m* ) imply substantial fluctuation, or irregularity." [1, p. 2083].
+*ApEn*( <sup>*m*</sup>) <sup>=</sup> Φ
 
-Pincus and Kalman [2] defined sequence to be *m* -irregular ( *m* -random) if its approximate entropy *ApEn* ( *m* ) takes the largest possible value. They evaluated quantities *ApEn* ( $m ), m = 0, 1, 2$ for binary and decimal expansions of *e* , π, 2 and 3 with the surprising conclusion that the expansion of 3 demonstrated more irregularity than that of π.
+## − Φ
+
+with *ApEn*(0) = -Φ<sup>(1)</sup>. "*ApEn*(*m*) measures the logarithmic frequency with which blocks of length *m* that are close together remain close together for blocks augmented by one position. Thus, small values of *ApEn*(*m*) imply strong regularity, or persistence, in a sequence. Alternatively, large values of *ApEn*(*m*) imply substantial fluctuation, or irregularity." [1, p. 2083].
+
+Pincus and Kalman [2] defined sequence to be *m*-irregular (*m*-random) if its approximate entropy *ApEn*(*m*) takes the largest possible value. They evaluated quantities *ApEn*(*m*), *m* = 0, 1, 2 for binary and decimal expansions of *e*, π, 2 and 3 with the surprising conclusion that the expansion of 3 demonstrated more irregularity than that of π.

@@ -12,35 +12,21 @@ substrate complex and free enzyme remain constant, the system can be expressed a
 
 we designed three different observations (Fig 6, Observation) with a known [E~0~] value of
 
-## 5.0 × 10<sup>−4</sup>
-
-. Specifically, we obtained RCS data from 12 trajectories of S(t) and P(t) which were
+5.0 × 10<sup>−4</sup>. Specifically, we obtained RCS data from 12 trajectories of S(t) and P(t) which were
 
 **Table 1. Parameter values for different distribution types within the target cell-limited model using synthetic data.**
 
-| β (×10−4) | p | c (×101) | κ | δ (×106) |
-| --- | --- | --- | --- | --- |
-| 2.40 | 1.60 | 1.30 | 4.00 | 1.60 |
-| 2.88 | 1.44 | 1.82 | 5.20 | 1.28 |
-| 2.16 | 2.08 | 0.91 | 3.20 | 1.76 |
-| 2.88 | 1.12 | 1.56 | 4.00 | 1.44 |
-| 1.68 | 2.24 | 1.82 | 5.60 | 1.60 |
-| 2.16 | 2.08 | 0.78 | 2.40 | 1.92 |
+| Distribution type | β (×10−4) | p | c (×101) | κ | δ (×106) | K δ (×104) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Unimodal | 2.40 | 1.60 | 1.30 | 4.00 | 1.60 | 4.50 |
+| Bimodal | 2.88 | 1.44 | 1.82 | 5.20 | 1.28 | 3.15 |
+|  | 2.16 | 2.08 | 0.91 | 3.20 | 1.76 | 4.95 |
+| Trimodal | 2.88 | 1.12 | 1.56 | 4.00 | 1.44 | 4.50 |
+|  | 1.68 | 2.24 | 1.82 | 5.60 | 1.60 | 7.20 |
+|  | 2.16 | 2.08 | 0.78 | 2.40 | 1.92 | 2.25 |
 
 **1 6**
 
-**Distribution type K**~***δ***~**(×10**<sup>**4**</sup>**)**
-
-Unimodal 4.50
-
-Bimodal 3.15
-
-4.95
-
-Trimodal 4.50
-
-7.20
-
-2.25 https://doi.org/10.1371/journal.pcbi.1012696.t001
+https://doi.org/10.1371/journal.pcbi.1012696.t001
 
 PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1012696 December 23, 2024 8 / 22

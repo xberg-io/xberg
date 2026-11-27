@@ -1,12 +1,12 @@
-**NAICS Codes NAICS Industry Description Size standards in millions of dollars**
+**NAICS Codes NAICS Industry Description**
 
-221210 Natural Gas Distribution 221310 Water Supply and Irrigation Systems $41.0 221320 Sewage Treatment Facilities $35.0 221330 Steam and Air Conditioning Supply $30.0
+221210 Natural Gas Distribution 221310 Water Supply and Irrigation Systems 221320 Sewage Treatment Facilities 221330 Steam and Air Conditioning Supply
 
 # Sector 23 – Construction
 
-**Size standards in number of employees**
+**Size Size standards in standards in millions of number of dollars employees**
 
-1,150
+1,150 $41.0 $35.0 $30.0
 
 | NAICS Codes | NAICS Industry Description | Size | Size |
 | --- | --- | --- | --- |

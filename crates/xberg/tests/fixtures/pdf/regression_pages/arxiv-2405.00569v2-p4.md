@@ -1,6 +1,32 @@
 4 Lavanya V Salian, Samala Rathan, Debojyoti Ghosh
 
-We have extended the expression (2.3) to achieve up to tenth-order accuracy, denoted as the third derivative cell-node compact scheme (TDCNCS). The general form is given by (2.4) f~j~+2 − 2f~j~+1 + 2f~j~−1 − f~j~−2 f~j~+3 − 3f~j~+1 + 3f~j~−1 − f~j~−3 βf<sup>′′′</sup> ~j~−2 + αf<sup>′′′</sup> ~j~−1 + f~j~ <sup>′′′</sup> + αf<sup>′′′</sup> ~j~+1 + βf<sup>′′′</sup> ~j~+2 = a + b 2h<sup>3</sup> 8h<sup>3</sup> f~j~+4 − 4f~j~+1 + 4f~j~−1 − f~j~−4 + c . 20h<sup>3</sup> The third derivative cell-centered compact scheme (TDCCCS) is given by (2.5) f~j~+<sup>3</sup> − 3f~j~+<sup>1</sup> + 3f~j~−<sup>1</sup> − f~j~−<sup>3</sup> f~j~+<sup>5</sup> − 5f~j~+<sup>1</sup> + 5f~j~−<sup>1</sup> − f~j~−<sup>5</sup> 2 2 2 2 2 2 2 2 βf<sup>′′′</sup> ~j~−2 + αf<sup>′′′</sup> ~j~−1 + f~j~ <sup>′′′</sup> + αf<sup>′′′</sup> ~j~+1 + βf<sup>′′′</sup> ~j~+2 = a + b h<sup>3</sup> 5h<sup>3</sup> f~j~+<sup>7</sup> − 7f~j~+<sup>1</sup> + 7f~j~−<sup>1</sup> − f~j~−<sup>7</sup> 2 2 2 2 + c . 14h<sup>3</sup>
+We have extended the expression (2.3) to achieve up to tenth-order accuracy, denoted as the third derivative cell-node compact scheme (TDCNCS). The general form is given by (2.4)
+
+$$
+\beta f_{j-2}'''+\alpha f_{j-1}'''+f_{j}'''+\alpha f_{j+1}'''+\beta f_{j+2}'''=a\frac{f_{j+2}-2f_{j+1}+2f_{j-1}-f_{j-2}}{2h^{3}}+b\frac{f_{j+3}-3f_{j+1}+3f_{j-1}-f_{j-3}}{8h^{3}}
+$$
+
+$$
+{}_{+c}f_{j+4}-4f_{j+1}+4f_{j-1}-f_{{}^{j-4}.}
+$$
+
+$$
+20h^{3}
+$$
+
+The third derivative cell-centered compact scheme (TDCCCS) is given by (2.5)
+
+$$
+\beta f_{j-2}'''+\alpha f_{j-1}'''+f_{j}'''+\alpha f_{j+1}'''+\beta f_{j+2}'''=a^{f_{j+_{2}}3}{}^{-3f_{j+_{2}}1}\frac{+3f_{j-_{2}}1}{h^{3}}^{-f_{j-_{2}}3}+b^{f_{j+_{2}}5}{}^{-5f_{j+_{2}}1}\frac{+5f_{j-_{2}}1}{5h^{3}}^{-f_{j-_{2}}5}
+$$
+
+$$
+{}_{+c}f_{j+_{2}}7-7f_{j+_{2}}1+7f_{j-_{2}}1-f_{j-_{2}}7_{.}
+$$
+
+$$
+14h^{3}
+$$
 
 | Scheme | Table 1. The coefficients of TDCNCS schemes. a | b | c | α | β | Order |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -21,6 +47,18 @@ We have extended the expression (2.3) to achieve up to tenth-order accuracy, den
 | TDCNCS-P10 | 18221 | -1846 | 5 | 799 | -557 | 10 |
 |  | 5478 | 913 | 66 | 2739 | 5478 |  |
 
+$$-\frac{12}{5}$$
+
+$$-\frac{1}{8}$$
+
+$$-\frac{167}{1180}$$
+
+$$-^{16}\frac{205}{472}&#95;{4}$$
+
+$$-&#95;{1846}\frac{5}{166}$$
+
+$$-\frac{1}{166}&#95;{557}$$
+
 | Scheme | a Table | 2. The coefficients b | of c | TDCCCS schemes. α | β | Order |
 | --- | --- | --- | --- | --- | --- | --- |
 | TDCCCS-E2 | 1 | 0 | 0 | 0 | 0 | 2 |
@@ -40,3 +78,11 @@ We have extended the expression (2.3) to achieve up to tenth-order accuracy, den
 |  | 79903 | 79903 |  | 79903 | 159806 |  |
 | TDCCCS-P10 | 55463611 | 677644345 | 6301771 | 93443398 | 15505921 | 10 |
 |  | 150617762 | 451853286 | 225926643 | 225926643 | 451853286 |  |
+
+$$-\frac{5}{8}$$
+
+$$-\frac{499}{384}$$
+
+$$-\frac{24787}{487600}$$
+
+$$-\frac{7}{1398}$$

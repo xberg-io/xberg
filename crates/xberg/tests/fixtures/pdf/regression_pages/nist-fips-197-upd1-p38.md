@@ -29,18 +29,22 @@
 Key = 8e 73 b0 f7 da 0e 64 52 c8 10 f3 2b 80 90 79 e5 62 f8 ea d2 52 2c 6b 7b for Nk = 6, which results in
 
 $$
-w0 = 8e73b0f7 w1 = da0e6452 w2 = c810f32b
+w_{0} = 8e73b0f7 w_{1} = da0e6452 w_{2} = c810f32b
 $$
 
 $$
-w3 = 809079e5 w4 = 62f8ead2 w5 = 522c6b7b
+w_{3} = 809079e5 w_{4} = 62f8ead2 w_{5} = 522c6b7b
 $$
 
-w[i] = i After After After XOR temp Rcon[i/Nk] w[i−Nk] temp⊕
+$w&#91;i&#93; = i$ (dec) temp RO After
 
-- (dec) RO TWO R D() SU BWO R D() with Rcon
+TWO R D() SU
 
-w[i−Nk]
+After
+
+BWO R D()
+
+Rcon[i/Nk] After with XOR Rcon w[i−Nk] temp⊕ w[i−Nk]
 
 | 6 | 522c6b7b 2c6b7b52 717f2100 01000000 707f2100 | 8e73b0f7 | fe0c91f7 |
 | --- | --- | --- | --- |

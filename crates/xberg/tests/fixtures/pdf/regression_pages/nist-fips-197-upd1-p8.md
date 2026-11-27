@@ -14,11 +14,11 @@
 | Figure 3 |  | Illustration of SHIFTROWS() . . . . . . . . . . . . . . . . . . . . . . . | 15 |
 | Figure 4 |  | Illustration of MIXCOLUMNS() . . . . . . . . . . . . . . . . . . . . . . | 16 |
 | Figure 5 |  | Illustration of ADDROUNDKEY() . . . . . . . . . . . . . . . . . . . . . | 16 |
-| Figure 6 |  | KEYEXPANSION() of AES-128 to generate the words w [ i ] for 4 ≤ i \< 44, |  |
+| Figure 6 |  | KEYEXPANSION() of AES-128 to generate the words w [i] for 4 ≤ i \< 44, |  |
 |  | where l ranges over the multiples of 4 between 0 and 36 . . . . . . . . . . . . . |  | 19 |
-| Figure 7 |  | KEYEXPANSION() of AES-192 to generate the words w [ i ] for 6 ≤ i \< 52, |  |
+| Figure 7 |  | KEYEXPANSION() of AES-192 to generate the words w [i] for 6 ≤ i \< 52, |  |
 |  | where l ranges over the multiples of 6 between 0 and 42 . . . . . . . . . . . . . |  | 20 |
-| Figure 8 |  | KEYEXPANSION() of AES-256 to generate the words w [ i ] for 8 ≤ i \< 60, |  |
+| Figure 8 |  | KEYEXPANSION() of AES-256 to generate the words w [i] for 8 ≤ i \< 60, |  |
 |  | where l ranges over the multiples of 8 between 0 and 48 . . . . . . . . . . . . . . 21 |  |  |
 | Figure 9 |  | Illustration of INVSHIFTROWS() . . . . . . . . . . . . . . . . . . . . . | 23 |
 

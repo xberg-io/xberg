@@ -30,15 +30,15 @@ _= 1 *M_[(7*
 
 **(162)**
 
-compressionsthroughsmallanglescanalsobecalculatedwith theaidof table II byregardingthemasreversedPrandtl-
+compressionsthroughsmallanglescanalsobecalculatedwith the aid of table II by regardingthem as reversedPrandtl-
 
 **For** weak shock waves, equations (113) **and (114) apply** to
 
-## Meyerexpansions(seelater section).The resultingnu-
+## Meyer expansions(seelater section). The resultingnu-
 
 oblique as well **as** normal shocks.
 
-mericalaccuracyisgreaterthanthatobtainedbyretaining termsup to _2in theaboveseries,and nearlyequalto that obtainedby retainingtermsupto 63.
+mericalaccuracyis greaterthan that obtainedby retaining termsup to _2in the aboveseries,and nearlyequalto that obtainedby retainingtermsup to 63.
 
 *Charts* 2, 3, and 4 show the variation of shock-wave angle, pressure coefficient across a shock wave, and downstream Much number with flow-deflection angle for various upstream Mach numbers.
 
@@ -48,7 +48,7 @@ _ --pl/p2.-- *M1* _ sin28___(_+l)_+(-r--1) 6_41 (155) 27 7 *M22* **sin 2** (0--_
 
 **p__(74**
 
-$$1)}4(7-- 1) 6}41 (158) p, (7-- 1)\\\$4(741) &#95;46 T_ a2 &#95; &#95; (7--1)&#95;+(7+1) &#95;+6 (159) T,--al --i= (7+1)&#95;4(7--1) &#95; 6_41$$
+$$1)}4(7-- 1) 6}41 (158) p, (7-- 1)\\\$4(741) &#95;46 T_ a2_ &#95; (7--1)&#95;+(7+1) &#95;+6 (159) T,--al --i= (7+1)&#95;4(7--1) &#95; 6_41$$
 
 __[ 7M_--5-55(f-- (_1)_ 1)_ 7M_--(6_6_4 1+ 1) (160) *v*
 

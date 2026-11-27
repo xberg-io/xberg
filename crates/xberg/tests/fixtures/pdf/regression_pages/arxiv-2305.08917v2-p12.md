@@ -1,62 +1,62 @@
-$$
-100 Lx= Ly=10, t =4 CDW
-$$
+# 12
 
-1 10
-
-*C* ( )
-
-10 2
-
-10 3
-
-0.0 2.5
-
-bility operators in two dimensions.
-
-24 22 20 18
-
-5.0 7.5 10.0 12.5 15.0 17.5
-
-FIG. 6: The autocorrelation functions for two suscepti-
-
-$$=4.0$$
+10<sup>0</sup>
 
 3.5
 
+*L*~*x*~= *L*~*y*~=10, $t =4$ CDW ED, $L=6$ ED, $L=8$
+
 3.0
 
+1 10
+
+QMC, $L=6$
+
+)
+
+QMC, $L=8$
+
+(
+
 2.5
+
+*C*
+
+2 10
 
 2.0
 
 1.5
 
+3 10
+
+0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5
+
 susceptibility from EEcorr
 
 1.0
 
-0.0 0.5 1.0 1.5
+FIG. 6: The autocorrelation functions for two suscepti-
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
+
+*t*
+
+bility operators in two dimensions.
 
 8
 
 7
 
+=4.0
+
 6
+
+24 22 20
 
 5
 
-12
-
-$$
-ED, L=6 ED, L=8 QMC, L=6 QMC, L=8
-$$
-
-2.0 2.5 3.0 3.5 4.0
-
-*t*
-
-ED, $L=6$
+18 ED, $L=6$
 
 2
 
@@ -70,23 +70,25 @@ ED, $L=6$
 
 14 ED, $L=8$
 
-$$+ n$$
+*n*
 
 12
 
-susceptibility from CDW
+\+
 
 QMC, $L=6$
+
+susceptibility from CDW
+
+3
 
 *w*
 
 10
 
-3
-
 *n*
 
-QMC, $L=8 8 6$
+QMC, L=8 8 6
 
 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
 
@@ -98,21 +100,7 @@ QMC, $L=8 8 6$
 
 2.0
 
-FIG. 7: The n~h~ and n~w~ for 100 equilibrated clusters plot-
-
-1.5
-
-ted for the U(1) theory in one dimension.
-
-1.0
-
-ED, $L=6$
-
-0.5
-
-ED, $L=8 0 0 25 0 5 0 0$ QMC, $L=6$
-
-0.0
+FIG. 7: The $n_{h}$ and $n_{w}$ for 100 equilibrated clusters plotted for the U(1) theory in one dimension.
 
 | βt 0.1 0.25 0.5 1.0 4.0 |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- |
@@ -137,38 +125,42 @@ ED, $L=8 0 0 25 0 5 0 0$ QMC, $L=6$
 | MC | -0.28(2) | 0.04(4) | 0.68(3) | 1.76(1) | 2.432(1) |
 | ED -0.255 0.057 0.681 1.766 2.4322 |  |  |  |  |  |
 
-EEcorr QMC, $L=8$
+EEcorr EEcorr
+
+1.5
+
+1.0
+
+ED, $L=6$
+
+0.5
+
+ED, $L=8$ QMC, $L=6$
+
+0.0
+
+QMC, $L=8$
 
 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
 
-*t* EEcorr
+*t*
 
-FIG. 8: Comparison of Meron Cluster QMC values with the ED values for χ~EEcorr~ (top), χ~CDW~ (middle), and the ¯ bare ψψ (bottom). tions: 1 X 1 1
-
-$$+y$$
-
-χ~CDW~ = (−1)<sup>x</sup> n~x~ − n~y~ − L~t~ 2 2 x,y,t X 1 ¯ψψ = (−1)<sup>x</sup>n~x~ (27) L~t~
-
-x,y,t
-
-X 1 TABLE III: Results for the observables χ , χ
-
-3 3 EEcorr CDW
+FIG. 8: Comparison of Meron Cluster QMC values with the ED values for χ~EEcorr~ (top), χ~CDW~ (middle), and the ¯ bare ψψ (bottom). tions:
 
 $$
-χ = sx,x
+\chi_{CDW}=\frac{1}{L_{{}^{t}x,y,t}}^{X}(-1)^{x+y}n_{x}-\frac{1}{2}
 $$
 
-- s~y,y~
+$$
+n_{y}-\frac{1}{2}
+$$
 
-.
+¯$\psi\psi=\frac{1}{L_{{}^{t}x,y,t}}^{X}(-1)^{x}n_{x}$ (27) TABLE III: Results for the observables χ $,\chi_{CDW}$~EEcorr~ χ =
 
-EEcorr +1 +1
+$$
+\frac{1}{L_{{}^{t}x,y,t}}^{X}s_{x,x+1}^{3}\cdot s_{y,y+1}^{3}.
+$$
 
-¯ and ψψ defined in (27) for the U(1) model in (1 + 1)-d L~t~
+EEcorr ¯ and ψψ defined in (27) for the U(1) model in (1 + 1)-d calculated with Meron Clusters (MC) and exact diagonalization (ED).
 
-x,y,t
-
-calculated with Meron Clusters (MC) and exact diagonalization (ED).
-
-Table III and Fig. 8 summarize these results, which are all for the observables in the Gauss law sector G~x~ = 0.
+Table III and Fig. 8 summarize these results, which are all for the observables in the Gauss law sector $G_{x}=0.$
