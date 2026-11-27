@@ -30,12 +30,14 @@ use crate::error::{Error, Result};
 use crate::object::Object;
 use crate::parser::parse_object;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 const MAX_OBJECT_STREAM_OBJECTS: i64 = 1_000_000;
 const MAX_OBJECT_STREAM_FIRST_OFFSET: i64 = 10_000_000;
 
 pub(crate) struct ObjectStreamParseOutcome {
-    pub(crate) objects: HashMap<u32, Object>,
+    /// Shared handles, so the caches that keep a member hold one allocation between them.
+    pub(crate) objects: HashMap<u32, Arc<Object>>,
     recovery: Option<ObjectStreamRecovery>,
 }
 
@@ -126,7 +128,11 @@ pub fn parse_object_stream_with_decryption(
 ) -> Result<HashMap<u32, Object>> {
     let outcome = parse_object_stream_with_decryption_outcome(stream_obj, decryption_fn, obj_num, gen_num)?;
     outcome.trace_recovery();
-    Ok(outcome.objects)
+    Ok(outcome
+        .objects
+        .into_iter()
+        .map(|(number, object)| (number, Arc::unwrap_or_clone(object)))
+        .collect())
 }
 
 pub(crate) fn parse_object_stream_with_decryption_outcome(
@@ -191,7 +197,6 @@ pub(crate) fn parse_object_stream_with_decryption_outcome(
 }
 
 fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> ObjectStreamParseOutcome {
-    let mut result = HashMap::new();
     let mut invalid_offset_count = 0usize;
     let mut parse_failure_count = 0usize;
     let mut seen_offsets = std::collections::HashSet::new();
@@ -204,6 +209,8 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
         .collect();
     starts.sort_unstable();
     starts.dedup();
+    // One member per distinct in-range offset at most, so /N alone cannot size the map.
+    let mut result = HashMap::with_capacity(starts.len());
 
     for (obj_num, offset_in_data) in pairs {
         // The offset is relative to the start of objects_data ~keep
@@ -226,7 +233,7 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
         match parse_object(obj_data) {
             Ok((remaining, obj)) => {
                 parsed_bytes = parsed_bytes.saturating_add(obj_data.len() - remaining.len());
-                result.insert(obj_num, obj);
+                result.insert(obj_num, Arc::new(obj));
             }
             Err(_) => {
                 parse_failure_count += 1;
@@ -235,6 +242,9 @@ fn parse_embedded_objects(objects_data: &[u8], pairs: Vec<(u32, usize)>) -> Obje
             }
         }
     }
+
+    // Skipped pairs leave room for members that never arrived, and the stream cache charges capacity.
+    result.shrink_to_fit();
 
     let recovery = (invalid_offset_count + parse_failure_count > 0).then_some(ObjectStreamRecovery {
         invalid_offset_count,
@@ -360,6 +370,32 @@ mod tests {
             "failed parses rescanned the tail"
         );
         assert!(outcome.objects.is_empty());
+    }
+
+    #[test]
+    fn member_map_holds_no_more_capacity_than_one_grown_by_insertion() {
+        for (members, unparsable) in [(20usize, 0usize), (20, 15), (3, 40), (0, 9)] {
+            let mut objects_data = b"7 ".repeat(members);
+            objects_data.extend(std::iter::repeat_n(b' ', unparsable));
+            let pairs: Vec<(u32, usize)> = (0..members)
+                .map(|member| (member as u32 + 1, member * 2))
+                .chain((0..unparsable).map(|blank| ((members + blank) as u32 + 1, members * 2 + blank)))
+                .collect();
+
+            let outcome = parse_embedded_objects(&objects_data, pairs);
+
+            let mut grown = HashMap::new();
+            for member in 0..members as u32 {
+                grown.insert(member + 1, Arc::new(Object::Integer(7)));
+            }
+            assert_eq!(outcome.objects, grown, "members={members} unparsable={unparsable}");
+            assert_eq!(
+                outcome.objects.capacity(),
+                grown.capacity(),
+                "members={members} unparsable={unparsable}"
+            );
+            assert_eq!(outcome.has_recovery(), unparsable > 0);
+        }
     }
 
     #[test]

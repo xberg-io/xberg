@@ -354,9 +354,33 @@ struct BoundedObjectCache {
     shared_source: std::ops::Range<usize>,
 }
 
+/// Members of one decoded object stream by object number. Each member is shared with the
+/// object cache, so a compressed object is resident once however many caches hold it.
+struct ObjectStreamMembers(HashMap<u32, Arc<Object>>);
+
+impl ObjectStreamMembers {
+    fn get(&self, object_number: &u32) -> Option<&Object> {
+        self.0.get(object_number).map(|member| &**member)
+    }
+
+    fn get_shared(&self, object_number: &u32) -> Option<&Arc<Object>> {
+        self.0.get(object_number)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&u32, &Arc<Object>)> {
+        self.0.iter()
+    }
+}
+
+impl From<HashMap<u32, Arc<Object>>> for ObjectStreamMembers {
+    fn from(members: HashMap<u32, Arc<Object>>) -> Self {
+        Self(members)
+    }
+}
+
 /// Byte-accounted FIFO cache for decoded object-stream maps.
 struct BoundedObjectStreamCache {
-    map: HashMap<ObjectRef, Arc<HashMap<u32, Object>>>,
+    map: HashMap<ObjectRef, Arc<ObjectStreamMembers>>,
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
@@ -404,11 +428,11 @@ impl BoundedObjectStreamCache {
         }
     }
 
-    fn get(&self, key: &ObjectRef) -> Option<&Arc<HashMap<u32, Object>>> {
+    fn get(&self, key: &ObjectRef) -> Option<&Arc<ObjectStreamMembers>> {
         self.map.get(key)
     }
 
-    fn insert(&mut self, key: ObjectRef, value: Arc<HashMap<u32, Object>>) -> bool {
+    fn insert(&mut self, key: ObjectRef, value: Arc<ObjectStreamMembers>) -> bool {
         let Some(entry_size) = Self::estimate_size(&value) else {
             return false;
         };
@@ -438,15 +462,18 @@ impl BoundedObjectStreamCache {
         }
     }
 
-    fn estimate_size(objects: &HashMap<u32, Object>) -> Option<usize> {
+    fn estimate_size(objects: &ObjectStreamMembers) -> Option<usize> {
         let headers =
-            std::mem::size_of::<HashMap<u32, Object>>().checked_add(std::mem::size_of::<Arc<HashMap<u32, Object>>>())?;
+            std::mem::size_of::<ObjectStreamMembers>().checked_add(std::mem::size_of::<Arc<ObjectStreamMembers>>())?;
+        // A member is charged per bucket although it lives behind its own shared allocation.
+        // The object cache charges the same member again, so the two budgets together
+        // overstate what is resident rather than understate it. ~keep
         let buckets = Self::checked_capacity_bytes(
-            objects.capacity(),
+            objects.0.capacity(),
             std::mem::size_of::<u32>() + std::mem::size_of::<Object>() + std::mem::size_of::<usize>(),
         )?;
         let mut total = headers.checked_add(buckets)?;
-        let mut stack: Vec<&Object> = objects.values().collect();
+        let mut stack: Vec<&Object> = objects.0.values().map(|member| &**member).collect();
         while let Some(object) = stack.pop() {
             total = total.checked_add(Self::estimate_dynamic_size(object, &mut stack)?)?;
         }

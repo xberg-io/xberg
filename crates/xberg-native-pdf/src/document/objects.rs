@@ -634,7 +634,7 @@ impl PdfDocument {
                 }
             };
             self.trace_object_stream_recovery_once(*stream_obj_num, &outcome);
-            let objects_map = Arc::new(outcome.objects);
+            let objects_map = Arc::new(ObjectStreamMembers::from(outcome.objects));
             self.object_stream_cache
                 .lock_or_recover()
                 .insert(ObjectRef::new(*stream_obj_num, 0), Arc::clone(&objects_map));
@@ -648,7 +648,7 @@ impl PdfDocument {
                 // clobber a real object loaded through the normal path. ~keep
                 match cache.get(&cache_ref) {
                     Some(Object::Null) | None => {
-                        cache.insert(cache_ref, object.clone());
+                        cache.insert_shared(cache_ref, Arc::clone(object));
                         published |= cache
                             .get(&cache_ref)
                             .is_some_and(|value| !matches!(value, Object::Null));
@@ -983,7 +983,6 @@ impl PdfDocument {
                 // entry.generation = index within stream ~keep
                 tracing::trace!(target: LOG_TARGET, "  → Compressed object in stream {}, index {}", entry_offset, entry_gen);
                 self.load_compressed_object(obj_ref, entry_offset as u32, entry_gen)
-                    .map(LoadedObject::Owned)
             }
             XRefEntryType::Uncompressed => {
                 tracing::trace!(target: LOG_TARGET, "  → Uncompressed object at offset {}", entry_offset);
@@ -1632,7 +1631,7 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         stream_obj_num: u32,
         _index_in_stream: u16,
-    ) -> Result<Object> {
+    ) -> Result<LoadedObject> {
         tracing::trace!(target: LOG_TARGET,
             object_id = obj_ref.id,
             stream_object_id = stream_obj_num,
@@ -1645,11 +1644,11 @@ impl PdfDocument {
 
         let Some((objects_map, newly_parsed)) = self.load_object_stream_objects(stream_obj_num)? else {
             self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-            return Ok(Object::Null);
+            return Ok(LoadedObject::Owned(Object::Null));
         };
 
-        let obj = match objects_map.get(&obj_ref.id) {
-            Some(o) => o.clone(),
+        let obj = match objects_map.get_shared(&obj_ref.id) {
+            Some(shared) => LoadedObject::Fresh(Arc::clone(shared)),
             None => {
                 tracing::warn!(
                     target: crate::LOG_TARGET_ROOT,
@@ -1659,7 +1658,7 @@ impl PdfDocument {
                     stream_object_id = stream_obj_num,
                     "treating missing compressed object as null"
                 );
-                Object::Null
+                LoadedObject::Owned(Object::Null)
             }
         };
 
@@ -1669,7 +1668,7 @@ impl PdfDocument {
         Ok(obj)
     }
 
-    fn load_object_stream_objects(&self, stream_obj_num: u32) -> Result<Option<(Arc<HashMap<u32, Object>>, bool)>> {
+    fn load_object_stream_objects(&self, stream_obj_num: u32) -> Result<Option<(Arc<ObjectStreamMembers>, bool)>> {
         use crate::objstm::parse_object_stream_with_decryption_outcome;
 
         let stream_ref = ObjectRef::new(stream_obj_num, 0);
@@ -1709,7 +1708,7 @@ impl PdfDocument {
         };
         drop(handler_ref);
         self.trace_object_stream_recovery_once(stream_obj_num, &outcome);
-        let parsed = Arc::new(outcome.objects);
+        let parsed = Arc::new(ObjectStreamMembers::from(outcome.objects));
         self.object_stream_cache
             .lock_or_recover()
             .insert(stream_ref, Arc::clone(&parsed));
@@ -1733,9 +1732,10 @@ impl PdfDocument {
         }
     }
 
-    fn cache_object_stream_entries(&self, stream_obj_num: u32, objects_map: &HashMap<u32, Object>) {
+    fn cache_object_stream_entries(&self, stream_obj_num: u32, objects_map: &ObjectStreamMembers) {
         let mut published = false;
-        for (obj_num, object) in objects_map {
+        let mut cache = self.object_cache.lock_or_recover();
+        for (obj_num, object) in objects_map.iter() {
             let cache_ref = ObjectRef::new(*obj_num, 0);
             let should_cache = if let Some(entry) = self.xref.get(*obj_num) {
                 entry.entry_type == crate::xref::XRefEntryType::Compressed && entry.offset == stream_obj_num as u64
@@ -1743,9 +1743,8 @@ impl PdfDocument {
                 true
             };
             if should_cache {
-                let mut cache = self.object_cache.lock_or_recover();
                 let previously_missing = cache.get(&cache_ref).is_none_or(|value| matches!(value, Object::Null));
-                cache.insert(cache_ref, object.clone());
+                cache.insert_shared(cache_ref, Arc::clone(object));
                 published |= previously_missing
                     && cache
                         .get(&cache_ref)
@@ -1758,6 +1757,7 @@ impl PdfDocument {
                 );
             }
         }
+        drop(cache);
         if published {
             self.object_recovery_epoch.fetch_add(1, Ordering::Release);
         }

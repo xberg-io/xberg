@@ -654,8 +654,8 @@ fn malformed_object_stream_is_parsed_once_for_multiple_missing_references() {
             document.load_compressed_object(ObjectRef::new(21, 0), 10, 1),
         )
     });
-    assert_eq!(first.unwrap(), Object::Null);
-    assert_eq!(second.unwrap(), Object::Null);
+    assert_eq!(first.unwrap().into_object(), Object::Null);
+    assert_eq!(second.unwrap().into_object(), Object::Null);
     let warnings: Vec<_> = events
         .iter()
         .filter(|event| {
