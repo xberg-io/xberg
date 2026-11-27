@@ -81,7 +81,7 @@ hex = "0.4.3"
 html-to-markdown-rs = { version = "3.23.3", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.15"
-jiff = "0.2"
+jiff = "1"
 
 libc = "0.2.191"
 # Builds a bundled zlib from source (`static`) for the target, so the vendored

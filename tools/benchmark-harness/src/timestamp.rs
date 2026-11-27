@@ -10,7 +10,7 @@ pub fn now_utc_rfc3339() -> String {
 
 /// Current local time as RFC 3339 with the system UTC offset.
 pub fn now_local_rfc3339() -> String {
-    jiff::Zoned::now().strftime(RFC3339_OFFSET).to_string()
+    jiff::ZonedDateTime::now().strftime(RFC3339_OFFSET).to_string()
 }
 
 /// Strict RFC 3339 check: `T` separator and a `Z` or `+HH:MM` / `-HH:MM` offset.

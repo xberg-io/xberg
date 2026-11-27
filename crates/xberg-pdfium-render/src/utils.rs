@@ -155,12 +155,12 @@ pub(crate) mod pixels {
 
 pub(crate) mod dates {
     use jiff::tz::TimeZone;
-    use jiff::{Timestamp, Zoned};
+    use jiff::{Timestamp, ZonedDateTime};
 
-    /// Converts a [Zoned] date and time to a formatted PDF date string, as defined in The PDF Reference
+    /// Converts a [ZonedDateTime] date and time to a formatted PDF date string, as defined in The PDF Reference
     /// Manual, sixth edition, section 3.8.3, on page 160.
     #[inline]
-    pub(crate) fn date_time_to_pdf_string(date: &Zoned) -> String {
+    pub(crate) fn date_time_to_pdf_string(date: &ZonedDateTime) -> String {
         let date_part = date.strftime("%Y%m%d%H%M%S");
 
         let timezone_part = format!("{}'", date.strftime("%:z"))
@@ -173,7 +173,7 @@ pub(crate) mod dates {
     /// Converts a UTC [Timestamp] to a formatted PDF date string.
     #[inline]
     pub(crate) fn timestamp_to_pdf_string(date: Timestamp) -> String {
-        date_time_to_pdf_string(&date.to_zoned(TimeZone::UTC))
+        date_time_to_pdf_string(&date.to_zoned_datetime(TimeZone::UTC))
     }
 }
 
@@ -531,13 +531,13 @@ mod tests {
 
         let west = jiff::civil::date(1998, 12, 23)
             .at(19, 52, 0, 0)
-            .to_zoned(jiff::tz::TimeZone::fixed(jiff::tz::offset(-8)))
+            .to_zoned_datetime(jiff::tz::TimeZone::fixed(jiff::tz::offset(-8)))
             .unwrap();
         assert_eq!(date_time_to_pdf_string(&west), "D:19981223195200-08'00'");
 
         let east = jiff::civil::date(1998, 12, 23)
             .at(19, 52, 0, 0)
-            .to_zoned(jiff::tz::TimeZone::fixed(jiff::tz::offset(5)))
+            .to_zoned_datetime(jiff::tz::TimeZone::fixed(jiff::tz::offset(5)))
             .unwrap();
         assert_eq!(date_time_to_pdf_string(&east), "D:19981223195200+05'00'");
     }
