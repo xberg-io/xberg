@@ -58,6 +58,9 @@ for workflow in (root / ".github/workflows").glob("*.y*ml"):
             if pin == '${{ env.ORT_VERSION }}':
                 assert env, workflow
                 versions.update(value.strip().strip("'\"") for value in env)
+            elif split := re.fullmatch(r"\$\{\{ matrix\.target == 'x86_64-apple-darwin' && '([0-9.]+)' \|\| '([0-9.]+)' \}\}", pin):
+                assert split[1] == intel, (workflow, pin)
+                versions.add(split[2])
             elif not (pin == intel and "matrix.target == 'x86_64-apple-darwin'" in step):
                 versions.add(pin)
     assert remaining == 0, (workflow, remaining)
