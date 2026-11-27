@@ -2574,16 +2574,33 @@ fn is_dense_numeric_grid(grid: &[Vec<String>]) -> bool {
         && numeric_cells.saturating_mul(100) >= non_empty_cells.saturating_mul(DENSE_NUMERIC_MIN_CELL_PERCENT)
 }
 
-/// Recurring numeric tracks are positive table evidence strong enough to
-/// distinguish wrapped row labels from prose flowing across inferred cells. ~keep
-/// Wrapped sentences a column must show before it counts as running prose.
+/// Wrapped sentences a column must show before it counts as running prose: one wrap is a long
+/// label, two is a flow. Sized so the two-column SUMMARY / INDICATORS page (two and three wraps) is
+/// prose while a single wrapped description stays a table.
 const MIN_COLUMN_WRAPS_FOR_PROSE: usize = 2;
-/// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label.
+/// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label: the shortest
+/// wrapped line on the nougat_005 pages is three words.
 const MIN_WRAPPED_LINE_WORDS: usize = 3;
+/// Longest parenthesised tail, in characters, that reads as a unit or qualifier closing an item
+/// (`(m 2 )`, `(acre-ft/yr)`) rather than a citation or an aside.
+const MAX_UNIT_TAIL_CHARS: usize = 14;
+
+/// Whether `cell` ends in a short parenthesised unit such as `square meter (m 2 )`: a finished
+/// item, not a line cut mid-sentence. A citation (`[12]`, `(2020)`) or a longer aside is not.
+fn ends_with_unit_tail(cell: &str) -> bool {
+    let Some(inner) = cell
+        .strip_suffix(')')
+        .and_then(|head| head.rsplit_once('('))
+        .map(|(_, tail)| tail)
+    else {
+        return false;
+    };
+    inner.chars().count() <= MAX_UNIT_TAIL_CHARS && !inner.contains(',') && inner.chars().any(|c| c.is_alphabetic())
+}
 
 /// The row transitions at which `column` continues a sentence from one data row into the next: a
 /// cell of at least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause
-/// punctuation or a closing bracket (a finished item such as `square meter (m 2 )`), followed by a cell that starts lowercase.
+/// punctuation or a unit tail, followed by a cell that starts lowercase.
 fn column_wrap_rows(data_rows: &[Vec<String>], column: usize) -> Vec<usize> {
     data_rows
         .windows(2)
@@ -2592,7 +2609,8 @@ fn column_wrap_rows(data_rows: &[Vec<String>], column: usize) -> Vec<usize> {
             let above = pair[0].get(column).map_or("", |cell| cell.trim());
             let below = pair[1].get(column).map_or("", |cell| cell.trim());
             above.split_whitespace().count() >= MIN_WRAPPED_LINE_WORDS
-                && !above.ends_with(['.', '?', '!', ':', ';', ')', ']'])
+                && !above.ends_with(['.', '?', '!', ':', ';'])
+                && !ends_with_unit_tail(above)
                 && below.chars().next().is_some_and(char::is_lowercase)
         })
         .map(|(row, _)| row)
@@ -2601,25 +2619,29 @@ fn column_wrap_rows(data_rows: &[Vec<String>], column: usize) -> Vec<usize> {
 
 /// How many columns wrap their own sentences down the rows, independently of one another.
 ///
-/// A record that wraps puts the continuation of each long cell on the same row, so the wraps of
-/// one column then fall on transitions another column wraps at too. Prose columns run on
-/// separate lines, each wrapping at rows the others do not.
+/// A wrapped record puts the continuation of each long cell on one row and leaves its key column
+/// empty there, so the wraps of one column fall on transitions another column wraps at, beside a
+/// blank cell. Prose columns run on separate lines, each wrapping at rows the others do not, or
+/// wrap together with text in every column: such a transition counts for each column that wraps.
 fn independent_wrapping_columns(data_rows: &[Vec<String>], columns: usize) -> usize {
-    let wraps: Vec<Vec<usize>> = (0..columns)
-        .map(|column| column_wrap_rows(data_rows, column))
-        .filter(|rows| rows.len() >= MIN_COLUMN_WRAPS_FOR_PROSE)
-        .collect();
-    wraps
+    let all_wraps: Vec<Vec<usize>> = (0..columns).map(|column| column_wrap_rows(data_rows, column)).collect();
+    let record_wrap = |row: usize, column: usize| {
+        let shared = all_wraps
+            .iter()
+            .enumerate()
+            .any(|(other, rows)| other != column && rows.contains(&row));
+        shared
+            && data_rows.get(row + 1).is_some_and(|below| {
+                (0..columns).any(|key| {
+                    !all_wraps[key].contains(&row) && below.get(key).is_none_or(|cell| cell.trim().is_empty())
+                })
+            })
+    };
+    all_wraps
         .iter()
         .enumerate()
-        .filter(|(index, rows)| {
-            rows.iter().any(|row| {
-                wraps
-                    .iter()
-                    .enumerate()
-                    .all(|(other, others)| other == *index || !others.contains(row))
-            })
-        })
+        .filter(|(_, rows)| rows.len() >= MIN_COLUMN_WRAPS_FOR_PROSE)
+        .filter(|(column, rows)| rows.iter().any(|&row| !record_wrap(row, *column)))
         .count()
 }
 
@@ -2647,6 +2669,8 @@ fn line_returns_to_row_start(above: &[String], below: &[String]) -> bool {
         && below[first].trim().starts_with(char::is_lowercase)
 }
 
+/// Recurring numeric tracks are positive table evidence strong enough to
+/// distinguish wrapped row labels from prose flowing across inferred cells. ~keep
 fn has_recurring_numeric_tracks(grid: &[Vec<String>]) -> bool {
     let Some(width) = grid.first().map(Vec::len) else {
         return false;
@@ -4576,6 +4600,72 @@ mod tests {
             .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
             .collect();
         assert_eq!(independent_wrapping_columns(&table[1..], 3), 0);
+    }
+
+    /// Aligned two-column prose wraps on the same lines in both columns with text in every cell, so
+    /// neither column continues a record: both are prose flows.
+    #[test]
+    fn aligned_prose_columns_that_wrap_on_the_same_rows_are_independent_flows() {
+        let rows: [[&str; 2]; 6] = [
+            [
+                "Earned wage products give workers early access to",
+                "Employers that partner with providers can offer",
+            ],
+            [
+                "wages they have already earned before the usual",
+                "the service through payroll deduction at no cost to",
+            ],
+            [
+                "pay date arrives and some providers charge a",
+                "the worker while direct to consumer products are",
+            ],
+            [
+                "fee for faster delivery of the advance to the",
+                "paid for by the worker through a fee or tip on",
+            ],
+            [
+                "worker bank account which can add up quickly",
+                "every advance and sometimes by both parties at once",
+            ],
+            [
+                "over a pay period with frequent small advances",
+                "so the full cost is hard to see for a worker",
+            ],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table, 2), 2);
+    }
+
+    /// A citation closing a line is not a finished item: the sentence runs on.
+    #[test]
+    fn a_citation_ending_a_line_is_still_a_wrapped_line() {
+        let rows: [[&str; 2]; 5] = [
+            [
+                "Early access to wages was studied as shown in [12]",
+                "Providers charge fees as reported by regulators (2020)",
+            ],
+            [
+                "and the findings were broadly consistent",
+                "and the amounts varied widely between products",
+            ],
+            [
+                "Further work on the same question appeared in [13]",
+                "Costs to workers were also measured in (2021)",
+            ],
+            [
+                "with larger samples across more employers",
+                "across several states over two full years",
+            ],
+            ["Closing remarks.", "Closing remarks."],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table, 2), 2);
     }
 
     #[test]
