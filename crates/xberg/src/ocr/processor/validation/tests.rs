@@ -118,6 +118,32 @@ fn test_resolve_tessdata_path_skips_override_missing_lang() {
     }
 }
 
+#[test]
+fn test_a_language_that_is_a_path_never_reaches_the_file_system() {
+    let outside = tempfile::tempdir().unwrap();
+    let directory = outside.path().join("tessdata");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(outside.path().join("secret.traineddata"), b"x").unwrap();
+    std::fs::write(directory.join("eng.traineddata"), b"x").unwrap();
+    let cache = tempfile::tempdir().unwrap();
+
+    for language in ["../secret", "/etc/passwd", r"..\secret", "eng/../../secret", ""] {
+        let error = resolve_tessdata_path_with(
+            &[language.to_string()],
+            Some(&directory),
+            &cache_env(cache.path(), TessdataModel::Fast),
+            &offline(&NO_SYSTEM, &PINNED),
+        )
+        .expect_err("a path is not a language");
+        assert!(matches!(error, OcrError::InvalidLanguageCode(_)), "{language}: {error}");
+    }
+    assert!(!cache.path().join("tessdata").exists(), "nothing may be created");
+    assert!(matches!(
+        validate_language_and_traineddata("eng+../secret", directory.to_str().unwrap()),
+        Err(OcrError::InvalidLanguageCode(_))
+    ));
+}
+
 fn given_env(model: TessdataModel, system_paths: bool) -> TessdataEnv {
     TessdataEnv {
         tessdata_prefix: Some("/given/prefix".to_string()),

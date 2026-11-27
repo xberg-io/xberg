@@ -48,6 +48,7 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
             if lang.is_empty() {
                 continue;
             }
+            require_language_names(&[lang])?;
             let traineddata_path = Path::new(tessdata_path).join(format!("{}.traineddata", lang));
             if !traineddata_path.exists() {
                 return Err(OcrError::TesseractInitializationFailed(format!(
@@ -189,6 +190,7 @@ fn resolve_tessdata_path_with(
     tessdata_env: &TessdataEnv,
     provision: &Provision<'_>,
 ) -> Result<String, OcrError> {
+    require_language_names(languages)?;
     let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
     let managed = model_cache_dir(&cache_base, tessdata_env.model);
     let flat = cache_base.join("tessdata");
@@ -237,6 +239,23 @@ fn resolve_tessdata_path_with(
             "Failed to resolve all requested languages: {:?}",
             languages
         )))
+    }
+}
+
+/// Refuse a language that is not a model name before it is joined into a file path.
+///
+/// `OcrConfig::validate` rejects these first; this covers callers that build a `TesseractConfig`
+/// without it. ~keep
+fn require_language_names<S: AsRef<str>>(languages: &[S]) -> Result<(), OcrError> {
+    match languages
+        .iter()
+        .map(AsRef::as_ref)
+        .find(|name| !crate::core::config::ocr::is_tesseract_language_name(name))
+    {
+        Some(name) => Err(OcrError::InvalidLanguageCode(format!(
+            "Tesseract language '{name}' is not a model name; set tessdata_path to use models from another directory"
+        ))),
+        None => Ok(()),
     }
 }
 
