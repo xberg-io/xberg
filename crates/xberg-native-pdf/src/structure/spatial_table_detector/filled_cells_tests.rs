@@ -159,7 +159,13 @@ fn candidate_must_keep_the_original_occurrence_and_visible_cell_value() {
     let config = TableDetectionConfig::strict();
     let mut prepared = prepare(&spans, &paths, &config).expect("certified source tiling");
     let mut recovery = super::super::RecoveredIntersection::default();
-    let mut tables = super::super::detect_with_unmodified_paths(&spans, &prepared.paths, &config, Some(&mut recovery));
+    let mut tables = super::super::detect_with_unmodified_paths(
+        &spans,
+        &prepared.paths,
+        &config,
+        Some(&mut recovery),
+        &Default::default(),
+    );
     assert!(prepared.accepts(&tables));
 
     let original = tables[0].rows[0].cells[2].spans[1].clone();

@@ -49,10 +49,16 @@ pub(crate) fn finite_table_bounds(bounds: BoundingBox) -> bool {
 }
 
 // ~keep Exact finite ruling geometry avoids discarding neighboring or nested tables.
-fn table_region_key(table: &Table) -> Option<(u32, [u64; 4])> {
-    let bbox = table.bounding_box.filter(|bounds| finite_table_bounds(*bounds))?;
+fn table_region_key(table: &Table) -> Option<TableRegionKey> {
+    region_key(table.page_number, table.bounding_box)
+}
+
+type TableRegionKey = (u32, [u64; 4]);
+
+fn region_key(page_number: u32, bounds: Option<BoundingBox>) -> Option<TableRegionKey> {
+    let bbox = bounds.filter(|bounds| finite_table_bounds(*bounds))?;
     let bits = [bbox.x0, bbox.y0, bbox.x1, bbox.y1].map(|value| if value == 0.0 { 0 } else { value.to_bits() });
-    Some((table.page_number, bits))
+    Some((page_number, bits))
 }
 
 pub(crate) fn append_bordered_tables(strict: &mut Vec<NativeTable>, bordered: Vec<NativeTable>) {
@@ -266,21 +272,40 @@ pub(crate) fn extract_ruled_tables(
                 let recovered_from_empty =
                     empty_or_certified_new_ruled_table(&strict_tables, strict_ownership.as_ref())
                         && empty_or_certified_new_ruled_table(&bordered_tables, bordered_ownership.as_ref());
+                let mut span_warnings = Vec::new();
+                let source_spans = if strict_tables.is_empty() && bordered_tables.is_empty() {
+                    scripts::PageSpans::default()
+                } else {
+                    scripts::page_spans(doc, page_idx, &mut span_warnings)
+                };
+                let page_sources = PageTableSources {
+                    paths: &paths,
+                    spans: &source_spans,
+                    span_warnings: &span_warnings,
+                };
                 append_page_tables(
                     doc,
                     page_idx,
                     strict_tables,
                     strict_ownership.as_ref(),
-                    &paths,
+                    &page_sources,
+                    &HashSet::new(),
                     &mut strict,
                     &mut strict_warnings,
                 );
+                // `append_bordered_tables` drops a bordered table whose region a strict table of
+                // the same page owns, so such a table is not converted at all. ~keep
+                let strict_regions: HashSet<_> = strict[strict_start..]
+                    .iter()
+                    .filter_map(|entry| table_region_key(&entry.table))
+                    .collect();
                 append_page_tables(
                     doc,
                     page_idx,
                     bordered_tables,
                     bordered_ownership.as_ref(),
-                    &paths,
+                    &page_sources,
+                    &strict_regions,
                     &mut bordered,
                     &mut bordered_warnings,
                 );
@@ -326,20 +351,22 @@ fn append_page_tables(
     page_idx: usize,
     extracted: Vec<xberg_native_pdf::structure::table_extractor::Table>,
     ownership: Option<&xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
-    source_paths: &[PathContent],
+    sources: &PageTableSources<'_>,
+    owned_regions: &HashSet<TableRegionKey>,
     tables: &mut Vec<NativeTable>,
     warnings: &mut Vec<ProcessingWarning>,
 ) {
     if extracted.is_empty() {
         return;
     }
-    let source_spans = scripts::page_spans(doc, page_idx, warnings);
+    warnings.extend(sources.span_warnings.iter().cloned());
     let context = PageTableContext {
         doc,
         page_idx,
         ownership,
-        source_paths,
-        source_spans: &source_spans,
+        source_paths: sources.paths,
+        source_spans: sources.spans,
+        owned_regions,
         capture_members: extracted.len() <= source_members::MAX_CAPTURE_TABLES,
         source_chars: std::cell::OnceCell::new(),
     };
@@ -353,6 +380,14 @@ fn append_page_tables(
     }
 }
 
+/// Page sources read once for the strict and bordered conversions of one page.
+struct PageTableSources<'a> {
+    paths: &'a [PathContent],
+    spans: &'a scripts::PageSpans,
+    /// Warnings raised while reading `spans`, reported by every route that converts a table.
+    span_warnings: &'a [ProcessingWarning],
+}
+
 /// Everything one page's ruled tables share while they are converted.
 struct PageTableContext<'a> {
     doc: &'a NativeDocument,
@@ -360,6 +395,8 @@ struct PageTableContext<'a> {
     ownership: Option<&'a xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
     source_paths: &'a [PathContent],
     source_spans: &'a scripts::PageSpans,
+    /// Regions whose tables a later pass discards, so converting them is wasted.
+    owned_regions: &'a HashSet<TableRegionKey>,
     capture_members: bool,
     source_chars: std::cell::OnceCell<std::sync::Arc<Vec<xberg_native_pdf::layout::TextChar>>>,
 }
@@ -387,20 +424,24 @@ fn append_extracted_table(
         &context.source_spans.spans,
         context.source_paths,
     );
-    let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
-    if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
-        return;
-    }
     let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
         x0: rect.x as f64,
         y0: rect.y as f64,
         x1: (rect.x + rect.width) as f64,
         y1: (rect.y + rect.height) as f64,
     });
+    let page_number = (context.page_idx + 1) as u32;
+    if region_key(page_number, bounding_box).is_some_and(|region| context.owned_regions.contains(&region)) {
+        return;
+    }
+    let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
+    if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
+        return;
+    }
     let table = Table {
         cells,
         markdown,
-        page_number: (context.page_idx + 1) as u32,
+        page_number,
         bounding_box,
         ..Default::default()
     };
@@ -1101,15 +1142,24 @@ fn reconstruct_page_region_tables(
         // cuts one table into one word region per ruled band. Rejoin those
         // bands before reconstruction when their column tracks agree and the
         // page's ruling continues across the gap. ~keep
-        let mut merged = regions[index].clone();
+        let mut merged: Option<Vec<crate::pdf::table_reconstruct::HocrWord>> = None;
         let mut end = index + 1;
-        while end < regions.len() && ruled_bands_continue(&merged, &regions[end], ruling_paths, page_height) {
-            merged.extend(regions[end].iter().cloned());
+        while end < regions.len()
+            && ruled_bands_continue(
+                merged.as_deref().unwrap_or(&regions[index]),
+                &regions[end],
+                ruling_paths,
+                page_height,
+            )
+        {
+            merged
+                .get_or_insert_with(|| regions[index].clone())
+                .extend(regions[end].iter().cloned());
             end += 1;
         }
-        if end > index + 1
+        if let Some(merged) = &merged
             && let Some((table, grid)) =
-                reconstruct_ruled_band_table(&merged, page_height, page_number, allow_single_column, ruling_paths)
+                reconstruct_ruled_band_table(merged, page_height, page_number, allow_single_column, ruling_paths)
         {
             tables.push((table, Some(grid), true));
             definition_tables.push(false);
@@ -3077,7 +3127,7 @@ fn cluster_words_into_vertical_regions_with_rules(
     let row_tolerance_f = row_tolerance as f32;
     let row_gap_split = median_height as f32 * ROW_GAP_SPLIT_HEIGHT_FACTOR + ROW_CENTER_ROUNDING_SLACK;
 
-    let mut sorted = words.to_vec();
+    let mut sorted: Vec<&crate::pdf::table_reconstruct::HocrWord> = words.iter().collect();
     sorted.sort_by(|left, right| row_center(left).total_cmp(&row_center(right)));
 
     let mut regions: Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> = Vec::new();
@@ -3086,10 +3136,10 @@ fn cluster_words_into_vertical_regions_with_rules(
 
     let mut idx = 0;
     while idx < sorted.len() {
-        let row_yc = row_center(&sorted[idx]);
+        let row_yc = row_center(sorted[idx]);
         let mut end = idx + 1;
         while end < sorted.len() {
-            if (row_center(&sorted[end]) - row_yc).abs() <= row_tolerance_f {
+            if (row_center(sorted[end]) - row_yc).abs() <= row_tolerance_f {
                 end += 1;
             } else {
                 break;
@@ -3102,7 +3152,7 @@ fn cluster_words_into_vertical_regions_with_rules(
         {
             regions.push(std::mem::take(&mut current));
         }
-        current.extend(sorted[idx..end].iter().cloned());
+        current.extend(sorted[idx..end].iter().map(|word| (*word).clone()));
         last_row_yc = Some(row_yc);
         idx = end;
     }

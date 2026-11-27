@@ -1,8 +1,8 @@
 use super::*;
 use crate::structure::spatial_table_detector::{
-    DEFAULT_MAX_TABLE_COLUMNS, MAX_SOURCE_SPANNED_COLUMNS, PaintedCellOwnership, TableDetectionConfig, TableStrategy,
-    certify_source_spanned_wide_table, detect_tables_with_line_ownership, detect_tables_without_painted_recovery,
-    source_spanned_rules_present, source_spanned_work_fits,
+    DEFAULT_MAX_TABLE_COLUMNS, MAX_SOURCE_SPANNED_COLUMNS, PaintedCellOwnership, SharedLineGeometry,
+    TableDetectionConfig, TableStrategy, certify_source_spanned_wide_table, detect_tables_with_line_ownership,
+    detect_tables_without_painted_recovery, source_spanned_rules_present, source_spanned_work_fits,
 };
 use crate::structure::table_extractor::Table;
 
@@ -11,6 +11,12 @@ mod visible_paint;
 
 type TablePaths = Vec<crate::elements::PathContent>;
 type RuledSourceTables = (Vec<Table>, Option<PaintedCellOwnership>);
+/// One page's table words and ruling paths with the detector geometry derived from them.
+type PageSources<'a> = (
+    &'a [crate::layout::TextSpan],
+    &'a [crate::elements::PathContent],
+    &'a SharedLineGeometry,
+);
 
 impl PdfDocument {
     /// Extract tables with independent configurations using one page's words and ruling paths.
@@ -157,8 +163,9 @@ impl PdfDocument {
         // spatial candidate, independent of anything else in this function. ~keep
         let visible_bounds = std::cell::OnceCell::new();
         let page_bounds = || *visible_bounds.get_or_init(|| visible_paint::plain_page_bounds(self, page_index));
+        let shared = SharedLineGeometry::default();
         let mut results = configs.map(|config| {
-            let (mut tables, ownership) = detect_tables_with_line_ownership(spans, lines, config);
+            let (mut tables, ownership) = detect_tables_with_line_ownership(spans, lines, config, &shared);
             let mut wide_ownership = None;
             tables.retain(|table| {
                 is_public_ruled_table(table) || {
@@ -171,9 +178,16 @@ impl PdfDocument {
             let ownership = wide_ownership.or(ownership).filter(|_| tables.len() == 1);
             (tables, ownership)
         });
-        certify_empty_legacy_routes(&mut results, configs, spans, lines);
+        certify_empty_legacy_routes(&mut results, configs, (spans, lines, &shared));
         if recover_wide {
-            recover_empty_ruled_routes(self, page_index, configs, &mut results, (spans, lines), page_bounds);
+            recover_empty_ruled_routes(
+                self,
+                page_index,
+                configs,
+                &mut results,
+                (spans, lines, &shared),
+                page_bounds,
+            );
         }
         if spans.iter().any(|span| span.mcid.is_some()) {
             self.retain_tagged_decimal_roles(page_index, &mut results);
@@ -218,7 +232,7 @@ fn recover_empty_ruled_routes<const N: usize>(
     page: usize,
     configs: [&TableDetectionConfig; N],
     results: &mut [RuledSourceTables; N],
-    (spans, lines): (&[crate::layout::TextSpan], &[crate::elements::PathContent]),
+    sources: PageSources<'_>,
     page_bounds: impl FnOnce() -> Option<crate::geometry::Rect>,
 ) {
     if results.iter().any(|(tables, _)| !tables.is_empty()) {
@@ -228,7 +242,7 @@ fn recover_empty_ruled_routes<const N: usize>(
     let (Some(config), Some(last)) = (configs.last().copied(), results.last_mut()) else {
         return;
     };
-    if let Some(recovered) = recover_wide_source_table(config, spans, lines, page_bounds) {
+    if let Some(recovered) = recover_wide_source_table(config, sources, page_bounds) {
         *last = recovered;
     }
 }
@@ -280,8 +294,7 @@ fn wide_ruled_ownership(
 
 fn recover_wide_source_table(
     config: &TableDetectionConfig,
-    spans: &[crate::layout::TextSpan],
-    lines: &[crate::elements::PathContent],
+    (spans, lines, shared): PageSources<'_>,
     page_bounds: impl FnOnce() -> Option<crate::geometry::Rect>,
 ) -> Option<RuledSourceTables> {
     // The last two checks are cost gates: recovery runs on every page whose ruled routes are empty. ~keep
@@ -295,7 +308,7 @@ fn recover_wide_source_table(
     let page = page_bounds()?;
     let mut retry = config.clone();
     retry.max_table_columns = MAX_SOURCE_SPANNED_COLUMNS;
-    let tables = detect_tables_without_painted_recovery(spans, lines, &retry);
+    let tables = detect_tables_without_painted_recovery(spans, lines, &retry, shared);
     let [table] = <[Table; 1]>::try_from(tables).ok()?;
     if table.col_count <= config.max_table_columns || !within_page(&table, Some(page)) || looks_like_prose_table(&table)
     {
@@ -320,8 +333,7 @@ fn is_public_ruled_table(table: &Table) -> bool {
 fn certify_empty_legacy_routes<const N: usize>(
     results: &mut [RuledSourceTables; N],
     configs: [&TableDetectionConfig; N],
-    spans: &[crate::layout::TextSpan],
-    lines: &[crate::elements::PathContent],
+    (spans, lines, shared): PageSources<'_>,
 ) {
     let candidates = results
         .iter_mut()
@@ -331,7 +343,7 @@ fn certify_empty_legacy_routes<const N: usize>(
     let mut candidates = candidates.peekable();
     if candidates.peek().is_some()
         && configs.iter().all(|config| {
-            !detect_tables_without_painted_recovery(spans, lines, config)
+            !detect_tables_without_painted_recovery(spans, lines, config, shared)
                 .iter()
                 .any(is_public_ruled_table)
         })

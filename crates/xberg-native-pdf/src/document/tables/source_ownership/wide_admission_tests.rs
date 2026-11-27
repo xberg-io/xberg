@@ -84,15 +84,18 @@ fn prose_shaped_wide_table_is_declined() {
 }
 
 fn recovered(config: &TableDetectionConfig, grid: &fixture::Grid, page: Option<Rect>) -> bool {
-    recover_wide_source_table(config, &grid.spans, &grid.paths, || page).is_some()
+    recover_wide_source_table(config, (&grid.spans, &grid.paths, &Default::default()), || page).is_some()
 }
 
 #[test]
 fn empty_default_route_recovers_the_wide_table() {
     let grid = fixture::grid();
-    let (tables, ownership) =
-        recover_wide_source_table(&default_line_config(), &grid.spans, &grid.paths, || Some(PAGE))
-            .expect("the fixture is the recoverable shape");
+    let (tables, ownership) = recover_wide_source_table(
+        &default_line_config(),
+        (&grid.spans, &grid.paths, &Default::default()),
+        || Some(PAGE),
+    )
+    .expect("the fixture is the recoverable shape");
     assert_eq!(tables.len(), 1);
     assert_eq!(tables[0].col_count, fixture::COLUMNS);
     assert!(ownership.is_some_and(|ownership| ownership.replaces_empty_ruled_route));
@@ -148,7 +151,7 @@ fn recovery_declines_a_prose_shaped_table() {
     }
     let mut retry = default_line_config();
     retry.max_table_columns = MAX_SOURCE_SPANNED_COLUMNS;
-    let tables = detect_tables_without_painted_recovery(&grid.spans, &grid.paths, &retry);
+    let tables = detect_tables_without_painted_recovery(&grid.spans, &grid.paths, &retry, &Default::default());
     let [table] = tables.as_slice() else {
         panic!("the detector must find the one table for the prose check to be what declines");
     };
@@ -166,7 +169,7 @@ fn recovery_declines_a_page_with_two_wide_tables() {
     let mut retry = default_line_config();
     retry.max_table_columns = MAX_SOURCE_SPANNED_COLUMNS;
     assert_eq!(
-        detect_tables_without_painted_recovery(&grid.spans, &grid.paths, &retry).len(),
+        detect_tables_without_painted_recovery(&grid.spans, &grid.paths, &retry, &Default::default()).len(),
         2,
         "the detector must see two tables for the single-table guard to be what declines"
     );
