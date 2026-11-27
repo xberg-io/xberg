@@ -1259,17 +1259,19 @@ fn serialize_selected_hocr_lines(
 /// A word without a `bbox` parses as an all-zero box, which carries no gap. ~keep
 fn hocr_word_gap(previous: &HocrWordInfo, next: &HocrWordInfo) -> Option<(f64, f64)> {
     let has_box = |word: &HocrWordInfo| word.x1 > word.x0 && word.y1 > word.y0;
-    (has_box(previous) && has_box(next)).then(|| {
-        crate::table_core::word_spacing::box_gap(
-            (
-                previous.x0,
-                previous.y0,
-                previous.x1 - previous.x0,
-                previous.y1 - previous.y0,
-            ),
-            (next.x0, next.y0, next.x1 - next.x0, next.y1 - next.y0),
-        )
-    })
+    // Eager `then_some` would underflow the `u32` widths of a missing box. ~keep
+    if !(has_box(previous) && has_box(next)) {
+        return None;
+    }
+    Some(crate::table_core::word_spacing::box_gap(
+        (
+            previous.x0,
+            previous.y0,
+            previous.x1 - previous.x0,
+            previous.y1 - previous.y0,
+        ),
+        (next.x0, next.y0, next.x1 - next.x0, next.y1 - next.y0),
+    ))
 }
 
 impl HocrOccurrenceCapture {
