@@ -1531,18 +1531,44 @@ fn ocr_preprocessing_decision<'a>(
     height: u32,
     preprocessing: Option<&'a crate::types::ImagePreprocessingConfig>,
     known_full_page_scan: bool,
+    tessdata_model: crate::core::config::TessdataModel,
 ) -> Option<std::borrow::Cow<'a, crate::types::ImagePreprocessingConfig>> {
     match preprocessing {
         Some(preprocessing) => Some(std::borrow::Cow::Borrowed(preprocessing)),
-        None if known_full_page_scan => Some(std::borrow::Cow::Owned(known_full_page_scan_preprocessing())),
+        None if known_full_page_scan => Some(std::borrow::Cow::Owned(known_full_page_scan_preprocessing(
+            tessdata_model,
+        ))),
         None if should_apply_default_preprocessing(rgb_data, width, height) => {
-            Some(std::borrow::Cow::Owned(Default::default()))
+            Some(std::borrow::Cow::Owned(page_preprocessing(tessdata_model)))
         }
         None => None,
     }
 }
 
-/// Whether a known full-page scan with no caller-selected preprocessing is binarized.
+/// The preprocessing a page-like raster gets when the caller selected none.
+///
+/// The best model reads the contrast-enhanced grayscale page better than its Otsu binarization;
+/// the fast model does not. Measured with build 1ffe8f20c8, psm 11, deskew off, on the 48 OCR
+/// benchmark fixtures both models read under all three policies: best TF1 Otsu .670, no
+/// binarization .684, no binarization with contrast .697 (financial_table_1 .863 -> .997,
+/// balance_sheet_1 .625 -> .974, ocr_image.* about +.08, docling_scanned .664 -> .701;
+/// rtl_hebrew_scanned .880 -> .839); fast Otsu .666, no binarization .665. Of the two unbinarized
+/// policies only the contrast one has a native workspace model (`native_image_budget`). ~keep
+fn page_preprocessing(tessdata_model: crate::core::config::TessdataModel) -> crate::types::ImagePreprocessingConfig {
+    match tessdata_model {
+        crate::core::config::TessdataModel::Best => crate::types::ImagePreprocessingConfig {
+            binarization_method: "none".into(),
+            // Configuration validation rejects deskew without binarization.
+            deskew: false,
+            contrast_enhance: true,
+            ..Default::default()
+        },
+        crate::core::config::TessdataModel::Fast => Default::default(),
+    }
+}
+
+/// Whether a known full-page scan read with the fast model and no caller-selected preprocessing is
+/// binarized; the best model takes [`page_preprocessing`].
 ///
 /// Measured with build 1ffe8f20c8 on the 12 English OCR benchmark PDFs, explicit Otsu against
 /// explicit no binarization (deskew off in both; deskew changed no score): TF1 rose on 8
@@ -1556,7 +1582,12 @@ fn ocr_preprocessing_decision<'a>(
 const KNOWN_FULL_PAGE_SCAN_BINARIZES: bool = true;
 
 /// The preprocessing a known full-page scan gets when the caller selected none.
-fn known_full_page_scan_preprocessing() -> crate::types::ImagePreprocessingConfig {
+fn known_full_page_scan_preprocessing(
+    tessdata_model: crate::core::config::TessdataModel,
+) -> crate::types::ImagePreprocessingConfig {
+    if tessdata_model == crate::core::config::TessdataModel::Best {
+        return page_preprocessing(tessdata_model);
+    }
     if KNOWN_FULL_PAGE_SCAN_BINARIZES {
         return Default::default();
     }
@@ -1622,7 +1653,14 @@ fn prepare_ocr_image(
     known_source_dpi: Option<f64>,
     known_full_page_scan: bool,
 ) -> PreparedOcrImage {
-    let preprocessing = ocr_preprocessing_decision(&rgb_data, width, height, preprocessing, known_full_page_scan);
+    let preprocessing = ocr_preprocessing_decision(
+        &rgb_data,
+        width,
+        height,
+        preprocessing,
+        known_full_page_scan,
+        crate::core::config::TessdataModel::Fast,
+    );
     prepare_decided_ocr_image(
         rgb_data,
         width,
@@ -4369,15 +4407,83 @@ mod tests {
 
     #[test]
     fn known_full_page_scan_preprocessing_is_a_valid_policy_for_dark_and_bright_scans() {
-        let policy = known_full_page_scan_preprocessing();
-        crate::core::config_validation::validate_image_preprocessing_config(&policy).expect("valid known-scan policy");
-        for pixel in [20_u8, 245] {
-            let rgb = vec![pixel; 4 * 4 * 3];
-            let decided = ocr_preprocessing_decision(&rgb, 4, 4, None, true).expect("a known scan is preprocessed");
-            assert_eq!(
-                (decided.binarization_method.as_str(), decided.deskew, decided.target_dpi),
-                (policy.binarization_method.as_str(), policy.deskew, policy.target_dpi)
-            );
+        use crate::core::config::TessdataModel;
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let policy = known_full_page_scan_preprocessing(model);
+            crate::core::config_validation::validate_image_preprocessing_config(&policy)
+                .expect("valid known-scan policy");
+            for pixel in [20_u8, 245] {
+                let rgb = vec![pixel; 4 * 4 * 3];
+                let decided =
+                    ocr_preprocessing_decision(&rgb, 4, 4, None, true, model).expect("a known scan is preprocessed");
+                assert_eq!(
+                    (
+                        decided.binarization_method.as_str(),
+                        decided.deskew,
+                        decided.contrast_enhance,
+                        decided.target_dpi
+                    ),
+                    (
+                        policy.binarization_method.as_str(),
+                        policy.deskew,
+                        policy.contrast_enhance,
+                        policy.target_dpi
+                    ),
+                    "{model}"
+                );
+            }
+        }
+    }
+
+    /// The best model reads the contrast-enhanced grayscale page; the fast model keeps Otsu. ~keep
+    #[test]
+    fn default_page_preprocessing_binarizes_only_for_the_fast_model() {
+        use crate::core::config::TessdataModel;
+        let mut page = vec![u8::MAX; 80 * 20 * RGB_CHANNEL_COUNT];
+        for row in page.chunks_exact_mut(80 * RGB_CHANNEL_COUNT) {
+            row[..4 * RGB_CHANNEL_COUNT].fill(0);
+        }
+        assert!(should_apply_default_preprocessing(&page, 80, 20));
+        let policy = |model, known_full_page_scan| {
+            let decided = ocr_preprocessing_decision(&page, 80, 20, None, known_full_page_scan, model)
+                .expect("a page-like raster is preprocessed")
+                .into_owned();
+            crate::core::config_validation::validate_image_preprocessing_config(&decided).expect("valid policy");
+            (
+                decided.binarization_method,
+                decided.deskew,
+                decided.contrast_enhance,
+                decided.target_dpi,
+            )
+        };
+        let otsu = ("otsu".to_string(), true, false, 300);
+        let grayscale = ("none".to_string(), false, true, 300);
+        assert_eq!(policy(TessdataModel::Fast, false), otsu);
+        assert_eq!(policy(TessdataModel::Fast, true), otsu);
+        assert_eq!(policy(TessdataModel::Best, false), grayscale);
+        assert_eq!(policy(TessdataModel::Best, true), grayscale);
+    }
+
+    #[test]
+    fn best_model_page_preprocessing_has_a_native_workspace_model() {
+        let policy = page_preprocessing(crate::core::config::TessdataModel::Best);
+        assert!(native_image_budget::releases_source_rgb(&policy));
+        assert!(
+            native_image_budget::known_phase_peak(2480, 3508, 1024, Some(&policy))
+                .expect("addressable dimensions")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn caller_selected_preprocessing_is_kept_for_either_model() {
+        use crate::core::config::TessdataModel;
+        let selected = crate::types::ImagePreprocessingConfig::default();
+        let rgb = vec![245_u8; 4 * 4 * 3];
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let decided = ocr_preprocessing_decision(&rgb, 4, 4, Some(&selected), true, model).expect("selected");
+            assert!(matches!(decided, std::borrow::Cow::Borrowed(_)), "{model}");
+            assert_eq!(decided.binarization_method, "otsu", "{model}");
         }
     }
 
