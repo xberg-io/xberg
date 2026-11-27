@@ -5331,6 +5331,24 @@ fn seg(text: &str, x: f32, width: f32) -> SegmentData {
     }
 }
 
+/// `super::finalize_paragraph` with its lines built from copies of the run, where
+/// `blocks_to_paragraphs` moves the run itself.
+fn finalize_paragraph(
+    lines: &[&SegmentData],
+    heading_map: &[(f32, Option<u8>)],
+    gap_info: &crate::pdf::structure::classify::GapInfo,
+) -> Option<PdfParagraph> {
+    let pending = super::finalize_paragraph(lines, heading_map, gap_info)?;
+    Some(pending.into_paragraph(&mut lines.iter().map(|segment| (*segment).clone())))
+}
+
+fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<PdfLine> {
+    build_pdf_lines(
+        &pdf_line_spans(segments),
+        &mut segments.iter().map(|segment| (*segment).clone()),
+    )
+}
+
 fn inline_seg(text: &str, x: f32, baseline_y: f32, is_bold: bool) -> SegmentData {
     let mut segment = seg(text, x, 20.0);
     segment.baseline_y = baseline_y;
@@ -8511,6 +8529,47 @@ fn test_blocks_to_paragraphs_separates_rotated_body_from_upright_footer() {
     assert_eq!(paragraphs.len(), 2);
     assert_eq!(paragraphs[0].text, "Engine oil");
     assert_eq!(paragraphs[1].text, "264");
+}
+
+#[test]
+fn visual_line_texts_gives_every_segment_the_text_of_its_whole_line() {
+    let segments = vec![
+        inline_seg("3.1.7", 50.0, 700.0, true),
+        inline_seg(" Innovatie ", 90.0, 700.0, true),
+        inline_seg("  ", 200.0, 700.0, true),
+        inline_seg("Body text", 50.0, 680.0, false),
+    ];
+
+    let texts = visual_line_texts(&segments);
+
+    for index in 0..3 {
+        assert_eq!(texts.of_segment(index), "3.1.7 Innovatie", "segment {index}");
+    }
+    assert_eq!(texts.of_segment(3), "Body text");
+}
+
+#[test]
+fn assign_ascii_lowercase_replaces_the_previous_contents() {
+    let mut buffer = String::from("a longer earlier word");
+    for text in ["Relief", "CAFÉ", "", "ǅ-Mixed"] {
+        assign_ascii_lowercase(&mut buffer, text);
+        assert_eq!(buffer, text.to_ascii_lowercase(), "{text:?}");
+    }
+}
+
+#[test]
+fn trim_owned_matches_str_trim() {
+    for text in [
+        "plain",
+        "  leading",
+        "trailing \n",
+        "\u{a0}\t both sides \u{2003}\n",
+        "inner  spaces\nand lines",
+        " \n\t",
+        "",
+    ] {
+        assert_eq!(trim_owned(text.to_string()), text.trim(), "{text:?}");
+    }
 }
 
 #[test]

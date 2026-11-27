@@ -2266,8 +2266,9 @@ fn paragraph_gap_axis(segment: &SegmentData) -> f32 {
 /// than ordinary line pitch. `merge_continuation_paragraphs::starts_numbered_section`
 /// already re-joins a paragraph's first line for exactly this reason; this is the
 /// same re-join on the grouper side, so the two passes agree. See #1609. ~keep
-fn visual_line_texts(lines: &[SegmentData]) -> Vec<String> {
-    let mut texts = vec![String::new(); lines.len()];
+fn visual_line_texts(lines: &[SegmentData]) -> VisualLineTexts {
+    let mut texts = Vec::new();
+    let mut line_of_segment = Vec::with_capacity(lines.len());
     let mut start = 0usize;
     while start < lines.len() {
         let mut end = start + 1;
@@ -2286,12 +2287,24 @@ fn visual_line_texts(lines: &[SegmentData]) -> Vec<String> {
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
-        for slot in &mut texts[start..end] {
-            slot.clone_from(&joined);
-        }
+        line_of_segment.resize(end, texts.len());
+        texts.push(joined);
         start = end;
     }
-    texts
+    VisualLineTexts { texts, line_of_segment }
+}
+
+/// One joined text per visual line, shared by every segment on that line.
+struct VisualLineTexts {
+    texts: Vec<String>,
+    line_of_segment: Vec<usize>,
+}
+
+impl VisualLineTexts {
+    /// The text of the whole visual line the segment at `index` belongs to.
+    fn of_segment(&self, index: usize) -> &str {
+        &self.texts[self.line_of_segment[index]]
+    }
 }
 
 // GH#1806: values mirror the column-gutter bounds already measured for the equivalent
@@ -2520,7 +2533,7 @@ fn blocks_to_paragraphs(
     let visual_line_texts = visual_line_texts(&lines);
     let column_corridor = page_column_corridor(&lines);
 
-    let mut paragraphs: Vec<PdfParagraph> = Vec::new();
+    let mut pending: Vec<(std::ops::Range<usize>, PendingParagraph)> = Vec::new();
     let mut current_lines: Vec<&SegmentData> = Vec::new();
     let mut current_is_single_visual_line = true;
     let mut prev_idx = 0usize;
@@ -2618,11 +2631,11 @@ fn blocks_to_paragraphs(
             // prose beginning with a bare year — "2024 was een druk jaar" — does not
             // break its paragraph. See #1386. ~keep
             let starts_section =
-                starts_new_line && super::classify::is_numbered_section_heading(&visual_line_texts[line_idx]);
+                starts_new_line && super::classify::is_numbered_section_heading(visual_line_texts.of_segment(line_idx));
             // A formula line under a hat drawn as a lone letter starts a new paragraph.
             // The heading rule used to break there; joined, the two print as "bX". ~keep
             let accent_over_formula =
-                starts_new_line && accent_letter_over_formula_start(prev, line, &visual_line_texts[line_idx]);
+                starts_new_line && accent_letter_over_formula_start(prev, line, visual_line_texts.of_segment(line_idx));
             // A numbered section heading also always ENDS the element it opens: without
             // this term nothing else distinguishes a heading from the body text that
             // follows it when both share font size, weight, role and line spacing --
@@ -2690,7 +2703,7 @@ fn blocks_to_paragraphs(
             // short, by definition) fails it and stops the chain. ~keep
             let heading_continuation_accepted = current_lines.first().is_some_and(|heading_start| {
                 (current_is_single_visual_line
-                    && super::classify::is_numbered_section_heading(&visual_line_texts[prev_idx])
+                    && super::classify::is_numbered_section_heading(visual_line_texts.of_segment(prev_idx))
                     && (heading_wraps_onto(prev, line)
                         || heading_continuation_at_margin(heading_start, prev, line, &lines, line_idx)))
                     || (heading_wrap_chain_open
@@ -2699,7 +2712,7 @@ fn blocks_to_paragraphs(
             });
             let follows_section = starts_new_line
                 && ((current_is_single_visual_line
-                    && super::classify::is_numbered_section_heading(&visual_line_texts[prev_idx])
+                    && super::classify::is_numbered_section_heading(visual_line_texts.of_segment(prev_idx))
                     && !heading_continuation_accepted)
                     || heading_wrap_chain_open)
                 && !heading_continuation_accepted;
@@ -2763,7 +2776,7 @@ fn blocks_to_paragraphs(
 
         if should_break && !current_lines.is_empty() {
             if let Some(para) = finalize_paragraph(&current_lines, heading_map, &gap_info) {
-                paragraphs.push(para);
+                pending.push((line_idx - current_lines.len()..line_idx, para));
             }
             current_lines.clear();
             current_is_single_visual_line = true;
@@ -2793,13 +2806,26 @@ fn blocks_to_paragraphs(
     if !current_lines.is_empty()
         && let Some(para) = finalize_paragraph(&current_lines, heading_map, &gap_info)
     {
-        paragraphs.push(para);
+        pending.push((lines.len() - current_lines.len()..lines.len(), para));
+    }
+
+    // `current_lines` is always the run of segments ending just before the one being read, so
+    // each paragraph owns a consecutive range of `lines` and its segments move into it. A run
+    // that made no paragraph lies between two that did and is dropped here. ~keep
+    let input_lines = lines.len();
+    let mut segments = lines.into_iter();
+    let mut consumed = 0usize;
+    let mut paragraphs: Vec<PdfParagraph> = Vec::with_capacity(pending.len());
+    for (run, para) in pending {
+        segments.by_ref().take(run.start - consumed).for_each(drop);
+        consumed = run.end;
+        paragraphs.push(para.into_paragraph(&mut segments));
     }
 
     keep_adjacent_numbered_entries_as_list(&mut paragraphs);
 
     tracing::debug!(
-        input_lines = lines.len(),
+        input_lines,
         output_paragraphs = paragraphs.len(),
         headings = paragraphs.iter().filter(|p| p.heading_level.is_some()).count(),
         lists = paragraphs.iter().filter(|p| p.is_list_item).count(),
@@ -3490,54 +3516,30 @@ fn heading_style_carries_capital_opener(prev: &SegmentData, line: &SegmentData, 
         )
 }
 
-/// Reconstruct PdfLine objects from a flat list of SegmentData, grouping by baseline_y.
+/// One visual line of a paragraph run: how many consecutive segments it holds and the
+/// baseline of the first of them.
+struct PdfLineSpan {
+    segment_count: usize,
+    baseline_y: f32,
+}
+
+/// Split a flat list of SegmentData into visual lines, grouping by baseline_y.
 ///
-/// This preserves inline formatting information (is_bold, is_italic, is_monospace)
-/// at the segment level so that the assembly layer can emit properly annotated markdown
-/// with bold/italic emphasis.
-fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine> {
+/// Only the grouping is decided here; [`build_pdf_lines`] turns the spans into PdfLine
+/// objects once the segments themselves can be handed over.
+fn pdf_line_spans(segments: &[&SegmentData]) -> Vec<PdfLineSpan> {
     const MAX_LINE_TOLERANCE_PT: f32 = 3.0;
     const LINE_TOLERANCE_SCALE_FACTOR: f32 = 0.25;
-
-    fn finish_line(mut segments: Vec<SegmentData>, baseline_y: f32) -> super::types::PdfLine {
-        let contains_rtl = segments.iter().any(|segment| {
-            segment
-                .text
-                .chars()
-                .any(|character| xberg_native_pdf::text::is_rtl_text(character as u32))
-        });
-        if !contains_rtl {
-            segments.sort_by(|a, b| a.upright_advance_extent().0.total_cmp(&b.upright_advance_extent().0));
-        }
-
-        let dominant_font_size = segments.iter().map(|s| s.font_size).fold(0.0, |a, b| {
-            if a > 0.0 && b > a / 2.0 && b < a * 2.0 {
-                (a + b) / 2.0
-            } else {
-                a.max(b)
-            }
-        });
-        let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
-        let is_monospace = segments.iter().all(|s| s.is_monospace);
-        super::types::PdfLine {
-            native_scripts: Vec::new(),
-            segments,
-            baseline_y: Some(baseline_y),
-            dominant_font_size,
-            is_bold,
-            is_monospace,
-        }
-    }
 
     if segments.is_empty() {
         return Vec::new();
     }
 
-    let mut lines: Vec<super::types::PdfLine> = Vec::new();
+    let mut spans: Vec<PdfLineSpan> = Vec::new();
     let mut current_baseline = segments[0].upright_baseline();
     let mut current_rotation = segments[0].rotation_degrees;
     let mut current_scale = segments[0].font_size.max(segments[0].height).abs();
-    let mut current_segments: Vec<SegmentData> = Vec::new();
+    let mut current_count = 0usize;
 
     for seg in segments {
         let same_rotation = (seg.rotation_degrees - current_rotation).abs() <= f32::EPSILON;
@@ -3546,8 +3548,12 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         let baseline_tolerance =
             (current_scale.max(segment_scale) * LINE_TOLERANCE_SCALE_FACTOR).min(MAX_LINE_TOLERANCE_PT);
         if !same_rotation || (segment_baseline - current_baseline).abs() > baseline_tolerance {
-            if !current_segments.is_empty() {
-                lines.push(finish_line(std::mem::take(&mut current_segments), current_baseline));
+            if current_count > 0 {
+                spans.push(PdfLineSpan {
+                    segment_count: current_count,
+                    baseline_y: current_baseline,
+                });
+                current_count = 0;
             }
             current_baseline = segment_baseline;
             current_rotation = seg.rotation_degrees;
@@ -3555,14 +3561,72 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
         } else {
             current_scale = current_scale.max(segment_scale);
         }
-        current_segments.push((*seg).clone());
+        current_count += 1;
     }
 
-    if !current_segments.is_empty() {
-        lines.push(finish_line(current_segments, current_baseline));
+    if current_count > 0 {
+        spans.push(PdfLineSpan {
+            segment_count: current_count,
+            baseline_y: current_baseline,
+        });
     }
 
-    lines
+    spans
+}
+
+/// Build the PdfLine objects `spans` describes from the run of segments they were
+/// measured on, taken from `segments` in the same order.
+///
+/// This preserves inline formatting information (is_bold, is_italic, is_monospace)
+/// at the segment level so that the assembly layer can emit properly annotated markdown
+/// with bold/italic emphasis.
+fn build_pdf_lines(
+    spans: &[PdfLineSpan],
+    segments: &mut impl Iterator<Item = SegmentData>,
+) -> Vec<super::types::PdfLine> {
+    spans
+        .iter()
+        .map(|span| finish_pdf_line(segments.by_ref().take(span.segment_count).collect(), span.baseline_y))
+        .collect()
+}
+
+fn finish_pdf_line(mut segments: Vec<SegmentData>, baseline_y: f32) -> super::types::PdfLine {
+    let contains_rtl = segments.iter().any(|segment| {
+        segment
+            .text
+            .chars()
+            .any(|character| xberg_native_pdf::text::is_rtl_text(character as u32))
+    });
+    if !contains_rtl {
+        segments.sort_by(|a, b| a.upright_advance_extent().0.total_cmp(&b.upright_advance_extent().0));
+    }
+
+    let dominant_font_size = segments.iter().map(|s| s.font_size).fold(0.0, |a, b| {
+        if a > 0.0 && b > a / 2.0 && b < a * 2.0 {
+            (a + b) / 2.0
+        } else {
+            a.max(b)
+        }
+    });
+    let is_bold = segments.iter().filter(|s| s.is_bold).count() > segments.len() / 2;
+    let is_monospace = segments.iter().all(|s| s.is_monospace);
+    super::types::PdfLine {
+        native_scripts: Vec::new(),
+        segments,
+        baseline_y: Some(baseline_y),
+        dominant_font_size,
+        is_bold,
+        is_monospace,
+    }
+}
+
+/// `text.trim()` as an owned string, reusing the buffer `text` already holds.
+fn trim_owned(mut text: String) -> String {
+    text.truncate(text.trim_end().len());
+    let leading = text.len() - text.trim_start().len();
+    text.replace_range(..leading, "");
+    text.shrink_to_fit();
+    text
 }
 
 /// Build a PdfParagraph from a group of consecutive lines with compatible font properties.
@@ -3687,11 +3751,33 @@ fn keep_adjacent_numbered_entries_as_list(paragraphs: &mut [PdfParagraph]) {
     }
 }
 
+/// A classified paragraph whose lines are still to be built from the segments of its run.
+///
+/// Classification reads the run through references; holding the line spans back lets the
+/// caller move each segment into its line once nothing borrows the run any more.
+struct PendingParagraph {
+    paragraph: PdfParagraph,
+    line_spans: Vec<PdfLineSpan>,
+}
+
+impl PendingParagraph {
+    /// Complete the paragraph with the run it was classified from, taken from `segments`
+    /// in order.
+    fn into_paragraph(self, segments: &mut impl Iterator<Item = SegmentData>) -> PdfParagraph {
+        let Self {
+            mut paragraph,
+            line_spans,
+        } = self;
+        paragraph.lines = build_pdf_lines(&line_spans, segments);
+        paragraph
+    }
+}
+
 fn finalize_paragraph(
     lines: &[&SegmentData],
     heading_map: &[(f32, Option<u8>)],
     gap_info: &super::classify::GapInfo,
-) -> Option<PdfParagraph> {
+) -> Option<PendingParagraph> {
     if lines.is_empty() {
         return None;
     }
@@ -3711,7 +3797,7 @@ fn finalize_paragraph(
         .skip(1)
         .any(|line| line.is_bold != first.is_bold || line.is_italic != first.is_italic);
 
-    let reconstructed_lines = reconstruct_pdf_lines(lines);
+    let line_spans = pdf_line_spans(lines);
     let starts_with_split_list_marker = lines.get(1).is_some_and(|body| {
         is_bare_list_marker(&first.text)
             && body.has_same_rotation(first)
@@ -3722,28 +3808,29 @@ fn finalize_paragraph(
 
     let structure_tree_role = most_frequent_level(lines.iter().filter_map(|l| l.assigned_role)).map(|(level, _)| level);
     if let Some(level) = structure_tree_role {
-        let para_text = trimmed.to_string();
-        let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);
-        return Some(PdfParagraph {
-            text: if has_mixed_inline_styles {
-                String::new()
-            } else {
-                para_text
+        return Some(PendingParagraph {
+            paragraph: PdfParagraph {
+                text: if has_mixed_inline_styles {
+                    String::new()
+                } else {
+                    trim_owned(text)
+                },
+                lines: Vec::new(),
+                dominant_font_size: first.font_size,
+                heading_level: Some(level),
+                is_bold,
+                is_list_item: is_list_candidate,
+                is_code_block: first.is_monospace && lines.len() > 1,
+                is_formula: false,
+                is_page_furniture: false,
+                layout_class: None,
+                layout_region_path: None,
+                ocr_source_spans: Vec::new(),
+                caption_for: None,
+                block_bbox: None,
+                word_count,
             },
-            lines: reconstructed_lines,
-            dominant_font_size: first.font_size,
-            heading_level: Some(level),
-            is_bold,
-            is_list_item: is_list_candidate,
-            is_code_block: first.is_monospace && lines.len() > 1,
-            is_formula: false,
-            is_page_furniture: false,
-            layout_class: None,
-            layout_region_path: None,
-            ocr_source_spans: Vec::new(),
-            caption_for: None,
-            block_bbox: None,
-            word_count,
+            line_spans,
         });
     }
 
@@ -3800,7 +3887,7 @@ fn finalize_paragraph(
         && is_bold
         && clears_bold_font_gate
         && (1..=8).contains(&word_count)
-        && (lines.len() == 1 || (reconstructed_lines.len() == 1 && !is_list_candidate))
+        && (lines.len() == 1 || (line_spans.len() == 1 && !is_list_candidate))
         && !trimmed.ends_with('.')
         && !trimmed.ends_with(':')
         && !trimmed.ends_with(',')
@@ -3821,7 +3908,7 @@ fn finalize_paragraph(
     if heading_level.is_none()
         && is_bold
         && !page_number_like
-        && reconstructed_lines.len() <= MAX_NUMBERED_HEADING_LINES
+        && line_spans.len() <= MAX_NUMBERED_HEADING_LINES
         && word_count <= super::constants::MAX_BOLD_HEADING_WORD_COUNT
         && is_bold_numbered_section_heading(
             trimmed,
@@ -3880,37 +3967,37 @@ fn finalize_paragraph(
         "classified paragraph"
     );
 
-    let para_text = trimmed.to_string();
-    let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);
-
-    Some(PdfParagraph {
-        text: if has_mixed_inline_styles {
-            String::new()
-        } else {
-            para_text
+    Some(PendingParagraph {
+        paragraph: PdfParagraph {
+            text: if has_mixed_inline_styles {
+                String::new()
+            } else {
+                trim_owned(text)
+            },
+            lines: Vec::new(),
+            dominant_font_size: first.font_size,
+            heading_level,
+            is_bold,
+            is_list_item,
+            is_code_block,
+            is_formula: false,
+            // Page-number furniture is decided document-wide, not here — see
+            // `mark_validated_page_numbers` (GH#1411).
+            is_page_furniture: false,
+            layout_class: None,
+            layout_region_path: None,
+            ocr_source_spans: Vec::new(),
+            caption_for: None,
+            block_bbox: Some({
+                let left = lines.iter().map(|l| l.x).fold(f32::MAX, f32::min);
+                let bottom = lines.iter().map(|l| l.baseline_y).fold(f32::MAX, f32::min);
+                let right = lines.iter().map(|l| l.x + l.width).fold(f32::MIN, f32::max);
+                let top = lines.iter().map(|l| l.baseline_y + l.height).fold(f32::MIN, f32::max);
+                (left, bottom, right, top)
+            }),
+            word_count,
         },
-        lines: reconstructed_lines,
-        dominant_font_size: first.font_size,
-        heading_level,
-        is_bold,
-        is_list_item,
-        is_code_block,
-        is_formula: false,
-        // Page-number furniture is decided document-wide, not here — see
-        // `mark_validated_page_numbers` (GH#1411).
-        is_page_furniture: false,
-        layout_class: None,
-        layout_region_path: None,
-        ocr_source_spans: Vec::new(),
-        caption_for: None,
-        block_bbox: Some({
-            let left = lines.iter().map(|l| l.x).fold(f32::MAX, f32::min);
-            let bottom = lines.iter().map(|l| l.baseline_y).fold(f32::MAX, f32::min);
-            let right = lines.iter().map(|l| l.x + l.width).fold(f32::MIN, f32::max);
-            let top = lines.iter().map(|l| l.baseline_y + l.height).fold(f32::MIN, f32::max);
-            (left, bottom, right, top)
-        }),
-        word_count,
+        line_spans,
     })
 }
 
@@ -4287,13 +4374,18 @@ fn build_document_structure(
 
 pub(crate) fn extract_document_structure_from_native_pages(
     native_document: &xberg_native_pdf::PdfDocument,
-    native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
+    mut native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     table_plan: NativeTablePlan<'_>,
     schemas: &[crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
-    let segments = native_pages.iter().map(|page| page.segments.clone()).collect();
+    // The pages keep only their script owners, prose rows and math glyphs from here on: every
+    // later pass is handed the segments that survived paragraph assembly instead. ~keep
+    let segments = native_pages
+        .iter_mut()
+        .map(|page| std::mem::take(&mut page.segments))
+        .collect();
     build_document_structure_with_native(
         segments,
         Some(native_pages),
@@ -4878,7 +4970,6 @@ fn build_document_structure_with_native(
     let page_inputs: Vec<PageInput> = (0..page_count)
         .map(|i| {
             let heuristic_segments = std::mem::take(&mut all_page_segments[i]);
-            let paragraph_gap_ys = compute_paragraph_gap_ys(&heuristic_segments);
             PageInput {
                 page_index: i,
                 struct_paragraphs: None,
@@ -4903,7 +4994,8 @@ fn build_document_structure_with_native(
                 #[cfg(not(feature = "layout-detection"))]
                 isolated_folio_page_height: None,
                 needs_classify: false,
-                paragraph_gap_ys,
+                // Measured per page in `process_page`, off this sequential pass. ~keep
+                paragraph_gap_ys: Vec::new(),
                 include_headers,
                 include_footers,
                 include_footnotes,
@@ -4917,7 +5009,8 @@ fn build_document_structure_with_native(
         ));
     }
 
-    let process_page = |input| {
+    let process_page = |mut input: PageInput| {
+        input.paragraph_gap_ys = compute_paragraph_gap_ys(&input.heuristic_segments);
         let mut accepted_folio = None;
         let paragraphs =
             process_single_page_with_folio(input, &heading_map, doc_body_font_size, &witnesses, &mut accepted_folio);
@@ -8727,6 +8820,7 @@ fn collect_hyphen_witnesses(all_page_segments: &[Vec<SegmentData>]) -> HyphenWit
 /// token. A hyphen that ends its token (a wrap hyphen before a break) has no right-hand
 /// letters and so never witnesses itself.
 pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesses) {
+    let mut pair = (String::new(), String::new());
     for word in text.split_whitespace() {
         let mut parts = word.split(is_word_hyphen);
         let Some(mut left) = parts.next() else {
@@ -8738,7 +8832,11 @@ pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesse
             if left_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
                 && right_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
             {
-                witnesses.insert((left_run.to_ascii_lowercase(), right_run.to_ascii_lowercase()));
+                assign_ascii_lowercase(&mut pair.0, left_run);
+                assign_ascii_lowercase(&mut pair.1, right_run);
+                if !witnesses.contains(&pair) {
+                    witnesses.insert(pair.clone());
+                }
             }
             left = right;
         }
@@ -8761,32 +8859,43 @@ pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesse
 /// [`collect_hyphen_witnesses`]. ~keep
 fn collect_word_witnesses(all_page_segments: &[Vec<SegmentData>]) -> WordWitnesses {
     let mut witnesses = WordWitnesses::default();
+    let mut lowercase = String::new();
     for segment in all_page_segments.iter().flatten() {
-        let cores: Vec<&str> = segment
+        let mut cores = segment
             .text
             .split_whitespace()
             .map(|token| token.trim_matches(|c: char| !c.is_alphabetic()))
-            .collect();
-        for index in 0..cores.len() {
-            let core = cores[index];
+            .peekable();
+        let mut previous: Option<&str> = None;
+        while let Some(core) = cores.next() {
+            let preceding = previous.replace(core);
             if core.chars().count() < MIN_LIGATURE_WITNESS_WORD_LEN {
                 continue;
             }
             let is_left_of_candidate = core.ends_with('f')
                 && cores
-                    .get(index + 1)
+                    .peek()
                     .and_then(|next| next.chars().next())
                     .is_some_and(|c| matches!(c, 'i' | 'l' | 'f'));
-            let is_right_of_candidate = index > 0
-                && cores[index - 1].ends_with('f')
+            let is_right_of_candidate = preceding.is_some_and(|before| before.ends_with('f'))
                 && core.chars().next().is_some_and(|c| matches!(c, 'i' | 'l' | 'f'));
             if is_left_of_candidate || is_right_of_candidate {
                 continue;
             }
-            witnesses.insert(core.to_ascii_lowercase());
+            assign_ascii_lowercase(&mut lowercase, core);
+            if !witnesses.contains(lowercase.as_str()) {
+                witnesses.insert(lowercase.clone());
+            }
         }
     }
     witnesses
+}
+
+/// Overwrite `buffer` with `text.to_ascii_lowercase()`, keeping its allocation.
+fn assign_ascii_lowercase(buffer: &mut String, text: &str) {
+    buffer.clear();
+    buffer.push_str(text);
+    buffer.make_ascii_lowercase();
 }
 
 /// A hyphen that can end a wrapped line: ASCII `-`, U+2010 HYPHEN and U+2011
@@ -9573,7 +9682,7 @@ fn apply_text_repair_to_structure_tree_paragraphs(
 /// diverging from the stale pre-repair string used by the heuristic path.
 fn synchronize_paragraph_text_metadata(paragraphs: &mut [PdfParagraph]) {
     for paragraph in paragraphs {
-        paragraph.text.clear();
+        paragraph.text = String::new();
         paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
     }
 }

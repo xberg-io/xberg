@@ -14,8 +14,8 @@ const KMEANS_CONVERGENCE_THRESHOLD: f32 = 0.01;
 pub struct FontSizeCluster {
     /// The centroid (mean) font size of this cluster
     pub centroid: f32,
-    /// The text blocks that belong to this cluster
-    pub members: Vec<TextBlock>,
+    /// Total byte length of the text of the blocks that belong to this cluster
+    pub text_len: usize,
 }
 
 /// Cluster text blocks by font size using k-means algorithm.
@@ -25,7 +25,7 @@ pub struct FontSizeCluster {
 /// 1. Extracts font sizes from text blocks
 /// 2. Applies k-means clustering to group similar font sizes
 /// 3. Sorts clusters by centroid size in descending order (largest = H1)
-/// 4. Returns clusters with their member blocks
+/// 4. Returns clusters with the amount of text assigned to each
 ///
 /// # Arguments
 ///
@@ -119,11 +119,12 @@ pub(crate) fn cluster_font_sizes(blocks: &[TextBlock], k: usize) -> Result<Vec<F
     let mut result: Vec<FontSizeCluster> = Vec::new();
 
     for i in 0..actual_k {
-        if !clusters[i].is_empty() {
+        let (member_count, text_len) = clusters[i];
+        if member_count > 0 {
             let centroid_value = centroids[i];
             result.push(FontSizeCluster {
                 centroid: centroid_value,
-                members: clusters[i].clone(),
+                text_len,
             });
         }
     }
@@ -181,7 +182,7 @@ pub(crate) fn assign_heading_levels_smart(
     let body_idx = clusters
         .iter()
         .enumerate()
-        .max_by_key(|(_, c)| c.members.iter().map(|block| block.text.len()).sum::<usize>())
+        .max_by_key(|(_, c)| c.text_len)
         .map(|(i, _)| i)
         .unwrap_or(0);
 
@@ -224,10 +225,13 @@ pub(crate) fn assign_heading_levels_smart(
 /// `KMEANS_MAX_ITERATIONS` is reached, and returns the refined centroids.
 fn refine_centroids(font_sizes: &[f32], mut centroids: Vec<f32>, actual_k: usize) -> Vec<f32> {
     let mut prev_assignments: Vec<usize> = vec![0; font_sizes.len()];
+    let mut assignments: Vec<usize> = Vec::with_capacity(font_sizes.len());
+    let mut size_clusters: Vec<Vec<f32>> = vec![Vec::new(); centroids.len()];
+    let mut new_centroids: Vec<f32> = Vec::with_capacity(actual_k);
     let mut first_iter = true;
 
     for _ in 0..KMEANS_MAX_ITERATIONS {
-        let (size_clusters, assignments) = assign_sizes_to_centroids_tracked(font_sizes, &centroids);
+        assign_sizes_to_centroids_tracked(font_sizes, &centroids, &mut size_clusters, &mut assignments);
 
         let assignments_changed = if first_iter {
             first_iter = false;
@@ -239,13 +243,13 @@ fn refine_centroids(font_sizes: &[f32], mut centroids: Vec<f32>, actual_k: usize
                 .filter(|(a, b)| a != b)
                 .count()
         };
-        prev_assignments = assignments;
+        std::mem::swap(&mut prev_assignments, &mut assignments);
 
         if assignments_changed == 0 {
             break;
         }
 
-        let mut new_centroids = Vec::with_capacity(actual_k);
+        new_centroids.clear();
         for (i, cluster) in size_clusters.iter().enumerate() {
             if !cluster.is_empty() {
                 new_centroids.push(cluster.iter().sum::<f32>() / cluster.len() as f32);
@@ -272,22 +276,30 @@ fn refine_centroids(font_sizes: &[f32], mut centroids: Vec<f32>, actual_k: usize
 /// Helper function to assign font sizes to their nearest centroid (for iteration loop).
 ///
 /// Assigns font sizes to clusters without cloning full TextBlock objects, and also
-/// returns per-element cluster assignments so the caller can detect convergence via
+/// records per-element cluster assignments so the caller can detect convergence via
 /// unchanged assignments (in addition to the centroid-movement threshold).
+///
+/// Both outputs are caller-owned buffers, emptied here and refilled, so the
+/// refinement loop allocates them once rather than once per iteration.
 ///
 /// # Arguments
 ///
 /// * `font_sizes` - Slice of font size values to assign
 /// * `centroids` - Slice of centroid values (one per cluster)
-///
-/// # Returns
-///
-/// A tuple of:
-/// - A vector of clusters, where each cluster contains the font sizes assigned to that centroid
-/// - A vector of per-element cluster indices (same length as `font_sizes`)
-fn assign_sizes_to_centroids_tracked(font_sizes: &[f32], centroids: &[f32]) -> (Vec<Vec<f32>>, Vec<usize>) {
-    let mut clusters: Vec<Vec<f32>> = vec![Vec::new(); centroids.len()];
-    let mut assignments: Vec<usize> = Vec::with_capacity(font_sizes.len());
+/// * `clusters` - One buffer per centroid, refilled with the font sizes assigned to it
+///   in `font_sizes` order
+/// * `assignments` - Refilled with the per-element cluster indices (same length as
+///   `font_sizes`)
+fn assign_sizes_to_centroids_tracked(
+    font_sizes: &[f32],
+    centroids: &[f32],
+    clusters: &mut [Vec<f32>],
+    assignments: &mut Vec<usize>,
+) {
+    for cluster in clusters.iter_mut() {
+        cluster.clear();
+    }
+    assignments.clear();
 
     for &size in font_sizes {
         let mut min_distance = f32::INFINITY;
@@ -304,14 +316,12 @@ fn assign_sizes_to_centroids_tracked(font_sizes: &[f32], centroids: &[f32]) -> (
         clusters[best_cluster].push(size);
         assignments.push(best_cluster);
     }
-
-    (clusters, assignments)
 }
 
 /// Helper function to assign blocks to their nearest centroid.
 ///
 /// Iterates through blocks and finds the closest centroid for each block,
-/// grouping them into clusters. Used in the final assignment step after convergence.
+/// tallying them per cluster. Used in the final assignment step after convergence.
 ///
 /// # Arguments
 ///
@@ -320,10 +330,10 @@ fn assign_sizes_to_centroids_tracked(font_sizes: &[f32], centroids: &[f32]) -> (
 ///
 /// # Returns
 ///
-/// A vector of clusters, where each cluster contains the TextBlock objects
-/// assigned to that centroid
-fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<Vec<TextBlock>> {
-    let mut clusters: Vec<Vec<TextBlock>> = vec![Vec::new(); centroids.len()];
+/// One `(member count, total text byte length)` pair per centroid, covering the
+/// TextBlock objects assigned to it
+fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<(usize, usize)> {
+    let mut clusters: Vec<(usize, usize)> = vec![(0, 0); centroids.len()];
 
     for block in blocks {
         let mut min_distance = f32::INFINITY;
@@ -337,7 +347,9 @@ fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<Ve
             }
         }
 
-        clusters[best_cluster].push(block.clone());
+        let (member_count, text_len) = &mut clusters[best_cluster];
+        *member_count += 1;
+        *text_len += block.text.len();
     }
 
     clusters
@@ -396,7 +408,22 @@ mod tests {
 
         assert_eq!(clusters.len(), 1, "expected exactly one cluster, got {clusters:?}");
         assert_eq!(clusters[0].centroid, 18.0);
-        assert_eq!(clusters[0].members.len(), 1);
+        assert_eq!(clusters[0].text_len, "Ordinary heading".len());
+    }
+
+    #[test]
+    fn reused_assignment_buffers_hold_only_the_latest_assignment() {
+        let font_sizes = [24.0, 12.0, 11.0];
+        let mut clusters = vec![Vec::new(); 2];
+        let mut assignments = Vec::new();
+
+        assign_sizes_to_centroids_tracked(&font_sizes, &[24.0, 12.0], &mut clusters, &mut assignments);
+        assert_eq!(clusters, [vec![24.0], vec![12.0, 11.0]]);
+        assert_eq!(assignments, [0, 1, 1]);
+
+        assign_sizes_to_centroids_tracked(&font_sizes, &[12.0, 24.0], &mut clusters, &mut assignments);
+        assert_eq!(clusters, [vec![12.0, 11.0], vec![24.0]]);
+        assert_eq!(assignments, [1, 0, 0]);
     }
 
     #[test]
@@ -424,14 +451,11 @@ mod tests {
         vec![
             FontSizeCluster {
                 centroid: candidate_centroid,
-                members: vec![make_block("Short", candidate_centroid)],
+                text_len: "Short".len(),
             },
             FontSizeCluster {
                 centroid: body_centroid,
-                members: vec![make_block(
-                    "This cluster carries far more running text so char-weighted mass picks it as body.",
-                    body_centroid,
-                )],
+                text_len: "This cluster carries far more running text so char-weighted mass picks it as body.".len(),
             },
         ]
     }
