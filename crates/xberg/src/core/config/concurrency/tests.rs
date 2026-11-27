@@ -569,9 +569,9 @@ fn test_ocr_concurrency_is_not_pinned_to_four_on_a_many_core_host() {
 #[cfg(target_os = "linux")]
 #[test]
 fn test_cgroup_headroom_reads_both_unlimited_spellings_as_no_limit() {
-    assert_eq!(parse_cgroup_headroom("max\n", "1024\n"), None);
-    assert_eq!(parse_cgroup_headroom("9223372036854771712\n", "1024\n"), None);
-    assert_eq!(parse_cgroup_headroom("0\n", "1024\n"), None);
+    assert_eq!(parse_cgroup_headroom("max\n", "1024\n", None), None);
+    assert_eq!(parse_cgroup_headroom("9223372036854771712\n", "1024\n", None), None);
+    assert_eq!(parse_cgroup_headroom("0\n", "1024\n", None), None);
 }
 
 /// The limit is not the headroom. A cgroup already holding most of its
@@ -580,10 +580,87 @@ fn test_cgroup_headroom_reads_both_unlimited_spellings_as_no_limit() {
 #[cfg(target_os = "linux")]
 #[test]
 fn test_cgroup_headroom_subtracts_current_usage_from_the_limit() {
-    assert_eq!(parse_cgroup_headroom("2147483648\n", "0\n"), Some(2 * GIB));
-    assert_eq!(parse_cgroup_headroom("8589934592\n", "6442450944\n"), Some(2 * GIB));
-    assert_eq!(parse_cgroup_headroom("2147483648\n", "4294967296\n"), Some(0));
-    assert_eq!(parse_cgroup_headroom("2147483648\n", "not-a-number\n"), None);
+    assert_eq!(parse_cgroup_headroom("2147483648\n", "0\n", None), Some(2 * GIB));
+    assert_eq!(
+        parse_cgroup_headroom("8589934592\n", "6442450944\n", None),
+        Some(2 * GIB)
+    );
+    assert_eq!(parse_cgroup_headroom("2147483648\n", "4294967296\n", None), Some(0));
+    assert_eq!(parse_cgroup_headroom("2147483648\n", "not-a-number\n", None), None);
+}
+
+/// A warmed container: usage sits at the limit, but most of it is page cache
+/// the kernel drops on demand. Charging the cache as held memory resolved
+/// recognition and the PDF OCR batch to one wide on exactly the hosts that had
+/// already read their documents and models.
+#[cfg(target_os = "linux")]
+#[test]
+fn test_cgroup_headroom_does_not_charge_inactive_file_pages() {
+    assert_eq!(
+        parse_cgroup_headroom("8589934592\n", "8589934592\n", Some(6 * GIB)),
+        Some(6 * GIB)
+    );
+    assert_eq!(parse_cgroup_headroom("8589934592\n", "8589934592\n", Some(0)), Some(0));
+    assert_eq!(
+        parse_cgroup_headroom("8589934592\n", "6442450944\n", Some(GIB)),
+        Some(3 * GIB)
+    );
+}
+
+/// The two files are read at different instants, so the cache can read larger
+/// than the usage it is part of. The working set clamps at zero and the
+/// headroom at the limit rather than wrapping.
+#[cfg(target_os = "linux")]
+#[test]
+fn test_cgroup_headroom_clamps_when_inactive_file_exceeds_usage() {
+    assert_eq!(
+        parse_cgroup_headroom("2147483648\n", "1073741824\n", Some(4 * GIB)),
+        Some(2 * GIB)
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_cgroup_stat_reads_inactive_file_from_a_v2_sample() {
+    let memory_stat = "anon 1503645696\nfile 6442450944\nkernel 20553728\nfile_mapped 8110080\n\
+                       inactive_anon 1503531008\nactive_anon 114688\ninactive_file 5368709120\n\
+                       active_file 1073741824\nunevictable 0\n";
+    assert_eq!(parse_cgroup_stat_bytes(memory_stat, "inactive_file"), Some(5 * GIB));
+}
+
+/// v1 lists the cgroup's own `inactive_file` before the hierarchical
+/// `total_inactive_file`. Each key must select its own line: a prefix or
+/// suffix match would return the other's figure.
+#[cfg(target_os = "linux")]
+#[test]
+fn test_cgroup_stat_reads_total_inactive_file_from_a_v1_sample() {
+    let memory_stat = "cache 3221225472\nrss 1073741824\ninactive_anon 0\nactive_anon 1073741824\n\
+                       inactive_file 1073741824\nactive_file 2147483648\nunevictable 0\n\
+                       hierarchical_memory_limit 8589934592\ntotal_cache 3221225472\ntotal_rss 1073741824\n\
+                       total_inactive_anon 0\ntotal_active_anon 1073741824\ntotal_inactive_file 2147483648\n\
+                       total_active_file 1073741824\ntotal_unevictable 0\n";
+    assert_eq!(
+        parse_cgroup_stat_bytes(memory_stat, "total_inactive_file"),
+        Some(2 * GIB)
+    );
+    assert_eq!(parse_cgroup_stat_bytes(memory_stat, "inactive_file"), Some(GIB));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_cgroup_stat_without_the_key_or_with_garbage_reads_as_unknown() {
+    assert_eq!(
+        parse_cgroup_stat_bytes("anon 1024\nactive_file 2048\n", "inactive_file"),
+        None
+    );
+    assert_eq!(parse_cgroup_stat_bytes("", "inactive_file"), None);
+    assert_eq!(parse_cgroup_stat_bytes("inactive_file\n", "inactive_file"), None);
+    assert_eq!(parse_cgroup_stat_bytes("inactive_file many\n", "inactive_file"), None);
+    assert_eq!(parse_cgroup_stat_bytes("inactive_file -1\n", "inactive_file"), None);
+    assert_eq!(
+        parse_cgroup_stat_bytes("\u{0}\u{1}not a stat file", "inactive_file"),
+        None
+    );
 }
 
 #[cfg(target_os = "linux")]
