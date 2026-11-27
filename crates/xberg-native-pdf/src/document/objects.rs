@@ -513,6 +513,48 @@ impl PdfDocument {
         }
     }
 
+    /// [`Self::scan_for_object`] for a reference the xref leaves unresolved, without the scan
+    /// when the reference is to object 0 and the file holds no header for it.
+    ///
+    /// Object 0 heads the free list and is never defined (ISO 32000-1 §7.5.4), and producers
+    /// write `0 0 R` as a null placeholder. On a well-formed file the scan could only confirm
+    /// the absence, after indexing every object header in the file. ~keep
+    fn scan_for_unresolved_object(&self, obj_ref: ObjectRef) -> Result<u64> {
+        if obj_ref.id == 0 && !self.object_zero_header_exists() {
+            return Err(Error::ObjectNotFound(obj_ref.id, obj_ref.generation));
+        }
+        self.scan_for_object(obj_ref)
+    }
+
+    /// Whether the file body holds a `0 G obj` header in the shape [`Self::scan_for_object`]
+    /// accepts: the only evidence that a damaged xref hides a real object 0.
+    fn object_zero_header_exists(&self) -> bool {
+        if let Some(offsets) = self.scanned_object_offsets.lock_or_recover().as_ref() {
+            return offsets.contains_key(&0);
+        }
+        let content: &[u8] = &self.source_bytes;
+        memchr::memmem::find_iter(content, b" obj").any(|keyword| {
+            let terminated = content
+                .get(keyword + 4)
+                .is_none_or(|&byte| matches!(byte, b'\n' | b'\r' | b' ' | b'\t' | b'<'));
+            let digits_start = |end: usize| {
+                content[..end]
+                    .iter()
+                    .rposition(|byte| !byte.is_ascii_digit())
+                    .map_or(0, |separator| separator + 1)
+            };
+            let generation_start = digits_start(keyword);
+            if !terminated || generation_start == 0 || content[generation_start - 1] != b' ' {
+                return false;
+            }
+            let number_end = generation_start - 1;
+            let number_start = digits_start(number_end);
+            number_start < number_end
+                && content[number_start..number_end].iter().all(|digit| *digit == b'0')
+                && (number_start == 0 || matches!(content[number_start - 1], b'\n' | b'\r'))
+        })
+    }
+
     /// One-time sweep over every known object stream (`/Type /ObjStm`),
     /// used to recover from xref tables that mis-mark compressed objects as
     /// free.
@@ -770,7 +812,7 @@ impl PdfDocument {
                     available
                 );
 
-                match self.scan_for_object(obj_ref) {
+                match self.scan_for_unresolved_object(obj_ref) {
                     Ok(offset) => {
                         self.recovery
                             .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
@@ -878,7 +920,7 @@ impl PdfDocument {
             // per document and caches it, so the amortised cost is a
             // single O(filesize) pass no matter how many free-marked
             // objects we probe. ~keep
-            if let Ok(scanned_offset) = self.scan_for_object(obj_ref) {
+            if let Ok(scanned_offset) = self.scan_for_unresolved_object(obj_ref) {
                 tracing::warn!(target: LOG_TARGET,
                     "Object {} marked free in xref but found in file scan at offset {}; recovering",
                     obj_ref.id,
@@ -899,9 +941,15 @@ impl PdfDocument {
             // Recovery path 2 — the object may be compressed inside a
             // `/Type /ObjStm`. Real-world producers have been seen to
             // mis-flag every compressed object's xref slot as free, so
-            // sweep the object streams once and recheck the cache. ~keep
-            self.recover_from_object_streams();
-            let recovered = self.object_cache.lock_or_recover().get_shared(&obj_ref);
+            // sweep the object streams once and recheck the cache. Object 0
+            // is free by definition, so a reference to it never pays for the
+            // sweep. ~keep
+            let recovered = if obj_ref.id == 0 {
+                None
+            } else {
+                self.recover_from_object_streams();
+                self.object_cache.lock_or_recover().get_shared(&obj_ref)
+            };
             if let Some(obj) = recovered
                 && !matches!(*obj, Object::Null)
             {

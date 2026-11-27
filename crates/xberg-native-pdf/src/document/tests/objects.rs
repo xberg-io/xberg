@@ -864,3 +864,88 @@ fn stream_with_a_wrong_or_indirect_length_still_ends_at_endstream() {
     assert_eq!(stream_payload(&doc, 3), b"hello world");
     assert_eq!(stream_payload(&doc, 4), b"indirect");
 }
+
+fn object_headers_were_indexed(document: &PdfDocument) -> bool {
+    document.scanned_object_offsets.lock_or_recover().is_some()
+}
+
+fn object_streams_were_swept(document: &PdfDocument) -> bool {
+    *document.objstm_recovery_done.lock_or_recover()
+}
+
+/// Objects 1 to 10, so the body holds `10 0 obj`, whose tail reads `0 0 obj`.
+fn document_with_ten_objects() -> PdfDocument {
+    let body: &[u8] = b"<< /Marker 1 >>";
+    PdfDocument::from_bytes(pdf_with_trailing_objects(&[body; 8])).expect("open pdf")
+}
+
+#[test]
+fn reference_to_free_object_zero_is_null_without_scanning_the_file() {
+    use crate::xref::XRefEntry;
+
+    let mut document = document_with_ten_objects();
+    document.xref.add_entry(0, XRefEntry::free(0, 65535));
+    for generation in [0, 65535] {
+        assert_eq!(
+            document.load_object(ObjectRef::new(0, generation)).unwrap(),
+            Object::Null
+        );
+    }
+    assert!(!object_headers_were_indexed(&document));
+    assert!(!object_streams_were_swept(&document));
+
+    let mut control = document_with_ten_objects();
+    control.xref.add_entry(11, XRefEntry::free(0, 1));
+    assert_eq!(control.load_object(ObjectRef::new(11, 0)).unwrap(), Object::Null);
+    assert!(
+        object_headers_were_indexed(&control) && object_streams_were_swept(&control),
+        "a free entry for any other object keeps both recovery paths"
+    );
+}
+
+#[test]
+fn reference_to_object_zero_missing_from_the_xref_is_null_without_scanning_the_file() {
+    let mut document = document_with_ten_objects();
+    document.xref.entries.remove(&0);
+    assert_eq!(document.load_object(ObjectRef::new(0, 0)).unwrap(), Object::Null);
+    assert!(!object_headers_were_indexed(&document));
+
+    assert_eq!(document.load_object(ObjectRef::new(99, 0)).unwrap(), Object::Null);
+    assert!(
+        object_headers_were_indexed(&document),
+        "a missing entry for any other object still scans the file"
+    );
+}
+
+#[test]
+fn object_zero_with_a_header_in_the_file_is_still_recovered() {
+    use crate::xref::XRefEntry;
+
+    let mut pdf = b"%PDF-1.4\n0 0 obj\n<< /Marker 7 >>\nendobj\n".to_vec();
+    let catalog_offset = pdf.len();
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    let pages_offset = pdf.len();
+    pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n");
+    let xref_offset = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 3\n0000000000 65535 f \n");
+    pdf.extend_from_slice(format!("{catalog_offset:010} 00000 n \n{pages_offset:010} 00000 n \n").as_bytes());
+    pdf.extend_from_slice(format!("trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes());
+
+    for listed_as_free in [true, false] {
+        let mut document = PdfDocument::from_bytes(pdf.clone()).expect("open pdf");
+        if listed_as_free {
+            document.xref.add_entry(0, XRefEntry::free(0, 65535));
+        } else {
+            document.xref.entries.remove(&0);
+        }
+        let recovered = document.load_object(ObjectRef::new(0, 0)).unwrap();
+        assert_eq!(
+            recovered
+                .as_dict()
+                .and_then(|dict| dict.get("Marker"))
+                .and_then(Object::as_integer),
+            Some(7),
+            "listed_as_free={listed_as_free}"
+        );
+    }
+}
