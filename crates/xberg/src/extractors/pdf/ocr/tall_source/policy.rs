@@ -107,6 +107,7 @@ fn annotation_only_options(pdf: &PdfConfig) -> bool {
             backend: PdfBackend::Native,
             extract_vector_geometry: false,
             plan_regions: None,
+            keep_white_text: false,
         }
     )
 }

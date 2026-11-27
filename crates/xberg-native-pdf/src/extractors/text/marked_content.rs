@@ -160,6 +160,7 @@ impl<'doc> TextExtractor<'doc> {
             dropped = unpainted.len(),
             "dropping white text over unpainted page area"
         );
+        document.note_dropped_white_text(page, unpainted.len());
         retain_held_from(&mut self.spans, &mut self.span_holds, 0, |span| {
             !unpainted.contains(&span.sequence)
         });

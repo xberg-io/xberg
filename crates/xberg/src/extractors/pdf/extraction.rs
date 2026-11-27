@@ -350,6 +350,27 @@ fn table_stage_failure_warning(stage: &str, error: &impl std::fmt::Display) -> c
 }
 
 #[cfg(feature = "pdf")]
+/// The warning for white text dropped where no painted content lies under it, naming each page
+/// (1-indexed) with the spans it lost. `None` when nothing was dropped.
+fn dropped_white_text_warning(dropped: &[(usize, usize)]) -> Option<crate::types::ProcessingWarning> {
+    if dropped.is_empty() {
+        return None;
+    }
+    let total: usize = dropped.iter().map(|&(_, spans)| spans).sum();
+    let pages = dropped
+        .iter()
+        .map(|&(page_index, spans)| format!("{} ({spans})", page_index + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("pdf_white_text"),
+        message: std::borrow::Cow::Owned(format!(
+            "Dropped {total} white text span(s) that sit on no painted content, by page (spans): {pages}. \
+             Set pdf_options.keep_white_text to keep them."
+        )),
+    })
+}
+
 fn extract_annotations_with_empty_body_fallback(
     doc: &mut crate::pdf::native::NativeDocument,
     requested: bool,
@@ -1300,6 +1321,8 @@ pub(crate) fn extract_all_from_native_document(
         }
     }
 
+    extraction_warnings.extend(dropped_white_text_warning(&doc.doc.dropped_white_text_spans()));
+
     if !skipped_stages.is_empty() {
         extraction_warnings.push(crate::types::ProcessingWarning {
             source: std::borrow::Cow::Borrowed("pdf_time_limit"),
@@ -1485,10 +1508,24 @@ fn join_pages_with_boundaries(
 #[cfg(test)]
 mod tests {
     use super::{
-        hierarchy_cluster_count, map_native_text_error, needs_structured_extraction, page_has_exact_text_block,
-        retain_segments_inside_page_margins, table_stage_failure_warning,
+        dropped_white_text_warning, hierarchy_cluster_count, map_native_text_error, needs_structured_extraction,
+        page_has_exact_text_block, retain_segments_inside_page_margins, table_stage_failure_warning,
     };
     use crate::core::config::OutputFormat;
+
+    #[test]
+    fn dropped_white_text_warning_names_each_page_and_its_spans() {
+        assert!(dropped_white_text_warning(&[]).is_none());
+
+        let warning = dropped_white_text_warning(&[(0, 2), (4, 1)]).expect("spans were dropped");
+
+        assert_eq!(warning.source, "pdf_white_text");
+        assert_eq!(
+            warning.message,
+            "Dropped 3 white text span(s) that sit on no painted content, by page (spans): 1 (2), 5 (1). \
+             Set pdf_options.keep_white_text to keep them."
+        );
+    }
 
     #[cfg(feature = "pdf")]
     #[test]
