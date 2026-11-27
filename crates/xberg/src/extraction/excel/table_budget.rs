@@ -36,6 +36,19 @@ pub(super) struct SkippedSheets {
     cell_limit_errors: HashMap<usize, (usize, usize)>,
     /// BOUNDSHEET records the XLS preflight saw; the reader must report exactly this many sheets.
     sheet_count: usize,
+    /// XLSX sheets whose leading rows fit in the budget while the rest did not.
+    truncated: HashMap<usize, TruncatedSheet>,
+}
+
+/// The leading rows of a worksheet that fit in the remaining `max_table_cells` budget.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct TruncatedSheet {
+    /// First row left out; every kept row lies above it.
+    row_end: u32,
+    /// Cells the preflight charged for the kept rows; the kept range never spans more.
+    max_cells: usize,
+    /// The configured `max_table_cells`, named in the warning.
+    limit: usize,
 }
 
 impl SkippedSheets {
@@ -46,7 +59,12 @@ impl SkippedSheets {
             names: Vec::new(),
             cell_limit_errors: HashMap::new(),
             sheet_count: 0,
+            truncated: HashMap::new(),
         }
+    }
+
+    pub(super) fn truncated(&self, index: usize) -> Option<TruncatedSheet> {
+        self.truncated.get(&index).copied()
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -183,7 +201,19 @@ fn preflight_sheet(
     sheet: impl FnOnce(&mut SecurityBudget) -> Result<()>,
 ) -> Result<()> {
     let before = Charges::of(budget);
-    match sheet(budget) {
+    let result = sheet(budget);
+    skip_on_cell_limit(index, before, budget, skipped, recoverable, result)
+}
+
+fn skip_on_cell_limit(
+    index: usize,
+    before: Charges,
+    budget: &mut SecurityBudget,
+    skipped: &mut SkippedSheets,
+    recoverable: bool,
+    result: Result<()>,
+) -> Result<()> {
+    match result {
         Err(error) if recoverable && is_cell_limit(&error) => {
             if let Some(counts) = cell_limit_counts(&error) {
                 skipped.cell_limit_errors.insert(index, counts);
@@ -196,7 +226,148 @@ fn preflight_sheet(
     }
 }
 
+/// The row a streamed worksheet preflight is in, and the budget charged before that row.
 #[derive(Default)]
+struct RowProgress {
+    row: Option<u32>,
+    before_row: Option<Charges>,
+    rows: usize,
+}
+
+impl RowProgress {
+    fn enter(&mut self, row: u32, budget: &SecurityBudget) {
+        if self.row != Some(row) {
+            self.row = Some(row);
+            self.before_row = Some(Charges::of(budget));
+            self.rows += 1;
+        }
+    }
+
+    /// The first row left out and the charges of the rows above it, when at least one row came before it.
+    fn leading_rows(self) -> Option<(u32, Charges)> {
+        if self.rows < 2 {
+            return None;
+        }
+        self.row.zip(self.before_row)
+    }
+}
+
+/// [`preflight_sheet`] for a worksheet streamed row by row: when the cell limit trips after at least one
+/// complete row, the rows before the tripping one are kept and only the rest is charged back.
+fn preflight_sheet_rows(
+    index: usize,
+    budget: &mut SecurityBudget,
+    skipped: &mut SkippedSheets,
+    sheet: impl FnOnce(&mut SecurityBudget, &mut RowProgress) -> Result<()>,
+) -> Result<()> {
+    let before = Charges::of(budget);
+    let mut progress = RowProgress::default();
+    let result = sheet(budget, &mut progress);
+    if matches!(&result, Err(error) if is_cell_limit(error))
+        && let Some((row_end, kept)) = progress.leading_rows()
+    {
+        let max_cells = kept.table.current_cells() - before.table.current_cells();
+        kept.restore(budget);
+        let limit = skipped.max_cells;
+        skipped.truncated.insert(
+            index,
+            TruncatedSheet {
+                row_end,
+                max_cells,
+                limit,
+            },
+        );
+        return Ok(());
+    }
+    skip_on_cell_limit(index, before, budget, skipped, true, result)
+}
+
+/// Builds the kept leading rows of a truncated worksheet from its streamed cells, never spanning more
+/// cells than the preflight charged for them.
+pub(super) struct TruncatedRange {
+    sheet: TruncatedSheet,
+    cells: Vec<calamine::Cell<calamine::Data>>,
+    kept: SheetBounds,
+    /// Lowest kept row seen; rows can arrive out of order.
+    first_row: Option<u32>,
+}
+
+impl TruncatedRange {
+    pub(super) fn new(sheet: TruncatedSheet) -> Self {
+        Self {
+            sheet,
+            cells: Vec::new(),
+            kept: SheetBounds::default(),
+            first_row: None,
+        }
+    }
+
+    /// Adds a cell of the kept rows; returns `false` at the first cell past them, where reading stops.
+    pub(super) fn push(&mut self, position: (u32, u32), value: &DataRef<'_>) -> bool {
+        let row = position.0;
+        if row >= self.sheet.row_end {
+            return false;
+        }
+        self.first_row = Some(self.first_row.map_or(row, |first| first.min(row)));
+        if matches!(value, DataRef::Empty) {
+            return true;
+        }
+        let mut grown = self.kept.clone();
+        if grown.grow(position).is_ok_and(|cells| cells <= self.sheet.max_cells) {
+            self.kept = grown;
+            self.cells
+                .push(calamine::Cell::new(position, super::owned_xlsx_cell_value(value)));
+        }
+        true
+    }
+
+    pub(super) fn finish(
+        self,
+        name: &str,
+        warnings: &mut Vec<crate::types::ProcessingWarning>,
+    ) -> crate::types::ExcelSheet {
+        let range = calamine::Range::from_sparse(self.cells);
+        let sheet = super::process_sheet(name, &range, warnings);
+        let first = u64::from(self.first_row.unwrap_or_default());
+        let kept = range
+            .end()
+            .map_or(0, |(row, _)| (u64::from(row) + 1).saturating_sub(first));
+        let message = format!(
+            "Sheet '{name}' was truncated to its first {kept} {}: the remaining rows did not fit in the \
+             remaining table-cell budget (`security_limits.max_table_cells` is {}); raise the limit to extract \
+             the whole sheet",
+            if kept == 1 { "row" } else { "rows" },
+            self.sheet.limit
+        );
+        crate::core::diagnostics::push_warning(warnings, "excel", message);
+        sheet
+    }
+}
+
+/// Read the kept leading rows of an XLSX worksheet the preflight truncated. Reading stops at the first
+/// row past them, so the rows left out are never read.
+pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
+    workbook: &mut calamine::Xlsx<R>,
+    name: &str,
+    sheet: TruncatedSheet,
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
+) -> Result<crate::types::ExcelSheet> {
+    let mut reader = workbook
+        .worksheet_cells_reader(name)
+        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
+    let mut kept = TruncatedRange::new(sheet);
+    while let Some(cell) = reader
+        .next_cell()
+        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+    {
+        if !kept.push(cell.get_position(), cell.get_value()) {
+            break;
+        }
+    }
+    Ok(kept.finish(name, warnings))
+}
+
+#[derive(Default, Clone)]
 struct SheetBounds {
     bounds: Option<(u32, u32, u32, u32)>,
     #[cfg(test)]
@@ -268,8 +439,8 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
-        preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
-            validate_xlsx_sheet(workbook, &name, limits, budget)
+        preflight_sheet_rows(index, &mut budget, &mut skipped, |budget, progress| {
+            validate_xlsx_sheet(workbook, &name, limits, budget, progress)
         })?;
     }
     Ok(skipped)
@@ -280,6 +451,7 @@ fn validate_xlsx_sheet<R: Read + Seek>(
     name: &str,
     limits: &SecurityLimits,
     budget: &mut SecurityBudget,
+    progress: &mut RowProgress,
 ) -> Result<()> {
     let mut bounds = SheetAllocation::default();
     let mut shared_formula_capacity = 0usize;
@@ -299,6 +471,7 @@ fn validate_xlsx_sheet<R: Read + Seek>(
         .next_cell_with_formula_metadata()
         .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
     {
+        progress.enter(cell.pos.0, budget);
         if let Some(calamine::XlsxFormulaMetadata::Shared {
             shared_index,
             range: Some(_),

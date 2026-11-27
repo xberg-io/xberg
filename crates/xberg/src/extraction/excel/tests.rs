@@ -703,10 +703,15 @@ fn should_warn_when_sheet_declared_dimensions_greatly_exceed_actual_data() {
         &[("xl/worksheets/sheet1.xml", sheet1_xml.to_vec())],
     );
 
-    assert_sheet_skipped_for_cell_limit(
+    let truncated = assert_sheet_truncated_for_cell_limit(
         read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000)),
         "Huge",
         SecurityLimits::default().max_table_cells,
+        1,
+    );
+    assert_eq!(
+        truncated.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["Start".to_string()]]
     );
     let limits = SecurityLimits {
         max_table_cells: 100_002,
@@ -1036,7 +1041,7 @@ fn should_warn_when_named_sheet_range_cannot_be_read() {
 }
 
 #[test]
-fn should_skip_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
+fn should_truncate_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
     let bytes = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
         <sheetData><row r="1"><c r="A1"><v>1</v></c></row>
@@ -1047,7 +1052,35 @@ fn should_skip_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8);
+    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 1);
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["1".to_string()]]
+    );
+}
+
+/// An XLSX sheet that tripped `max_table_cells` after its leading rows keeps only those rows, with a
+/// warning naming the kept row count.
+fn assert_sheet_truncated_for_cell_limit(
+    result: Result<ExcelReadResult>,
+    sheet: &str,
+    max: usize,
+    kept: usize,
+) -> ExcelWorkbook {
+    let (workbook, warnings) = result.expect("a sheet over the table-cell limit must degrade, not fail");
+    assert_eq!(workbook.sheets.len(), 1);
+    assert_eq!(workbook.sheets[0].name, sheet);
+    assert!(workbook.sheets[0].row_count <= kept, "{:?}", workbook.sheets[0]);
+    let unit = if kept == 1 { "row" } else { "rows" };
+    let expected = format!("Sheet '{sheet}' was truncated to its first {kept} {unit}:");
+    let limit = format!("`security_limits.max_table_cells` is {max}");
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.message.contains(&expected) && warning.message.contains(&limit)),
+        "{warnings:?}"
+    );
+    workbook
 }
 
 /// A sheet that tripped `max_table_cells` comes back empty with a warning naming it, never as an error.
@@ -1105,7 +1138,7 @@ fn three_sheet_workbook() -> Vec<u8> {
 }
 
 #[test]
-fn should_skip_only_the_sheets_over_the_table_budget_gh2820() {
+fn should_truncate_then_skip_the_sheets_over_the_table_budget_gh3417() {
     let limits = SecurityLimits {
         max_table_cells: 10,
         ..Default::default()
@@ -1122,22 +1155,76 @@ fn should_skip_only_the_sheets_over_the_table_budget_gh2820() {
             vec!["s10".to_string(), "s11".to_string()]
         ]
     );
-    assert!(workbook.sheets[1].table_cells.is_none());
-    assert_eq!(
-        workbook.sheets[2].table_cells.as_ref().unwrap(),
-        &[vec!["t00".to_string(), "t01".to_string()]]
-    );
-    let skipped: Vec<&str> = warnings
+    let big_first_row: Vec<String> = (0..5).map(|col| format!("b0{col}")).collect();
+    assert_eq!(workbook.sheets[1].table_cells.as_ref().unwrap(), &[big_first_row]);
+    assert!(workbook.sheets[2].table_cells.is_none());
+    let budget: Vec<&str> = warnings
         .iter()
-        .filter(|warning| warning.message.contains("max_table_cells"))
+        .filter(|warning| warning.message.contains("`security_limits.max_table_cells` is 10"))
         .map(|warning| warning.message.as_ref())
         .collect();
-    assert_eq!(skipped.len(), 1, "{warnings:?}");
-    assert!(skipped[0].contains("Sheet 'Big' was skipped"), "{}", skipped[0]);
+    assert_eq!(budget.len(), 2, "{warnings:?}");
     assert!(
-        skipped[0].contains("`security_limits.max_table_cells` is 10"),
+        budget[0].contains("Sheet 'Big' was truncated to its first 1 row:"),
         "{}",
-        skipped[0]
+        budget[0]
+    );
+    assert!(budget[1].contains("Sheet 'Tail' was skipped"), "{}", budget[1]);
+}
+
+#[test]
+fn should_keep_the_leading_rows_of_a_sheet_over_the_table_budget_gh3417() {
+    let bytes = make_xlsx_with_worksheet(std::str::from_utf8(&inline_string_sheet(6, 3, "d")).unwrap());
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        ..Default::default()
+    };
+    let (workbook, warnings) = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap();
+
+    assert_eq!(workbook.sheets.len(), 1);
+    let sheet = &workbook.sheets[0];
+    let expected: Vec<Vec<String>> = (0..3)
+        .map(|row| (0..3).map(|col| format!("d{row}{col}")).collect())
+        .collect();
+    assert_eq!(sheet.table_cells.as_ref().unwrap(), &expected);
+    assert_eq!((sheet.row_count, sheet.col_count), (3, 3));
+    assert!(sheet.markdown.contains("d22"), "{}", sheet.markdown);
+    assert!(!sheet.markdown.contains("d30"), "{}", sheet.markdown);
+    let messages: Vec<&str> = warnings.iter().map(|warning| warning.message.as_ref()).collect();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(
+        messages[0].contains("Sheet 'Sheet1' was truncated to its first 3 rows:"),
+        "{}",
+        messages[0]
+    );
+    assert!(
+        messages[0].contains("`security_limits.max_table_cells` is 10"),
+        "{}",
+        messages[0]
+    );
+}
+
+#[test]
+fn should_count_kept_rows_when_a_truncated_sheet_lists_rows_out_of_order_gh3417() {
+    let bytes = make_xlsx_with_worksheet(
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetData><row r="5"><c r="A5"/></row><row r="1"><c r="A1"><v>1</v></c></row>
+        <row r="10"><c r="A10"><v>2</v></c></row></sheetData></worksheet>"#,
+    );
+    let limits = SecurityLimits {
+        max_table_cells: 1,
+        ..Default::default()
+    };
+
+    let (workbook, warnings) = read_excel_bytes(&bytes, ".xlsx", &limits).expect("out-of-order rows must not fail");
+
+    assert_eq!(workbook.sheets.len(), 1);
+    let messages: Vec<&str> = warnings.iter().map(|warning| warning.message.as_ref()).collect();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("Sheet 'Sheet1' was truncated to its first 1 row:")),
+        "{messages:?}"
     );
 }
 
@@ -1174,7 +1261,12 @@ fn should_budget_formula_only_xlsx_ranges_before_collecting_formulas_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8);
+    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 0);
+    assert!(
+        !workbook.metadata.contains_key("formulas_Sheet1"),
+        "{:?}",
+        workbook.metadata
+    );
 }
 
 #[test]
@@ -1190,10 +1282,10 @@ fn should_apply_the_xlsx_preflight_to_file_inputs_and_addins_gh2296() {
     };
     let directory = tempfile::tempdir().unwrap();
     for extension in [".xlsx", ".xlsm", ".xltm", ".xlam"] {
-        assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, extension, &limits), "Sheet1", 8);
+        assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, extension, &limits), "Sheet1", 8, 1);
         let path = directory.path().join(format!("budget{extension}"));
         std::fs::write(&path, &bytes).unwrap();
-        assert_sheet_skipped_for_cell_limit(read_excel_file(path.to_str().unwrap(), &limits), "Sheet1", 8);
+        assert_sheet_truncated_for_cell_limit(read_excel_file(path.to_str().unwrap(), &limits), "Sheet1", 8, 1);
     }
 }
 
@@ -1250,7 +1342,7 @@ fn should_keep_xlsx_cell_guards_when_a_file_is_renamed_gh2296() {
             max_table_cells: 3,
             ..Default::default()
         };
-        assert_sheet_skipped_for_cell_limit(read_excel_file(path.to_str().unwrap(), &low), "Sheet1", 3);
+        assert_sheet_truncated_for_cell_limit(read_excel_file(path.to_str().unwrap(), &low), "Sheet1", 3, 1);
         let exact = SecurityLimits {
             max_table_cells: 4,
             ..Default::default()
@@ -1737,15 +1829,18 @@ async fn should_extract_the_sheets_within_budget_through_the_extractor_gh2820() 
     let pages = doc.prebuilt_pages.expect("one page per sheet");
     assert_eq!(pages.len(), 3);
     assert!(pages[0].content.contains("s11"), "{}", pages[0].content);
-    assert!(!pages[1].content.contains("b44"), "{}", pages[1].content);
-    assert!(pages[2].content.contains("t01"), "{}", pages[2].content);
-    assert!(
-        doc.processing_warnings
-            .iter()
-            .any(|warning| warning.message.contains("Sheet 'Big' was skipped")),
-        "{:?}",
-        doc.processing_warnings
-    );
+    assert!(pages[1].content.contains("b04"), "{}", pages[1].content);
+    assert!(!pages[1].content.contains("b10"), "{}", pages[1].content);
+    assert!(!pages[2].content.contains("t01"), "{}", pages[2].content);
+    for expected in ["Sheet 'Big' was truncated", "Sheet 'Tail' was skipped"] {
+        assert!(
+            doc.processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains(expected)),
+            "{expected}: {:?}",
+            doc.processing_warnings
+        );
+    }
 }
 
 #[test]
@@ -1888,7 +1983,7 @@ fn should_keep_the_iteration_budget_monotonic_across_skipped_xlsx_sheets_gh2820(
     );
     let limits = SecurityLimits {
         max_table_cells: 10,
-        max_iterations: 100,
+        max_iterations: 40,
         ..Default::default()
     };
     let error = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap_err();
