@@ -27,7 +27,7 @@ setup() {
 	xberg_assert_status 0
 	xberg_assert_trace \
 		'view @xberg-io/n8n-nodes-xberg@0.0.1 version' \
-		'view @xberg-io/langchain-xberg@0.0.1 version' \
+		'view @xberg-io/langchain-xberg@0.0.1 version'
 	xberg_assert_file_absent "$NPM_CAPTURE/package.json"
 }
 
