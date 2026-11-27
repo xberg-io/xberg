@@ -36,6 +36,9 @@
 // Deprecated public compatibility fields remain wired internally until their planned 2.0 removal. ~keep
 #![allow(deprecated)]
 #![deny(unsafe_code)]
+// The PDF extractor's async-trait future embeds liter-llm's HTTP/2 client state; proving it `Send`
+// needs more than the default 128 levels (E0275 on the `liter-llm` feature leg). ~keep
+#![recursion_limit = "256"]
 
 /// Return the source build identifier embedded in this Xberg library.
 ///
