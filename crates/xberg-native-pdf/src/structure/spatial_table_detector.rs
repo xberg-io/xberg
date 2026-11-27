@@ -2605,10 +2605,55 @@ const MAX_HEADER_CELL_WIDENING_CANDIDATES: usize = 8;
 /// banded table's row rule or a merged cell's boundary — keeps its span at any width. ~keep
 const MAX_UNRULED_CELL_X_GAP: f32 = 60.0;
 
+/// Fewest distinct row bands that must hold text in an unruled strip for it to be a column.
+const MIN_TEXT_COLUMN_ROW_BANDS: usize = 2;
+
+/// Whether text centred between `x1` and `x2` falls in at least `MIN_TEXT_COLUMN_ROW_BANDS`
+/// distinct row bands of `ys`. A single caption or margin note in a gutter is one band.
+fn strip_holds_text_column(x1: f32, x2: f32, ys: &[f32], text_centers: &[(f32, f32)]) -> bool {
+    let mut bands = std::collections::BTreeSet::new();
+    for &(cx, cy) in text_centers {
+        if cx < x1 - SNAP_TOL || cx > x2 + SNAP_TOL {
+            continue;
+        }
+        if let Some(band) = ys
+            .windows(2)
+            .position(|pair| cy >= pair[0] - SNAP_TOL && cy <= pair[1] + SNAP_TOL)
+        {
+            bands.insert(band);
+            if bands.len() >= MIN_TEXT_COLUMN_ROW_BANDS {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Centres of the unrotated horizontal spans: rotated or vertical text is not a table column
+/// in the page's row bands.
+fn horizontal_text_centers(spans: &[TextSpan]) -> Vec<(f32, f32)> {
+    spans
+        .iter()
+        .filter(|span| span.rotation_degrees == 0.0 && span.wmode == 0)
+        .map(|span| {
+            let center = span.bbox.center();
+            (center.x, center.y)
+        })
+        .collect()
+}
+
 /// Build cells from intersection points.
 /// A cell exists when all four corners (x1,y1), (x2,y1), (x1,y2), (x2,y2) are present
 /// and there is no intermediate intersection between them on either axis.
-fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edges: &[Edge]) -> Vec<IntersectionCell> {
+///
+/// `text_centers` are the centres of unrotated horizontal spans; they decide whether an
+/// over-wide unruled span is a text column (a cell) or an empty gap between grids.
+fn build_cells_from_intersections(
+    pts: &[Intersection],
+    h_edges: &[Edge],
+    v_edges: &[Edge],
+    text_centers: &[(f32, f32)],
+) -> Vec<IntersectionCell> {
     use std::collections::BTreeSet;
 
     let mut xs: Vec<f32> = pts.iter().map(|p| p.x).collect();
@@ -2739,12 +2784,16 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
                             && v_edge_spans(xs[nxi], ys[yi], ys[nyi])
                             && h_edge_across(ys[yi], xs[xi], xs[nxi]).is_some()
                             && h_edge_across(ys[nyi], xs[xi], xs[nxi]).is_some()))
-                    // An over-wide span with no H rule across it is the graphics-free gap
-                    // between two side-by-side grids, not a cell. Callers that supply only
-                    // crossings and V edges keep the corner-only contract. ~keep
+                    // An over-wide span with no H rule across it is the graphics-free gap between
+                    // two side-by-side grids, not a cell, unless text runs down it as a column: a
+                    // table's text column whose own rows are unruled (xberg-io/xberg#3429, SGS lab
+                    // reports). A caption or stray label in the gutter is one row band, not a
+                    // column. Callers that supply only crossings and V edges keep the corner-only
+                    // contract. ~keep
                     && (h_edges.is_empty()
                         || xs[nxi] - xs[xi] <= MAX_UNRULED_CELL_X_GAP
-                        || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi]))
+                        || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi])
+                        || strip_holds_text_column(xs[xi], xs[nxi], &ys, text_centers))
                 {
                     cells.push(IntersectionCell {
                         x1: xs[xi],
@@ -3306,7 +3355,13 @@ fn detect_tables_from_intersections(
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
-    detect_intersections(spans, lines, config, Some(&mut RecoveredIntersection::default()))
+    detect_intersections(
+        spans,
+        lines,
+        config,
+        &horizontal_text_centers(spans),
+        Some(&mut RecoveredIntersection::default()),
+    )
 }
 
 #[derive(Default)]
@@ -3319,9 +3374,10 @@ fn detect_intersections(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
+    text_centers: &[(f32, f32)],
     mut recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
-    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, config);
+    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, text_centers, config);
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
@@ -3436,6 +3492,7 @@ fn detect_intersections(
 /// both needed downstream by `band_column_groups` (xberg-io/xberg#1580).
 fn build_grid_from_lines(
     lines: &[crate::elements::PathContent],
+    text_centers: &[(f32, f32)],
     config: &TableDetectionConfig,
 ) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
     let (mut h_edges, mut v_edges) = extract_edges(lines);
@@ -3465,7 +3522,7 @@ fn build_grid_from_lines(
     // (xberg-io/xberg#1580) — an extended grid has no V edge that ever spans any band, so
     // merging there would collapse every row to one cell instead of narrowing a phantom cut.
     let (cells, cells_are_intersections) = if intersections.len() >= 4 {
-        let c = build_cells_from_intersections(&intersections, &h_edges, &v_edges);
+        let c = build_cells_from_intersections(&intersections, &h_edges, &v_edges, text_centers);
         if c.is_empty() {
             // Lines exist but don't form real intersection cells — try extended grid. ~keep
             (
@@ -5194,11 +5251,12 @@ fn detect_with_unmodified_paths(
     config: &TableDetectionConfig,
     recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
+    let text_centers = horizontal_text_centers(spans);
     if matches!(
         (config.horizontal_strategy, config.vertical_strategy),
         (TableStrategy::Lines, TableStrategy::Lines)
     ) {
-        let mut tables = detect_intersections(spans, lines, config, recovery);
+        let mut tables = detect_intersections(spans, lines, config, &text_centers, recovery);
         if tables.is_empty() {
             for cluster in group_lines_into_clusters(lines, config) {
                 tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
@@ -5211,7 +5269,7 @@ fn detect_with_unmodified_paths(
     }
     // Both / hybrid strategy: try intersection-based first, then cluster, then H-rule bounded,
     // then text fallback. ~keep
-    let mut final_tables = detect_intersections(spans, lines, config, recovery);
+    let mut final_tables = detect_intersections(spans, lines, config, &text_centers, recovery);
     if final_tables.is_empty() {
         let clusters = group_lines_into_clusters(lines, config);
         for cluster in clusters {
@@ -5866,7 +5924,7 @@ mod tests {
             },
         ];
         let points = find_intersections(&horizontal, &vertical);
-        let cells = build_cells_from_intersections(&points, &horizontal, &vertical);
+        let cells = build_cells_from_intersections(&points, &horizontal, &vertical, &[]);
         assert!(
             cells
                 .iter()
@@ -5914,7 +5972,7 @@ mod tests {
             })
             .collect();
         let points = find_intersections(&horizontal, &vertical);
-        let cells = build_cells_from_intersections(&points, &horizontal, &vertical);
+        let cells = build_cells_from_intersections(&points, &horizontal, &vertical, &[]);
         assert!(
             !cells
                 .iter()
@@ -5955,7 +6013,7 @@ mod tests {
             },
         ];
         let points = find_intersections(&horizontal, &vertical);
-        let cells = build_cells_from_intersections(&points, &horizontal, &vertical);
+        let cells = build_cells_from_intersections(&points, &horizontal, &vertical, &[]);
         assert!(
             !cells
                 .iter()
@@ -6002,7 +6060,7 @@ mod tests {
                 end: 20.,
             },
         ];
-        assert!(build_cells_from_intersections(&points, &h, &v).is_empty());
+        assert!(build_cells_from_intersections(&points, &h, &v, &[]).is_empty());
     }
 
     #[test]
@@ -6051,7 +6109,7 @@ mod tests {
             PathContent::line(394., 430., 394., 719.),
             PathContent::line(306., 110., 306., 399.),
         ];
-        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
         assert!(
             groups.is_empty(),
             "the lone in-band column pair is one column: {groups:?}"
@@ -6068,7 +6126,7 @@ mod tests {
             PathContent::line(150., 100., 150., 370.),
             PathContent::line(250., 100., 250., 370.),
         ];
-        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].3, 2);
     }
@@ -6257,7 +6315,7 @@ mod tests {
                 end: 20.,
             },
         ];
-        let cells = build_cells_from_intersections(&points, &h, &v);
+        let cells = build_cells_from_intersections(&points, &h, &v, &[]);
         assert!(
             cells
                 .iter()
@@ -6957,7 +7015,7 @@ mod tests {
             ..Default::default()
         };
 
-        let (groups, _, _) = build_grid_from_lines(&table_paths, &config);
+        let (groups, _, _) = build_grid_from_lines(&table_paths, &[], &config);
         assert_eq!(groups.len(), 1, "fixture assumption: one cell group");
         assert_eq!(groups[0].0.len(), 24, "fixture assumption: the grid itself is complete");
         assert_eq!(groups[0].2.len(), 13, "fixture assumption: 12 row bands");
@@ -8030,7 +8088,7 @@ mod tests {
                 end: 100.0,
             },
         ];
-        let cells = build_cells_from_intersections(&pts, &[], &v_edges);
+        let cells = build_cells_from_intersections(&pts, &[], &v_edges, &[]);
         assert_eq!(cells.len(), 1, "4 corners should produce 1 cell");
     }
 
@@ -8233,7 +8291,7 @@ mod tests {
                 end: 17.0,
             },
         ];
-        let cells = build_cells_from_intersections(&pts, &[], &v_edges);
+        let cells = build_cells_from_intersections(&pts, &[], &v_edges, &[]);
         assert_eq!(
             cells.len(),
             1,
@@ -8280,7 +8338,7 @@ mod tests {
                 end: 40.0,
             },
         ];
-        let cells = build_cells_from_intersections(&pts, &[], &v_edges);
+        let cells = build_cells_from_intersections(&pts, &[], &v_edges, &[]);
         assert!(
             cells.is_empty(),
             "a 40pt graphics-free gap must still be rejected under the looser CELL_RULE_SPAN_TOL, got: {cells:?}"
@@ -8318,7 +8376,7 @@ mod tests {
             edge(280.0, 0.0, 20.0),
         ];
 
-        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[]);
         assert!(
             cells.iter().all(|cell| cell.x2 - cell.x1 <= MAX_UNRULED_CELL_X_GAP),
             "no cell may span the unrulled gap between the two grids, got: {cells:?}"
@@ -8327,6 +8385,122 @@ mod tests {
             group_cells_into_tables(&cells).len(),
             2,
             "each side-by-side grid must stay its own cell cluster, got: {cells:?}"
+        );
+    }
+
+    /// Two ruled grids side by side (x 0..40 and 240..280) on two shared row bands (y 0..20,
+    /// 20..40), separated by a 200pt gutter no H rule crosses.
+    fn gutter_fixture() -> (Vec<Intersection>, Vec<Edge>, Vec<Edge>) {
+        let edge = |coord, start, end| Edge { coord, start, end };
+        let mut pts = Vec::new();
+        for y in [0.0, 20.0, 40.0] {
+            for x in [0.0, 40.0, 240.0, 280.0] {
+                pts.push(Intersection { x, y });
+            }
+        }
+        let mut h_edges = Vec::new();
+        for y in [0.0, 20.0, 40.0] {
+            h_edges.push(edge(y, 0.0, 40.0));
+            h_edges.push(edge(y, 240.0, 280.0));
+        }
+        let v_edges = [0.0, 40.0, 240.0, 280.0].map(|x| edge(x, 0.0, 40.0)).to_vec();
+        (pts, h_edges, v_edges)
+    }
+
+    fn cell_boxes(cells: &[IntersectionCell]) -> Vec<(f32, f32, f32, f32)> {
+        cells.iter().map(|c| (c.x1, c.y1, c.x2, c.y2)).collect()
+    }
+
+    const SPLIT_CELLS: [(f32, f32, f32, f32); 4] = [
+        (0.0, 0.0, 40.0, 20.0),
+        (240.0, 0.0, 280.0, 20.0),
+        (0.0, 20.0, 40.0, 40.0),
+        (240.0, 20.0, 280.0, 40.0),
+    ];
+
+    #[test]
+    fn a_caption_in_the_gutter_does_not_join_side_by_side_groups() {
+        let (pts, h_edges, v_edges) = gutter_fixture();
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[(140.0, 30.0)]);
+        assert_eq!(cell_boxes(&cells), SPLIT_CELLS);
+        assert_eq!(group_cells_into_tables(&cells).len(), 2);
+    }
+
+    #[test]
+    fn a_stray_span_in_the_gutter_does_not_join_side_by_side_groups() {
+        let (pts, h_edges, v_edges) = gutter_fixture();
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[(140.0, 10.0)]);
+        assert_eq!(cell_boxes(&cells), SPLIT_CELLS);
+        assert_eq!(group_cells_into_tables(&cells).len(), 2);
+    }
+
+    #[test]
+    fn rotated_text_in_the_gutter_does_not_join_side_by_side_groups() {
+        let (pts, h_edges, v_edges) = gutter_fixture();
+        let mut spans = vec![
+            create_test_span("rotated a", 100.0, 5.0, 40.0, 10.0),
+            create_test_span("rotated b", 100.0, 25.0, 40.0, 10.0),
+        ];
+        for span in &mut spans {
+            span.rotation_degrees = 90.0;
+        }
+        let centers = horizontal_text_centers(&spans);
+        assert!(centers.is_empty(), "rotated spans must not count as column text");
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &centers);
+        assert_eq!(cell_boxes(&cells), SPLIT_CELLS);
+    }
+
+    #[test]
+    fn a_vertical_writing_span_is_not_a_text_column_centre() {
+        let mut span = create_test_span("v", 100.0, 5.0, 10.0, 10.0);
+        span.wmode = 1;
+        assert!(horizontal_text_centers(&[span]).is_empty());
+    }
+
+    #[test]
+    fn a_text_column_in_an_unruled_wide_span_keeps_the_grids_one_cluster() {
+        let (pts, h_edges, v_edges) = gutter_fixture();
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[(140.0, 10.0), (140.0, 30.0)]);
+        assert_eq!(
+            cell_boxes(&cells),
+            [
+                (0.0, 0.0, 40.0, 20.0),
+                (40.0, 0.0, 240.0, 20.0),
+                (240.0, 0.0, 280.0, 20.0),
+                (0.0, 20.0, 40.0, 40.0),
+                (40.0, 20.0, 240.0, 40.0),
+                (240.0, 20.0, 280.0, 40.0),
+            ]
+        );
+        assert_eq!(group_cells_into_tables(&cells).len(), 1);
+    }
+
+    #[test]
+    fn a_ruled_table_with_an_unruled_text_column_is_one_grid_end_to_end() {
+        use crate::elements::PathContent;
+        let mut lines = Vec::new();
+        for y in [0.0, 20.0, 40.0] {
+            lines.push(PathContent::line(0.0, y, 40.0, y));
+            lines.push(PathContent::line(240.0, y, 280.0, y));
+        }
+        for x in [0.0, 40.0, 240.0, 280.0] {
+            lines.push(PathContent::line(x, 0.0, x, 40.0));
+        }
+        let centers = [(140.0, 10.0), (140.0, 30.0)];
+        let (groups, _, _) = build_grid_from_lines(&lines, &centers, &ruled_grid_config());
+        assert_eq!(groups.len(), 1, "text column joins both ruled sides: {groups:?}");
+        let (cells, xs, ys, num_cols) = &groups[0];
+        assert_eq!(cells.len(), 6);
+        assert_eq!(xs, &[0.0, 40.0, 240.0, 280.0]);
+        assert_eq!(ys, &[0.0, 20.0, 40.0]);
+        assert_eq!(*num_cols, 3);
+
+        let (split, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
+        assert!(
+            split
+                .iter()
+                .all(|group| group.0.iter().all(|cell| cell.x2 - cell.x1 <= MAX_UNRULED_CELL_X_GAP)),
+            "without text no group may span the gutter: {split:?}"
         );
     }
 
@@ -8354,7 +8528,7 @@ mod tests {
             edge(280.0, 0.0, 20.0),
         ];
 
-        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[]);
         assert!(
             cells.iter().any(|cell| cell.x2 - cell.x1 > MAX_UNRULED_CELL_X_GAP),
             "a rule across the gap must still license the wide cell, got: {cells:?}"
@@ -8402,7 +8576,7 @@ mod tests {
             edge(right_x + 50.0, 0.0, 20.0),
         ];
 
-        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[]);
         assert!(
             cells
                 .iter()
@@ -8480,7 +8654,7 @@ mod tests {
             edge(100.0, 20.0, 40.0),
             edge(50.0, -20.0, 40.0),
         ];
-        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[]);
         assert_eq!(cells.len(), 2, "got: {cells:?}");
     }
 
@@ -8504,7 +8678,7 @@ mod tests {
             edge(50.0, -20.0, 0.0),
             edge(50.0, 20.0, 40.0),
         ];
-        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[]);
         assert_eq!(cells.len(), 2, "got: {cells:?}");
     }
 
@@ -8528,7 +8702,7 @@ mod tests {
             edge(-2.5, -100.0, 200.0),
             edge(150.0, -100.0, 200.0),
         ];
-        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges);
+        let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, &[]);
         assert!(cells.is_empty(), "got: {cells:?}");
     }
 
@@ -8571,7 +8745,7 @@ mod tests {
                 end: 100.0,
             },
         ];
-        let cells = build_cells_from_intersections(&pts, &[], &v_edges);
+        let cells = build_cells_from_intersections(&pts, &[], &v_edges, &[]);
         assert_eq!(cells.len(), 4, "3x3 grid should produce 4 cells");
         let groups = group_cells_into_tables(&cells);
         assert_eq!(groups.len(), 1, "All 4 cells should form 1 table");

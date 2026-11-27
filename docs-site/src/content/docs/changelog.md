@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ruled PDF tables with an unruled text column are no longer split into fragments and duplicated as paragraph text (SGS lab reports). A wide unruled span between ruled columns is a cell when horizontal text runs down it, and a gap between side-by-side grids otherwise.
 - Markdown tables from DOCX files no longer backslash-escape the `^` of superscript runs (`10^9^`) when `escape_markdown` is off, matching the subscript `~`. comrak 1.2 started escaping `^` in text.
 
 ## [1.5.4] - 2026-11-25

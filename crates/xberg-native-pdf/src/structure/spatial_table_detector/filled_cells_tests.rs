@@ -308,7 +308,7 @@ fn assigned_alternating_bands(
     paths: &[PathContent],
 ) -> (Vec<super::super::TableRow>, Vec<Vec<Vec<usize>>>) {
     let config = TableDetectionConfig::default();
-    let (groups, edges, intersections) = super::super::build_grid_from_lines(paths, &config);
+    let (groups, edges, intersections) = super::super::build_grid_from_lines(paths, &[], &config);
     let [(cells, xs, ys, columns)] = groups.as_slice() else {
         panic!("one exact physical source grid");
     };
