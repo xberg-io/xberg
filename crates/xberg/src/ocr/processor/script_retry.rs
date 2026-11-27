@@ -2527,7 +2527,7 @@ mod tests {
         let retry = line(&[("漢字", 95.0, 0, 35), ("漢字", 95.0, 50, 35)], 1, 0);
         let result = merge_han(first.clone(), retry);
         assert_eq!(result.han_supplement(), "漢字");
-        assert_eq!(result.text(), "漢字 漢字\n留存");
+        assert_eq!(result.text(), "漢字漢字\n留存");
         let only_retained = line(&[("漢字", 95.0, 0, 35)], 1, 0);
         assert!(merge_han(first, only_retained).han_supplement().is_empty());
     }
