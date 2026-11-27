@@ -261,12 +261,12 @@ mod tests {
             policy: Some(&policy),
             estimate_dpi: true,
         };
-        assert_eq!(budget.finest_frame(4096).unwrap(), Some((3649, 2736)));
-        assert!(budget.admits((3649, 2736)).unwrap());
-        assert!(!budget.admits((3650, 2737)).unwrap());
+        assert_eq!(budget.finest_frame(4096).unwrap(), Some((3810, 2857)));
+        assert!(budget.admits((3810, 2857)).unwrap());
+        assert!(!budget.admits((3811, 2858)).unwrap());
         assert_eq!(budget.finest_frame(3200).unwrap(), Some((3200, 2400)));
         assert!(budget.dimension_clamps((3200, 2400), 3200).unwrap());
-        assert!(!budget.dimension_clamps((3649, 2736), 3649).unwrap());
+        assert!(!budget.dimension_clamps((3810, 2857), 3810).unwrap());
     }
 
     #[test]
