@@ -33,7 +33,7 @@ setup() {
 @test "LiteParse wrapper should emit valid plaintext metadata and preserve the quoted file argument" {
 	run bash "$WRAPPER" --format=plaintext "$INPUT"
 	xberg_assert_status 0
-	xberg_assert_trace "<parse><$INPUT><--format><text><--no-links><--quiet>"
+	xberg_assert_trace "<parse><$INPUT><--format><text><--no-links><--ocr-backend><tesseract><--quiet>"
 	run python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert value == {"content":sys.argv[2],"metadata":{"framework":"liteparse","output_format":"plaintext"},"_extraction_time_ms":42}' "$output" "$LIT_CONTENT"
 	xberg_assert_status 0
 }
@@ -41,7 +41,7 @@ setup() {
 @test "LiteParse wrapper should select Markdown and forward an explicit no OCR request" {
 	run bash "$WRAPPER" --format=markdown --no-ocr "$INPUT"
 	xberg_assert_status 0
-	xberg_assert_trace "<parse><$INPUT><--format><markdown><--no-ocr><--quiet>"
+	xberg_assert_trace "<parse><$INPUT><--format><markdown><--ocr-backend><tesseract><--no-ocr><--quiet>"
 	run python3 -c 'import json,sys; value=json.loads(sys.argv[1]); assert value["content"] == sys.argv[2]; assert value["metadata"]["output_format"] == "markdown"' "$output" "$LIT_CONTENT"
 	xberg_assert_status 0
 }
