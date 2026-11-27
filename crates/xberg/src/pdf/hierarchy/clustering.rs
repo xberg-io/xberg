@@ -14,8 +14,8 @@ const KMEANS_CONVERGENCE_THRESHOLD: f32 = 0.01;
 pub struct FontSizeCluster {
     /// The centroid (mean) font size of this cluster
     pub centroid: f32,
-    /// The text blocks that belong to this cluster
-    pub members: Vec<TextBlock>,
+    /// Total byte length of the text of the blocks that belong to this cluster
+    pub text_len: usize,
 }
 
 /// Cluster text blocks by font size using k-means algorithm.
@@ -25,7 +25,7 @@ pub struct FontSizeCluster {
 /// 1. Extracts font sizes from text blocks
 /// 2. Applies k-means clustering to group similar font sizes
 /// 3. Sorts clusters by centroid size in descending order (largest = H1)
-/// 4. Returns clusters with their member blocks
+/// 4. Returns clusters with the amount of text assigned to each
 ///
 /// # Arguments
 ///
@@ -119,11 +119,12 @@ pub(crate) fn cluster_font_sizes(blocks: &[TextBlock], k: usize) -> Result<Vec<F
     let mut result: Vec<FontSizeCluster> = Vec::new();
 
     for i in 0..actual_k {
-        if !clusters[i].is_empty() {
+        let (member_count, text_len) = clusters[i];
+        if member_count > 0 {
             let centroid_value = centroids[i];
             result.push(FontSizeCluster {
                 centroid: centroid_value,
-                members: clusters[i].clone(),
+                text_len,
             });
         }
     }
@@ -181,7 +182,7 @@ pub(crate) fn assign_heading_levels_smart(
     let body_idx = clusters
         .iter()
         .enumerate()
-        .max_by_key(|(_, c)| c.members.iter().map(|block| block.text.len()).sum::<usize>())
+        .max_by_key(|(_, c)| c.text_len)
         .map(|(i, _)| i)
         .unwrap_or(0);
 
@@ -320,7 +321,7 @@ fn assign_sizes_to_centroids_tracked(
 /// Helper function to assign blocks to their nearest centroid.
 ///
 /// Iterates through blocks and finds the closest centroid for each block,
-/// grouping them into clusters. Used in the final assignment step after convergence.
+/// tallying them per cluster. Used in the final assignment step after convergence.
 ///
 /// # Arguments
 ///
@@ -329,10 +330,10 @@ fn assign_sizes_to_centroids_tracked(
 ///
 /// # Returns
 ///
-/// A vector of clusters, where each cluster contains the TextBlock objects
-/// assigned to that centroid
-fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<Vec<TextBlock>> {
-    let mut clusters: Vec<Vec<TextBlock>> = vec![Vec::new(); centroids.len()];
+/// One `(member count, total text byte length)` pair per centroid, covering the
+/// TextBlock objects assigned to it
+fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<(usize, usize)> {
+    let mut clusters: Vec<(usize, usize)> = vec![(0, 0); centroids.len()];
 
     for block in blocks {
         let mut min_distance = f32::INFINITY;
@@ -346,7 +347,9 @@ fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<Ve
             }
         }
 
-        clusters[best_cluster].push(block.clone());
+        let (member_count, text_len) = &mut clusters[best_cluster];
+        *member_count += 1;
+        *text_len += block.text.len();
     }
 
     clusters
@@ -405,7 +408,7 @@ mod tests {
 
         assert_eq!(clusters.len(), 1, "expected exactly one cluster, got {clusters:?}");
         assert_eq!(clusters[0].centroid, 18.0);
-        assert_eq!(clusters[0].members.len(), 1);
+        assert_eq!(clusters[0].text_len, "Ordinary heading".len());
     }
 
     #[test]
@@ -448,14 +451,11 @@ mod tests {
         vec![
             FontSizeCluster {
                 centroid: candidate_centroid,
-                members: vec![make_block("Short", candidate_centroid)],
+                text_len: "Short".len(),
             },
             FontSizeCluster {
                 centroid: body_centroid,
-                members: vec![make_block(
-                    "This cluster carries far more running text so char-weighted mass picks it as body.",
-                    body_centroid,
-                )],
+                text_len: "This cluster carries far more running text so char-weighted mass picks it as body.".len(),
             },
         ]
     }
