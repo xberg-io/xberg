@@ -335,6 +335,9 @@ const FORMULA_MIN_MATH_CHARS: usize = 3;
 
 /// Mark paragraphs whose text reads as a standalone equation.
 ///
+/// A fragment of an equation, a legend or a row of numbers carries math characters without
+/// a relation joining two operands; only a line with one is written as display math.
+///
 /// This is the font-independent half of `classify_paragraphs`, split out so the
 /// heuristic extraction path — which has no structure tree and therefore never
 /// runs `classify_paragraphs` — classifies an equation line the same way. Without
@@ -365,7 +368,7 @@ pub(super) fn classify_formula_paragraphs(paragraphs: &mut [PdfParagraph]) {
                     .join(" "),
             )
         };
-        if reads_as_formula(&text) {
+        if reads_as_formula(&text) && super::math_inline::relations_join_operands(&text) {
             para.is_formula = true;
         }
     }
@@ -3892,6 +3895,19 @@ mod tests {
             !paragraphs[0].is_formula,
             "a sentence carrying symbols is prose, so inline math can annotate it"
         );
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_keeps_number_records_and_equation_fragments_paragraphs() {
+        for text in [
+            "2.078075267D+04 2.859351226D+00 1.901912370D+00 7.301045660D-03-9.139769870D-06",
+            "=4.0",
+            "ED, L=6 ED, L=8 QMC, L=6 QMC, L=8",
+        ] {
+            let mut paragraphs = vec![make_text_paragraph(12.0, text, false)];
+            classify_formula_paragraphs(&mut paragraphs);
+            assert!(!paragraphs[0].is_formula, "{text} has no relation joining two operands");
+        }
     }
 
     #[test]

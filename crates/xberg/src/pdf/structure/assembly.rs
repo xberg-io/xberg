@@ -1224,7 +1224,9 @@ fn push_paragraph_element_by_kind(
         return builder.push_code(&text, None, page, bbox);
     }
 
-    if para.is_formula {
+    // Display math keeps only text, so an equation line the font heuristic marked and whose
+    // exponents and indices are native scripts stays a paragraph that carries them.
+    if para.is_formula && (para.layout_class == Some(LayoutHintClass::Formula) || !paragraph_has_scripts(para)) {
         let text = get_text(para);
         return builder.push_formula(&text, page, bbox);
     }
@@ -1327,7 +1329,17 @@ fn push_text_with_inline_math(
     let spans: Vec<(usize, usize)> = spans
         .into_iter()
         .map(|(start, end)| (start as usize, end as usize))
+        .filter(|&(start, end)| {
+            !annotations.iter().any(|annotation| {
+                matches!(annotation.kind, AnnotationKind::Superscript | AnnotationKind::Subscript)
+                    && (annotation.start as usize) < end
+                    && (annotation.end as usize) > start
+            })
+        })
         .collect();
+    if spans.is_empty() {
+        return builder.push_paragraph(text, annotations, page, bbox);
+    }
     let mut marked = String::with_capacity(text.len() + 2 * spans.len());
     let mut math_annotations = Vec::with_capacity(spans.len());
     let mut cursor = 0usize;
@@ -4341,6 +4353,37 @@ mod tests {
             &element.text[italic.start as usize..italic.end as usize],
             "\u{03B1}",
             "the annotation must cover the same character once the delimiters are inserted"
+        );
+    }
+
+    /// A math span writes its source as one dollar run, which has no place for a superscript
+    /// mark, so a run covering a script keeps its text and its annotation instead.
+    #[test]
+    fn inline_math_skips_a_run_that_covers_a_script_annotation() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = "Let y = x5.";
+        let exponent = text.find('5').unwrap() as u32;
+        push_text_with_inline_math(
+            &mut builder,
+            text,
+            vec![TextAnnotation {
+                start: exponent,
+                end: exponent + 1,
+                kind: AnnotationKind::Superscript,
+            }],
+            None,
+            None,
+        );
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, text);
+        assert!(
+            element
+                .annotations
+                .iter()
+                .any(|annotation| annotation.kind == AnnotationKind::Superscript)
         );
     }
 

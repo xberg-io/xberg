@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Markdown tables from DOCX files no longer backslash-escape the `^` of superscript runs (`10^9^`) when `escape_markdown` is off, matching the subscript `~`. comrak 1.2 started escaping `^` in text.
 - PDF: a lone wide glyph raised above its base, such as the minus of `5.0 × 10^−4`, no longer reads as a multi-glyph run, so a negative exponent stays in its sentence instead of splitting the line (regression from the ordinal-suffix fix).
+- PDF Markdown no longer wraps number records, tick-label rows, equation fragments or citation lists in `$...$` math, and keeps `<sup>`/`~` scripts instead of flattening them into math text (`x5`, `HNf`); a bracketed reference such as `[45, 48]` stays outside inline math.
 
 ## [1.5.4] - 2026-11-25
 
