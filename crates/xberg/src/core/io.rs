@@ -71,6 +71,7 @@ impl FileBytes {
     ///
     /// A mapping becomes the owner of the returned `Bytes` and stays mapped until the last
     /// clone or slice of it drops, so the [`open_file_bytes`] contract extends to that point.
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
     pub(crate) fn into_bytes(self) -> bytes::Bytes {
         match self.inner {
             FileBytesInner::Heap(bytes) => bytes::Bytes::from(bytes),
