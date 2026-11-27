@@ -3386,9 +3386,8 @@ fn detect_tables_from_intersections(
     detect_intersections(
         spans,
         lines,
-        &extract_edges(lines),
         config,
-        &horizontal_text_centers(spans),
+        &SharedLineGeometry::default(),
         Some(&mut RecoveredIntersection::default()),
     )
 }
@@ -3399,24 +3398,70 @@ struct RecoveredIntersection {
     double_rule: bool,
 }
 
-/// `edges` are `extract_edges(lines)`, computed once by the caller.
+/// Geometry of one `(spans, lines)` pair that no `TableDetectionConfig` field affects, computed
+/// on first use and shared by detections of that pair that differ only in configuration.
+///
+/// A value must never be reused for other spans or lines.
+#[derive(Default)]
+pub(crate) struct SharedLineGeometry {
+    text_centers: std::cell::OnceCell<Vec<(f32, f32)>>,
+    edges: std::cell::OnceCell<(Vec<Edge>, Vec<Edge>)>,
+    divider_edges: std::cell::OnceCell<(Vec<Edge>, Vec<Edge>)>,
+    grid: std::cell::OnceCell<GridCells>,
+}
+
+impl SharedLineGeometry {
+    fn edges(&self, lines: &[crate::elements::PathContent]) -> &(Vec<Edge>, Vec<Edge>) {
+        self.edges.get_or_init(|| extract_edges(lines))
+    }
+
+    /// Merged H-edges (to detect full-width lines) and V-edges that are only snapped, NOT
+    /// joined — joining would merge separate per-section V-segments into a single long edge,
+    /// hiding the section boundary discontinuity. ~keep
+    fn divider_edges(&self, lines: &[crate::elements::PathContent]) -> &(Vec<Edge>, Vec<Edge>) {
+        self.divider_edges.get_or_init(|| {
+            let (mut h_edges, mut v_edges) = self.edges(lines).clone();
+            snap_and_merge(&mut h_edges);
+            snap_edges(&mut v_edges);
+            (h_edges, v_edges)
+        })
+    }
+
+    fn grid(&self, spans: &[TextSpan], lines: &[crate::elements::PathContent]) -> &GridCells {
+        self.grid.get_or_init(|| {
+            let (h_edges, v_edges) = self.edges(lines).clone();
+            let text_centers = self.text_centers.get_or_init(|| horizontal_text_centers(spans));
+            build_grid_cells(h_edges, v_edges, spans, text_centers)
+        })
+    }
+}
+
+/// The cells ruling lines form and their connected groups, before any configured bound applies.
+struct GridCells {
+    cells: Vec<IntersectionCell>,
+    groups: Vec<Vec<usize>>,
+    /// The V edges used to build `cells`.
+    v_edges: Vec<Edge>,
+    cells_are_intersections: bool,
+}
+
 fn detect_intersections(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
-    edges: &(Vec<Edge>, Vec<Edge>),
     config: &TableDetectionConfig,
-    text_centers: &[(f32, f32)],
+    shared: &SharedLineGeometry,
     mut recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
-    let (groups, v_edges, cells_are_intersections) =
-        build_grid_from_edges(edges.0.clone(), edges.1.clone(), spans, text_centers, config);
+    let grid = shared.grid(spans, lines);
+    let groups = table_groups_from_cells(grid, config);
+    let (v_edges, cells_are_intersections) = (grid.v_edges.as_slice(), grid.cells_are_intersections);
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
         #[cfg(test)]
-        header_source_diagnostic::grid(group_cells, xs, ys, &v_edges, cells_are_intersections);
+        header_source_diagnostic::grid(group_cells, xs, ys, v_edges, cells_are_intersections);
         let Some((mut table_rows, mut row_cell_span_indices)) =
-            assign_spans_to_intersection_grid(group_cells, xs, ys, *num_cols, spans, &v_edges, cells_are_intersections)
+            assign_spans_to_intersection_grid(group_cells, xs, ys, *num_cols, spans, v_edges, cells_are_intersections)
         else {
             continue;
         };
@@ -3479,13 +3524,8 @@ fn detect_intersections(
         return tables;
     }
     // Post-merge: split tables at section dividers — full-width horizontal
-    // lines that indicate separate form sections within a single grid.
-    // Use merged H-edges (to detect full-width lines) but only snap (do NOT
-    // join) V-edges — joining would merge separate per-section V-segments
-    // into a single long edge, hiding the section boundary discontinuity. ~keep
-    let (mut h_edges, mut v_edges) = edges.clone();
-    snap_and_merge(&mut h_edges);
-    snap_edges(&mut v_edges);
+    // lines that indicate separate form sections within a single grid. ~keep
+    let (h_edges, v_edges) = shared.divider_edges(lines);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_divider_edges", || {
         serde_json::json!({
@@ -3493,13 +3533,13 @@ fn detect_intersections(
             "vertical": v_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
         })
     });
-    let (stacked_row_cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
+    let (stacked_row_cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, h_edges, v_edges);
     for table in &mut tables {
         source_headers::infer_complete_leading_header(table, lines);
     }
     #[cfg(test)]
     header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
-    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &restart_members, &h_edges, &v_edges, config);
+    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &restart_members, h_edges, v_edges, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_section_split", || {
         header_source_diagnostic::tables(&tables)
@@ -3527,33 +3567,43 @@ fn build_grid_from_lines(
     config: &TableDetectionConfig,
 ) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
     let (h_edges, v_edges) = extract_edges(lines);
-    build_grid_from_edges(h_edges, v_edges, spans, text_centers, config)
+    let grid = build_grid_cells(h_edges, v_edges, spans, text_centers);
+    (
+        table_groups_from_cells(&grid, config),
+        grid.v_edges,
+        grid.cells_are_intersections,
+    )
 }
 
-/// Steps 1-4: from the extracted edges, find intersections, build cells, and group them
-/// into per-table cell groups with their grid boundaries.
+/// Steps 1-3 and the grouping of step 4: from the extracted edges, find intersections, build
+/// cells and connect them into groups. Nothing here reads a `TableDetectionConfig`.
 ///
-/// Returns one `(group_cells, xs, ys, num_cols)` tuple per table group, plus the V edges used
-/// to build the cells and whether they came from real crossings (`cells_are_intersections`) —
-/// both needed downstream by `band_column_groups` (xberg-io/xberg#1580).
+/// Records the V edges used to build the cells and whether they came from real crossings
+/// (`cells_are_intersections`) — both needed downstream by `band_column_groups`
+/// (xberg-io/xberg#1580).
 ///
 /// `spans` close the open outer columns of interior-ruled tables; `text_centers` are the
 /// centres of their unrotated horizontal spans (`horizontal_text_centers`), computed once by
 /// the caller, and keep an unruled text column inside a ruled table.
-fn build_grid_from_edges(
+fn build_grid_cells(
     mut h_edges: Vec<Edge>,
     mut v_edges: Vec<Edge>,
     spans: &[TextSpan],
     text_centers: &[(f32, f32)],
-    config: &TableDetectionConfig,
-) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
+) -> GridCells {
+    let no_cells = |v_edges, cells_are_intersections| GridCells {
+        cells: Vec::new(),
+        groups: Vec::new(),
+        v_edges,
+        cells_are_intersections,
+    };
     snap_and_merge(&mut h_edges);
     snap_and_merge(&mut v_edges);
     let open_column_edges = open_outer_column_edges(&h_edges, &v_edges, spans);
     v_edges.extend(open_column_edges);
 
     if h_edges.len() < 2 || v_edges.len() < 2 {
-        return (Vec::new(), v_edges, false);
+        return no_cells(v_edges, false);
     }
 
     let intersections = find_intersections(&h_edges, &v_edges);
@@ -3565,7 +3615,7 @@ fn build_grid_from_edges(
     if intersections.len() < 4 {
         filter_edges_by_coverage(&mut h_edges, &mut v_edges);
         if h_edges.len() < 2 || v_edges.len() < 2 {
-            return (Vec::new(), v_edges, false);
+            return no_cells(v_edges, false);
         }
     }
 
@@ -3595,10 +3645,29 @@ fn build_grid_from_edges(
         )
     };
     if cells.is_empty() {
-        return (Vec::new(), v_edges, cells_are_intersections);
+        return no_cells(v_edges, cells_are_intersections);
     }
 
-    let table_groups = attach_spanning_headers(&cells, group_cells_into_tables(&cells), config.min_table_cells);
+    let groups = group_cells_into_tables(&cells);
+    GridCells {
+        cells,
+        groups,
+        v_edges,
+        cells_are_intersections,
+    }
+}
+
+/// Rest of step 4: the cell groups a configuration accepts, each as a
+/// `(group_cells, xs, ys, num_cols)` tuple with its grid boundaries.
+fn table_groups_from_cells(
+    grid: &GridCells,
+    config: &TableDetectionConfig,
+) -> Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)> {
+    let cells = &grid.cells;
+    if cells.is_empty() {
+        return Vec::new();
+    }
+    let table_groups = attach_spanning_headers(cells, grid.groups.clone(), config.min_table_cells);
     let mut result = Vec::new();
     for group in &table_groups {
         let group_cells: Vec<IntersectionCell> = group.iter().map(|&i| cells[i]).collect();
@@ -3631,7 +3700,7 @@ fn build_grid_from_edges(
 
         result.push((group_cells, xs, ys, num_cols));
     }
-    (result, v_edges, cells_are_intersections)
+    result
 }
 
 /// Narrowest strip, in points, between a horizontal rule's end and the outermost vertical rule
@@ -5365,23 +5434,27 @@ pub fn detect_tables_with_lines(
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
-    detect_tables_with_line_ownership(spans, lines, config).0
+    detect_tables_with_line_ownership(spans, lines, config, &SharedLineGeometry::default()).0
 }
 
+/// `shared` must belong to these `spans` and `lines`.
 pub(crate) fn detect_tables_with_line_ownership(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
+    shared: &SharedLineGeometry,
 ) -> (Vec<Table>, Option<PaintedCellOwnership>) {
-    detect_with_recovery(spans, lines, config, true)
+    detect_with_recovery(spans, lines, config, true, shared)
 }
 
+/// `shared` must belong to these `spans` and `lines`.
 pub(crate) fn detect_tables_without_painted_recovery(
     spans: &[TextSpan],
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
+    shared: &SharedLineGeometry,
 ) -> Vec<Table> {
-    detect_with_recovery(spans, lines, config, false).0
+    detect_with_recovery(spans, lines, config, false, shared).0
 }
 
 fn detect_with_recovery(
@@ -5389,6 +5462,7 @@ fn detect_with_recovery(
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
     recover: bool,
+    shared: &SharedLineGeometry,
 ) -> (Vec<Table>, Option<PaintedCellOwnership>) {
     if !config.enabled || spans.is_empty() {
         return (Vec::new(), None);
@@ -5401,14 +5475,21 @@ fn detect_with_recovery(
     }
     if let Some(mut prepared) = filled_cells::prepare(spans, lines, config) {
         let mut evidence = RecoveredIntersection::default();
-        let candidate = detect_with_unmodified_paths(spans, &prepared.paths, config, recover.then_some(&mut evidence));
+        // The prepared paths are not `lines`, so they get geometry of their own. ~keep
+        let candidate = detect_with_unmodified_paths(
+            spans,
+            &prepared.paths,
+            config,
+            recover.then_some(&mut evidence),
+            &SharedLineGeometry::default(),
+        );
         if prepared.accepts(&candidate) {
             let ownership = prepared.overhang_ownership(&candidate[0]);
             return (candidate, ownership);
         }
     }
     let mut evidence = RecoveredIntersection::default();
-    let tables = detect_with_unmodified_paths(spans, lines, config, recover.then_some(&mut evidence));
+    let tables = detect_with_unmodified_paths(spans, lines, config, recover.then_some(&mut evidence), shared);
     let ownership = match tables.as_slice() {
         [table] if evidence.bounds.is_some() && table.bbox == evidence.bounds => Some(PaintedCellOwnership {
             columns: table.col_count,
@@ -5427,6 +5508,7 @@ fn detect_with_unmodified_paths(
     lines: &[crate::elements::PathContent],
     config: &TableDetectionConfig,
     recovery: Option<&mut RecoveredIntersection>,
+    shared: &SharedLineGeometry,
 ) -> Vec<Table> {
     let line_only = matches!(
         (config.horizontal_strategy, config.vertical_strategy),
@@ -5436,10 +5518,8 @@ fn detect_with_unmodified_paths(
     if line_only && lines.is_empty() {
         return Vec::new();
     }
-    let text_centers = horizontal_text_centers(spans);
-    let edges = extract_edges(lines);
     if line_only {
-        let mut tables = detect_intersections(spans, lines, &edges, config, &text_centers, recovery);
+        let mut tables = detect_intersections(spans, lines, config, shared, recovery);
         if tables.is_empty() {
             for cluster in group_lines_into_clusters(lines, config) {
                 tables.append(&mut detect_tables_in_cluster(spans, lines, &cluster, config));
@@ -5452,7 +5532,7 @@ fn detect_with_unmodified_paths(
     }
     // Both / hybrid strategy: try intersection-based first, then cluster, then H-rule bounded,
     // then text fallback. ~keep
-    let mut final_tables = detect_intersections(spans, lines, &edges, config, &text_centers, recovery);
+    let mut final_tables = detect_intersections(spans, lines, config, shared, recovery);
     if final_tables.is_empty() {
         let clusters = group_lines_into_clusters(lines, config);
         for cluster in clusters {
@@ -5462,7 +5542,7 @@ fn detect_with_unmodified_paths(
     // When intersection and cluster pipelines found nothing, try H-rule bounded detection:
     // use horizontal lines as table region boundaries with text-edge column detection. ~keep
     if final_tables.is_empty() {
-        final_tables = tables_from_horizontal_edges(spans, lines, edges.0, config);
+        final_tables = tables_from_horizontal_edges(spans, lines, shared.edges(lines).0.clone(), config);
     }
     // Filter out invalid line-based tables BEFORE overlap checking so that
     // spurious line-based tables don't shadow valid text-based ones. ~keep
@@ -6326,6 +6406,29 @@ mod tests {
         assert_eq!(groups[0].1.first().copied(), Some(45.));
         assert_eq!(groups[0].1.last().copied(), Some(567.));
         assert_eq!(groups[0].3, 5, "stub, three value columns and the last column");
+    }
+
+    #[test]
+    fn one_shared_grid_serves_configs_with_different_column_bounds() {
+        let lines = interior_ruled_table(false);
+        let spans = interior_ruled_table_text(true);
+        let centers = horizontal_text_centers(&spans);
+        let too_narrow = TableDetectionConfig {
+            max_table_columns: 4,
+            ..ruled_grid_config()
+        };
+        let shared = SharedLineGeometry::default();
+
+        for (config, expected_groups) in [(ruled_grid_config(), 1), (too_narrow, 0), (ruled_grid_config(), 1)] {
+            let (alone, alone_v_edges, alone_intersections) = build_grid_from_lines(&lines, &spans, &centers, &config);
+            let grid = shared.grid(&spans, &lines);
+            let sharing = table_groups_from_cells(grid, &config);
+
+            assert_eq!(sharing.len(), expected_groups);
+            assert_eq!(format!("{sharing:?}"), format!("{alone:?}"));
+            assert_eq!(format!("{:?}", grid.v_edges), format!("{alone_v_edges:?}"));
+            assert_eq!(grid.cells_are_intersections, alone_intersections);
+        }
     }
 
     #[test]
