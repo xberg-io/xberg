@@ -358,3 +358,15 @@ fn should_order_a_large_table_without_a_band_quickly() {
         started.elapsed()
     );
 }
+
+#[test]
+fn should_read_the_columns_between_a_title_and_a_footer() {
+    let mut spans = aligned_columns(30.0, 200.0, 3);
+    spans.push(wide("Title", 0.0, 130.0, 430.0));
+    spans.push(wide("Footer", 0.0, 20.0, 430.0));
+    spans.reverse();
+    assert_eq!(
+        repair_rotated_page_text(&spans).as_deref(),
+        Some("Title\nA1\nA2\nA3\nB1\nB2\nB3\nFooter")
+    );
+}

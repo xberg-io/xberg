@@ -200,6 +200,9 @@ const GUTTER_MIN_HEIGHTS: f32 = 1.5;
 /// aligned-baseline pair of columns from a table row.
 const GUTTER_MAX_BLOCK_FRACTION: f32 = 0.5;
 
+/// Most lines peeled off each end when a title and a footer both span the columns.
+const MAX_BAND_LINES: usize = 3;
+
 /// Fewest lines a column must hold for a gutter to cut it off.
 const MIN_LINES_PER_COLUMN: usize = 2;
 
@@ -295,7 +298,8 @@ fn by_start(placed: &[Placed]) -> Vec<Placed> {
 ///
 /// A column cut needs at least [`MIN_LINES_PER_COLUMN`] lines on each side, so a
 /// single row of cells, a header row or a letter-spaced heading stays one line.
-/// Cutting stops at [`MAX_CUT_DEPTH`] levels of nesting; a page more deeply
+/// A title and a footer around the columns are found only when each is at most
+/// [`MAX_BAND_LINES`] lines. Cutting stops at [`MAX_CUT_DEPTH`] levels of nesting; a page more deeply
 /// divided than that keeps its remaining blocks in top-to-bottom line order.
 fn order_block(placed: &[Placed], body: f32, depth: usize) -> Vec<Vec<usize>> {
     let tolerance = body * ROTATED_LINE_CROSS_TOLERANCE_RATIO;
@@ -343,16 +347,42 @@ fn order_block(placed: &[Placed], body: f32, depth: usize) -> Vec<Vec<usize>> {
     let band_cut = (1..count)
         .find(|&k| below[k])
         .or_else(|| (1..count).rev().find(|&k| above[k]));
-    match band_cut {
-        Some(k) => {
-            let top: Vec<Placed> = lines[..k].iter().flatten().copied().collect();
-            let bottom: Vec<Placed> = lines[k..].iter().flatten().copied().collect();
-            let mut ordered = order_block(&top, body, depth + 1);
-            ordered.extend(order_block(&bottom, body, depth + 1));
-            ordered
-        }
-        None => as_indices(lines),
+    if let Some(k) = band_cut {
+        return order_parts(&[&lines[..k], &lines[k..]], body, depth);
     }
+
+    // A title and a footer together close the gutter from both sides: look for
+    // columns in what is left once up to MAX_BAND_LINES lines are peeled off each end.
+    for top in 1..=MAX_BAND_LINES {
+        for bottom in 1..=MAX_BAND_LINES {
+            if top + bottom >= count {
+                continue;
+            }
+            let mut extents: Vec<(f32, f32)> = Vec::new();
+            for span in lines[top..count - bottom].iter().flatten() {
+                insert_extent(&mut extents, span.start, span.end);
+            }
+            if has_gutter(&extents, body) {
+                return order_parts(
+                    &[&lines[..top], &lines[top..count - bottom], &lines[count - bottom..]],
+                    body,
+                    depth,
+                );
+            }
+        }
+    }
+    as_indices(lines)
+}
+
+/// Order each group of lines as its own block, one after the other.
+fn order_parts(parts: &[&[Vec<Placed>]], body: f32, depth: usize) -> Vec<Vec<usize>> {
+    parts
+        .iter()
+        .flat_map(|part| {
+            let members: Vec<Placed> = part.iter().flatten().copied().collect();
+            order_block(&members, body, depth + 1)
+        })
+        .collect()
 }
 
 /// Order one rotated run as lines, top to bottom in its own upright frame.
