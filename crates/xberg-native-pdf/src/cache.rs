@@ -145,12 +145,10 @@ impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
         self.used_bytes = 0;
     }
 
-    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.map.len()
     }
 
-    #[cfg(test)]
     pub(crate) fn used_bytes(&self) -> usize {
         self.used_bytes
     }

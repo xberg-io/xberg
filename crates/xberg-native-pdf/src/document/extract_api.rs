@@ -9,7 +9,7 @@ use super::*;
 const MAX_PAGE_CONTENT_BYTES: usize = 256 * 1024 * 1024;
 const MAX_PAGE_CONTENT_ITEMS: usize = 100_000;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum ScriptGeometry {
     Flatten,
     Preserve,
@@ -342,6 +342,7 @@ impl PdfDocument {
                 .len()
                 .saturating_mul(PAGE_PASS_CACHE_BYTES_PER_SOURCE_BYTE),
         );
+        tracing::debug!(budget_bytes = budget, "page pass cache started");
         *self.raw_page_spans_cache.lock_or_recover() = Some(crate::cache::AdmissionBudgetCache::new(budget));
         *self.painted_regions_cache.lock_or_recover() = Some(super::BoundedEntryCache::new(
             super::painted::PAINTED_REGIONS_CACHE_PAGES,
@@ -364,7 +365,14 @@ impl PdfDocument {
     /// none of them alive. A later read records its page's baselines again.
     #[doc(hidden)]
     pub fn release_page_caches(&self) {
-        *self.raw_page_spans_cache.lock_or_recover() = None;
+        if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().take() {
+            tracing::debug!(
+                entries = cache.len(),
+                used_bytes = cache.used_bytes(),
+                budget_bytes = cache.budget_bytes(),
+                "page pass cache released"
+            );
+        }
         self.paired_geometry_pages.store(0, Ordering::Relaxed);
         self.script_baselines.lock_or_recover().clear();
         *self.painted_regions_cache.lock_or_recover() = None;
@@ -455,6 +463,13 @@ impl PdfDocument {
             )
         };
         if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
+            tracing::trace!(
+                page_index,
+                geometry = ?script_geometry,
+                outcome = "hit",
+                spans = page.spans.len(),
+                "page pass read"
+            );
             self.replay_read_effects(page_index, Some(script_geometry), &page);
             if let (Some(output), Some(witnesses)) = (cmsy, &page.cmsy) {
                 output.clone_from(witnesses);
@@ -497,6 +512,7 @@ impl PdfDocument {
                         false,
                         capture,
                         pair_geometries,
+                        "page_pass",
                     )
                 })
             });
@@ -511,7 +527,18 @@ impl PdfDocument {
         let preserved = page.preserved.take();
         let page = Arc::new(page);
         // The flattened entry is admitted first: the later passes read it more often. ~keep
-        self.retain_interpretation(key, &page);
+        let admitted = self.retain_interpretation(key, &page);
+        tracing::trace!(
+            page_index,
+            geometry = ?script_geometry,
+            outcome = "interpreted",
+            passes_running,
+            paired = pair_geometries,
+            spans = page.spans.len(),
+            admitted = admitted.is_some(),
+            estimated_bytes = admitted.unwrap_or_else(|| page.estimated_bytes()),
+            "page pass read"
+        );
         if let Some(preserved) = preserved {
             // The preserved read shares the content run, so it has the same document effects;
             // only the flattened read records script baselines. ~keep
@@ -533,7 +560,17 @@ impl PdfDocument {
             let paced = self.raw_page_spans_cache.lock_or_recover().as_ref().map_or(0, |cache| {
                 paired_preserved_share(cache.budget_bytes(), page_index, paired_pages)
             });
-            if let Some(bytes) = self.admitted_bytes(&preserved_key, &preserved, paced)
+            let preserved_bytes = self.admitted_bytes(&preserved_key, &preserved, paced);
+            tracing::trace!(
+                page_index,
+                geometry = ?ScriptGeometry::Preserve,
+                outcome = "paired",
+                spans = preserved.spans.len(),
+                admitted = preserved_bytes.is_some(),
+                estimated_bytes = preserved_bytes.unwrap_or_else(|| preserved.estimated_bytes()),
+                "page pass read"
+            );
+            if let Some(bytes) = preserved_bytes
                 && let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut()
             {
                 cache.insert(preserved_key, std::sync::Arc::new(preserved), bytes);
@@ -577,11 +614,10 @@ impl PdfDocument {
     }
 
     /// Share `page` with the page-pass cache when the passes run and its budget
-    /// admits it. The first admission check runs without walking the spans.
-    fn retain_interpretation(&self, key: RawSpanKey, page: &InterpretedPage) {
-        let Some(bytes) = self.admitted_bytes(&key, page, usize::MAX) else {
-            return;
-        };
+    /// admits it, returning the estimated bytes it was admitted with. The first admission check
+    /// runs without walking the spans.
+    fn retain_interpretation(&self, key: RawSpanKey, page: &InterpretedPage) -> Option<usize> {
+        let bytes = self.admitted_bytes(&key, page, usize::MAX)?;
         // ~keep A fresh read's vectors and strings keep their growth slack; the caller consumes that
         // read, and the cache holds an exact-capacity copy instead, as many bytes fewer as the slack.
         let copy = InterpretedPage {
@@ -596,6 +632,7 @@ impl PdfDocument {
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
             cache.insert(key, Arc::new(copy), bytes);
         }
+        Some(bytes)
     }
 
     /// The estimated bytes of `page` when the page-pass cache admits it under
@@ -669,6 +706,7 @@ impl PdfDocument {
             skip_nonpainting_text,
             false,
             false,
+            "uncached",
         )?;
         self.record_mc_actualtext(page_index, page.mc_actualtext.map(Arc::unwrap_or_clone));
         Ok(Arc::unwrap_or_clone(page.spans))
@@ -739,9 +777,21 @@ impl PdfDocument {
         skip_nonpainting_text: bool,
         capture_cmsy: bool,
         pair_geometries: bool,
+        caller: &'static str,
     ) -> Result<InterpretedPage> {
         #[cfg(test)]
         PAGE_SPAN_INTERPRETATIONS.with(|count| count.set(count.get() + 1));
+        let span = tracing::trace_span!(
+            "xberg_native_pdf::interpret_page",
+            page_index,
+            caller,
+            geometry = ?script_geometry,
+            filtered = !excluded_layers.is_empty() || !excluded_inks.is_empty(),
+            paired = pair_geometries,
+            skip_nonpainting = skip_nonpainting_text,
+            spans = tracing::field::Empty,
+        );
+        let _entered = span.enter();
         if self.is_encrypted_unreadable() {
             tracing::warn!(target: LOG_TARGET, "PDF is encrypted and could not be decrypted; returning no spans");
             return Ok(InterpretedPage::skipped());
@@ -836,6 +886,7 @@ impl PdfDocument {
         } else {
             (extractor.extract_text_spans(&content_data)?, None)
         };
+        span.record("spans", spans.len());
         let cmsy = capture_cmsy.then(|| Arc::new(extractor.cmsy_witnesses.take().unwrap_or_default()));
         Ok(InterpretedPage {
             spans: Arc::new(spans),
@@ -1105,6 +1156,7 @@ impl PdfDocument {
                             false,
                             false,
                             false,
+                            "raw_filtered",
                         )
                     })
                 });
@@ -1142,6 +1194,12 @@ impl PdfDocument {
         reading_order: ReadingOrder,
     ) -> Result<Vec<crate::layout::TextSpan>> {
         if raw.ordered.swap(true, Ordering::Relaxed) {
+            tracing::trace!(
+                page_index = raw.page,
+                outcome = "reordered",
+                filtered = raw.filtered,
+                "page pass read"
+            );
             let script_geometry = (!raw.filtered).then_some(ScriptGeometry::Flatten);
             self.replay_read_effects(raw.page, script_geometry, &raw.read);
         } else {

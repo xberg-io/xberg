@@ -217,6 +217,12 @@ impl PdfDocument {
     /// # Ok::<(), xberg_native_pdf::error::Error>(())
     /// ```
     pub fn get_annotations(&self, page_index: usize) -> Result<Vec<Annotation>> {
+        let span = tracing::trace_span!(
+            "xberg_native_pdf::get_annotations",
+            page_index,
+            annotations = tracing::field::Empty
+        );
+        let _entered = span.enter();
         let page_ref = self.get_page_ref(page_index)?;
         let page_obj = self.load_object(page_ref)?;
 
@@ -245,6 +251,7 @@ impl PdfDocument {
             }
         }
 
+        span.record("annotations", result.len());
         Ok(result)
     }
 
