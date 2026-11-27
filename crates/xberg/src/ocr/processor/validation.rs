@@ -254,37 +254,89 @@ pub(crate) fn canonical_tessdata_dir(directory: &str) -> PathBuf {
     })
 }
 
+/// What tells one version of a file from another without reading it: its size and modification
+/// time and, on Unix, its device, inode and status-change time, which replacing the file changes
+/// even when the size and modification time are kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileStamp {
+    len: u64,
+    modified: std::time::SystemTime,
+    #[cfg(unix)]
+    inode: (u64, u64),
+    #[cfg(unix)]
+    changed: (i64, i64),
+}
+
+impl FileStamp {
+    /// The stamp of the file `metadata` describes, or `None` when the platform reports no
+    /// modification time: such a file cannot be told from a replacement of the same size.
+    pub(crate) fn of(metadata: &std::fs::Metadata) -> Option<Self> {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt as _;
+
+        Some(Self {
+            len: metadata.len(),
+            modified: metadata.modified().ok()?,
+            #[cfg(unix)]
+            inode: (metadata.dev(), metadata.ino()),
+            #[cfg(unix)]
+            changed: (metadata.ctime(), metadata.ctime_nsec()),
+        })
+    }
+
+    fn hash_into(&self, hasher: &mut blake3::Hasher) {
+        hasher.update(&self.len.to_le_bytes());
+        let (side, offset) = match self.modified.duration_since(std::time::UNIX_EPOCH) {
+            Ok(after) => (1_u8, after),
+            Err(before) => (2, before.duration()),
+        };
+        hasher.update(&[side]);
+        hasher.update(&offset.as_nanos().to_le_bytes());
+        #[cfg(unix)]
+        {
+            hasher.update(&self.inode.0.to_le_bytes());
+            hasher.update(&self.inode.1.to_le_bytes());
+            hasher.update(&self.changed.0.to_le_bytes());
+            hasher.update(&self.changed.1.to_le_bytes());
+        }
+    }
+}
+
 /// Hash what identifies each language's model file in `directory` without reading it: the
-/// language, then the file's size and modification time, or that it is no regular file.
+/// language, then the file's [`FileStamp`], or that it is no regular file.
 ///
 /// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
-/// and engines made from the old one. It costs one `stat` per language. A rewrite that keeps both
-/// the size and the modification time (two writes within one clock tick of the file system) is
-/// not seen. ~keep
+/// and engines made from the old one. It costs one `stat` per language. Returns false when a
+/// file has no stamp: the hash cannot tell it from a replacement of the same size, so nothing
+/// keyed on it may be stored or reused.
+#[must_use]
 pub(crate) fn hash_pack_identities<'a>(
     hasher: &mut blake3::Hasher,
     directory: &Path,
     languages: impl IntoIterator<Item = &'a str>,
-) {
+) -> bool {
+    let mut identified = true;
     for lang in languages {
         hasher.update(&(lang.len() as u64).to_le_bytes());
         hasher.update(lang.as_bytes());
         match std::fs::metadata(directory.join(format!("{lang}.traineddata"))) {
-            Ok(metadata) if metadata.is_file() => {
-                let modified = metadata
-                    .modified()
-                    .ok()
-                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map_or(0, |since_epoch| since_epoch.as_nanos());
-                hasher.update(&[1]);
-                hasher.update(&metadata.len().to_le_bytes());
-                hasher.update(&modified.to_le_bytes());
-            }
+            Ok(metadata) if metadata.is_file() => match FileStamp::of(&metadata) {
+                Some(stamp) => {
+                    hasher.update(&[1]);
+                    stamp.hash_into(hasher);
+                }
+                None => {
+                    identified = false;
+                    hasher.update(&[2]);
+                    hasher.update(&metadata.len().to_le_bytes());
+                }
+            },
             _ => {
                 hasher.update(&[0]);
             }
         }
     }
+    identified
 }
 
 /// Refuse a language that is not a model name before it is joined into a file path.

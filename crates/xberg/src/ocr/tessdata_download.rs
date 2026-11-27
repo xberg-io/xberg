@@ -8,6 +8,7 @@
 
 use crate::core::config::TessdataModel;
 use crate::ocr::error::OcrError;
+use crate::ocr::processor::validation::FileStamp;
 use sha2::{Digest as _, Sha256};
 use std::collections::HashMap;
 use std::io::{ErrorKind, Read as _, Write as _};
@@ -125,8 +126,8 @@ impl<'a> PinTables<'a> {
     /// Which pinned pack of `lang` the file at `path` is.
     ///
     /// The size is compared first, so a file that is no pinned size (every user-trained model)
-    /// is never read; a file of a pinned size is hashed once per (path, size, modification time)
-    /// in this process.
+    /// is never read; a file of a pinned size is hashed once per (path, [`FileStamp`]) in this
+    /// process.
     pub(crate) fn classify(&self, lang: &str, path: &Path) -> VerifiedSet {
         let Ok(metadata) = std::fs::metadata(path) else {
             return VerifiedSet::Unknown;
@@ -202,8 +203,8 @@ impl<'a> PinTables<'a> {
         }
         let aside = output_dir.join(format!("{lang}.traineddata.unverified"));
         std::fs::rename(&path, &aside)?;
-        // ~keep The pack published next can share the size and modification time of the file
-        // just moved, which is all the digest memo tells files apart by.
+        // ~keep Where the platform has no inode, the pack published next can share the size and
+        // modification time of the file just moved, which is all the digest memo tells apart there.
         DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).remove(&path);
         tracing::warn!(
             path = %path.display(),
@@ -231,16 +232,16 @@ impl<'a> PinTables<'a> {
     }
 }
 
-/// Size, modification time and SHA-256 of the files [`memoized_sha256`] has read.
-type SeenDigest = (u64, std::time::SystemTime, String);
+/// Stamp and SHA-256 of the files [`memoized_sha256`] has read.
+type SeenDigest = (FileStamp, String);
 static DIGESTS: LazyLock<Mutex<HashMap<PathBuf, SeenDigest>>> = LazyLock::new(Default::default);
 
-/// The SHA-256 of the regular file at `path`, read once per (path, size, modification time) in
-/// this process. `metadata` is what the caller just read for `path`.
+/// The SHA-256 of the regular file at `path`, read once per (path, [`FileStamp`]) in this
+/// process. `metadata` is what the caller just read for `path`.
 fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> {
-    let state = (metadata.len(), metadata.modified().ok()?);
-    if let Some((len, modified, digest)) = DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).get(path)
-        && (*len, *modified) == state
+    let state = FileStamp::of(metadata)?;
+    if let Some((seen, digest)) = DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).get(path)
+        && *seen == state
     {
         return Some(digest.clone());
     }
@@ -265,14 +266,14 @@ fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> 
     }
     // ~keep A file that changed while it was read has no digest worth remembering under the
     // size and time read before it.
-    if read != state.0 {
+    if read != metadata.len() {
         return None;
     }
     let digest = hex::encode(hasher.finalize());
     DIGESTS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .insert(path.to_path_buf(), (state.0, state.1, digest.clone()));
+        .insert(path.to_path_buf(), (state, digest.clone()));
     Some(digest)
 }
 
@@ -832,6 +833,39 @@ mod tests {
         assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[]).unwrap());
         assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_replacement_that_keeps_size_and_modification_time_is_classified_again() {
+        use super::{PinTables, VerifiedSet};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+        assert_eq!(pins.classify("eng", &pack), VerifiedSet::Fast);
+
+        let modified = std::fs::metadata(&pack).unwrap().modified().unwrap();
+        let staged = directory.path().join("staged");
+        std::fs::write(&staged, b"user english").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&staged)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        std::fs::rename(&staged, &pack).unwrap();
+        let replaced = std::fs::metadata(&pack).unwrap();
+        assert_eq!((replaced.len(), replaced.modified().unwrap()), (12, modified));
+
+        assert_eq!(
+            pins.classify("eng", &pack),
+            VerifiedSet::Unknown,
+            "the memo must not vouch for the bytes it read before"
+        );
     }
 
     #[test]

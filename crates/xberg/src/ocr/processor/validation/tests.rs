@@ -939,3 +939,43 @@ fn test_strip_control_characters_delete_char() {
     let output = strip_control_characters(input);
     assert_eq!(output, "HelloWorld");
 }
+
+/// Replace `path` with `bytes`, keeping its size and modification time, the way a copy tool that
+/// preserves times does: through a new file renamed over it.
+#[cfg(unix)]
+fn replace_keeping_size_and_time(path: &Path, bytes: &[u8]) {
+    let before = std::fs::metadata(path).unwrap();
+    assert_eq!(before.len(), bytes.len() as u64, "the replacement must keep the size");
+    let staged = path.with_extension("staged");
+    std::fs::write(&staged, bytes).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&staged)
+        .unwrap()
+        .set_modified(before.modified().unwrap())
+        .unwrap();
+    std::fs::rename(&staged, path).unwrap();
+    let after = std::fs::metadata(path).unwrap();
+    assert_eq!(
+        (after.len(), after.modified().unwrap()),
+        (before.len(), before.modified().unwrap())
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_pack_identity_sees_a_replacement_that_keeps_size_and_modification_time() {
+    let directory = tempfile::tempdir().unwrap();
+    let pack = directory.path().join("eng.traineddata");
+    std::fs::write(&pack, b"first model").unwrap();
+    let identity = || {
+        let mut hasher = blake3::Hasher::new();
+        assert!(hash_pack_identities(&mut hasher, directory.path(), ["eng"]));
+        hasher.finalize()
+    };
+
+    let first = identity();
+    assert_eq!(identity(), first);
+    replace_keeping_size_and_time(&pack, b"other model");
+    assert_ne!(identity(), first);
+}

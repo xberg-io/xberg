@@ -36,8 +36,8 @@ struct ApiKey {
     oem: u8,
     osd_revision: Option<blake3::Hash>,
     primary_revision: Option<blake3::Hash>,
-    /// Size and modification time of the primary model files, so an engine built from a pack that
-    /// was since replaced in place is not handed out for the new one.
+    /// The file stamps of the primary model files, so an engine built from a pack that was since
+    /// replaced in place is not handed out for the new one.
     identity: Option<blake3::Hash>,
 }
 

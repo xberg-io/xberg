@@ -195,7 +195,11 @@ fn tessdata_context(dependencies: &[CacheDependency], cancel: Option<&Cancellati
             any = true;
             hash.update(&(index as u64).to_le_bytes());
             let env = TessdataEnv::from_process().for_model(selection.tessdata_model);
-            hash_tessdata_selection(&mut hash, selection, &env);
+            if !hash_tessdata_selection(&mut hash, selection, &env) {
+                return Err(crate::XbergError::cache(
+                    "Cannot identify a Tesseract model file: the platform reports no modification time",
+                ));
+            }
         }
     }
     Ok(if any {
@@ -205,19 +209,22 @@ fn tessdata_context(dependencies: &[CacheDependency], cancel: Option<&Cancellati
     })
 }
 
-/// Hash the model set of `selection`, the directory that serves it and the identity (size and
-/// modification time) of each of its model files there.
+/// Hash the model set of `selection`, the directory that serves it and the identity
+/// ([`FileStamp`](crate::ocr::processor::validation::FileStamp)) of each of its model files there.
+/// Returns false when a model file cannot be identified, so the key cannot be trusted.
 ///
-/// Stats files only: it never creates a directory, downloads or reads a model, since it runs for
-/// requests that may not reach OCR at all. A selection that no directory serves yet (the engine
+/// Stats files: it never creates a directory or downloads, and reads a model only to check a
+/// pinned-size pack in a verified `best` directory against its pin, once per file version, since
+/// it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
 /// would download its packs) is keyed on its set, languages and candidate directories instead;
 /// once the packs exist the key changes, so nothing read before is served after.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[must_use]
 fn hash_tessdata_selection(
     hash: &mut blake3::Hasher,
     selection: &ModelSelection,
     env: &crate::ocr::processor::validation::TessdataEnv,
-) {
+) -> bool {
     use crate::ocr::processor::validation::{
         canonical_tessdata_dir, existing_tessdata_dir_for, hash_pack_identities, tessdata_search_dirs,
     };
@@ -250,7 +257,7 @@ fn hash_tessdata_selection(
         for language in &languages {
             frame(hash, language.as_bytes());
         }
-        return;
+        return true;
     };
     let directory = canonical_tessdata_dir(&directory);
     hash.update(&[1]);
@@ -265,9 +272,9 @@ fn hash_tessdata_selection(
             })
             .collect();
         installed.sort();
-        hash_pack_identities(hash, &directory, installed.iter().map(String::as_str));
+        hash_pack_identities(hash, &directory, installed.iter().map(String::as_str))
     } else {
-        hash_pack_identities(hash, &directory, languages.iter().copied());
+        hash_pack_identities(hash, &directory, languages.iter().copied())
     }
 }
 
@@ -800,7 +807,11 @@ mod tests {
         };
         let context = |prefix: Option<String>, tessdata_model| {
             let mut hash = blake3::Hasher::new();
-            hash_tessdata_selection(&mut hash, &selection(tessdata_model), &env(prefix, tessdata_model));
+            assert!(hash_tessdata_selection(
+                &mut hash,
+                &selection(tessdata_model),
+                &env(prefix, tessdata_model)
+            ));
             hash.finalize()
         };
         let fast = crate::core::config::TessdataModel::Fast;
@@ -856,7 +867,11 @@ mod tests {
         };
         let context = || {
             let mut hash = blake3::Hasher::new();
-            hash_tessdata_selection(&mut hash, &selection, &TessdataEnv::from_lookup(|_| None));
+            assert!(hash_tessdata_selection(
+                &mut hash,
+                &selection,
+                &TessdataEnv::from_lookup(|_| None)
+            ));
             hash.finalize()
         };
 

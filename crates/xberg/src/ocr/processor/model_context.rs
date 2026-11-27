@@ -19,9 +19,13 @@ fn invalidate_script_cache(invalidated: &AtomicBool, script: &str, error: &OcrEr
 pub(super) struct ModelContext {
     pub(super) directory: String,
     pub(super) osd_revision: Option<blake3::Hash>,
-    /// Size and modification time of each primary language's model file, for cache and pool
-    /// keys. Unlike `primary` it is taken for every PSM and never reads the files.
+    /// The [`FileStamp`](super::validation::FileStamp) of each primary language's model file,
+    /// for cache and pool keys. Unlike `primary` it is taken for every PSM and never reads the
+    /// files.
     identity: Option<blake3::Hash>,
+    /// False when a primary model file has no stamp: results and engines are then neither stored
+    /// nor reused, since `identity` cannot tell the file from a replacement of the same size.
+    identity_known: bool,
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
@@ -295,7 +299,7 @@ impl ModelContext {
     fn for_config(directory: String, psm: u8, languages: Vec<String>) -> Result<Self, OcrError> {
         let mut context = Self::for_path(directory, psm)?;
         let mut identity = blake3::Hasher::new();
-        super::validation::hash_pack_identities(
+        context.identity_known = super::validation::hash_pack_identities(
             &mut identity,
             std::path::Path::new(&context.directory),
             languages.iter().map(String::as_str),
@@ -319,6 +323,7 @@ impl ModelContext {
             directory,
             osd_revision,
             identity: None,
+            identity_known: true,
             primary: None,
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
@@ -330,7 +335,8 @@ impl ModelContext {
     }
 
     pub(super) fn if_current<T>(&self, action: impl FnOnce() -> T) -> Option<T> {
-        if self.invalidated.load(Ordering::Acquire)
+        if !self.identity_known
+            || self.invalidated.load(Ordering::Acquire)
             || self
                 .operation
                 .as_ref()
