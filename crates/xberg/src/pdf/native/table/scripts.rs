@@ -20,10 +20,11 @@ pub(crate) struct TableScripts {
 }
 
 pub(super) fn page_spans(doc: &NativeDocument, page: usize, warnings: &mut Vec<ProcessingWarning>) -> PageSpans {
-    match doc
-        .doc
-        .extract_page_text_with_script_geometry(page, xberg_native_pdf::document::ReadingOrder::TopToBottom)
-    {
+    match doc.doc.extract_page_spans_with_cmsy_capture(
+        page,
+        xberg_native_pdf::document::ReadingOrder::TopToBottom,
+        None,
+    ) {
         Ok(text) => {
             let mut spans: Vec<_> = text
                 .spans
