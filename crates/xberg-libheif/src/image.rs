@@ -44,7 +44,6 @@ impl Image {
     /// [`Image::create_plane()`] method to add image planes required by your colorspace.
     #[allow(unsafe_code)]
     pub fn new(width: u32, height: u32, color_space: ColorSpace) -> Result<Image> {
-        crate::ensure_libheif()?;
         if width > MAX_IMAGE_SIZE || height > MAX_IMAGE_SIZE {
             return Err(HeifError {
                 code: HeifErrorCode::UsageError,
@@ -65,7 +64,7 @@ impl Image {
                 color_space.heif_chroma(),
                 c_image.as_mut_ptr(),
             )
-        };
+        }?;
         HeifError::from_heif_error(err)?;
         Ok(Image {
             // SAFETY: `heif_image_create` returned success, which is libheif's contract for having written

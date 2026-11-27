@@ -19,7 +19,8 @@ impl Default for SecurityLimits {
     #[allow(unsafe_code)]
     fn default() -> Self {
         // SAFETY: This takes no Rust pointers and returns libheif's immutable global limits.
-        let inner_ptr = unsafe { lh::heif_get_global_security_limits() };
+        let inner_ptr = unsafe { lh::heif_get_global_security_limits() }
+            .unwrap_or_else(|error| panic!("libheif cannot be loaded: {}", error.message));
         if inner_ptr.is_null() {
             panic!("heif_get_global_security_limits returned the null pointer");
         }
