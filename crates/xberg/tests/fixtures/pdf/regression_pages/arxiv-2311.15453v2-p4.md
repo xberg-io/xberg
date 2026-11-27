@@ -2,43 +2,33 @@ AP
 
 **ATLAS BraTS-T1 BraTS-T2**
 
-$$
-25 0.03 ± 0.00 0.38 ± 0.01 0.23 ± 0.01 50 0.20 ± 0.02 0.44 ± 0.02 0.45 ± 0.01
-$$
+25 0.03 ± 0.00 0.38 ± 0.01 0.23 ± 0.01 50 0.20 ± 0.02 **0.44** ± 0.02 0.45 ± 0.01
 
 t
 
-$$
-75 0.29 ± 0.03 0.34 ± 0.03 0.59 ± 0.03 100 0.25 ± 0.03 0.28 ± 0.02 0.70 ± 0.02
-$$
+75 **0.29** ± 0.03 0.34 ± 0.03 0.59 ± 0.03 100 0.25 ± 0.03 0.28 ± 0.02 **0.70** ± 0.02
 
 **single-step**
 
-$$
 10 0.27 ± 0.02 0.32 ± 0.02 0.73 ± 0.02 20 0.29 ± 0.02 0.34 ± 0.02 0.74 ± 0.02
-$$
 
 size
 
-$$
 25 0.29 ± 0.02 0.34 ± 0.02 0.75 ± 0.02 33 0.29 ± 0.02 0.35 ± 0.02 0.75 ± 0.01
-$$
 
 **multi-step**
 
 step
 
-$$
 50 0.30 ± 0.03 0.35 ± 0.02 0.75 ± 0.02
-$$
 
-**Table 1** . Upper section: AP for single-step restorations
+**Table 1**. Upper section: AP for single-step restorations
 
 (AS = ∥x−P(x, t)∥) as a function of the t used to condition the model. Lower section: AP for multi-step restorations, as a function of step size. Mean and std. dev. on 4 seeds.
 
-**Fig. 3** . Restoration results on test images drawn from the AT- LAS [17], BraTS-T1, and BraTS-T2 [18], after step size = 25, along with anomaly scores AS in grayscale compared with the ground truth outline in red.
+**Fig. 3**. Restoration results on test images drawn from the AT-LAS [17], BraTS-T1, and BraTS-T2 [18], after step size = 25, along with anomaly scores AS in grayscale compared with the ground truth outline in red.
 
-When using single-step restorations we found that AP peaks at different t values for different anomalies and modal- **Fig. 2** . AP profiles as a function of t. Blue line shows singleities (Fig. 2). We hypothesize that these profiles are associstep restoration. Orange line shows the cumulative AS as deated with how the anomalies manifest in each image modality, fined in Section 2 up-to t stage (step size = 25). Single seed.
+When using single-step restorations we found that AP peaks at different t values for different anomalies and modal- **Fig. 2**. AP profiles as a function of t. Blue line shows singleities (Fig. 2). We hypothesize that these profiles are associstep restoration. Orange line shows the cumulative AS as deated with how the anomalies manifest in each image modality, fined in Section 2 up-to t stage (step size = 25). Single seed.
 
 Method VAE [2] r-VAE [5]
 
@@ -118,11 +108,11 @@ DISYRE f.w. (Ours)
 
 our final experiments as it provides a good balance between coverage of the anomaly schedule and inference speed.
 
-**Table 2** . Localization results of the image-reconstruction
+**Table 2**. Localization results of the image-reconstruction
 
-In this work we propose DISYRE, a new strategy that ( **IR** ), feature-modeling ( **FM** ), attention-based ( **AB** ), and selfadapts diffusion models to UAD. With the motivation of supervised ( **S-S** ) methods. Best scores are bold. learning a score function ∇~x~log p(x) which generalizes to naturally occurring medical anomalies, we replace the standard Gaussian noise corruption with gradual, synthetic
+In this work we propose DISYRE, a new strategy that (**IR**), feature-modeling (**FM**), attention-based (**AB**), and selfadapts diffusion models to UAD. With the motivation of supervised (**S-S**) methods. Best scores are bold. learning a score function $\nabla_{x}\log p(x)$ which generalizes to naturally occurring medical anomalies, we replace the standard Gaussian noise corruption with gradual, synthetic
 
-4. **DISCUSSION & CONCLUSION**
+**4. DISCUSSION & CONCLUSION**
 
 anomalies. DISYRE opens a new route to leverage diffusion- Results in Table 2 highlight the effectiveness of our strategy:
 

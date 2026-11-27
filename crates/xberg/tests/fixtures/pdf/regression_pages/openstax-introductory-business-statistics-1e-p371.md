@@ -32,7 +32,7 @@ a. i. *x* = __________
 
 - ii. *s*~*x*~ = __________
 - iii. *n* = __________
-- iv. *n* -1 = __________ -
+- iv. *n*-1 = __________ -
 
 b. Define the random variables *X* and *X* in words.
 

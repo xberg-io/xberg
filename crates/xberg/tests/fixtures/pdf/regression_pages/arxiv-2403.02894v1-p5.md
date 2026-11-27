@@ -1,8 +1,8 @@
 # (a) (b) (c)
 
-**Fig. 6.** Suppression results in Sentinel-1; (a) Interfered image, *ME* =3.40; (b) Notch filtering image, *ME* =2.34; (c) DIFNet filtering image,
+**Fig. 6.** Suppression results in Sentinel-1; (a) Interfered image, *ME*=3.40; (b) Notch filtering image, *ME*=2.34; (c) DIFNet filtering image,
 
-# ME =2.19 .
+# ME=2.19.
 
 - [5] B. Zhao, et al., "Performance Improvement of Deception Jamming Against SAR Based on Minimum Condition Number," Ieee Journal of
 

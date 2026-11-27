@@ -1,6 +1,6 @@
 {
   "name": "@xberg-io/xberg-cli",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "mcpName": "io.github.xberg-io/xberg",
   "description": "CLI proxy for xberg — runs the native xberg binary shipped in a per-platform package, downloading it from GitHub releases only as a fallback.",
   "license": "MIT",

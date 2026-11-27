@@ -21,6 +21,8 @@ EXPECTED_CHECKOUTS = 85
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
 ACTIONS_BUMP_WORKFLOW = "maintenance-actions-bump.yaml"
+# Benchmark runs take 6-9 hours, so a newer dispatch on the same ref queues behind the running one.
+QUEUED_WORKFLOW = "benchmarks"
 PYTHON_CALLBACK_SMOKE = "python-callback-smoke"
 PYTHON_CALLBACK_SMOKE_GUARD = (
     "github.repository == 'xberg-io/xberg' && github.event_name == 'workflow_dispatch' && inputs.python_callback_smoke"
@@ -64,10 +66,10 @@ def checks_out_main_source(step: dict[str, object]) -> bool:
 
 
 def keeps_latest_ci_run(concurrency: object, workflow: str) -> bool:
-    """Cancel superseded runs within one workflow's stable ref group."""
+    """Cancel superseded runs within one workflow's stable ref group; the queued workflow never cancels."""
     return (
         isinstance(concurrency, dict)
-        and concurrency.get("cancel-in-progress") is True
+        and concurrency.get("cancel-in-progress") is (workflow != QUEUED_WORKFLOW)
         and concurrency.get("group") == f"{workflow}-${{{{ github.ref }}}}"
     )
 
@@ -230,8 +232,9 @@ class MainOnlyCiTests(unittest.TestCase):
         for path in paths:
             with self.subTest(workflow=path.name):
                 group = f"{path.stem}-${{{{ github.ref }}}}"
-                assert keeps_latest_ci_run({"group": group, "cancel-in-progress": True}, path.stem)
-                assert not keeps_latest_ci_run({"group": group, "cancel-in-progress": False}, path.stem)
+                cancels = path.stem != QUEUED_WORKFLOW
+                assert keeps_latest_ci_run({"group": group, "cancel-in-progress": cancels}, path.stem)
+                assert not keeps_latest_ci_run({"group": group, "cancel-in-progress": not cancels}, path.stem)
 
     def test_no_ci_workflow_queues_superseded_runs(self) -> None:
         paths = ci_workflows()
@@ -239,7 +242,10 @@ class MainOnlyCiTests(unittest.TestCase):
         for path in paths:
             with self.subTest(workflow=path.name):
                 workflow = yaml.safe_load(path.read_text())
-                assert workflow["concurrency"]["cancel-in-progress"] is True, f"{path}: superseded runs must cancel"
+                expected = path.stem != QUEUED_WORKFLOW
+                assert workflow["concurrency"]["cancel-in-progress"] is expected, (
+                    f"{path}: superseded runs must {'cancel' if expected else 'queue'}"
+                )
 
     def test_rejects_missing_concurrency_and_disabled_cancellation(self) -> None:
         assert not keeps_latest_ci_run(None, "ci-rust")

@@ -4361,7 +4361,9 @@ fn is_script_run_of(previous: &xberg_native_pdf::layout::TextSpan, next: &xberg_
     let smaller_font_size = previous.font_size.min(next.font_size);
     let baseline_delta = (next_cross - previous_cross).abs();
 
-    crate::script_run::is_script_run_baseline_offset(baseline_delta, font_size, smaller_font_size)
+    // A table cell's raised mark continues the label it follows: a statistics label's `R`+`2` sits
+    // 0.45em up, past a lone mark's reach, so the wider row reach applies.
+    crate::script_run::is_script_row_baseline_offset(baseline_delta, font_size, smaller_font_size)
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 

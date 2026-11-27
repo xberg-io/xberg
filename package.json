@@ -1,6 +1,6 @@
 {
   "name": "xberg-root",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "private": true,
   "scripts": {
     "typecheck": "pnpm -r --if-present run typecheck"
@@ -27,7 +27,7 @@
     "typescript": "^7.0.2",
     "vitest": "^5.1.1"
   },
-  "packageManager": "pnpm@12.21.0",
+  "packageManager": "pnpm@12.23.0",
   "pi": {
     "prompts": [
       "./plugin/.pi/prompts/xberg-extract.md",

@@ -10,7 +10,7 @@
 
 and all other probabilities are very small (≤ 0.005) when $M ≥ 10$.
 
-For the *N* square matrices obtained, their ranks *R*~*l*~, *l* = 1,…, *N* are evaluated, and the frequencies *F* , *F* , and *N* − *F* − *F* of the values *M* , *M* -1 and of ranks not exceeding *M* -2 are determined: *M M* −1 *M M* −1 *F* =\#{ *R*~*l*~ = *M* }<sup>,</sup>
+For the *N* square matrices obtained, their ranks *R*~*l*~, *l* = 1,…, *N* are evaluated, and the frequencies *F* , *F* , and *N* − *F* − *F* of the values *M*, *M*-1 and of ranks not exceeding *M*-2 are determined: *M M* −1 *M M* −1 *F* =\#{ *R*~*l*~ = *M* }<sup>,</sup>
 
 *M*
 
@@ -28,9 +28,7 @@ To apply the Χ -test, use the classical statistic
 
 2 *M M* −1 *M M* −1
 
-$$
 Χ = + + ,
-$$
 
 0.2888 *N* 0.5776 *N* 0.13336 *N*
 
@@ -38,11 +36,11 @@ $$
 
 which, under the null (randomness) hypothesis, has an approximate Χ -distribution with 2 degrees of
 
-freedom. The reported *P-value* is exp ( *obs* )/2
+freedom. The reported *P-value* is exp (*obs*)/2
 
 {<sup>−Χ2</sup> }<sup>.</sup>
 
-Interpretation of this test: large values of Χ<sup>2</sup>( *obs* ) indicate that the deviation of the rank distribution from that corresponding to a random sequence is significant. For example, pseudo random matrices produced by a shift-register generator formed by less than *M* successive vectors systematically have rank *R*~*l*~ ≡ *M* , while for truly random data, the proportion of such occurrences should be only about 0.29.
+Interpretation of this test: large values of Χ<sup>2</sup>(*obs*) indicate that the deviation of the rank distribution from that corresponding to a random sequence is significant. For example, pseudo random matrices produced by a shift-register generator formed by less than *M* successive vectors systematically have rank *R*~*l*~ ≡ *M* , while for truly random data, the proportion of such occurrences should be only about 0.29.
 
 **References for Test**
 
@@ -54,4 +52,4 @@ Interpretation of this test: large values of Χ<sup>2</sup>( *obs* ) indicate th
 
 The test described here is based on the discrete Fourier transform. It is a member of a class of procedures known as spectral methods. The Fourier test detects periodic features in the bit series that would indicate a deviation from the assumption of randomness.
 
-Let *x* be the *k*<sup>*th*</sup> ~*k*~ bit, where $k = 1$, ..., *n* . Assume that the bits are coded -1 and +1. Let
+Let *x* be the *k*<sup>*th*</sup> ~*k*~ bit, where $k = 1$, ..., *n*. Assume that the bits are coded -1 and +1. Let

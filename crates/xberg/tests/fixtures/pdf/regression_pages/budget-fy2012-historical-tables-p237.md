@@ -4,8 +4,6 @@ THE BUDGET FOR FISCAL YEAR 2012, HISTORICAL TABLES
 
 **Table 11.3—OUTLAYS FOR PAYMENTS FOR INDIVIDUALS BY CATEGORY AND MAJOR PROGRAM: 1940–2016—Continued**
 
-(in millions of dollars)
-
 |  | 1967 | 1968 | 1969 |
 | --- | --- | --- | --- |
 | Program |  |  |  |
@@ -56,3 +54,5 @@ THE BUDGET FOR FISCAL YEAR 2012, HISTORICAL TABLES
 | Total, payments for individuals ............................................................... | 43,211 38,392 | 4,819 49,849 43,779 | 6,070 57,225 | 49,983 | 7,243 |
 
 * $500 thousand or less.
+
+(in millions of dollars)

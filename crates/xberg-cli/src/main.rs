@@ -82,7 +82,12 @@ use clap::{CommandFactory, Parser, Subcommand};
 use commands::cache::WarmOptions;
 #[cfg(feature = "embeddings")]
 use commands::embed_command;
-#[cfg(any(feature = "api", feature = "mcp", feature = "core-cli", feature = "ocr-surface"))]
+#[cfg(any(
+    feature = "api",
+    feature = "mcp",
+    feature = "core-cli",
+    all(test, feature = "ocr-surface")
+))]
 use commands::load_config;
 use commands::overrides::ExtractionOverrides;
 #[cfg(all(feature = "paddle-ocr", feature = "sceptre-ocr"))]

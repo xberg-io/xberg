@@ -2,32 +2,40 @@ GEOMETRICAL PROGRESSION.
 
 199
 
-176. Geometrical Mean. If three numbers are in geometrical progression, the middle number is called the geometrical mean of the other two numbers. Hence, if a, G, b are in geometrical progression, G is the geometrical mean of a and b.
+176. **Geometrical Mean.** If three numbers are in geometrical progression, the middle number is called the geometrical mean of the other two numbers. Hence, if a, G, b are in geometrical progression, G is the geometrical mean of a and b.
 
-By the definition of a geometrical progression, G b = . a G
+By the definition of a geometrical progression,
 
-2
+$$
+\frac{G}{a}=\frac{b}{G}.
+$$
 
-∴ G = ab, √ and G = ± ab. Formula (2)
+$$
+∴G^{2}=ab,
+$$
+
+√ and G = ± ab. Formula (2)
 
 Hence, the geometrical mean of any two numbers is the square root of their product.
 
-177. To Find the Sum of Any Number of Terms of a Geometrical Progression.
+177. **To Find the Sum of Any Number of Terms of a Geometrical Progression.**
 
 If l denote the last term, a the first term, n the number of terms, r the common ratio, and s the sum of the n terms, then
 
-2 3 −1
-
 $$
-s = a + ar + ar + ar +
+s=a+ar+ar^{2}+ar^{3}+\cdot\cdot\cdot+ar^{n-1}.
 $$
 
-- \+ ar n .
+Multiply by $r,rs=ar+ar^{2}+ar^{3}+\cdot\cdot\cdot+ar^{n-1}+ar^{n}.$ Therefore, by subtracting the first equation from the second,
 
-2 3 −1
+$$
+rs-s=ar^{n}-a,
+$$
 
-Multiply by r , rs = ar + ar + ar +
+or
 
-- \+ ar n + ar n .
+$$
+(r-1)s=a(r_{n}^{n}-1).
+$$
 
-Therefore, by subtracting the first equation from the second, rs − s = ar<sup>n</sup> − a, or (r − 1)s = a(r<sup>n</sup> − 1). a(r<sup>n</sup> − 1) ∴ s = . Formula (3) r − 1
+a(r − 1) ∴ s = . Formula (3) r − 1

@@ -470,7 +470,7 @@ fn regression_page_keeps_negative_exponent_with_its_prose_base() {
 
 #[test]
 fn regression_page_keeps_squared_suffix_with_its_row_label() {
-    assert_regression_page_has_script("plos-journal.pone.0311664-p14.pdf", "R<sup>2</sup> 0.355");
+    assert_regression_page_has_script("plos-journal.pone.0311664-p14.pdf", "| R<sup>2</sup> | 0.193 |");
 }
 
 #[test]

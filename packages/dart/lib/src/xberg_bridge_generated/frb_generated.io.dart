@@ -1069,6 +1069,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TableGrid dco_decode_box_autoadd_table_grid(dynamic raw);
 
   @protected
+  TessdataModel dco_decode_box_autoadd_tessdata_model(dynamic raw);
+
+  @protected
   TesseractConfig dco_decode_box_autoadd_tesseract_config(dynamic raw);
 
   @protected
@@ -2515,6 +2518,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TessdataModel? dco_decode_opt_box_autoadd_tessdata_model(dynamic raw);
+
+  @protected
   TesseractConfig? dco_decode_opt_box_autoadd_tesseract_config(dynamic raw);
 
   @protected
@@ -3007,6 +3013,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableOverlapPreference dco_decode_table_overlap_preference(dynamic raw);
+
+  @protected
+  TessdataModel dco_decode_tessdata_model(dynamic raw);
 
   @protected
   TesseractConfig dco_decode_tesseract_config(dynamic raw);
@@ -4138,6 +4147,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableGrid sse_decode_box_autoadd_table_grid(SseDeserializer deserializer);
+
+  @protected
+  TessdataModel sse_decode_box_autoadd_tessdata_model(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TesseractConfig sse_decode_box_autoadd_tesseract_config(
@@ -5970,6 +5984,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TessdataModel? sse_decode_opt_box_autoadd_tessdata_model(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TesseractConfig? sse_decode_opt_box_autoadd_tesseract_config(
     SseDeserializer deserializer,
   );
@@ -6574,6 +6593,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TableOverlapPreference sse_decode_table_overlap_preference(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TessdataModel sse_decode_tessdata_model(SseDeserializer deserializer);
 
   @protected
   TesseractConfig sse_decode_tesseract_config(SseDeserializer deserializer);
@@ -8117,6 +8139,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_table_grid(
     TableGrid self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_tessdata_model(
+    TessdataModel self,
     SseSerializer serializer,
   );
 
@@ -10455,6 +10483,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_tessdata_model(
+    TessdataModel? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_tesseract_config(
     TesseractConfig? self,
     SseSerializer serializer,
@@ -11239,6 +11273,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TableOverlapPreference self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_tessdata_model(TessdataModel self, SseSerializer serializer);
 
   @protected
   void sse_encode_tesseract_config(

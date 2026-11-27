@@ -1,10 +1,12 @@
-## Federal Register / Vol. 90, No. 221 / Wednesday, November 19, 2025 / Notices
+# Federal Register / Vol. 90, No. 221 / Wednesday, November 19, 2025 / Notices
 
-# 52069
+**52069**
 
-## FULL PART B COVERAGE
+Beneficiaries who file individual tax returns with modified adjusted gross income:
 
-Income-related Beneficiaries who file individual tax returns with modified Beneficiaries who file joint tax returns with modified Total monthly monthly adjustment adjusted gross income: adjusted gross income: premium amount amount
+# FULL PART B COVERAGE
+
+Beneficiaries who file joint tax returns with modified adjusted gross income: Income-related monthly adjustment amount Total monthly premium amount
 
 | Less than or equal to $109,000 ............................................ | Less than or equal to $218,000 ............................................ | $0.00 | $202.90 |
 | --- | --- | --- | --- |
@@ -16,9 +18,9 @@ Income-related Beneficiaries who file individual tax returns with modified Benef
 
 For beneficiaries with heads of households, qualifying widows the entire taxable year) or joint tax immunosuppressive drug only Part B or widowers with dependent children, returns, the 2026 Part B monthly coverage who file either individual tax or married individuals filing separately premium rates are as follows: returns (and are single individuals, who lived apart from their spouses for
 
-## PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
+# PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
 
-Income-related Beneficiaries who file individual tax returns with modified Beneficiaries who file joint tax returns with modified Total monthly monthly adjustment adjusted gross income: adjusted gross income: premium amount amount
+Beneficiaries who file individual tax returns with modified Beneficiaries who file joint tax returns with modified adjusted gross income: adjusted gross income: Income-related Total monthly monthly adjustment premium amount amount
 
 | Less than or equal to $109,000 ............................................ | Less than or equal to $218,000 ............................................ | $0.00 | $121.60 |
 | --- | --- | --- | --- |
@@ -28,35 +30,51 @@ Income-related Beneficiaries who file individual tax returns with modified Benef
 | Greater than $205,000 and less than $500,000 ................... | Greater than $410,000 and less than $750,000 .................. | 445.90 | 567.50 |
 | Greater than or equal to $500,000 ........................................ | Greater than or equal to $750,000 ....................................... | 486.50 | 608.10 |
 
-In addition, the monthly premium who are married and lived with their year, but who file separate tax returns rates to be paid by (or on behalf of) spouses at any time during the taxable from their spouses, are as follows: beneficiaries with full Part B coverage
+In addition, the monthly premium rates to be paid by (or on behalf of) beneficiaries with full Part B coverage who are married and lived with their spouses at any time during the taxable year, but who file separate tax returns from their spouses, are as follows:
 
-## FULL PART B COVERAGE
+# FULL PART B COVERAGE
 
-Income-related Beneficiaries who are married and lived with their spouses at any time during the year, but who file separate tax returns Total monthly monthly adjustment from their spouses, with modified adjusted gross income: premium amount amount Less than or equal to $109,000 ................................................................................................................................................ $0.00 $202.90 Greater than $109,000 and less than $391,000 ....................................................................................................................... 446.30 649.20 Greater than or equal to $391,000 ........................................................................................................................................... 487.00 689.90
+Beneficiaries who are married and lived with their spouses at any time during the year, but who file separate tax returns from their spouses, with modified adjusted gross income:
 
-The monthly premium rates to be B coverage who are married and lived tax returns from their spouses, are as paid by (or on behalf of) beneficiaries with their spouses at any time during follows: with immunosuppressive drug only Part the taxable year, but who file separate
+Less than or equal to $109,000 ................................................................................................................................................ Greater than $109,000 and less than $391,000 .......................................................................................................................
 
-## PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
+Income-related Total monthly monthly adjustment premium amount amount $0.00 $202.90
 
-Income-related Beneficiaries who are married and lived with their spouses at any time during the year, but who file separate tax returns Total monthly monthly adjustment from their spouses, with modified adjusted gross income:
+446.30 649.20
+
+Greater than or equal to $391,000 ...........................................................................................................................................
+
+The monthly premium rates to be B coverage who are married and lived paid by (or on behalf of) beneficiaries with their spouses at any time during with immunosuppressive drug only Part the taxable year, but who file separate
+
+# PART B IMMUNOSUPPRESSIVE DRUG COVERAGE ONLY
+
+Beneficiaries who are married and lived with their spouses at any time during the year, but who file separate tax returns from their spouses, with modified adjusted gross income:
 
 Less than or equal to $109,000 ................................................................................................................................................ Greater than $109,000 and less than $391,000 ....................................................................................................................... Greater than or equal to $391,000 ...........................................................................................................................................
 
+Calendar year
+
 The Part B annual deductible for 2026 is $283.00 for all beneficiaries.
 
-## TABLE 2—PROJECTION FACTORS<sup>1</sup>
+Physician Durable fee medical schedule equipment
 
-### [12-Month Periods Ending December 31 of 2023–2026 (in percent)]
+TABLE 2—PROJECTION FACTORS<sup>1</sup>
 
-Physician Durable Physician- Other Home
+## [12-Month Periods Ending December 31 of 2023–2026 (in percent)]
 
-premium amount amount $0.00 $121.60
+Physician- Other Practitioner administered practitioner Lab<sup>2</sup> drugs services<sup>3</sup>
+
+487.00 689.90
+
+tax returns from their spouses, are as follows:
+
+Income-related Total monthly monthly adjustment premium amount amount $0.00 $121.60
 
 445.90 567.50
 
 486.50 608.10
 
-Other Practitioner Outpatient Hospital Managed Calendar year fee medical administered practitioner health institutional Lab<sup>2</sup> hospital lab<sup>4</sup> care schedule equipment drugs services<sup>3</sup> agency services<sup>5</sup>
+Home Outpatient Hospital health hospital lab<sup>4</sup> agency Other Managed institutional care services<sup>5</sup>
 
 | Aged: |  |  |  |  |  |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -65,7 +83,3 @@ Other Practitioner Outpatient Hospital Managed Calendar year fee medical adminis
 | 2025 ............... | 3.2 | 15.8 | 3.4 | 20.5 | 8.6 | 10.0 | 3.6 | 3.9 | 6.2 | 4.4 |
 | 2026 ............... | 5.0 | 6.1 | 4.9 ¥ 29.7 |  | 7.3 | 8.9 | 6.0 | 2.5 | 5.5 | 8.7 |
 | Disabled: |  |  |  |  |  |  |  |  |  |  |
-
-VerDate Sep\<11\>2014 18:13 Nov 18, 2025 Jkt 268001 PO 00000 Frm 00033 Fmt 4703 Sfmt 4703 E:\\FR\\FM\\19NON1.SGM 19NON1
-
-khammond on DSK9W7S144PROD with NOTICES

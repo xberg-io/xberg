@@ -6802,7 +6802,50 @@ fn covers_and_carries_with(seg: &SegmentData, table: &TableCoverage, row_holds: 
     }
     #[cfg(test)]
     CARRY_CHECKS.with(|checks| checks.set(checks.get() + 1));
+    // A formula's text is its TeX, which no cell spells: its words and function names are what the grid
+    // can carry. Every one must be there, so a formula in a column the grid omitted is kept.
+    if crate::pdf::native::math_latex::sentinels::contains_sentinel(seg_text) {
+        let spelled = tex_as_cell_text(seg_text);
+        return table.carries_with(&spelled, |normalized| {
+            table.rows.iter().any(|row| row.contains(normalized))
+        });
+    }
     table.carries_with(seg_text, row_holds)
+}
+
+/// Function names a TeX command stands for in printed text, kept when commands are stripped.
+const TEX_FUNCTION_NAMES: [&str; 11] = [
+    "sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "exp", "lim", "max",
+];
+
+/// A segment holding math as the words a table cell would spell: sentinels, TeX commands (but
+/// not the function names they print) and the script and group marks removed.
+fn tex_as_cell_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if crate::pdf::native::math_latex::sentinels::is_sentinel(ch) {
+            out.push(' ');
+        } else if ch == '\\' {
+            let mut name = String::new();
+            while let Some(&next) = chars.peek() {
+                if !next.is_ascii_alphabetic() {
+                    break;
+                }
+                name.push(next);
+                chars.next();
+            }
+            if TEX_FUNCTION_NAMES.contains(&name.as_str()) {
+                out.push_str(&name);
+            }
+            out.push(' ');
+        } else if matches!(ch, '{' | '}' | '^' | '_') {
+            out.push(' ');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -9069,7 +9112,14 @@ fn dehyphenate_line_breaks(
         {
             continue;
         }
-        let keeps_hyphen = match classify_wrap(&trailing.text, &leading.text, hyphen_witnesses) {
+        // A hyphen drawn as its own run leaves the word stem in the segment before it.
+        let stem_segment = (trailing.text.chars().count() == 1 && para.lines[i].segments.len() >= 2)
+            .then(|| para.lines[i].segments.len() - 2);
+        let left = match stem_segment {
+            Some(index) => format!("{}{}", para.lines[i].segments[index].text, trailing.text),
+            None => trailing.text.clone(),
+        };
+        let keeps_hyphen = match classify_wrap(&left, &leading.text, hyphen_witnesses) {
             WrapHyphen::NotApplicable => continue,
             WrapHyphen::Weld => false,
             WrapHyphen::KeepHyphen => true,
@@ -9079,13 +9129,26 @@ fn dehyphenate_line_breaks(
         let remainder = continuation[leading_word.len()..].trim_start().to_string();
         let leading_word = leading_word.to_string();
 
-        if let Some(seg) = para.lines[i].segments.last_mut() {
-            let hyphen_len = seg.text.chars().next_back().map_or(0, char::len_utf8);
-            seg.text.truncate(seg.text.len() - hyphen_len);
-            if keeps_hyphen {
-                seg.text.push('-');
+        match stem_segment {
+            Some(index) => {
+                let line = &mut para.lines[i];
+                line.segments.pop();
+                let stem = &mut line.segments[index];
+                if keeps_hyphen {
+                    stem.text.push('-');
+                }
+                stem.text.push_str(&leading_word);
             }
-            seg.text.push_str(&leading_word);
+            None => {
+                if let Some(seg) = para.lines[i].segments.last_mut() {
+                    let hyphen_len = seg.text.chars().next_back().map_or(0, char::len_utf8);
+                    seg.text.truncate(seg.text.len() - hyphen_len);
+                    if keeps_hyphen {
+                        seg.text.push('-');
+                    }
+                    seg.text.push_str(&leading_word);
+                }
+            }
         }
         if let Some(seg) = para.lines[i + 1].segments.first_mut() {
             seg.text = remainder;

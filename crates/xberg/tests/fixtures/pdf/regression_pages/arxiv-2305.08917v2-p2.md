@@ -1,95 +1,51 @@
-attractive choice for simulation when applicable. Correspondingly, exciting opportunities open up when new interesting physical models are found which can be simulated using this method [46–48]. Recently, there has been intense experimental development to study the physics of confinement and quantum spin liquids [49–55] using tools of quantum simulation and computation. The microscopic models used to capture the physics involve fermions interacting with
-
-- (Abelian) gauge fields. In this Letter, we develop meron cluster algorithms for a class of experimentally relevant models [56, 57], enabling a robust elucidation of their phase diagrams. We also introduce new classes of Z~2~ and U(1) multi-flavored gauge-fermion theories, which might be realized in cold-atom setups and also be further studied using Monte Carlo techniques. Notably, the U(1) family of these models seems to be one of the few families that falls outside the class of models known to be simulable by auxiliary-field methods, as are [23, 58, 59]. Moreover, the worldline nature of the method makes it easily employed to study the corresponding phases in these theories in higher spatial dimensions, and the resulting physically-relevant configurations are promising inputs for machine learning algorithms.
-
-Models.– We start with the half-filled t-V model–a spinless fermionic Hamiltonian involving only the most local interactions, X t 1 1 † † H = − (c~x~c~y~ + c~y~c~x~) + V (n~x~ − )(n~y~ − ) (1) 2 2 2
+attractive choice for simulation when applicable. Correspondingly, exciting opportunities open up when new interesting physical models are found which can be simulated using this method [46–48]. Recently, there has been intense experimental development to study the physics of confinement and quantum spin liquids [49–55] using tools of quantum simulation and computation. The microscopic models used to capture the physics involve fermions interacting with (Abelian) gauge fields. In this Letter, we develop meron cluster algorithms for a class of experimentally relevant models [56, 57], enabling a robust elucidation of their phase diagrams. We also introduce new classes of $\mathbb{Z}&#95;{2}$ and U(1) multi-flavored gauge-fermion theories, which might be realized in cold-atom setups and also be further studied using Monte Carlo techniques. Notably, the U(1) family of these models seems to be one of the few families that falls outside the class of models known to be simulable by auxiliary-field methods, as are [23, 58, 59]. Moreover, the worldline nature of the method makes it easily employed to study the corresponding phases in these theories in higher spatial dimensions, and the resulting physically-relevant configurations are promising inputs for machine learning algorithms. Models.– We start with the half-filled t-V model–a spinless fermionic Hamiltonian involving only the most local interactions,
 
 $$
-⟨xy⟩ †
+H=\frac{X}{\langle xy\rangle}-\frac{t}{2}(c_{x}^{\dagger}c_{y}+c_{y}^{\dagger}c_{x})+V(n_{x}-\frac{1}{2})(n_{y}-\frac{1}{2})
 $$
 
-Here ⟨xy⟩ are the nearest neighbor site pairs, c , c are the creation and annihilation operators respectively, and the repulsive interaction V is given in terms of the number
+(1) Here ⟨xy⟩ are the nearest neighbor site pairs, $c^{\dagger},c$ are the creation and annihilation operators respectively, and the repulsive interaction V is given in terms of the number operator $n=c^{\dagger}c$. It is simulable by meron clusters for V ≥ 2t [45, 48]. In this Letter, we extend the meron cluster method to physically interesting Hamiltonians involving gauge fields, which are lower-dimensional versions of quantum electrodynamics (QED) [60, 61]. The $\mathbb{Z}&#95;{2}$- and U(1)-gauge symmetric families are given by:
 
-†
+des
 
-operator $n = c c$. It is simulable by meron clusters for $V ≥ 2t &#91;45, 48&#93;$. In this Letter, we extend the meron cluster method to physically interesting Hamiltonians involving gauge fields, which are lower-dimensional versions of quantum electrodynamics (QED) [60, 61]. The Z~2~- and U(1)-gauge symmetric families are given by:
-
-N~f~
-
-XY
-
-(g) (g) (g),des
+$H_{N_{f}}^{(g)}=-\frac{XY^{N_{f}}}{\langle xy\rangle f=1}H_{\langle xy\rangle,f}^{(g)}+H_{\langle xy\rangle,f}^{(g),}$ (2) The label $g\in\\{U(1),\mathbb{Z}&#95;{2}\\}$ is the gauge symmetry, with
 
 $$
-HNf = − H + H (2) ⟨xy⟩,f ⟨xy⟩,f
+H_{\langle xy\rangle,f}^{\mathbb{Z}_{2}}=tc_{x,f}^{\dagger}s_{xy,f}^{1}c_{y,f}+c_{y,f}^{\dagger}s_{xy,f}^{1}c_{x,f}
 $$
 
-$$
-⟨xy⟩ f=1
-$$
-
-The label $g ∈ {U(1), Z2}$ is the gauge symmetry, with
-
-† 1 † 1
+(3)
 
 $$
-H⟨xy⟩,f Z2 = t c sxy,fcy,f + c sxy,fcx,f x,f y,f (3)
+H_{\langle xy\rangle,f}^{U(1)}=tc_{x,f}^{\dagger}s_{xy,f}^{+}c_{y,f}+c_{y,f}^{\dagger}s_{xy,f}^{-}c_{x,f}.
 $$
 
-U(1) † †
+The hopping of spinless fermions between the nearest neighbors ⟨xy⟩ are now governed by the presence of gauge fields, represented by spin-1/2 operators, $s_{xy}^{k}$, on the bond. Fig. 1 illustrates the model degrees of freedom.
 
-$H = t c s+$ c~y,f~ + c s<sup>−</sup> c~x,f~ . ⟨xy⟩,f x,f xy,f y,f xy,f The hopping of spinless fermions between the nearest neighbors ⟨xy⟩ are now governed by the presence of gauge fields, represented by spin-1/2 operators, s~xy~ <sup>k</sup> , on the bond. Fig. 1 illustrates the model degrees of freedom.
+des
 
-(g),des
-
-Then H is a designer term [62] that makes the mod⟨xy⟩,f
+Then $H_{\langle xy\rangle,f}^{(g),}$ is a designer term [62] that makes the mod-
 
 2
 
-fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t H~⟨xy⟩,f~ <sup>Z</sup>~2~<sup>,des</sup> = −2t n~x,f~ − n~y,f~ − + 2 2 2 1 1 U(1),des
-
-- H = −t n (4) ⟨xy⟩,f x,f − n~y,f~ − 2 2 t
-
-3
-
-− ts~xy,f~ (n~y,f~ − n~x,f~) + 4 These terms serve a similar role as the $V = 2t$ term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric $V ≥ 0$ term can be added to the models here in a signproblem-free way. In the Z~2~ gauge theory, the gauge field
-
-$s1 = σ1/2$ couples to fermions, and the local Z~2~ symmetry is manifest via the commutation [Q~x~, $HZ2&#93; = 0, P Q$
-
-n~x,f~ 3 3 f
-
-where Q~x~ = (−1) s s , αˆ are the f,αˆ x,x+ˆα,f x−α,x,fˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~ , which commutes Q<sup>(1)</sup>
-
-- (1) 
-
-with H<sup>U</sup> is given by V~U~ = e<sup>iθxGx</sup> (1) , with G~x~ = h x i P P
-
-3 3
-
-n − s − s + ((−1)<sup>x</sup> x,f − 1)/2 .
+fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with $N_{f}=1.$ els simulable by the meron algorithm, des$H_{\langle xy\rangle,f}^{\mathbb{Z}&#95;{2},}=-2tn_{x,f}-\frac{1}{2}$
 
 $$
-f αˆ x,x+ˆα,f x−α,x,fˆ
+n_{y,f}-\frac{1}{2}+\frac{t}{2}
 $$
 
-In the terminology of gauge fields, our microscopic models are quantum link models [63], which realize the continuous gauge invariance using finite-dimensional quantum degrees of freedom. The identification with usual gauge
-
-† 3
-
-field operators is $U = s+$ , $U = s−$ , E = s~xy,f~ xy,f . xy,f xy,f xy,f We note that a straightforward application of the meron idea necessitates the introduction of an equivalent flavor index for gauge links as fermion flavors. Naively, the total Gauss law can be expressed through a product (Z~2~) or sum (U(1)) of the Gauss law of individual flavors degrees of freedom, and the resulting theories have
-
-⊗N~f~
-
-Z~2~ and U(1)<sup>⊗N</sup>~f~ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material), X
-
-U(1) U(1) 3 3
+des (4)$H_{\langle xy\rangle,f}^{U(1),}$ $=-tn_{x,f}-\frac{1}{2}$
 
 $$
-HNf=2 →HNf=2 + J sxy,1sxy,2, (5)
+n_{y,f}-\frac{1}{2}
 $$
 
+$$-ts_{xy,f}^{3}(n_{y,f}-n_{x,f})+\frac{t}{4}$$
+
+These terms serve a similar role as the V = 2t term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric V ≥ 0 term can be added to the models here in a signproblem-free way. In the $\mathbb{Z}&#95;{2}$ gauge theory, the gauge field $s^{1}=\sigma^{1}/2$ couples to fermions, and the local $\mathbb{Z}&#95;{2}$ symmetry is manifest via the commutation${}&#95;{{}&#95;{\alpha,f}s}{}&#95;{3}{}&#95;{x}&#91;Q_{x},H^{\mathbb{Z}&#95;{2}}&#93;=0,$ where `Q_{x}=(-1)^{P}{}^{{}_{{}_{f}n_{x,f}}Q}`${}&#95;{f,\alpha}s_{x,x}^{3}$ ${}&#95;{-\alpha,x,f},\alpha$ˆ are the ~ˆ~ +ˆ ˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~ , which commutes Q<sup>(1)</sup> with is given by V~U~ = e<sup>iθxGx</sup> (1) , with G~x~ = x i$P_{f}\frac{{}&#95;{h}H}{n_{x,f}}\frac{U(1)}{-}P$ 3${}&#95;{\alpha}s_{x,x}^{3}$ − s~x~${}&#95;{-\alpha,x,f}+((-1)^{x}-1)/2.$ˆ +ˆα,f ~ˆ~ In the terminology of gauge fields, our microscopic models are quantum link models [63], which realize the continuous gauge invariance using finite-dimensional quantum degrees of freedom. The identification with usual gauge field operators is $U_{xy,f}=s_{xy,f}^{+},U_{xy,f}^{\dagger}=s_{xy,f}^{-},E=s_{xy,f}^{3}.$ We note that a straightforward application of the meron idea necessitates the introduction of an equivalent flavor index for gauge links as fermion flavors. Naively, the total Gauss law can be expressed through a product $(\mathbb{Z}&#95;{2})$ or sum (U(1)) of the Gauss law of individual flavors degrees of freedom, and the resulting theories have $\mathbb{Z}&#95;{2}^{\otimes N_{f}}$ and $U(1)^{\otimes N_{f}}$ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material),
+
 $$
-⟨xy⟩
+H_{N_{f}=2}^{U(1)}\rightarrow H_{N_{f}=2}^{U(1)}+J\frac{X}{\langle xy\rangle}s_{xy,1}^{3}s_{xy,2}^{3},
 $$
 
-or through a Hubbard-U interaction for both Z~2~ and U(1)-symmetric models [48]. These additions directly
+(5) or through a Hubbard-U interaction for both $\mathbb{Z}&#95;{2}$ and U(1)-symmetric models [48]. These additions directly

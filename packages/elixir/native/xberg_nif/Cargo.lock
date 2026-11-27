@@ -939,9 +939,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.3"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
+checksum = "95e45cf2980b2d467be49a9ed942c9179b701063a7ca3d037de7ee9bd67f8d66"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1084,7 +1084,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1315,9 +1315,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.5"
+version = "1.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb62b11fc64a5593db360a33ae917ce34dd14cff2b21cf75c8798616c8834f21"
+checksum = "9ff5bd3e9c18ab6280f8ebcb08ed9f9d41cbb915e45f23a911a24471016f6a8a"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1372,9 +1372,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.5"
+version = "1.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5caf7992d16ddcacfd58685d16c23899931b064e71cf20f89892876bc389f22"
+checksum = "f3901fcf5d6fd6697ea12f33db2fba975667752cb6c3e9363b1faa2b12be43e7"
 
 [[package]]
 name = "crc-fast"
@@ -1714,7 +1714,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1894,7 +1894,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2075,9 +2075,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+checksum = "3e44f110d1777dc6559a51e7d45083945ded4f1bf3305494350f693b6d20b9c8"
 
 [[package]]
 name = "finl_unicode"
@@ -2894,9 +2894,9 @@ checksum = "d45ed4d99334da2a2f221504e8ffc8ad09baf2a452b154465a976bfde697b004"
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.23.3"
+version = "3.23.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97df00d41ebf6a85b379912c09d4c7758cc6c57d15d9b5b24f3b9b58424ee0e5"
+checksum = "9ad4dec09e3ad41baad5496380d1c6f86c43021dfdf4e4e26e61f4992ae49a98"
 dependencies = [
  "ahash",
  "astral-html",
@@ -3860,9 +3860,9 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "liter-llm"
-version = "2.7.6"
+version = "2.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84a3c152e953f1ae6cc2f7cfafd31e5f48b0871d045cab0dfdd5c990bc3b208a"
+checksum = "9557d8a31e3f8ef6104a454f5c9c5d8f8735826359bf4eeeec7884aa66d7ce7b"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -4072,6 +4072,12 @@ checksum = "ef1d73c59a56771343712b22ea5615092c612c16ba291c0979e3105dfeec4890"
 dependencies = [
  "sha2",
 ]
+
+[[package]]
+name = "lzma-rust2"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c7861572250348d13073a9035c6a83f3e583ec9a76a65ce92f338fe1107d8f5"
 
 [[package]]
 name = "macro_rules_attribute"
@@ -4571,7 +4577,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5475,7 +5481,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6061,7 +6067,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15469072ec2f788a9bfa1f7ea4edca49e45c14d754ce38ae3df5396ccc9f041c"
 dependencies = [
  "g2p",
- "image 0.24.9",
+ "image 0.25.10",
  "lru 0.18.5",
  "zeroize",
 ]
@@ -6135,7 +6141,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6218,7 +6224,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6310,9 +6316,9 @@ dependencies = [
 
 [[package]]
 name = "sceptre"
-version = "0.10.1"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f5bf29e8ff2f642d47c54593c9863f8f1af07aaffef8f0201d5c3038ef93c13"
+checksum = "9a0db34f5e29168b733ecb8f97886099ea562db34145b22763604144cfe75024"
 dependencies = [
  "hf-hub",
  "image 0.25.10",
@@ -6571,9 +6577,9 @@ dependencies = [
 
 [[package]]
 name = "sevenz-rust2"
-version = "0.25.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5e465701779cbc6d0d10cf907f175035cfdd50b8d3cb628d7f1f435ef02972f"
+checksum = "2e668242e054ba8b7360918104c30c6685bdedf847909a784cf267d002f40a6a"
 dependencies = [
  "aes",
  "bzip2",
@@ -6581,7 +6587,7 @@ dependencies = [
  "crc32fast",
  "getrandom 0.4.3",
  "js-sys",
- "lzma-rust2 0.25.0",
+ "lzma-rust2 0.26.0",
  "ppmd-rust",
  "sha2",
  "wasm-bindgen",
@@ -7252,7 +7258,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7906,9 +7912,9 @@ checksum = "d0af592be68c579aa78a16846bd19422978c3c52e438523d45ff5d1bff1f9d4a"
 
 [[package]]
 name = "tree-sitter-language-pack"
-version = "1.27.3"
+version = "1.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34dadf8eb61ccb510ebfe7f343282ede4d8a7c86cae43526609d9fe71b272e2c"
+checksum = "012c6a4ddf41a5f1c8783ab8d2273b9d5ffffce8c0445778512ed89dd6ffef0b"
 dependencies = [
  "ahash",
  "cc",
@@ -8596,7 +8602,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8868,7 +8874,7 @@ dependencies = [
 
 [[package]]
 name = "xberg"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "aes-gcm",
  "ahash",
@@ -9010,7 +9016,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-candle-ocr"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "base64 0.23.1",
  "candle-core",
@@ -9030,7 +9036,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
@@ -9044,7 +9050,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libheif"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "enumn",
  "four-cc",
@@ -9054,7 +9060,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libwpd"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "cc",
  "flate2",
@@ -9067,7 +9073,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-native-pdf"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "aes",
  "base64 0.23.1",
@@ -9113,7 +9119,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-paddle-ocr"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -9128,7 +9134,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-pdfium-render"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -9145,7 +9151,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-tesseract"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "cc",
  "cmake",
@@ -9160,7 +9166,7 @@ dependencies = [
 
 [[package]]
 name = "xberg_nif"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",

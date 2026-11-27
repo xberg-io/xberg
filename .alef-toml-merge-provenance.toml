@@ -1584,21 +1584,6 @@ values = ["A001", "N801"]
 
 [[entries]]
 relative_path = "poly.toml"
-key_path = "per_file_ignores.integrations/node/llamaindex-xberg/src/nodeParser.ts"
-values = ["no-console"]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "per_file_ignores.integrations/node/llamaindex-xberg/src/reader.ts"
-values = ["no-console"]
-
-[[entries]]
-relative_path = "poly.toml"
-key_path = "per_file_ignores.integrations/node/llamaindex-xberg/src/readerMapping.ts"
-values = ["no-console"]
-
-[[entries]]
-relative_path = "poly.toml"
 key_path = "per_file_ignores.packages/**"
 values = [
   "comment",

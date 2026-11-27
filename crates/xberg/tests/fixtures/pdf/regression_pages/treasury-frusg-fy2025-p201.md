@@ -1,8 +1,4 @@
-# United States Government
-
-# Other Information (Unaudited) for the
-
-# Years Ended September 30, 2025, and 2024
+# United States Government Other Information (Unaudited) for the Years Ended September 30, 2025, and 2024
 
 ## Tax Burden
 

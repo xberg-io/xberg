@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -162837844;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -483114380;
 
 // Section: executor
 
@@ -10951,6 +10951,34 @@ fn wire__crate__create_table_overlap_preference_from_json_impl(
         },
     )
 }
+fn wire__crate__create_tessdata_model_from_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_tessdata_model_from_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_)
+            };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::create_tessdata_model_from_json(api_json)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__create_tesseract_config_from_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -14248,6 +14276,7 @@ const _: fn() = || {
         let _: bool = ExtractionConfig.use_cache;
         let _: bool = ExtractionConfig.enable_quality_processing;
         let _: Option<crate::OcrConfig> = ExtractionConfig.ocr;
+        let _: Option<crate::TessdataModel> = ExtractionConfig.tessdata_model;
         let _: bool = ExtractionConfig.force_ocr;
         let _: crate::OcrStrategy = ExtractionConfig.ocr_strategy;
         let _: Option<Vec<i64>> = ExtractionConfig.force_ocr_pages;
@@ -15148,7 +15177,9 @@ const _: fn() = || {
         let _: Option<crate::SecurityLimits> = OcrConfig.security_limits;
         let _: Option<std::collections::HashMap<String, Vec<u8>>> = OcrConfig.tessdata_bytes;
         let _: Option<String> = OcrConfig.tessdata_path;
+        let _: Option<crate::TessdataModel> = OcrConfig.tessdata_model;
         let _: bool = OcrConfig.numeric_repair;
+        let _: bool = OcrConfig.image_paddle_fallback;
     }
     {
         let OcrElement = None::<crate::OcrElement>.unwrap();
@@ -15468,6 +15499,7 @@ const _: fn() = || {
         let _: crate::PdfBackend = PdfConfig.backend;
         let _: bool = PdfConfig.extract_vector_geometry;
         let _: Option<crate::PlanRegionConfig> = PdfConfig.plan_regions;
+        let _: bool = PdfConfig.keep_white_text;
     }
     {
         let PdfFormField = None::<crate::PdfFormField>.unwrap();
@@ -19844,6 +19876,7 @@ impl SseDecode for crate::ExtractionConfig {
         let mut var_useCache = <bool>::sse_decode(deserializer);
         let mut var_enableQualityProcessing = <bool>::sse_decode(deserializer);
         let mut var_ocr = <Option<crate::OcrConfig>>::sse_decode(deserializer);
+        let mut var_tessdataModel = <Option<crate::TessdataModel>>::sse_decode(deserializer);
         let mut var_forceOcr = <bool>::sse_decode(deserializer);
         let mut var_ocrStrategy = <crate::OcrStrategy>::sse_decode(deserializer);
         let mut var_forceOcrPages = <Option<Vec<i64>>>::sse_decode(deserializer);
@@ -19901,6 +19934,7 @@ impl SseDecode for crate::ExtractionConfig {
             use_cache: var_useCache,
             enable_quality_processing: var_enableQualityProcessing,
             ocr: var_ocr,
+            tessdata_model: var_tessdataModel,
             force_ocr: var_forceOcr,
             ocr_strategy: var_ocrStrategy,
             force_ocr_pages: var_forceOcrPages,
@@ -23395,7 +23429,9 @@ impl SseDecode for crate::OcrConfig {
         let mut var_securityLimits = <Option<crate::SecurityLimits>>::sse_decode(deserializer);
         let mut var_tessdataBytes = <Option<std::collections::HashMap<String, Vec<u8>>>>::sse_decode(deserializer);
         let mut var_tessdataPath = <Option<String>>::sse_decode(deserializer);
+        let mut var_tessdataModel = <Option<crate::TessdataModel>>::sse_decode(deserializer);
         let mut var_numericRepair = <bool>::sse_decode(deserializer);
+        let mut var_imagePaddleFallback = <bool>::sse_decode(deserializer);
         return crate::OcrConfig {
             enabled: var_enabled,
             backend: var_backend,
@@ -23416,7 +23452,9 @@ impl SseDecode for crate::OcrConfig {
             security_limits: var_securityLimits,
             tessdata_bytes: var_tessdataBytes,
             tessdata_path: var_tessdataPath,
+            tessdata_model: var_tessdataModel,
             numeric_repair: var_numericRepair,
+            image_paddle_fallback: var_imagePaddleFallback,
         };
     }
 }
@@ -24834,6 +24872,17 @@ impl SseDecode for Option<crate::SummarizationConfig> {
     }
 }
 
+impl SseDecode for Option<crate::TessdataModel> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::TessdataModel>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::TesseractConfig> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -25911,6 +25960,7 @@ impl SseDecode for crate::PdfConfig {
         let mut var_backend = <crate::PdfBackend>::sse_decode(deserializer);
         let mut var_extractVectorGeometry = <bool>::sse_decode(deserializer);
         let mut var_planRegions = <Option<crate::PlanRegionConfig>>::sse_decode(deserializer);
+        let mut var_keepWhiteText = <bool>::sse_decode(deserializer);
         return crate::PdfConfig {
             extract_images: var_extractImages,
             extract_tables: var_extractTables,
@@ -25927,6 +25977,7 @@ impl SseDecode for crate::PdfConfig {
             backend: var_backend,
             extract_vector_geometry: var_extractVectorGeometry,
             plan_regions: var_planRegions,
+            keep_white_text: var_keepWhiteText,
         };
     }
 }
@@ -27341,6 +27392,18 @@ impl SseDecode for crate::TableOverlapPreference {
     }
 }
 
+impl SseDecode for crate::TessdataModel {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::TessdataModel::Fast,
+            1 => crate::TessdataModel::Best,
+            _ => unreachable!("Invalid variant for TessdataModel: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::TesseractConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -28551,108 +28614,109 @@ fn pde_ffi_dispatcher_primary_impl(
         371 => wire__crate__create_table_model_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "layout-types")]
         372 => wire__crate__create_table_overlap_preference_from_json_impl(port, ptr, rust_vec_len, data_len),
-        373 => wire__crate__create_tesseract_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        374 => wire__crate__create_text_annotation_from_json_impl(port, ptr, rust_vec_len, data_len),
-        375 => wire__crate__create_text_direction_from_json_impl(port, ptr, rust_vec_len, data_len),
-        376 => wire__crate__create_text_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        377 => wire__crate__create_text_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        378 => wire__crate__create_tier_strategy_from_json_impl(port, ptr, rust_vec_len, data_len),
+        373 => wire__crate__create_tessdata_model_from_json_impl(port, ptr, rust_vec_len, data_len),
+        374 => wire__crate__create_tesseract_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        375 => wire__crate__create_text_annotation_from_json_impl(port, ptr, rust_vec_len, data_len),
+        376 => wire__crate__create_text_direction_from_json_impl(port, ptr, rust_vec_len, data_len),
+        377 => wire__crate__create_text_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        378 => wire__crate__create_text_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        379 => wire__crate__create_tier_strategy_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "quality")]
-        379 => wire__crate__create_token_reduction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        380 => wire__crate__create_token_reduction_options_from_json_impl(port, ptr, rust_vec_len, data_len),
-        381 => wire__crate__create_tokenizer_backend_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        380 => wire__crate__create_token_reduction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        381 => wire__crate__create_token_reduction_options_from_json_impl(port, ptr, rust_vec_len, data_len),
+        382 => wire__crate__create_tokenizer_backend_dart_impl_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "transcription-types")]
-        382 => wire__crate__create_transcription_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        383 => wire__crate__create_translation_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        384 => wire__crate__create_translation_from_json_impl(port, ptr, rust_vec_len, data_len),
+        383 => wire__crate__create_transcription_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        384 => wire__crate__create_translation_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        385 => wire__crate__create_translation_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "tree-sitter")]
-        385 => wire__crate__create_tree_sitter_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        386 => wire__crate__create_tree_sitter_config_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "tree-sitter")]
-        386 => wire__crate__create_tree_sitter_process_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        387 => wire__crate__create_tree_sitter_process_config_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "candle-ocr")]
-        387 => wire__crate__create_trocr_backend_options_from_json_impl(port, ptr, rust_vec_len, data_len),
-        388 => wire__crate__create_uri_kind_from_json_impl(port, ptr, rust_vec_len, data_len),
-        389 => wire__crate__create_url_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        390 => wire__crate__create_url_extraction_mode_from_json_impl(port, ptr, rust_vec_len, data_len),
+        388 => wire__crate__create_trocr_backend_options_from_json_impl(port, ptr, rust_vec_len, data_len),
+        389 => wire__crate__create_uri_kind_from_json_impl(port, ptr, rust_vec_len, data_len),
+        390 => wire__crate__create_url_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        391 => wire__crate__create_url_extraction_mode_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "heuristics")]
-        391 => wire__crate__create_user_chunk_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        392 => wire__crate__create_validator_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        393 => wire__crate__create_vector_color_from_json_impl(port, ptr, rust_vec_len, data_len),
-        394 => wire__crate__create_vector_dash_pattern_from_json_impl(port, ptr, rust_vec_len, data_len),
-        395 => wire__crate__create_vector_line_cap_from_json_impl(port, ptr, rust_vec_len, data_len),
-        396 => wire__crate__create_vector_line_join_from_json_impl(port, ptr, rust_vec_len, data_len),
-        397 => wire__crate__create_vector_path_from_json_impl(port, ptr, rust_vec_len, data_len),
-        398 => wire__crate__create_vector_point_from_json_impl(port, ptr, rust_vec_len, data_len),
-        399 => wire__crate__create_vector_segment_from_json_impl(port, ptr, rust_vec_len, data_len),
-        400 => wire__crate__create_vector_stroke_from_json_impl(port, ptr, rust_vec_len, data_len),
-        401 => wire__crate__create_vector_subpath_from_json_impl(port, ptr, rust_vec_len, data_len),
-        402 => wire__crate__create_vlm_fallback_policy_from_json_impl(port, ptr, rust_vec_len, data_len),
+        392 => wire__crate__create_user_chunk_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        393 => wire__crate__create_validator_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        394 => wire__crate__create_vector_color_from_json_impl(port, ptr, rust_vec_len, data_len),
+        395 => wire__crate__create_vector_dash_pattern_from_json_impl(port, ptr, rust_vec_len, data_len),
+        396 => wire__crate__create_vector_line_cap_from_json_impl(port, ptr, rust_vec_len, data_len),
+        397 => wire__crate__create_vector_line_join_from_json_impl(port, ptr, rust_vec_len, data_len),
+        398 => wire__crate__create_vector_path_from_json_impl(port, ptr, rust_vec_len, data_len),
+        399 => wire__crate__create_vector_point_from_json_impl(port, ptr, rust_vec_len, data_len),
+        400 => wire__crate__create_vector_segment_from_json_impl(port, ptr, rust_vec_len, data_len),
+        401 => wire__crate__create_vector_stroke_from_json_impl(port, ptr, rust_vec_len, data_len),
+        402 => wire__crate__create_vector_subpath_from_json_impl(port, ptr, rust_vec_len, data_len),
+        403 => wire__crate__create_vlm_fallback_policy_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "transcription-types")]
-        403 => wire__crate__create_whisper_model_from_json_impl(port, ptr, rust_vec_len, data_len),
-        404 => wire__crate__create_xlsx_app_properties_from_json_impl(port, ptr, rust_vec_len, data_len),
-        405 => wire__crate__create_xml_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        406 => wire__crate__create_xml_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        404 => wire__crate__create_whisper_model_from_json_impl(port, ptr, rust_vec_len, data_len),
+        405 => wire__crate__create_xlsx_app_properties_from_json_impl(port, ptr, rust_vec_len, data_len),
+        406 => wire__crate__create_xml_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        407 => wire__crate__create_xml_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "keywords-yake")]
-        407 => wire__crate__create_yake_params_from_json_impl(port, ptr, rust_vec_len, data_len),
-        408 => wire__crate__create_year_range_from_json_impl(port, ptr, rust_vec_len, data_len),
-        409 => wire__crate__doctor_impl(port, ptr, rust_vec_len, data_len),
-        410 => wire__crate__extract_impl(port, ptr, rust_vec_len, data_len),
-        411 => wire__crate__extract_batch_impl(port, ptr, rust_vec_len, data_len),
-        412 => wire__crate__extract_batch_with_input_options_impl(port, ptr, rust_vec_len, data_len),
-        413 => wire__crate__extract_batch_with_input_options_json_impl(port, ptr, rust_vec_len, data_len),
+        408 => wire__crate__create_yake_params_from_json_impl(port, ptr, rust_vec_len, data_len),
+        409 => wire__crate__create_year_range_from_json_impl(port, ptr, rust_vec_len, data_len),
+        410 => wire__crate__doctor_impl(port, ptr, rust_vec_len, data_len),
+        411 => wire__crate__extract_impl(port, ptr, rust_vec_len, data_len),
+        412 => wire__crate__extract_batch_impl(port, ptr, rust_vec_len, data_len),
+        413 => wire__crate__extract_batch_with_input_options_impl(port, ptr, rust_vec_len, data_len),
+        414 => wire__crate__extract_batch_with_input_options_json_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "redaction")]
-        414 => wire__crate__extract_with_external_redaction_impl(port, ptr, rust_vec_len, data_len),
+        415 => wire__crate__extract_with_external_redaction_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "markdown-footnotes")]
-        415 => wire__crate__find_unmarked_claims_impl(port, ptr, rust_vec_len, data_len),
-        416 => wire__crate__list_document_extractors_impl(port, ptr, rust_vec_len, data_len),
-        417 => wire__crate__list_embedding_backends_impl(port, ptr, rust_vec_len, data_len),
-        418 => wire__crate__list_ocr_backend_capabilities_impl(port, ptr, rust_vec_len, data_len),
-        419 => wire__crate__list_ocr_backend_capabilities_for_impl(port, ptr, rust_vec_len, data_len),
-        420 => wire__crate__list_ocr_backends_impl(port, ptr, rust_vec_len, data_len),
-        421 => wire__crate__list_post_processors_impl(port, ptr, rust_vec_len, data_len),
-        422 => wire__crate__list_renderers_impl(port, ptr, rust_vec_len, data_len),
-        423 => wire__crate__list_reranker_backends_impl(port, ptr, rust_vec_len, data_len),
-        424 => wire__crate__list_supported_formats_impl(port, ptr, rust_vec_len, data_len),
-        425 => wire__crate__list_tokenizer_backends_impl(port, ptr, rust_vec_len, data_len),
-        426 => wire__crate__list_validators_impl(port, ptr, rust_vec_len, data_len),
+        416 => wire__crate__find_unmarked_claims_impl(port, ptr, rust_vec_len, data_len),
+        417 => wire__crate__list_document_extractors_impl(port, ptr, rust_vec_len, data_len),
+        418 => wire__crate__list_embedding_backends_impl(port, ptr, rust_vec_len, data_len),
+        419 => wire__crate__list_ocr_backend_capabilities_impl(port, ptr, rust_vec_len, data_len),
+        420 => wire__crate__list_ocr_backend_capabilities_for_impl(port, ptr, rust_vec_len, data_len),
+        421 => wire__crate__list_ocr_backends_impl(port, ptr, rust_vec_len, data_len),
+        422 => wire__crate__list_post_processors_impl(port, ptr, rust_vec_len, data_len),
+        423 => wire__crate__list_renderers_impl(port, ptr, rust_vec_len, data_len),
+        424 => wire__crate__list_reranker_backends_impl(port, ptr, rust_vec_len, data_len),
+        425 => wire__crate__list_supported_formats_impl(port, ptr, rust_vec_len, data_len),
+        426 => wire__crate__list_tokenizer_backends_impl(port, ptr, rust_vec_len, data_len),
+        427 => wire__crate__list_validators_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "url-ingestion")]
-        427 => wire__crate__map_url_impl(port, ptr, rust_vec_len, data_len),
+        428 => wire__crate__map_url_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(any(
             any(feature = "late-interaction-presets", feature = "late-interaction"),
             feature = "late-interaction-presets"
         ))]
-        428 => wire__crate__max_sim_rank_impl(port, ptr, rust_vec_len, data_len),
+        429 => wire__crate__max_sim_rank_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(any(
             any(feature = "late-interaction-presets", feature = "late-interaction"),
             feature = "late-interaction-presets"
         ))]
-        429 => wire__crate__max_sim_score_impl(port, ptr, rust_vec_len, data_len),
-        430 => wire__crate__ocr_backend_supports_language_impl(port, ptr, rust_vec_len, data_len),
-        431 => wire__crate__ocr_backend_supports_language_for_impl(port, ptr, rust_vec_len, data_len),
-        432 => wire__crate__ort_session_options_impl(port, ptr, rust_vec_len, data_len),
+        430 => wire__crate__max_sim_score_impl(port, ptr, rust_vec_len, data_len),
+        431 => wire__crate__ocr_backend_supports_language_impl(port, ptr, rust_vec_len, data_len),
+        432 => wire__crate__ocr_backend_supports_language_for_impl(port, ptr, rust_vec_len, data_len),
+        433 => wire__crate__ort_session_options_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "pdf")]
-        433 => wire__crate__pdf_page_count_impl(port, ptr, rust_vec_len, data_len),
+        434 => wire__crate__pdf_page_count_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "redaction")]
-        434 => wire__crate__redact_external_impl(port, ptr, rust_vec_len, data_len),
-        435 => wire__crate__register_document_extractor_impl(port, ptr, rust_vec_len, data_len),
-        436 => wire__crate__register_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
-        437 => wire__crate__register_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
-        438 => wire__crate__register_post_processor_impl(port, ptr, rust_vec_len, data_len),
-        439 => wire__crate__register_renderer_impl(port, ptr, rust_vec_len, data_len),
-        440 => wire__crate__register_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
-        441 => wire__crate__register_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
-        442 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
-        443 => wire__crate__set_ort_session_options_impl(port, ptr, rust_vec_len, data_len),
-        444 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
-        445 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
-        446 => wire__crate__unregister_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
-        447 => wire__crate__unregister_post_processor_impl(port, ptr, rust_vec_len, data_len),
-        448 => wire__crate__unregister_renderer_impl(port, ptr, rust_vec_len, data_len),
-        449 => wire__crate__unregister_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
-        450 => wire__crate__unregister_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
-        451 => wire__crate__unregister_validator_impl(port, ptr, rust_vec_len, data_len),
+        435 => wire__crate__redact_external_impl(port, ptr, rust_vec_len, data_len),
+        436 => wire__crate__register_document_extractor_impl(port, ptr, rust_vec_len, data_len),
+        437 => wire__crate__register_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
+        438 => wire__crate__register_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
+        439 => wire__crate__register_post_processor_impl(port, ptr, rust_vec_len, data_len),
+        440 => wire__crate__register_renderer_impl(port, ptr, rust_vec_len, data_len),
+        441 => wire__crate__register_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
+        442 => wire__crate__register_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
+        443 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
+        444 => wire__crate__set_ort_session_options_impl(port, ptr, rust_vec_len, data_len),
+        445 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
+        446 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
+        447 => wire__crate__unregister_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
+        448 => wire__crate__unregister_post_processor_impl(port, ptr, rust_vec_len, data_len),
+        449 => wire__crate__unregister_renderer_impl(port, ptr, rust_vec_len, data_len),
+        450 => wire__crate__unregister_reranker_backend_impl(port, ptr, rust_vec_len, data_len),
+        451 => wire__crate__unregister_tokenizer_backend_impl(port, ptr, rust_vec_len, data_len),
+        452 => wire__crate__unregister_validator_impl(port, ptr, rust_vec_len, data_len),
         #[cfg(feature = "markdown-footnotes")]
-        452 => wire__crate__verify_excerpt_impl(port, ptr, rust_vec_len, data_len),
+        453 => wire__crate__verify_excerpt_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -31503,6 +31567,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ExtractionConfig> {
             self.0.use_cache.into_into_dart().into_dart(),
             self.0.enable_quality_processing.into_into_dart().into_dart(),
             self.0.ocr.into_into_dart().into_dart(),
+            self.0.tessdata_model.into_into_dart().into_dart(),
             self.0.force_ocr.into_into_dart().into_dart(),
             self.0.ocr_strategy.into_into_dart().into_dart(),
             self.0.force_ocr_pages.into_into_dart().into_dart(),
@@ -33730,7 +33795,9 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::OcrConfig> {
             self.0.security_limits.into_into_dart().into_dart(),
             self.0.tessdata_bytes.into_into_dart().into_dart(),
             self.0.tessdata_path.into_into_dart().into_dart(),
+            self.0.tessdata_model.into_into_dart().into_dart(),
             self.0.numeric_repair.into_into_dart().into_dart(),
+            self.0.image_paddle_fallback.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -34632,6 +34699,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PdfConfig> {
             self.0.backend.into_into_dart().into_dart(),
             self.0.extract_vector_geometry.into_into_dart().into_dart(),
             self.0.plan_regions.into_into_dart().into_dart(),
+            self.0.keep_white_text.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -36102,6 +36170,22 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::TableOverlapPreference>
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::TableOverlapPreference> {}
 impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::TableOverlapPreference>> for crate::TableOverlapPreference {
     fn into_into_dart(self) -> FrbWrapper<crate::TableOverlapPreference> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::TessdataModel> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::TessdataModel::Fast => 0.into_dart(),
+            crate::TessdataModel::Best => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::TessdataModel> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::TessdataModel>> for crate::TessdataModel {
+    fn into_into_dart(self) -> FrbWrapper<crate::TessdataModel> {
         self.into()
     }
 }
@@ -39143,6 +39227,7 @@ impl SseEncode for crate::ExtractionConfig {
         <bool>::sse_encode(self.use_cache, serializer);
         <bool>::sse_encode(self.enable_quality_processing, serializer);
         <Option<crate::OcrConfig>>::sse_encode(self.ocr, serializer);
+        <Option<crate::TessdataModel>>::sse_encode(self.tessdata_model, serializer);
         <bool>::sse_encode(self.force_ocr, serializer);
         <crate::OcrStrategy>::sse_encode(self.ocr_strategy, serializer);
         <Option<Vec<i64>>>::sse_encode(self.force_ocr_pages, serializer);
@@ -42003,7 +42088,9 @@ impl SseEncode for crate::OcrConfig {
         <Option<crate::SecurityLimits>>::sse_encode(self.security_limits, serializer);
         <Option<std::collections::HashMap<String, Vec<u8>>>>::sse_encode(self.tessdata_bytes, serializer);
         <Option<String>>::sse_encode(self.tessdata_path, serializer);
+        <Option<crate::TessdataModel>>::sse_encode(self.tessdata_model, serializer);
         <bool>::sse_encode(self.numeric_repair, serializer);
+        <bool>::sse_encode(self.image_paddle_fallback, serializer);
     }
 }
 
@@ -43220,6 +43307,16 @@ impl SseEncode for Option<crate::SummarizationConfig> {
     }
 }
 
+impl SseEncode for Option<crate::TessdataModel> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::TessdataModel>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::TesseractConfig> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -44126,6 +44223,7 @@ impl SseEncode for crate::PdfConfig {
         <crate::PdfBackend>::sse_encode(self.backend, serializer);
         <bool>::sse_encode(self.extract_vector_geometry, serializer);
         <Option<crate::PlanRegionConfig>>::sse_encode(self.plan_regions, serializer);
+        <bool>::sse_encode(self.keep_white_text, serializer);
     }
 }
 
@@ -45235,6 +45333,22 @@ impl SseEncode for crate::TableOverlapPreference {
                 crate::TableOverlapPreference::Content => 0,
                 crate::TableOverlapPreference::Native => 1,
                 crate::TableOverlapPreference::Layout => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::TessdataModel {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::TessdataModel::Fast => 0,
+                crate::TessdataModel::Best => 1,
                 _ => {
                     unimplemented!("");
                 }

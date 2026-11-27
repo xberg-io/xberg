@@ -6971,12 +6971,12 @@
           "default": {
             "aarch64_unknown_linux_gnu": true,
             "i686_pc_windows_msvc": true,
-            "macos_dynamic_lookup": true,
+            "macos_dynamic_lookup": false,
             "wasm32_unknown_unknown": true,
             "x86_64_pc_windows_msvc": true,
             "x86_64_unknown_linux_musl": true
           },
-          "description": "Per-target cross-compile / rustflags overrides. Defaults emit the canonical\n6-target template (macOS dynamic_lookup, Windows MSVC rust-lld x64+i686,\naarch64-linux-gnu cross-gcc, x86_64-linux-musl, wasm32 bulk-memory)."
+          "description": "Per-target cross-compile / rustflags overrides. Defaults emit the canonical\n5-target template (Windows MSVC rust-lld x64+i686, aarch64-linux-gnu cross-gcc,\nx86_64-linux-musl, wasm32 bulk-memory); the workspace-wide macOS\n`-undefined dynamic_lookup` block is opt-in via `macos_dynamic_lookup`."
         }
       },
       "type": "object"
@@ -7006,7 +7006,7 @@
     },
     "ScaffoldCargoTargets": {
       "additionalProperties": false,
-      "description": "Per-target opt-out flags. All default to `true`.",
+      "description": "Per-target flags. All default to `true` except `macos_dynamic_lookup`.",
       "properties": {
         "aarch64_unknown_linux_gnu": {
           "default": true,
@@ -7017,7 +7017,8 @@
           "type": "boolean"
         },
         "macos_dynamic_lookup": {
-          "default": true,
+          "default": false,
+          "description": "Emit `-C link-arg=-Wl,-undefined,dynamic_lookup` for every macOS target in the\nworkspace. Defaults to `false`. The Python, PHP and Ruby extension crates get the flag\nfrom their generated `build.rs` for their cdylib, test, bench and example targets only.\n`[[bin]]` executables and unrelated crates keep the default ld64 behaviour: chained\nfixups and link-time errors for unresolved symbols. Set to `true` only for a workspace\nthat needs it everywhere.",
           "type": "boolean"
         },
         "wasm32_unknown_unknown": {
@@ -8895,7 +8896,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.132.6/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.132.8/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -9030,6 +9031,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.132.6",
-  "x-alef-version": "0.132.6"
+  "version": "0.132.8",
+  "x-alef-version": "0.132.8"
 }

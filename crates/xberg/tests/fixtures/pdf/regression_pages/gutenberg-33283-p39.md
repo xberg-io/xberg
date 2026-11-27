@@ -16,15 +16,13 @@
 
 −50 x −3 −2 −1 0 1 2 3 4 5 dy 2 Fig. 6.—Graph of $y = 7x$ . Fig. 6a.—Graph of = 14x. dx
 
-7 times as big as that of x<sup>2</sup>. If we had taken 8x<sup>2</sup>, the differential coeffi-
+7 times as big as that of $x^{2}$. If we had taken 8$x^{2}$, the differential coefficient would have come out eight times as great as that of $x^{2}$. If we put $y=ax^{2}$, we shall get
 
-cient would have come out eight times as great as that of x<sup>2</sup>. If we put
+$$
+\frac{dy}{dx}=a\times2x.
+$$
 
-$y = ax2$, we shall get dy = a × 2x. dx dy
-
-−1
-
-If we had begun with y = ax<sup>n</sup>, we should have had = a×nx<sup>n</sup> . dx So that any mere multiplication by a constant reappears as a mere multiplication when the thing is differentiated. And, what is true about multiplication is equally true about division: for if, in the example above, we had taken as the constant
+If we had begun with $y=ax^{n}$, we should have had $\frac{dy}{dx}=a\times nx^{n-1}.$ So that any mere multiplication by a constant reappears as a mere multiplication when the thing is differentiated. And, what is true about multiplication is equally true about division: for if, in the example above, we had taken as the constant
 
 1
 

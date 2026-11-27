@@ -1,34 +1,34 @@
-### 2.5.6 Conclusion and Interpretation of Results
+## 2.5.6 Conclusion and Interpretation of Results
 
-Since the *P-value* obtained in step 5 of Section 2.5.4 is ≥ 0.01 ( *P-value* = 0.741948), the conclusion is that the sequence is random.
+Since the *P-value* obtained in step 5 of Section 2.5.4 is ≥ 0.01 (*P-value* = 0.741948), the conclusion is that the sequence is random.
 
 *2*
 
-Note that large values of χ *( obs )* (and hence, small *P-values* ) would have indicated a deviation of the rank distribution from that corresponding to a random sequence.
+Note that large values of χ *( obs )* (and hence, small *P-values*) would have indicated a deviation of the rank distribution from that corresponding to a random sequence.
 
-### 2.5.7 Input Size Recommendation
+## 2.5.7 Input Size Recommendation
 
-The probabilities for $M = Q = 32$ have been calculated and inserted into the test code. Other choices of *M* and *Q* may be selected, but the probabilities would need to be calculated. The minimum number of bits to be tested must be such that $n ≥ 38MQ$ (i.e., at least 38 matrices are created). For $M = Q = 32$ , each sequence to be tested should consist of a minimum of 38,912 bits.
+The probabilities for $M = Q = 32$ have been calculated and inserted into the test code. Other choices of *M* and *Q* may be selected, but the probabilities would need to be calculated. The minimum number of bits to be tested must be such that $n ≥ 38MQ (i.e$., at least 38 matrices are created). For $M = Q = 32$, each sequence to be tested should consist of a minimum of 38,912 bits.
 
-### 2.5.8 Example
+## 2.5.8 Example
 
-(input)
+(input) (input) $n = 100000, M = Q = 32 ε$ = the first 100,000 binary digits in the expansion of *e* (NOTE: 672 BITS WERE DISCARDED.) (processing) (processing) (processing) (output) (conclusion)
 
-- (input) *n* = 100000, *M = Q* = 32
+## 2.6.1 Test Purpose
 
-ε = the first 100,000 binary digits in the expansion of *e* (NOTE: 672 BITS WERE DISCARDED.) (processing) (processing) (processing) (output) (conclusion)
+$N = 97$ *F*~*M*~ = 23, *F*~*M-1*~ = 60, N – F~M~ – *F*~*M-1*~= 14
 
-### 2.6.1 Test Purpose
+*2*
 
-$N = 97$ *F*~*M*~ = 23, *F*~*M-1*~ = 60, N – F~M~ – *F*~*M-1*~= $14 χ2 = 1.2619656$ *P-value* = 0.532069 Since *P-value* ≥ *0.01* , accept the sequence as random.
+$χ = 1.2619656$ *P-value* = 0.532069 Since *P-value* ≥ *0.01*, accept the sequence as random.
 
-### 2.6 Discrete Fourier Transform (Spectral) Test
+## 2.6 Discrete Fourier Transform (Spectral) Test
 
 The focus of this test is the peak heights in the Discrete Fourier Transform of the sequence. The purpose of this test is to detect periodic features (i.e., repetitive patterns that are near each other) in the tested sequence that would indicate a deviation from the assumption of randomness. The intention is to detect whether the number of peaks exceeding the 95 % threshold is significantly different than 5 %.
 
-### 2.6.2 Function Call
+## 2.6.2 Function Call
 
-DiscreteFourierTransform( *n* ), where: *n* The length of the bit string.
+DiscreteFourierTransform(*n*), where: *n* The length of the bit string.
 
 Additional input used by the function, but supplied by the testing code:
 

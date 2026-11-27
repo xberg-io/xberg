@@ -5,9 +5,8 @@
 |  | Restated |
 | (In billions of dollars) | 2025 2024 |
 
-| All other reconciling items | Total other | (36.0) (37.7) | 23.8 19.0 |
-| --- | --- | --- | --- |
 | Net operating cost |  | (2,093.2) | (2,385.2) |
+| --- | --- | --- | --- |
 | Components of net operating cost not part of the budget deficit: |  |  |  |
 | Excess of accrual-basis expenses over budget outlays: |  |  |  |
 | * Federal employee and veteran benefits payable: |  |  |  |
@@ -45,6 +44,8 @@
 |  | Subtotal - components of the budget deficit that are not part of net operating cost | (120.5) | (87.1) |
 | Other: |  |  |  |
 | Allocations of special drawing rights |  | (1.7) | (4.8) |
+| All other reconciling items |  | (36.0) | 23.8 |
+|  | Total other | (37.7) | 19.0 |
 | Budget deficit 1 |  | (1,775.4) | (1,816.8) |
 
 1

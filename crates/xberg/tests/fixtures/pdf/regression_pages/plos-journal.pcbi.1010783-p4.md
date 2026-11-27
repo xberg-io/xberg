@@ -14,10 +14,18 @@ We consider ODE models of the form
 
 **x**
 
-_ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt**~0~Þ¼ **x**~0~ðθ *;* **uÞ** *;* ð1Þ in which **xðt** *;* **θ** *;* **uÞ** 2 R~þ~ <sup>n</sup>~x~ is the vector of state variables, **θ** 2 R~þ~ <sup>n</sup>~y~ is the parameter vector, **u** 2 R~þ~ <sup>n</sup>~u~ is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is **f** : R~þ~ <sup>n</sup>~x~ R~þ~ <sup>n</sup>~y~ R~þ~ <sup>n</sup>~u~ \! R~þ~ <sup>n</sup>~x~, which is Lipschitz-continuous with respect to x, and the initial condition at t~0~is **x**~0~ : R~þ~ <sup>n</sup>~y~ R~þ~ <sup>n</sup>~u~ \! R~þ~ <sup>n</sup>~x~. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs ( **u** ) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** ( **θ** , **u** ) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
+_ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt**~0~Þ¼ **x**~0~ðθ *;* **uÞ** *;* ð1Þ in which **xðt** *;* **θ** *;* **uÞ** $2R^{n_{x}}$ is the vector of state variables, $\theta2R^{n_{y}}$ is the parameter vector, **u** 2 þ þ $R^{n_{u}}$ is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is þ
+
+$f:R^{n_{x}}$
+
+$R^{n_{y}}$ $R^{n_{u}}!R^{n_{x}}$, which is Lipschitz-continuous with respect to x, and the initial
+
+þ þ þ þ
+
+condition at t~0~is $x_{0}:R^{n_{y}}$~þ~ $R^{n_{u}}!R^{n_{x}}$~þ þ~. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs (**u**) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** (**θ**, **u**) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
 
 $t!1$
 
-In this paper we assume that for each initial condition ( **x**~0~( **θ** , **u** )) there exists an exponentially stable steady state. Both pre- and post-equilibration cases assume existence of a steady state that the dynamical system can reach fast enough to appropriately describe the modeled
+In this paper we assume that for each initial condition (**x**~0~(**θ**, **u**)) there exists an exponentially stable steady state. Both pre- and post-equilibration cases assume existence of a steady state that the dynamical system can reach fast enough to appropriately describe the modeled
 
 PLOS Computational Biology | https://doi.org/10.1371/journal.pcbi.1010783 January 3, 2023 4 / 19

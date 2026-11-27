@@ -1,12 +1,12 @@
-**NAICS Codes NAICS Industry Description Size standards in millions of dollars**
+**NAICS Codes NAICS Industry Description**
 
-221210 Natural Gas Distribution 221310 Water Supply and Irrigation Systems $41.0 221320 Sewage Treatment Facilities $35.0 221330 Steam and Air Conditioning Supply $30.0
+221210 Natural Gas Distribution 221310 Water Supply and Irrigation Systems 221320 Sewage Treatment Facilities 221330 Steam and Air Conditioning Supply
 
 # Sector 23 – Construction
 
-**Size standards in number of employees**
+**Size Size standards in standards in millions of number of dollars employees**
 
-1,150
+1,150 $41.0 $35.0 $30.0
 
 | NAICS Codes | NAICS Industry Description | Size | Size |
 | --- | --- | --- | --- |
@@ -25,7 +25,7 @@
 | 237210 | Land Subdivision | $34.0 |  |
 | 237310 | Highway, Street, and Bridge Construction | $45.0 |  |
 | 237990 | Other Heavy and Civil Engineering Construction | $45.0 |  |
-| 237990 (Exception) | Dredging and Surface Cleanup Activities2 | $37.0 |  |
+| 237990 (Exception) | Dredging and Surface Cleanup Activities<sup>2</sup> | $37.0 |  |
 | 238110 | Poured Concrete Foundation and Structure Contractors | $19.0 |  |
 | 238120 | Structural Steel and Precast Concrete Contractors | $19.0 |  |
 | 238130 | Framing Contractors | $19.0 |  |

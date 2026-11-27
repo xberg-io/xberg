@@ -2777,6 +2777,24 @@ typedef struct XBERGTableModel XBERGTableModel;
  */
 typedef struct XBERGTableOverlapPreference XBERGTableOverlapPreference;
 /**
+ * Which upstream Tesseract model set (`tessdata_fast` or `tessdata_best`) xberg resolves and
+ * downloads language data from.
+ *
+ * The set only selects among the directories xberg manages: an explicit
+ * `OcrConfig.tessdata_path` or the `TESSDATA_PREFIX` environment variable is used as given,
+ * whatever this says. Each set has its own cache directory (`<cache>/tessdata/fast`,
+ * `<cache>/tessdata/best`), so a request for one set never reads the other's files. System
+ * tessdata directories (apt, Homebrew) ship `tessdata_fast` and are searched only for
+ * `TessdataModel.Fast`; `TessdataModel.Best` also reads the read-only
+ * `/usr/share/xberg/tessdata/best` an image can provide.
+ *
+ * Values are lowercase in every form (config files, JSON, environment, CLI).
+ *
+ * WebAssembly does not bundle or download `tessdata_best`: it refuses `Best` unless the caller
+ * supplies the model bytes in `tessdata_bytes`.
+ */
+typedef struct XBERGTessdataModel XBERGTessdataModel;
+/**
  * Tesseract OCR configuration.
  *
  * Provides fine-grained control over Tesseract OCR engine parameters.
@@ -12193,6 +12211,15 @@ int32_t xberg_extraction_config_enable_quality_processing(XBERGAlefHandle handle
 XBERGAlefHandle xberg_extraction_config_ocr(XBERGAlefHandle handle);
 
 /**
+ * Get the `tessdata_model` field from a `ExtractionConfig`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_tessdata_model_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_extraction_config_tessdata_model(XBERGAlefHandle handle);
+
+/**
  * Get the `force_ocr` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -12802,6 +12829,14 @@ int32_t xberg_extraction_config_default_extraction_timeout_has_result(void);
  * be freed with the appropriate free function.
  */
 XBERGAlefHandle xberg_extraction_config_default(void);
+
+/**
+ * The Tesseract model set OCR in this extraction uses: `ocr.tessdata_model`, else
+ * `Self.tessdata_model`, else `fast`.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extraction_config_effective_tessdata_model(XBERGAlefHandle this_);
 
 /**
  * Validate the configuration, returning an error if any settings are invalid.
@@ -18634,6 +18669,15 @@ char *xberg_ocr_config_vlm_prompt(XBERGAlefHandle handle);
 char *xberg_ocr_config_tessdata_path(XBERGAlefHandle handle);
 
 /**
+ * Get the `tessdata_model` field from a `OcrConfig`.
+ * A non-null returned handle is owned by the caller.
+ * It must be freed with `xberg_tessdata_model_free`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+XBERGAlefHandle xberg_ocr_config_tessdata_model(XBERGAlefHandle handle);
+
+/**
  * Get the `numeric_repair` field from a `OcrConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -18641,10 +18685,26 @@ char *xberg_ocr_config_tessdata_path(XBERGAlefHandle handle);
 int32_t xberg_ocr_config_numeric_repair(XBERGAlefHandle handle);
 
 /**
+ * Get the `image_paddle_fallback` field from a `OcrConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_ocr_config_image_paddle_fallback(XBERGAlefHandle handle);
+
+/**
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
  * be freed with the appropriate free function.
  */
 XBERGAlefHandle xberg_ocr_config_default(void);
+
+/**
+ * The model set this section resolves: its own, else `fast`. An `OcrConfig` taken from an
+ * `ExtractionConfig` carries the inherited top-level set once
+ * `ExtractionConfig::resolve_tessdata_model` or `ExtractionConfig::ocr_or_default` ran.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_ocr_config_effective_tessdata_model(XBERGAlefHandle this_);
 
 /**
  * Create a `OcrElement` from a JSON string. Returns null on failure.
@@ -21486,6 +21546,15 @@ int32_t xberg_pdf_config_extract_vector_geometry(XBERGAlefHandle handle);
  * Pointer must be a valid handle returned by this library.
  */
 XBERGAlefHandle xberg_pdf_config_plan_regions(XBERGAlefHandle handle);
+#endif
+
+#if defined(XBERG_FEATURE_PDF)
+/**
+ * Get the `keep_white_text` field from a `PdfConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t xberg_pdf_config_keep_white_text(XBERGAlefHandle handle);
 #endif
 
 #if defined(XBERG_FEATURE_PDF)
@@ -29206,6 +29275,20 @@ int32_t xberg_table_overlap_preference_from_i32(int32_t value);
 int32_t xberg_table_overlap_preference_from_str(const char *name);
 
 /**
+ * Convert an integer to a `TessdataModel` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t xberg_tessdata_model_from_i32(int32_t value);
+
+/**
+ * Convert a `TessdataModel` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t xberg_tessdata_model_from_str(const char *name);
+
+/**
  * Convert an integer to a `TextDirection` variant. Returns -1 on invalid input.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -31454,6 +31537,31 @@ char *xberg_table_overlap_preference_to_json(XBERGAlefHandle handle);
  */
 char *xberg_table_overlap_preference_to_string(XBERGAlefHandle handle);
 #endif
+
+/**
+ * Free a `TessdataModel` handle.
+ * # Safety
+ * Handle must have been returned by this library, or be zero.
+ */
+void xberg_tessdata_model_free(XBERGAlefHandle handle);
+
+/**
+ * Serialize a `TessdataModel` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_tessdata_model_to_json(XBERGAlefHandle handle);
+
+/**
+ * Render a `TessdataModel` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `xberg` function.
+ * The returned string must be freed with `xberg_free_string`.
+ */
+char *xberg_tessdata_model_to_string(XBERGAlefHandle handle);
 
 /**
  * Free a `TextDirection` handle.

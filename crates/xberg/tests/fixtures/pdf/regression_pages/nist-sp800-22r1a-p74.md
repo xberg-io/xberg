@@ -1,12 +1,12 @@
 **3.8 Overlapping Template Matching Test**
 
-This test rejects sequences which show too many or too few occurrences of *m* -runs of ones, but can be easily modified to detect irregular occurrences of any periodic pattern *B* .
+This test rejects sequences which show too many or too few occurrences of *m*-runs of ones, but can be easily modified to detect irregular occurrences of any periodic pattern *B*.
 
-To implement this test, parameters *M* and *N* are determined so that *n* = *MN* , i.e., the original string is partitioned into *N* blocks, each of length *M* .
+To implement this test, parameters *M* and *N* are determined so that *n* = *MN*, i.e., the original string is partitioned into *N* blocks, each of length *M*.
 
 Let *W* ˜ = *W* ˜ *m* in the jth block.
 
-*j j* (<sup>*m*</sup> , *n*) <sup>be the number of (possibly overlapping) runs of ones of length</sup>
+*j j* (<sup>*m*</sup>, *n*) <sup>be the number of (possibly overlapping) runs of ones of length</sup>
 
 The asymptotic distribution of *W*~*j*~ is the compound Poisson distribution (the so-called Pòlya-Aeppli law, see[1]):
 
@@ -14,7 +14,7 @@ The asymptotic distribution of *W*~*j*~ is the compound Poisson distribution (th
 
 *t*
 
-λ(<sup>*e*</sup> −1)<sup></sup> *E* exp{<sup>*tW*</sup> ˜ $j } → exp$  (5) 
+λ(<sup>*e*</sup> −1)<sup></sup> *E* exp{<sup>*tW*</sup> ˜ ~*j*~ } <sup>→</sup> exp  (5) 
 
 *t*
 
@@ -22,39 +22,31 @@ The asymptotic distribution of *W*~*j*~ is the compound Poisson distribution (th
 
 − *m*
 
-when $(M − m + 1)2 → λ > 0 ( t$ is a real variable).
+when $(^{M} − m + 1)^{2} → λ > 0 (t$ is a real variable).
 
-The corresponding probabilities can be expressed in terms of the confluent hypergeometric function $Φ = F$ . If *U* denotes a random variable with the compound Poisson asymptotic distribution, then for $u ≥ 1 1 1$ with $η = λ/2$.
+The corresponding probabilities can be expressed in terms of the confluent hypergeometric function $Φ = F$ . If *U* denotes a random variable with the compound Poisson asymptotic distribution, then for u ≥ 1 1 1 with $η = λ/2$.
 
 *u l* −2η
 
-$$
-e−η  u −1η ηe P ( u)=
-$$
+*e*<sup>−η</sup>  *u* −1η ηe *P* ( *u*)<sup>=</sup>
 
-$$
-∑
-$$
+∑~~
 
-$$
- = Φ( U = u +1,2,η).
-$$
+ = Φ( *U* = <sup>*u*</sup> +1,2,η)<sup>.</sup>
 
 *u*
 
-2<sup>*u*</sup>  *l* −1 *l* \! 2
+2<sup>*u*</sup>  *l* −1 *l*\! 2
 
 $$
 l =1
 $$
 
-For example, *P* ( <sup>*U*</sup> = 0)<sup>=</sup> *e*<sup>−η</sup>, η *P* (<sup>*U*</sup> = 1)<sup>=</sup> *e*<sup>−η</sup>, 2 ηe<sup>−η</sup> $P ( U = 2)= &#91;η + 2&#93;, 8$ 
+For example, *P* ( <sup>*U*</sup> = 0)<sup>=</sup> *e*<sup>−η</sup>, η *P* (<sup>*U*</sup> = 1)<sup>=</sup> *e*<sup>−η</sup>, 2 ηe<sup>−η</sup> *P* ( <sup>*U*</sup> = 2)<sup>=</sup> [<sup>η</sup> + 2]<sup>,</sup> 8 
 
 2
 
-$$
-ηe−η η  P ( U = 3)=  + η + 1, 8  6  
-$$
+ηe<sup>−η</sup> η  *P* ( <sup>*U*</sup> = 3)<sup>=</sup>  + η + 1, 8  6  
 
 3
 
@@ -62,8 +54,8 @@ $$
 
 | π ~0~ | 0.364091 |
 | --- | --- |
-| π 1 | 0.185659 |
-| π2 | 0.139381 |
-| π 3 | 0.100571 |
-| π4 | 0.0704323 |
-| π 5 | 0.139865 |
+| π ~1~ | 0.185659 |
+| π~2~ | 0.139381 |
+| π ~3~ | 0.100571 |
+| π~4~ | 0.0704323 |
+| π ~5~ | 0.139865 |

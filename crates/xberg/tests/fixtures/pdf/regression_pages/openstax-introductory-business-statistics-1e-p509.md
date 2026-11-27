@@ -2,11 +2,11 @@ Chapter 11 | The Chi-Square Distribution 501
 
 105. According to Dan Lenard, an independent insurance agent in the Buffalo, N.Y. area, the following is a breakdown of the amount of life insurance purchased by males in the following age groups. He is interested in whether the age of the male and the amount of life insurance purchased are independent events. Conduct a test for independence.
 
-### Age of Males None \< $200,000 $200,000–$400,000 $401,001–$1,000,000 $1,000,001+
+## Age of Males None \< $200,000 $200,000–$400,000 $401,001–$1,000,000 $1,000,001+
 
 20–29 40 15 40 0 5 30–39 35 5 20 20 10 40–49 20 0 30 0 30 50+ 40 30 15 15 10
 
-### Table 11.44
+## Table 11.44
 
 106. Suppose that 600 thirty-year-olds were surveyed to determine whether or not there is a relationship between the level of education an individual has and salary. Conduct a test of independence.
 
@@ -20,7 +20,7 @@ Chapter 11 | The Chi-Square Distribution 501
 
 $60,000+ 0 5 10 150
 
-### Table 11.45
+## Table 11.45
 
 *Read the statement and decide whether it is true or false.*
 
@@ -30,9 +30,9 @@ $60,000+ 0 5 10 150
 110. In a test of independence, the expected number is equal to the row total multiplied by the column total divided by the total surveyed.
 111. An ice cream maker performs a nationwide survey about favorite flavors of ice cream in different geographic areas of the U.S. Based on
 
-**Table 11.46** , do the numbers suggest that geographic location is independent of favorite ice cream flavors? Test at the 5% significance level.
+**Table 11.46**, do the numbers suggest that geographic location is independent of favorite ice cream flavors? Test at the 5% significance level.
 
-**Mint U.S. region/ Rocky Row Strawberry Chocolate Vanilla Chocolate Pistachio Flavor Road total Chip**
+**Mint U.S. region/ Flavor Strawberry Chocolate Vanilla Rocky Road Chocolate Pistachio Row total Chip**
 
 West 12 21 22 19 15 8 97
 
@@ -43,4 +43,4 @@ West 12 21 22 19 15 8 97
 
 Column Total 45 112 101 46 60 27 391
 
-### Table 11.46
+## Table 11.46

@@ -32,18 +32,18 @@
 |  |  |  | Economic Assumptions (percent change) |  |  |  |  |  |  |  |  |  |  |  |
 |  |  |  | 2025 |  | 2030 | 2040 | 2050 | 2060 | 2070 | 2080 | 2090 | 210013 |  |  |
 | Real wage growth<sup>5</sup> |  |  | 1.5 |  | 1.5 | 1.2 | 1.1 | 1.1 | 1.1 | 1.1 | 1.1 | 1.1 |  |  |
-| Wages6 |  |  | 4.0 |  | 3.9 | 3.7 | 3.5 | 3.5 | 3.6 | 3.6 | 3.6 | 3.6 |  |  |
-| CPI7 |  |  | 2.5 |  | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 |  |  |
-| Real GDP8 |  |  | 2.3 |  | 2.0 | 1.9 | 1.8 | 1.9 | 1.8 | 1.8 | 1.9 | 1.9 |  |  |
-| Total employment9 |  |  | 0.9 |  | 0.5 | 0.3 | 0.3 | 0.3 | 0.2 | 0.3 | 0.4 | 0.3 |  |  |
-| Avg. annual interest rate (percent)10 |  |  | 4.2 |  | 4.1 | 4.6 | 4.7 | 4.7 | 4.7 | 4.7 | 4.7 | 4.7 |  |  |
-| Real interest rate (percent)11 |  |  | 1.8 |  | 1.7 | 2.2 | 2.3 | 2.3 | 2.3 | 2.3 | 2.3 | - |  |  |
-| Per beneficiary cost - HI12 |  |  | 3.7 | 14 | 4.6 | 4.2 | 3.3 | 3.3 | 3.4 | 3.4 | 3.6 | - |  |  |
+| Wages<sup>6</sup> |  |  | 4.0 |  | 3.9 | 3.7 | 3.5 | 3.5 | 3.6 | 3.6 | 3.6 | 3.6 |  |  |
+| CPI<sup>7</sup> |  |  | 2.5 |  | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 |  |  |
+| Real GDP<sup>8</sup> |  |  | 2.3 |  | 2.0 | 1.9 | 1.8 | 1.9 | 1.8 | 1.8 | 1.9 | 1.9 |  |  |
+| Total employment<sup>9</sup> |  |  | 0.9 |  | 0.5 | 0.3 | 0.3 | 0.3 | 0.2 | 0.3 | 0.4 | 0.3 |  |  |
+| Avg. annual interest rate (percent)<sup>10</sup> |  |  | 4.2 |  | 4.1 | 4.6 | 4.7 | 4.7 | 4.7 | 4.7 | 4.7 | 4.7 |  |  |
+| Real interest rate (percent)<sup>11</sup> |  |  | 1.8 |  | 1.7 | 2.2 | 2.3 | 2.3 | 2.3 | 2.3 | 2.3 | - |  |  |
+| Per beneficiary cost - HI<sup>12</sup> |  |  | 3.7 | 14 | 4.6 | 4.2 | 3.3 | 3.3 | 3.4 | 3.4 | 3.6 | - |  |  |
 |  |  |  | 2025 |  | 2030 | 2040 | 2050 | 2060 | 2070 | 2080 | 2090 | 210013 |  |  |
 | Total fertility rate<sup>1</sup> |  |  | 1.6 |  | 1.7 | 1.9 | 1.9 | 1.9 | 1.9 | 1.9 | 1.9 | 1.9 |  |  |
-| Age-sex adjusted death rate2 |  |  | 764.4 |  | 734.3 | 676.1 | 623.8 | 577.6 | 536.6 | 500.1 | 467.6 | 438.5 |  |  |
-| Net annual immigration3 |  |  | 2,102 |  | 1,323 | 1,289 | 1,260 | 1,251 | 1,244 | 1,240 | 1,237 | 1,235 |  |  |
-| Period life expectancy at birth - Male4 |  |  | 76.7 |  | 77.2 | 78.3 | 79.3 | 80.3 | 81.2 | 82.1 | 82.9 | 83.7 |  |  |
-| Period life expectancy at birth - Female4 |  |  | 81.6 |  | 82.1 | 83.0 | 83.8 | 84.6 | 85.4 | 86.1 | 86.7 | 87.4 |  |  |
+| Age-sex adjusted death rate<sup>2</sup> |  |  | 764.4 |  | 734.3 | 676.1 | 623.8 | 577.6 | 536.6 | 500.1 | 467.6 | 438.5 |  |  |
+| Net annual immigration<sup>3</sup> |  |  | 2,102 |  | 1,323 | 1,289 | 1,260 | 1,251 | 1,244 | 1,240 | 1,237 | 1,235 |  |  |
+| Period life expectancy at birth - Male<sup>4</sup> |  |  | 76.7 |  | 77.2 | 78.3 | 79.3 | 80.3 | 81.2 | 82.1 | 82.9 | 83.7 |  |  |
+| Period life expectancy at birth - Female<sup>4</sup> |  |  | 81.6 |  | 82.1 | 83.0 | 83.8 | 84.6 | 85.4 | 86.1 | 86.7 | 87.4 |  |  |
 
 Reflects lower projected enrollment that is disproportionately lower for those eligible for low-income subsidies.

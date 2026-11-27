@@ -4,7 +4,11 @@
 
 # ENERGYRELATIONS
 
-The law of conservation of energy gives *dq=du_dw* (first law of thermodynamics)_ =du+p *dv=dh--v dp*
+The law of conservation of energy gives *dq=du_dw* (first law of thermodynamics)_
+
+t
+
+=du+p *dv=dh--v dp*
 
 *dq=c, dT+p* [therm pert] =cp *dT--v dp*
 
@@ -16,19 +20,11 @@ The
 
 **ENTROPY**
 
-The entropy is defined by (21) (10a)
-
-t
-
-It follows that
-
-- (lOb) *ds [_du+dw'_ iZdu+pdv'_ dT. [Sp\* , =\\. _ *./,,,=\* _- -),,=c.-_--i.-_a_,) *av* (22a)
-
-*dT.* _ *dr" ds=C,* --T-+ _ --ffspecific heats at constant pressure and constant volume are defined by *dT R dp* ***/bq*** "_ *[bh'_*
+The entropy is defined by (21) (10a) It follows that (lOb) *ds [_du+dw'_ iZdu+pdv'_ dT. [Sp\* , =\\. _ *./,,,=\* _- -),,=c.-_--i.-_a_,) *av* (22a) *dT.* _ *dr" ds=C,* --T-+ _ --ffspecific heats at constant pressure and constant volume are defined by *dT R dp* ***/bq*** "_ *[bh'_*
 
 =c°_-- --;
 
-*c* __k_r] *=k_),* (11) [therm peril (221)) _ *dT o dp*
+$c &#95;&#95;k_r&#93; =k_), (11)$ [therm peril (221)) _ *dT o dp*
 
 It can be shown that ----c_
 

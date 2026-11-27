@@ -1208,9 +1208,7 @@ fn post_process_table_inner(
     // others hold values (nougat_005 page 1 read its SUMMARY and INDICATORS columns as a
     // 16-row table, row by row). ~keep
     if !definition_grid && !has_recurring_numeric_tracks(&processed) {
-        let wrapping_columns = (0..processed[0].len())
-            .filter(|&column| column_wrap_count(&processed[1..], column) >= MIN_COLUMN_WRAPS_FOR_PROSE)
-            .count();
+        let wrapping_columns = independent_wrapping_columns(&processed[1..], processed[0].len());
         if wrapping_columns >= 2 {
             tracing::debug!(
                 target: "xberg::table_reconstruct",
@@ -2576,26 +2574,82 @@ fn is_dense_numeric_grid(grid: &[Vec<String>]) -> bool {
         && numeric_cells.saturating_mul(100) >= non_empty_cells.saturating_mul(DENSE_NUMERIC_MIN_CELL_PERCENT)
 }
 
-/// Recurring numeric tracks are positive table evidence strong enough to
-/// distinguish wrapped row labels from prose flowing across inferred cells. ~keep
-/// Wrapped sentences a column must show before it counts as running prose.
+/// Wrapped sentences a column must show before it counts as running prose: one wrap is a long
+/// label, two is a flow. Sized so the two-column SUMMARY / INDICATORS page (two and three wraps) is
+/// prose while a single wrapped description stays a table.
 const MIN_COLUMN_WRAPS_FOR_PROSE: usize = 2;
-/// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label.
+/// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label: the shortest
+/// wrapped line on the nougat_005 pages is three words.
 const MIN_WRAPPED_LINE_WORDS: usize = 3;
+/// Longest bracketed tail, in characters, that reads as a unit or qualifier closing an item. Anchors:
+/// `(acre-ft/yr)` (11) and `(thousands of dollars)` (21) are units; `(see Fig. 2)` and `(Smith et al.)`
+/// are asides and are told apart by shape below, not by length.
+const MAX_UNIT_TAIL_CHARS: usize = 24;
+/// Most words in a unit tail: `(US dollars, millions)` is two, `(thousands of dollars)` three.
+const MAX_UNIT_TAIL_WORDS: usize = 4;
 
-/// How many times `column` continues a sentence from one data row into the next: a cell of at
-/// least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause punctuation,
-/// followed by a cell that starts lowercase.
-fn column_wrap_count(data_rows: &[Vec<String>], column: usize) -> usize {
+/// Whether `cell` ends in a short bracketed unit such as `square meter (m 2 )`, `[kPa]` or `(%)`: a
+/// finished item, not a line cut mid-sentence. A citation (`[12]`, `(2020)`, `(Smith, 2020)`) or an
+/// aside (`(see Fig. 2)`, `(Smith et al.)`) is not: it has no letters, a year, a full stop or a
+/// pointer word, and the sentence runs on.
+fn ends_with_unit_tail(cell: &str) -> bool {
+    let Some(inner) = [(')', '('), (']', '[')].into_iter().find_map(|(close, open)| {
+        cell.strip_suffix(close)
+            .and_then(|head| head.rsplit_once(open))
+            .map(|(_, tail)| tail)
+    }) else {
+        return false;
+    };
+    let has_year = inner
+        .as_bytes()
+        .windows(4)
+        .any(|window| window.iter().all(u8::is_ascii_digit));
+    let pointer = ["see ", "cf ", "e.g", "i.e"].iter().any(|word| inner.starts_with(word));
+    inner.chars().count() <= MAX_UNIT_TAIL_CHARS
+        && inner.split_whitespace().count() <= MAX_UNIT_TAIL_WORDS
+        && inner.chars().any(|c| c.is_alphabetic() || c == '%')
+        && !inner.contains('.')
+        && !has_year
+        && !pointer
+}
+
+/// The row transitions at which `column` continues a sentence from one data row into the next: a
+/// cell of at least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause
+/// punctuation or a unit tail, followed by a cell that starts lowercase.
+fn column_wrap_rows(data_rows: &[Vec<String>], column: usize) -> Vec<usize> {
     data_rows
         .windows(2)
-        .filter(|pair| {
+        .enumerate()
+        .filter(|(_, pair)| {
             let above = pair[0].get(column).map_or("", |cell| cell.trim());
             let below = pair[1].get(column).map_or("", |cell| cell.trim());
             above.split_whitespace().count() >= MIN_WRAPPED_LINE_WORDS
                 && !above.ends_with(['.', '?', '!', ':', ';'])
+                && !ends_with_unit_tail(above)
                 && below.chars().next().is_some_and(char::is_lowercase)
         })
+        .map(|(row, _)| row)
+        .collect()
+}
+
+/// How many columns wrap their own sentences down the rows, independently of one another.
+///
+/// A wrapped record continues each long cell on the next line and stops there, and the cells of one
+/// record do so on the same transition: two or more columns wrap at a transition and none of them
+/// wraps again at the next. Prose columns run on across consecutive lines, so their wraps chain, or
+/// fall on rows the other columns do not wrap at. A transition shared by columns that all stop after
+/// one continuation line counts for none of them. Trade-off: two aligned prose columns whose
+/// paragraphs are all exactly two lines long read as a table.
+fn independent_wrapping_columns(data_rows: &[Vec<String>], columns: usize) -> usize {
+    let all_wraps: Vec<Vec<usize>> = (0..columns).map(|column| column_wrap_rows(data_rows, column)).collect();
+    let record_wrap = |row: usize| {
+        let sharers: Vec<&Vec<usize>> = all_wraps.iter().filter(|rows| rows.contains(&row)).collect();
+        sharers.len() >= 2 && sharers.iter().all(|rows| !rows.contains(&(row + 1)))
+    };
+    all_wraps
+        .iter()
+        .filter(|rows| rows.len() >= MIN_COLUMN_WRAPS_FOR_PROSE)
+        .filter(|rows| rows.iter().any(|&row| !record_wrap(row)))
         .count()
 }
 
@@ -2623,6 +2677,8 @@ fn line_returns_to_row_start(above: &[String], below: &[String]) -> bool {
         && below[first].trim().starts_with(char::is_lowercase)
 }
 
+/// Recurring numeric tracks are positive table evidence strong enough to
+/// distinguish wrapped row labels from prose flowing across inferred cells. ~keep
 fn has_recurring_numeric_tracks(grid: &[Vec<String>]) -> bool {
     let Some(width) = grid.first().map(Vec::len) else {
         return false;
@@ -4476,6 +4532,200 @@ mod tests {
             .collect();
         // Two columns, as the OCR grid of that page is after its empty tracks merge away.
         assert!(post_process_table_inner(table, 2, false, None, false).is_none());
+    }
+
+    /// A wrapped record continues its long cells on the same row, so two wrapping columns that wrap
+    /// in lock step stay a table (a civil-penalty schedule: citation, description, amount).
+    #[test]
+    fn wrapped_cells_that_continue_on_the_same_rows_stay_a_table() {
+        let rows: [[&str; 3]; 8] = [
+            ["Citation", "Description", "Amount"],
+            [
+                "(4) 12 U.S.C. 1782",
+                "Tier 1 CMP for inadvertent failure to submit",
+                "$4,596.",
+            ],
+            ["", "shares and charges due to the insurance fund", ""],
+            [
+                "(5) 12 U.S.C. 1783",
+                "Tier 2 CMP for non-inadvertent failure to submit",
+                "$2,297,385 or 1% of the total assets",
+            ],
+            [
+                "",
+                "mission of false or misleading statement",
+                "union, whichever is less.",
+            ],
+            [
+                "(6) 12 U.S.C. 1784",
+                "Tier 3 CMP for failure to submit a certified statement",
+                "$62,829 or 1% of the total assets",
+            ],
+            [
+                "",
+                "false or misleading statement done knowingly",
+                "union, whichever is less.",
+            ],
+            [
+                "(7) 12 U.S.C. 1785",
+                "Non-compliance with insurance logo requirements.",
+                "$157.",
+            ],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert!(post_process_table_inner(table, 3, false, None, false).is_some());
+    }
+
+    /// A unit conversion table lists lowercase names that end in a closing bracket: each row is a
+    /// complete item, not a wrapped line.
+    #[test]
+    fn lowercase_unit_names_ending_in_a_bracket_are_not_wrapped_lines() {
+        let rows: [[&str; 3]; 10] = [
+            ["Multiply", "By", "To obtain"],
+            ["acre", "4,047", "square meter (m 2 )"],
+            ["acre", "0.4047", "hectare (ha)"],
+            ["acre", "0.4047", "square hectometer (hm 2 )"],
+            ["acre", "0.004047", "square kilometer (km 2 )"],
+            ["square mile (mi 2 )", "259.0", "hectare (ha)"],
+            ["square mile (mi 2 )", "2.590", "square kilometer (km 2 )"],
+            [
+                "acre-foot per year (acre-ft/yr)",
+                "1,233",
+                "cubic meter per year (m 3 /yr)",
+            ],
+            [
+                "acre-foot per year (acre-ft/yr)",
+                "0.001233",
+                "cubic hectometer per year (hm 3 /yr)",
+            ],
+            ["inch per year (in/yr)", "25.4", "millimeter per year (mm/yr)"],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table[1..], 3), 0);
+    }
+
+    /// Aligned two-column prose wraps on the same lines in both columns with text in every cell, so
+    /// neither column continues a record: both are prose flows.
+    #[test]
+    fn aligned_prose_columns_that_wrap_on_the_same_rows_are_independent_flows() {
+        let rows: [[&str; 2]; 6] = [
+            [
+                "Earned wage products give workers early access to",
+                "Employers that partner with providers can offer",
+            ],
+            [
+                "wages they have already earned before the usual",
+                "the service through payroll deduction at no cost to",
+            ],
+            [
+                "pay date arrives and some providers charge a",
+                "the worker while direct to consumer products are",
+            ],
+            [
+                "fee for faster delivery of the advance to the",
+                "paid for by the worker through a fee or tip on",
+            ],
+            [
+                "worker bank account which can add up quickly",
+                "every advance and sometimes by both parties at once",
+            ],
+            [
+                "over a pay period with frequent small advances",
+                "so the full cost is hard to see for a worker",
+            ],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table, 2), 2);
+    }
+
+    /// A citation closing a line is not a finished item: the sentence runs on.
+    #[test]
+    fn a_citation_ending_a_line_is_still_a_wrapped_line() {
+        let rows: [[&str; 2]; 5] = [
+            [
+                "Early access to wages was studied as shown in [12]",
+                "Providers charge fees as reported by regulators (2020)",
+            ],
+            [
+                "and the findings were broadly consistent",
+                "and the amounts varied widely between products",
+            ],
+            [
+                "Further work on the same question appeared in [13]",
+                "Costs to workers were also measured in (2021)",
+            ],
+            [
+                "with larger samples across more employers",
+                "across several states over two full years",
+            ],
+            ["Closing remarks.", "Closing remarks."],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(column_wrap_rows(&table, 0), vec![0, 2]);
+        assert_eq!(column_wrap_rows(&table, 1), vec![0, 2]);
+    }
+
+    #[test]
+    fn unit_tails_are_told_from_citations_and_asides() {
+        for unit in [
+            "square meter (m 2 )",
+            "pressure [kPa]",
+            "flow [m3/s]",
+            "income (thousands of dollars)",
+            "income (US dollars, millions)",
+            "share (%)",
+        ] {
+            assert!(ends_with_unit_tail(unit), "{unit}");
+        }
+        for aside in [
+            "as shown in [12]",
+            "measured in (2020)",
+            "as reported (Smith, 2020)",
+            "discussed above (see Fig. 2)",
+            "reported earlier (Smith et al.)",
+            "ends without a bracket",
+        ] {
+            assert!(!ends_with_unit_tail(aside), "{aside}");
+        }
+    }
+
+    /// An all-text record table: every cell of a record wraps onto one more line, in lock step.
+    #[test]
+    fn an_all_text_record_table_with_every_cell_wrapping_stays_a_table() {
+        let rows: [[&str; 3]; 7] = [
+            ["Term", "Definition", "Remarks"],
+            [
+                "Freight",
+                "Carriage of the goods from the port",
+                "Charged per container unless the",
+            ],
+            ["", "to the warehouse in two loads", "carrier agrees a flat rate"],
+            [
+                "Storage",
+                "Bonded storage for the first month",
+                "Billed daily after the first week",
+            ],
+            ["", "at the agreed rate", "at a reduced weekend rate"],
+            ["Insurance", "Cover for the declared value.", "Optional."],
+            ["Handling", "Loading and unloading.", "Included."],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table[1..], 3), 0);
     }
 
     #[test]

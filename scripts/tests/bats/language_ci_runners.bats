@@ -208,11 +208,11 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	export TEST_OS=Darwin TEST_ARCH=arm64 RUST_MIN_STACK=33554432
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 18 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 19 ]
 	grep -Fxq 'cargo clean -p xberg' "$XBERG_TRACE"
 	grep -Fxq 'mise run rust:clean' "$XBERG_TRACE"
-	[ "$(grep -c '^live=1 stack=33554432 backtrace=' "$XBERG_WORK/cargo-env")" -eq 18 ]
-	[ "$(grep -c '^live=1 stack=33554432 backtrace=full$' "$XBERG_WORK/cargo-env")" -eq 6 ]
+	[ "$(grep -c '^live=1 stack=33554432 backtrace=' "$XBERG_WORK/cargo-env")" -eq 19 ]
+	[ "$(grep -c '^live=1 stack=33554432 backtrace=full$' "$XBERG_WORK/cargo-env")" -eq 7 ]
 	xberg_assert_output_contains 'JPEG recovery model tests expected 9, passed 9'
 	local features='full,formula-recognition,classification-onnx,bundle-tessdata-eng'
 	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --lib --benches --verbose" "$XBERG_TRACE"
@@ -234,7 +234,7 @@ pnpm run check ld=$XBERG_WORK/pdfium/lib:"
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'integration-test targets: 2 (chunks of 1)'
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 18 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 19 ]
 	local features='full-no-heic,heic,formula-recognition,classification-onnx,bundle-tessdata-eng'
 	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --lib --benches --verbose" "$XBERG_TRACE"
 	grep -Fxq "cargo test --locked --no-fail-fast -p xberg --features $features --test first-case --verbose" "$XBERG_TRACE"
@@ -315,7 +315,7 @@ prepare_chunk_metadata() {
 	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/rust/run-unit-tests.sh"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'integration-test targets: 2 (chunks of 1)'
-	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 19 ]
+	[ "$(grep -c '^cargo test ' "$XBERG_TRACE")" -eq 20 ]
 	[ "$(grep -c -- '--test first-case --verbose' "$XBERG_TRACE")" -eq 1 ]
 	[ "$(grep -c -- '--test second_case --verbose' "$XBERG_TRACE")" -eq 1 ]
 	[ ! -e "$REPO_ROOT/target/debug/deps/first_case-abc123" ]

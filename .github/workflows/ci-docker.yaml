@@ -128,11 +128,21 @@ jobs:
         if: matrix.variant != 'cli'
         run: scripts/ci/docker/run-config-tests.sh "${{ matrix.variant }}"
 
+      # The images bind 0.0.0.0, so the server refuses to start without XBERG_API_TOKEN or
+      # XBERG_ALLOW_UNAUTHENTICATED, and the contract action starts the image with `docker run`
+      # and no way to pass either. A one-layer derived image carries the opt-out so schemathesis
+      # reaches the spec; authentication itself is covered by scripts/ci/docker/test_docker.py. ~keep
+      - name: Derive the contract-test image
+        if: matrix.variant != 'cli'
+        run: |
+          printf 'FROM xberg:%s\nENV XBERG_ALLOW_UNAUTHENTICATED=true\n' "${{ matrix.variant }}" \
+            | docker build --tag "xberg:${{ matrix.variant }}-contract" -
+
       - name: Run API contract tests with schemathesis
         if: matrix.variant != 'cli'
         uses: xberg-io/actions/run-api-contract-tests@v1
         with:
-          image: xberg:${{ matrix.variant }}
+          image: xberg:${{ matrix.variant }}-contract
           port: "8000"
           # `POST /cache/warm` eagerly DOWNLOADS models -- that is the endpoint's
           # entire purpose, and an empty `{}` body is explicitly valid (it warms
