@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 </details>
 
+## [Unreleased]
+
+### Fixed
+
+- Markdown tables from DOCX files no longer backslash-escape the `^` of superscript runs (`10^9^`) when `escape_markdown` is off, matching the subscript `~`. comrak 1.2 started escaping `^` in text.
+
 ## [1.5.4] - 2026-11-25
 
 ### Added
