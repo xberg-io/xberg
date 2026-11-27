@@ -155,10 +155,10 @@ pub fn order_on_script_base_lines(
     use crate::extractors::text::{OrderingSpan, ordering_script_bases};
     use std::collections::{HashMap, HashSet};
 
-    type Key = (String, u32, u32, usize, u32);
+    // A span's text completes its key; it is compared in place so that a lookup copies none. ~keep
+    type Key = (u32, u32, usize, u32);
     fn key(span: &crate::layout::TextSpan) -> Key {
         (
-            span.text.clone(),
             span.bbox.x.to_bits(),
             span.bbox.y.to_bits(),
             span.sequence,
@@ -179,12 +179,16 @@ pub fn order_on_script_base_lines(
         })
         .collect();
     let snapped = ordering_script_bases(&snapshot);
-    let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
+    let mut raw_by_key: HashMap<Key, Vec<(String, Vec<f32>)>> = HashMap::new();
     for (span, base) in spans.iter_mut().zip(&snapped) {
         if let Some((base_y, _)) = base {
             let raw_y = span.bbox.y;
             span.bbox.y = *base_y;
-            raw_by_key.entry(key(span)).or_default().push(raw_y);
+            let same_key = raw_by_key.entry(key(span)).or_default();
+            match same_key.iter().position(|(text, _)| *text == span.text) {
+                Some(index) => same_key[index].1.push(raw_y),
+                None => same_key.push((span.text.clone(), vec![raw_y])),
+            }
         }
     }
     // Input order can arrive from a raw-baseline sort with a raised mark ahead of the span it
@@ -240,10 +244,14 @@ pub fn order_on_script_base_lines(
         *spans = ordered;
     }
     order(spans);
+    if raw_by_key.is_empty() {
+        return;
+    }
     for span in spans.iter_mut() {
         if let Some(raw_y) = raw_by_key
             .get_mut(&key(span))
-            .and_then(|raws| (!raws.is_empty()).then(|| raws.remove(0)))
+            .and_then(|same_key| same_key.iter_mut().find(|(text, _)| *text == span.text))
+            .and_then(|(_, raws)| (!raws.is_empty()).then(|| raws.remove(0)))
         {
             span.bbox.y = raw_y;
         }
