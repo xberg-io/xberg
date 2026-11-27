@@ -7,7 +7,7 @@ use std::path::Path;
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
 use super::api_pool::{RetryApiPools, RetryStage};
-use super::validation::{TessdataEnv, first_directory_holding, tessdata_search_dirs};
+use super::validation::{SearchDir, TessdataEnv, first_directory_holding, retry_search_dirs};
 use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::RetainedWordConfidenceStats;
@@ -71,7 +71,7 @@ pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<
     if !supports_retry_language(language) {
         return false;
     }
-    let directories = tessdata_search_dirs(override_path, env);
+    let directories = retry_search_dirs(override_path, env);
     retry_directories(&directories, &retry_list(language, HAN_MODEL)).is_some()
 }
 
@@ -86,7 +86,7 @@ pub(crate) fn requires_khmer_outer_cache_bypass(
 ) -> bool {
     may_retry_khmer(language)
         && first_directory_holding(
-            &tessdata_search_dirs(override_path, env),
+            &retry_search_dirs(override_path, env),
             &retry_list(language, KHMER_MODEL),
         )
         .is_some()
@@ -245,7 +245,7 @@ impl HanModels {
     }
 }
 
-fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, String)> {
+fn retry_directories(directories: &[SearchDir], han: &[String]) -> Option<(String, String)> {
     let osd_directory = first_directory_holding(directories, &["osd".to_string()])?;
     let han_directory = first_directory_holding(directories, han)?;
     Some((osd_directory, han_directory))
@@ -256,16 +256,16 @@ pub(crate) fn outer_vertical_model_fingerprint(
     override_path: Option<&Path>,
     env: &TessdataEnv,
 ) -> crate::Result<Option<blake3::Hash>> {
-    vertical_outer_model_fingerprint(language, &tessdata_search_dirs(override_path, env))
+    vertical_outer_model_fingerprint(language, &retry_search_dirs(override_path, env))
 }
 
-fn vertical_outer_model_fingerprint(language: &str, directories: &[String]) -> crate::Result<Option<blake3::Hash>> {
+fn vertical_outer_model_fingerprint(language: &str, directories: &[SearchDir]) -> crate::Result<Option<blake3::Hash>> {
     let model =
         observe_vertical_model(directories, language).map_err(|error| crate::XbergError::cache(error.to_string()))?;
     Ok(model.as_ref().map(vertical_model_identity))
 }
 
-fn observe_vertical_model(directories: &[String], language: &str) -> Result<Option<ModelSet>, OcrError> {
+fn observe_vertical_model(directories: &[SearchDir], language: &str) -> Result<Option<ModelSet>, OcrError> {
     if language != "eng" {
         return Ok(None);
     }
@@ -285,7 +285,8 @@ fn observe_vertical_model(directories: &[String], language: &str) -> Result<Opti
             ))
         })
         .transpose()?;
-    cacheability::observe_vertical_model(directories, model.as_ref().map(vertical_model_identity));
+    let paths: Vec<String> = directories.iter().map(|directory| directory.path.clone()).collect();
+    cacheability::observe_vertical_model(&paths, model.as_ref().map(vertical_model_identity));
     Ok(model)
 }
 
@@ -298,8 +299,7 @@ fn vertical_model_identity(model: &ModelSet) -> blake3::Hash {
 #[tokio::test]
 async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
     let root = tempfile::tempdir().unwrap();
-    let directory = root.path().to_str().unwrap().to_owned();
-    let directories = [directory];
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
     let path = root.path().join("jpn_vert.traineddata");
     std::fs::write(&path, b"model one").unwrap();
 
@@ -330,7 +330,7 @@ async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
 #[test]
 fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     let root = tempfile::tempdir().unwrap();
-    let directories = [root.path().to_str().unwrap().to_owned()];
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
     let model = root.path().join("jpn_vert.traineddata");
     let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).unwrap();
 
@@ -344,7 +344,7 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     assert_ne!(second, first);
     let other = tempfile::tempdir().unwrap();
     std::fs::copy(&model, other.path().join("jpn_vert.traineddata")).unwrap();
-    let other_directories = [other.path().to_str().unwrap().to_owned()];
+    let other_directories = [SearchDir::as_given(other.path().to_str().unwrap())];
     assert_ne!(
         vertical_outer_model_fingerprint("eng", &other_directories).unwrap(),
         second
@@ -353,7 +353,7 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     assert_eq!(fingerprint(), None);
 }
 
-fn vertical_japanese_directory(directories: &[String]) -> Option<String> {
+fn vertical_japanese_directory(directories: &[SearchDir]) -> Option<String> {
     first_directory_holding(directories, &[VERTICAL_JAPANESE_MODEL.to_owned()])
 }
 
@@ -363,7 +363,7 @@ impl RetryModels {
     }
 
     #[cfg(test)]
-    fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
+    fn resolve(directories: &[SearchDir], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
         Ok(Self::from_snapshots(
             Self::resolve_han(directories, language, psm, |_| {})?,
             Self::resolve_requested_khmer(directories, language, psm)?,
@@ -371,7 +371,7 @@ impl RetryModels {
     }
 
     pub(super) fn resolve_requested_khmer(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
     ) -> Result<Option<ModelSet>, OcrError> {
@@ -384,7 +384,7 @@ impl RetryModels {
 
     #[cfg(test)]
     fn resolve_han(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
         on_vertical_error: impl FnOnce(&OcrError),
@@ -398,7 +398,7 @@ impl RetryModels {
     }
 
     pub(super) fn resolve_horizontal(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
     ) -> Result<Option<(ModelSet, ModelSet)>, OcrError> {
@@ -416,7 +416,7 @@ impl RetryModels {
     }
 
     pub(super) fn resolve_vertical(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
     ) -> Result<Option<ModelSet>, OcrError> {
@@ -426,7 +426,7 @@ impl RetryModels {
         observe_vertical_model(directories, language)
     }
 
-    fn resolve_khmer(directories: &[String], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
+    fn resolve_khmer(directories: &[SearchDir], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
         let languages = retry_list(language, KHMER_MODEL);
         let implicit_osd = matches!(psm, 0 | 1 | 12);
         let mut required = languages.clone();
@@ -2215,7 +2215,7 @@ mod tests {
         for language in ["eng", "deu", "chi_sim", "osd"] {
             write(&last, language);
         }
-        let directories = [&absent, &first, &second, &last].map(|dir| dir.to_str().unwrap().to_owned());
+        let directories = [&absent, &first, &second, &last].map(|dir| SearchDir::as_given(dir.to_str().unwrap()));
         assert!(RetryModels::resolve(&directories[..3], "eng+deu", 3).unwrap().is_none());
         let models = RetryModels::resolve(&directories, "eng+deu", 3)
             .unwrap()
@@ -2223,9 +2223,9 @@ mod tests {
             .han
             .unwrap();
         let (osd, recognition) = models.horizontal.unwrap();
-        assert_eq!(osd.directory, directories[1]);
+        assert_eq!(osd.directory, directories[1].path);
         assert_eq!(osd.languages, "osd");
-        assert_eq!(recognition.directory, directories[3]);
+        assert_eq!(recognition.directory, directories[3].path);
         assert_eq!(recognition.languages, "eng+deu+chi_sim");
         assert!(!absent.exists());
     }
@@ -2233,7 +2233,7 @@ mod tests {
     #[test]
     fn broken_vertical_japanese_engine_falls_through_to_working_horizontal_han() {
         let fixture = crate::utils::read_test_fixture("images/chi_sim_image.jpeg");
-        let directories = tessdata_search_dirs(None, &TessdataEnv::from_process());
+        let directories = retry_search_dirs(None, &TessdataEnv::from_process());
         let horizontal = RetryModels::resolve_han(&directories, "eng", 6, |_| {})
             .unwrap()
             .and_then(|models| models.horizontal);
@@ -2294,7 +2294,7 @@ mod tests {
     #[test]
     fn vertical_retry_models_are_independent_of_horizontal_han_and_track_revision() {
         let root = tempfile::tempdir().unwrap();
-        let directories = [root.path().to_str().unwrap().to_owned()];
+        let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
         let model = root.path().join("jpn_vert.traineddata");
         assert!(
             RetryModels::resolve_han(&directories, "eng", 11, |_| {})
@@ -2327,7 +2327,7 @@ mod tests {
     #[test]
     fn khmer_retry_requires_an_installed_complete_model_set() {
         let root = tempfile::tempdir().unwrap();
-        let directories = [root.path().to_str().unwrap().to_owned()];
+        let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
         for name in ["eng", "deu"] {
             std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
         }
@@ -2343,6 +2343,40 @@ mod tests {
             RetryModels::resolve_khmer(&directories, "deu+eng", 1)
                 .unwrap()
                 .is_none()
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn retry_holds_the_managed_best_directory_to_the_pins_the_first_pass_does() {
+        use crate::core::config::TessdataModel;
+        use crate::ocr::processor::validation::model_cache_dir;
+
+        let cache = tempfile::tempdir().unwrap();
+        let env = |model| TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().into()),
+            system_paths: false,
+            model,
+        };
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let managed = model_cache_dir(cache.path(), model);
+            std::fs::create_dir_all(&managed).unwrap();
+            std::fs::write(managed.join("khm.traineddata"), b"not the pinned pack").unwrap();
+        }
+        let best = model_cache_dir(cache.path(), TessdataModel::Best);
+
+        assert!(
+            requires_khmer_outer_cache_bypass("eng", None, &env(TessdataModel::Fast)),
+            "a fast directory serves a file as it is"
+        );
+        assert!(
+            !requires_khmer_outer_cache_bypass("eng", None, &env(TessdataModel::Best)),
+            "the managed best directory serves only the pinned pack, for the retry as for the first pass"
+        );
+        assert!(
+            requires_khmer_outer_cache_bypass("eng", Some(best.as_path()), &env(TessdataModel::Best)),
+            "a directory the caller names is used as given"
         );
     }
 
@@ -2545,7 +2579,7 @@ mod tests {
     #[test]
     fn khmer_hint_keeps_han_models_with_or_without_khmer_installed() {
         let root = tempfile::tempdir().unwrap();
-        let directories = [root.path().to_str().unwrap().to_owned()];
+        let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
         for name in ["eng", "osd", "chi_sim"] {
             std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
         }

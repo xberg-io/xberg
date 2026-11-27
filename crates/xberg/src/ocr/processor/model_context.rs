@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::script_retry::{self, HanModels, RetryModels, hash_language_models, hash_model_file};
-use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
+use super::validation::{SearchDir, TessdataEnv, resolve_tessdata_path_in, retry_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 
@@ -39,7 +39,7 @@ struct PrimaryModels {
 
 #[derive(Clone)]
 struct RetryContext {
-    directories: Vec<String>,
+    directories: Vec<SearchDir>,
     models: Option<RetryModels>,
     noisy_below: f64,
 }
@@ -67,12 +67,12 @@ impl ModelContext {
         if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config))
             && !crate::core::extractor::cacheability::ocr_stop_requested()
         {
-            context.select_retry(config, tessdata_search_dirs(override_path, &env), noisy_below);
+            context.select_retry(config, retry_search_dirs(override_path, &env), noisy_below);
         }
         Ok(context)
     }
 
-    fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
+    fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<SearchDir>, noisy_below: f64) {
         let horizontal =
             RetryModels::resolve_horizontal(&directories, &config.language, config.psm).unwrap_or_else(|error| {
                 self.invalidate_han_cache(&error);
@@ -578,7 +578,7 @@ mod tests {
                     ..Default::default()
                 };
                 let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-                context.select_retry(&config, vec![directory], 75.0);
+                context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
                 assert!(
                     context.retry_models(&config, 30.0, || true).is_some(),
                     "Han must remain selectable"
@@ -604,7 +604,7 @@ mod tests {
             ..Default::default()
         };
         let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-        context.select_retry(&config, vec![directory], 75.0);
+        context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
         let header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext";
         for (token, confidence, expected) in [("|", 20, true), ("|", 65, false), ("1", 20, false)] {
             let tsv = format!("{header}\n5\t1\t1\t1\t1\t1\t0\t100\t3\t40\t{confidence}\t{token}");
@@ -632,7 +632,7 @@ mod tests {
         };
         script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
             let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-            context.select_retry(&config, vec![directory], 75.0);
+            context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
             let models = context.retry_models(&config, 30.0, || false).unwrap();
             assert!(models.han.is_none());
             assert!(models.khmer.is_some());
@@ -673,7 +673,7 @@ mod tests {
                     ..Default::default()
                 };
                 let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-                context.select_retry(&config, vec![directory], 75.0);
+                context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
                 if !fail_at_selection {
                     assert!(context.if_result_current(&config, || ()).is_some());
                     std::fs::write(&han, b"Han revision two").unwrap();
@@ -705,13 +705,16 @@ mod tests {
         write(&primary, "eng", b"eng");
         write(&fallback, "osd", b"osd");
         write(&fallback, "chi_sim", b"han1");
-        let directories: Vec<String> = vec![primary.to_str().unwrap().into(), fallback.to_str().unwrap().into()];
+        let directories = vec![
+            SearchDir::as_given(primary.to_str().unwrap()),
+            SearchDir::as_given(fallback.to_str().unwrap()),
+        ];
         let config = TesseractConfig {
             psm: 3,
             ..Default::default()
         };
         let snapshot = |threshold| {
-            let mut context = ModelContext::for_path(directories[0].clone(), config.psm).unwrap();
+            let mut context = ModelContext::for_path(directories[0].path.clone(), config.psm).unwrap();
             context.select_retry(&config, directories.clone(), threshold);
             context
         };

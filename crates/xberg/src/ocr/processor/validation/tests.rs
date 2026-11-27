@@ -63,35 +63,35 @@ fn test_resolve_all_installed_languages_empty_path() {
 }
 
 #[test]
-fn test_all_languages_exist_returns_true_when_present() {
+fn test_directory_serves_returns_true_when_present() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("eng.traineddata"), b"x").unwrap();
     std::fs::write(dir.path().join("fra.traineddata"), b"x").unwrap();
 
     let langs = vec!["eng".to_string(), "fra".to_string()];
-    assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert!(directory_serves(dir.path().to_str().unwrap(), &langs, false, &PINNED));
 }
 
 #[test]
-fn test_all_languages_exist_returns_false_when_one_missing() {
+fn test_directory_serves_returns_false_when_one_missing() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("eng.traineddata"), b"x").unwrap();
 
     let langs = vec!["eng".to_string(), "deu".to_string()];
-    assert!(!all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert!(!directory_serves(dir.path().to_str().unwrap(), &langs, false, &PINNED));
 }
 
 #[test]
-fn test_all_languages_exist_false_for_empty_path_or_langs() {
-    assert!(!all_languages_exist("", &["eng".to_string()]).unwrap());
+fn test_directory_serves_false_for_empty_path_or_langs() {
+    assert!(!directory_serves("", &["eng".to_string()], false, &PINNED));
     let dir = tempfile::tempdir().unwrap();
-    assert!(!all_languages_exist(dir.path().to_str().unwrap(), &[]).unwrap());
+    assert!(!directory_serves(dir.path().to_str().unwrap(), &[], false, &PINNED));
 }
 
 #[test]
-fn test_all_languages_exist_false_for_missing_dir() {
+fn test_directory_serves_false_for_missing_dir() {
     let langs = vec!["eng".to_string()];
-    assert!(!all_languages_exist("/nonexistent/path/xyz", &langs).unwrap());
+    assert!(!directory_serves("/nonexistent/path/xyz", &langs, false, &PINNED));
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn test_a_language_that_is_a_path_never_reaches_the_file_system() {
     };
     assert_eq!(existing_tessdata_dir_for(&outside_pack, None, &explicit_env), None);
     assert_eq!(
-        first_directory_holding(&[directory.to_str().unwrap().to_owned()], &outside_pack),
+        first_directory_holding(&[SearchDir::as_given(directory.to_str().unwrap())], &outside_pack),
         None
     );
     assert!(matches!(
@@ -300,7 +300,13 @@ fn test_best_request_never_resolves_to_a_fast_only_directory() {
         model,
     };
     let langs = vec!["eng".to_string()];
-    let find = |model| first_directory_holding(&tessdata_search_dirs_with(None, &env(model), &system), &langs);
+    let find = |model| {
+        let directories: Vec<SearchDir> = tessdata_search_dirs_with(None, &env(model), &system)
+            .into_iter()
+            .map(SearchDir::as_given)
+            .collect();
+        first_directory_holding(&directories, &langs)
+    };
 
     assert_eq!(
         find(TessdataModel::Fast).as_deref(),
@@ -516,7 +522,7 @@ fn test_materialize_eng_from_bundled_bytes() {
     let provision = offline(&NO_SYSTEM, &PINNED);
     materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[], &provision).unwrap();
     assert!(dir.path().join("eng.traineddata").exists());
-    assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert!(directory_serves(dir.path().to_str().unwrap(), &langs, false, &PINNED));
     assert_eq!(
         std::fs::read(dir.path().join("eng.traineddata")).unwrap(),
         xberg_tesseract::bundled_eng_traineddata().unwrap()
@@ -767,7 +773,12 @@ fn test_a_directory_named_like_a_pack_is_not_a_pack() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("eng.traineddata")).unwrap();
 
-    assert!(!all_languages_exist(dir.path().to_str().unwrap(), &["eng".to_string()]).unwrap());
+    assert!(!directory_serves(
+        dir.path().to_str().unwrap(),
+        &["eng".to_string()],
+        false,
+        &PINNED
+    ));
 }
 
 #[test]

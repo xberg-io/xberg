@@ -566,13 +566,45 @@ fn pack_serves(pack: &Path, _lang: &str, _verified_best: bool, _pins: &PinTables
     pack.is_file()
 }
 
-/// The first of `directories` that holds a `.traineddata` for every one of `languages`.
-pub(crate) fn first_directory_holding(directories: &[String], languages: &[String]) -> Option<String> {
+/// A candidate tessdata directory and whether the primary resolution holds its packs to the
+/// `tessdata_best` pins ([`holds_verified_best`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SearchDir {
+    pub(crate) path: String,
+    pub(crate) verified_best: bool,
+}
+
+impl SearchDir {
+    /// A directory whose files are used as they are.
+    #[cfg(test)]
+    pub(crate) fn as_given(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            verified_best: false,
+        }
+    }
+}
+
+/// [`tessdata_search_dirs`], each held to the pins the primary resolution holds it to, so the
+/// script retry passes never read a pack of another set than the first pass.
+pub(crate) fn retry_search_dirs(override_path: Option<&Path>, tessdata_env: &TessdataEnv) -> Vec<SearchDir> {
+    tessdata_search_dirs(override_path, tessdata_env)
+        .into_iter()
+        .map(|path| SearchDir {
+            verified_best: holds_verified_best(&path, override_path, tessdata_env, &SYSTEM_TESSDATA_DIRS),
+            path,
+        })
+        .collect()
+}
+
+/// The first of `directories` that serves every one of `languages`, by the same rule as the
+/// primary resolution ([`directory_serves`]).
+pub(crate) fn first_directory_holding(directories: &[SearchDir], languages: &[String]) -> Option<String> {
     require_language_names(languages).ok()?;
     directories
         .iter()
-        .find(|dir| all_languages_exist(dir, languages).unwrap_or(false))
-        .cloned()
+        .find(|dir| directory_serves(&dir.path, languages, dir.verified_best, &PINNED))
+        .map(|dir| dir.path.clone())
 }
 
 /// Candidate tessdata directories in the resolver's priority order:
@@ -668,27 +700,6 @@ const SYSTEM_TESSDATA_PATHS: &[&str] = &[
     r#"C:\Program Files\Tesseract-OCR\tessdata"#,
     r#"C:\ProgramData\Tesseract-OCR\tessdata"#,
 ];
-
-/// Check if all languages in the list exist as traineddata files in the given directory.
-fn all_languages_exist(tessdata_path: &str, languages: &[String]) -> Result<bool, OcrError> {
-    if tessdata_path.is_empty() || languages.is_empty() {
-        return Ok(false);
-    }
-
-    let tessdata_dir = Path::new(tessdata_path);
-    if !tessdata_dir.exists() {
-        return Ok(false);
-    }
-
-    for lang in languages {
-        let traineddata_path = tessdata_dir.join(format!("{}.traineddata", lang));
-        if !traineddata_path.is_file() {
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
 
 /// Materialize missing `model` language files into `tessdata_path`.
 ///
