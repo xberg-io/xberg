@@ -1473,6 +1473,14 @@ impl XYCutStrategy {
         indices: &[usize],
         region_kind: RegionKind,
     ) -> Option<f32> {
+        // Positive identification of prose — required by the
+        // classifier to avoid the google_doc 2-col table
+        // sub-region false positive. Tested first: nothing below
+        // can answer `Some` without it. ~keep
+        if region_kind != RegionKind::Prose {
+            return None;
+        }
+
         if indices.len() < 8 {
             return None;
         }
@@ -1604,13 +1612,6 @@ impl XYCutStrategy {
             return None;
         }
 
-        // Positive identification of prose — required by the
-        // classifier to avoid the google_doc 2-col table
-        // sub-region false positive. ~keep
-        if region_kind != RegionKind::Prose {
-            return None;
-        }
-
         // Gutter midpoint as the cut. The cluster centres are the left
         // edges of the two columns; the gutter sits between the right
         // edge of column 1 and the left edge of column 2. We don't
@@ -1655,6 +1656,19 @@ impl XYCutStrategy {
         indices: &[usize],
         region_kind: RegionKind,
     ) -> Option<f32> {
+        // Prose gate — same safety as `detect_two_column_prose`.
+        // Tables with narrow cell gaps fail the classifier
+        // (`mean_chars < 8` → `Table`), preventing the gap-cluster
+        // signal from misfiring on tabular content. Short-verse
+        // two-column bodies now also pass this gate: although
+        // their `mean_chars <= 20`, `classify_region_kind`'s short-line
+        // central-corridor admission arm returns `Prose` for them, so a
+        // routed short-verse body is cut here rather than re-collapsed.
+        // Tested first: nothing below can answer `Some` without it. ~keep
+        if region_kind != RegionKind::Prose {
+            return None;
+        }
+
         if indices.len() < 24 {
             return None;
         }
@@ -1784,19 +1798,6 @@ impl XYCutStrategy {
 
         let gutter_offset = best_center - x_min;
         if gutter_offset < region_width * 0.2 || gutter_offset > region_width * 0.8 {
-            return None;
-        }
-
-        // Prose gate — same safety as `detect_two_column_prose`.
-        // Tables with narrow cell gaps fail the classifier
-        // (`mean_chars < 8` → `Table`), preventing the gap-cluster
-        // signal from misfiring on tabular content. Short-verse
-        // two-column bodies now also pass this gate: although
-        // their `mean_chars <= 20`, `classify_region_kind`'s short-line
-        // central-corridor admission arm returns `Prose` for them, so a
-        // routed short-verse body is cut here rather than re-collapsed.
-        // ~keep
-        if region_kind != RegionKind::Prose {
             return None;
         }
 
