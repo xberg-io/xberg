@@ -2266,8 +2266,9 @@ fn paragraph_gap_axis(segment: &SegmentData) -> f32 {
 /// than ordinary line pitch. `merge_continuation_paragraphs::starts_numbered_section`
 /// already re-joins a paragraph's first line for exactly this reason; this is the
 /// same re-join on the grouper side, so the two passes agree. See #1609. ~keep
-fn visual_line_texts(lines: &[SegmentData]) -> Vec<String> {
-    let mut texts = vec![String::new(); lines.len()];
+fn visual_line_texts(lines: &[SegmentData]) -> VisualLineTexts {
+    let mut texts = Vec::new();
+    let mut line_of_segment = Vec::with_capacity(lines.len());
     let mut start = 0usize;
     while start < lines.len() {
         let mut end = start + 1;
@@ -2286,12 +2287,24 @@ fn visual_line_texts(lines: &[SegmentData]) -> Vec<String> {
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
-        for slot in &mut texts[start..end] {
-            slot.clone_from(&joined);
-        }
+        line_of_segment.resize(end, texts.len());
+        texts.push(joined);
         start = end;
     }
-    texts
+    VisualLineTexts { texts, line_of_segment }
+}
+
+/// One joined text per visual line, shared by every segment on that line.
+struct VisualLineTexts {
+    texts: Vec<String>,
+    line_of_segment: Vec<usize>,
+}
+
+impl VisualLineTexts {
+    /// The text of the whole visual line the segment at `index` belongs to.
+    fn of_segment(&self, index: usize) -> &str {
+        &self.texts[self.line_of_segment[index]]
+    }
 }
 
 // GH#1806: values mirror the column-gutter bounds already measured for the equivalent
@@ -2618,11 +2631,11 @@ fn blocks_to_paragraphs(
             // prose beginning with a bare year — "2024 was een druk jaar" — does not
             // break its paragraph. See #1386. ~keep
             let starts_section =
-                starts_new_line && super::classify::is_numbered_section_heading(&visual_line_texts[line_idx]);
+                starts_new_line && super::classify::is_numbered_section_heading(visual_line_texts.of_segment(line_idx));
             // A formula line under a hat drawn as a lone letter starts a new paragraph.
             // The heading rule used to break there; joined, the two print as "bX". ~keep
             let accent_over_formula =
-                starts_new_line && accent_letter_over_formula_start(prev, line, &visual_line_texts[line_idx]);
+                starts_new_line && accent_letter_over_formula_start(prev, line, visual_line_texts.of_segment(line_idx));
             // A numbered section heading also always ENDS the element it opens: without
             // this term nothing else distinguishes a heading from the body text that
             // follows it when both share font size, weight, role and line spacing --
@@ -2690,7 +2703,7 @@ fn blocks_to_paragraphs(
             // short, by definition) fails it and stops the chain. ~keep
             let heading_continuation_accepted = current_lines.first().is_some_and(|heading_start| {
                 (current_is_single_visual_line
-                    && super::classify::is_numbered_section_heading(&visual_line_texts[prev_idx])
+                    && super::classify::is_numbered_section_heading(visual_line_texts.of_segment(prev_idx))
                     && (heading_wraps_onto(prev, line)
                         || heading_continuation_at_margin(heading_start, prev, line, &lines, line_idx)))
                     || (heading_wrap_chain_open
@@ -2699,7 +2712,7 @@ fn blocks_to_paragraphs(
             });
             let follows_section = starts_new_line
                 && ((current_is_single_visual_line
-                    && super::classify::is_numbered_section_heading(&visual_line_texts[prev_idx])
+                    && super::classify::is_numbered_section_heading(visual_line_texts.of_segment(prev_idx))
                     && !heading_continuation_accepted)
                     || heading_wrap_chain_open)
                 && !heading_continuation_accepted;

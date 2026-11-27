@@ -8532,6 +8532,23 @@ fn test_blocks_to_paragraphs_separates_rotated_body_from_upright_footer() {
 }
 
 #[test]
+fn visual_line_texts_gives_every_segment_the_text_of_its_whole_line() {
+    let segments = vec![
+        inline_seg("3.1.7", 50.0, 700.0, true),
+        inline_seg(" Innovatie ", 90.0, 700.0, true),
+        inline_seg("  ", 200.0, 700.0, true),
+        inline_seg("Body text", 50.0, 680.0, false),
+    ];
+
+    let texts = visual_line_texts(&segments);
+
+    for index in 0..3 {
+        assert_eq!(texts.of_segment(index), "3.1.7 Innovatie", "segment {index}");
+    }
+    assert_eq!(texts.of_segment(3), "Body text");
+}
+
+#[test]
 fn assign_ascii_lowercase_replaces_the_previous_contents() {
     let mut buffer = String::from("a longer earlier word");
     for text in ["Relief", "CAFÉ", "", "ǅ-Mixed"] {
