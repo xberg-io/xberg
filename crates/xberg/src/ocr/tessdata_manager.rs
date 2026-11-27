@@ -81,8 +81,20 @@ impl TessdataManager {
     }
 
     /// Check if a specific language traineddata file is cached.
+    ///
+    /// A regular file counts. For the `best` set, a language with a pinned pack counts only when
+    /// its file is that pack (size and SHA-256), so fast data, an empty file or a truncated one is
+    /// reported as not cached and replaced by the next download.
     pub fn is_language_cached(&self, lang: &str) -> bool {
-        self.cache_dir.join(format!("{lang}.traineddata")).exists()
+        let pack = self.cache_dir.join(format!("{lang}.traineddata"));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pins = &super::tessdata_download::PINNED;
+            if self.model == TessdataModel::Best && pins.pin(lang, self.model).is_some() {
+                return pins.classify(lang, &pack).is(self.model);
+            }
+        }
+        pack.is_file()
     }
 
     /// Returns the manifest of every pinned tessdata file of both model sets.
@@ -181,6 +193,18 @@ impl TessdataManager {
         for (i, &lang) in languages.iter().enumerate() {
             if self.is_language_cached(lang) {
                 continue;
+            }
+            if self.model == TessdataModel::Best {
+                super::tessdata_download::PINNED
+                    .set_aside_unverified(lang, self.model, &self.cache_dir)
+                    .map_err(|e| {
+                        OcrError::TesseractInitializationFailed(format!(
+                            "'{lang}.traineddata' in {} is not the pinned {} language pack and could not be \
+                             moved aside: {e}. Remove it",
+                            self.cache_dir.display(),
+                            self.model.repository()
+                        ))
+                    })?;
             }
             tracing::info!(
                 lang,
@@ -291,13 +315,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_best_manager_counts_only_the_pinned_pack_as_cached() {
+        let temp_dir = TempDir::new().unwrap();
+        let best = TessdataManager::for_model(Some(temp_dir.path().to_path_buf()), TessdataModel::Best);
+        let fast = TessdataManager::for_model(Some(temp_dir.path().to_path_buf()), TessdataModel::Fast);
+
+        std::fs::write(temp_dir.path().join("eng.traineddata"), "not the pinned best pack").unwrap();
+        std::fs::write(temp_dir.path().join("my_custom.traineddata"), "user trained").unwrap();
+        std::fs::create_dir(temp_dir.path().join("deu.traineddata")).unwrap();
+
+        assert!(!best.is_language_cached("eng"));
+        assert!(fast.is_language_cached("eng"), "the fast set keeps hand-placed packs");
+        assert!(best.is_language_cached("my_custom"), "no pin to hold it to");
+        assert!(!fast.is_language_cached("deu"), "a directory is not a pack");
+    }
+
     #[cfg(paddle_ocr)]
     #[test]
     fn test_ensure_all_languages_with_existing_files() {
         let temp_dir = TempDir::new().unwrap();
-        let manager = TessdataManager::for_model(Some(temp_dir.path().to_path_buf()), TessdataModel::Best);
+        // ~keep Fast: a best manager holds every pinned file to its pin and would download.
+        let manager = TessdataManager::for_model(Some(temp_dir.path().to_path_buf()), TessdataModel::Fast);
 
-        for &(code, _, _) in pinned_packs(TessdataModel::Best) {
+        for &(code, _, _) in pinned_packs(TessdataModel::Fast) {
             fs::write(temp_dir.path().join(format!("{code}.traineddata")), "fake").unwrap();
         }
 

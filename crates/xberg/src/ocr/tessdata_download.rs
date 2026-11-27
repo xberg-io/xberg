@@ -174,6 +174,47 @@ impl<'a> PinTables<'a> {
         verified
     }
 
+    /// Move a file in `output_dir` that is not the pinned `model` pack of `lang` out of the way
+    /// (to `<lang>.traineddata.unverified`), so the pinned pack can be published there without
+    /// replacing anything. A language with no pin is left alone. Returns whether a file was moved.
+    ///
+    /// For the directories xberg vouches for: a wrong file there would otherwise keep being
+    /// served as the pinned pack.
+    pub(crate) fn set_aside_unverified(
+        &self,
+        lang: &str,
+        model: TessdataModel,
+        output_dir: &Path,
+    ) -> std::io::Result<bool> {
+        // ~keep One mover at a time, deciding on what is there now: a thread that saw the wrong
+        // file earlier must not move the pack another thread has published since.
+        static MOVING: Mutex<()> = Mutex::new(());
+        let _alone = MOVING.lock().unwrap_or_else(PoisonError::into_inner);
+
+        let path = output_dir.join(format!("{lang}.traineddata"));
+        match std::fs::symlink_metadata(&path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error),
+        }
+        if self.pin(lang, model).is_none() || self.classify(lang, &path).is(model) {
+            return Ok(false);
+        }
+        let aside = output_dir.join(format!("{lang}.traineddata.unverified"));
+        std::fs::rename(&path, &aside)?;
+        // ~keep The pack published next can share the size and modification time of the file
+        // just moved, which is all the digest memo tells files apart by.
+        DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).remove(&path);
+        tracing::warn!(
+            path = %path.display(),
+            moved_to = %aside.display(),
+            model = %model,
+            "A file in xberg's tessdata directory is not the pinned language pack; moved it aside to \
+             fetch the pinned one"
+        );
+        Ok(true)
+    }
+
     /// Copy the pinned `model` pack for `lang` into `output_dir` from the first of `sources`
     /// that holds exactly those bytes. Never downloads. Returns whether `output_dir` now holds
     /// the pack.
@@ -190,12 +231,13 @@ impl<'a> PinTables<'a> {
     }
 }
 
+/// Size, modification time and SHA-256 of the files [`memoized_sha256`] has read.
+type SeenDigest = (u64, std::time::SystemTime, String);
+static DIGESTS: LazyLock<Mutex<HashMap<PathBuf, SeenDigest>>> = LazyLock::new(Default::default);
+
 /// The SHA-256 of the regular file at `path`, read once per (path, size, modification time) in
 /// this process. `metadata` is what the caller just read for `path`.
 fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> {
-    type Seen = (u64, std::time::SystemTime, String);
-    static DIGESTS: LazyLock<Mutex<HashMap<PathBuf, Seen>>> = LazyLock::new(Default::default);
-
     let state = (metadata.len(), metadata.modified().ok()?);
     if let Some((len, modified, digest)) = DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).get(path)
         && (*len, *modified) == state
@@ -833,6 +875,45 @@ mod tests {
         assert!(VerifiedSet::Shared.is(TessdataModel::Best) && VerifiedSet::Shared.is(TessdataModel::Fast));
         assert!(VerifiedSet::Best.is(TessdataModel::Best) && !VerifiedSet::Best.is(TessdataModel::Fast));
         assert!(!VerifiedSet::Fast.is(TessdataModel::Best) && !VerifiedSet::Unknown.is(TessdataModel::Fast));
+    }
+
+    #[test]
+    fn only_a_wrong_file_for_a_pinned_language_is_set_aside() {
+        use super::{PinTables, TessdataModel};
+
+        let directory = tempfile::tempdir().unwrap();
+        let digest = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
+        let (fast_pack, best_pack) = (digest(b"fast"), digest(b"best!"));
+        let fast = [("eng", fast_pack.as_str(), 4)];
+        let best = [("eng", best_pack.as_str(), 5)];
+        let pins = PinTables {
+            fast: &fast,
+            best: &best,
+        };
+        let pack = |lang: &str| directory.path().join(format!("{lang}.traineddata"));
+        let set_aside = |lang: &str| {
+            pins.set_aside_unverified(lang, TessdataModel::Best, directory.path())
+                .unwrap()
+        };
+
+        assert!(!set_aside("eng"), "nothing there");
+        std::fs::write(pack("custom"), b"user trained").unwrap();
+        assert!(!set_aside("custom"), "no pin to hold it to");
+        std::fs::write(pack("eng"), b"best!").unwrap();
+        assert!(!set_aside("eng"), "the pinned pack stays");
+        assert_eq!(std::fs::read(pack("eng")).unwrap(), b"best!");
+
+        std::fs::remove_file(pack("eng")).unwrap();
+        std::fs::write(pack("eng"), b"fast").unwrap();
+        assert!(set_aside("eng"));
+        assert!(!pack("eng").exists());
+        assert_eq!(
+            std::fs::read(directory.path().join("eng.traineddata.unverified")).unwrap(),
+            b"fast"
+        );
+        std::fs::write(pack("eng"), b"").unwrap();
+        assert!(set_aside("eng"), "an earlier set-aside file does not block the next");
+        assert!(!pack("eng").exists());
     }
 
     #[test]

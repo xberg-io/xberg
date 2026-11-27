@@ -622,6 +622,156 @@ fn test_shared_packs_reach_the_best_directory_once_a_source_appears() {
 }
 
 #[test]
+fn test_a_wrong_file_in_the_managed_best_directory_is_replaced_not_served() {
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let (fast, best) = ([("eng", fast_pack.as_str(), 4)], [("eng", best_pack.as_str(), 5)]);
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let wrong_files: [&[u8]; 3] = [b"fast", b"", b"BEST!"];
+
+    for wrong in wrong_files {
+        let cache = tempfile::tempdir().unwrap();
+        let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+        std::fs::create_dir_all(&managed).unwrap();
+        std::fs::write(managed.join("eng.traineddata"), wrong).unwrap();
+        let env = cache_env(cache.path(), TessdataModel::Best);
+        let languages = ["eng".to_string()];
+        assert_eq!(
+            first_serving_dir(&languages, None, &env, &NO_SYSTEM, &pins),
+            None,
+            "{wrong:?} must not count as the best pack"
+        );
+
+        let fetched = std::cell::Cell::new(0_u32);
+        let fetch = |lang: &str, model: TessdataModel, directory: &Path| -> Result<bool, OcrError> {
+            assert_eq!((lang, model), ("eng", TessdataModel::Best));
+            fetched.set(fetched.get() + 1);
+            std::fs::write(directory.join("eng.traineddata"), b"best!").unwrap();
+            Ok(true)
+        };
+        let provision = Provision {
+            system: &NO_SYSTEM,
+            pins: &pins,
+            fetch: &fetch,
+        };
+
+        let resolved = resolve_tessdata_path_with(&languages, None, &env, &provision).unwrap();
+        assert_eq!(resolved, managed.to_str().unwrap());
+        assert_eq!(std::fs::read(managed.join("eng.traineddata")).unwrap(), b"best!");
+        assert_eq!(
+            std::fs::read(managed.join("eng.traineddata.unverified")).unwrap(),
+            wrong
+        );
+        assert_eq!(
+            resolve_tessdata_path_with(&languages, None, &env, &provision).unwrap(),
+            resolved
+        );
+        assert_eq!(fetched.get(), 1, "the verified pack is not fetched again");
+    }
+}
+
+#[test]
+fn test_a_wrong_best_pack_that_cannot_be_replaced_is_an_error() {
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let (fast, best) = ([("eng", fast_pack.as_str(), 4)], [("eng", best_pack.as_str(), 5)]);
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let cache = tempfile::tempdir().unwrap();
+    let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+    std::fs::create_dir_all(&managed).unwrap();
+    std::fs::write(managed.join("eng.traineddata"), b"fast").unwrap();
+    let offline_fetch = |_: &str, _: TessdataModel, _: &Path| -> Result<bool, OcrError> {
+        Err(OcrError::TesseractInitializationFailed("offline".into()))
+    };
+    let provision = Provision {
+        system: &NO_SYSTEM,
+        pins: &pins,
+        fetch: &offline_fetch,
+    };
+
+    let result = resolve_tessdata_path_with(
+        &["eng".to_string()],
+        None,
+        &cache_env(cache.path(), TessdataModel::Best),
+        &provision,
+    );
+
+    assert!(result.is_err(), "fast data must not be served for best: {result:?}");
+}
+
+#[test]
+fn test_a_wrong_pack_in_the_built_in_best_directory_is_skipped() {
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let (fast, best) = ([("eng", fast_pack.as_str(), 4)], [("eng", best_pack.as_str(), 5)]);
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let cache = tempfile::tempdir().unwrap();
+    let image = tempfile::tempdir().unwrap();
+    let image_dirs = [image.path().to_str().unwrap()];
+    let system = SystemTessdataDirs {
+        fast: &[],
+        best: &image_dirs,
+    };
+    let env = TessdataEnv {
+        system_paths: true,
+        ..cache_env(cache.path(), TessdataModel::Best)
+    };
+    let languages = ["eng".to_string(), "custom".to_string()];
+    std::fs::write(image.path().join("custom.traineddata"), b"user trained").unwrap();
+    let serving = || first_serving_dir(&languages, None, &env, &system, &pins);
+
+    std::fs::write(image.path().join("eng.traineddata"), b"fast").unwrap();
+    assert_eq!(serving(), None);
+    assert_eq!(
+        first_serving_dir(&languages, Some(image.path()), &env, &system, &pins).as_deref(),
+        image.path().to_str(),
+        "the same directory named by the caller is used as given"
+    );
+    std::fs::remove_file(image.path().join("eng.traineddata")).unwrap();
+    std::fs::write(image.path().join("eng.traineddata"), b"best!").unwrap();
+    assert_eq!(
+        serving().as_deref(),
+        image.path().to_str(),
+        "a language with no pin only has to be a file"
+    );
+    assert_eq!(
+        std::fs::read(image.path().join("eng.traineddata")).unwrap(),
+        b"best!",
+        "a read-only image directory is never written"
+    );
+}
+
+#[test]
+fn test_a_directory_named_like_a_pack_is_not_a_pack() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("eng.traineddata")).unwrap();
+
+    assert!(!all_languages_exist(dir.path().to_str().unwrap(), &["eng".to_string()]).unwrap());
+}
+
+#[test]
+fn test_the_offline_probe_holds_the_managed_best_directory_to_the_real_pins() {
+    let cache = tempfile::tempdir().unwrap();
+    let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+    std::fs::create_dir_all(&managed).unwrap();
+    std::fs::write(managed.join("eng.traineddata"), b"not the pinned pack").unwrap();
+    std::fs::write(managed.join("my_custom.traineddata"), b"user trained").unwrap();
+    let env = cache_env(cache.path(), TessdataModel::Best);
+
+    assert_eq!(existing_tessdata_dir_for(&["eng".to_string()], None, &env), None);
+    assert_eq!(
+        existing_tessdata_dir_for(&["my_custom".to_string()], None, &env).as_deref(),
+        managed.to_str()
+    );
+}
+
+#[test]
 fn test_shared_packs_never_adopt_an_unverified_file() {
     let directory = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();

@@ -80,7 +80,9 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 ///    pinned, SHA-256 verified download from the model's GitHub repository.
 ///
 /// The override and `TESSDATA_PREFIX` are the caller's choice and are used whichever model set
-/// they hold; `model` applies only to the directories xberg manages.
+/// they hold; `model` applies only to the directories xberg manages. In the managed and built-in
+/// `best` directories a pinned language counts as present only when its file is the pinned
+/// `tessdata_best` pack; in the managed one a wrong file is moved aside and the pack fetched.
 ///
 /// # Arguments
 ///
@@ -198,14 +200,12 @@ fn resolve_tessdata_path_with(
     let xberg_owned =
         |dir: &Path| dir == managed.as_path() || (tessdata_env.model == TessdataModel::Fast && dir == flat);
 
-    for dir in tessdata_search_dirs_with(override_path, tessdata_env, provision.system) {
-        if all_languages_exist(&dir, languages)? {
-            if xberg_owned(Path::new(&dir)) {
-                adopt_shared_packs(Path::new(&dir), tessdata_env.model, &sources, provision.pins);
-            }
-            log_resolved(&dir, languages, override_path, tessdata_env, provision.pins);
-            return Ok(dir);
+    if let Some(dir) = first_serving_dir(languages, override_path, tessdata_env, provision.system, provision.pins) {
+        if xberg_owned(Path::new(&dir)) {
+            adopt_shared_packs(Path::new(&dir), tessdata_env.model, &sources, provision.pins);
         }
+        log_resolved(&dir, languages, override_path, tessdata_env, provision.pins);
+        return Ok(dir);
     }
 
     // ~keep A flat cache that already serves some of the requested languages stays the fast
@@ -224,6 +224,9 @@ fn resolve_tessdata_path_with(
         ))
     })?;
 
+    // ~keep A best request is only ever filled into the managed best directory, whose packs are
+    // held to their pins.
+    let destination_is_verified = tessdata_env.model == TessdataModel::Best;
     materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, provision)?;
     adopt_shared_packs(&destination, tessdata_env.model, &sources, provision.pins);
 
@@ -231,7 +234,7 @@ fn resolve_tessdata_path_with(
         .to_str()
         .ok_or_else(|| OcrError::TesseractInitializationFailed("Tessdata path is not valid UTF-8".to_string()))?;
 
-    if all_languages_exist(dest_str, languages)? {
+    if directory_serves(dest_str, languages, destination_is_verified, provision.pins) {
         log_resolved(dest_str, languages, override_path, tessdata_env, provision.pins);
         Ok(dest_str.to_string())
     } else {
@@ -439,7 +442,69 @@ pub(crate) fn existing_tessdata_dir_for(
     override_path: Option<&Path>,
     tessdata_env: &TessdataEnv,
 ) -> Option<String> {
-    first_directory_holding(&tessdata_search_dirs(override_path, tessdata_env), languages)
+    first_serving_dir(languages, override_path, tessdata_env, &SYSTEM_TESSDATA_DIRS, &PINNED)
+}
+
+/// The first candidate directory that serves every one of `languages`, in the resolver's order.
+fn first_serving_dir(
+    languages: &[String],
+    override_path: Option<&Path>,
+    tessdata_env: &TessdataEnv,
+    system: &SystemTessdataDirs<'_>,
+    pins: &PinTables<'_>,
+) -> Option<String> {
+    tessdata_search_dirs_with(override_path, tessdata_env, system)
+        .into_iter()
+        .find(|dir| {
+            let verified = holds_verified_best(dir, override_path, tessdata_env, system);
+            directory_serves(dir, languages, verified, pins)
+        })
+}
+
+/// Whether `directory` is one xberg vouches for as `tessdata_best`: the managed best cache or the
+/// read-only best directory of an image, reached through the search order rather than named by
+/// the caller. A pack there is held to its pin; everywhere else a file is used as it is.
+fn holds_verified_best(
+    directory: &str,
+    override_path: Option<&Path>,
+    tessdata_env: &TessdataEnv,
+    system: &SystemTessdataDirs<'_>,
+) -> bool {
+    if tessdata_env.model != TessdataModel::Best
+        || override_path.and_then(Path::to_str) == Some(directory)
+        || tessdata_env.tessdata_prefix.as_deref() == Some(directory)
+    {
+        return false;
+    }
+    let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
+    Path::new(directory) == model_cache_dir(&cache_base, TessdataModel::Best) || system.best.contains(&directory)
+}
+
+/// Whether `directory` holds a usable pack for every one of `languages`: a regular file, which in
+/// a `verified_best` directory must also be the pinned `tessdata_best` pack when its language has
+/// one. A wrong, empty or truncated file there counts as missing.
+fn directory_serves(directory: &str, languages: &[String], verified_best: bool, pins: &PinTables<'_>) -> bool {
+    !directory.is_empty()
+        && !languages.is_empty()
+        && languages.iter().all(|lang| {
+            let pack = Path::new(directory).join(format!("{lang}.traineddata"));
+            pack_serves(&pack, lang, verified_best, pins)
+        })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn pack_serves(pack: &Path, lang: &str, verified_best: bool, pins: &PinTables<'_>) -> bool {
+    if verified_best && pins.pin(lang, TessdataModel::Best).is_some() {
+        pins.classify(lang, pack).is(TessdataModel::Best)
+    } else {
+        pack.is_file()
+    }
+}
+
+/// WASM has no pins to hold a pack to.
+#[cfg(target_arch = "wasm32")]
+fn pack_serves(pack: &Path, _lang: &str, _verified_best: bool, _pins: &PinTables<'_>) -> bool {
+    pack.is_file()
 }
 
 /// The first of `directories` that holds a `.traineddata` for every one of `languages`.
@@ -557,7 +622,7 @@ fn all_languages_exist(tessdata_path: &str, languages: &[String]) -> Result<bool
 
     for lang in languages {
         let traineddata_path = tessdata_dir.join(format!("{}.traineddata", lang));
-        if !traineddata_path.exists() {
+        if !traineddata_path.is_file() {
             return Ok(false);
         }
     }
@@ -578,9 +643,28 @@ fn materialize_missing_languages(
     sources: &[PathBuf],
     provision: &Provision<'_>,
 ) -> Result<(), OcrError> {
+    // ~keep Best packs are only ever filled into the managed best directory, where a file that
+    // is not the pinned pack (hand-copied fast data, an empty or truncated file) is replaced
+    // rather than served.
+    let verified_best = model == TessdataModel::Best;
     for lang in languages {
         let traineddata_path = tessdata_path.join(format!("{}.traineddata", lang));
-        if traineddata_path.exists() || provision.pins.adopt(lang, model, tessdata_path, sources) {
+        if pack_serves(&traineddata_path, lang, verified_best, provision.pins) {
+            continue;
+        }
+        if verified_best {
+            provision
+                .pins
+                .set_aside_unverified(lang, model, tessdata_path)
+                .map_err(|e| {
+                    OcrError::TesseractInitializationFailed(format!(
+                        "'{}' is not the pinned {} language pack and could not be moved aside: {e}. Remove it",
+                        traineddata_path.display(),
+                        model.repository()
+                    ))
+                })?;
+        }
+        if provision.pins.adopt(lang, model, tessdata_path, sources) {
             continue;
         }
 
