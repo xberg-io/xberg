@@ -1,10 +1,15 @@
 use super::super::*;
 use super::common::*;
+use super::pdf_fixtures::build_pdf_with_annotations;
 
 /// Build a tagged one-page PDF with three MCID-tagged paragraphs
 /// (ALPHA/BRAVO/CHARLIE, MCID 0/1/2) drawn top-to-bottom and a minimal
 /// struct tree whose `/P` kids reference those MCIDs in order.
 fn build_mcid_structure_tree_pdf() -> Vec<u8> {
+    build_mcid_structure_tree_pdf_with_mark_info("<< /Marked true >>")
+}
+
+fn build_mcid_structure_tree_pdf_with_mark_info(mark_info: &str) -> Vec<u8> {
     let content = b"BT /F1 12 Tf\n\
             /P <</MCID 0>> BDC 1 0 0 1 72 700 Tm (ALPHA) Tj EMC\n\
             /P <</MCID 1>> BDC 1 0 0 1 72 600 Tm (BRAVO) Tj EMC\n\
@@ -27,7 +32,7 @@ fn build_mcid_structure_tree_pdf() -> Vec<u8> {
         &mut buf,
         &mut off,
         1,
-        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 7 0 R >>",
+        &format!("<< /Type /Catalog /Pages 2 0 R /MarkInfo {mark_info} /StructTreeRoot 7 0 R >>"),
     );
     obj(&mut buf, &mut off, 2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
     obj(
@@ -67,6 +72,53 @@ fn build_mcid_structure_tree_pdf() -> Vec<u8> {
     buf.extend_from_slice(format!("{xref}\n%%EOF\n").as_bytes());
 
     buf
+}
+
+/// The heading pass and text extraction share one structure-tree parse and one
+/// all-pages traversal per document, whichever runs first.
+#[test]
+fn structure_page_content_shares_parse_and_traversal_with_extraction() {
+    let doc = PdfDocument::from_bytes(build_mcid_structure_tree_pdf()).unwrap();
+    let tree = doc.struct_tree_marked().expect("tagged fixture has a structure tree");
+    let content = doc
+        .structure_page_content()
+        .expect("tagged fixture has structure content");
+    let mcids: Vec<_> = content[&0].iter().filter_map(|c| c.mcid).collect();
+    assert_eq!(mcids, [0, 1, 2]);
+
+    doc.extract_text(0).unwrap();
+    let cached = doc
+        .structure_content_cache
+        .get()
+        .expect("extraction reads the traversal cache");
+    assert!(Arc::ptr_eq(&content, cached), "extraction traversed the tree again");
+    assert!(
+        Arc::ptr_eq(&tree, &doc.struct_tree_marked().unwrap()),
+        "extraction parsed the tree again"
+    );
+    assert!(Arc::ptr_eq(&content, &doc.structure_page_content().unwrap()));
+
+    let extracted_first = PdfDocument::from_bytes(build_mcid_structure_tree_pdf()).unwrap();
+    extracted_first.extract_text(0).unwrap();
+    let cached = Arc::clone(extracted_first.structure_content_cache.get().unwrap());
+    assert!(Arc::ptr_eq(&cached, &extracted_first.structure_page_content().unwrap()));
+}
+
+/// `/Suspects true` keeps the tree out of reading order but the accessor still
+/// serves it: reliability is the caller's gate, as with `struct_tree_marked`.
+#[test]
+fn structure_page_content_ignores_suspects_and_untagged_returns_none() {
+    let suspect = PdfDocument::from_bytes(build_mcid_structure_tree_pdf_with_mark_info(
+        "<< /Marked true /Suspects true >>",
+    ))
+    .unwrap();
+    assert!(!suspect.mark_info().unwrap().is_structure_reliable());
+    assert!(suspect.struct_tree_trustworthy().is_none());
+    let content = suspect.structure_page_content().expect("suspect tree is still parsed");
+    assert_eq!(content[&0].iter().filter_map(|c| c.mcid).count(), 3);
+
+    let untagged = PdfDocument::from_bytes(build_pdf_with_annotations(Vec::new())).unwrap();
+    assert!(untagged.structure_page_content().is_none());
 }
 
 /// A span injected into a tagged page via `extract_text_with_extra_spans`

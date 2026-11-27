@@ -786,6 +786,31 @@ impl PdfDocument {
         out
     }
 
+    /// All-pages traversal of `struct_tree`, computed once per document.
+    ///
+    /// Every caller passes the tree held in `structure_tree_cache` (via
+    /// `struct_tree_trustworthy` or `struct_tree_marked`, which share one
+    /// `Arc`), so the first traversal is valid for all of them.
+    pub(crate) fn structure_content_for(
+        &self,
+        struct_tree: &crate::structure::StructTreeRoot,
+    ) -> Arc<HashMap<u32, Vec<crate::structure::OrderedContent>>> {
+        Arc::clone(
+            self.structure_content_cache
+                .get_or_init(|| Arc::new(crate::structure::traverse_structure_tree_all_pages(struct_tree))),
+        )
+    }
+
+    /// Per-page logical-structure content of the document's structure tree,
+    /// independent of `/MarkInfo /Suspects`: the same parse and traversal
+    /// the extraction paths use. `None` when the document has no structure
+    /// tree or it fails to parse. Callers apply their own reliability gate.
+    #[doc(hidden)]
+    pub fn structure_page_content(&self) -> Option<Arc<HashMap<u32, Vec<crate::structure::OrderedContent>>>> {
+        let tree = self.struct_tree_marked()?;
+        Some(self.structure_content_for(&tree))
+    }
+
     /// Page's MCID reading order from the all-pages traversal cache
     /// (`structure_content_cache`, populated once). `build_context` previously
     /// re-walked the whole tree per page (≈ O(pages²) on a tagged document);
@@ -795,14 +820,8 @@ impl PdfDocument {
         struct_tree: &crate::structure::StructTreeRoot,
         page_index: u32,
     ) -> Vec<(crate::structure::McidScope, u32)> {
-        if self.structure_content_cache.lock_or_recover().is_none() {
-            let all_content = crate::structure::traverse_structure_tree_all_pages(struct_tree);
-            *self.structure_content_cache.lock_or_recover() = Some(all_content);
-        }
-        self.structure_content_cache
-            .lock_or_recover()
-            .as_ref()
-            .and_then(|c| c.get(&page_index))
+        self.structure_content_for(struct_tree)
+            .get(&page_index)
             .map(|content| {
                 content
                     .iter()
@@ -869,16 +888,12 @@ impl PdfDocument {
             }
         }
 
-        let ordered_content_owned: Vec<crate::structure::OrderedContent>;
-        let ordered_content = {
-            let cache = self.structure_content_cache.lock_or_recover();
-            ordered_content_owned = cache
-                .as_ref()
-                .and_then(|c| c.get(&(page_index as u32)))
-                .cloned()
-                .unwrap_or_default();
-            &ordered_content_owned as &[crate::structure::OrderedContent]
-        };
+        let all_content = self.structure_content_cache.get().cloned();
+        let ordered_content: &[crate::structure::OrderedContent] = all_content
+            .as_deref()
+            .and_then(|c| c.get(&(page_index as u32)))
+            .map(Vec::as_slice)
+            .unwrap_or_default();
 
         let at_index = self.actualtext_index();
         // MC-scope-wins precedence set: MCIDs whose BDC carried inline

@@ -1220,15 +1220,12 @@ impl PdfDocument {
                 // span keeps its geometric position. ~keep
                 let mut ordered = self.order_spans_column_aware(spans, page_index)?;
                 if let Some(tree) = self.struct_tree_trustworthy() {
-                    // Populate the structure-content cache, then read it (it carries the
-                    // per-MCID `in_table` flag the mcid-order list does not). ~keep
-                    let _ = self.cached_mcid_order_for_page(&tree, page_index as u32);
-                    let content: Vec<crate::structure::OrderedContent> = self
-                        .structure_content_cache
-                        .lock_or_recover()
-                        .as_ref()
-                        .and_then(|c| c.get(&(page_index as u32)))
-                        .cloned()
+                    // The structure content carries the per-MCID `in_table` flag the
+                    // mcid-order list does not. ~keep
+                    let all_content = self.structure_content_for(&tree);
+                    let content: &[crate::structure::OrderedContent] = all_content
+                        .get(&(page_index as u32))
+                        .map(Vec::as_slice)
                         .unwrap_or_default();
 
                     let page_scope = crate::structure::McidScope::Page(page_index as u32);
@@ -1388,12 +1385,7 @@ impl PdfDocument {
         let Some(ref struct_tree) = self.struct_tree_trustworthy() else {
             return info;
         };
-        if self.structure_content_cache.lock_or_recover().is_none() {
-            let all = crate::structure::traverse_structure_tree_all_pages(struct_tree);
-            *self.structure_content_cache.lock_or_recover() = Some(all);
-        }
-        let cache = self.structure_content_cache.lock_or_recover();
-        if let Some(content) = cache.as_ref().and_then(|c| c.get(&(page_index as u32))) {
+        if let Some(content) = self.structure_content_for(struct_tree).get(&(page_index as u32)) {
             for item in content {
                 if let Some(mcid) = item.mcid {
                     if matches!(item.list_role, Some(crate::structure::ListRole::Lbl)) {

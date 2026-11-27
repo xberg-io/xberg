@@ -472,10 +472,7 @@ impl PdfDocument {
 
         let text = if let Some(ref struct_tree) = cached_tree {
             // Build per-page traversal cache once, then O(1) lookup per page. ~keep
-            if self.structure_content_cache.lock_or_recover().is_none() {
-                let all_content = crate::structure::traverse_structure_tree_all_pages(struct_tree);
-                *self.structure_content_cache.lock_or_recover() = Some(all_content);
-            }
+            self.structure_content_for(struct_tree);
             self.extract_text_structure_order_cached_with_spans(page_index, all_spans, options.include_artifacts)?
         } else {
             // Untagged or Suspects=true PDF: use page content

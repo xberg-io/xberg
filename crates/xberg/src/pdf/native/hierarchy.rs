@@ -9,6 +9,7 @@
 //! bypassing font-size clustering entirely for more accurate heading detection.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::NativeDocument;
 // Inline-script rejoining measures baselines and character origins in raw page
@@ -1468,7 +1469,7 @@ pub(super) fn log_structure_tree_roles<T>(pages: &[T], count_roles: impl Fn(&T) 
 
 fn reliable_heading_content(
     doc: &NativeDocument,
-) -> Option<HashMap<u32, Vec<xberg_native_pdf::structure::OrderedContent>>> {
+) -> Option<Arc<HashMap<u32, Vec<xberg_native_pdf::structure::OrderedContent>>>> {
     let mark_info = match doc.doc.mark_info() {
         Ok(mi) => mi,
         Err(e) => {
@@ -1486,19 +1487,11 @@ fn reliable_heading_content(
         return None;
     }
 
-    let struct_tree = match doc.doc.structure_tree() {
-        Ok(Some(tree)) => tree,
-        Ok(None) => {
-            tracing::debug!("xberg_native_pdf: no structure tree found despite marked=true");
-            return None;
-        }
-        Err(e) => {
-            tracing::debug!("xberg_native_pdf: structure_tree() failed: {e}");
-            return None;
-        }
+    // Shares the document's cached parse and traversal with text extraction. ~keep
+    let Some(all_page_content) = doc.doc.structure_page_content() else {
+        tracing::debug!("xberg_native_pdf: no parseable structure tree despite marked=true");
+        return None;
     };
-
-    let all_page_content = xberg_native_pdf::structure::traverse_structure_tree_all_pages(&struct_tree);
 
     let heading_count: usize = all_page_content
         .values()
@@ -3110,5 +3103,91 @@ mod tests {
         let out = super::dedupe_redrawn_segments(vec![upright, rotated]);
 
         assert_eq!(out.len(), 2);
+    }
+
+    /// One page whose structure tree tags MCIDs 0-2 with `heading` and MCID 3 as `/P`.
+    fn tagged_headings_pdf(mark_info: &str, heading: &str) -> Vec<u8> {
+        let content = b"BT /F1 12 Tf\n\
+            /H1 <</MCID 0>> BDC 1 0 0 1 72 700 Tm (One) Tj EMC\n\
+            /H1 <</MCID 1>> BDC 1 0 0 1 72 650 Tm (Two) Tj EMC\n\
+            /H1 <</MCID 2>> BDC 1 0 0 1 72 600 Tm (Three) Tj EMC\n\
+            /P <</MCID 3>> BDC 1 0 0 1 72 550 Tm (Body) Tj EMC\n\
+            ET\n";
+        let kids = (0..3)
+            .map(|mcid| format!("<< /Type /StructElem /S /{heading} /Pg 3 0 R /K {mcid} >>"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let objects = [
+            format!("<< /Type /Catalog /Pages 2 0 R /MarkInfo {mark_info} /StructTreeRoot 5 0 R >>"),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> \
+             /Contents 4 0 R /StructParents 0 >>"
+                .to_string(),
+            format!(
+                "<< /Length {} >>\nstream\n{}\nendstream",
+                content.len(),
+                String::from_utf8_lossy(content)
+            ),
+            "<< /Type /StructTreeRoot /K [6 0 R] >>".to_string(),
+            format!("<< /Type /StructElem /S /Document /K [{kids} << /Type /StructElem /S /P /Pg 3 0 R /K 3 >>] >>"),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+        ];
+        let mut pdf = b"%PDF-1.7\n".to_vec();
+        let mut offsets = Vec::new();
+        for (index, body) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for offset in offsets {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+                objects.len() + 1
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    #[test]
+    fn structure_roles_reuse_the_document_structure_content() {
+        let document = NativeDocument::open_bytes(&tagged_headings_pdf("<< /Marked true >>", "H1")).unwrap();
+        let roles = super::structure_tree_page_roles(&document)
+            .unwrap()
+            .expect("a reliable tree with three headings yields roles");
+        assert_eq!(
+            roles[0],
+            std::collections::HashMap::from([(0, Some(1)), (1, Some(1)), (2, Some(1)), (3, None)])
+        );
+
+        let shared = document.doc.structure_page_content().unwrap();
+        let heading_content = super::reliable_heading_content(&document).unwrap();
+        assert!(
+            std::sync::Arc::ptr_eq(&shared, &heading_content),
+            "the heading pass parsed or traversed the structure tree again"
+        );
+    }
+
+    #[test]
+    fn structure_roles_fall_back_for_suspect_or_heading_poor_trees() {
+        for (mark_info, heading) in [
+            ("<< /Marked true /Suspects true >>", "H1"),
+            ("<< /Marked false >>", "H1"),
+            ("<< /Marked true >>", "P"),
+        ] {
+            let document = NativeDocument::open_bytes(&tagged_headings_pdf(mark_info, heading)).unwrap();
+            assert!(
+                document.doc.structure_page_content().is_some(),
+                "{mark_info} {heading}: the fixture tree must parse"
+            );
+            assert!(
+                super::structure_tree_page_roles(&document).unwrap().is_none(),
+                "{mark_info} {heading}: must fall back to font-size clustering"
+            );
+        }
     }
 }

@@ -903,8 +903,8 @@ pub struct PdfDocument {
     structure_tree_cache: Mutex<Option<Option<Arc<crate::structure::StructTreeRoot>>>>,
     /// Cached per-page structure tree traversal results.
     /// Built once from the structure tree, then O(1) lookup per page.
-    /// Mutex provides interior mutability for `&self` read-path methods.
-    structure_content_cache: Mutex<Option<HashMap<u32, Vec<crate::structure::OrderedContent>>>>,
+    /// `OnceLock` keeps concurrent first readers from traversing the tree twice.
+    structure_content_cache: std::sync::OnceLock<Arc<HashMap<u32, Vec<crate::structure::OrderedContent>>>>,
     /// Cached resolved structure-tree `/ActualText` scopes.
     ///
     /// `None` = not yet built, `Some(None)` = built and the document has
