@@ -543,11 +543,18 @@ fn tesseract_line_element<K>(words: &[(K, OcrElement)]) -> OcrElement {
         weighted_recognition += word.confidence.recognition * count as f64;
         word_count += count;
     }
-    let text = words
-        .iter()
-        .map(|(_, word)| word.text.trim())
-        .collect::<Vec<_>>()
-        .join(" ");
+    let mut text = String::new();
+    let mut previous: Option<&OcrElement> = None;
+    for (_, word) in words {
+        if let Some(previous) = previous {
+            let gap = crate::table_core::word_spacing::box_gap(previous.geometry.to_aabb(), word.geometry.to_aabb());
+            if !crate::table_core::word_spacing::joins_without_space(&previous.text, &word.text, Some(gap)) {
+                text.push(' ');
+            }
+        }
+        text.push_str(word.text.trim());
+        previous = Some(word);
+    }
     let geometry = OcrBoundingGeometry::Rectangle {
         left,
         top,

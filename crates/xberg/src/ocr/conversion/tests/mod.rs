@@ -348,6 +348,19 @@ fn tesseract_elements_with_lines_adds_one_line_per_text_line() {
 }
 
 #[test]
+fn tesseract_line_joins_adjacent_cjk_words_without_spaces() {
+    let elements = tesseract_elements_with_lines(vec![
+        line_keyed_word(1, "停车", 10, 5, 0.9),
+        line_keyed_word(1, "区", 32, 5, 0.9),
+        line_keyed_word(1, "7.5", 54, 5, 0.9),
+        line_keyed_word(1, "用地", 76, 5, 0.9),
+        line_keyed_word(1, "指标", 200, 5, 0.9),
+    ]);
+
+    assert_eq!(elements[0].text, "停车区 7.5 用地 指标");
+}
+
+#[test]
 fn iterator_word_to_element_forwards_underline_font_id_crown_indent_and_language() {
     let word = xberg_tesseract::WordData {
         text: "Word".to_string(),

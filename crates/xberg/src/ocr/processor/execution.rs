@@ -880,7 +880,10 @@ fn observe_inline_word_occurrences<'a>(
     for (line_index, words) in lines.enumerate() {
         offset += usize::from(line_index != 0);
         for (word_index, &word) in words.iter().enumerate() {
-            offset += usize::from(word_index != 0);
+            offset += usize::from(
+                word_index != 0
+                    && !crate::table_core::word_spacing::hocr_words_join_without_space(words[word_index - 1], word),
+            );
             let end = offset + word.text.len();
             if let Some(&id) = ids.get(&std::ptr::from_ref(word)) {
                 observer(id, offset..end);
@@ -888,6 +891,18 @@ fn observe_inline_word_occurrences<'a>(
             offset = end;
         }
     }
+}
+
+/// Separators here must match the offsets [`observe_inline_word_occurrences`] reports. ~keep
+fn join_inline_line_words(words: &[&HocrWord]) -> String {
+    let mut text = String::new();
+    for (index, word) in words.iter().enumerate() {
+        if index != 0 && !crate::table_core::word_spacing::hocr_words_join_without_space(words[index - 1], word) {
+            text.push(' ');
+        }
+        text.push_str(&word.text);
+    }
+    text
 }
 
 fn render_inline_ocr_table_content_impl(
@@ -977,14 +992,7 @@ fn render_inline_ocr_table_content_impl(
             let last_y = last_para.y_start;
             if line.y_center.saturating_sub(last_y) <= paragraph_gap {
                 last_para.text.push('\n');
-                last_para.text.push_str(
-                    &line
-                        .words
-                        .iter()
-                        .map(|word| word.text.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                );
+                last_para.text.push_str(&join_inline_line_words(&line.words));
                 last_para.y_start = line.y_center;
                 last_para.source_lines.end = source_index + 1;
                 continue;
@@ -993,12 +1001,7 @@ fn render_inline_ocr_table_content_impl(
         paragraphs.push(Paragraph {
             y_start: line.y_center,
             source_lines: source_index..source_index + 1,
-            text: line
-                .words
-                .iter()
-                .map(|word| word.text.as_str())
-                .collect::<Vec<_>>()
-                .join(" "),
+            text: join_inline_line_words(&line.words),
         });
     }
 

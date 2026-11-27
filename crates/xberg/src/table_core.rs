@@ -10,6 +10,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 pub(crate) mod overlap;
+pub(crate) mod word_spacing;
 
 use overlap::{
     STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
@@ -988,12 +989,15 @@ fn merge_row_into_cell_tokens<'a>(
                 let gap = word.left as f64 - (token.left + token.width) as f64;
                 let (allowed_gap, is_connector) = allowed_merge_gap(word, next_word, merge_gap, previous_was_connector);
                 if gap <= allowed_gap && !column_edges.contains(&std::ptr::from_ref(word)) {
+                    let unspaced = crate::table_core::word_spacing::hocr_words_join_without_space(&token, word);
                     let new_right = (word.left + word.width).max(token.left + token.width);
                     let new_bottom = (word.top + word.height).max(token.top + token.height);
                     token.top = token.top.min(word.top);
                     token.width = new_right.saturating_sub(token.left);
                     token.height = new_bottom.saturating_sub(token.top);
-                    token.text.push(' ');
+                    if !unspaced {
+                        token.text.push(' ');
+                    }
                     token.text.push_str(&word.text);
                     members.push(word);
                     previous_was_connector = is_connector;
@@ -1565,7 +1569,10 @@ fn join_cell_words(words: &[&HocrWord]) -> String {
             previous.is_some_and(|prev| is_bridging_decimal_separator(prev, word, words.get(index + 1).copied()));
         let glued = previous_was_bridging_separator
             || is_bridging_separator
-            || previous.is_some_and(|prev| is_touching_numeric_continuation(prev, word));
+            || previous.is_some_and(|prev| {
+                is_touching_numeric_continuation(prev, word)
+                    || crate::table_core::word_spacing::hocr_words_join_without_space(prev, word)
+            });
         if !text.is_empty() && !glued {
             text.push(' ');
         }
@@ -3294,6 +3301,30 @@ mod tests {
             let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
             assert_eq!(table, vec![vec![expected.to_string()]]);
         }
+    }
+
+    #[test]
+    fn cell_joins_adjacent_cjk_words_without_a_space() {
+        let words = [
+            word("用地", 100, 100, 60, 30),
+            word("指标", 165, 100, 60, 30),
+            word("Q", 235, 100, 15, 30),
+            word("（pcu/d）", 255, 100, 90, 30),
+            word("值", 400, 100, 30, 30),
+        ];
+        let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+        assert_eq!(table, vec![vec!["用地指标 Q （pcu/d） 值".to_string()]]);
+    }
+
+    #[test]
+    fn row_token_merge_joins_adjacent_cjk_words_without_a_space() {
+        let words = [word("基准", 100, 100, 60, 30), word("值", 165, 100, 30, 30)];
+        let row = words.iter().collect::<Vec<_>>();
+        let tokens = merge_row_into_cell_tokens(&row, 20.0, &HashSet::new());
+        assert_eq!(
+            tokens.iter().map(|(token, _)| token.text.as_str()).collect::<Vec<_>>(),
+            ["基准值"]
+        );
     }
 
     /// TeX draws a math-mode decimal point from CMMI between CMR digit runs, so the cell

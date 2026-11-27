@@ -1237,7 +1237,13 @@ fn serialize_selected_hocr_lines(
             text.push('\n');
         }
         for (word_index, word) in line.words.iter().enumerate() {
-            if word_index != 0 {
+            if let Some(previous) = word_index.checked_sub(1).map(|index| &line.words[index])
+                && !crate::table_core::word_spacing::joins_without_space(
+                    &previous.text,
+                    &word.text,
+                    hocr_word_gap(previous, word),
+                )
+            {
                 text.push(' ');
             }
             let start = text.len();
@@ -1248,6 +1254,22 @@ fn serialize_selected_hocr_lines(
         }
     }
     text
+}
+
+/// A word without a `bbox` parses as an all-zero box, which carries no gap. ~keep
+fn hocr_word_gap(previous: &HocrWordInfo, next: &HocrWordInfo) -> Option<(f64, f64)> {
+    let has_box = |word: &HocrWordInfo| word.x1 > word.x0 && word.y1 > word.y0;
+    (has_box(previous) && has_box(next)).then(|| {
+        crate::table_core::word_spacing::box_gap(
+            (
+                previous.x0,
+                previous.y0,
+                previous.x1 - previous.x0,
+                previous.y1 - previous.y0,
+            ),
+            (next.x0, next.y0, next.x1 - next.x0, next.y1 - next.y0),
+        )
+    })
 }
 
 impl HocrOccurrenceCapture {
@@ -1550,6 +1572,35 @@ mod tests {
         let elements = doc.elements;
         assert_eq!(elements.len(), 1);
         assert_eq!(elements[0].text, "Line one\nLine two");
+    }
+
+    /// chi_sim hOCR splits a line into one word per character or short run; the words of
+    /// a synthetic zh-Hans page rendered as `安徽 省 建设 用 地 使 用 标准 〈2020 年 版 )`. ~keep
+    #[test]
+    fn cjk_words_on_a_line_join_without_spaces_but_keep_them_beside_digits_and_wide_gaps() {
+        let hocr = r#"<div class="ocr_page" title="bbox 0 0 2000 1500; ppageno 0">
+            <p class="ocr_par">
+                <span class="ocr_line" title="bbox 100 100 1900 150">
+                    <span class="ocrx_word" title="bbox 100 100 180 135; x_wconf 95">安徽</span>
+                    <span class="ocrx_word" title="bbox 188 100 223 135; x_wconf 95">省</span>
+                    <span class="ocrx_word" title="bbox 242 100 312 135; x_wconf 95">建设</span>
+                    <span class="ocrx_word" title="bbox 330 100 420 135; x_wconf 95">〈2020</span>
+                    <span class="ocrx_word" title="bbox 434 100 469 135; x_wconf 95">年</span>
+                    <span class="ocrx_word" title="bbox 468 100 503 135; x_wconf 95">版</span>
+                    <span class="ocrx_word" title="bbox 920 100 990 135; x_wconf 95">编制</span>
+                    <span class="ocrx_word" title="bbox 1000 100 1100 135; x_wconf 95">Q_</span>
+                    <span class="ocrx_word" title="bbox 1110 100 1200 135; x_wconf 95">(pcu/d)</span>
+                </span>
+                <span class="ocr_line" title="bbox 100 200 400 240">
+                    <span class="ocrx_word">停车</span>
+                    <span class="ocrx_word">区</span>
+                </span>
+            </p>
+        </div>"#;
+
+        let doc = parse_hocr_to_internal_document(hocr);
+
+        assert_eq!(doc.elements[0].text, "安徽省建设〈2020 年版 编制 Q_ (pcu/d)\n停车区");
     }
 
     #[test]
