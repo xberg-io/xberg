@@ -675,6 +675,44 @@ impl XYCutStrategy {
         self.expand_blocks(synth_groups, spans, &synthetic_origin)
     }
 
+    /// Order `spans` for reading, consuming them. This is [`ReadingOrderStrategy::apply`]
+    /// without the `Result`: the XY-cut cannot fail, so a caller that owns its spans can
+    /// hand them over without keeping a copy for an error path. `column_gutter` is as for
+    /// [`Self::partition_region`]. ~keep
+    pub fn order_spans(&self, mut spans: Vec<TextSpan>, column_gutter: Option<f32>) -> Vec<OrderedTextSpan> {
+        // Detects multi-line heading runs and partitions with each
+        // wrapped heading standing as a single atomic block. The groups
+        // are ORIGINAL-span indices either way, so the move-out below
+        // works on the input Vec. ~keep
+        let heading_runs = self.find_heading_runs(&spans, column_gutter);
+
+        let index_groups: Vec<Vec<usize>> = if heading_runs.is_empty() {
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            self.partition_indexed(&spans, &indices)
+        } else {
+            self.partition_with_heading_runs(&mut spans, &heading_runs)
+        };
+
+        // Build result — moves spans out by index (no extra clone) ~keep
+        let mut ordered = Vec::with_capacity(spans.len());
+        // Convert spans to indexable storage for O(1) moves ~keep
+        let mut span_slots: Vec<Option<TextSpan>> = spans.into_iter().map(Some).collect();
+        let mut order_index = 0usize;
+
+        for (group_idx, group) in index_groups.iter().enumerate() {
+            for &i in group {
+                if let Some(span) = span_slots[i].take() {
+                    ordered.push(
+                        OrderedTextSpan::with_info(span, order_index, ReadingOrderInfo::xycut()).with_group(group_idx),
+                    );
+                    order_index += 1;
+                }
+            }
+        }
+
+        ordered
+    }
+
     /// Detect contiguous bold/large-font runs that span ≥ 2 lines with
     /// matching X-extent (i.e. wrapped subsection headings).
     ///
@@ -2940,38 +2978,8 @@ struct ProjectionProfile {
 }
 
 impl ReadingOrderStrategy for XYCutStrategy {
-    fn apply(&self, mut spans: Vec<TextSpan>, context: &ReadingOrderContext) -> Result<Vec<OrderedTextSpan>> {
-        // Detects multi-line heading runs and partitions with each
-        // wrapped heading standing as a single atomic block. The groups
-        // are ORIGINAL-span indices either way, so the move-out below
-        // works on the input Vec. ~keep
-        let heading_runs = self.find_heading_runs(&spans, context.column_gutter);
-
-        let index_groups: Vec<Vec<usize>> = if heading_runs.is_empty() {
-            let indices: Vec<usize> = (0..spans.len()).collect();
-            self.partition_indexed(&spans, &indices)
-        } else {
-            self.partition_with_heading_runs(&mut spans, &heading_runs)
-        };
-
-        // Build result — moves spans out by index (no extra clone) ~keep
-        let mut ordered = Vec::with_capacity(spans.len());
-        // Convert spans to indexable storage for O(1) moves ~keep
-        let mut span_slots: Vec<Option<TextSpan>> = spans.into_iter().map(Some).collect();
-        let mut order_index = 0usize;
-
-        for (group_idx, group) in index_groups.iter().enumerate() {
-            for &i in group {
-                if let Some(span) = span_slots[i].take() {
-                    ordered.push(
-                        OrderedTextSpan::with_info(span, order_index, ReadingOrderInfo::xycut()).with_group(group_idx),
-                    );
-                    order_index += 1;
-                }
-            }
-        }
-
-        Ok(ordered)
+    fn apply(&self, spans: Vec<TextSpan>, context: &ReadingOrderContext) -> Result<Vec<OrderedTextSpan>> {
+        Ok(self.order_spans(spans, context.column_gutter))
     }
 
     fn name(&self) -> &'static str {

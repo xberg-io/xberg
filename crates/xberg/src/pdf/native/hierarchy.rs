@@ -562,16 +562,13 @@ fn take_rotated_margin_runs(
 
 /// Run xberg_native_pdf's `ColumnAware` XY-Cut pass when `select_reading_order`
 /// judges the page a balanced two-column prose layout.
-///
-/// A failed XY-Cut pass is logged and leaves `spans` in top-to-bottom order
-/// (the pre-existing fallback behavior).
 fn apply_xy_cut_if_column_aware(
     spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
     page_width: f32,
     page_height: f32,
     page_index: usize,
 ) {
-    use xberg_native_pdf::pipeline::{ReadingOrderContext, ReadingOrderStrategy, XYCutStrategy};
+    use xberg_native_pdf::pipeline::XYCutStrategy;
 
     let order = select_reading_order(spans.as_slice(), page_width, page_height);
     if order != xberg_native_pdf::document::ReadingOrder::ColumnAware {
@@ -583,25 +580,16 @@ fn apply_xy_cut_if_column_aware(
     // wrapped heading is welded to the other column's opening line
     // (xberg-io/xberg#1757). This ordering reaches the markdown lens, so it
     // has to carry the gutter like every other XY-cut entry point. ~keep
-    let mut context = ReadingOrderContext::new().with_page(page_index as u32);
-    if let Some(gutter_x) = xberg_native_pdf::pipeline::reading_order::detect_column_gutter(spans.as_slice()) {
-        context = context.with_column_gutter(gutter_x);
-    }
-    match XYCutStrategy::new().apply(spans.clone(), &context) {
-        Ok(ordered) => {
-            tracing::debug!(
-                target: "xberg::pdf::column_split",
-                page = page_index,
-                gutter_x = ?context.column_gutter,
-                "column-aware XY-cut ordered the page"
-            );
-            *spans = ordered.into_iter().map(|item| item.span).collect();
-        }
-        Err(error) => tracing::debug!(
-            page = page_index,
-            "xberg_native_pdf column-aware hierarchy ordering failed; retaining top-to-bottom order: {error}"
-        ),
-    }
+    let column_gutter = xberg_native_pdf::pipeline::reading_order::detect_column_gutter(spans.as_slice());
+    // `order_spans` cannot fail, so the page's spans are moved in, not cloned for a fallback. ~keep
+    let ordered = XYCutStrategy::new().order_spans(std::mem::take(spans), column_gutter);
+    tracing::debug!(
+        target: "xberg::pdf::column_split",
+        page = page_index,
+        gutter_x = ?column_gutter,
+        "column-aware XY-cut ordered the page"
+    );
+    *spans = ordered.into_iter().map(|item| item.span).collect();
 }
 
 #[cfg(test)]
