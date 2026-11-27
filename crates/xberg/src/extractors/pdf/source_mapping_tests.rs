@@ -216,3 +216,85 @@ fn the_native_engine_keeps_the_shared_source_it_was_given() {
     assert_eq!(output.source.as_ptr(), shared.as_ptr());
     assert_eq!(output.source.len(), shared.len());
 }
+
+fn image_over(data: bytes::Bytes) -> crate::types::ExtractedImage {
+    crate::types::ExtractedImage {
+        data,
+        format: "jpeg".into(),
+        ..Default::default()
+    }
+}
+
+fn range_of(bytes: &bytes::Bytes) -> std::ops::Range<usize> {
+    let start = bytes.as_ptr() as usize;
+    start..start + bytes.len()
+}
+
+#[test]
+fn result_images_that_slice_the_source_are_copied_onto_the_heap() {
+    let source = bytes::Bytes::from((0..=255u8).cycle().take(4096).collect::<Vec<u8>>());
+    let range = range_of(&source);
+    let outside = bytes::Bytes::from_static(b"already on the heap");
+
+    let nested = crate::types::ExtractedDocument {
+        images: Some(vec![image_over(source.slice(100..200))]),
+        ..Default::default()
+    };
+    let mut outer = image_over(source.slice(10..90));
+    outer.ocr_result = Some(Box::new(nested));
+    let mut document = InternalDocument::new("application/pdf");
+    document.images = vec![outer, image_over(outside.clone()), image_over(bytes::Bytes::new())];
+
+    detach_from_source(&mut document, &range);
+
+    assert_eq!(document.images[0].data.as_ref(), &source[10..90]);
+    assert!(!range.contains(&(document.images[0].data.as_ptr() as usize)));
+    let nested = document.images[0]
+        .ocr_result
+        .as_ref()
+        .and_then(|ocr| ocr.images.as_ref());
+    let nested = &nested.expect("nested images")[0];
+    assert_eq!(nested.data.as_ref(), &source[100..200]);
+    assert!(!range.contains(&(nested.data.as_ptr() as usize)));
+    assert_eq!(
+        document.images[1].data.as_ptr(),
+        outside.as_ptr(),
+        "a buffer outside the source is left alone"
+    );
+    assert!(document.images[2].data.is_empty());
+    drop(source);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_result_survives_the_mapped_file_being_truncated_after_extraction() {
+    let content = padded_text_pdf(1_300_000 + 4_111);
+    let file = write_fixture(&content);
+
+    let document = PdfExtractor::new()
+        .extract_path(file.path(), "application/pdf", &ExtractionConfig::default())
+        .await
+        .expect("path extraction must succeed");
+
+    let loaded = loaded_with_len(content.len());
+    assert_eq!(loaded.len(), 1, "one load of the fixture, got {loaded:?}");
+    let (mapping, mapped) = loaded[0];
+    assert!(mapped, "the fixture must be mapped for this test to mean anything");
+
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(file.path())
+        .expect("reopen fixture")
+        .set_len(0)
+        .expect("truncate fixture");
+
+    for image in &document.images {
+        let start = image.data.as_ptr() as usize;
+        assert!(
+            image.data.is_empty() || !(mapping.ptr..mapping.ptr + mapping.len).contains(&start),
+            "a returned image must not point into the file mapping"
+        );
+        let _ = image.data.iter().copied().fold(0u8, u8::wrapping_add);
+    }
+    assert!(plain_text(document).contains(SENTINEL));
+}

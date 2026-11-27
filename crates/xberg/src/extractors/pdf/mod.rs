@@ -442,7 +442,8 @@ impl<'a> From<&'a [u8]> for PdfSource<'a> {
 ///
 /// Files over the `open_file_bytes` threshold are mapped and the mapping becomes the native
 /// document's source, so object and stream reads page in only what they touch. The file must
-/// not be modified or truncated while the extraction runs (the `open_file_bytes` contract).
+/// not be modified or truncated while the extraction runs (the `open_file_bytes` contract); the
+/// extractor copies any result buffer that slices the mapping before returning.
 #[cfg(feature = "tokio-runtime")]
 async fn load_pdf_source(path: &Path) -> Result<bytes::Bytes> {
     let open = |path: &Path| -> Result<bytes::Bytes> {
@@ -460,6 +461,39 @@ async fn load_pdf_source(path: &Path) -> Result<bytes::Bytes> {
     }
     #[cfg(target_arch = "wasm32")]
     open(path)
+}
+
+/// Copy every result buffer that is a slice of the file mapping onto the heap.
+///
+/// A returned document outlives the extraction and may be cached, while a mapped file can be
+/// truncated by another process at any time and a read of the vanished pages then raises
+/// SIGBUS. The engine copies image payloads already; this makes that a checked invariant
+/// instead of an assumption, so a future zero-copy slice cannot keep the mapping alive.
+#[cfg(feature = "tokio-runtime")]
+fn detach_from_source(document: &mut InternalDocument, source: &std::ops::Range<usize>) {
+    fn detach_images(images: &mut [crate::types::ExtractedImage], source: &std::ops::Range<usize>) {
+        for image in images {
+            let start = image.data.as_ptr() as usize;
+            if !image.data.is_empty() && source.contains(&start) {
+                image.data = bytes::Bytes::copy_from_slice(&image.data);
+            }
+            if let Some(nested) = image.ocr_result.as_mut() {
+                detach_document(nested, source);
+            }
+        }
+    }
+    fn detach_document(document: &mut crate::types::ExtractedDocument, source: &std::ops::Range<usize>) {
+        if let Some(images) = document.images.as_mut() {
+            detach_images(images, source);
+        }
+        for child in document.children.iter_mut().flatten() {
+            detach_document(&mut child.result, source);
+        }
+    }
+    detach_images(&mut document.images, source);
+    for child in document.children.iter_mut().flatten() {
+        detach_document(&mut child.result, source);
+    }
 }
 
 #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
@@ -2962,6 +2996,7 @@ impl InternalDocumentExtractor for PdfExtractor {
     #[cfg(feature = "tokio-runtime")]
     async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
         let bytes = load_pdf_source(path).await?;
+        let source = bytes.as_ptr() as usize..bytes.as_ptr() as usize + bytes.len();
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(Some(path.to_path_buf()));
         let result = crate::pdf::render::with_task_render_warnings(self.extract_core(
@@ -2973,7 +3008,10 @@ impl InternalDocumentExtractor for PdfExtractor {
         .await;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(None);
-        result
+        result.map(|mut document| {
+            detach_from_source(&mut document, &source);
+            document
+        })
     }
 
     fn supported_mime_types(&self) -> &[&str] {
