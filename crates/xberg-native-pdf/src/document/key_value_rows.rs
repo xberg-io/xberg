@@ -125,10 +125,10 @@ fn value_tracks(
         .enumerate()
         .filter(|(index, span)| {
             !labels.contains(index)
-                && is_horizontal_ltr(span)
                 && !span.text.trim_end().ends_with(':')
                 && (min_value_x..=max_value_x).contains(&span.bbox.x)
                 && (bottom_y..=top_y).contains(&span.bbox.y)
+                && is_horizontal_ltr(span)
         })
         .map(|(index, _)| index)
         .collect();
@@ -151,11 +151,11 @@ fn label_column_holds_other_text(spans: &[crate::layout::TextSpan], labels: &[us
         .enumerate()
         .filter(|(index, span)| {
             !labels.contains(index)
-                && is_horizontal_ltr(span)
                 && !span.text.trim().is_empty()
                 && (span.bbox.x - label_x).abs() <= tolerance
                 && span.bbox.y < top
                 && span.bbox.y > bottom
+                && is_horizontal_ltr(span)
         })
         .count();
     others > labels.len()
@@ -170,7 +170,7 @@ fn find_key_value_blocks(spans: &[crate::layout::TextSpan]) -> Vec<KeyValueBlock
     let label_indices = spans
         .iter()
         .enumerate()
-        .filter(|(_, span)| is_horizontal_ltr(span) && span.text.trim_end().ends_with(':'))
+        .filter(|(_, span)| span.text.trim_end().ends_with(':') && is_horizontal_ltr(span))
         .map(|(index, _)| index)
         .collect();
     let mut label_clusters = cluster_indices_by_x(spans, label_indices, TRACK_TOLERANCE);
