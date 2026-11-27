@@ -2561,6 +2561,13 @@ fn page_whitespace_corridors(
 /// visible. The corridor is therefore first sought with no span treated as furniture, and only
 /// when that finds none with the usual furniture exclusion, which still tolerates a header set
 /// across the gutter. ~keep
+///
+/// When the whole page has no qualifying corridor at all, the lower half of its lines is asked alone, and
+/// its single corridor is accepted whatever its width. 2209.05611 page 1 sets its two columns
+/// on baselines 2.7pt apart under a centred title, author block and date that cross the
+/// gutter, so no line votes and the page has no corridor; the native XY-cut then read the
+/// columns line by line. The header sits at the top of a first page, so the lower half is all
+/// column body, and the same gutter the document's other pages split at is empty there. ~keep
 fn sole_whitespace_gutter(
     spans: &[xberg_native_pdf::layout::TextSpan],
     lines: &[SpanLine],
@@ -2570,7 +2577,7 @@ fn sole_whitespace_gutter(
     let max_gutter = page_width * MAX_DENSE_COLUMN_GUTTER_FRACTION;
     let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
     let max_label_width = page_width * MAX_DENSE_COLUMN_SPLIT_SNAP_SPAN_FRACTION;
-    let qualifying_corridors = |corridor_furniture_width: f32| -> Vec<(f32, f32)> {
+    let qualifying_corridors = |lines: &[SpanLine], corridor_furniture_width: f32| -> Vec<(f32, f32)> {
         page_whitespace_corridors(spans, lines, corridor_furniture_width, min_gutter)
             .into_iter()
             .filter(|&(left, right)| right - left <= max_gutter)
@@ -2582,14 +2589,26 @@ fn sole_whitespace_gutter(
             })
             .collect()
     };
-    let mut corridors = qualifying_corridors(NO_WIDTH_FURNITURE);
-    if corridors.is_empty() {
-        corridors = qualifying_corridors(furniture_width);
+    let corridors_of = |lines: &[SpanLine]| {
+        let corridors = qualifying_corridors(lines, NO_WIDTH_FURNITURE);
+        if corridors.is_empty() {
+            qualifying_corridors(lines, furniture_width)
+        } else {
+            corridors
+        }
+    };
+    let corridors = corridors_of(lines);
+    if let &[(left, right)] = corridors.as_slice() {
+        return (right - left < xberg_native_pdf::XYCutStrategy::DEFAULT_MIN_VALLEY_WIDTH)
+            .then_some((left + right) / 2.0);
     }
-    let &[(left, right)] = corridors.as_slice() else {
+    if !corridors.is_empty() {
+        return None;
+    }
+    let &[(left, right)] = corridors_of(&lines[lines.len() / 2..]).as_slice() else {
         return None;
     };
-    (right - left < xberg_native_pdf::XYCutStrategy::DEFAULT_MIN_VALLEY_WIDTH).then_some((left + right) / 2.0)
+    Some((left + right) / 2.0)
 }
 
 /// Move a gutter estimate out of a repeated hanging-label band.
@@ -5082,6 +5101,72 @@ mod tests {
 
         let expected: Vec<String> = (0..8).map(left_line).chain((0..8).map(right_line)).collect();
         assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// 2209.05611 page 1: a centred title block and a full-width abstract over two columns set on
+    /// baselines 2.7pt apart. No line holds both columns and the title closes the page-wide
+    /// corridor, so only the lower half of the page shows the gutter.
+    #[test]
+    fn offset_columns_under_a_centred_title_split_at_the_lower_half_gutter() {
+        let mut spans = vec![
+            span_with_width(
+                "Unidirectional propagation of spin waves",
+                190.0,
+                730.0,
+                232.0,
+                14.0,
+                14.0,
+            ),
+            span_with_width("P. I. Gerevenkov and N. E. Khokhlov", 220.0, 700.0, 172.0, 10.0, 10.0),
+            span_with_width("(Dated: March 1, 2023)", 260.0, 688.0, 92.0, 10.0, 10.0),
+        ];
+        for row in 0..4 {
+            spans.push(span_with_width(
+                &format!("Abstract line {row} runs across the whole page width in one justified block"),
+                77.0,
+                660.0 - row as f32 * 10.5,
+                458.0,
+                9.0,
+                9.0,
+            ));
+        }
+        let left_line = |row: usize| format!("left column sentence {row} continues the introduction here");
+        let right_line = |row: usize| format!("right column sentence {row} continues the discussion there");
+        for row in 0..20 {
+            let y = 600.0 - row as f32 * 11.45;
+            spans.push(span_with_width(&left_line(row), 54.0, y, 245.08, 10.0, 10.0));
+            spans.push(span_with_width(&right_line(row), 317.01, y + 2.7, 245.0, 10.0, 10.0));
+        }
+        let header: Vec<String> = spans[..7].iter().map(|span| span.text.clone()).collect();
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = header
+            .into_iter()
+            .chain((0..20).map(left_line))
+            .chain((0..20).map(right_line))
+            .collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// A single column page has no gutter in its lower half either.
+    #[test]
+    fn a_single_column_page_under_a_title_has_no_lower_half_gutter() {
+        let mut spans = vec![span_with_width("A centred title", 250.0, 730.0, 112.0, 14.0, 14.0)];
+        for row in 0..30 {
+            spans.push(span_with_width(
+                &format!("single column body line {row} of ordinary running prose"),
+                72.0,
+                700.0 - row as f32 * 12.0,
+                468.0 - (row % 3) as f32 * 40.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert_eq!(sole_whitespace_gutter(&spans, &lines, 612.0), None);
     }
 
     /// The same narrow gaps vote only where they repeat edge for edge: staggered gaps of the
