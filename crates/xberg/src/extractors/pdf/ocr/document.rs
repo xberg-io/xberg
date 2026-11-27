@@ -4711,7 +4711,7 @@ fn restructured_document_retains_prose(
         &Default::default(),
     );
     let baseline_text = crate::rendering::render_plain(&baseline);
-    let restructured_text = crate::rendering::render_plain(doc);
+    let restructured_text = restructured_text_with_furniture(doc);
     let retention = ocr_structure_heuristic_char_retention(&restructured_text, &baseline_text);
     let retained = retention >= MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION;
     if !retained && tracing::enabled!(tracing::Level::DEBUG) {
@@ -4738,6 +4738,26 @@ fn restructured_document_retains_prose(
     }
     retained
 }
+
+/// `doc`'s plain text followed by the text of the page furniture that plain rendering leaves
+/// out. The restructuring pass classifies a repeated "Page 3 of 5" line as a running footer,
+/// which the lossless baseline keeps as body text; the line is still in the document, so the
+/// retention gate must not read it as dropped prose (nougat_005 lost all 22 headings to the
+/// footers of pages 2 to 4, exactly the 24 characters the gate reported missing). ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn restructured_text_with_furniture(doc: &crate::types::internal::InternalDocument) -> String {
+    let mut text = crate::rendering::render_plain(doc);
+    for element in doc
+        .elements
+        .iter()
+        .filter(|element| !crate::rendering::common::is_body_element(element))
+    {
+        text.push('\n');
+        text.push_str(&element.text);
+    }
+    text
+}
+
 /// Split the single, document-wide [`crate::types::internal::InternalDocument`]
 /// [`heuristically_restructured_ocr_pages`] produced back into one per-page document per
 /// real OCR'd page number, for [`extract_mixed_ocr_native`].
@@ -5382,6 +5402,32 @@ mod tests {
         let restructured = builder.build();
 
         assert!(restructured_document_retains_prose(&pages, &[table], &restructured));
+    }
+
+    /// nougat_005: the restructuring pass made each "Page N of 5" line a running footer, which
+    /// plain rendering leaves out, and the gate read the five footers as lost prose and
+    /// discarded every heading. A footer is still in the document; a dropped word is not.
+    #[test]
+    fn should_accept_restructured_document_that_moved_a_footer_to_page_furniture() {
+        let pages = vec![vec![
+            bare_paragraph("Criteria 3.1 packaging"),
+            bare_paragraph("Page 3 of 5"),
+        ]];
+        let mut restructured = doc_with_paragraph("Criteria 3.1 packaging");
+        let mut footer = crate::types::internal::InternalElement::text(
+            crate::types::internal::ElementKind::Paragraph,
+            "Page 3 of 5",
+            0,
+        );
+        footer.layer = crate::types::document_structure::ContentLayer::Footer;
+        restructured.push_element(footer.clone());
+        assert!(!crate::rendering::render_plain(&restructured).contains("Page 3 of 5"));
+
+        assert!(restructured_document_retains_prose(&pages, &[], &restructured));
+
+        let mut dropped_word = doc_with_paragraph("Criteria 3.1");
+        dropped_word.push_element(footer);
+        assert!(!restructured_document_retains_prose(&pages, &[], &dropped_word));
     }
 
     /// A restructured document with no elements at all, compared against a baseline
