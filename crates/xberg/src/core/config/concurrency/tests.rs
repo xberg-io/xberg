@@ -242,7 +242,11 @@ fn test_resolve_thread_budget_clamps_to_one() {
     assert_eq!(resolve_thread_budget(Some(&config)), 1);
 }
 
-#[cfg(any(sceptre_ocr, paddle_ocr, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
 #[test]
 fn uninitialized_budget_follows_the_callers_max_threads() {
     let config = ConcurrencyConfig {
@@ -252,7 +256,11 @@ fn uninitialized_budget_follows_the_callers_max_threads() {
     assert_eq!(installed_budget_or_resolved(0, Some(&config)), 3);
 }
 
-#[cfg(any(sceptre_ocr, paddle_ocr, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
 #[test]
 fn installed_budget_wins_over_a_later_callers_max_threads() {
     let config = ConcurrencyConfig {

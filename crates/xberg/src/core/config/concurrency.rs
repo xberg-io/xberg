@@ -796,7 +796,7 @@ fn init_thread_pools_with(
 ///
 /// Model backends with private pools use this value to obey the same extraction
 /// budget. Before initialization, this resolves to the standard automatic limit.
-#[cfg(any(sceptre_ocr, paddle_ocr, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+#[cfg(any(all(sceptre_ocr, not(target_arch = "wasm32")), paddle_ocr))]
 pub(crate) fn active_thread_budget() -> usize {
     active_thread_budget_for(None)
 }
@@ -804,13 +804,21 @@ pub(crate) fn active_thread_budget() -> usize {
 /// As [`active_thread_budget`], but before initialization `config` is resolved
 /// instead of the automatic limit, so a caller that has not reached
 /// [`init_thread_pools`] yet can still size from its own `max_threads`.
-#[cfg(any(sceptre_ocr, paddle_ocr, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
 pub(crate) fn active_thread_budget_for(config: Option<&ConcurrencyConfig>) -> usize {
     installed_budget_or_resolved(ACTIVE_THREAD_BUDGET.load(Ordering::Relaxed), config)
 }
 
 /// Pure core of [`active_thread_budget_for`]: `installed` is the stored budget, `0` when none is.
-#[cfg(any(sceptre_ocr, paddle_ocr, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
 fn installed_budget_or_resolved(installed: usize, config: Option<&ConcurrencyConfig>) -> usize {
     match installed {
         0 => resolve_thread_budget(config),
