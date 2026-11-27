@@ -3818,13 +3818,12 @@ fn extract_page_text_column_aware(
         None
     };
 
-    let rotation_spans = page_text_data.spans.iter().map(rotation_span).collect::<Vec<_>>();
     let panel_text = (options.preserve_panel_rows && complete_page && financial_rows.is_none())
         .then(|| render_stepped_panel_text(doc, page_index, &page_text_data.spans))
         .flatten();
     let mut text = if let Some(repaired) = panel_text {
         repaired
-    } else if let Some(repaired) = crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans) {
+    } else if let Some(repaired) = repair_rotated_spans(&page_text_data.spans) {
         repaired
     } else if is_fragmented_span_list(&page_text_data.spans) {
         tracing::debug!(
@@ -3860,6 +3859,19 @@ fn with_math_as_latex<'s>(
     spans: &'s [TextSpan],
 ) -> Cow<'s, [TextSpan]> {
     super::math_latex::rewrite_page_math(doc, page_index, spans).map_or(Cow::Borrowed(spans), Cow::Owned)
+}
+
+/// `rotation::repair_rotated_page_text` over the page's spans, without copying them when no
+/// span is rotated.
+///
+/// The repair returns `None` for a page with no rotated span, and `is_unrotated` here is
+/// stricter than the repair's own tolerance, so every span it treats as rotated reaches it. ~keep
+fn repair_rotated_spans(spans: &[TextSpan]) -> Option<String> {
+    if spans.iter().all(is_unrotated) {
+        return None;
+    }
+    let rotation_spans = spans.iter().map(rotation_span).collect::<Vec<_>>();
+    crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans)
 }
 
 pub(crate) fn rotation_span(span: &xberg_native_pdf::layout::TextSpan) -> crate::extractors::pdf::rotation::TextSpan {
@@ -4733,6 +4745,46 @@ mod tests {
         let mut span = span_with_width(text, x, y, width, height, height);
         span.rotation_degrees = rotation_degrees;
         span
+    }
+
+    fn direct_rotation_repair(spans: &[TextSpan]) -> Option<String> {
+        let rotation_spans = spans.iter().map(rotation_span).collect::<Vec<_>>();
+        crate::extractors::pdf::rotation::repair_rotated_page_text(&rotation_spans)
+    }
+
+    #[test]
+    fn rotation_repair_leaves_a_page_without_rotated_spans_alone() {
+        let upright = vec![
+            span_with_width("First line", 72.0, 700.0, 50.0, 10.0, 10.0),
+            span_with_width("Second line", 72.0, 680.0, 55.0, 10.0, 10.0),
+        ];
+        assert_eq!(direct_rotation_repair(&upright), None);
+        assert_eq!(repair_rotated_spans(&upright), None);
+        assert_eq!(repair_rotated_spans(&[]), None);
+
+        // Inside the repair's own tolerance, outside the stricter span-geometry one. ~keep
+        let nearly_upright = vec![rotated_span("Nearly upright", 72.0, 700.0, 70.0, 10.0, 0.0005)];
+        assert_eq!(direct_rotation_repair(&nearly_upright), None);
+        assert_eq!(repair_rotated_spans(&nearly_upright), None);
+    }
+
+    #[test]
+    fn rotation_repair_still_rewrites_a_page_with_one_rotated_span() {
+        let spans = vec![
+            span_with_width("7", 72.0, 700.0, 6.0, 10.0, 10.0),
+            rotated_span("Sideways table header", 400.0, 100.0, 105.0, 10.0, 90.0),
+        ];
+        let repaired = repair_rotated_spans(&spans);
+        assert!(repaired.is_some(), "a dominant rotated span must still be repaired");
+        assert_eq!(repaired, direct_rotation_repair(&spans));
+
+        let rotated_only = vec![
+            rotated_span("Motorcraft", 400.0, 100.0, 50.0, 10.0, 90.0),
+            rotated_span("Premium", 400.0, 155.0, 40.0, 10.0, 90.0),
+        ];
+        let repaired = repair_rotated_spans(&rotated_only);
+        assert!(repaired.is_some(), "an all-rotated page must still be repaired");
+        assert_eq!(repaired, direct_rotation_repair(&rotated_only));
     }
 
     /// #1358 / #294 — a detached fragment of a rotated word must rejoin its
