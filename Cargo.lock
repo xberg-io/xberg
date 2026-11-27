@@ -333,15 +333,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "astral-tl"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe43b63a04560c41783a27e23209ca87a3f5d01bab21c74bec93268bad39e3a"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "async-compression"
 version = "0.4.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1877,21 +1868,20 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.4"
+version = "1.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f61676b15e570ad174720b9c96d51f1bfcf9f76672d0b25885fc71a9c443ca"
+checksum = "bb62b11fc64a5593db360a33ae917ce34dd14cff2b21cf75c8798616c8834f21"
 dependencies = [
  "ahash",
  "aho-corasick",
  "arc-swap",
- "astral-tl",
+ "astral-html",
  "async-trait",
  "async-tungstenite",
  "base64 0.23.1",
  "blake3",
  "bytes",
  "chardetng",
- "chrono",
  "cookie_store",
  "crawlberg-chromiumoxide",
  "crawlberg-robots",
@@ -1914,6 +1904,7 @@ dependencies = [
  "icu_normalizer",
  "idna",
  "ipnet",
+ "jiff 1.0.3",
  "libc",
  "liter-llm",
  "memchr",
@@ -1976,9 +1967,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.4"
+version = "1.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59440db2bf1c6a669509eff1a01964d58e178f6dd8c2a643fe1b8078cb2fb955"
+checksum = "d5caf7992d16ddcacfd58685d16c23899931b064e71cf20f89892876bc389f22"
 
 [[package]]
 name = "crc-fast"
@@ -3294,19 +3285,19 @@ checksum = "312d2295c7302019c395cfb90dacd00a82a2eabd700429bba9c7a3f38dbbe11b"
 
 [[package]]
 name = "gcp_auth"
-version = "0.12.7"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d27dbcc645b60b8e7f6e2868a9d7102ece97d1bb49c1288b5321fcc67f7260"
+checksum = "5cb94183b5679930be54594e6a801f483cd394fce130a29800fd0828a7dfbae7"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
- "chrono",
  "http",
  "http-body-util",
  "hyper",
  "hyper-rustls",
  "hyper-util",
+ "jiff 1.0.3",
  "ring",
  "rustls",
  "rustls-pki-types",
@@ -3315,7 +3306,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
- "tracing-futures",
  "url",
 ]
 
@@ -5088,9 +5078,9 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "liter-llm"
-version = "2.7.5"
+version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a17dd7b07af4be2e22b7bb5e088fa60a08b02a30cfee67ecb76f7544740cd69"
+checksum = "84a3c152e953f1ae6cc2f7cfafd31e5f48b0871d045cab0dfdd5c990bc3b208a"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -9888,16 +9878,6 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
-]
-
-[[package]]
-name = "tracing-futures"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
-dependencies = [
- "pin-project",
- "tracing",
 ]
 
 [[package]]
