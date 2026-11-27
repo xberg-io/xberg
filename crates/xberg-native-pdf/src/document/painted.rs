@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use super::{MutexExt, PdfDocument};
 use crate::content::Operator;
@@ -52,6 +53,44 @@ struct PaintAudit {
 }
 
 impl PdfDocument {
+    /// Keep white text even where nothing painted lies under it. By default such text is dropped
+    /// as unseen; a page whose painted content the check cannot fully resolve keeps it either way.
+    /// Set it before reading pages: changing it empties the per-page span and character caches.
+    pub fn set_keep_white_text(&self, keep: bool) {
+        if self.keep_white_text.swap(keep, Ordering::Relaxed) == keep {
+            return;
+        }
+        if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
+            cache.clear();
+        }
+        self.page_spans_cache.lock_or_recover().clear();
+        self.page_chars_cache.lock_or_recover().clear();
+        self.search_index.lock_or_recover().clear();
+    }
+
+    pub(crate) fn keeps_white_text(&self) -> bool {
+        self.keep_white_text.load(Ordering::Relaxed)
+    }
+
+    /// `(page index, span count)` of each page that dropped white text over unpainted page area,
+    /// in page order. A page read several times counts the most spans any one read dropped.
+    pub fn dropped_white_text_spans(&self) -> Vec<(usize, usize)> {
+        let mut dropped: Vec<(usize, usize)> = self
+            .dropped_white_text
+            .lock_or_recover()
+            .iter()
+            .map(|(&page, &count)| (page, count))
+            .collect();
+        dropped.sort_unstable();
+        dropped
+    }
+
+    pub(crate) fn note_dropped_white_text(&self, page_index: usize, spans: usize) {
+        let mut dropped = self.dropped_white_text.lock_or_recover();
+        let count = dropped.entry(page_index).or_insert(0);
+        *count = (*count).max(spans);
+    }
+
     /// The regions of `page_index` covered by painted content other than white: filled or stroked
     /// paths of any other colour and every image. `None` when the page or a Form it paints draws
     /// content whose colour the path walker does not resolve (a shading, a fill colour space other

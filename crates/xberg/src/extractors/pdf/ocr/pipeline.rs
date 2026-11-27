@@ -8200,7 +8200,9 @@ fn open_merge_geometry_document(
         .unwrap_or(&[]);
     #[cfg(test)]
     geometry_session_tests::record_open();
-    crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords).ok()
+    let document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords).ok()?;
+    document.doc.set_keep_white_text(super::super::keeps_white_text(config));
+    Some(document)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

@@ -706,7 +706,7 @@ impl PdfDocument {
         extractor.preserve_script_baselines = matches!(script_geometry, ScriptGeometry::Preserve);
         extractor.skip_nonpainting_text = skip_nonpainting_text;
         // The OCR bridge drops non-painting text itself and reads the rest as painted. ~keep
-        if !skip_nonpainting_text {
+        if !skip_nonpainting_text && !self.keeps_white_text() {
             extractor.invisible_text_page = Some(page_index);
         }
         // Stamp the page index so spans carry McidScope::Page(page_index)
@@ -1885,7 +1885,9 @@ impl PdfDocument {
         extractor.set_page_index(page_index as u32);
         // Drop the white glyphs the span layer drops, so table and script passes reading chars
         // see the page text extraction does. ~keep
-        extractor.invisible_text_page = Some(page_index);
+        if !self.keeps_white_text() {
+            extractor.invisible_text_page = Some(page_index);
+        }
         if !excluded_layers.is_empty() {
             extractor.set_excluded_layers(excluded_layers);
         }

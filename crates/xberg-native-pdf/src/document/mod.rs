@@ -998,6 +998,12 @@ pub struct PdfDocument {
     /// (`PdfDocument::painted_regions`). `None` outside
     /// `begin_page_passes`/`release_page_caches`.
     painted_regions_cache: Mutex<Option<BoundedEntryCache<usize, Option<Arc<Vec<crate::geometry::Rect>>>>>>,
+    /// Keep white text over unpainted page area instead of dropping it
+    /// (`PdfDocument::set_keep_white_text`).
+    keep_white_text: AtomicBool,
+    /// White text spans dropped over unpainted page area, by page index: the most any one read of
+    /// the page dropped (`PdfDocument::dropped_white_text_spans`).
+    dropped_white_text: Mutex<HashMap<usize, usize>>,
     /// Small-text density evidence for a single-page document.
     small_painted_text: std::sync::OnceLock<bool>,
     /// Per-page lightweight search index (page text + span bounding boxes,

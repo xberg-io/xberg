@@ -199,6 +199,20 @@ pub struct PdfConfig {
     #[serde(default)]
     #[cfg_attr(feature = "alef-meta", alef(since = "1.5.0"))]
     pub plan_regions: Option<PlanRegionConfig>,
+
+    /// Keep white text that sits on no painted content.
+    ///
+    /// By default the native backend drops text filled white (in a device or
+    /// calibrated colour space) where no non-white path, image or Form paint lies
+    /// under it, since it is invisible on the page: hidden duplicate headers,
+    /// blanked cells, stamps. A page that paints content the check cannot resolve
+    /// (a shading, a pattern, a fill in another colour space) keeps all its text.
+    /// Each extraction that drops such text says how many spans on which pages in
+    /// a `pdf_white_text` processing warning. Set this to `true` to keep the text.
+    /// Native backend only. Default: `false`.
+    #[serde(default)]
+    #[cfg_attr(feature = "alef-meta", alef(since = "1.5.5"))]
+    pub keep_white_text: bool,
 }
 
 /// Settings for closed-region recovery on a PDF page's vector paths.
@@ -297,6 +311,7 @@ impl Default for PdfConfig {
             backend: PdfBackend::default(),
             extract_vector_geometry: false,
             plan_regions: None,
+            keep_white_text: false,
         }
     }
 }
@@ -561,6 +576,20 @@ mod tests {
 
     #[test]
     #[cfg(feature = "pdf")]
+    fn keep_white_text_is_off_by_default_and_read_from_its_key() {
+        assert!(!PdfConfig::default().keep_white_text);
+
+        let with_key: PdfConfig =
+            serde_json::from_str(r#"{"keep_white_text": true}"#).expect("a config with the key parses");
+        assert!(with_key.keep_white_text);
+
+        let without_key: PdfConfig =
+            serde_json::from_str(r#"{"extract_tables": true}"#).expect("a config without the key parses");
+        assert!(!without_key.keep_white_text);
+    }
+
+    #[test]
+    #[cfg(feature = "pdf")]
     fn plan_regions_is_off_by_default_and_reads_its_key() {
         assert!(
             PdfConfig::default().plan_regions.is_none(),
@@ -654,6 +683,7 @@ mod tests {
             backend: PdfBackend::Native,
             extract_vector_geometry: false,
             plan_regions: None,
+            keep_white_text: false,
         };
         assert_eq!(config.top_margin_fraction, Some(0.10));
         assert_eq!(config.bottom_margin_fraction, Some(0.08));

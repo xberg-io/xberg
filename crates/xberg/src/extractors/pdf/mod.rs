@@ -300,6 +300,15 @@ fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
 #[cfg(feature = "ocr-pipeline")]
 use crate::plugins::registry::automatic_ocr_backend_is_registered;
 
+/// Whether `pdf_options.keep_white_text` keeps white text that sits on no painted content.
+#[cfg(feature = "pdf")]
+fn keeps_white_text(config: &ExtractionConfig) -> bool {
+    config
+        .pdf_options
+        .as_ref()
+        .is_some_and(|options| options.keep_white_text)
+}
+
 /// Page count via `xberg_native_pdf`. `None` when it cannot open or count the document,
 /// in which case the caller falls back to [`lopdf_page_count`].
 #[cfg(feature = "pdf")]
@@ -540,6 +549,7 @@ fn extract_native_blocking(
         .and_then(|options| options.passwords.as_deref())
         .unwrap_or(&[]);
     let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
+    native_document.doc.set_keep_white_text(keeps_white_text(&config));
     #[cfg(all(test, feature = "tokio-runtime"))]
     source_mapping_tests::record_opened(&native_document.doc.source_bytes);
     let OutlineAndRevisionData {

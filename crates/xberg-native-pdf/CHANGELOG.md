@@ -12,6 +12,12 @@ and in the upstream project itself.
 
 ## [Unreleased]
 
+### Added
+
+- **(pdf): White text over unpainted page area can be kept, and its drop is counted.**
+  `PdfDocument::set_keep_white_text(true)` keeps white text that sits on no painted content in spans and characters;
+  `PdfDocument::dropped_white_text_spans()` returns `(page index, span count)` for each page that dropped some.
+
 ### Changed
 
 - **(pdf): Native font metrics retain their 16-bit glyph-count API with the updated font parser.**
