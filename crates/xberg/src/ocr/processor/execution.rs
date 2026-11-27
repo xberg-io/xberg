@@ -1531,10 +1531,37 @@ fn ocr_preprocessing_decision<'a>(
 ) -> Option<std::borrow::Cow<'a, crate::types::ImagePreprocessingConfig>> {
     match preprocessing {
         Some(preprocessing) => Some(std::borrow::Cow::Borrowed(preprocessing)),
-        None if known_full_page_scan || should_apply_default_preprocessing(rgb_data, width, height) => {
+        None if known_full_page_scan => Some(std::borrow::Cow::Owned(known_full_page_scan_preprocessing())),
+        None if should_apply_default_preprocessing(rgb_data, width, height) => {
             Some(std::borrow::Cow::Owned(Default::default()))
         }
         None => None,
+    }
+}
+
+/// Whether a known full-page scan with no caller-selected preprocessing is binarized.
+///
+/// Measured with build 1ffe8f20c8 on the 12 English OCR benchmark PDFs, explicit Otsu against
+/// explicit no binarization (deskew off in both; deskew changed no score): TF1 rose on 8
+/// (docling_scanned .667 -> .745, nougat_009 .857 -> .909, nougat_005 .925 -> .953, nougat_012
+/// .987 -> .995), fell on nougat_001 (.960 -> .953), and SF1 fell on 6 (docling .156 -> .092,
+/// multi_page .079 -> .026). No page property measured (source ppi, paper level, mid-tone
+/// share, colour) separates nougat_001 from the gains. Flipping this also needs a native
+/// workspace model for unbinarized, uncontrasted preprocessing (`native_image_budget` has
+/// none, so such a policy cannot qualify a reduced JPEG or a budgeted upscale) and a
+/// `TESSERACT_RESULT_SCHEMA_VERSION` bump. ~keep
+const KNOWN_FULL_PAGE_SCAN_BINARIZES: bool = true;
+
+/// The preprocessing a known full-page scan gets when the caller selected none.
+fn known_full_page_scan_preprocessing() -> crate::types::ImagePreprocessingConfig {
+    if KNOWN_FULL_PAGE_SCAN_BINARIZES {
+        return Default::default();
+    }
+    // Configuration validation rejects deskew without binarization.
+    crate::types::ImagePreprocessingConfig {
+        binarization_method: "none".into(),
+        deskew: false,
+        ..Default::default()
     }
 }
 
@@ -4336,6 +4363,20 @@ mod tests {
     use crate::table_core::cluster_words_into_table_regions;
     use serial_test::serial;
     use tempfile::tempdir;
+
+    #[test]
+    fn known_full_page_scan_preprocessing_is_a_valid_policy_for_dark_and_bright_scans() {
+        let policy = known_full_page_scan_preprocessing();
+        crate::core::config_validation::validate_image_preprocessing_config(&policy).expect("valid known-scan policy");
+        for pixel in [20_u8, 245] {
+            let rgb = vec![pixel; 4 * 4 * 3];
+            let decided = ocr_preprocessing_decision(&rgb, 4, 4, None, true).expect("a known scan is preprocessed");
+            assert_eq!(
+                (decided.binarization_method.as_str(), decided.deskew, decided.target_dpi),
+                (policy.binarization_method.as_str(), policy.deskew, policy.target_dpi)
+            );
+        }
+    }
 
     /// The hOCR page and the TSV table of a list of words (text, left, top, width, height, TSV line), each
     /// word on its own hOCR line, as a sparse-text read gives.

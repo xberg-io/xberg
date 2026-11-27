@@ -64,11 +64,11 @@ pub(super) fn prepare_with_dpi_policy(
         gray_input: std::cell::Cell::new(false),
     };
     let mut assessment = Assessment {
-        policy: config
-            .preprocessing
-            .clone()
-            .map(Some)
-            .or_else(|| config.known_full_page_scan.then(|| Some(Default::default()))),
+        policy: config.preprocessing.clone().map(Some).or_else(|| {
+            config
+                .known_full_page_scan
+                .then(|| Some(super::known_full_page_scan_preprocessing()))
+        }),
         maximum_pixels: u64::MAX,
     };
     // Full, half, quarter and eighth are the only JPEG output candidates. ~keep
