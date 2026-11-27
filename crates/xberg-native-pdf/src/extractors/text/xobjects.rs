@@ -138,6 +138,20 @@ impl<'doc> TextExtractor<'doc> {
         }
     }
 
+    /// Positive media-box area of `page_idx`, read from the document once per page. A failed
+    /// read is not kept, so it is tried again as it was before the area was cached. ~keep
+    fn page_area(&mut self, doc: &crate::document::PdfDocument, page_idx: usize) -> Option<f32> {
+        if let Some((cached_idx, area)) = self.page_area
+            && cached_idx == page_idx
+        {
+            return area;
+        }
+        let (llx, lly, urx, ury) = doc.get_page_media_box(page_idx).ok()?;
+        let area = Some(((urx - llx) * (ury - lly)).abs()).filter(|area| *area > 0.0);
+        self.page_area = Some((page_idx, area));
+        area
+    }
+
     pub(super) fn process_xobject(&mut self, name: &str) -> Result<()> {
         if self.xobject_depth >= Self::MAX_XOBJECT_DEPTH {
             self.xobject_subtree_depth = None;
@@ -211,11 +225,7 @@ impl<'doc> TextExtractor<'doc> {
             Some(crate::structure::McidScope::Page(p)) => *p as usize,
             _ => 0,
         };
-        let page_area = doc
-            .get_page_media_box(page_idx)
-            .ok()
-            .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
-            .filter(|area| *area > 0.0);
+        let page_area = self.page_area(doc, page_idx);
         let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
         let caller_ctm_bits = [
             current_ctm.a,

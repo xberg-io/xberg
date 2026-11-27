@@ -106,6 +106,7 @@ impl<'doc> TextExtractor<'doc> {
             // extraction. Form XObject `Do` invocations push their
             // own scope on top. ~keep
             mcid_scope_stack: vec![crate::structure::McidScope::Page(0)],
+            page_area: None,
         }
     }
 
@@ -195,6 +196,7 @@ impl<'doc> TextExtractor<'doc> {
     /// Set the document reference for loading XObjects.
     pub fn set_document(&mut self, document: &'doc crate::document::PdfDocument) {
         self.document = Some(document);
+        self.page_area = None;
     }
 
     /// Take ownership of the set of MCIDs whose marked-content
