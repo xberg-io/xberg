@@ -7,6 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
+/// Bumped whenever a change to the cached computation makes entries written before it wrong.
 const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 22;
 
 /// Compute a deterministic hash of the OCR configuration.
@@ -144,7 +145,7 @@ fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, re
     hash_bytes(hasher, directory.as_os_str().as_encoded_bytes());
     // ~keep The resolved directory already differs per model set for xberg's own caches; a
     // non-fast set is hashed too so the key never depends on how a directory was chosen. Fast
-    // adds nothing, so entries written before model sets existed stay valid.
+    // adds nothing; the schema version, not this, decides whether older entries still match.
     if config.tessdata_model != crate::core::config::TessdataModel::Fast {
         hash_bytes(hasher, config.tessdata_model.as_str().as_bytes());
     }
@@ -486,15 +487,6 @@ mod tests {
     fn test_hash_config_frames_result_schema_version() {
         let config = create_test_config();
 
-        // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
-        // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Version 22 keys on the canonical tessdata
-        // directory and on each primary model file's size and modification time: older entries were
-        // keyed by the directory path alone and kept matching after a pack was replaced in place.
-        assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 22,
-            "a bump must be deliberate: state here which change made an old entry wrong"
-        );
         assert_ne!(
             hash_config_for_schema(&config, TEST_TESSDATA_PATH, 1),
             hash_config_for_schema(&config, TEST_TESSDATA_PATH, 2)

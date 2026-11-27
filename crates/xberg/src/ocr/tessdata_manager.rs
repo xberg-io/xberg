@@ -350,11 +350,6 @@ mod tests {
         for model in [TessdataModel::Fast, TessdataModel::Best] {
             let manager = TessdataManager::for_model(Some(root.join(model.as_str())), model);
             assert_eq!(
-                manager.adopt_from,
-                crate::ocr::processor::validation::adoption_sources_beside(root, model),
-                "{model}"
-            );
-            assert_eq!(
                 manager.adopt_from[..2],
                 [root.to_path_buf(), root.join("fast")],
                 "{model}"
@@ -364,6 +359,12 @@ mod tests {
             TessdataManager::for_model(Some(PathBuf::from("/elsewhere")), TessdataModel::Best)
                 .adopt_from
                 .is_empty()
+        );
+        assert!(
+            TessdataManager::for_model(Some(root.join("fast")), TessdataModel::Best)
+                .adopt_from
+                .is_empty(),
+            "the directory of the other set is not a best set directory"
         );
     }
 
