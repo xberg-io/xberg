@@ -638,6 +638,7 @@ impl TableValidator {
     }
 
     /// Cells charged so far.
+    #[cfg(any(feature = "excel", feature = "excel-wasm"))]
     pub(crate) fn current_cells(&self) -> usize {
         self.current_cells
     }
