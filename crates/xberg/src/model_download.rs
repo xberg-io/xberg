@@ -1214,7 +1214,7 @@ fn portable_artifact_component(component: &str) -> bool {
 /// ~keep Streams the file in 1 MiB chunks to avoid loading large model files (100MB+) entirely
 /// into memory. Returns `Ok(())` if the checksum matches or is empty (skip verification).
 ///
-/// A file this process already hashed to `expected` is not hashed again while its
+/// On Unix, a file this process already hashed to `expected` is not hashed again while its
 /// [`VerifiedStamp`] is unchanged; a failed check is never remembered.
 #[cfg(model_download)]
 pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<(), String> {
@@ -1272,7 +1272,7 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
         && file
             .metadata()
             .is_ok_and(|metadata| VerifiedStamp::of(&metadata).as_ref() == Some(&stamp))
-        && stamp.settled()
+        && stamp.reusable()
     {
         remember_verified(path, stamp, hash_hex);
     }
@@ -1316,6 +1316,13 @@ impl VerifiedStamp {
             #[cfg(unix)]
             changed: (metadata.ctime(), metadata.ctime_nsec()),
         })
+    }
+
+    /// Whether a repeat check may trust this stamp instead of hashing. Only on Unix: elsewhere the
+    /// stamp is size and modification time, and a same-size rewrite that restores the
+    /// modification time would keep it.
+    fn reusable(&self) -> bool {
+        cfg!(unix) && self.settled()
     }
 
     /// Whether the modification time is at least [`VERIFIED_STAMP_SETTLE`] in the past, so a
@@ -1515,6 +1522,7 @@ mod verified_memo_tests {
             .unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_unchanged_file_is_hashed_once() {
         let dir = tempfile::tempdir().unwrap();
@@ -1529,6 +1537,7 @@ mod verified_memo_tests {
         assert_eq!(hashed() - before, 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_rewritten_file_is_hashed_again() {
         let dir = tempfile::tempdir().unwrap();
@@ -1576,6 +1585,7 @@ mod verified_memo_tests {
         assert_eq!(hashed() - before, 2);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_remembered_file_still_fails_another_digest() {
         let dir = tempfile::tempdir().unwrap();
@@ -1600,6 +1610,20 @@ mod verified_memo_tests {
 
         verify_sha256(&path, &sha256(b"fresh weights"), "model").unwrap();
         verify_sha256(&path, &sha256(b"fresh weights"), "model").unwrap();
+
+        assert_eq!(hashed() - before, 2);
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn an_unchanged_file_is_hashed_every_time_off_unix() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        let before = hashed();
+
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
 
         assert_eq!(hashed() - before, 2);
     }
