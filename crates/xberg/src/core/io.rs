@@ -58,7 +58,7 @@ impl AsRef<[u8]> for FileBytes {
 
 impl FileBytes {
     /// Whether the bytes are a file mapping rather than a heap buffer.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
     pub(crate) fn is_mapped(&self) -> bool {
         match &self.inner {
             FileBytesInner::Heap(_) => false,
@@ -71,6 +71,7 @@ impl FileBytes {
     ///
     /// A mapping becomes the owner of the returned `Bytes` and stays mapped until the last
     /// clone or slice of it drops, so the [`open_file_bytes`] contract extends to that point.
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
     pub(crate) fn into_bytes(self) -> bytes::Bytes {
         match self.inner {
             FileBytesInner::Heap(bytes) => bytes::Bytes::from(bytes),
