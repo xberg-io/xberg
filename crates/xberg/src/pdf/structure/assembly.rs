@@ -1315,7 +1315,16 @@ fn push_paragraph_element_by_kind(
         };
         let (normalized, removed_prefix_len) = normalize_list_text(&text);
         let annotations = shift_annotations_after_prefix_removal(annotations, removed_prefix_len, normalized.len());
-        let element_id = builder.push_list_item(normalized, ordered, annotations, page, bbox);
+        let (normalized, annotations, plain) =
+            if crate::pdf::native::math_latex::sentinels::contains_sentinel(&normalized) {
+                resolve_native_math(&normalized, annotations, builder.inline_math())
+            } else {
+                (normalized.to_owned(), annotations, None)
+            };
+        let element_id = builder.push_list_item(&normalized, ordered, annotations, page, bbox);
+        if let Some(plain) = plain {
+            builder.merge_attribute(element_id, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, plain);
+        }
         // The marker just stripped off `text` is the document's own label. Keep it:
         // an ordinance is cross-referenced by printed clause number, so a
         // synthesized sequence position is not an acceptable substitute.
@@ -1447,20 +1456,19 @@ fn push_text_with_inline_math(
     index
 }
 
-/// Push a paragraph whose native formulas travel between math sentinels: each becomes
-/// `$..$` (`$$..$$` for a display formula left inside prose) with its math annotation, and
-/// the plain projection keeps the undelimited TeX. Formatting annotations that reach into a
-/// formula are dropped, since its source font (italic math) is not emphasis.
-fn push_text_with_native_math(
-    builder: &mut InternalDocumentBuilder,
+/// Resolve the native math sentinels in `text`: each formula becomes `$..$` (`$$..$$` for a
+/// display formula left inside prose) with its math annotation. Formatting annotations that
+/// reach into a formula are dropped, since its source font (italic math) is not emphasis.
+/// The third value is the undelimited TeX, the element's plain projection, when a formula
+/// was delimited.
+fn resolve_native_math(
     text: &str,
     mut annotations: Vec<TextAnnotation>,
-    page: Option<u32>,
-    bbox: Option<BoundingBox>,
-) -> u32 {
+    inline_math: bool,
+) -> (String, Vec<TextAnnotation>, Option<String>) {
     use crate::pdf::native::math_latex::sentinels;
-    let mut resolved = sentinels::resolve(text, builder.inline_math());
-    if !builder.inline_math() {
+    let mut resolved = sentinels::resolve(text, inline_math);
+    if !inline_math {
         resolved.math.clear();
     }
     resolved.remap_annotations(&mut annotations);
@@ -1476,13 +1484,23 @@ fn push_text_with_native_math(
         kind: AnnotationKind::math(math.display),
     }));
     annotations.sort_by_key(|annotation| (annotation.start, std::cmp::Reverse(annotation.end)));
-    let index = builder.push_paragraph(&resolved.text, annotations, page, bbox);
-    if !resolved.math.is_empty() {
-        builder.merge_attribute(
-            index,
-            crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
-            sentinels::strip(text),
-        );
+    let plain = (!resolved.math.is_empty()).then(|| sentinels::strip(text));
+    (resolved.text, annotations, plain)
+}
+
+/// Push a paragraph whose native formulas travel between math sentinels; see
+/// [`resolve_native_math`].
+fn push_text_with_native_math(
+    builder: &mut InternalDocumentBuilder,
+    text: &str,
+    annotations: Vec<TextAnnotation>,
+    page: Option<u32>,
+    bbox: Option<BoundingBox>,
+) -> u32 {
+    let (resolved, annotations, plain) = resolve_native_math(text, annotations, builder.inline_math());
+    let index = builder.push_paragraph(&resolved, annotations, page, bbox);
+    if let Some(plain) = plain {
+        builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, plain);
     }
     index
 }
@@ -4928,6 +4946,23 @@ mod tests {
             "the delimiters must not be escaped: {markdown}"
         );
         assert!(!crate::pdf::native::math_latex::sentinels::contains_sentinel(&markdown));
+    }
+
+    /// A native inline formula in a list item renders as `$..$` math, not escaped TeX source.
+    #[test]
+    fn native_inline_formula_in_a_list_item_renders_as_markdown_math() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = format!("(1) If {} then stop.", native_inline("y=a+bt^{2}"));
+        let mut para = make_paragraph(&text, None);
+        para.is_list_item = true;
+        push_paragraph_element_by_kind(&mut builder, &para, None, &Default::default());
+        let document = builder.build();
+        let item = &document.elements[0];
+        assert!(matches!(item.kind, ElementKind::ListItem { .. }), "{:?}", item.kind);
+        assert_eq!(item.text, "If $y=a+bt^{2}$ then stop.");
+        let markdown = crate::rendering::render_markdown(&document);
+        assert!(markdown.contains("If $y=a+bt^{2}$ then stop."), "{markdown}");
     }
 
     /// A display formula renders as its own `$$` block; headings and tables lose sentinels.
