@@ -18,7 +18,8 @@
 //!
 //! This does not fully close GH#1358. What is repaired here is assembly
 //! *within* each same-rotation run: word order along the run's own advance
-//! axis, and the word gaps between fragments. Reading order *between* regions
+//! axis, the word gaps between fragments and, on the hint-free path, the
+//! top-to-bottom order of the run's lines. Reading order *between* regions
 //! on a rotated page — which rotated block precedes which — is layout-hint
 //! work and lives in `super::reading_order`, unchanged.
 
@@ -94,9 +95,12 @@ pub(crate) fn upright_reading_origin(span: &TextSpan) -> (f32, f32) {
 /// one frame forced across the boundary — then, for a rotated run, further
 /// splits it into "lines" using cross-axis proximity (spans within
 /// [`ROTATED_LINE_CROSS_TOLERANCE_RATIO`] of the run's own font extent count
-/// as the same line), sorts each line strictly by advance-axis position, and
+/// as the same line), sorts each line strictly by advance-axis position,
 /// inserts a space wherever the advance-axis gap between consecutive spans
-/// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff.
+/// exceeds the [`ATOMIC_FRAGMENT_GAP_RATIO`] kerning cutoff, and separates
+/// lines with a newline. It keeps the line order it is given: a caller that
+/// holds a layout-hint order passes it through unchanged, and the hint-free
+/// caller first orders lines with [`order_in_reading_frames`].
 ///
 /// Unrotated spans take the old code path verbatim (back-to-back
 /// concatenation, no reordering, no inserted separators), so this function is
@@ -145,18 +149,6 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
         return;
     }
 
-    // Lines stack top to bottom in the run's upright frame, whatever order the
-    // spans arrived in: the caller's order follows page axes, which for a
-    // rotated run reads lines (and the cells of a rotated table) backwards or
-    // column by column (GH#3423). The sort is stable, so equal rows keep
-    // their incoming order.
-    let mut indices = indices.to_vec();
-    indices.sort_by(|&a, &b| {
-        let cross_a = spans.get(a).map_or(0.0, |span| upright_reading_origin(span).1);
-        let cross_b = spans.get(b).map_or(0.0, |span| upright_reading_origin(span).1);
-        cross_b.total_cmp(&cross_a)
-    });
-
     let mut line_start = 0;
     let mut first_line = true;
     while line_start < indices.len() {
@@ -178,13 +170,125 @@ fn append_run(text: &mut String, spans: &[TextSpan], indices: &[usize], rotation
             line_end += 1;
         }
 
-        if !first_line && !text.is_empty() && !text.ends_with(char::is_whitespace) {
-            text.push(' ');
+        if !first_line && !text.is_empty() && !text.ends_with('\n') {
+            text.push('\n');
         }
         first_line = false;
         append_rotated_line(text, spans, &indices[line_start..line_end]);
         line_start = line_end;
     }
+}
+
+/// One rotated-frame line while a run is being ordered: its member spans, the
+/// advance-axis extent they cover and the cross-axis position that ranks it.
+struct FrameLine {
+    members: Vec<usize>,
+    start: f32,
+    end: f32,
+    cross: f32,
+}
+
+/// Order one rotated run top to bottom in its own upright frame.
+///
+/// The span order a caller holds follows page axes, which for a rotated run
+/// reads lines backwards or column by column (GH#3423). Lines are clustered by
+/// cross-axis proximity, then lines whose advance-axis extents overlap form one
+/// block; blocks that do not overlap (side-by-side columns) are emitted one
+/// after the other, left to right, so their lines never interleave. Every key
+/// is computed once, up front.
+fn order_rotated_run(spans: &[TextSpan], run: &[usize]) -> Vec<usize> {
+    struct Placed {
+        index: usize,
+        start: f32,
+        end: f32,
+        cross: f32,
+        height: f32,
+    }
+    let mut placed: Vec<Placed> = run
+        .iter()
+        .filter_map(|&index| {
+            let span = spans.get(index)?;
+            let (start, cross) = upright_reading_origin(span);
+            Some(Placed {
+                index,
+                start,
+                end: start + span.width,
+                cross,
+                height: span.height,
+            })
+        })
+        .collect();
+    placed.sort_by(|a, b| b.cross.total_cmp(&a.cross));
+
+    let mut lines: Vec<FrameLine> = Vec::new();
+    let mut anchor: Option<(f32, f32)> = None;
+    for span in &placed {
+        let same_line = anchor.is_some_and(|(cross, height)| {
+            (cross - span.cross).abs() <= height.max(span.height).max(f32::EPSILON) * ROTATED_LINE_CROSS_TOLERANCE_RATIO
+        });
+        match lines.last_mut().filter(|_| same_line) {
+            Some(line) => {
+                line.members.push(span.index);
+                line.start = line.start.min(span.start);
+                line.end = line.end.max(span.end);
+            }
+            None => {
+                anchor = Some((span.cross, span.height));
+                lines.push(FrameLine {
+                    members: vec![span.index],
+                    start: span.start,
+                    end: span.end,
+                    cross: span.cross,
+                });
+            }
+        }
+    }
+
+    let mut by_start: Vec<usize> = (0..lines.len()).collect();
+    by_start.sort_by(|&a, &b| lines[a].start.total_cmp(&lines[b].start));
+    let mut blocks: Vec<Vec<usize>> = Vec::new();
+    let mut block_end = f32::NEG_INFINITY;
+    for line in by_start {
+        if blocks.is_empty() || lines[line].start >= block_end {
+            blocks.push(vec![line]);
+            block_end = lines[line].end;
+        } else if let Some(block) = blocks.last_mut() {
+            block.push(line);
+            block_end = block_end.max(lines[line].end);
+        }
+    }
+
+    let mut ordered = Vec::with_capacity(run.len());
+    for mut block in blocks {
+        block.sort_by(|&a, &b| lines[b].cross.total_cmp(&lines[a].cross));
+        for line in block {
+            ordered.extend_from_slice(&lines[line].members);
+        }
+    }
+    ordered
+}
+
+/// Order a page's spans for assembly: each maximal rotated run is reordered
+/// into its reading frame by [`order_rotated_run`], upright runs keep their
+/// incoming order and every run stays where it was.
+fn order_in_reading_frames(spans: &[TextSpan], order: &[usize]) -> Vec<usize> {
+    let mut ordered = Vec::with_capacity(order.len());
+    let mut run_start = 0;
+    while run_start < order.len() {
+        let rotation = span_rotation(spans, order[run_start]);
+        let mut run_end = run_start + 1;
+        while run_end < order.len() && same_rotation(span_rotation(spans, order[run_end]), rotation) {
+            run_end += 1;
+        }
+        let run = &order[run_start..run_end];
+        if is_unrotated(rotation) {
+            ordered.extend_from_slice(run);
+        } else {
+            ordered.extend(order_rotated_run(spans, run));
+        }
+        run_start = run_end;
+    }
+    ordered
 }
 
 /// Sort one rotated-frame line by advance-axis position and join it,
@@ -305,11 +409,13 @@ fn upright_text_has_multiple_rows(spans: &[TextSpan]) -> bool {
 ///
 /// This is the hint-free half of the GH#1358 fix: sideways tables and rotated
 /// captions read word-reversed and glued, and [`assemble_reading_order_text`]
-/// needs only `rotation_degrees` to undo it. Ordering is deliberately left at
-/// identity — the span order the caller already has — because deciding a
-/// *better* cross-region order is the part that genuinely needs layout hints,
-/// and `super::reading_order`'s hint-free geometric fallback is rotation-blind
-/// by design and so cannot supply it.
+/// needs only `rotation_degrees` to undo it. Lines of each rotated run are
+/// first ordered top to bottom in the run's own frame, with side-by-side
+/// columns kept apart ([`order_rotated_run`], GH#3423). Cross-region order
+/// between separate runs stays the caller's identity order: deciding a
+/// *better* one is the part that genuinely needs layout hints, and
+/// `super::reading_order`'s hint-free geometric fallback is rotation-blind by
+/// design and so cannot supply it.
 ///
 /// Returns `None` when the page has no rotated spans, so the caller can leave
 /// that page's existing text completely untouched. That is the safety
@@ -325,7 +431,10 @@ pub(crate) fn repair_rotated_page_text(spans: &[TextSpan]) -> Option<String> {
     }
 
     let identity_order: Vec<usize> = (0..spans.len()).collect();
-    Some(assemble_reading_order_text(spans, &identity_order))
+    Some(assemble_reading_order_text(
+        spans,
+        &order_in_reading_frames(spans, &identity_order),
+    ))
 }
 
 #[cfg(test)]
@@ -689,6 +798,128 @@ mod tests {
                     "an entirely-rotated page must still be repaired"
                 );
             }
+        }
+    }
+    // GH#3423: the hint-free repair orders a rotated run's lines top to bottom
+    // in the run's own frame, whatever order the spans arrive in.
+    mod rotated_line_order {
+        use super::*;
+
+        const HEIGHT: f32 = 10.0;
+        const WIDTH: f32 = 30.0;
+
+        /// A span of a `rotation`-degree run placed at `advance` along its reading
+        /// direction and `cross` up its upright frame.
+        fn at(text: &str, rotation: f32, advance: f32, cross: f32) -> TextSpan {
+            let (x, y) = match rotation as i32 {
+                90 => (-cross, advance),
+                180 => (-advance, -cross),
+                270 => (cross, -advance),
+                _ => (advance, cross),
+            };
+            TextSpan {
+                text: text.to_string(),
+                x,
+                y,
+                width: WIDTH,
+                height: HEIGHT,
+                rotation_degrees: rotation,
+            }
+        }
+
+        /// Three rows of two cells, top row first.
+        fn table(rotation: f32) -> Vec<TextSpan> {
+            [("a", "b", 100.0), ("c", "d", 76.0), ("e", "f", 52.0)]
+                .into_iter()
+                .flat_map(|(left, right, cross)| [at(left, rotation, 0.0, cross), at(right, rotation, 60.0, cross)])
+                .collect()
+        }
+
+        fn shuffled(spans: &[TextSpan], permutation: &[usize]) -> Vec<TextSpan> {
+            permutation.iter().map(|&index| spans[index].clone()).collect()
+        }
+
+        const PERMUTATIONS: [[usize; 6]; 4] = [
+            [0, 1, 2, 3, 4, 5],
+            [5, 4, 3, 2, 1, 0],
+            [1, 3, 5, 0, 2, 4],
+            [4, 0, 3, 5, 2, 1],
+        ];
+
+        #[test]
+        fn should_read_a_shuffled_270_degree_table_row_by_row() {
+            for permutation in PERMUTATIONS {
+                let spans = shuffled(&table(270.0), &permutation);
+                assert_eq!(
+                    repair_rotated_page_text(&spans).as_deref(),
+                    Some("a b\nc d\ne f"),
+                    "{permutation:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_read_a_shuffled_90_degree_table_row_by_row() {
+            for permutation in PERMUTATIONS {
+                let spans = shuffled(&table(90.0), &permutation);
+                assert_eq!(
+                    repair_rotated_page_text(&spans).as_deref(),
+                    Some("a b\nc d\ne f"),
+                    "{permutation:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_read_a_shuffled_180_degree_table_row_by_row() {
+            for permutation in PERMUTATIONS {
+                let spans = shuffled(&table(180.0), &permutation);
+                assert_eq!(
+                    repair_rotated_page_text(&spans).as_deref(),
+                    Some("a b\nc d\ne f"),
+                    "{permutation:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_keep_same_line_jitter_on_one_line() {
+            for jitter in [0.1, 0.25, 0.4] {
+                let spans = vec![
+                    at("three", 90.0, 120.0, 100.0),
+                    at("two", 90.0, 60.0, 100.0 + jitter * HEIGHT),
+                    at("one", 90.0, 0.0, 100.0),
+                ];
+                assert_eq!(
+                    repair_rotated_page_text(&spans).as_deref(),
+                    Some("one two three"),
+                    "jitter {jitter}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_keep_side_by_side_columns_with_offset_baselines_apart() {
+            let spans = vec![
+                at("B1", 90.0, 200.0, 90.0),
+                at("A1", 90.0, 0.0, 100.0),
+                at("B2", 90.0, 200.0, 70.0),
+                at("A2", 90.0, 0.0, 80.0),
+                at("B3", 90.0, 200.0, 50.0),
+                at("A3", 90.0, 0.0, 60.0),
+            ];
+            assert_eq!(
+                repair_rotated_page_text(&spans).as_deref(),
+                Some("A1\nA2\nA3\nB1\nB2\nB3")
+            );
+        }
+
+        #[test]
+        fn should_keep_a_layout_hint_order_for_a_rotated_run() {
+            let spans = table(90.0);
+            // A hint order that reads the bottom row first must survive assembly.
+            let order = vec![4, 5, 0, 1, 2, 3];
+            assert_eq!(assemble_reading_order_text(&spans, &order), "e f\na b\nc d");
         }
     }
 }

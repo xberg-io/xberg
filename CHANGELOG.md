@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- PDF text drawn with a 90 or 270 degree text matrix (no page `/Rotate`), such as a landscape table on a portrait sheet, now extracts row by row with each label next to its value, instead of in reverse or column by column.
+- PDF tables drawn with a 90, 180 or 270 degree text matrix (no page `/Rotate`), such as a landscape table on a portrait sheet, now extract one row per line in displayed top-to-bottom order, each label next to its value, instead of scrambling the cell order.
 
 ## [1.5.4] - 2026-11-25
 
