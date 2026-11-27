@@ -72,7 +72,7 @@ pub(super) fn backend(
     (registry.is_builtin_tesseract(primary)
         && registry.has_builtin_paddle()
         && eligible(config, ocr, mime_type)
-        && is_camera_photo(content, mime_type))
+        && is_camera_photo(content, mime_type, &config.security_limits.clone().unwrap_or_default()))
     .then(|| registry.get("paddleocr").ok())
     .flatten()
 }
@@ -117,14 +117,13 @@ fn is_camera_type(mime_type: &str) -> bool {
 
 /// A camera photo: a lossy camera format whose pixels match no standard page size at a scan
 /// resolution (`resolve_known_source_dpi`, the signal the OCR route uses to spot page scans).
-fn is_camera_photo(content: &[u8], mime_type: &str) -> bool {
+/// The size comes from the audited header probe, under the request's security limits.
+fn is_camera_photo(content: &[u8], mime_type: &str, limits: &crate::extractors::security::SecurityLimits) -> bool {
     if !is_camera_type(mime_type) {
         return false;
     }
-    let Some((width, height)) = image::ImageReader::new(std::io::Cursor::new(content))
-        .with_guessed_format()
-        .ok()
-        .and_then(|reader| reader.into_dimensions().ok())
+    let Ok((width, height, _)) =
+        crate::extraction::image_decode::probe_standard_image_with_security_limits(content, limits)
     else {
         return false;
     };

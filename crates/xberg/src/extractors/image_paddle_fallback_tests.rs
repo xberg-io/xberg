@@ -251,16 +251,17 @@ fn webp(width: u32, height: u32) -> Vec<u8> {
 #[test]
 fn only_camera_photos_qualify() {
     let photo = jpeg(960, 1280);
-    assert!(is_camera_photo(&photo, "image/jpeg"));
-    assert!(is_camera_photo(&photo, "IMAGE/JPEG"));
-    assert!(is_camera_photo(&webp(1024, 768), "image/webp"));
+    let limits = crate::extractors::security::SecurityLimits::default();
+    assert!(is_camera_photo(&photo, "image/jpeg", &limits));
+    assert!(is_camera_photo(&photo, "IMAGE/JPEG", &limits));
+    assert!(is_camera_photo(&webp(1024, 768), "image/webp", &limits));
     for mime in ["image/png", "image/bmp", "image/gif", "image/tiff"] {
-        assert!(!is_camera_photo(&photo, mime), "{mime}");
+        assert!(!is_camera_photo(&photo, mime, &limits), "{mime}");
     }
     // US Letter at 150 dpi: a page scan saved as JPEG or WebP. ~keep
-    assert!(!is_camera_photo(&jpeg(1275, 1650), "image/jpeg"));
-    assert!(!is_camera_photo(&webp(1275, 1650), "image/webp"));
-    assert!(!is_camera_photo(b"not an image", "image/jpeg"));
+    assert!(!is_camera_photo(&jpeg(1275, 1650), "image/jpeg", &limits));
+    assert!(!is_camera_photo(&webp(1275, 1650), "image/webp", &limits));
+    assert!(!is_camera_photo(b"not an image", "image/jpeg", &limits));
 }
 
 fn default_extraction() -> ExtractionConfig {
