@@ -46,7 +46,7 @@ refresh_rust() {
 
 refresh_python() {
   if [ "$mode" = update ]; then
-    (cd packages/python && uv sync --no-install-project --no-install-workspace --all-extras --upgrade-package "*")
+    (cd packages/python && uv sync --no-install-project --no-install-workspace --all-extras --upgrade)
     return
   fi
   (cd packages/python && uv sync --no-install-project --no-install-workspace --all-extras --upgrade)

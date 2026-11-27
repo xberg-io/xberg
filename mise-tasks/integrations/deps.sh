@@ -11,7 +11,7 @@ set -euo pipefail
 . "$MISE_CONFIG_ROOT/mise-tasks/integrations/.lib/packages.sh"
 case "$usage_mode" in
 sync) uv_flags=() maven_goal="" ;;
-update) uv_flags=(--upgrade-package "*") maven_goal=versions:use-next-versions ;;
+update) uv_flags=(--upgrade) maven_goal=versions:use-next-versions ;;
 upgrade) uv_flags=(--upgrade) maven_goal=versions:use-latest-releases ;;
 *)
   echo "mode must be sync, update or upgrade, got: $usage_mode" >&2
