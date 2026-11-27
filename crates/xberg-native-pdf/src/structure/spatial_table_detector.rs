@@ -2609,6 +2609,17 @@ const MAX_UNRULED_CELL_X_GAP: f32 = 60.0;
 /// A cell exists when all four corners (x1,y1), (x2,y1), (x1,y2), (x2,y2) are present
 /// and there is no intermediate intersection between them on either axis.
 fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edges: &[Edge]) -> Vec<IntersectionCell> {
+    build_cells_from_intersections_with_text(pts, h_edges, v_edges, &[])
+}
+
+/// `build_cells_from_intersections` that also knows where text sits: `text_centers` are span
+/// centres, and a span centred inside an over-wide unruled span makes it a cell rather than a gap.
+fn build_cells_from_intersections_with_text(
+    pts: &[Intersection],
+    h_edges: &[Edge],
+    v_edges: &[Edge],
+    text_centers: &[(f32, f32)],
+) -> Vec<IntersectionCell> {
     use std::collections::BTreeSet;
 
     let mut xs: Vec<f32> = pts.iter().map(|p| p.x).collect();
@@ -2739,12 +2750,16 @@ fn build_cells_from_intersections(pts: &[Intersection], h_edges: &[Edge], v_edge
                             && v_edge_spans(xs[nxi], ys[yi], ys[nyi])
                             && h_edge_across(ys[yi], xs[xi], xs[nxi]).is_some()
                             && h_edge_across(ys[nyi], xs[xi], xs[nxi]).is_some()))
-                    // An over-wide span with no H rule across it is the graphics-free gap
-                    // between two side-by-side grids, not a cell. Callers that supply only
-                    // crossings and V edges keep the corner-only contract. ~keep
+                    // An over-wide span with no H rule across it and no text in it is the graphics-free
+                    // gap between two side-by-side grids, not a cell; a column of text whose own
+                    // rows are unruled (xberg-io/xberg SGS lab reports) is a cell. Callers that
+                    // supply only crossings and V edges keep the corner-only contract. ~keep
                     && (h_edges.is_empty()
                         || xs[nxi] - xs[xi] <= MAX_UNRULED_CELL_X_GAP
-                        || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi]))
+                        || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi])
+                        || text_centers.iter().any(|&(cx, cy)| {
+                            cx > xs[xi] && cx < xs[nxi] && cy > ys[yi].min(ys[nyi]) && cy < ys[yi].max(ys[nyi])
+                        }))
                 {
                     cells.push(IntersectionCell {
                         x1: xs[xi],
@@ -3321,7 +3336,14 @@ fn detect_intersections(
     config: &TableDetectionConfig,
     mut recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
-    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, config);
+    let text_centers: Vec<(f32, f32)> = spans
+        .iter()
+        .map(|span| {
+            let center = span.bbox.center();
+            (center.x, center.y)
+        })
+        .collect();
+    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, &text_centers, config);
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
@@ -3436,6 +3458,7 @@ fn detect_intersections(
 /// both needed downstream by `band_column_groups` (xberg-io/xberg#1580).
 fn build_grid_from_lines(
     lines: &[crate::elements::PathContent],
+    text_centers: &[(f32, f32)],
     config: &TableDetectionConfig,
 ) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
     let (mut h_edges, mut v_edges) = extract_edges(lines);
@@ -3465,7 +3488,7 @@ fn build_grid_from_lines(
     // (xberg-io/xberg#1580) — an extended grid has no V edge that ever spans any band, so
     // merging there would collapse every row to one cell instead of narrowing a phantom cut.
     let (cells, cells_are_intersections) = if intersections.len() >= 4 {
-        let c = build_cells_from_intersections(&intersections, &h_edges, &v_edges);
+        let c = build_cells_from_intersections_with_text(&intersections, &h_edges, &v_edges, text_centers);
         if c.is_empty() {
             // Lines exist but don't form real intersection cells — try extended grid. ~keep
             (
@@ -6051,7 +6074,7 @@ mod tests {
             PathContent::line(394., 430., 394., 719.),
             PathContent::line(306., 110., 306., 399.),
         ];
-        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
         assert!(
             groups.is_empty(),
             "the lone in-band column pair is one column: {groups:?}"
@@ -6068,7 +6091,7 @@ mod tests {
             PathContent::line(150., 100., 150., 370.),
             PathContent::line(250., 100., 250., 370.),
         ];
-        let (groups, _, _) = build_grid_from_lines(&lines, &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].3, 2);
     }
@@ -6957,7 +6980,7 @@ mod tests {
             ..Default::default()
         };
 
-        let (groups, _, _) = build_grid_from_lines(&table_paths, &config);
+        let (groups, _, _) = build_grid_from_lines(&table_paths, &[], &config);
         assert_eq!(groups.len(), 1, "fixture assumption: one cell group");
         assert_eq!(groups[0].0.len(), 24, "fixture assumption: the grid itself is complete");
         assert_eq!(groups[0].2.len(), 13, "fixture assumption: 12 row bands");
@@ -8327,6 +8350,46 @@ mod tests {
             group_cells_into_tables(&cells).len(),
             2,
             "each side-by-side grid must stay its own cell cluster, got: {cells:?}"
+        );
+    }
+
+    /// A wide column whose own rows carry no H rule (only the numeric columns beside it are
+    /// ruled) is a cell when text sits in it; only an empty strip is a gap between grids.
+    #[test]
+    fn text_in_an_unruled_wide_span_keeps_the_column_as_a_cell() {
+        let edge = |coord, start, end| Edge { coord, start, end };
+        let pts = vec![
+            Intersection { x: 0.0, y: 0.0 },
+            Intersection { x: 40.0, y: 0.0 },
+            Intersection { x: 240.0, y: 0.0 },
+            Intersection { x: 280.0, y: 0.0 },
+            Intersection { x: 0.0, y: 20.0 },
+            Intersection { x: 40.0, y: 20.0 },
+            Intersection { x: 240.0, y: 20.0 },
+            Intersection { x: 280.0, y: 20.0 },
+        ];
+        let h_edges = [
+            edge(0.0, 0.0, 40.0),
+            edge(0.0, 240.0, 280.0),
+            edge(20.0, 0.0, 40.0),
+            edge(20.0, 240.0, 280.0),
+        ];
+        let v_edges = [
+            edge(0.0, 0.0, 20.0),
+            edge(40.0, 0.0, 20.0),
+            edge(240.0, 0.0, 20.0),
+            edge(280.0, 0.0, 20.0),
+        ];
+
+        let cells = build_cells_from_intersections_with_text(&pts, &h_edges, &v_edges, &[(140.0, 10.0)]);
+        assert!(
+            cells.iter().any(|cell| cell.x2 - cell.x1 > MAX_UNRULED_CELL_X_GAP),
+            "a span holding text must stay a cell, got: {cells:?}"
+        );
+        assert_eq!(
+            group_cells_into_tables(&cells).len(),
+            1,
+            "the text column joins both ruled sides into one table, got: {cells:?}"
         );
     }
 
