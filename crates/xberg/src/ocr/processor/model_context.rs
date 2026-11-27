@@ -22,10 +22,7 @@ pub(super) struct ModelContext {
     /// The [`FileStamp`](super::validation::FileStamp) of each primary language's model file,
     /// for cache and pool keys. Unlike `primary` it is taken for every PSM and never reads the
     /// files.
-    identity: Option<blake3::Hash>,
-    /// False when a primary model file has no stamp: results and engines are then neither stored
-    /// nor reused, since `identity` cannot tell the file from a replacement of the same size.
-    identity_known: bool,
+    identity: Option<PackIdentity>,
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
@@ -33,6 +30,27 @@ pub(super) struct ModelContext {
     vertical_cache_invalidated: Arc<AtomicBool>,
     khmer_cache_invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
+}
+
+#[derive(Clone)]
+struct PackIdentity {
+    languages: Vec<String>,
+    hash: blake3::Hash,
+    /// False when a file has no stamp: results and engines are then neither stored nor reused,
+    /// since `hash` cannot tell the file from a replacement of the same size.
+    known: bool,
+}
+
+/// The identity hash of `languages`' model files in `directory`, and whether every file could be
+/// identified.
+fn identify_packs(directory: &str, languages: &[String]) -> (blake3::Hash, bool) {
+    let mut hasher = blake3::Hasher::new();
+    let known = super::validation::hash_pack_identities(
+        &mut hasher,
+        std::path::Path::new(directory),
+        languages.iter().map(String::as_str),
+    );
+    (hasher.finalize(), known)
 }
 
 #[derive(Clone)]
@@ -142,7 +160,25 @@ impl ModelContext {
 
     /// What identifies the primary model files this context was resolved against.
     pub(super) fn identity(&self) -> Option<blake3::Hash> {
-        self.identity
+        self.identity.as_ref().map(|identity| identity.hash)
+    }
+
+    /// Whether the primary model files are still the ones this context was resolved against and
+    /// could be identified at all: a pack replaced between resolution and use must not have the
+    /// text or engine read from it kept under the old key.
+    fn packs_are_current(&self) -> bool {
+        let Some(identity) = &self.identity else {
+            return true;
+        };
+        if !identity.known {
+            return false;
+        }
+        if identify_packs(&self.directory, &identity.languages) == (identity.hash, true) {
+            return true;
+        }
+        self.invalidated.store(true, Ordering::Release);
+        tracing::warn!("Tesseract model files changed during use; skipping cache reuse and discarding native state");
+        false
     }
 
     fn read_primary_revision(&self, languages: &[String]) -> Result<blake3::Hash, OcrError> {
@@ -298,13 +334,12 @@ impl ModelContext {
 
     fn for_config(directory: String, psm: u8, languages: Vec<String>) -> Result<Self, OcrError> {
         let mut context = Self::for_path(directory, psm)?;
-        let mut identity = blake3::Hasher::new();
-        context.identity_known = super::validation::hash_pack_identities(
-            &mut identity,
-            std::path::Path::new(&context.directory),
-            languages.iter().map(String::as_str),
-        );
-        context.identity = Some(identity.finalize());
+        let (hash, known) = identify_packs(&context.directory, &languages);
+        context.identity = Some(PackIdentity {
+            languages: languages.clone(),
+            hash,
+            known,
+        });
         if context.osd_revision.is_some() {
             let revision = context.read_primary_revision(&languages)?;
             context.primary = Some(PrimaryModels { languages, revision });
@@ -323,7 +358,6 @@ impl ModelContext {
             directory,
             osd_revision,
             identity: None,
-            identity_known: true,
             primary: None,
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
@@ -335,12 +369,12 @@ impl ModelContext {
     }
 
     pub(super) fn if_current<T>(&self, action: impl FnOnce() -> T) -> Option<T> {
-        if !self.identity_known
-            || self.invalidated.load(Ordering::Acquire)
+        if self.invalidated.load(Ordering::Acquire)
             || self
                 .operation
                 .as_ref()
                 .is_some_and(|operation| !operation.is_cacheable())
+            || !self.packs_are_current()
             || !self.primary_is_current()
         {
             return None;
@@ -897,6 +931,27 @@ mod tests {
         .await;
 
         assert_eq!(snapshot().if_current(|| 7), Some(7));
+    }
+
+    #[test]
+    fn a_pack_replaced_after_resolution_is_neither_cached_nor_pooled() {
+        let root = tempfile::tempdir().unwrap();
+        let pack = root.path().join("eng.traineddata");
+        std::fs::write(&pack, b"first model").unwrap();
+        let resolve = || ModelContext::for_config(root.path().to_str().unwrap().into(), 3, vec!["eng".into()]).unwrap();
+
+        let before = resolve();
+        assert_eq!(before.if_current(|| 7), Some(7));
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&pack, b"a replaced model").unwrap();
+        assert!(
+            before
+                .if_current(|| panic!("text or an engine of the old pack must not be kept"))
+                .is_none()
+        );
+        let after = resolve();
+        assert_ne!(after.identity(), before.identity());
+        assert_eq!(after.if_current(|| 7), Some(7));
     }
 
     #[cfg(unix)]
