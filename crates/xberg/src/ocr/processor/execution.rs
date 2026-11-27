@@ -6697,6 +6697,23 @@ mod tests {
         image::imageops::replace(&mut page, &vertical, 0, 300);
         let mut bytes = std::io::Cursor::new(Vec::new());
         page.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        // The body's ~40 px glyphs already exceed the 36 px resample target, so the page is read at its
+        // native frame. Before the glyph estimator's workspace was halved (3314f02886) the estimate did not
+        // fit the default limit beside this ~10 MP raster and the page was downscaled about 1% instead. ~keep
+        let prepared = prepare_encoded_ocr_image(
+            bytes.get_ref(),
+            &SecurityLimits::default(),
+            &TesseractConfig::default(),
+            None,
+            false,
+        )
+        .expect("prepare the mixed page");
+        assert_eq!((prepared.width, prepared.height), page.dimensions());
+        assert!(
+            prepared
+                .image_preprocessing
+                .is_some_and(|metadata| metadata.skipped_resize)
+        );
         let primary_config = TesseractConfig {
             psm: 11,
             output_format: "text".into(),
@@ -6738,7 +6755,9 @@ mod tests {
             result.content
         );
         let text: String = result.content.chars().filter(|c| !c.is_whitespace()).collect();
-        assert!(text.contains("胎盤") && text.contains("出血"), "{text:?}");
+        // Not 胎盤: jpn_vert reads that glyph as 胎, 膨, 計, 肘 or 巾 as the page is resampled by 1-5%,
+        // while 子宮 survived every scale from 0.97x to 1.5x. ~keep
+        assert!(text.contains("子宮") && text.contains("出血"), "{text:?}");
     }
 
     #[test]
