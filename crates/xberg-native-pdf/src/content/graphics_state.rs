@@ -469,6 +469,88 @@ impl GraphicsState {
             false
         }
     }
+
+    /// Make this state equal to `source`, keeping the buffers it already holds. Naming every
+    /// field makes a field added later fail to compile here until it is copied too. ~keep
+    fn copy_from(&mut self, source: &GraphicsState) {
+        let GraphicsState {
+            ctm,
+            text_matrix,
+            text_line_matrix,
+            char_space,
+            word_space,
+            horizontal_scaling,
+            leading,
+            font_name,
+            font_size,
+            text_rise,
+            render_mode,
+            text_wmode,
+            fill_color_space,
+            stroke_color_space,
+            fill_color_rgb,
+            stroke_color_rgb,
+            fill_color_cmyk,
+            stroke_color_cmyk,
+            fill_color_components,
+            stroke_color_components,
+            line_width,
+            dash_pattern,
+            line_cap,
+            line_join,
+            miter_limit,
+            rendering_intent,
+            flatness,
+            fill_alpha,
+            stroke_alpha,
+            blend_mode,
+            fill_overprint,
+            stroke_overprint,
+            overprint_mode,
+            smask,
+            fill_spot_inks,
+            stroke_spot_inks,
+            fill_pattern_name,
+        } = source;
+        self.ctm = *ctm;
+        self.text_matrix = *text_matrix;
+        self.text_line_matrix = *text_line_matrix;
+        self.char_space = *char_space;
+        self.word_space = *word_space;
+        self.horizontal_scaling = *horizontal_scaling;
+        self.leading = *leading;
+        self.font_name.clone_from(font_name);
+        self.font_size = *font_size;
+        self.text_rise = *text_rise;
+        self.render_mode = *render_mode;
+        self.text_wmode = *text_wmode;
+        self.fill_color_space.clone_from(fill_color_space);
+        self.stroke_color_space.clone_from(stroke_color_space);
+        self.fill_color_rgb = *fill_color_rgb;
+        self.stroke_color_rgb = *stroke_color_rgb;
+        self.fill_color_cmyk = *fill_color_cmyk;
+        self.stroke_color_cmyk = *stroke_color_cmyk;
+        self.fill_color_components.clone_from(fill_color_components);
+        self.stroke_color_components.clone_from(stroke_color_components);
+        self.line_width = *line_width;
+        self.dash_pattern.0.clone_from(&dash_pattern.0);
+        self.dash_pattern.1 = dash_pattern.1;
+        self.line_cap = *line_cap;
+        self.line_join = *line_join;
+        self.miter_limit = *miter_limit;
+        self.rendering_intent.clone_from(rendering_intent);
+        self.flatness = *flatness;
+        self.fill_alpha = *fill_alpha;
+        self.stroke_alpha = *stroke_alpha;
+        self.blend_mode.clone_from(blend_mode);
+        self.fill_overprint = *fill_overprint;
+        self.stroke_overprint = *stroke_overprint;
+        self.overprint_mode = *overprint_mode;
+        self.smask.clone_from(smask);
+        self.fill_spot_inks.clone_from(fill_spot_inks);
+        self.stroke_spot_inks.clone_from(stroke_spot_inks);
+        self.fill_pattern_name.clone_from(fill_pattern_name);
+    }
 }
 
 impl Default for GraphicsState {
@@ -490,6 +572,9 @@ pub struct GraphicsStateStack {
     /// Working state for scopes opened past the cap; dropped when the last such scope closes, so the retained top
     /// frame is never modified by them.
     overflow_state: Option<Box<GraphicsState>>,
+    /// Frames `Q` popped, kept so the next `q` copies into their buffers instead of allocating the
+    /// state's strings again. Never more than the stack ever held. ~keep
+    spare: Vec<GraphicsState>,
 }
 
 /// Deepest `q` nesting that keeps its own state. ISO 32000-1 Annex C suggests 28; hostile streams
@@ -512,6 +597,7 @@ impl GraphicsStateStack {
             stack: vec![GraphicsState::new()],
             overflow: 0,
             overflow_state: None,
+            spare: Vec::new(),
         }
     }
 
@@ -572,7 +658,13 @@ impl GraphicsStateStack {
             self.overflow = self.overflow.saturating_add(1);
             return;
         }
-        let state = self.current().clone();
+        let state = match self.spare.pop() {
+            Some(mut state) => {
+                state.copy_from(self.current());
+                state
+            }
+            None => self.current().clone(),
+        };
         self.stack.push(state);
     }
 
@@ -602,8 +694,10 @@ impl GraphicsStateStack {
             if self.overflow == 0 {
                 self.overflow_state = None;
             }
-        } else if self.stack.len() > 1 {
-            self.stack.pop();
+        } else if self.stack.len() > 1
+            && let Some(state) = self.stack.pop()
+        {
+            self.spare.push(state);
         }
     }
 
@@ -922,6 +1016,47 @@ mod tests {
         stack.restore();
         assert_eq!(stack.current().font_size, 12.0);
         assert_eq!(stack.depth(), MAX_GRAPHICS_STATE_DEPTH);
+    }
+
+    #[test]
+    fn save_into_a_recycled_frame_copies_every_field() {
+        let mut stack = GraphicsStateStack::new();
+        stack.save();
+        {
+            let state = stack.current_mut();
+            state.ctm = Matrix::scaling(2.0, 3.0);
+            state.text_matrix = Matrix::translation(4.0, 5.0);
+            state.font_name = Some("F9".to_string());
+            state.font_size = 7.0;
+            state.render_mode = 3;
+            state.fill_color_space = "A-separation-name-longer-than-any-device-space".to_string();
+            state.stroke_color_space = "DeviceRGB".to_string();
+            state.fill_color_rgb = (0.1, 0.2, 0.3);
+            state.fill_color_cmyk = Some((0.1, 0.2, 0.3, 0.4));
+            state.fill_color_components.push(0.5);
+            state.dash_pattern = (vec![1.0, 2.0], 3.0);
+            state.rendering_intent = "Perceptual".to_string();
+            state.blend_mode = "Multiply".to_string();
+            state.fill_overprint = true;
+            state.fill_spot_inks.push(("Gold".to_string(), 0.5));
+            state.fill_pattern_name = Some("P0".to_string());
+        }
+        stack.restore();
+
+        stack.current_mut().font_name = Some("F1".to_string());
+        stack.current_mut().stroke_color_space = "DeviceCMYK".to_string();
+        stack.current_mut().line_width = 2.5;
+        let saved = format!("{:?}", stack.current());
+        assert_eq!(saved, format!("{:?}", stack.current().clone()));
+
+        stack.save();
+        assert_eq!(stack.depth(), 2);
+        assert_eq!(format!("{:?}", stack.current()), saved);
+
+        stack.current_mut().blend_mode = "Screen".to_string();
+        stack.current_mut().font_name = None;
+        stack.restore();
+        assert_eq!(format!("{:?}", stack.current()), saved);
     }
 
     #[test]

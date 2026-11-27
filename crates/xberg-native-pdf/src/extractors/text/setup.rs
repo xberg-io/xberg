@@ -106,6 +106,7 @@ impl<'doc> TextExtractor<'doc> {
             // extraction. Form XObject `Do` invocations push their
             // own scope on top. ~keep
             mcid_scope_stack: vec![crate::structure::McidScope::Page(0)],
+            page_area: None,
         }
     }
 
@@ -139,6 +140,23 @@ impl<'doc> TextExtractor<'doc> {
             intern_font_name(&mut self.font_names, &font.base_font)
         });
         self.cached_current_font = font;
+    }
+
+    /// Point the font cache at the font the current graphics state names, after a `Q` or a form
+    /// exit restored that state. The width table and the glyph font name derive from the font
+    /// object alone, so the same object needs no refresh. ~keep
+    pub(super) fn restore_cached_current_font(&mut self) {
+        let restored = self
+            .state_stack
+            .current()
+            .font_name
+            .as_ref()
+            .and_then(|name| self.fonts.get(name));
+        if restored.map(Arc::as_ptr) == self.cached_current_font.as_ref().map(Arc::as_ptr) {
+            return;
+        }
+        let restored = restored.cloned();
+        self.set_cached_current_font(restored);
     }
 
     pub(super) fn simple_widths<'a>(
@@ -195,6 +213,7 @@ impl<'doc> TextExtractor<'doc> {
     /// Set the document reference for loading XObjects.
     pub fn set_document(&mut self, document: &'doc crate::document::PdfDocument) {
         self.document = Some(document);
+        self.page_area = None;
     }
 
     /// Take ownership of the set of MCIDs whose marked-content

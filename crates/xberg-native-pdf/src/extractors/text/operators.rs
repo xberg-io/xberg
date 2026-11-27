@@ -589,14 +589,7 @@ impl<'doc> TextExtractor<'doc> {
                 self.flush_tj_span_buffer()?;
                 self.state_stack.restore();
                 self.forget_drawn_end();
-                let current_font = self
-                    .state_stack
-                    .current()
-                    .font_name
-                    .as_ref()
-                    .and_then(|name| self.fonts.get(name))
-                    .cloned();
-                self.set_cached_current_font(current_font);
+                self.restore_cached_current_font();
                 if !self.excluded_inks.is_empty() {
                     let cs = self.state_stack.current().fill_color_space.clone();
                     self.inside_excluded_ink = self.is_excluded_ink_color_space(&cs);
@@ -633,7 +626,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
                 if state.fill_color_space != "DeviceRGB" {
-                    state.fill_color_space = "DeviceRGB".to_string();
+                    state.fill_color_space.clear();
+                    state.fill_color_space.push_str("DeviceRGB");
                 }
                 state.fill_color_rgb = (r, g, b);
             }
@@ -646,7 +640,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
                 if state.fill_color_space != "DeviceGray" {
-                    state.fill_color_space = "DeviceGray".to_string();
+                    state.fill_color_space.clear();
+                    state.fill_color_space.push_str("DeviceGray");
                 }
                 state.fill_color_rgb = (gray, gray, gray);
             }
@@ -658,7 +653,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
                 if state.fill_color_space != "DeviceCMYK" {
-                    state.fill_color_space = "DeviceCMYK".to_string();
+                    state.fill_color_space.clear();
+                    state.fill_color_space.push_str("DeviceCMYK");
                 }
                 state.fill_color_cmyk = Some((c, m, y, k));
                 state.fill_color_rgb = cmyk_to_rgb(c, m, y, k);

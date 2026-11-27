@@ -2631,6 +2631,9 @@ pub struct TextExtractor<'doc> {
     /// covers `Pattern(_)` in the data model so future pattern-content
     /// walks can populate it.
     mcid_scope_stack: Vec<crate::structure::McidScope>,
+    /// Page index and media-box area of the last page a Form XObject `Do` asked about. The page
+    /// lookup behind it copies the page dictionary, and a page paints many forms. ~keep
+    page_area: Option<(usize, Option<f32>)>,
 }
 
 /// Tracing target for every event raised under `extractors::text`, pinned to the
