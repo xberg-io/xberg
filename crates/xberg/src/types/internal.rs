@@ -795,6 +795,13 @@ impl InternalElement {
             .map(String::as_str)
     }
 
+    /// Remove and return the literal source list-marker text, for an item that stops being a
+    /// list item.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    pub(crate) fn take_list_item_source_label(&mut self) -> Option<String> {
+        self.attributes.as_mut()?.remove(LIST_ITEM_SOURCE_LABEL_ATTRIBUTE)
+    }
+
     /// Attributes safe to expose through the public document structure.
     pub(crate) fn public_attributes(&self) -> Option<std::collections::HashMap<String, String>> {
         let original = self.attributes.as_ref()?;
