@@ -224,10 +224,13 @@ pub(crate) fn assign_heading_levels_smart(
 /// `KMEANS_MAX_ITERATIONS` is reached, and returns the refined centroids.
 fn refine_centroids(font_sizes: &[f32], mut centroids: Vec<f32>, actual_k: usize) -> Vec<f32> {
     let mut prev_assignments: Vec<usize> = vec![0; font_sizes.len()];
+    let mut assignments: Vec<usize> = Vec::with_capacity(font_sizes.len());
+    let mut size_clusters: Vec<Vec<f32>> = vec![Vec::new(); centroids.len()];
+    let mut new_centroids: Vec<f32> = Vec::with_capacity(actual_k);
     let mut first_iter = true;
 
     for _ in 0..KMEANS_MAX_ITERATIONS {
-        let (size_clusters, assignments) = assign_sizes_to_centroids_tracked(font_sizes, &centroids);
+        assign_sizes_to_centroids_tracked(font_sizes, &centroids, &mut size_clusters, &mut assignments);
 
         let assignments_changed = if first_iter {
             first_iter = false;
@@ -239,13 +242,13 @@ fn refine_centroids(font_sizes: &[f32], mut centroids: Vec<f32>, actual_k: usize
                 .filter(|(a, b)| a != b)
                 .count()
         };
-        prev_assignments = assignments;
+        std::mem::swap(&mut prev_assignments, &mut assignments);
 
         if assignments_changed == 0 {
             break;
         }
 
-        let mut new_centroids = Vec::with_capacity(actual_k);
+        new_centroids.clear();
         for (i, cluster) in size_clusters.iter().enumerate() {
             if !cluster.is_empty() {
                 new_centroids.push(cluster.iter().sum::<f32>() / cluster.len() as f32);
@@ -272,22 +275,30 @@ fn refine_centroids(font_sizes: &[f32], mut centroids: Vec<f32>, actual_k: usize
 /// Helper function to assign font sizes to their nearest centroid (for iteration loop).
 ///
 /// Assigns font sizes to clusters without cloning full TextBlock objects, and also
-/// returns per-element cluster assignments so the caller can detect convergence via
+/// records per-element cluster assignments so the caller can detect convergence via
 /// unchanged assignments (in addition to the centroid-movement threshold).
+///
+/// Both outputs are caller-owned buffers, emptied here and refilled, so the
+/// refinement loop allocates them once rather than once per iteration.
 ///
 /// # Arguments
 ///
 /// * `font_sizes` - Slice of font size values to assign
 /// * `centroids` - Slice of centroid values (one per cluster)
-///
-/// # Returns
-///
-/// A tuple of:
-/// - A vector of clusters, where each cluster contains the font sizes assigned to that centroid
-/// - A vector of per-element cluster indices (same length as `font_sizes`)
-fn assign_sizes_to_centroids_tracked(font_sizes: &[f32], centroids: &[f32]) -> (Vec<Vec<f32>>, Vec<usize>) {
-    let mut clusters: Vec<Vec<f32>> = vec![Vec::new(); centroids.len()];
-    let mut assignments: Vec<usize> = Vec::with_capacity(font_sizes.len());
+/// * `clusters` - One buffer per centroid, refilled with the font sizes assigned to it
+///   in `font_sizes` order
+/// * `assignments` - Refilled with the per-element cluster indices (same length as
+///   `font_sizes`)
+fn assign_sizes_to_centroids_tracked(
+    font_sizes: &[f32],
+    centroids: &[f32],
+    clusters: &mut [Vec<f32>],
+    assignments: &mut Vec<usize>,
+) {
+    for cluster in clusters.iter_mut() {
+        cluster.clear();
+    }
+    assignments.clear();
 
     for &size in font_sizes {
         let mut min_distance = f32::INFINITY;
@@ -304,8 +315,6 @@ fn assign_sizes_to_centroids_tracked(font_sizes: &[f32], centroids: &[f32]) -> (
         clusters[best_cluster].push(size);
         assignments.push(best_cluster);
     }
-
-    (clusters, assignments)
 }
 
 /// Helper function to assign blocks to their nearest centroid.
@@ -397,6 +406,21 @@ mod tests {
         assert_eq!(clusters.len(), 1, "expected exactly one cluster, got {clusters:?}");
         assert_eq!(clusters[0].centroid, 18.0);
         assert_eq!(clusters[0].members.len(), 1);
+    }
+
+    #[test]
+    fn reused_assignment_buffers_hold_only_the_latest_assignment() {
+        let font_sizes = [24.0, 12.0, 11.0];
+        let mut clusters = vec![Vec::new(); 2];
+        let mut assignments = Vec::new();
+
+        assign_sizes_to_centroids_tracked(&font_sizes, &[24.0, 12.0], &mut clusters, &mut assignments);
+        assert_eq!(clusters, [vec![24.0], vec![12.0, 11.0]]);
+        assert_eq!(assignments, [0, 1, 1]);
+
+        assign_sizes_to_centroids_tracked(&font_sizes, &[12.0, 24.0], &mut clusters, &mut assignments);
+        assert_eq!(clusters, [vec![12.0, 11.0], vec![24.0]]);
+        assert_eq!(assignments, [1, 0, 0]);
     }
 
     #[test]
