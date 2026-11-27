@@ -1862,9 +1862,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.5"
+version = "1.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb62b11fc64a5593db360a33ae917ce34dd14cff2b21cf75c8798616c8834f21"
+checksum = "9ff5bd3e9c18ab6280f8ebcb08ed9f9d41cbb915e45f23a911a24471016f6a8a"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1961,9 +1961,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.5"
+version = "1.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5caf7992d16ddcacfd58685d16c23899931b064e71cf20f89892876bc389f22"
+checksum = "f3901fcf5d6fd6697ea12f33db2fba975667752cb6c3e9363b1faa2b12be43e7"
 
 [[package]]
 name = "crc-fast"
