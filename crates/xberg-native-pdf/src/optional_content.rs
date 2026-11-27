@@ -192,26 +192,30 @@ pub fn resolve_bdc_properties(
     let prop_name = properties.as_name()?;
     let resources = resources?;
     let doc = doc?;
+    let shared_resources;
     let res_dict = if let Some(res_ref) = resources.as_reference() {
-        doc.load_object(res_ref).ok()?
+        shared_resources = doc.load_object_shared(res_ref).ok()?;
+        shared_resources.as_dict()?
     } else {
-        resources.clone()
+        resources.as_dict()?
     };
-    let res_dict = res_dict.as_dict()?;
     let properties_dict_obj = res_dict.get("Properties")?;
+    let shared_properties;
     let properties_dict = if let Some(r) = properties_dict_obj.as_reference() {
-        doc.load_object(r).ok()?
+        shared_properties = doc.load_object_shared(r).ok()?;
+        shared_properties.as_dict()?
     } else {
-        properties_dict_obj.clone()
+        properties_dict_obj.as_dict()?
     };
-    let properties_dict = properties_dict.as_dict()?;
     let prop_obj = properties_dict.get(prop_name)?;
+    let shared_property;
     let resolved = if let Some(r) = prop_obj.as_reference() {
-        doc.load_object(r).ok()?
+        shared_property = doc.load_object_shared(r).ok()?;
+        shared_property.as_dict()?
     } else {
-        prop_obj.clone()
+        prop_obj.as_dict()?
     };
-    resolved.as_dict().cloned()
+    Some(resolved.clone())
 }
 
 /// Collect the `/Name` strings of every OCG referenced by an OCMD `/OCGs` entry.
@@ -468,6 +472,82 @@ mod tests {
         excluded.insert("Layer".to_string());
         let bytes: Vec<u8> = b"\xFF\xFEL\x00a\x00y\x00e\x00r\x00".to_vec();
         assert!(ocg_name_is_excluded(&Object::String(bytes), &excluded));
+    }
+
+    /// Catalog and empty page tree as objects 1 and 2, then `bodies` as objects 3, 4, ...
+    fn document_with_objects(bodies: &[&str]) -> PdfDocument {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = vec![pdf.len()];
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n");
+        for (index, body) in bodies.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 3).as_bytes());
+        }
+        let xref_offset = pdf.len();
+        let size = offsets.len() + 1;
+        pdf.extend_from_slice(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+        for offset in &offsets {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes(),
+        );
+        PdfDocument::from_bytes(pdf).expect("open synthetic document")
+    }
+
+    #[test]
+    fn named_bdc_properties_resolve_through_indirect_levels_without_copying_them() {
+        let document = document_with_objects(&[
+            "<< /Properties 4 0 R /Font << /F1 << /Type /Font >> >> >>",
+            "<< /MC0 5 0 R /MC1 << /Type /OCG /Name /Inline >> >>",
+            "<< /Type /OCG /Name /Watermark >>",
+        ]);
+        let resources = Object::Reference(crate::object::ObjectRef::new(3, 0));
+        let resolve =
+            |name: &str| resolve_bdc_properties(&Object::Name(name.into()), Some(&resources), Some(&document));
+
+        let indirect = resolve("MC0").expect("indirect property dictionary");
+        assert_eq!(indirect.get("Name").and_then(Object::as_name), Some("Watermark"));
+        let direct = resolve("MC1").expect("direct property dictionary");
+        assert_eq!(direct.get("Name").and_then(Object::as_name), Some("Inline"));
+        assert_eq!(resolve("Missing"), None);
+
+        let copies_before = document.cached_object_clone_count();
+        assert_eq!(resolve("MC0"), Some(indirect));
+        assert_eq!(resolve("MC1"), Some(direct));
+        assert_eq!(
+            document.cached_object_clone_count(),
+            copies_before,
+            "warm lookups must borrow the cached Resources and Properties dictionaries"
+        );
+    }
+
+    #[test]
+    fn inline_and_direct_bdc_properties_resolve_without_a_document_lookup() {
+        let inline = Object::Dictionary(HashMap::from([("MCID".to_string(), Object::Integer(7))]));
+        assert_eq!(
+            resolve_bdc_properties(&inline, None, None).and_then(|dict| dict.get("MCID").and_then(Object::as_integer)),
+            Some(7)
+        );
+
+        let document = document_with_objects(&[]);
+        let resources = Object::Dictionary(HashMap::from([(
+            "Properties".to_string(),
+            Object::Dictionary(HashMap::from([
+                ("MC0".to_string(), inline.clone()),
+                ("NotADict".to_string(), Object::Integer(1)),
+            ])),
+        )]));
+        let resolve =
+            |name: &str| resolve_bdc_properties(&Object::Name(name.into()), Some(&resources), Some(&document));
+        assert_eq!(resolve("MC0").as_ref(), inline.as_dict());
+        assert_eq!(resolve("NotADict"), None);
+        assert_eq!(
+            resolve_bdc_properties(&Object::Name("MC0".into()), Some(&resources), None),
+            None
+        );
     }
 
     #[test]

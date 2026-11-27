@@ -97,7 +97,7 @@ impl PdfDocument {
             // already-broken document. Only runs when the primary count is 0, so
             // normally-counted documents are byte-identical. ~keep
             let mut n = 0usize;
-            while n < 1_000_000 && self.get_page(n).is_ok() {
+            while n < 1_000_000 && self.get_page_shared(n).is_ok() {
                 n += 1;
             }
             if n > 0 {
@@ -112,7 +112,7 @@ impl PdfDocument {
     ///
     /// MediaBox defines the physical boundaries of the page in user space units.
     pub fn get_page_media_box(&self, page_index: usize) -> Result<(f32, f32, f32, f32)> {
-        let page = self.get_page(page_index)?;
+        let page = self.get_page_shared(page_index)?;
         let page_dict = page
             .as_dict()
             .ok_or_else(|| Error::InvalidPdf("Page is not a dictionary".to_string()))?;
@@ -164,7 +164,7 @@ impl PdfDocument {
     /// MediaBox falls back to the MediaBox so it never blanks a page.
     pub fn get_page_visible_box(&self, page_index: usize) -> Result<(f32, f32, f32, f32)> {
         let (mx0, my0, mx1, my1) = self.get_page_media_box(page_index)?;
-        let page = self.get_page(page_index)?;
+        let page = self.get_page_shared(page_index)?;
         let Some(crop) = page
             .as_dict()
             .and_then(|d| d.get("CropBox"))
@@ -196,7 +196,7 @@ impl PdfDocument {
     /// 1/72 inch. `1.0` when absent; a non-numeric or non-positive value is an error. The key
     /// is page-only, not inherited.
     pub fn get_page_user_unit(&self, page_index: usize) -> Result<f64> {
-        let page = self.get_page(page_index)?;
+        let page = self.get_page_shared(page_index)?;
         let dict = page
             .as_dict()
             .ok_or_else(|| Error::InvalidPdf("Page is not a dictionary".to_string()))?;
@@ -218,7 +218,7 @@ impl PdfDocument {
     /// up the page tree — a `/Rotate` set on an ancestor `/Pages` node
     /// is honoured, not just one on the leaf page object.
     pub fn get_page_rotation(&self, page_index: usize) -> Result<i32> {
-        let page = self.get_page(page_index)?;
+        let page = self.get_page_shared(page_index)?;
         let dict = page
             .as_dict()
             .ok_or_else(|| Error::InvalidPdf("Page is not a dictionary".to_string()))?;
@@ -242,7 +242,7 @@ impl PdfDocument {
     /// numeric value that is not a multiple of 90) distinct. Same inheritance
     /// resolution via [`get_page`](Self::get_page).
     pub fn get_page_rotation_status(&self, page_index: usize) -> Result<PageRotation> {
-        let page = self.get_page(page_index)?;
+        let page = self.get_page_shared(page_index)?;
         let dict = page
             .as_dict()
             .ok_or_else(|| Error::InvalidPdf("Page is not a dictionary".to_string()))?;
@@ -484,10 +484,16 @@ impl PdfDocument {
     /// Returns an error if the page index is out of bounds or if the page
     /// tree structure is invalid.
     pub fn get_page(&self, page_index: usize) -> Result<Object> {
+        self.get_page_shared(page_index)
+            .map(|page| Arc::try_unwrap(page).unwrap_or_else(|shared| Object::clone(&shared)))
+    }
+
+    /// Like [`Self::get_page`] but shares the cached page dictionary instead of deep-copying it.
+    pub(crate) fn get_page_shared(&self, page_index: usize) -> Result<Arc<Object>> {
         // Check page cache first — page tree is static per §7.7.3.2 ~keep
         let cached = self.page_cache.lock_or_recover().get(&page_index).cloned();
         if let Some(cached) = cached {
-            return Ok(Object::clone(&cached));
+            return Ok(cached);
         }
 
         // Defer bulk page tree walk until enough pages are accessed. ~keep
@@ -501,7 +507,7 @@ impl PdfDocument {
             }
             let cached = self.page_cache.lock_or_recover().get(&page_index).cloned();
             if let Some(cached) = cached {
-                return Ok(Object::clone(&cached));
+                return Ok(cached);
             }
         }
 
@@ -548,9 +554,8 @@ impl PdfDocument {
             }
         }?;
 
-        self.page_cache
-            .lock_or_recover()
-            .insert(page_index, Arc::new(page.clone()));
+        let page = Arc::new(page);
+        self.page_cache.lock_or_recover().insert(page_index, Arc::clone(&page));
         Ok(page)
     }
 

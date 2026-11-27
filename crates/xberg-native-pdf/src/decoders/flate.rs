@@ -9,6 +9,7 @@ use crate::decoders::StreamDecoder;
 use crate::error::{Error, Result};
 use flate2::read::{DeflateDecoder, ZlibDecoder};
 use std::io::Read;
+use std::sync::OnceLock;
 
 /// Default cap for [`FlateDecoder`]: 256 MB per stream.
 ///
@@ -50,7 +51,7 @@ fn effective_limit_from_str(val: Option<&str>) -> u64 {
 }
 
 /// Resolve the limit from the two possible environment values, new name
-/// first. Pulled apart from [`effective_limit`] so the fallback precedence
+/// first. Pulled apart from [`effective_limit_from_env`] so the fallback precedence
 /// is testable without mutating real process environment variables.
 fn effective_limit_from_env_pair(new_val: Option<&str>, old_val: Option<&str>) -> u64 {
     effective_limit_from_str(new_val.or(old_val))
@@ -64,11 +65,22 @@ fn effective_limit_from_env_pair(new_val: Option<&str>, old_val: Option<&str>) -
 /// `PDF_OXIDE_MAX_DECOMPRESS_MB`. Each rename kept the older spellings working because this
 /// is a deployment knob someone has already set in a Dockerfile or a systemd unit; dropping a
 /// name silently reverts their limit to the compile-time default with no error. ~keep
-pub(crate) fn effective_limit() -> u64 {
+fn effective_limit_from_env() -> u64 {
     let new_val = std::env::var("XBERG_NATIVE_PDF_MAX_DECOMPRESS_MB").ok();
     let previous_val = std::env::var("XBERG_PDF_OXIDE_MAX_DECOMPRESS_MB").ok();
     let old_val = std::env::var("PDF_OXIDE_MAX_DECOMPRESS_MB").ok();
     effective_limit_from_env_pair(new_val.or(previous_val).as_deref(), old_val.as_deref())
+}
+
+/// The environment's decompression limit, resolved once per process.
+///
+/// Every stream decode asks for this, some several times, and each read of the environment
+/// takes the process-wide environment lock and allocates. The limit is a deployment knob set
+/// before the process starts, so a change made to the environment after the first decode is
+/// not observed. ~keep
+pub(crate) fn effective_limit() -> u64 {
+    static LIMIT: OnceLock<u64> = OnceLock::new();
+    *LIMIT.get_or_init(effective_limit_from_env)
 }
 
 /// Heuristic validator for partial-recovery output from a failing decompress.
@@ -872,5 +884,13 @@ mod tests {
             effective_limit_from_env_pair(None, None),
             DEFAULT_MAX_DECOMPRESSED_BYTES
         );
+    }
+
+    #[test]
+    fn test_effective_limit_caches_what_the_environment_resolves_to() {
+        let resolved = effective_limit_from_env();
+        assert_eq!(effective_limit(), resolved);
+        assert_eq!(effective_limit(), resolved);
+        assert_eq!(FlateDecoder::default().max_decompressed_bytes, resolved);
     }
 }

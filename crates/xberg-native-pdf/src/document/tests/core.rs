@@ -581,11 +581,18 @@ fn test_bounded_object_cache_evicts_every_entry_a_large_insert_needs() {
     );
 }
 
+fn stream_members(object_number: u32, member: Object) -> Arc<ObjectStreamMembers> {
+    Arc::new(ObjectStreamMembers::from(HashMap::from([(
+        object_number,
+        Arc::new(member),
+    )])))
+}
+
 #[test]
 fn object_stream_cache_rejects_oversized_entries_and_evicts_to_budget() {
-    let first = Arc::new(HashMap::from([(1, Object::String(vec![0; 64]))]));
-    let second = Arc::new(HashMap::from([(2, Object::String(vec![0; 64]))]));
-    let third = Arc::new(HashMap::from([(3, Object::String(vec![0; 64]))]));
+    let first = stream_members(1, Object::String(vec![0; 64]));
+    let second = stream_members(2, Object::String(vec![0; 64]));
+    let third = stream_members(3, Object::String(vec![0; 64]));
     let entry_bytes = BoundedObjectStreamCache::estimate_size(&first).unwrap();
     let budget = entry_bytes * 2;
     let mut cache = BoundedObjectStreamCache::new(budget);
@@ -600,7 +607,7 @@ fn object_stream_cache_rejects_oversized_entries_and_evicts_to_budget() {
     assert!(cache.get(&ObjectRef::new(12, 0)).is_some());
     assert!(cache.current_bytes <= budget);
 
-    let oversized = Arc::new(HashMap::from([(4, Object::String(vec![0; budget]))]));
+    let oversized = stream_members(4, Object::String(vec![0; budget]));
     assert!(!cache.insert(ObjectRef::new(13, 0), oversized));
     assert!(cache.get(&ObjectRef::new(13, 0)).is_none());
     assert!(cache.current_bytes <= budget);
@@ -614,7 +621,7 @@ fn object_stream_cache_rejects_deeply_nested_oversized_string() {
     }
     let mut cache = BoundedObjectStreamCache::new(4 * 1024);
 
-    assert!(!cache.insert(ObjectRef::new(10, 0), Arc::new(HashMap::from([(20, nested)]))));
+    assert!(!cache.insert(ObjectRef::new(10, 0), stream_members(20, nested)));
     assert_eq!(cache.map.len(), 0);
     assert_eq!(cache.current_bytes, 0);
 }
@@ -630,9 +637,79 @@ fn object_stream_cache_accounts_for_nested_stream_bytes() {
     )]))]);
     let mut cache = BoundedObjectStreamCache::new(4 * 1024);
 
-    assert!(!cache.insert(ObjectRef::new(10, 0), Arc::new(HashMap::from([(20, nested)]))));
+    assert!(!cache.insert(ObjectRef::new(10, 0), stream_members(20, nested)));
     assert_eq!(cache.map.len(), 0);
     assert_eq!(cache.current_bytes, 0);
+}
+
+#[test]
+fn compressed_object_is_one_allocation_shared_by_both_caches() {
+    use crate::xref::XRefEntry;
+
+    let pairs = "20 0 21 15 ";
+    let members = "<< /Marker 1 >>[ 1 2 3 ]";
+    let mut pdf = b"%PDF-1.5\n".to_vec();
+    let catalog_offset = pdf.len();
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    let pages_offset = pdf.len();
+    pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n");
+    let stream_offset = pdf.len();
+    pdf.extend_from_slice(
+        format!(
+            "3 0 obj\n<< /Type /ObjStm /N 2 /First {} /Length {} >>\nstream\n{pairs}{members}\nendstream\nendobj\n",
+            pairs.len(),
+            pairs.len() + members.len()
+        )
+        .as_bytes(),
+    );
+    let xref_offset = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 4\n0000000000 65535 f \n");
+    for offset in [catalog_offset, pages_offset, stream_offset] {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size 22 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes());
+
+    let mut document = PdfDocument::from_bytes(pdf).unwrap();
+    document.xref.add_entry(20, XRefEntry::compressed(3, 0));
+    document.xref.add_entry(21, XRefEntry::compressed(3, 1));
+
+    let loaded = document.load_object_shared(ObjectRef::new(20, 0)).unwrap();
+    assert_eq!(
+        loaded
+            .as_dict()
+            .and_then(|dict| dict.get("Marker"))
+            .and_then(Object::as_integer),
+        Some(1)
+    );
+    let stream = document
+        .object_stream_cache
+        .lock_or_recover()
+        .get(&ObjectRef::new(3, 0))
+        .cloned()
+        .expect("the parsed stream is cached");
+    for member in [20, 21] {
+        let cached = document
+            .object_cache
+            .lock_or_recover()
+            .get_shared(&ObjectRef::new(member, 0))
+            .expect("every member is published to the object cache");
+        assert!(
+            Arc::ptr_eq(&cached, stream.get_shared(&member).unwrap()),
+            "member {member} must be resident once"
+        );
+    }
+    assert!(Arc::ptr_eq(&loaded, stream.get_shared(&20).unwrap()));
+
+    document.object_cache.lock_or_recover().clear();
+    let reloaded = document.load_object_shared(ObjectRef::new(21, 0)).unwrap();
+    assert!(
+        Arc::ptr_eq(&reloaded, stream.get_shared(&21).unwrap()),
+        "a member evicted from the object cache is served from the stream cache without a copy"
+    );
+    let mut owned = document.load_object(ObjectRef::new(21, 0)).unwrap();
+    assert_eq!(owned.as_array().map(|items| items.len()), Some(3));
+    owned = Object::Null;
+    assert_ne!(owned, *reloaded, "an owned load must not alias the cached member");
 }
 
 #[test]

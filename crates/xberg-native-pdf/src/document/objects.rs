@@ -513,6 +513,48 @@ impl PdfDocument {
         }
     }
 
+    /// [`Self::scan_for_object`] for a reference the xref leaves unresolved, without the scan
+    /// when the reference is to object 0 and the file holds no header for it.
+    ///
+    /// Object 0 heads the free list and is never defined (ISO 32000-1 §7.5.4), and producers
+    /// write `0 0 R` as a null placeholder. On a well-formed file the scan could only confirm
+    /// the absence, after indexing every object header in the file. ~keep
+    fn scan_for_unresolved_object(&self, obj_ref: ObjectRef) -> Result<u64> {
+        if obj_ref.id == 0 && !self.object_zero_header_exists() {
+            return Err(Error::ObjectNotFound(obj_ref.id, obj_ref.generation));
+        }
+        self.scan_for_object(obj_ref)
+    }
+
+    /// Whether the file body holds a `0 G obj` header in the shape [`Self::scan_for_object`]
+    /// accepts: the only evidence that a damaged xref hides a real object 0.
+    fn object_zero_header_exists(&self) -> bool {
+        if let Some(offsets) = self.scanned_object_offsets.lock_or_recover().as_ref() {
+            return offsets.contains_key(&0);
+        }
+        let content: &[u8] = &self.source_bytes;
+        memchr::memmem::find_iter(content, b" obj").any(|keyword| {
+            let terminated = content
+                .get(keyword + 4)
+                .is_none_or(|&byte| matches!(byte, b'\n' | b'\r' | b' ' | b'\t' | b'<'));
+            let digits_start = |end: usize| {
+                content[..end]
+                    .iter()
+                    .rposition(|byte| !byte.is_ascii_digit())
+                    .map_or(0, |separator| separator + 1)
+            };
+            let generation_start = digits_start(keyword);
+            if !terminated || generation_start == 0 || content[generation_start - 1] != b' ' {
+                return false;
+            }
+            let number_end = generation_start - 1;
+            let number_start = digits_start(number_end);
+            number_start < number_end
+                && content[number_start..number_end].iter().all(|digit| *digit == b'0')
+                && (number_start == 0 || matches!(content[number_start - 1], b'\n' | b'\r'))
+        })
+    }
+
     /// One-time sweep over every known object stream (`/Type /ObjStm`),
     /// used to recover from xref tables that mis-mark compressed objects as
     /// free.
@@ -592,7 +634,7 @@ impl PdfDocument {
                 }
             };
             self.trace_object_stream_recovery_once(*stream_obj_num, &outcome);
-            let objects_map = Arc::new(outcome.objects);
+            let objects_map = Arc::new(ObjectStreamMembers::from(outcome.objects));
             self.object_stream_cache
                 .lock_or_recover()
                 .insert(ObjectRef::new(*stream_obj_num, 0), Arc::clone(&objects_map));
@@ -606,7 +648,7 @@ impl PdfDocument {
                 // clobber a real object loaded through the normal path. ~keep
                 match cache.get(&cache_ref) {
                     Some(Object::Null) | None => {
-                        cache.insert(cache_ref, object.clone());
+                        cache.insert_shared(cache_ref, Arc::clone(object));
                         published |= cache
                             .get(&cache_ref)
                             .is_some_and(|value| !matches!(value, Object::Null));
@@ -770,7 +812,7 @@ impl PdfDocument {
                     available
                 );
 
-                match self.scan_for_object(obj_ref) {
+                match self.scan_for_unresolved_object(obj_ref) {
                     Ok(offset) => {
                         self.recovery
                             .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
@@ -878,7 +920,7 @@ impl PdfDocument {
             // per document and caches it, so the amortised cost is a
             // single O(filesize) pass no matter how many free-marked
             // objects we probe. ~keep
-            if let Ok(scanned_offset) = self.scan_for_object(obj_ref) {
+            if let Ok(scanned_offset) = self.scan_for_unresolved_object(obj_ref) {
                 tracing::warn!(target: LOG_TARGET,
                     "Object {} marked free in xref but found in file scan at offset {}; recovering",
                     obj_ref.id,
@@ -899,9 +941,15 @@ impl PdfDocument {
             // Recovery path 2 — the object may be compressed inside a
             // `/Type /ObjStm`. Real-world producers have been seen to
             // mis-flag every compressed object's xref slot as free, so
-            // sweep the object streams once and recheck the cache. ~keep
-            self.recover_from_object_streams();
-            let recovered = self.object_cache.lock_or_recover().get_shared(&obj_ref);
+            // sweep the object streams once and recheck the cache. Object 0
+            // is free by definition, so a reference to it never pays for the
+            // sweep. ~keep
+            let recovered = if obj_ref.id == 0 {
+                None
+            } else {
+                self.recover_from_object_streams();
+                self.object_cache.lock_or_recover().get_shared(&obj_ref)
+            };
             if let Some(obj) = recovered
                 && !matches!(*obj, Object::Null)
             {
@@ -935,7 +983,6 @@ impl PdfDocument {
                 // entry.generation = index within stream ~keep
                 tracing::trace!(target: LOG_TARGET, "  → Compressed object in stream {}, index {}", entry_offset, entry_gen);
                 self.load_compressed_object(obj_ref, entry_offset as u32, entry_gen)
-                    .map(LoadedObject::Owned)
             }
             XRefEntryType::Uncompressed => {
                 tracing::trace!(target: LOG_TARGET, "  → Uncompressed object at offset {}", entry_offset);
@@ -1459,10 +1506,8 @@ impl PdfDocument {
         let mut line_start = body_start;
         let mut payload_skipped = false;
         loop {
-            let line_end = source[line_start..]
-                .iter()
-                .position(|byte| *byte == b'\n')
-                .map_or(source.len(), |newline| line_start + newline + 1);
+            let line_end =
+                memchr::memchr(b'\n', &source[line_start..]).map_or(source.len(), |newline| line_start + newline + 1);
             let bytes_read = line_end - line_start;
             let data_len = prefix.len() + (data_end - data_start);
 
@@ -1493,9 +1538,7 @@ impl PdfDocument {
             }
 
             let chunk = &source[line_start..line_end];
-            if chunk.contains(&b'e')
-                && let Some(endobj_pos) = find_substring(chunk, b"endobj")
-            {
+            if let Some(endobj_pos) = find_substring(chunk, b"endobj") {
                 data_end = line_start + endobj_pos;
                 break;
             }
@@ -1588,7 +1631,7 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         stream_obj_num: u32,
         _index_in_stream: u16,
-    ) -> Result<Object> {
+    ) -> Result<LoadedObject> {
         tracing::trace!(target: LOG_TARGET,
             object_id = obj_ref.id,
             stream_object_id = stream_obj_num,
@@ -1601,11 +1644,11 @@ impl PdfDocument {
 
         let Some((objects_map, newly_parsed)) = self.load_object_stream_objects(stream_obj_num)? else {
             self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-            return Ok(Object::Null);
+            return Ok(LoadedObject::Owned(Object::Null));
         };
 
-        let obj = match objects_map.get(&obj_ref.id) {
-            Some(o) => o.clone(),
+        let obj = match objects_map.get_shared(&obj_ref.id) {
+            Some(shared) => LoadedObject::Fresh(Arc::clone(shared)),
             None => {
                 tracing::warn!(
                     target: crate::LOG_TARGET_ROOT,
@@ -1615,7 +1658,7 @@ impl PdfDocument {
                     stream_object_id = stream_obj_num,
                     "treating missing compressed object as null"
                 );
-                Object::Null
+                LoadedObject::Owned(Object::Null)
             }
         };
 
@@ -1625,7 +1668,7 @@ impl PdfDocument {
         Ok(obj)
     }
 
-    fn load_object_stream_objects(&self, stream_obj_num: u32) -> Result<Option<(Arc<HashMap<u32, Object>>, bool)>> {
+    fn load_object_stream_objects(&self, stream_obj_num: u32) -> Result<Option<(Arc<ObjectStreamMembers>, bool)>> {
         use crate::objstm::parse_object_stream_with_decryption_outcome;
 
         let stream_ref = ObjectRef::new(stream_obj_num, 0);
@@ -1665,7 +1708,7 @@ impl PdfDocument {
         };
         drop(handler_ref);
         self.trace_object_stream_recovery_once(stream_obj_num, &outcome);
-        let parsed = Arc::new(outcome.objects);
+        let parsed = Arc::new(ObjectStreamMembers::from(outcome.objects));
         self.object_stream_cache
             .lock_or_recover()
             .insert(stream_ref, Arc::clone(&parsed));
@@ -1689,9 +1732,10 @@ impl PdfDocument {
         }
     }
 
-    fn cache_object_stream_entries(&self, stream_obj_num: u32, objects_map: &HashMap<u32, Object>) {
+    fn cache_object_stream_entries(&self, stream_obj_num: u32, objects_map: &ObjectStreamMembers) {
         let mut published = false;
-        for (obj_num, object) in objects_map {
+        let mut cache = self.object_cache.lock_or_recover();
+        for (obj_num, object) in objects_map.iter() {
             let cache_ref = ObjectRef::new(*obj_num, 0);
             let should_cache = if let Some(entry) = self.xref.get(*obj_num) {
                 entry.entry_type == crate::xref::XRefEntryType::Compressed && entry.offset == stream_obj_num as u64
@@ -1699,9 +1743,8 @@ impl PdfDocument {
                 true
             };
             if should_cache {
-                let mut cache = self.object_cache.lock_or_recover();
                 let previously_missing = cache.get(&cache_ref).is_none_or(|value| matches!(value, Object::Null));
-                cache.insert(cache_ref, object.clone());
+                cache.insert_shared(cache_ref, Arc::clone(object));
                 published |= previously_missing
                     && cache
                         .get(&cache_ref)
@@ -1714,6 +1757,7 @@ impl PdfDocument {
                 );
             }
         }
+        drop(cache);
         if published {
             self.object_recovery_epoch.fetch_add(1, Ordering::Release);
         }

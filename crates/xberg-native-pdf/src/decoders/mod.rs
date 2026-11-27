@@ -15,6 +15,7 @@
 use crate::error::{Error, Result};
 use crate::object::Object;
 use crate::parser_config::ParserOptions;
+use std::borrow::Cow;
 
 mod ascii85;
 mod ascii_hex;
@@ -418,7 +419,7 @@ fn decode_stream_with_options_and_expected_size(
         .unwrap_or_else(default_max_decompressed_size);
 
     let compressed_size = data.len();
-    let mut current = data.to_vec();
+    let mut current = Cow::Borrowed(data);
 
     for (filter_index, filter_name) in filters.iter().enumerate() {
         // Hand the decoder the ratio bound too so a bomb aborts at ratio * len instead of after full inflation. ~keep
@@ -434,14 +435,14 @@ fn decode_stream_with_options_and_expected_size(
         } else {
             decode_filter(filter_name, &current, output_limit, exempt_size)
         };
-        current = decoded.map_err(|error| match error {
+        current = Cow::Owned(decoded.map_err(|error| match error {
             Error::Decode(message) if message.contains("limit") && (max_size == 0 || output_limit < max_size) => {
                 Error::Decode(format!(
                     "Decompression bomb detected: ratio exceeds limit {max_ratio}:1 (compressed: {compressed_size} bytes): {message}"
                 ))
             }
             other => other,
-        })?;
+        })?);
 
         // SECURITY: Check decompression ratio after each filter. Image callers may
         // provide the exact byte count implied by Width x Height x components x bpc
@@ -477,17 +478,17 @@ fn decode_stream_with_options_and_expected_size(
             && let Some(Some(params)) = stages.get(filter_index)
             && params.predictor != 1
         {
-            current = decode_predictor(&current, params)?;
+            current = Cow::Owned(decode_predictor(&current, params)?);
         }
     }
 
     if let PredictorPlacement::AfterFilters(Some(params)) = predictors
         && params.predictor != 1
     {
-        current = decode_predictor(&current, params)?;
+        current = Cow::Owned(decode_predictor(&current, params)?);
     }
 
-    Ok(current)
+    Ok(current.into_owned())
 }
 
 /// Decode stream data using a filter pipeline with optional decode parameters.

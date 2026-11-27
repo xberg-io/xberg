@@ -309,3 +309,23 @@ fn should_prefer_nearest_valid_ancestor_and_preserve_valid_indirect_leaf_values(
         }
     }
 }
+
+#[test]
+fn shared_page_reads_hand_out_the_cached_page_and_owned_reads_stay_independent() {
+    let doc = PdfDocument::from_bytes(super::common::build_multi_page_pdf(2)).unwrap();
+
+    let cold = doc.get_page_shared(1).unwrap();
+    let warm = doc.get_page_shared(1).unwrap();
+    assert!(Arc::ptr_eq(&cold, &warm), "a warm read must share the cached page");
+    assert!(!Arc::ptr_eq(&warm, &doc.get_page_shared(0).unwrap()));
+
+    let mut owned = doc.get_page(1).unwrap();
+    assert_eq!(owned, *warm);
+    owned = Object::Null;
+    assert_ne!(
+        owned,
+        *doc.get_page_shared(1).unwrap(),
+        "an owned page must not alias the cache"
+    );
+    assert!(doc.get_page_shared(2).is_err(), "out-of-range index must still fail");
+}
