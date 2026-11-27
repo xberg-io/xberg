@@ -76,6 +76,7 @@ pub mod split_benchmark;
 pub mod stats;
 pub mod survey;
 pub mod system_load;
+pub mod timestamp;
 pub mod types;
 pub mod validate_artifacts;
 pub mod validate_gt;

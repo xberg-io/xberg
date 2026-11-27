@@ -803,8 +803,6 @@ fn prop_value_to_string(value: &PropertyValue) -> Option<String> {
 
 #[cfg(feature = "email")]
 fn windows_filetime_to_string(filetime: i64) -> String {
-    use chrono::DateTime;
-
     const EPOCH_DIFF_100NS: i64 = 116_444_736_000_000_000;
     if filetime < EPOCH_DIFF_100NS {
         return format!("(invalid timestamp: {})", filetime);
@@ -813,9 +811,9 @@ fn windows_filetime_to_string(filetime: i64) -> String {
     let unix_secs = unix_100ns / 10_000_000;
     let nsecs = (unix_100ns % 10_000_000) * 100;
 
-    DateTime::from_timestamp(unix_secs, nsecs as u32)
-        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
-        .unwrap_or_else(|| format!("(invalid timestamp: {})", filetime))
+    jiff::Timestamp::new(unix_secs, nsecs as i32)
+        .map(|ts| ts.strftime("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_else(|_| format!("(invalid timestamp: {})", filetime))
 }
 
 #[cfg(not(feature = "email"))]

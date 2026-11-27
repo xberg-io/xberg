@@ -11,8 +11,7 @@ feature-depth = 1
 [advisories]
 ignore = [
   { id = "RUSTSEC-2024-0436", reason = "unmaintained only; paste 1.0.15 is a proc-macro dependency with no maintained drop-in replacement" },
-  { id = "RUSTSEC-2026-0444", reason = "unmaintained only; astral-tl arrives through crawlberg and html-to-markdown-rs until they move to astral-html" },
-  { id = "RUSTSEC-2026-0543", reason = "unmaintained only, no safe upgrade; chrono arrives directly and through calamine and pdfium, with no maintained drop-in replacement yet" },
+  { id = "RUSTSEC-2026-0543", reason = "unmaintained only, no safe upgrade; chrono arrives through nom-exif and hf-hub (hf-xet, xet-*), with no maintained drop-in replacement yet" },
   { id = "RUSTSEC-2026-0542", reason = "unmaintained only, wraps chrono; arrives transitively through xet-data" },
 ]
 

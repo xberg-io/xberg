@@ -208,15 +208,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "astral-tl"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe43b63a04560c41783a27e23209ca87a3f5d01bab21c74bec93268bad39e3a"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "async-compression"
 version = "0.4.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -848,7 +839,6 @@ checksum = "f431b67cba6122a1f7d26b7adafc71bbdf07026095fe811f5efc025d8748e1d8"
 dependencies = [
  "atoi_simd",
  "byteorder",
- "chrono",
  "codepage",
  "encoding_rs",
  "fast-float2",
@@ -1034,7 +1024,6 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
- "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1095,7 +1084,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1326,19 +1315,18 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.4"
+version = "1.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f61676b15e570ad174720b9c96d51f1bfcf9f76672d0b25885fc71a9c443ca"
+checksum = "bb62b11fc64a5593db360a33ae917ce34dd14cff2b21cf75c8798616c8834f21"
 dependencies = [
  "ahash",
  "aho-corasick",
  "arc-swap",
- "astral-tl",
+ "astral-html",
  "async-trait",
  "base64 0.23.1",
  "blake3",
  "chardetng",
- "chrono",
  "cookie_store",
  "crawlberg-robots",
  "dashmap",
@@ -1356,6 +1344,7 @@ dependencies = [
  "icu_normalizer",
  "idna",
  "ipnet",
+ "jiff",
  "liter-llm",
  "memchr",
  "notify",
@@ -1383,9 +1372,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.4"
+version = "1.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59440db2bf1c6a669509eff1a01964d58e178f6dd8c2a643fe1b8078cb2fb955"
+checksum = "d5caf7992d16ddcacfd58685d16c23899931b064e71cf20f89892876bc389f22"
 
 [[package]]
 name = "crc-fast"
@@ -1725,7 +1714,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1905,7 +1894,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2352,19 +2341,19 @@ checksum = "312d2295c7302019c395cfb90dacd00a82a2eabd700429bba9c7a3f38dbbe11b"
 
 [[package]]
 name = "gcp_auth"
-version = "0.12.7"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d27dbcc645b60b8e7f6e2868a9d7102ece97d1bb49c1288b5321fcc67f7260"
+checksum = "5cb94183b5679930be54594e6a801f483cd394fce130a29800fd0828a7dfbae7"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
- "chrono",
  "http",
  "http-body-util",
  "hyper",
  "hyper-rustls",
  "hyper-util",
+ "jiff",
  "ring",
  "rustls",
  "rustls-pki-types",
@@ -2373,7 +2362,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
- "tracing-futures",
  "url",
 ]
 
@@ -3484,6 +3472,60 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
+name = "jiff"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "107f2e89536b6818514025f6787b0d94d819e54fe3b40365275fc753de485b3f"
+dependencies = [
+ "jiff-core",
+ "jiff-static",
+ "jiff-tzdb-platform",
+ "js-sys",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+ "wasm-bindgen",
+ "windows-link",
+]
+
+[[package]]
+name = "jiff-core"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d44c923edf2bf456a982253f1a9ee1f6e89e421dffd0065d9b9a581da0def58f"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "jiff-static"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4996f71e569e3a3e32b925c28ef8f0027dc30bb1d594b33eeda409eea185f5c8"
+dependencies = [
+ "jiff-core",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "jiff-tzdb"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e71a1b68a875a44a33bb7a1dd84392cb77145a3367a552a3cfe6a4f5cf3afc"
+
+[[package]]
+name = "jiff-tzdb-platform"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc65b284afcfa8f6cf189c7274c805505314a7ab975c60e1f548bff56525420e"
+dependencies = [
+ "jiff-tzdb",
+]
+
+[[package]]
 name = "jni"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3809,9 +3851,9 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "liter-llm"
-version = "2.7.5"
+version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a17dd7b07af4be2e22b7bb5e088fa60a08b02a30cfee67ecb76f7544740cd69"
+checksum = "84a3c152e953f1ae6cc2f7cfafd31e5f48b0871d045cab0dfdd5c990bc3b208a"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -4520,7 +4562,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5423,7 +5465,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5914,19 +5956,19 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "391f153431ab68664d946513ea0cb3edbca78eaf99c5a983036cacab6220d85b"
+checksum = "fc4fa9a7558c480e1817c0f02e9a73782001ac1f47fb9d26cc073915963282ea"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
  "bytes",
- "chrono",
  "futures",
  "http",
  "http-body",
  "http-body-util",
  "indexmap",
+ "jiff",
  "libc",
  "pastey 0.2.3",
  "percent-encoding",
@@ -5951,9 +5993,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3598e3f36f4af2b5219b133baf7d97a2197039225adc3d4acf3dd8805b5a2aef"
+checksum = "43c1bf063ba32333267a8bc282ec33ae0edf56bf74890118cb0c7bf910a7a1c0"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",
@@ -6009,7 +6051,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15469072ec2f788a9bfa1f7ea4edca49e45c14d754ce38ae3df5396ccc9f041c"
 dependencies = [
  "g2p",
- "image 0.25.10",
+ "image 0.24.9",
  "lru 0.18.5",
  "zeroize",
 ]
@@ -6083,7 +6125,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6142,7 +6184,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6267,7 +6309,6 @@ version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
 dependencies = [
- "chrono",
  "dyn-clone",
  "ref-cast",
  "schemars_derive",
@@ -7177,7 +7218,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7740,16 +7781,6 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
-]
-
-[[package]]
-name = "tracing-futures"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
-dependencies = [
- "pin-project",
- "tracing",
 ]
 
 [[package]]
@@ -8531,7 +8562,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8820,7 +8851,6 @@ dependencies = [
  "calamine",
  "cfb 0.16.0",
  "chardetng",
- "chrono",
  "codepage",
  "comrak",
  "crawlberg",
@@ -8847,6 +8877,7 @@ dependencies = [
  "indexmap",
  "infer",
  "itertools 0.15.0",
+ "jiff",
  "jotdown",
  "jpeg-decoder",
  "jsonschema",
@@ -9026,7 +9057,6 @@ dependencies = [
  "byteorder",
  "bytes",
  "cbc",
- "chrono",
  "encoding_rs",
  "fast_image_resize",
  "fax 0.3.0",
@@ -9037,6 +9067,7 @@ dependencies = [
  "hayro-jbig2",
  "hayro-jpeg2000",
  "image 0.25.10",
+ "jiff",
  "jpeg-decoder",
  "md-5",
  "memchr",
@@ -9083,9 +9114,9 @@ version = "1.5.4"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
- "chrono",
  "image 0.25.10",
  "itertools 0.15.0",
+ "jiff",
  "libloading",
  "log",
  "maybe-owned",

@@ -333,15 +333,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "astral-tl"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe43b63a04560c41783a27e23209ca87a3f5d01bab21c74bec93268bad39e3a"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "async-compression"
 version = "0.4.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -725,13 +716,13 @@ dependencies = [
  "ahash",
  "async-trait",
  "blake3",
- "chrono",
  "clap",
  "dirs 7.0.0",
  "dotenvy",
  "futures",
  "image 0.25.10",
  "inferno",
+ "jiff 1.0.3",
  "jsonschema",
  "libc",
  "num_cpus",
@@ -1129,7 +1120,6 @@ checksum = "f431b67cba6122a1f7d26b7adafc71bbdf07026095fe811f5efc025d8748e1d8"
 dependencies = [
  "atoi_simd",
  "byteorder",
- "chrono",
  "codepage",
  "encoding_rs",
  "fast-float2",
@@ -1878,21 +1868,20 @@ dependencies = [
 
 [[package]]
 name = "crawlberg"
-version = "1.13.4"
+version = "1.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f61676b15e570ad174720b9c96d51f1bfcf9f76672d0b25885fc71a9c443ca"
+checksum = "bb62b11fc64a5593db360a33ae917ce34dd14cff2b21cf75c8798616c8834f21"
 dependencies = [
  "ahash",
  "aho-corasick",
  "arc-swap",
- "astral-tl",
+ "astral-html",
  "async-trait",
  "async-tungstenite",
  "base64 0.23.1",
  "blake3",
  "bytes",
  "chardetng",
- "chrono",
  "cookie_store",
  "crawlberg-chromiumoxide",
  "crawlberg-robots",
@@ -1915,6 +1904,7 @@ dependencies = [
  "icu_normalizer",
  "idna",
  "ipnet",
+ "jiff 1.0.3",
  "libc",
  "liter-llm",
  "memchr",
@@ -1977,9 +1967,9 @@ dependencies = [
 
 [[package]]
 name = "crawlberg-robots"
-version = "1.13.4"
+version = "1.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59440db2bf1c6a669509eff1a01964d58e178f6dd8c2a643fe1b8078cb2fb955"
+checksum = "d5caf7992d16ddcacfd58685d16c23899931b064e71cf20f89892876bc389f22"
 
 [[package]]
 name = "crc-fast"
@@ -3295,19 +3285,19 @@ checksum = "312d2295c7302019c395cfb90dacd00a82a2eabd700429bba9c7a3f38dbbe11b"
 
 [[package]]
 name = "gcp_auth"
-version = "0.12.7"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d27dbcc645b60b8e7f6e2868a9d7102ece97d1bb49c1288b5321fcc67f7260"
+checksum = "5cb94183b5679930be54594e6a801f483cd394fce130a29800fd0828a7dfbae7"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
- "chrono",
  "http",
  "http-body-util",
  "hyper",
  "hyper-rustls",
  "hyper-util",
+ "jiff 1.0.3",
  "ring",
  "rustls",
  "rustls-pki-types",
@@ -3316,7 +3306,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
- "tracing-futures",
  "url",
 ]
 
@@ -4650,10 +4639,12 @@ dependencies = [
  "jiff-core 1.0.2",
  "jiff-static 1.0.3",
  "jiff-tzdb-platform 1.0.0",
+ "js-sys",
  "log",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -5089,9 +5080,9 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "liter-llm"
-version = "2.7.5"
+version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a17dd7b07af4be2e22b7bb5e088fa60a08b02a30cfee67ecb76f7544740cd69"
+checksum = "84a3c152e953f1ae6cc2f7cfafd31e5f48b0871d045cab0dfdd5c990bc3b208a"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -7660,19 +7651,19 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "391f153431ab68664d946513ea0cb3edbca78eaf99c5a983036cacab6220d85b"
+checksum = "fc4fa9a7558c480e1817c0f02e9a73782001ac1f47fb9d26cc073915963282ea"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
  "bytes",
- "chrono",
  "futures",
  "http",
  "http-body",
  "http-body-util",
  "indexmap 2.14.2",
+ "jiff 1.0.3",
  "libc",
  "pastey 0.2.3",
  "percent-encoding",
@@ -7697,9 +7688,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3598e3f36f4af2b5219b133baf7d97a2197039225adc3d4acf3dd8805b5a2aef"
+checksum = "43c1bf063ba32333267a8bc282ec33ae0edf56bf74890118cb0c7bf910a7a1c0"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",
@@ -8052,7 +8043,6 @@ version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
 dependencies = [
- "chrono",
  "dyn-clone",
  "ref-cast",
  "schemars_derive",
@@ -9893,16 +9883,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-futures"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
-dependencies = [
- "pin-project",
- "tracing",
-]
-
-[[package]]
 name = "tracing-log"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11339,7 +11319,6 @@ dependencies = [
  "calamine",
  "cfb 0.16.0",
  "chardetng",
- "chrono",
  "codepage",
  "comrak",
  "crawlberg",
@@ -11371,6 +11350,7 @@ dependencies = [
  "indexmap 2.14.2",
  "infer",
  "itertools 0.15.0",
+ "jiff 1.0.3",
  "jotdown",
  "jpeg-decoder",
  "jpeg-encoder",
@@ -11629,7 +11609,6 @@ dependencies = [
  "byteorder",
  "bytes",
  "cbc",
- "chrono",
  "criterion",
  "encoding_rs",
  "fast_image_resize",
@@ -11642,6 +11621,7 @@ dependencies = [
  "hayro-jpeg2000",
  "hex-literal",
  "image 0.25.10",
+ "jiff 1.0.3",
  "jpeg-decoder",
  "jpeg-encoder",
  "md-5 0.11.0",
@@ -11711,9 +11691,9 @@ dependencies = [
  "bindgen",
  "bitflags 2.13.2",
  "bytemuck",
- "chrono",
  "image 0.25.10",
  "itertools 0.15.0",
+ "jiff 1.0.3",
  "libloading 0.9.1",
  "log",
  "maybe-owned",

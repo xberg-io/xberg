@@ -681,7 +681,7 @@ pub fn build_summary_with_config(
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
 
-    let timestamp = chrono::Utc::now().to_rfc3339();
+    let timestamp = crate::timestamp::now_utc_rfc3339();
 
     PipelineRunSummary {
         timestamp,

@@ -279,7 +279,12 @@ pub fn generate_job_id() -> String {
 
 /// Return the current time formatted as RFC 3339 (ISO 8601).
 pub fn now_rfc3339() -> String {
-    chrono::Utc::now().to_rfc3339()
+    format_rfc3339(jiff::Timestamp::now())
+}
+
+/// RFC 3339 UTC with a `+00:00` offset and fractional seconds only when non-zero.
+fn format_rfc3339(ts: jiff::Timestamp) -> String {
+    ts.strftime("%Y-%m-%dT%H:%M:%S%.f+00:00").to_string()
 }
 
 #[cfg(test)]
@@ -287,6 +292,21 @@ mod tests {
     use super::*;
 
     use crate::api::types::JobState;
+
+    #[test]
+    fn test_format_rfc3339_matches_chrono_shape() {
+        let whole = jiff::Timestamp::new(1_700_000_000, 0).unwrap();
+        assert_eq!(format_rfc3339(whole), "2023-11-14T22:13:20+00:00");
+        let frac = jiff::Timestamp::new(1_700_000_000, 123_456_789).unwrap();
+        assert_eq!(format_rfc3339(frac), "2023-11-14T22:13:20.123456789+00:00");
+    }
+
+    #[test]
+    fn test_now_rfc3339_is_parseable_utc() {
+        let now = now_rfc3339();
+        assert!(now.ends_with("+00:00"), "{now}");
+        now.parse::<jiff::Timestamp>().expect("RFC 3339 timestamp");
+    }
 
     #[test]
     fn test_create_job_is_pending() {

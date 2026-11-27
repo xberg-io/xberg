@@ -78,7 +78,6 @@ brotli = "9"
 byteorder = "1.5"
 bytes = "1.12"
 cbc = "0.2"
-chrono = "0.4"
 encoding_rs = "0.8"
 fast_image_resize = "6"
 fax = "0.3"
@@ -88,6 +87,7 @@ harfrust = "0.16"
 hayro-jbig2 = { version = "0.4", default-features = false }
 hayro-jpeg2000 = { version = "0.5.0", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff"] }
+jiff = "1"
 jpeg-decoder = { version = "0.3.2", default-features = false }                            # rayon is enabled per target below ~keep
 md-5 = "0.11"
 memchr = "2"
@@ -117,6 +117,8 @@ zeroize = "1"
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"] }
+# `Timestamp::now()` panics on wasm32-unknown-unknown without the `js` clock source (cbom_json). ~keep
+jiff = { version = "1", features = ["js"] }
 
 # Mirrors fontdb's own target gating for this dependency: Linux/BSD system-font
 # discovery (src/vendor/fontdb) reads the host's fontconfig config to resolve

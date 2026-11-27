@@ -80,6 +80,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replace `chrono` with `jiff` for timestamps in `xberg`, `xberg-native-pdf` and `xberg-pdfium-render`, and drop calamine's `dates` feature and rmcp's default `chrono` feature. `PdfPageAnnotationCommon::set_creation_date` and `set_modification_date` in `xberg-pdfium-render` now take `jiff::Timestamp`. `chrono` remains only through `nom-exif` and `hf-hub` (RUSTSEC-2026-0543).
+- Upgrade `crawlberg` to 1.13.5 and `liter-llm` to 2.7.6, and `rmcp` to 3.12.
+
 ### Fixed
 
 - Ruled PDF tables with an unruled text column are no longer split into fragments and duplicated as paragraph text (SGS lab reports). A wide unruled span between ruled columns is a cell when horizontal text runs down it, and a gap between side-by-side grids otherwise.

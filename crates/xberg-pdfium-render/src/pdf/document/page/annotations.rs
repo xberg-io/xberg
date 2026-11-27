@@ -20,7 +20,6 @@ use crate::pdf::document::page::annotation::{PdfPageAnnotation, PdfPageAnnotatio
 use crate::pdf::document::page::object::{PdfPageObject, PdfPageObjectCommon};
 use crate::pdf::document::page::{PdfPage, PdfPageContentRegenerationStrategy, PdfPageIndexCache};
 use crate::pdf::quad_points::PdfQuadPoints;
-use chrono::prelude::*;
 use std::ops::Range;
 use std::os::raw::c_int;
 
@@ -158,7 +157,7 @@ impl<'a> PdfPageAnnotations<'a> {
             let mut annotation = constructor(self.document_handle(), self.page_handle(), handle, self.bindings());
 
             annotation
-                .set_creation_date(Utc::now())
+                .set_creation_date(jiff::Timestamp::now())
                 .and_then(|()| {
                     if let Some(content_regeneration_strategy) =
                         PdfPageIndexCache::get_content_regeneration_strategy_for_page(
