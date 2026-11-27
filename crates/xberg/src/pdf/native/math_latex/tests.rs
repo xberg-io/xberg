@@ -1,5 +1,5 @@
 use super::glyphs::{MathFont, math_font, spell_glyph};
-use super::{Delimiters, is_equation_number, rewrite_math_spans_with};
+use super::{Delimiters, is_equation_number, rewrite_math_spans_with, tex_is_reliable};
 use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::TextSpan;
 
@@ -362,4 +362,27 @@ fn should_restore_each_row_its_own_script_baseline() {
         super::rewrite_with_baselines(&spans, Delimiters::Dollars, &super::RawBaselines::new(&recorded))
             .expect("both rows are rewritten");
     assert_eq!(texts(&rewritten), ["$$a=r^{2}$$", "$$a=r^{2}$$"]);
+}
+
+#[test]
+fn rebuilt_tex_with_misplaced_scripts_is_not_published() {
+    for broken in [
+        "=_{2}\\sqrt{1+v1}",
+        "\\frac{}{b}",
+        "^{x^{3}}",
+        "a+_{3}b",
+        "\\frac{dy}{dx",
+    ] {
+        assert!(!tex_is_reliable(broken), "{broken}");
+    }
+    for sound in [
+        "\\frac{dy}{dx}=x^{2}+1",
+        "e^{-ax}",
+        "f_{j+1}'",
+        "{}^{14}\\mathrm{C}",
+        "x_{1}^{2}",
+        "(a+b)^{2}",
+    ] {
+        assert!(tex_is_reliable(sound), "{sound}");
+    }
 }

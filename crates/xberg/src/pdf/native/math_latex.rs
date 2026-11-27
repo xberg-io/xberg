@@ -476,6 +476,39 @@ impl Formula<'_> {
     }
 }
 
+/// Whether rebuilt TeX is well formed enough to publish. Wrong math is worse than the plain prose
+/// reading, so a formula the layout pass could not structure is left as its source spans: an
+/// empty group that scripts nothing (`{}` outside `{}^{14}C`), a script after an operator
+/// (`=_{2}`, a leading `^{`) or unbalanced braces mark a base or fraction part that landed in the
+/// wrong place.
+fn tex_is_reliable(tex: &str) -> bool {
+    if tex
+        .match_indices("{}")
+        .any(|(at, group)| !tex[at + group.len()..].starts_with(['^', '_']))
+    {
+        return false;
+    }
+    let mut depth = 0i32;
+    let mut previous: Option<char> = None;
+    for ch in tex.chars() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            '^' | '_' if previous.is_none_or(|before| matches!(before, '=' | '+' | '-' | ',' | ';' | '(' | '[')) => {
+                return false;
+            }
+            _ => {}
+        }
+        previous = Some(ch);
+    }
+    depth == 0
+}
+
 fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
     let mut prose: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class == Class::Prose).collect();
     prose.sort_by(|a, b| a.base.total_cmp(&b.base));
@@ -483,7 +516,9 @@ fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
     let mut formulas = Vec::new();
     for component in connected_components(&candidates, &prose) {
         for unit in split_rows(component) {
-            if let Some(formula) = build_formula(unit, &prose) {
+            if let Some(formula) = build_formula(unit, &prose)
+                && tex_is_reliable(&formula.tex)
+            {
                 formulas.push(formula);
             }
         }
