@@ -4948,6 +4948,19 @@ mod tests {
         assert!(!crate::pdf::native::math_latex::sentinels::contains_sentinel(&markdown));
     }
 
+    /// A display formula left inside prose renders as `$$..$$` math with its scripts unescaped.
+    #[test]
+    fn native_display_formula_inside_prose_renders_unescaped() {
+        use crate::pdf::native::math_latex::sentinels::{DISPLAY_CLOSE, DISPLAY_OPEN};
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = format!("see {DISPLAY_OPEN}x^{{2}}+1{DISPLAY_CLOSE} here");
+        push_text_with_inline_math(&mut builder, &text, Vec::new(), None, None);
+        let document = builder.build();
+        let markdown = crate::rendering::render_markdown(&document);
+        assert!(markdown.contains("$$x^{2}+1$$"), "{markdown}");
+    }
+
     /// A native inline formula in a list item renders as `$..$` math, not escaped TeX source.
     #[test]
     fn native_inline_formula_in_a_list_item_renders_as_markdown_math() {
@@ -4963,6 +4976,32 @@ mod tests {
         assert_eq!(item.text, "If $y=a+bt^{2}$ then stop.");
         let markdown = crate::rendering::render_markdown(&document);
         assert!(markdown.contains("If $y=a+bt^{2}$ then stop."), "{markdown}");
+        assert_eq!(
+            item.attributes
+                .as_ref()
+                .and_then(|attributes| attributes.get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
+                .map(String::as_str),
+            Some("If y=a+bt^{2} then stop.")
+        );
+    }
+
+    /// With inline math off a list item keeps the formula's source as plain text and no delimiters.
+    #[test]
+    fn native_inline_formula_in_a_list_item_is_plain_text_without_inline_math() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(false);
+        let text = format!("(1) If {} then stop.", native_inline("y=a+bt^{2}"));
+        let mut para = make_paragraph(&text, None);
+        para.is_list_item = true;
+        push_paragraph_element_by_kind(&mut builder, &para, None, &Default::default());
+        let document = builder.build();
+        let item = &document.elements[0];
+        assert_eq!(item.text, "If y=a+bt^{2} then stop.");
+        assert!(
+            item.annotations
+                .iter()
+                .all(|annotation| annotation.kind.math_display().is_none())
+        );
     }
 
     /// A display formula renders as its own `$$` block; headings and tables lose sentinels.
