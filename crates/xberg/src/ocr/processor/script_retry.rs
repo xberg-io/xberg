@@ -2359,23 +2359,27 @@ mod tests {
             system_paths: false,
             model,
         };
+        // ~keep The retry also needs the primary language; one without a pin is served as it is
+        // everywhere, so only the Khmer pack decides.
+        let primary = "xberg_unpinned_fixture";
         for model in [TessdataModel::Fast, TessdataModel::Best] {
             let managed = model_cache_dir(cache.path(), model);
             std::fs::create_dir_all(&managed).unwrap();
+            std::fs::write(managed.join(format!("{primary}.traineddata")), primary).unwrap();
             std::fs::write(managed.join("khm.traineddata"), b"not the pinned pack").unwrap();
         }
         let best = model_cache_dir(cache.path(), TessdataModel::Best);
 
         assert!(
-            requires_khmer_outer_cache_bypass("eng", None, &env(TessdataModel::Fast)),
+            requires_khmer_outer_cache_bypass(primary, None, &env(TessdataModel::Fast)),
             "a fast directory serves a file as it is"
         );
         assert!(
-            !requires_khmer_outer_cache_bypass("eng", None, &env(TessdataModel::Best)),
+            !requires_khmer_outer_cache_bypass(primary, None, &env(TessdataModel::Best)),
             "the managed best directory serves only the pinned pack, for the retry as for the first pass"
         );
         assert!(
-            requires_khmer_outer_cache_bypass("eng", Some(best.as_path()), &env(TessdataModel::Best)),
+            requires_khmer_outer_cache_bypass(primary, Some(best.as_path()), &env(TessdataModel::Best)),
             "a directory the caller names is used as given"
         );
     }
