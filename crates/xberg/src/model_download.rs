@@ -1363,6 +1363,16 @@ fn verified_earlier(path: &Path, metadata: &std::fs::Metadata, expected: &str) -
 #[cfg(model_download)]
 fn remember_verified(path: &Path, stamp: VerifiedStamp, sha256: String) {
     let mut files = VERIFIED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    insert_verified(&mut files, path, stamp, sha256);
+}
+
+#[cfg(model_download)]
+fn insert_verified(
+    files: &mut std::collections::HashMap<PathBuf, (VerifiedStamp, String)>,
+    path: &Path,
+    stamp: VerifiedStamp,
+    sha256: String,
+) {
     if files.len() >= MAX_VERIFIED_FILES && !files.contains_key(path) {
         files.clear();
     }
@@ -1605,13 +1615,98 @@ mod verified_memo_tests {
     fn a_just_written_file_is_hashed_every_time() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("model.onnx");
+        // A modification time ahead of the clock never settles, however slow the test runs.
         std::fs::write(&path, b"fresh weights").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(SystemTime::now() + HOUR)
+            .unwrap();
         let before = hashed();
 
         verify_sha256(&path, &sha256(b"fresh weights"), "model").unwrap();
         verify_sha256(&path, &sha256(b"fresh weights"), "model").unwrap();
 
         assert_eq!(hashed() - before, 2);
+    }
+
+    /// A same-size rewrite that restores the modification time changes only the change time.
+    #[cfg(unix)]
+    #[test]
+    fn a_rewrite_that_restores_the_modification_time_is_hashed_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        // Linux takes the change time from a coarse clock; a later tick keeps the rewrite's apart.
+        std::thread::sleep(Duration::from_millis(50));
+
+        std::fs::write(&path, b"tampered weights").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), modified);
+        let before = hashed();
+
+        let error = verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap_err();
+        assert!(error.contains("Checksum mismatch"), "{error}");
+        assert_eq!(hashed() - before, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_renamed_over_the_path_is_hashed_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+
+        let sibling = dir.path().join("model.onnx.partial");
+        std::fs::write(&sibling, b"tampered weights").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&sibling)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        std::fs::rename(&sibling, &path).unwrap();
+        let before = hashed();
+
+        let error = verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap_err();
+        assert!(error.contains("Checksum mismatch"), "{error}");
+        assert_eq!(hashed() - before, 1);
+    }
+
+    #[test]
+    fn a_full_memo_is_cleared_for_a_new_file_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        let stamp = VerifiedStamp::of(&std::fs::metadata(&path).unwrap()).unwrap();
+        let mut files = std::collections::HashMap::new();
+        for index in 0..MAX_VERIFIED_FILES {
+            let other = dir.path().join(format!("{index}.onnx"));
+            insert_verified(&mut files, &other, stamp.clone(), sha256(b"weights"));
+        }
+        assert_eq!(files.len(), MAX_VERIFIED_FILES);
+
+        insert_verified(
+            &mut files,
+            &dir.path().join("0.onnx"),
+            stamp.clone(),
+            sha256(b"weights"),
+        );
+        assert_eq!(files.len(), MAX_VERIFIED_FILES, "a remembered file is updated in place");
+
+        insert_verified(&mut files, &path, stamp, sha256(b"weights"));
+        assert_eq!(files.len(), 1);
+        assert!(files.contains_key(&path));
     }
 
     #[cfg(not(unix))]
