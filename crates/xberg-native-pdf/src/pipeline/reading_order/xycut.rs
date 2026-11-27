@@ -987,6 +987,69 @@ impl XYCutStrategy {
             .collect()
     }
 
+    /// `partition_indexed` over `spans` with every heading run standing as one wide span,
+    /// answered as groups of ORIGINAL indices: what partitioning `synthesize_for_partition`'s
+    /// list and mapping the groups back through its origins gives, without cloning a span.
+    /// A run's first span in slice order carries the run's union bbox and joined text while
+    /// the partition runs, and the run's other spans are left out of the index list -- the
+    /// partition reads spans only through that list, and never an index's own value. `spans`
+    /// is as it was on return. ~keep
+    fn partition_with_heading_runs(&self, spans: &mut [TextSpan], runs: &[HeadingRun]) -> Vec<Vec<usize>> {
+        let mut in_run: Vec<Option<usize>> = vec![None; spans.len()];
+        for (r_idx, run) in runs.iter().enumerate() {
+            for &i in &run.span_indices {
+                in_run[i] = Some(r_idx);
+            }
+        }
+
+        let mut indices: Vec<usize> = Vec::with_capacity(spans.len());
+        let mut placeholders: Vec<(usize, Rect, String)> = Vec::with_capacity(runs.len());
+        let mut emitted_run = vec![false; runs.len()];
+        for (i, run_of_span) in in_run.iter().enumerate() {
+            match *run_of_span {
+                None => indices.push(i),
+                Some(r_idx) if !emitted_run[r_idx] => {
+                    let run = &runs[r_idx];
+                    let mut combined_text = String::new();
+                    for (k, &si) in run.span_indices.iter().enumerate() {
+                        if k > 0 {
+                            combined_text.push(' ');
+                        }
+                        combined_text.push_str(&spans[si].text);
+                    }
+                    placeholders.push((i, run.combined_bbox, combined_text));
+                    indices.push(i);
+                    emitted_run[r_idx] = true;
+                }
+                Some(_) => {}
+            }
+        }
+
+        for (i, bbox, text) in &mut placeholders {
+            std::mem::swap(&mut spans[*i].bbox, bbox);
+            std::mem::swap(&mut spans[*i].text, text);
+        }
+        let groups = self.partition_indexed(spans, &indices);
+        for (i, bbox, text) in placeholders {
+            spans[i].bbox = bbox;
+            spans[i].text = text;
+        }
+
+        groups
+            .into_iter()
+            .map(|group| {
+                let mut out = Vec::with_capacity(group.len());
+                for i in group {
+                    match in_run[i] {
+                        Some(r_idx) => out.extend(runs[r_idx].span_indices.iter().copied()),
+                        None => out.push(i),
+                    }
+                }
+                out
+            })
+            .collect()
+    }
+
     /// Index-based recursive partitioning — returns groups of indices into the input span slice.
     ///
     /// Avoids cloning TextSpan at every recursive split level. Spans are only
@@ -2877,33 +2940,18 @@ struct ProjectionProfile {
 }
 
 impl ReadingOrderStrategy for XYCutStrategy {
-    fn apply(&self, spans: Vec<TextSpan>, context: &ReadingOrderContext) -> Result<Vec<OrderedTextSpan>> {
-        // Detects multi-line heading runs and routes the
-        // partition through synthetic-span space so the splitter treats
-        // each wrapped heading as a single atomic block. When no
-        // headings are found we use the original index-only path that
-        // avoids span clones during recursion. ~keep
+    fn apply(&self, mut spans: Vec<TextSpan>, context: &ReadingOrderContext) -> Result<Vec<OrderedTextSpan>> {
+        // Detects multi-line heading runs and partitions with each
+        // wrapped heading standing as a single atomic block. The groups
+        // are ORIGINAL-span indices either way, so the move-out below
+        // works on the input Vec. ~keep
         let heading_runs = self.find_heading_runs(&spans, context.column_gutter);
 
         let index_groups: Vec<Vec<usize>> = if heading_runs.is_empty() {
             let indices: Vec<usize> = (0..spans.len()).collect();
             self.partition_indexed(&spans, &indices)
         } else {
-            let (synthetic, synthetic_origin) = self.synthesize_for_partition(&spans, &heading_runs);
-            let synth_indices: Vec<usize> = (0..synthetic.len()).collect();
-            let synth_groups = self.partition_indexed(&synthetic, &synth_indices);
-            // Project synthetic-space groups back to ORIGINAL-span
-            // indices (so the move-out below works on the input Vec). ~keep
-            synth_groups
-                .into_iter()
-                .map(|group| {
-                    let mut out = Vec::with_capacity(group.len());
-                    for synth_idx in group {
-                        out.extend(synthetic_origin[synth_idx].iter().copied());
-                    }
-                    out
-                })
-                .collect()
+            self.partition_with_heading_runs(&mut spans, &heading_runs)
         };
 
         // Build result — moves spans out by index (no extra clone) ~keep
@@ -3912,6 +3960,44 @@ mod tests {
             runs_single.is_empty(),
             "single-line bold runs must not produce a HeadingRun"
         );
+    }
+
+    /// `partition_with_heading_runs` must answer exactly what the synthetic-list route does,
+    /// and hand the spans back untouched. The heading's second line comes first in the slice
+    /// and its first line mid-slice, so the placeholder slot is not the run's first span and
+    /// the synthetic list's indices run one behind the originals past the omitted span. ~keep
+    #[test]
+    fn partition_with_heading_runs_matches_the_synthetic_route_and_restores_spans() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![make_bold_span(72.0, 484.0, 220.0, "Advantages of Vari-linear", 14.0)];
+        for row in 0..8 {
+            if row == 4 {
+                spans.push(make_bold_span(72.0, 500.0, 180.0, "2.3 Performance and", 14.0));
+            }
+            let y = 460.0 - row as f32 * 14.0;
+            spans.push(make_body_span(72.0, y, 260.0, 12.0));
+            spans.push(make_body_span(362.0, y + 10.0, 260.0, 12.0));
+        }
+
+        let runs = strategy.find_heading_runs(&spans, None);
+        assert_eq!(runs.len(), 1, "the fixture must hold one heading run: {runs:?}");
+        assert_eq!(runs[0].span_indices, vec![9, 0]);
+
+        let (synthetic, origins) = strategy.synthesize_for_partition(&spans, &runs);
+        let synth_indices: Vec<usize> = (0..synthetic.len()).collect();
+        let expected: Vec<Vec<usize>> = strategy
+            .partition_indexed(&synthetic, &synth_indices)
+            .into_iter()
+            .map(|group| group.into_iter().flat_map(|k| origins[k].iter().copied()).collect())
+            .collect();
+        assert!(expected.len() > 1, "the fixture must split: {expected:?}");
+
+        let before: Vec<(String, Rect)> = spans.iter().map(|span| (span.text.clone(), span.bbox)).collect();
+        let groups = strategy.partition_with_heading_runs(&mut spans, &runs);
+        let after: Vec<(String, Rect)> = spans.iter().map(|span| (span.text.clone(), span.bbox)).collect();
+
+        assert_eq!(groups, expected);
+        assert_eq!(after, before, "the placeholder bbox and text outlived the partition");
     }
 
     /// fix-543 unit: the canonical repro shape — left-column 2-line
