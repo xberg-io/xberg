@@ -48,7 +48,8 @@ pub trait BaseNet {
     }
 
     /// Load a model from a file path onto the `ort` backend with a custom session
-    /// builder (e.g. for GPU execution providers).
+    /// builder (e.g. for GPU execution providers). ONNX Runtime reads the file itself, so the
+    /// model is not also held in a buffer while the session is built.
     #[cfg(feature = "ort")]
     fn init_model_with_ort_builder(
         &mut self,
@@ -56,8 +57,10 @@ pub trait BaseNet {
         num_thread: usize,
         builder_fn: Option<fn(SessionBuilder) -> Result<SessionBuilder, ort::Error>>,
     ) -> Result<(), OcrError> {
-        let model_bytes = std::fs::read(path)?;
-        self.init_model_from_memory_with_ort_builder(&model_bytes, num_thread, builder_fn)
+        let backend =
+            inference::ort_backend::OrtBackend::load_file(std::path::Path::new(path), num_thread, builder_fn)?;
+        self.set_backend(Some(Box::new(backend)));
+        Ok(())
     }
 
     /// Load a model from ONNX bytes onto the `ort` backend with a custom session
