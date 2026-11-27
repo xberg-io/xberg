@@ -632,6 +632,35 @@ uv run --locked --isolated --python 3.12 --only-group bench-rapidocr \
 `--only-group` omits the editable Xberg workspace package, while `--isolated` prevents another benchmark environment
 from changing the selected OCR runtime.
 
+## Synthetic OCR scan corpus
+
+`scripts/synth_ocr_corpus.py` builds a stratified OCR corpus from native PDFs in `test_documents` (those pinned in
+`corpus.lock.json`, minus `pdf_scanned/`, `user_reports/` and fuzz inputs). Each selected page is rendered with
+`pdftoppm` as a clean 300 dpi grayscale PNG and as degraded "scans" at 150, 200 and 300 dpi (seeded ImageMagick
+rotation within ±1°, blur, Gaussian noise and JPEG quality 60-85). Ground truth is poppler `pdftotext` in its default
+reading-order mode, one file per page, with `ground_truth.source = "pdf_text_layer"`; no xberg output is used.
+Default mode is chosen over `-layout`, which interleaves the lines of side-by-side columns, and `-raw`, which follows
+content-stream order: the harness reading-order score compares OCR order with ground-truth order, and OCR engines emit
+text column by column.
+
+A page is excluded when its text layer fails an automatic check: fewer than 25 tokens, CID or private-use garbage,
+mostly non-alphanumeric text, no language stopword signal (shifted or reversed glyph maps), split or glued words,
+backward line jumps inside a column (extraction-order chaos), raster images over 5% of the page (text inside images
+has no ground truth; also rejects scans with an OCR layer), or words with no ink in a 100 dpi render (invisible or
+white text). Selection gives every detected language and every layout class (`single_column`, `multi_column`, `table`,
+`sparse`) up to `--per-stratum` pages (default 20), spreading pages across source documents.
+
+```bash
+python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py build --out /tmp/ocr-corpus
+python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py verify --out /tmp/ocr-corpus --samples 10
+```
+
+The output directory holds `images/`, `ground_truth/`, `fixtures/` (paths relative to the fixture), `cohorts/`
+(`ocr-synth-{clean300,scan150,scan200,scan300}-v1`), `inventory.jsonl` (every inspected page with its checks) and
+`manifest.json` (seed, tool versions, exclusion counts, stratum counts, under-filled strata). Output is deterministic
+for a fixed `--seed`, corpus and tool versions. `verify` OCRs clean 300 dpi samples with plain `tesseract` and reports
+token F1 plus reading-order agreement against each `pdftotext` mode; run the harness on the fixtures for real scores.
+
 ## Development
 
 ```bash
