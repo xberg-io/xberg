@@ -7,7 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
-const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 21;
+const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 22;
 
 /// Compute a deterministic hash of the OCR configuration.
 ///
@@ -138,7 +138,10 @@ fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, re
         }
     }
     hasher.update(&[config.known_full_page_scan as u8]);
-    hash_bytes(hasher, resolved_tessdata_path.as_bytes());
+    // ~keep Canonical, so one directory spelled `/a/b` and `/a/b/` (or reached through a
+    // symlink) has one key.
+    let directory = super::validation::canonical_tessdata_dir(resolved_tessdata_path);
+    hash_bytes(hasher, directory.as_os_str().as_encoded_bytes());
     // ~keep The resolved directory already differs per model set for xberg's own caches; a
     // non-fast set is hashed too so the key never depends on how a directory was chosen. Fast
     // adds nothing, so entries written before model sets existed stay valid.
@@ -371,6 +374,35 @@ mod tests {
         assert_eq!(actual.finalize(), before_model_sets.finalize());
     }
 
+    #[test]
+    fn one_tessdata_directory_has_one_cache_key_however_it_is_spelled() {
+        let config = create_test_config();
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().to_str().unwrap();
+        let separator = std::path::MAIN_SEPARATOR;
+
+        assert_eq!(
+            hash_config(&config, "/tessdata/fast"),
+            hash_config(&config, "/tessdata/fast/"),
+            "a trailing separator names the same directory"
+        );
+        for spelling in [
+            format!("{directory}{separator}"),
+            format!("{directory}{separator}."),
+            format!("{directory}{separator}{separator}"),
+        ] {
+            assert_eq!(
+                hash_config(&config, directory),
+                hash_config(&config, &spelling),
+                "{spelling}"
+            );
+        }
+        assert_ne!(
+            hash_config(&config, directory),
+            hash_config(&config, root.path().parent().unwrap().to_str().unwrap())
+        );
+    }
+
     /// Negative control for the fix above: the resolved-directory hashing must not become so
     /// specific that two calls resolving to the SAME directory stop sharing a cache entry. An
     /// over-eager fix (e.g. hashing a directory listing, an inode, or a timestamp instead of the
@@ -456,10 +488,11 @@ mod tests {
 
         // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
         // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Version 21 reads page-like rasters and known
-        // full-page scans with the best model as contrast-enhanced grayscale instead of Otsu.
+        // silently reusing entries computed the old way. Version 22 keys on the canonical tessdata
+        // directory and on each primary model file's size and modification time: older entries were
+        // keyed by the directory path alone and kept matching after a pack was replaced in place.
         assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 21,
+            TESSERACT_RESULT_SCHEMA_VERSION, 22,
             "a bump must be deliberate: state here which change made an old entry wrong"
         );
         assert_ne!(

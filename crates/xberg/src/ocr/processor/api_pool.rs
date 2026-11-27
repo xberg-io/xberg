@@ -30,21 +30,26 @@ pub(crate) fn tesseract_api_capacity() -> usize {
 
 #[derive(Clone, PartialEq, Eq)]
 struct ApiKey {
-    tessdata_path: String,
+    /// Canonical, so one directory spelled two ways shares its engines.
+    tessdata_path: std::path::PathBuf,
     language: String,
     oem: u8,
     osd_revision: Option<blake3::Hash>,
     primary_revision: Option<blake3::Hash>,
+    /// Size and modification time of the primary model files, so an engine built from a pack that
+    /// was since replaced in place is not handed out for the new one.
+    identity: Option<blake3::Hash>,
 }
 
 impl ApiKey {
     fn for_models(models: &super::model_context::ModelContext, language: &str, oem: u8) -> Self {
         Self {
-            tessdata_path: models.directory.clone(),
+            tessdata_path: super::validation::canonical_tessdata_dir(&models.directory),
             language: language.into(),
             oem,
             osd_revision: models.osd_revision,
             primary_revision: models.primary_revision(),
+            identity: models.identity(),
         }
     }
 }
@@ -712,6 +717,42 @@ mod tests {
     }
 
     #[test]
+    fn a_model_replaced_in_place_never_reuses_the_engine_built_from_the_old_one() {
+        use super::super::model_context::ModelContext;
+        use crate::ocr::types::TesseractConfig;
+
+        let root = tempfile::tempdir().unwrap();
+        let english = root.path().join("eng.traineddata");
+        std::fs::write(&english, b"first model").unwrap();
+        let directory = root.path().to_str().unwrap().to_owned();
+        let models = |directory: String| {
+            ModelContext::for_provisioned(&TesseractConfig {
+                language: "eng".into(),
+                tessdata_path: Some(directory.into()),
+                psm: 3,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let pool = ResourcePool::new(1);
+        let checkout = |models: &ModelContext, handle| {
+            pool.checkout::<(), _>(ApiKey::for_models(models, "eng", 1), || Ok(handle))
+                .unwrap()
+        };
+
+        drop(checkout(&models(directory.clone()), 1));
+        let spelled_otherwise = format!("{directory}{}", std::path::MAIN_SEPARATOR);
+        assert_eq!(
+            *checkout(&models(spelled_otherwise), 2),
+            1,
+            "one directory shares its engines"
+        );
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&english, b"a replaced model").unwrap();
+        assert_eq!(*checkout(&models(directory), 2), 2);
+    }
+
+    #[test]
     fn should_keep_requested_engine_modes_separate_in_pool_keys() {
         let pool = ResourcePool::new(1);
         let key = |oem| ApiKey {
@@ -720,6 +761,7 @@ mod tests {
             oem,
             osd_revision: None,
             primary_revision: None,
+            identity: None,
         };
         drop(pool.checkout::<(), _>(key(1), || Ok(1)).unwrap());
         let reused = pool
@@ -993,11 +1035,12 @@ mod tests {
     }
     fn dictionary_key(path: &str, language: &str, oem: u8) -> ApiKey {
         ApiKey {
-            tessdata_path: path.to_owned(),
+            tessdata_path: path.into(),
             language: language.to_owned(),
             oem,
             osd_revision: None,
             primary_revision: None,
+            identity: None,
         }
     }
 

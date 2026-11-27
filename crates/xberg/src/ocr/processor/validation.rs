@@ -245,6 +245,48 @@ fn resolve_tessdata_path_with(
     }
 }
 
+/// The directory as caches key it: symlinks, `.` and `..` resolved when it exists, trailing
+/// separators dropped otherwise, so `/a/b` and `/a/b/` name one directory.
+pub(crate) fn canonical_tessdata_dir(directory: &str) -> PathBuf {
+    std::fs::canonicalize(directory).unwrap_or_else(|_| {
+        let trimmed = directory.trim_end_matches(['/', std::path::MAIN_SEPARATOR]);
+        PathBuf::from(if trimmed.is_empty() { directory } else { trimmed })
+    })
+}
+
+/// Hash what identifies each language's model file in `directory` without reading it: the
+/// language, then the file's size and modification time, or that it is no regular file.
+///
+/// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
+/// and engines made from the old one. It costs one `stat` per language. A rewrite that keeps both
+/// the size and the modification time (two writes within one clock tick of the file system) is
+/// not seen. ~keep
+pub(crate) fn hash_pack_identities<'a>(
+    hasher: &mut blake3::Hasher,
+    directory: &Path,
+    languages: impl IntoIterator<Item = &'a str>,
+) {
+    for lang in languages {
+        hasher.update(&(lang.len() as u64).to_le_bytes());
+        hasher.update(lang.as_bytes());
+        match std::fs::metadata(directory.join(format!("{lang}.traineddata"))) {
+            Ok(metadata) if metadata.is_file() => {
+                let modified = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |since_epoch| since_epoch.as_nanos());
+                hasher.update(&[1]);
+                hasher.update(&metadata.len().to_le_bytes());
+                hasher.update(&modified.to_le_bytes());
+            }
+            _ => {
+                hasher.update(&[0]);
+            }
+        }
+    }
+}
+
 /// Refuse a language that is not a model name before it is joined into a file path.
 ///
 /// `OcrConfig::validate` rejects these first; this covers callers that build a `TesseractConfig`

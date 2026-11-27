@@ -19,6 +19,9 @@ fn invalidate_script_cache(invalidated: &AtomicBool, script: &str, error: &OcrEr
 pub(super) struct ModelContext {
     pub(super) directory: String,
     pub(super) osd_revision: Option<blake3::Hash>,
+    /// Size and modification time of each primary language's model file, for cache and pool
+    /// keys. Unlike `primary` it is taken for every PSM and never reads the files.
+    identity: Option<blake3::Hash>,
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
@@ -131,6 +134,11 @@ impl ModelContext {
 
     pub(super) fn primary_revision(&self) -> Option<blake3::Hash> {
         self.primary.as_ref().map(|primary| primary.revision)
+    }
+
+    /// What identifies the primary model files this context was resolved against.
+    pub(super) fn identity(&self) -> Option<blake3::Hash> {
+        self.identity
     }
 
     fn read_primary_revision(&self, languages: &[String]) -> Result<blake3::Hash, OcrError> {
@@ -286,6 +294,13 @@ impl ModelContext {
 
     fn for_config(directory: String, psm: u8, languages: Vec<String>) -> Result<Self, OcrError> {
         let mut context = Self::for_path(directory, psm)?;
+        let mut identity = blake3::Hasher::new();
+        super::validation::hash_pack_identities(
+            &mut identity,
+            std::path::Path::new(&context.directory),
+            languages.iter().map(String::as_str),
+        );
+        context.identity = Some(identity.finalize());
         if context.osd_revision.is_some() {
             let revision = context.read_primary_revision(&languages)?;
             context.primary = Some(PrimaryModels { languages, revision });
@@ -303,6 +318,7 @@ impl ModelContext {
         Ok(Self {
             directory,
             osd_revision,
+            identity: None,
             primary: None,
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
@@ -349,6 +365,14 @@ impl ModelContext {
 
     pub(super) fn result_key(&self, config: &TesseractConfig) -> String {
         let mut base = super::config::hash_config(config, &self.directory);
+        // ~keep The directory path alone keeps matching after a pack is replaced in place.
+        if let Some(identity) = self.identity {
+            let mut hash = blake3::Hasher::new();
+            hash.update(b"tesseract-primary-model-identity-v1");
+            hash.update(base.as_bytes());
+            hash.update(identity.as_bytes());
+            base = hash.finalize().to_hex().to_string();
+        }
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
             hash.update(b"tesseract-script-retry-v7");
@@ -397,6 +421,58 @@ fn model_read_error(path: &std::path::Path, error: impl std::fmt::Display) -> Oc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn result_key_changes_when_a_primary_model_is_replaced_in_place_without_osd() {
+        let root = tempfile::tempdir().unwrap();
+        let english = root.path().join("eng.traineddata");
+        std::fs::write(&english, b"first model").unwrap();
+        std::fs::write(root.path().join("deu.traineddata"), b"german").unwrap();
+        let config = TesseractConfig {
+            language: "eng".into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 3,
+            ..Default::default()
+        };
+        let key = || {
+            let context = ModelContext::for_provisioned(&config).unwrap();
+            assert!(context.osd_revision.is_none() && context.primary_revision().is_none());
+            context.result_key(&config)
+        };
+
+        let first = key();
+        assert_eq!(first, key(), "an unchanged model keeps its entries");
+        std::fs::write(root.path().join("deu.traineddata"), b"another german model").unwrap();
+        assert_eq!(first, key(), "a language that is not requested is not part of the key");
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&english, b"a replaced model").unwrap();
+        assert_ne!(
+            first,
+            key(),
+            "text read with the old model must not be served for the new one"
+        );
+    }
+
+    #[test]
+    fn result_key_ignores_how_the_directory_is_spelled() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("eng.traineddata"), b"model").unwrap();
+        let key = |directory: String| {
+            let config = TesseractConfig {
+                language: "eng".into(),
+                tessdata_path: Some(directory.into()),
+                psm: 3,
+                ..Default::default()
+            };
+            ModelContext::for_provisioned(&config).unwrap().result_key(&config)
+        };
+        let directory = root.path().to_str().unwrap();
+
+        assert_eq!(
+            key(directory.to_owned()),
+            key(format!("{directory}{}", std::path::MAIN_SEPARATOR))
+        );
+    }
 
     #[test]
     fn osd_only_key_requires_the_captured_osd_bytes() {
