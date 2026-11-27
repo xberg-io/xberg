@@ -33,7 +33,8 @@
 //! users cannot rename, such as a subdirectory of the sticky `/tmp`.
 //!
 //! Every failure falls back to the normal online-optimised build, at most one load and one save
-//! per build; a graph that fails its checks or fails to load is deleted.
+//! per build; a graph that fails its checks or fails to load is deleted. A cache directory that
+//! is never writable is reported once per process.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -72,6 +73,8 @@ const SHA256_HEX_LEN: usize = 64;
 const STAMP_SETTLE: Duration = Duration::from_secs(2);
 
 static STAGING_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Cache directories already reported as unable to stage a graph.
+static UNSTAGEABLE_DIRS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
 
 /// How [`commit_with_cache`] produced its session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,7 +163,7 @@ fn commit_with_cache(
     let staged = match slot.create_staging() {
         Ok(staged) => staged,
         Err(error) => {
-            tracing::debug!(dir = %slot.dir.display(), %error, "ORT saved graph: cannot stage; optimising online");
+            report_unstageable(&slot.dir, &error);
             return online(configure, model).map(|session| (session, Outcome::Online));
         }
     };
@@ -231,6 +234,34 @@ fn load_saved(
         }
     }
     Ok(None)
+}
+
+/// Warn the first time `dir` cannot stage a graph in this process, so a cache directory that is
+/// never writable is visible without repeating on every session build.
+fn report_unstageable(dir: &Path, error: &std::io::Error) {
+    if first_unstageable(dir) {
+        tracing::warn!(
+            dir = %dir.display(),
+            %error,
+            "ORT saved graph cache is not writable; optimising online in this process. Fix the \
+             directory's permissions or set XBERG_ORT_OPTIMIZED_CACHE=0"
+        );
+    } else {
+        tracing::debug!(dir = %dir.display(), %error, "ORT saved graph: cannot stage; optimising online");
+    }
+}
+
+/// Whether this is the first staging failure in `dir` for this process, so it is warned about
+/// once and later ones are logged at debug.
+fn first_unstageable(dir: &Path) -> bool {
+    let mut reported = UNSTAGEABLE_DIRS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if reported.iter().any(|seen| seen == dir) {
+        return false;
+    }
+    reported.push(dir.to_path_buf());
+    true
 }
 
 /// The parts of the host that change which optimised graph ONNX Runtime produces.

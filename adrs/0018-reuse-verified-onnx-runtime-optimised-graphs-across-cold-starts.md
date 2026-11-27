@@ -102,6 +102,8 @@ Rules:
   and unreferenced graphs older than one hour are swept on publish; at most 16
   entries are kept. The sidecar read is capped at 4 KiB, the graph read at
   its recorded size.
+* **Unwritable cache.** A cache directory that cannot stage a graph is
+  reported with one warning per directory per process, then at debug.
 * **Default and switches.** On by default, because the protections above make
   a saved graph no easier to subvert than the model cache beside it for
   anyone except the cache owner (see the threat model), and the benefit
@@ -166,7 +168,7 @@ Rules:
 refusal of group/world-writable and symlinked directories and entries,
 tampered, truncated, oversized, malformed and foreign sidecars, recording and
 trusting a settled graph's identity, re-hashing a graph rewritten in place or
-replaced, discard, eviction, sweeping,
+replaced, the once-per-directory staging warning, discard, eviction, sweeping,
 the entry cap and racing publishers; the ignored `graph_verification_cost`
 test measures load time with and without the hash. ORT-backed tests on a
 model built in memory prove the save-then-load cycle, a forged entry that

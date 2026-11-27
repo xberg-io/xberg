@@ -437,6 +437,45 @@ fn a_graph_changed_after_its_identity_was_recorded_is_hashed_again() {
     assert!(!slot.verified_graph().unwrap().unwrap().hashed);
 }
 
+#[test]
+fn a_staging_failure_is_warned_once_per_directory() {
+    let root = TempDir::new().unwrap();
+    let dir = root.path().join("cache");
+    let other = root.path().join("other");
+
+    assert!(
+        first_unstageable(&dir),
+        "the first failure in a directory is warned about"
+    );
+    assert!(!first_unstageable(&dir), "later failures in it are not");
+    assert!(
+        first_unstageable(&other),
+        "another directory is warned about separately"
+    );
+}
+
+#[test]
+fn a_read_only_cache_dir_cannot_stage() {
+    if current_uid() == 0 {
+        return;
+    }
+    let root = TempDir::new().unwrap();
+    let slot = slot(&root);
+    slot.prepare_dir().unwrap();
+    fs::set_permissions(&slot.dir, fs::Permissions::from_mode(0o500)).unwrap();
+
+    assert_eq!(
+        slot.prepare_dir(),
+        Ok(true),
+        "an owner-only read-only directory passes the checks"
+    );
+    assert!(
+        slot.create_staging().is_err(),
+        "but cannot stage, which is what gets warned about"
+    );
+    fs::set_permissions(&slot.dir, fs::Permissions::from_mode(0o700)).unwrap();
+}
+
 /// Times loading published graphs of several sizes with and without the hash. Run in release:
 /// `cargo test -p xberg --release --lib -- --ignored --nocapture graph_verification_cost`.
 /// `XBERG_ORT_GRAPH_BENCH_MIB` overrides the sizes (comma-separated MiB, default `16,169,512`).
