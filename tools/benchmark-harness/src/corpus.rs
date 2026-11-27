@@ -333,7 +333,7 @@ mod tests {
         let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let fixtures_dir = crate_root.join("fixtures");
 
-        let expected_counts: &[(&str, usize)] = &[("wpd", 7), ("docbook", 7), ("jpeg", 18), ("tiff", 2), ("yaml", 6)];
+        let expected_counts: &[(&str, usize)] = &[("wpd", 7), ("docbook", 7), ("jpeg", 54), ("tiff", 2), ("yaml", 6)];
 
         for (requested, expected_count) in expected_counts {
             let docs = build_corpus(
