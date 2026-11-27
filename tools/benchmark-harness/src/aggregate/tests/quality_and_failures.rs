@@ -251,8 +251,9 @@ fn test_infra_failure_does_not_penalize_quality_or_success_rate() {
 /// started `success=true` / `ErrorKind::None` but scored `f1_score_text == 0.0` against a
 /// non-empty ground truth is flipped to `success=false` / `ErrorKind::ZeroOverlap` before it
 /// reaches aggregation. Aggregation must treat that flipped result exactly like any other
-/// framework-fault failure: excluded from quality percentiles/rankings but counted against
-/// coverage/success-rate stats — never pooled as a legitimate 0.0 quality sample.
+/// framework-fault failure: excluded from the `quality` percentiles and rankings but counted
+/// against coverage/success-rate stats. Only `quality_including_failures` pools its 0.0 (see
+/// below).
 #[test]
 fn reclassified_zero_overlap_result_is_excluded_from_quality_and_counted_as_failure() {
     let success = result_with_quality("fw", "pdf", 0.9, true);
@@ -295,6 +296,48 @@ fn reclassified_zero_overlap_result_is_excluded_from_quality_and_counted_as_fail
     // Quality ranking is coverage-adjusted: 0.9 * (1 accountable success / 2 accountable samples).
     let aggregated = aggregate_new_format(&[success, reclassified]);
     assert!((ranking_value(&aggregated.comparison.quality_ranking_markdown, "fw") - 0.45).abs() < 1e-9);
+}
+
+/// `quality_including_failures` counts the zero-overlap row at the TF1 of 0 it was scored with,
+/// so a document that fell from a good score to the wrong text pulls the distribution down
+/// instead of disappearing. A framework error carries no quality and stays out of both blocks.
+#[test]
+fn quality_including_failures_counts_a_zero_overlap_row_at_tf1_zero() {
+    let success = result_with_quality("fw", "pdf", 0.9, true);
+    let framework_error = result_with_quality("fw", "pdf", 0.0, false);
+    let mut reclassified = result_with_quality("fw", "pdf", 0.0, true);
+    reclassified.success = false;
+    reclassified.error_kind = ErrorKind::ZeroOverlap;
+    reclassified.error_message = Some("extraction produced no ground-truth token overlap".to_string());
+
+    let percentiles = calculate_percentiles(&[&success, &reclassified, &framework_error]);
+
+    let quality = percentiles.quality.expect("successful quality");
+    assert_eq!(quality.f1_text_p50, 0.9);
+    let including = percentiles
+        .quality_including_failures
+        .expect("zero-overlap rows carry quality");
+    assert!((including.f1_text_p50 - 0.45).abs() < 1e-9, "{}", including.f1_text_p50);
+    assert!((including.quality_score_p50 - 0.45).abs() < 1e-9);
+    assert_eq!(percentiles.zero_overlap, 1);
+    assert!((percentiles.success_rate_percent - 100.0 / 3.0).abs() < 1e-9);
+}
+
+#[test]
+fn quality_including_failures_equals_quality_without_zero_overlap_rows() {
+    let results = [
+        result_with_quality("fw", "pdf", 0.9, true),
+        result_with_quality("fw", "pdf", 0.5, true),
+        result_with_quality("fw", "pdf", 0.0, false),
+    ];
+    let refs: Vec<&BenchmarkResult> = results.iter().collect();
+
+    let percentiles = calculate_percentiles(&refs);
+
+    assert_eq!(
+        serde_json::to_value(&percentiles.quality).unwrap(),
+        serde_json::to_value(&percentiles.quality_including_failures).unwrap()
+    );
 }
 
 /// A layout-bearing row whose layout pass failed is the variant's own fault: it counts against

@@ -370,6 +370,13 @@ failures (`FrameworkError`, `Timeout`, `EmptyContent`, and `ZeroOverlap`). Unsup
 execution. Infrastructure failures are reported separately and do not enter this rate; a framework
 with no accountable results still fails validation.
 
+A `ZeroOverlap` row is a failure for this rate but still a quality result: its output was scored
+(TF1 = 0). The aggregate's `quality_including_failures` percentiles, the `layout_impact` and
+`head_to_head` pairings and the gap report count it at that score, so a document that scores 1.0
+under one configuration and 0.0 under another shows as a regression instead of disappearing. The
+`quality` percentiles and quality rankings stay success-only, because rankings already apply
+success coverage (see [SCHEMA.md](SCHEMA.md)).
+
 `--max-concurrent` and `--xberg-max-threads` can be varied independently for Xberg.
 An explicit thread budget applies to both single-file and native batch invocations.
 Omitting it preserves Xberg's automatic single-file budget and uses the worker limit

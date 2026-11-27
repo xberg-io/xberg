@@ -1,4 +1,4 @@
-# Aggregation Schema v2.12.0
+# Aggregation Schema v2.13.0
 
 This document describes the structure of `aggregated.json` produced by `benchmark-harness consolidate`.
 
@@ -6,7 +6,7 @@ This document describes the structure of `aggregated.json` produced by `benchmar
 
 ```json
 {
-  "schema_version": "2.12.0",
+  "schema_version": "2.13.0",
   "by_framework_mode": {
     "<aggregate_key>": {
       /* FrameworkModeAggregation */
@@ -118,7 +118,10 @@ suppression and dispersion contract (v2.10.0+):
   "extraction_duration": { "p50": 80.0, "p95": 120.0, "p99": 160.0, "sample_count": 40, "std_dev": 12.0 }, // Optional
   "quality": {
     /* QualityPercentiles */
-  }, // Optional, if quality data available
+  }, // Optional, if quality data available; successful results only
+  "quality_including_failures": {
+    /* QualityPercentiles */
+  }, // Optional (v2.13.0+); successes plus zero_overlap failures at their scored TF1 of 0
   "success_rate_percent": 84.0,
   "pages_per_sec": { "p50": 12.5, "p95": 8.0, "p99": 5.0, "sample_count": 40, "std_dev": 1.1 }, // Optional (v2.7.0+, PDF only)
   "cpu_seconds": { "p50": 1.2, "p95": 2.1, "p99": 3.4, "sample_count": 38, "std_dev": 0.6 }, // v2.7.0+
@@ -181,6 +184,15 @@ Includes p50, p95, p99 for all F1 metrics. Layout percentiles are `null` for pla
 `reading_order_p50` is the median of `quality.reading_order_score` over the successful results that
 have one; results without it (too few anchor tokens, see `quality::reading_order_score`) are not
 counted as 0. It is report-only and is not part of `quality_score`.
+
+`quality` covers successful results only; the quality rankings read it and apply success coverage
+separately, so a failure is penalised once. `quality_including_failures` (v2.13.0+) is the same
+block over successful results plus `zero_overlap` failures, each counted at the quality it was
+scored with (TF1 = 0). A zero-overlap row returned the wrong text, which is a quality result, not a
+missing one: without it a document that scores 1.0 under one configuration and 0.0 under another
+drops out of the second configuration's distribution instead of pulling it down. Read
+`quality_including_failures` when comparing quality without a coverage adjustment. Failures
+without a scored output (`empty_content`, `framework_errors`, timeouts) are in neither block.
 
 ## SystemLoadPercentiles (v2.7.0+)
 
@@ -398,7 +410,7 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   "ocr": false, // shared by every successful row on both sides, else null
   "baseline_ocr_fixture_count": 0, // paired fixtures the baseline variant OCRed
   "layout_ocr_fixture_count": 0, // paired fixtures the layout variant OCRed
-  "paired_fixture_count": 41, // fixtures where both variants succeeded
+  "paired_fixture_count": 41, // fixtures where both variants have a quality result (success or zero overlap)
   "sf1": { "baseline_p50": 0.5, "layout_p50": 0.7, "delta_p50": 0.18, "sample_count": 41 }, // null for plaintext
   "tf1": { /* PairedDelta */ },
   "reading_order": { /* PairedDelta */ }, // null when no paired fixture carries a score
@@ -423,13 +435,15 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
   the three medians are `null` exactly when it is `0` (e.g. `duration_ms` in batch mode), so an
   unmeasured metric never reads as "no difference". `validate-artifacts` enforces this.
 - **Pairing** happens by fixture inside one (`output_format`, `mode`, `file_type`) bucket and only
-  for fixtures where both variants succeeded. A bucket whose layout rows all failed still gets an
-  entry, with `paired_fixture_count: 0`.
+  for fixtures where both variants have a quality result: a success, or (v2.13.0+) a `ZeroOverlap`
+  failure, which pairs at the TF1 of 0 it was scored with so a fixture that falls from 1.0 to 0.0
+  is `regressed` instead of dropping out. A bucket whose layout rows all failed otherwise still gets
+  an entry, with `paired_fixture_count: 0`.
 - **Ambiguous fixture ids**: `fixture_id` is the file stem and the corpus repeats stems, so one id
   can name several documents. Rows carry no path; an id seen (per `file_type`) with two different
   non-zero `file_size` values is excluded from pairing on every side and listed in
   `ambiguous_fixture_ids`. Repeated rows with one size are treated as re-runs of one document
-  (first success wins). Same-sized collisions cannot be detected.
+  (first success wins, then the first zero-overlap row). Same-sized collisions cannot be detected.
 - **OCR** is a property of each row, not part of the bucket: failed rows never report it
   (`ocr: null`), and an auto-OCR variant decides per document. `ocr` is the value every successful
   row on both sides reports, and `null` when they disagree, any did not report it, or none
@@ -448,7 +462,8 @@ trailing model-version segment (`-layout-v3`) is discarded as a last resort.
 ## HeadToHead (v2.12.0+)
 
 Top-level `head_to_head` compares every xberg framework with every non-xberg framework on the
-documents both succeeded on, one entry per (xberg framework, competitor framework,
+documents both have a quality result for (success or, v2.13.0+, zero overlap; see LayoutImpact),
+one entry per (xberg framework, competitor framework,
 `output_format`, `mode`, `file_type`) in which the two share at least one fixture id. OCR use does
 not split entries (see LayoutImpact): a scan xberg auto-OCRed and the competitor read without OCR
 is one shared fixture.
@@ -463,10 +478,10 @@ is one shared fixture.
   "ocr": false, // shared by every successful row on both sides, else null
   "xberg_ocr_fixture_count": 0, // shared fixtures xberg OCRed
   "competitor_ocr_fixture_count": 0, // shared fixtures the competitor OCRed
-  "shared_fixture_count": 3, // both succeeded
-  "xberg_only_fixture_ids": ["doc_d"], // xberg succeeded, competitor absent or failed; first 50, sorted
+  "shared_fixture_count": 3, // both have a quality result
+  "xberg_only_fixture_ids": ["doc_d"], // only xberg has a quality result; first 50, sorted
   "xberg_only_fixture_count": 1, // total, so a capped list shows as count > length
-  "competitor_only_fixture_ids": [], // competitor succeeded, xberg absent or failed; first 50, sorted
+  "competitor_only_fixture_ids": [], // only the competitor has a quality result; first 50, sorted
   "competitor_only_fixture_count": 0,
   "ambiguous_fixture_ids": [], // stems naming more than one document (see LayoutImpact); not compared
   "ambiguous_fixture_count": 0,
@@ -488,6 +503,21 @@ exactly `min(count, 50)` ids.
 a quality metric means xberg scored higher. All medians cover only the shared fixtures, so a
 competitor that ran 3 of 4 documents is compared on those 3 rather than credited or penalised for
 the fourth.
+
+## Migration from v2.12.0 to v2.13.0
+
+2.12.0 aggregates still deserialize (every new field defaults); `validate-artifacts` accepts only
+the current version.
+
+- **`PerformancePercentiles.quality_including_failures`**: quality percentiles that also count
+  `zero_overlap` failures at their scored TF1 of 0. `quality` and every ranking are unchanged.
+- **`layout_impact` / `head_to_head` pairing**: zero-overlap rows now pair (and leave the
+  `*_only` lists) instead of being dropped, so `paired_fixture_count`, `shared_fixture_count` and
+  the quality and timing deltas can move between 2.12.0 and 2.13.0 on the same results.
+- **CJK tokenization** (scoring, not schema): spaces and tabs between two CJK characters are
+  removed from ground truth and output before TF1 tokenization, so TF1, `quality_score` and SF1 of
+  documents with CJK text can change for every framework. Do not compare CJK scores across this
+  boundary.
 
 ## Migration from v2.11.0 to v2.12.0
 

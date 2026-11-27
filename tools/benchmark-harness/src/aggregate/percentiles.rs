@@ -8,7 +8,9 @@ use super::types::{
     QualityPercentiles, SystemLoadPercentiles,
 };
 use crate::stats::{percentile_r7, sanitize_f64};
-use crate::types::{BenchmarkResult, ErrorKind, expand_performance_iterations, successful_performance_samples};
+use crate::types::{
+    BenchmarkResult, ErrorKind, expand_performance_iterations, has_quality_result, successful_performance_samples,
+};
 use std::collections::HashMap;
 
 /// Build a `Percentiles` group from a slice of values (need not be pre-sorted).
@@ -240,25 +242,25 @@ fn count_error_kinds_and_details(results: &[&BenchmarkResult]) -> ErrorKindCount
     }
 }
 
-/// Build the quality percentile block from a group's successful results, or `None` when none of
-/// them carry a quality score.
-fn build_quality_percentiles(successful: &[&BenchmarkResult]) -> Option<QualityPercentiles> {
-    let mut f1_texts: Vec<f64> = successful
+/// Build the quality percentile block from `results`, or `None` when none of them carry a quality
+/// score.
+fn build_quality_percentiles(results: &[&BenchmarkResult]) -> Option<QualityPercentiles> {
+    let mut f1_texts: Vec<f64> = results
         .iter()
         .filter_map(|r| r.quality.as_ref().map(|q| q.f1_score_text))
         .filter(|v| !v.is_nan() && v.is_finite())
         .collect();
-    let mut f1_numerics: Vec<f64> = successful
+    let mut f1_numerics: Vec<f64> = results
         .iter()
         .filter_map(|r| r.quality.as_ref().map(|q| q.f1_score_numeric))
         .filter(|v| !v.is_nan() && v.is_finite())
         .collect();
-    let mut f1_layouts: Vec<f64> = successful
+    let mut f1_layouts: Vec<f64> = results
         .iter()
         .filter_map(|r| r.quality.as_ref().and_then(|q| q.f1_score_layout))
         .filter(|v| !v.is_nan() && v.is_finite())
         .collect();
-    let mut quality_scores: Vec<f64> = successful
+    let mut quality_scores: Vec<f64> = results
         .iter()
         .filter_map(|r| r.quality.as_ref().map(|q| q.quality_score))
         .filter(|v| !v.is_nan() && v.is_finite())
@@ -268,7 +270,7 @@ fn build_quality_percentiles(successful: &[&BenchmarkResult]) -> Option<QualityP
         return None;
     }
 
-    let mut reading_orders: Vec<f64> = successful
+    let mut reading_orders: Vec<f64> = results
         .iter()
         .filter_map(|r| r.quality.as_ref().and_then(|q| q.reading_order_score))
         .filter(|v| v.is_finite())
@@ -319,8 +321,10 @@ fn build_quality_percentiles(successful: &[&BenchmarkResult]) -> Option<QualityP
 ///
 /// Performance and raw quality percentiles use only successful samples. Quality rankings apply
 /// accountable success coverage separately, avoiding a nonlinear double penalty from both zero
-/// injection and coverage adjustment. The success-rate denominator is successes plus
-/// framework-fault failures; harness/config-setup failures are excluded. ~keep
+/// injection and coverage adjustment. `quality_including_failures` adds zero-overlap failures at
+/// their scored quality for readers that compare quality without a coverage adjustment. The
+/// success-rate denominator is successes plus framework-fault failures; harness/config-setup
+/// failures are excluded. ~keep
 pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> PerformancePercentiles {
     let successful: Vec<&BenchmarkResult> = results.iter().filter(|r| r.success).copied().collect();
     let framework_fault_failures = results.iter().filter(|r| is_framework_fault_failure(r)).count();
@@ -355,6 +359,8 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
 
     let error_counts = count_error_kinds_and_details(results);
     let quality = build_quality_percentiles(&successful);
+    let quality_scored: Vec<&BenchmarkResult> = results.iter().copied().filter(|r| has_quality_result(r)).collect();
+    let quality_including_failures = build_quality_percentiles(&quality_scored);
 
     PerformancePercentiles {
         successful_sample_count: successful.len(),
@@ -374,6 +380,7 @@ pub(super) fn calculate_percentiles(results: &[&BenchmarkResult]) -> Performance
         success_rate_percent,
         extraction_duration: performance_metrics.extraction_duration,
         quality,
+        quality_including_failures,
         pages_per_sec: performance_metrics.pages_per_sec,
         cpu_seconds: performance_metrics.cpu_seconds,
         batch_size,

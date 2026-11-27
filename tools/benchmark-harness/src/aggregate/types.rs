@@ -1,4 +1,4 @@
-//! Schema types for the aggregated benchmark output (v2.12.0).
+//! Schema types for the aggregated benchmark output (v2.13.0).
 //!
 //! Pure data definitions only — see [`super`] for the aggregation logic that populates them.
 
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Schema version for the aggregated output format.
-pub const SCHEMA_VERSION: &str = "2.12.0";
+pub const SCHEMA_VERSION: &str = "2.13.0";
 
 /// Consolidated results using aggregation format v2.8.0.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,7 +101,9 @@ pub struct PairedFixtureDeltas {
 /// Variants pair by name, the layout variant's `layout` segment replaced by `baseline`
 /// (`xberg-markdown-layout` with `xberg-markdown-baseline`), or dropped when no such framework
 /// exists (`xberg-markdown-sceptre-ort-layout` with `xberg-markdown-sceptre-ort`). Only fixtures
-/// where both variants succeeded are paired; duration and memory are further restricted to
+/// where both variants carry a quality result are paired: a success, or (v2.13.0+) a zero-overlap
+/// failure at the TF1 of 0 it was scored with, so a fixture that falls from 1.0 to 0.0 shows as a
+/// regression instead of dropping out. Duration and memory are further restricted to
 /// single-file, cold-process measurements (and isolated-process RSS for memory) because batch rows
 /// do not carry per-document timing.
 ///
@@ -123,7 +125,7 @@ pub struct LayoutImpact {
     /// Paired fixtures on which the layout variant reported OCR use.
     #[serde(default)]
     pub layout_ocr_fixture_count: usize,
-    /// Fixtures where both variants succeeded.
+    /// Fixtures where both variants carry a quality result (success or zero overlap).
     pub paired_fixture_count: usize,
     /// Structural F1; `None` for plaintext output or when no fixture carries it.
     pub sf1: Option<PairedDelta>,
@@ -151,7 +153,8 @@ pub struct LayoutImpact {
     pub per_fixture: PairedFixtureDeltas,
 }
 
-/// xberg against one competitor on the fixtures both succeeded on (v2.12.0+).
+/// xberg against one competitor on the fixtures both carry a quality result for (v2.12.0+): a
+/// success, or (v2.13.0+) a zero-overlap failure at the TF1 of 0 it was scored with.
 ///
 /// All [`PairedDelta`]s read with `baseline` = competitor, `layout` = xberg, so a positive
 /// `delta_p50` on a quality metric means xberg scored higher. Duration and memory carry
@@ -174,15 +177,16 @@ pub struct HeadToHead {
     /// Shared fixtures on which the competitor reported OCR use.
     #[serde(default)]
     pub competitor_ocr_fixture_count: usize,
-    /// Fixtures where both frameworks succeeded.
+    /// Fixtures where both frameworks carry a quality result (success or zero overlap).
     pub shared_fixture_count: usize,
-    /// Fixtures xberg succeeded on and the competitor did not (absent or failed): the first 50 ids
-    /// in sorted order; `xberg_only_fixture_count` is the total.
+    /// Fixtures xberg has a quality result for and the competitor does not (absent, or failed
+    /// other than by zero overlap): the first 50 ids in sorted order; `xberg_only_fixture_count`
+    /// is the total.
     pub xberg_only_fixture_ids: Vec<String>,
     #[serde(default)]
     pub xberg_only_fixture_count: usize,
-    /// Fixtures the competitor succeeded on and xberg did not (absent or failed): the first 50 ids
-    /// in sorted order; `competitor_only_fixture_count` is the total.
+    /// Fixtures the competitor has a quality result for and xberg does not: the first 50 ids in
+    /// sorted order; `competitor_only_fixture_count` is the total.
     pub competitor_only_fixture_ids: Vec<String>,
     #[serde(default)]
     pub competitor_only_fixture_count: usize,
@@ -635,9 +639,17 @@ pub struct PerformancePercentiles {
     /// Extraction duration percentiles (p50, p95, p99) in ms
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extraction_duration: Option<Percentiles>,
-    /// Quality score percentiles (p50, p95, p99) — 0.0 to 1.0
+    /// Quality score percentiles (p50, p95, p99) — 0.0 to 1.0, over successful results only.
+    /// Quality rankings read this block and apply success coverage separately.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<QualityPercentiles>,
+    /// Quality percentiles over successful results plus `zero_overlap` failures, the latter at
+    /// the quality they were scored with (TF1 = 0) (v2.13.0+). A zero-overlap row returned the
+    /// wrong text, which is a quality result: leaving it out of `quality` lets a document that
+    /// falls from 1.0 to 0.0 vanish instead of pulling the distribution down. `None` when no
+    /// result in the group carries a quality score; absent from pre-2.13.0 aggregates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_including_failures: Option<QualityPercentiles>,
     /// Pages-per-second percentiles, derived from `PdfMetadata.page_count` divided by wall-clock
     /// duration. `None` when no result in this group carries a known PDF page count (e.g.
     /// non-PDF file types, or a page count the harness could not detect). For a native batch,

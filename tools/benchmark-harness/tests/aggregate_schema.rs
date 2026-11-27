@@ -80,7 +80,7 @@ fn test_schema_version_2_12_0() {
     )];
 
     let aggregated = aggregate_new_format(&results);
-    assert_eq!(aggregated.schema_version, "2.12.0");
+    assert_eq!(aggregated.schema_version, "2.13.0");
 }
 
 #[test]
@@ -529,7 +529,7 @@ fn test_empty_results() {
     let results = vec![];
     let aggregated = aggregate_new_format(&results);
 
-    assert_eq!(aggregated.schema_version, "2.12.0");
+    assert_eq!(aggregated.schema_version, "2.13.0");
     assert!(aggregated.by_framework_mode.is_empty());
     assert!(aggregated.per_fixture_results.is_empty());
     assert_eq!(aggregated.metadata.total_results, 0);

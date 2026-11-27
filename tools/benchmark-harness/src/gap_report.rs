@@ -23,6 +23,9 @@ use std::path::Path;
 pub struct FrameworkScore {
     pub framework: String,
     pub success: bool,
+    /// Whether the scores below count in comparisons: a success, or a zero-overlap failure,
+    /// which returned the wrong text and counts at the TF1 of 0 it was scored with.
+    pub scored: bool,
     /// Text token F1 (`f1_score_text`).
     pub tf1: Option<f64>,
     /// Numeric token F1 (`f1_score_numeric`).
@@ -88,6 +91,7 @@ fn score_from_result(result: &BenchmarkResult) -> FrameworkScore {
     FrameworkScore {
         framework: base_framework(&result.framework).to_string(),
         success: result.success,
+        scored: crate::types::has_quality_result(result),
         tf1: quality.map(|q| q.f1_score_text),
         numeric_f1: quality.map(|q| q.f1_score_numeric),
         sf1: quality.and_then(|q| q.f1_score_layout),
@@ -122,13 +126,13 @@ pub fn build_document_rows(results: &[BenchmarkResult], config: &GapConfig) -> V
         let file_size = frameworks.values().map(|(_, size)| *size).max().unwrap_or(0);
 
         let xberg = frameworks.get(&config.baseline).map(|(s, _)| s);
-        let xberg_combined = xberg.and_then(|s| s.combined.filter(|_| s.success));
+        let xberg_combined = xberg.and_then(|s| s.combined.filter(|_| s.scored));
 
         let best = config
             .competitors
             .iter()
             .filter_map(|name| frameworks.get(name).map(|(s, _)| s))
-            .filter(|s| s.success)
+            .filter(|s| s.scored)
             .filter_map(|s| s.combined.map(|c| (s, c)))
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -299,8 +303,8 @@ fn push_layout_vs_docling(out: &mut String, rows: &[DocumentRow], config: &GapCo
     out.push_str("|---|--:|--:|--:|\n");
     let mut layout_rows: Vec<(&DocumentRow, f64, f64, f64)> = Vec::new();
     for row in rows {
-        let layout = row.scores.iter().find(|s| s.framework == config.layout && s.success);
-        let docling = row.scores.iter().find(|s| s.framework == "docling" && s.success);
+        let layout = row.scores.iter().find(|s| s.framework == config.layout && s.scored);
+        let docling = row.scores.iter().find(|s| s.framework == "docling" && s.scored);
         if let (Some(l), Some(d)) = (layout, docling)
             && let (Some(lc), Some(dc)) = (l.combined, d.combined)
             && dc > lc
@@ -532,6 +536,20 @@ mod tests {
         let rows = build_document_rows(&results, &GapConfig::default());
         assert!(rows[0].best_competitor.is_none());
         assert!(rows[0].combined_deficit.is_none());
+    }
+
+    #[test]
+    fn should_count_a_zero_overlap_heuristics_run_as_a_loss_at_tf1_zero() {
+        let mut zero_overlap = result("xberg-markdown-baseline", "a.pdf", 0.0, 0.0, 0.0, true);
+        zero_overlap.success = false;
+        zero_overlap.error_kind = crate::types::ErrorKind::ZeroOverlap;
+        let results = vec![zero_overlap, result("liteparse", "a.pdf", 1.0, 1.0, 1.0, true)];
+
+        let rows = build_document_rows(&results, &GapConfig::default());
+
+        assert_eq!(rows[0].xberg_combined, Some(0.0));
+        assert_eq!(rows[0].combined_deficit, Some(1.0));
+        assert_eq!(rows[0].tf1_deficit, Some(1.0));
     }
 
     #[test]

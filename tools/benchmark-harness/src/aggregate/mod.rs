@@ -1,12 +1,13 @@
-//! Aggregation module for benchmark results (v2.12.0 output schema).
+//! Aggregation module for benchmark results (v2.13.0 output schema).
 //!
 //! Groups [`BenchmarkResult`] records by framework-and-mode, output format, file type, and
 //! OCR usage (yes/no), then computes percentile-based statistics for each
-//! group. The output schema (`schema_version: "2.12.0"`) surfaces TF1 and SF1 separately
+//! group. The output schema (`schema_version: "2.13.0"`) surfaces TF1 and SF1 separately
 //! with per-fixture rows preserved and split rankings by output format, plus a cohort-wide
 //! [`FailureSummary`] rolling up framework-fault vs infrastructure failures (v2.9.0+), plus
 //! paired layout-vs-baseline ([`LayoutImpact`]) and xberg-vs-competitor ([`HeadToHead`])
-//! deltas computed from the per-fixture rows (v2.12.0+).
+//! deltas computed from the per-fixture rows (v2.12.0+). Zero-overlap failures count as quality
+//! results (TF1 = 0) in `quality_including_failures` and in the paired sections (v2.13.0+).
 //!
 //! # Percentile methodology
 //!
@@ -25,7 +26,8 @@
 //!
 //! Failed results (non-zero `error_kind`) are excluded from percentile
 //! calculations but still counted in `total_sample_count` to preserve the
-//! `success_rate_percent` metric.
+//! `success_rate_percent` metric. The one exception is `quality_including_failures`, which also
+//! counts zero-overlap failures at the quality they were scored with.
 //!
 //! # Output format support
 //!

@@ -404,6 +404,16 @@ pub(crate) fn is_timing_eligible(result: &BenchmarkResult) -> bool {
     result.success || result.error_kind == ErrorKind::ZeroOverlap
 }
 
+/// Whether a result carries a quality score that quality comparisons must count.
+///
+/// A [`ErrorKind::ZeroOverlap`] result stays a failure for success-rate accounting, but its
+/// output was scored against the ground truth (TF1 = 0): it is the worst quality result, not a
+/// missing one. Dropping it from a mean or a per-document pairing hides exactly the regressions
+/// where one configuration scores 1.0 and another returns the wrong text.
+pub(crate) fn has_quality_result(result: &BenchmarkResult) -> bool {
+    result.success || result.error_kind == ErrorKind::ZeroOverlap
+}
+
 /// Deduplicated performance samples for a group of results: one row per single-file success, or
 /// one anchor row per native batch (see [`BenchmarkResult::is_performance_sample`]). Timing
 /// eligibility (see [`is_timing_eligible`]) gates inclusion, not raw `success` — a zero-overlap
