@@ -4568,6 +4568,7 @@ pub(super) fn heuristically_restructured_ocr_pages(
             if !doc.elements.is_empty() && restructured_document_retains_prose(pages, collected_tables, &doc) =>
         {
             promote_isolated_title_lines(&mut doc);
+            promote_lone_numbered_titles(&mut doc);
             Some(doc)
         }
         Ok(_) => None,
@@ -4646,6 +4647,79 @@ fn promote_isolated_title_lines(doc: &mut crate::types::internal::InternalDocume
     for index in titles {
         doc.elements[index].kind = ElementKind::Heading { level: 2 };
     }
+}
+
+/// Most words after the number of a numbered line read as a title by
+/// [`promote_lone_numbered_titles`].
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MAX_NUMBERED_TITLE_WORDS: usize = 5;
+/// Fewest words of the paragraph a numbered title must introduce.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MIN_NUMBERED_TITLED_PARAGRAPH_WORDS: usize = 8;
+
+/// Make section headings of the numbered title lines the list pass read as one-item lists.
+///
+/// A scanned action plan titles each commitment "4. Leading" or "2. Good progress" above a
+/// sentence (nougat_005); the marker makes each a separate ordered list of one item. A real
+/// list item has a neighbouring item, so only an ordered item with no list item on either
+/// side, a few words of text without closing punctuation, and a paragraph of prose after it
+/// becomes a heading, keeping its number. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn promote_lone_numbered_titles(doc: &mut crate::types::internal::InternalDocument) {
+    use crate::types::document_structure::ContentLayer;
+    use crate::types::internal::ElementKind;
+
+    let body: Vec<usize> = doc
+        .elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| element.layer == ContentLayer::Body)
+        .map(|(index, _)| index)
+        .collect();
+    let is_list_item = |index: Option<&usize>| {
+        index.is_some_and(|&index| matches!(doc.elements[index].kind, ElementKind::ListItem { .. }))
+    };
+    let titles: Vec<usize> = body
+        .iter()
+        .enumerate()
+        .filter(|&(position, &index)| {
+            let element = &doc.elements[index];
+            let Some(next) = body.get(position + 1).map(|&next| &doc.elements[next]) else {
+                return false;
+            };
+            element.kind == (ElementKind::ListItem { ordered: true })
+                && element.list_item_source_label().is_some()
+                && !is_list_item(position.checked_sub(1).and_then(|previous| body.get(previous)))
+                && is_numbered_title_text(element.text.trim())
+                && next.kind == ElementKind::Paragraph
+                && next.text.split_whitespace().count() >= MIN_NUMBERED_TITLED_PARAGRAPH_WORDS
+        })
+        .map(|(_, &index)| index)
+        .collect();
+    for index in titles {
+        let element = &mut doc.elements[index];
+        let Some(label) = element.take_list_item_source_label() else {
+            continue;
+        };
+        let shift = label.len() + 1;
+        let removed = element.text.len() - element.text.trim_start().len();
+        let title = format!("{label} {}", element.text.trim_start());
+        element.text = title;
+        for annotation in &mut element.annotations {
+            annotation.start = (annotation.start as usize + shift).saturating_sub(removed) as u32;
+            annotation.end = (annotation.end as usize + shift).saturating_sub(removed) as u32;
+        }
+        element.kind = ElementKind::Heading { level: 2 };
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn is_numbered_title_text(text: &str) -> bool {
+    let words = text.split_whitespace().count();
+    !text.contains('\n')
+        && (1..=MAX_NUMBERED_TITLE_WORDS).contains(&words)
+        && text.starts_with(char::is_uppercase)
+        && text.ends_with(char::is_alphanumeric)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -5590,6 +5664,59 @@ mod tests {
             "Too short to be prose.",
         ]);
         promote_isolated_title_lines(&mut doc);
+        assert!(heading_texts(&doc).is_empty(), "{:?}", heading_texts(&doc));
+    }
+
+    fn numbered(builder: &mut InternalDocumentBuilder, label: &str, text: &str) {
+        let index = builder.push_list_item(text, true, vec![], None, None);
+        builder.set_list_item_source_label(index, label);
+    }
+
+    const COMMITMENT: &str = "Your organisation is committed to: Having targets that are specific, timed \
+                              and time-based.";
+
+    /// nougat_005: each commitment's level, "4. Leading", sits alone above its sentence and was
+    /// read as a one-item ordered list.
+    #[test]
+    fn a_lone_numbered_line_above_prose_becomes_a_heading_that_keeps_its_number() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.push_paragraph(
+            "Criteria 1.1 PACKAGING SUSTAINABILITY STRATEGY (core)",
+            vec![],
+            None,
+            None,
+        );
+        numbered(&mut builder, "4.", "Leading");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        numbered(&mut builder, "2.", "Good progress");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        let mut doc = builder.build();
+
+        promote_lone_numbered_titles(&mut doc);
+
+        assert_eq!(heading_texts(&doc), ["4. Leading", "2. Good progress"]);
+        assert!(
+            doc.elements
+                .iter()
+                .all(|element| element.list_item_source_label().is_none())
+        );
+    }
+
+    #[test]
+    fn real_lists_sentences_and_items_without_prose_after_stay_list_items() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        numbered(&mut builder, "1.", "First finding");
+        numbered(&mut builder, "2.", "Second finding");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        numbered(&mut builder, "3.", "Targets were met.");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        numbered(&mut builder, "4.", "Leading");
+        builder.push_paragraph("Too short to be prose.", vec![], None, None);
+        numbered(&mut builder, "5.", "Leading");
+        let mut doc = builder.build();
+
+        promote_lone_numbered_titles(&mut doc);
+
         assert!(heading_texts(&doc).is_empty(), "{:?}", heading_texts(&doc));
     }
 

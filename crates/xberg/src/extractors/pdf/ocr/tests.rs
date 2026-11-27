@@ -9708,6 +9708,119 @@ Name: ___
         assert!(heuristically_restructured_ocr_pages(&pages, &[1000.0, 1000.0], &[], &config).is_some());
     }
 
+    /// Four OCR pages, each a large-font title and two body paragraphs; pages 2 to 4 end in a
+    /// "Page N of 4" folio in the bottom margin, so no running footer spans every page.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    fn folio_footed_ocr_pages() -> Vec<Vec<crate::pdf::structure::types::PdfParagraph>> {
+        const PAGES: [(&str, &str, &str); 4] = [
+            (
+                "ANNUAL REPORT OVERVIEW",
+                "This report summarises the packaging commitments the organisation made this year.",
+                "Each commitment is scored against a published framework of five performance levels.",
+            ),
+            (
+                "REPORTING FRAMEWORK",
+                "The framework groups thirteen criteria into leadership, outcomes and operations.",
+                "Members answer every core criterion and as many recommended criteria as they can.",
+            ),
+            (
+                "OUR COMMITMENTS",
+                "The action plan below is a public commitment to improving packaging sustainability.",
+                "Members are encouraged to keep an internal plan with the steps behind each target.",
+            ),
+            (
+                "SIGN OFF",
+                "The chief financial officer approved this report on behalf of the whole organisation.",
+                "Questions about the report can be sent to the covenant office by email or by phone.",
+            ),
+        ];
+        PAGES
+            .iter()
+            .enumerate()
+            .map(|(index, (title, first, second))| {
+                let mut doc = crate::types::internal::InternalDocument::new("test");
+                doc.push_element(ocr_font_block(title, "28", 10.0, 50.0));
+                doc.push_element(ocr_font_block(first, "11", 60.0, 90.0));
+                doc.push_element(ocr_font_block(second, "11", 100.0, 130.0));
+                if index > 0 {
+                    doc.push_element(ocr_font_block(&format!("Page {} of 4", index + 1), "11", 955.0, 975.0));
+                }
+                crate::pdf::structure::adapters::ocr_doc_to_paragraphs(
+                    &doc,
+                    1000,
+                    crate::pdf::structure::adapters::OcrFontSizeScale::uniform(1.0),
+                )
+            })
+            .collect()
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    fn segment_structure_text(pages: &[Vec<crate::pdf::structure::types::PdfParagraph>], ocr_text: bool) -> String {
+        let doc = crate::pdf::structure::extract_document_structure_from_segments(
+            crate::pdf::structure::adapters::segments_from_ocr_pages(pages),
+            crate::pdf::structure::SegmentStructureConfig {
+                k_clusters: crate::core::config::HierarchyConfig::default().k_clusters,
+                tables: &[],
+                outline_entries: &[],
+                strip_repeating_text: false,
+                include_headers: false,
+                include_footers: false,
+                include_footnotes: false,
+                include_watermarks: false,
+                used_structure_tree: false,
+                ocr_text,
+                image_positions: &[],
+                images: None,
+                inject_placeholders: false,
+                layout_hints: None,
+                allow_single_column: true,
+                cancel_token: None,
+                #[cfg(feature = "layout-detection")]
+                layout_images: None,
+                #[cfg(feature = "layout-detection")]
+                layout_results: None,
+                #[cfg(feature = "layout-detection")]
+                table_model: crate::core::config::layout::TableModel::default(),
+                #[cfg(feature = "layout-detection")]
+                table_overlap_preference: crate::core::config::layout::TableOverlapPreference::default(),
+                #[cfg(feature = "layout-detection")]
+                acceleration: None,
+                #[cfg(feature = "layout-detection")]
+                session_thread_budget: 0,
+            },
+        )
+        .expect("segment structure pass");
+        crate::rendering::render_plain(&doc)
+    }
+
+    /// nougat_005: the segment pass deleted the scan's "Page N of 5" folios as validated page
+    /// numbers, and the retention gate, which needs every OCR character back, then discarded the
+    /// pass and all 22 headings it found. OCR text keeps its page numbers, so the headings stay.
+    /// The native control proves the folios sit where page-number validation deletes them.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn heuristically_restructured_ocr_pages_keeps_folios_and_the_headings_found() {
+        let pages = folio_footed_ocr_pages();
+        assert!(!segment_structure_text(&pages, false).contains("Page 2 of 4"));
+        assert!(segment_structure_text(&pages, true).contains("Page 2 of 4"));
+
+        let config = ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Markdown,
+            ..ExtractionConfig::default()
+        };
+        let doc = heuristically_restructured_ocr_pages(&pages, &[1000.0; 4], &[], &config)
+            .expect("the retention gate must accept a pass that kept every folio");
+
+        assert!(crate::rendering::render_plain(&doc).contains("Page 2 of 4"));
+        assert!(
+            doc.elements
+                .iter()
+                .any(|element| matches!(element.kind, crate::types::internal::ElementKind::Heading { .. })),
+            "expected a Heading element, got kinds: {:?}",
+            doc.elements.iter().map(|e| &e.kind).collect::<Vec<_>>()
+        );
+    }
+
     /// Pins a content-loss defect surfaced while A/B-testing hybrid OCR on scanned documents: the VLM
     /// backend (`llm::vlm_ocr::VlmOcrBackend::process_image`) never populates
     /// `ocr_internal_document` or `ocr_elements` -- it returns bare markdown `content`

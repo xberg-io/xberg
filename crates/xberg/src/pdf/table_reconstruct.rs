@@ -1222,6 +1222,20 @@ fn post_process_table_inner(
             );
             return None;
         }
+        if let Some(row) = processed
+            .windows(2)
+            .position(|pair| line_returns_to_row_start(&pair[0], &pair[1]))
+        {
+            tracing::debug!(
+                target: "xberg::table_reconstruct",
+                reason = "prose_line_returns_to_row_start",
+                row,
+                rows = processed.len(),
+                cols = processed[0].len(),
+                "post_process_table_inner: rejected table"
+            );
+            return None;
+        }
     }
 
     {
@@ -2583,6 +2597,30 @@ fn column_wrap_count(data_rows: &[Vec<String>], column: usize) -> usize {
                 && below.chars().next().is_some_and(char::is_lowercase)
         })
         .count()
+}
+
+/// Words the cell a line breaks out of needs before the break reads as running prose.
+const MIN_RETURNING_LINE_WORDS: usize = 6;
+
+/// Whether `below` carries on the prose line `above` breaks off, back at the start of the row.
+///
+/// A wrapped table cell continues under itself. A prose line instead returns to the left margin:
+/// `above`'s last cell ends mid-sentence in lowercase, `below` starts lowercase in an earlier
+/// column, and nothing in `below` sits under the cell it continues (nougat_005 page 3 split
+/// "... data for the purpos" / "es of monitoring ..." into a two-column table). ~keep
+fn line_returns_to_row_start(above: &[String], below: &[String]) -> bool {
+    let Some(last) = above.iter().rposition(|cell| !cell.trim().is_empty()) else {
+        return false;
+    };
+    let Some(first) = below.iter().position(|cell| !cell.trim().is_empty()) else {
+        return false;
+    };
+    let broken = above[last].trim();
+    first < last
+        && below.iter().skip(last).all(|cell| cell.trim().is_empty())
+        && broken.split_whitespace().count() >= MIN_RETURNING_LINE_WORDS
+        && broken.ends_with(char::is_lowercase)
+        && below[first].trim().starts_with(char::is_lowercase)
 }
 
 fn has_recurring_numeric_tracks(grid: &[Vec<String>]) -> bool {
@@ -4280,6 +4318,55 @@ mod tests {
             result_guided.is_none(),
             "Row-continuation prose should be rejected in layout-guided mode"
         );
+    }
+
+    fn row(cells: &[&str]) -> Vec<String> {
+        cells.iter().map(|cell| (*cell).to_string()).collect()
+    }
+
+    /// nougat_005 pages 3 and 5: a commitment paragraph's line broke mid-word and its next line
+    /// returned to an earlier column, leaving the broken cell's column empty.
+    #[test]
+    fn a_prose_line_returning_to_an_earlier_column_reads_as_prose() {
+        let broken = row(&[
+            "Your organisation is committed to:",
+            "Ensuring that rigorous processes are implemented to collect data for the purpos",
+        ]);
+        let returned = row(&["es of monitoring the performance of the closed loop collaboration.", ""]);
+        assert!(line_returns_to_row_start(&broken, &returned));
+
+        let broken = row(&[
+            "",
+            "Your organisation",
+            "is committed to: Investigating opportunities to divert more than 50% of solid waste generated at f",
+        ]);
+        let returned = row(&[
+            "",
+            "acilities (factories, warehouses, offices, retail stores etc.) from landfill.",
+            "",
+        ]);
+        assert!(line_returns_to_row_start(&broken, &returned));
+    }
+
+    #[test]
+    fn a_table_row_after_a_long_unpunctuated_cell_is_not_a_returning_line() {
+        let described = row(&["timeout", "maximum number of seconds the client waits for a reply"]);
+        assert!(!line_returns_to_row_start(
+            &described,
+            &row(&["retries", "how often a failed request is sent again"])
+        ));
+        assert!(!line_returns_to_row_start(
+            &described,
+            &row(&["", "before the request is abandoned"])
+        ));
+        assert!(!line_returns_to_row_start(
+            &row(&["Operating expenses for the year ended", "1,234"]),
+            &row(&["excluding depreciation", ""])
+        ));
+        assert!(!line_returns_to_row_start(
+            &row(&["Note", "short wrapped label"]),
+            &row(&["continued", ""])
+        ));
     }
 
     #[test]
