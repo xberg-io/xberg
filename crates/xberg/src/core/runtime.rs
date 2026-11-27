@@ -22,6 +22,7 @@ use once_cell::sync::OnceCell;
 /// deeper poll, and a frame above 4 KiB is probed page by page on entry, so the temporary is resident
 /// whether or not the branch that builds it runs. Here it lives in a frame popped before the first poll.
 #[inline(never)]
+#[cfg_attr(alef, alef(skip))]
 pub fn pin_boxed<F: std::future::Future>(make: impl FnOnce() -> F) -> std::pin::Pin<Box<F>> {
     Box::pin(make())
 }
@@ -129,6 +130,7 @@ pub(crate) fn global_runtime_for(
 ///
 /// Panics when called from inside a Tokio runtime, as [`tokio::runtime::Runtime::block_on`] does.
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[cfg_attr(alef, alef(skip))]
 pub fn block_on_shared_runtime<F: std::future::Future>(
     future: F,
     concurrency: Option<&crate::core::config::ConcurrencyConfig>,
