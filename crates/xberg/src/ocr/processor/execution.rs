@@ -6577,11 +6577,14 @@ mod tests {
         let snapshot = || cache_context::fingerprint(&dependencies, None);
 
         cacheability::scope(async {
-            let before = snapshot().await.unwrap();
-            assert!(before.as_ref().is_some_and(|context| !context.is_empty()));
-            for model in [language, "osd", "chi_sim"] {
+            // ~keep The outer key holds the primary pack's identity, so it is in place before
+            // `before` is taken: only the Han model comes and goes.
+            for model in [language, "osd"] {
                 std::fs::write(root.path().join(format!("{model}.traineddata")), model).unwrap();
             }
+            let before = snapshot().await.unwrap();
+            assert!(before.as_ref().is_some_and(|context| !context.is_empty()));
+            std::fs::write(root.path().join("chi_sim.traineddata"), "chi_sim").unwrap();
             assert_eq!(snapshot().await.unwrap(), None);
 
             let threshold = Some(75.0);
