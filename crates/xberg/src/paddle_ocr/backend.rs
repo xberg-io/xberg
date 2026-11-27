@@ -355,6 +355,25 @@ fn engine_pool_key(
     format!("{version}/{tier}/{model_key}/{accel_key}/{backend_key}{options_suffix}")
 }
 
+/// The pool key of the engine a read uses, from its [`engine_pool_key`] and its `use_angle_cls`.
+/// An engine built for a read without angle classification holds no classifier, so it never
+/// serves a read that runs one. Unchanged when off so existing keys are unchanged.
+fn classifier_pool_key(engine_key: String, angle_classifier: bool) -> String {
+    if angle_classifier {
+        engine_key + "/cls"
+    } else {
+        engine_key
+    }
+}
+
+/// The model files one engine loads. `cls_model` is `None` for an engine whose reads skip angle
+/// classification, which then loads no textline-orientation classifier.
+struct EngineModels<'a> {
+    det_model: &'a Path,
+    cls_model: Option<&'a Path>,
+    rec: &'a ResolvedRecModel,
+}
+
 fn acceleration_pool_key(accel: Option<&crate::core::config::acceleration::AccelerationConfig>) -> String {
     use crate::core::config::acceleration::ExecutionProviderType;
 
@@ -810,6 +829,8 @@ impl PaddleOcrBackend {
     /// - Multiple families sharing the same unified model reuse one engine
     /// - Different tiers get different engines (different det model)
     /// - Different acceleration configs get separate engines (CPU vs CUDA)
+    /// - Reads with and without angle classification get separate engines (only the former
+    ///   loads the textline-orientation classifier)
     async fn get_or_init_engine_for_family(
         context: Arc<PaddleModelContext>,
         family: &str,
@@ -850,7 +871,11 @@ impl PaddleOcrBackend {
         let backend = Self::effective_backend(config)?;
         let resolved = model_manager.resolve_rec_model_versioned(version, family, tier)?;
         let options = crate::ort_options::ort_session_options();
-        let pool_key = engine_pool_key(version, tier, &resolved.model_key, accel, backend, &options);
+        let angle_classifier = config.use_angle_cls;
+        let pool_key = classifier_pool_key(
+            engine_pool_key(version, tier, &resolved.model_key, accel, backend, &options),
+            angle_classifier,
+        );
 
         let init_cell = init_cell_for_key(engine_pool, &pool_key).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to acquire engine pool lock: {error}"),
@@ -860,7 +885,12 @@ impl PaddleOcrBackend {
             let shared = Self::get_or_init_shared_paths(model_manager, shared_paths, config)?;
             #[cfg(feature = "paddle-ocr-ort")]
             let _options_guard = PaddleOptionsGuard::set(options);
-            Self::initialize_engine(family, tier, &resolved, &shared, accel.cloned(), backend)
+            let models = EngineModels {
+                det_model: &shared.det_model,
+                cls_model: angle_classifier.then_some(shared.cls_model.as_path()),
+                rec: &resolved,
+            };
+            Self::initialize_engine(family, tier, models, accel.cloned(), backend)
         })?;
 
         Ok(Arc::clone(engine))
@@ -908,25 +938,37 @@ impl PaddleOcrBackend {
     fn initialize_engine(
         family: &str,
         tier: &str,
-        resolved: &ResolvedRecModel,
-        shared: &SharedModelPaths,
+        models: EngineModels<'_>,
         accel: Option<crate::core::config::acceleration::AccelerationConfig>,
         backend: PaddleInferenceBackend,
     ) -> Result<Arc<PaddleOcrEngine>> {
-        tracing::info!(family, model_key = %resolved.model_key, tier, ?backend, "Initializing PaddleOCR engine");
+        let resolved = models.rec;
+        tracing::info!(
+            family,
+            model_key = %resolved.model_key,
+            tier,
+            ?backend,
+            angle_classifier = models.cls_model.is_some(),
+            "Initializing PaddleOCR engine"
+        );
 
         let mut ocr_engine = PaddleOcrEngine::new();
-        let det_model_path = Self::find_onnx_model(&shared.det_model)?;
-        let cls_model_path = Self::find_onnx_model(&shared.cls_model)?;
+        let det_model_path = Self::find_onnx_model(models.det_model)?;
+        let cls_model_path = models.cls_model.map(Self::find_onnx_model).transpose()?;
         let rec_model_path = Self::find_onnx_model(&resolved.model_dir)?;
         let det_model_path = det_model_path.to_str().ok_or_else(|| crate::XbergError::Ocr {
             message: "Invalid detection model path".to_string(),
             source: None,
         })?;
-        let cls_model_path = cls_model_path.to_str().ok_or_else(|| crate::XbergError::Ocr {
-            message: "Invalid classification model path".to_string(),
-            source: None,
-        })?;
+        let cls_model_path = cls_model_path
+            .as_deref()
+            .map(|path| {
+                path.to_str().ok_or_else(|| crate::XbergError::Ocr {
+                    message: "Invalid classification model path".to_string(),
+                    source: None,
+                })
+            })
+            .transpose()?;
         let rec_model_path = rec_model_path.to_str().ok_or_else(|| crate::XbergError::Ocr {
             message: "Invalid recognition model path".to_string(),
             source: None,
@@ -994,7 +1036,7 @@ impl PaddleOcrBackend {
     fn init_engine_ort(
         ocr_engine: &mut PaddleOcrEngine,
         det_model_path: &str,
-        cls_model_path: &str,
+        cls_model_path: Option<&str>,
         rec_model_path: &str,
         dict_path: &str,
         accel: Option<crate::core::config::acceleration::AccelerationConfig>,
@@ -1017,7 +1059,7 @@ impl PaddleOcrBackend {
             &PADDLE_TL_OPTIONS.with(|cell| cell.borrow().clone()),
         );
 
-        ocr_engine.init_models_with_dict_custom(
+        ocr_engine.init_models_with_optional_classifier_custom(
             det_model_path,
             cls_model_path,
             rec_model_path,
@@ -1044,7 +1086,7 @@ impl PaddleOcrBackend {
     fn init_engine_tract(
         ocr_engine: &mut PaddleOcrEngine,
         det_model_path: &str,
-        cls_model_path: &str,
+        cls_model_path: Option<&str>,
         rec_model_path: &str,
         dict_path: &str,
         accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
@@ -1060,7 +1102,7 @@ impl PaddleOcrBackend {
         // `paddle-ocr-ort` is also compiled in. In a dual-engine build (native cross-engine
         // parity) the default would hand this function an `ort` engine, so a caller asking for
         // tract would silently get ORT.
-        ocr_engine.init_models_with_dict_on(
+        ocr_engine.init_models_with_optional_classifier_on(
             xberg_paddle_ocr::InferenceBackend::Tract,
             det_model_path,
             cls_model_path,
@@ -2593,6 +2635,95 @@ mod tests {
             engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Tract, &no_arena),
             "v6/small/latin/cpu/tract"
         );
+    }
+
+    #[test]
+    fn engine_pool_key_separates_angle_classifier_engines() {
+        use crate::ort_options::OrtSessionOptions;
+
+        let defaults = OrtSessionOptions::default();
+        let no_arena = OrtSessionOptions {
+            cpu_arena: false,
+            ..defaults
+        };
+        let key = |backend, options, angle_classifier| {
+            classifier_pool_key(
+                engine_pool_key("v6", "small", "latin", None, backend, options),
+                angle_classifier,
+            )
+        };
+        assert_eq!(
+            key(PaddleInferenceBackend::Ort, &defaults, false),
+            "v6/small/latin/cpu/ort"
+        );
+        assert_eq!(
+            key(PaddleInferenceBackend::Ort, &defaults, true),
+            "v6/small/latin/cpu/ort/cls"
+        );
+        assert_eq!(
+            key(PaddleInferenceBackend::Ort, &no_arena, true),
+            "v6/small/latin/cpu/ort/mp1-arena0/cls"
+        );
+        assert_eq!(
+            key(PaddleInferenceBackend::Tract, &defaults, true),
+            "v6/small/latin/cpu/tract/cls"
+        );
+    }
+
+    #[test]
+    fn reads_with_and_without_angle_classification_never_share_a_pooled_engine() {
+        let defaults = crate::ort_options::OrtSessionOptions::default();
+        let key = |angle_classifier| {
+            classifier_pool_key(
+                engine_pool_key("v6", "small", "latin", None, PaddleInferenceBackend::Ort, &defaults),
+                angle_classifier,
+            )
+        };
+        let pool: InitPool<Arc<PaddleOcrEngine>> = Mutex::new(AHashMap::new());
+
+        let plain = init_cell_for_key(&pool, &key(false)).unwrap();
+        let classified = init_cell_for_key(&pool, &key(true)).unwrap();
+
+        assert!(!Arc::ptr_eq(&plain, &classified));
+        assert!(Arc::ptr_eq(&plain, &init_cell_for_key(&pool, &key(false)).unwrap()));
+        assert!(Arc::ptr_eq(&classified, &init_cell_for_key(&pool, &key(true)).unwrap()));
+        assert_eq!(pool.lock().unwrap().len(), 2);
+    }
+
+    #[cfg(feature = "paddle-ocr-ort")]
+    #[test]
+    #[ignore = "requires ONNX Runtime and XBERG_2503_PADDLE_CACHE; fetches an uncached textline classifier"]
+    fn the_angle_classifier_is_loaded_only_for_reads_that_run_it() {
+        let cache = PathBuf::from(std::env::var_os("XBERG_2503_PADDLE_CACHE").expect("pinned Paddle model cache"));
+        let context = PaddleModelContext::new(cache.clone());
+        let engine = |use_angle_cls| {
+            let config = PaddleOcrConfig {
+                cache_dir: Some(cache.clone()),
+                use_angle_cls,
+                model_version: "pp-ocrv6".to_string(),
+                model_tier: "small".to_string(),
+                ..PaddleOcrConfig::default()
+            };
+            PaddleOcrBackend::get_or_init_engine_for_family_blocking(
+                &context.model_manager,
+                &context.shared_paths,
+                &context.engine_pool,
+                "english",
+                &config,
+                None,
+            )
+            .expect("PaddleOCR engine initializes")
+        };
+
+        let plain = engine(false);
+        let classified = engine(true);
+
+        assert!(!plain.has_angle_classifier());
+        assert!(classified.has_angle_classifier());
+        assert!(!Arc::ptr_eq(&plain, &classified));
+        assert!(Arc::ptr_eq(&plain, &engine(false)));
+        assert!(Arc::ptr_eq(&classified, &engine(true)));
+        assert_eq!(context.engine_pool.lock().unwrap().len(), 2);
     }
 
     #[test]
