@@ -8514,6 +8514,21 @@ fn test_blocks_to_paragraphs_separates_rotated_body_from_upright_footer() {
 }
 
 #[test]
+fn trim_owned_matches_str_trim() {
+    for text in [
+        "plain",
+        "  leading",
+        "trailing \n",
+        "\u{a0}\t both sides \u{2003}\n",
+        "inner  spaces\nand lines",
+        " \n\t",
+        "",
+    ] {
+        assert_eq!(trim_owned(text.to_string()), text.trim(), "{text:?}");
+    }
+}
+
+#[test]
 fn test_compute_paragraph_gap_ys_detects_blank_line_gap() {
     let segments = vec![
         seg_at("line one", 10.0, 700.0, 12.0, false),

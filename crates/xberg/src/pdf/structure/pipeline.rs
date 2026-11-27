@@ -3565,6 +3565,15 @@ fn reconstruct_pdf_lines(segments: &[&SegmentData]) -> Vec<super::types::PdfLine
     lines
 }
 
+/// `text.trim()` as an owned string, reusing the buffer `text` already holds.
+fn trim_owned(mut text: String) -> String {
+    text.truncate(text.trim_end().len());
+    let leading = text.len() - text.trim_start().len();
+    text.replace_range(..leading, "");
+    text.shrink_to_fit();
+    text
+}
+
 /// Build a PdfParagraph from a group of consecutive lines with compatible font properties.
 fn paragraph_text(lines: &[&SegmentData]) -> String {
     if lines.iter().all(|segment| segment.is_unrotated()) {
@@ -3722,13 +3731,11 @@ fn finalize_paragraph(
 
     let structure_tree_role = most_frequent_level(lines.iter().filter_map(|l| l.assigned_role)).map(|(level, _)| level);
     if let Some(level) = structure_tree_role {
-        let para_text = trimmed.to_string();
-        let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);
         return Some(PdfParagraph {
             text: if has_mixed_inline_styles {
                 String::new()
             } else {
-                para_text
+                trim_owned(text)
             },
             lines: reconstructed_lines,
             dominant_font_size: first.font_size,
@@ -3880,14 +3887,11 @@ fn finalize_paragraph(
         "classified paragraph"
     );
 
-    let para_text = trimmed.to_string();
-    let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);
-
     Some(PdfParagraph {
         text: if has_mixed_inline_styles {
             String::new()
         } else {
-            para_text
+            trim_owned(text)
         },
         lines: reconstructed_lines,
         dominant_font_size: first.font_size,
@@ -9578,7 +9582,7 @@ fn apply_text_repair_to_structure_tree_paragraphs(
 /// diverging from the stale pre-repair string used by the heuristic path.
 fn synchronize_paragraph_text_metadata(paragraphs: &mut [PdfParagraph]) {
     for paragraph in paragraphs {
-        paragraph.text.clear();
+        paragraph.text = String::new();
         paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
     }
 }
