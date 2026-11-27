@@ -5,7 +5,6 @@
 //! most accurate character-to-Unicode mapping.
 
 use super::adobe_glyph_list::ADOBE_GLYPH_LIST;
-use crate::cache::MutexExt;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::fonts::TrueTypeCMap;
@@ -477,11 +476,7 @@ fn unicode_keyed_predefined_collection(
 /// `B5-H`, `EUC-H`, …) and the UTF-8 predefined CMaps (`UniJIS-UTF8-H`, …) —
 /// none of these have a vendored charcode→CID table in this crate.
 fn warn_unsupported_predefined_cmap_once(name: &str, base_font: &str) {
-    static WARNED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
-        std::sync::OnceLock::new();
-    let warned = WARNED.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
-    let mut warned = warned.lock_or_recover();
-    if !warned.insert(name.to_string()) {
+    if !first_unsupported_predefined_cmap_warning(name) {
         return;
     }
     tracing::warn!(
@@ -494,6 +489,26 @@ fn warn_unsupported_predefined_cmap_once(name: &str, base_font: &str) {
          CID, which is only correct by coincidence. Glyph widths and any CID-keyed lookups for \
          this font are likely wrong."
     );
+}
+
+/// Records `name` as warned about; `true` only for the first call per name in the process.
+fn first_unsupported_predefined_cmap_warning(name: &str) -> bool {
+    static WARNED: std::sync::OnceLock<std::sync::RwLock<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let warned = WARNED.get_or_init(Default::default);
+    // `code_to_cid` reaches this per glyph, so a repeat must neither allocate nor
+    // exclude the other page threads. ~keep
+    if warned
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains(name)
+    {
+        return false;
+    }
+    warned
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(name.to_string())
 }
 
 impl FontInfo {
@@ -520,12 +535,16 @@ impl FontInfo {
                     }
                     Ok(_) => None,
                     Err(_) => {
-                        tracing::warn!(
-                            target: crate::LOG_TARGET_ROOT,
-                            operation = "extract_truetype_cmap",
-                            error_code = "invalid_font_data",
-                            "using fallback font encoding"
-                        );
+                        // A descendant CIDFontType2 program is routinely subset without a
+                        // cmap table; that is not a defect worth a warning per font. ~keep
+                        if self.subtype != "Type0" {
+                            tracing::warn!(
+                                target: crate::LOG_TARGET_ROOT,
+                                operation = "extract_truetype_cmap",
+                                error_code = "invalid_font_data",
+                                "using fallback font encoding"
+                            );
+                        }
                         None
                     }
                 }
@@ -867,7 +886,7 @@ impl FontInfo {
             flags,
             stem_v,
             mut embedded_font_data,
-            is_truetype_font,
+            mut is_truetype_font,
             raw_ascent,
             raw_descent,
             mut has_font_program,
@@ -1061,7 +1080,7 @@ impl FontInfo {
                     widths,
                     dw,
                     explicit_dw,
-                    tt_cmap,
+                    desc_is_truetype,
                     (desc_has_font_program, desc_embedded),
                     d_ascent,
                     d_descent,
@@ -1077,8 +1096,18 @@ impl FontInfo {
                         widths.as_ref().map(|m| m.len()).unwrap_or(0),
                         desc_embedded.is_some()
                     );
-                    if desc_embedded.is_some() && embedded_font_data.is_none() {
-                        embedded_font_data = desc_embedded;
+                    let mut tt_cmap = None;
+                    if let Some(desc_data) = desc_embedded {
+                        if embedded_font_data.is_none() {
+                            // `truetype_cmap()` parses the adopted program on first use. ~keep
+                            is_truetype_font |= desc_is_truetype;
+                            embedded_font_data = Some(desc_data);
+                        } else if desc_is_truetype {
+                            // The lazy accessor would read the wrapper's own program instead. ~keep
+                            tt_cmap = TrueTypeCMap::from_font_data(&desc_data)
+                                .ok()
+                                .filter(|cmap| !cmap.is_empty());
+                        }
                     }
                     has_font_program |= desc_has_font_program;
                     (
@@ -1872,7 +1901,7 @@ impl FontInfo {
         Option<HashMap<u16, f32>>,
         f32,
         bool,
-        Option<TrueTypeCMap>,
+        bool,
         (bool, Option<Arc<Vec<u8>>>),
         Option<f32>,
         Option<f32>,
@@ -2063,13 +2092,9 @@ impl FontInfo {
             );
         }
 
-        let descendant_tt_cmap = if cid_font_type == "CIDFontType2" {
-            Self::extract_truetype_cmap_from_descriptor(cidfont_dict, base_font, doc)
-        } else {
-            None
-        };
-
-        let descendant_embedded = Self::extract_embedded_font_from_descriptor(cidfont_dict, base_font, doc);
+        let (desc_has_font_program, descendant_embedded, from_font_file2) =
+            Self::extract_embedded_font_from_descriptor(cidfont_dict, base_font, doc);
+        let descendant_is_truetype = cid_font_type == "CIDFontType2" && from_font_file2;
 
         let (desc_raw_ascent, desc_raw_descent) = Self::read_raw_ascent_descent_from_descriptor(cidfont_dict, doc);
 
@@ -2080,8 +2105,8 @@ impl FontInfo {
             cid_widths,
             cid_default_width,
             has_explicit_dw,
-            descendant_tt_cmap,
-            descendant_embedded,
+            descendant_is_truetype,
+            (desc_has_font_program, descendant_embedded),
             desc_raw_ascent,
             desc_raw_descent,
             cid_vertical_metrics,
@@ -2190,51 +2215,6 @@ impl FontInfo {
         Some(CIDToGIDMap::Explicit(map))
     }
 
-    /// Extract TrueType cmap from a font dictionary's /FontDescriptor /FontFile2.
-    fn extract_truetype_cmap_from_descriptor(
-        font_dict: &HashMap<String, Object>,
-        base_font: &str,
-        doc: &PdfDocument,
-    ) -> Option<TrueTypeCMap> {
-        let desc_obj = font_dict.get("FontDescriptor")?;
-        let desc = if let Some(r) = desc_obj.as_reference() {
-            doc.load_object(r).ok()?
-        } else {
-            desc_obj.clone()
-        };
-        let desc_dict = desc.as_dict()?;
-        let ff2_obj = desc_dict.get("FontFile2")?;
-        let ff2_ref = ff2_obj.as_reference()?;
-        let ff2_stream = match doc.load_object(ff2_ref) {
-            Ok(obj) => obj,
-            Err(error) => {
-                crate::error::trace_recovery("load_truetype_font_program", &error);
-                return None;
-            }
-        };
-        let font_data = match doc.decode_stream_with_encryption(&ff2_stream, ff2_ref) {
-            Ok(data) => data,
-            Err(error) => {
-                crate::error::trace_recovery("decode_truetype_font_program", &error);
-                return None;
-            }
-        };
-        if font_data.is_empty() {
-            return None;
-        }
-        match TrueTypeCMap::from_font_data(&font_data) {
-            Ok(cmap) if !cmap.is_empty() => {
-                tracing::debug!(
-                    "Font '{}': Extracted TrueType cmap from descendant CIDFont ({} mappings)",
-                    base_font,
-                    cmap.len()
-                );
-                Some(cmap)
-            }
-            _ => None,
-        }
-    }
-
     /// Read raw /Ascent and /Descent from a font dictionary's /FontDescriptor.
     /// Returns (raw_ascent, raw_descent) in PDF 1/1000-em units, or None if absent.
     /// Used to pull ascent/descent off a CIDFont descendant (§9.7.4 / Table 117).
@@ -2270,24 +2250,25 @@ impl FontInfo {
 
     /// Extract embedded font data from a font dictionary's /FontDescriptor.
     /// Checks FontFile2 (TrueType), FontFile3 (CFF/OpenType), and FontFile (Type 1).
+    /// The last element is whether the returned program is the /FontFile2 one.
     fn extract_embedded_font_from_descriptor(
         font_dict: &HashMap<String, Object>,
         base_font: &str,
         doc: &PdfDocument,
-    ) -> (bool, Option<Arc<Vec<u8>>>) {
+    ) -> (bool, Option<Arc<Vec<u8>>>, bool) {
         let Some(desc_obj) = font_dict.get("FontDescriptor") else {
-            return (false, None);
+            return (false, None, false);
         };
         let desc = if let Some(r) = desc_obj.as_reference() {
             match doc.load_object(r) {
                 Ok(obj) => obj,
-                Err(_) => return (false, None),
+                Err(_) => return (false, None, false),
             }
         } else {
             desc_obj.clone()
         };
         let Some(desc_dict) = desc.as_dict() else {
-            return (false, None);
+            return (false, None, false);
         };
 
         let font_file_keys = ["FontFile2", "FontFile3", "FontFile"];
@@ -2333,11 +2314,11 @@ impl FontInfo {
                         key,
                         font_data.len()
                     );
-                    return (has_font_program, Some(Arc::new(font_data)));
+                    return (has_font_program, Some(Arc::new(font_data)), *key == "FontFile2");
                 }
             }
         }
-        (has_font_program, None)
+        (has_font_program, None, false)
     }
 }
 
@@ -12554,5 +12535,182 @@ mod tests {
             info.cjk_substitution,
             Some(super::super::predefined_cidfont::CharacterCollection::AdobeJapan1)
         );
+    }
+
+    /// A TrueType program whose only table is a format-4 cmap mapping `code` to `gid`.
+    fn truetype_program_with_cmap(code: u16, gid: u16) -> Vec<u8> {
+        let sfnt_header = [0x0001, 0x0000, 1, 16, 0, 0];
+        let cmap_record = [0x636D, 0x6170, 0, 0, 0, 28, 0, 0];
+        let cmap_header = [0, 1, 3, 1, 0, 12];
+        let format4 = [
+            4,
+            32,
+            0,
+            4,
+            0,
+            0,
+            0,
+            code,
+            0xFFFF,
+            0,
+            code,
+            0xFFFF,
+            gid.wrapping_sub(code),
+            1,
+            0,
+            0,
+        ];
+        [&sfnt_header[..], &cmap_record[..], &cmap_header[..], &format4[..]]
+            .concat()
+            .into_iter()
+            .flat_map(u16::to_be_bytes)
+            .collect()
+    }
+
+    /// Object 3 of a document whose Type0 font has a descendant of `cid_font_type` embedding a
+    /// /FontFile2 that maps glyph 3 to `A`.
+    fn parse_type0_with_descendant_font_file2(cid_font_type: &str) -> FontInfo {
+        let program: String = truetype_program_with_cmap(0x41, 3)
+            .iter()
+            .map(|byte| format!("{byte:02X}"))
+            .collect();
+        let descendant = format!(
+            "<< /Type /Font /Subtype /{cid_font_type} /BaseFont /Foo \
+             /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> \
+             /FontDescriptor 5 0 R >>"
+        );
+        let font_file = format!(
+            "<< /Filter /ASCIIHexDecode /Length {} >>\nstream\n{program}>\nendstream",
+            program.len() + 1
+        );
+        let pdf = pdf_from_object_bodies(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [] /Count 0 >>",
+            "<< /Type /Font /Subtype /Type0 /BaseFont /Foo /Encoding /Identity-H /DescendantFonts [4 0 R] >>",
+            &descendant,
+            "<< /Type /FontDescriptor /FontName /Foo /Flags 4 /FontFile2 6 0 R >>",
+            &font_file,
+        ]);
+        let doc = crate::document::PdfDocument::from_bytes(pdf).expect("synthetic PDF must parse");
+        let font_obj = doc.load_object(crate::object::ObjectRef::new(3, 0)).unwrap();
+        FontInfo::from_dict(&font_obj, &doc).expect("FontInfo::from_dict")
+    }
+
+    fn truetype_font(base_font: &str, code: u16) -> FontInfo {
+        make_font(|f| {
+            f.base_font = base_font.to_string();
+            f.subtype = "TrueType".to_string();
+            f.is_truetype_font = true;
+            f.embedded_font_data = Some(Arc::new(truetype_program_with_cmap(code, 3)));
+        })
+    }
+
+    fn type0_font_without_program(base_font: &str, encoding: Encoding) -> FontInfo {
+        make_font(|f| {
+            f.base_font = base_font.to_string();
+            f.subtype = "Type0".to_string();
+            f.encoding = encoding;
+        })
+    }
+
+    /// With no Type0 Identity font sharing a base name with another font there is nothing to
+    /// donate, and no font's lazy cmap is parsed to find that out.
+    #[test]
+    fn cmap_donation_without_a_recipient_parses_no_cmap() {
+        let fonts = [
+            truetype_font("ABCDEF+Arial", 0x41),
+            truetype_font("Arial", 0x42),
+            type0_font_without_program("GHIJKL+Times", Encoding::Identity),
+            type0_font_without_program("MNOPQR+Arial", Encoding::Standard("90ms-RKSJ-H".to_string())),
+        ];
+
+        let donations = crate::fonts::truetype_cmap::truetype_cmap_donations(fonts.iter());
+
+        assert!(donations.is_empty());
+        for font in &fonts {
+            assert!(font.truetype_cmap.get().is_none(), "{} was parsed", font.base_font);
+        }
+    }
+
+    /// A Type0 Identity font without a cmap is offered the cmap of the font sharing its base
+    /// name; on equal coverage the smallest donor name wins, and unrelated fonts stay unparsed.
+    #[test]
+    fn cmap_donation_offers_a_recipient_the_best_donor_of_its_base_name() {
+        let fonts = [
+            truetype_font("CCCCCC+Arial", 0x41),
+            truetype_font("BBBBBB+Arial", 0x42),
+            type0_font_without_program("AAAAAA+Arial", Encoding::Standard("Identity-H".to_string())),
+            truetype_font("DDDDDD+Times", 0x43),
+        ];
+
+        let donations = crate::fonts::truetype_cmap::truetype_cmap_donations(fonts.iter());
+
+        assert_eq!(donations.keys().collect::<Vec<_>>(), ["Arial"]);
+        assert_eq!(donations["Arial"].get_unicode(3), Some('B'));
+        assert!(
+            fonts[3].truetype_cmap.get().is_none(),
+            "a font no recipient shares a name with stays unparsed"
+        );
+    }
+
+    /// A Type0 font's UTF-8 CMap name is recognised in any letter case, with or without the
+    /// hyphen; a simple font never takes the UTF-8 route.
+    #[test]
+    fn utf8_cmap_names_match_in_any_case() {
+        use crate::fonts::unicode_decode::font_has_utf8_cmap;
+        let named = |name: &str| type0_font_without_program("Foo", Encoding::Standard(name.to_string()));
+
+        for name in ["UniJIS-UTF8-H", "Uni-Utf8-H", "uni-utf-8-v", "UTF-8", "utf8"] {
+            assert!(font_has_utf8_cmap(&named(name)), "{name}");
+        }
+        for name in ["UniJIS-UTF16-H", "Identity-H", "utf", "UTF_8", "utf-", "8ftu", ""] {
+            assert!(!font_has_utf8_cmap(&named(name)), "{name}");
+        }
+        let mut simple = named("UniJIS-UTF8-H");
+        simple.subtype = "TrueType".to_string();
+        assert!(!font_has_utf8_cmap(&simple));
+    }
+
+    /// Only the first sighting of an unsupported predefined CMap name reports, however many
+    /// glyphs and fonts ask afterwards.
+    #[test]
+    fn unsupported_predefined_cmap_is_reported_once_per_name() {
+        let name = "Test-ReportedOncePerName-H";
+        let other = "Test-ReportedOncePerName-V";
+
+        assert!(first_unsupported_predefined_cmap_warning(name));
+        assert!(!first_unsupported_predefined_cmap_warning(name));
+        assert!(!first_unsupported_predefined_cmap_warning(name));
+        assert!(first_unsupported_predefined_cmap_warning(other));
+        assert!(!first_unsupported_predefined_cmap_warning(other));
+    }
+
+    /// Loading a Type0 font adopts its CIDFontType2 descendant's /FontFile2 without parsing the
+    /// cmap; the first `truetype_cmap()` call parses it from the adopted bytes.
+    #[test]
+    fn descendant_truetype_cmap_is_parsed_on_first_use() {
+        let font = parse_type0_with_descendant_font_file2("CIDFontType2");
+
+        assert_eq!(
+            font.embedded_font_data.as_deref(),
+            Some(&truetype_program_with_cmap(0x41, 3))
+        );
+        assert!(font.is_truetype_font);
+        assert!(
+            font.truetype_cmap.get().is_none(),
+            "loading the font must not parse the cmap"
+        );
+        assert_eq!(font.truetype_cmap().and_then(|cmap| cmap.get_unicode(3)), Some('A'));
+    }
+
+    /// A CIDFontType0 descendant's glyphs are not addressed through a TrueType cmap, so its
+    /// /FontFile2 is adopted as the program but never donates a cmap.
+    #[test]
+    fn cid_font_type0_descendant_font_file2_yields_no_truetype_cmap() {
+        let font = parse_type0_with_descendant_font_file2("CIDFontType0");
+
+        assert!(font.embedded_font_data.is_some());
+        assert!(!font.is_truetype_font);
+        assert!(font.truetype_cmap().is_none());
     }
 }

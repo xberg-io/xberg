@@ -327,8 +327,10 @@ pub(crate) fn font_has_utf8_cmap(font: &FontInfo) -> bool {
         return false;
     }
     if let crate::fonts::Encoding::Standard(name) = &font.encoding {
-        let lower = name.to_ascii_lowercase();
-        lower.contains("utf8") || lower.contains("utf-8")
+        // Matched in place, not in a lowercased copy: this runs for every shown string. ~keep
+        let name = name.as_bytes();
+        let has = |needle: &[u8]| name.windows(needle.len()).any(|w| w.eq_ignore_ascii_case(needle));
+        has(b"utf8") || has(b"utf-8")
     } else {
         false
     }
@@ -374,7 +376,7 @@ pub(crate) fn get_byte_mode(font: Option<&FontInfo>) -> ByteMode {
 /// unchanged. ~keep
 fn byte_mode_from_embedded_codespace(font: &FontInfo) -> Option<ByteMode> {
     let cid_map = font.embedded_cid_map.as_ref()?;
-    match cid_map.codespace_widths().as_slice() {
+    match cid_map.codespace_widths() {
         [1] => Some(ByteMode::OneByte),
         [2] => Some(ByteMode::TwoByte),
         [] => None,

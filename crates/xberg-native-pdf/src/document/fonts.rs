@@ -869,9 +869,9 @@ impl PdfDocument {
         resolved: &[(String, Arc<crate::fonts::FontInfo>)],
     ) -> Vec<(String, Arc<crate::fonts::FontInfo>)> {
         let mut donated: Vec<(String, Arc<crate::fonts::FontInfo>)> = resolved.to_vec();
-        let best_cmaps =
-            crate::fonts::unicode_decode::best_truetype_cmaps(donated.iter().map(|(_, font)| font.as_ref()));
-        if best_cmaps.is_empty() {
+        let donations =
+            crate::fonts::truetype_cmap::truetype_cmap_donations(resolved.iter().map(|(_, font)| font.as_ref()));
+        if donations.is_empty() {
             return donated;
         }
 
@@ -888,7 +888,7 @@ impl PdfDocument {
                 continue;
             }
             let stripped = crate::fonts::unicode_decode::strip_subset_prefix(&font_arc.base_font);
-            if let Some((donor_cmap, _)) = best_cmaps.get(stripped) {
+            if let Some(donor_cmap) = donations.get(stripped) {
                 Arc::make_mut(font_arc).set_truetype_cmap(Some(donor_cmap.clone()));
             }
         }

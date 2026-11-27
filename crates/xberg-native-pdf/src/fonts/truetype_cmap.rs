@@ -8,6 +8,10 @@ use byteorder::{BigEndian, ReadBytesExt};
 /// We support formats 4 (BMP), 6 (trimmed), and 12 (Unicode full).
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::sync::Arc;
+
+use crate::fonts::FontInfo;
+use crate::fonts::unicode_decode::{best_truetype_cmaps, strip_subset_prefix};
 
 /// Mac Roman (platform 1, encoding 0) high-half → Unicode mapping.
 ///
@@ -40,13 +44,16 @@ struct Format4Segment {
 }
 
 /// Represents a TrueType cmap table extracted from an embedded font
+///
+/// The tables are immutable once parsed and shared between clones, so donating
+/// a cmap to another font does not copy them.
 #[derive(Debug, Clone)]
 pub struct TrueTypeCMap {
     /// Mapping from Glyph ID to Unicode character
-    gid_to_unicode: HashMap<u16, char>,
+    gid_to_unicode: Arc<HashMap<u16, char>>,
     /// Content-byte → GID, from a `(3,0)`/`(1,0)` subtable. Empty unless the
     /// font is symbolic-style; lets decode do byte→GID before GID→Unicode.
-    symbol_code_to_gid: HashMap<u32, u16>,
+    symbol_code_to_gid: Arc<HashMap<u32, u16>>,
 }
 
 impl TrueTypeCMap {
@@ -133,10 +140,10 @@ impl TrueTypeCMap {
         let gid_to_unicode = Self::parse_cmap_subtable(&mut cursor)?;
 
         Ok(TrueTypeCMap {
-            gid_to_unicode,
+            gid_to_unicode: Arc::new(gid_to_unicode),
             // Symbolic fonts index glyphs by content byte, not GID — build
             // byte→GID from the (3,0)/(1,0) subtable so decode can do that hop. ~keep
-            symbol_code_to_gid: Self::build_symbol_code_to_gid(data),
+            symbol_code_to_gid: Arc::new(Self::build_symbol_code_to_gid(data)),
         })
     }
 
@@ -677,6 +684,43 @@ impl TrueTypeCMap {
 /// than the core crate's `SecurityLimits::max_iterations` work budget
 /// (10M), which lives in a crate this one does not depend on.
 const MAX_CMAP_EXAMINED_CODE_POINTS: usize = (u16::MAX as usize + 1) * 16;
+
+/// The cmap to donate for each stripped base font name that has a recipient
+/// on the extraction path: a Type0 Identity font without a cmap of its own.
+/// Empty when nothing would be donated.
+///
+/// Each entry is the `best_truetype_cmaps` one for that name. Recipients are
+/// found first because a font cannot donate to itself: a base name held by a
+/// single font has no recipient, which is the usual font set, and is settled
+/// without a `truetype_cmap()` call forcing any lazy cmap parse.
+pub(crate) fn truetype_cmap_donations<'a>(
+    fonts: impl Iterator<Item = &'a FontInfo> + Clone,
+) -> HashMap<String, TrueTypeCMap> {
+    let mut fonts_per_name: HashMap<&str, usize> = HashMap::new();
+    for font in fonts.clone() {
+        *fonts_per_name.entry(strip_subset_prefix(&font.base_font)).or_default() += 1;
+    }
+    let recipient_names: std::collections::HashSet<&str> = fonts
+        .clone()
+        .filter(|font| {
+            font.subtype == "Type0"
+                && (matches!(&font.encoding, crate::fonts::Encoding::Identity)
+                    || matches!(&font.encoding, crate::fonts::Encoding::Standard(n) if n.contains("Identity")))
+        })
+        .map(|font| (font, strip_subset_prefix(&font.base_font)))
+        .filter(|(font, name)| {
+            fonts_per_name.get(name).is_some_and(|count| *count > 1) && font.truetype_cmap().is_none()
+        })
+        .map(|(_, name)| name)
+        .collect();
+    if recipient_names.is_empty() {
+        return HashMap::new();
+    }
+    best_truetype_cmaps(fonts.filter(|font| recipient_names.contains(strip_subset_prefix(&font.base_font))))
+        .into_iter()
+        .map(|(name, (cmap, _))| (name, cmap))
+        .collect()
+}
 
 #[cfg(test)]
 mod tests;
