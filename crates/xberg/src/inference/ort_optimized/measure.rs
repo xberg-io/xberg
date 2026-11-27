@@ -101,7 +101,7 @@ fn graph_load_peak_rss() {
         let file = PathBuf::from(std::env::var(RSS_FILE).unwrap());
         let accel = cpu();
         let mut builder = with_level(
-            super::super::ort_backend::session_builder(Some(&accel), 1, true).unwrap(),
+            crate::inference::ort_backend::session_builder(Some(&accel), 1, true).unwrap(),
             GraphOptimizationLevel::Disable,
         )
         .unwrap();
