@@ -368,7 +368,7 @@ pub(super) fn classify_formula_paragraphs(paragraphs: &mut [PdfParagraph]) {
                     .join(" "),
             )
         };
-        if reads_as_formula(&text) && super::math_inline::relations_join_operands(&text) {
+        if reads_as_formula(&text) {
             para.is_formula = true;
         }
     }
@@ -384,6 +384,7 @@ fn reads_as_formula(text: &str) -> bool {
     (math_char_count >= FORMULA_MIN_MATH_CHARS
         || (math_char_count as f64 / total_chars as f64) >= FORMULA_MIN_MATH_DENSITY)
         && reads_as_equation_structure(text)
+        && super::math_inline::relations_join_operands(text)
 }
 
 /// Whether `text` is structured as an equation line rather than a sentence.
@@ -3908,6 +3909,34 @@ mod tests {
             classify_formula_paragraphs(&mut paragraphs);
             assert!(!paragraphs[0].is_formula, "{text} has no relation joining two operands");
         }
+    }
+
+    #[test]
+    fn classify_formula_paragraphs_marks_equations_with_symbol_operands() {
+        for text in [
+            "E = mc^2",
+            "lim x \u{2192} \u{221E}",
+            "A \u{222A} B = C",
+            "\u{2211} x\u{2208}S f(x) \u{2264} \u{221E}",
+        ] {
+            let mut paragraphs = vec![make_text_paragraph(12.0, text, false)];
+            classify_formula_paragraphs(&mut paragraphs);
+            assert!(paragraphs[0].is_formula, "{text} is an equation line");
+        }
+    }
+
+    #[test]
+    fn classify_paragraphs_applies_the_same_relation_gate_as_the_heuristic_path() {
+        let heading_map = vec![(12.0, None)];
+        let mut equation = vec![make_text_paragraph(12.0, "E = mc^2", false)];
+        classify_paragraphs(&mut equation, &heading_map);
+        assert!(equation[0].is_formula);
+        let mut fragment = vec![make_text_paragraph(12.0, "=4.0 \u{00B1}", false)];
+        classify_paragraphs(&mut fragment, &heading_map);
+        assert!(
+            !fragment[0].is_formula,
+            "a relation with no left operand is not an equation line"
+        );
     }
 
     #[test]

@@ -38,6 +38,8 @@ struct Token {
     relation: bool,
     /// The token holds a superscript marker.
     superscript: bool,
+    /// A comma or semicolon follows the token, so a relation after it starts a new clause.
+    separator: bool,
 }
 
 /// Byte ranges of the math runs inside `text`, in order and without overlap.
@@ -108,7 +110,7 @@ fn citation_ranges(text: &str) -> Vec<(usize, usize)> {
 
 /// Whether `token` sits in a reference list that no operator in `run` governs.
 ///
-/// An interval after a relation (`x \u{2208} [0, 1]`) is math; the same brackets after a
+/// An interval after a relation (`x ∈ [0, 1]`) is math; the same brackets after a
 /// word are a citation.
 fn is_citation_token(citations: &[(usize, usize)], run: &[Token], token: &Token) -> bool {
     let Some(&(start, _)) = citations
@@ -127,7 +129,8 @@ fn is_citation_token(citations: &[(usize, usize)], run: &[Token], token: &Token)
 /// Whether two relations in the run sit side by side with no operator between them.
 ///
 /// `L = 4 L = 200` and `L=6 L=8` are separate labels set next to each other, not one
-/// equation; `a = b = c` and `a = b + c = d` chain through a shared operand or an operator.
+/// equation; `a = b = c` and `a = b + c = d` chain through a shared operand or an operator,
+/// and a comma or semicolon (`x = 1, y = 2`) separates two clauses that are each math.
 fn run_juxtaposes_relations(run: &[Token]) -> bool {
     let mut previous_compact: Option<bool> = None;
     let mut operands = 0usize;
@@ -149,25 +152,31 @@ fn run_juxtaposes_relations(run: &[Token]) -> bool {
         } else {
             operands += 1;
         }
+        operator |= token.separator;
     }
     false
 }
 
-/// Whether a bare number in the run has no relation or operator beside it.
+/// Whether a bare number in the run has no relation, operator or operand beside it.
 ///
-/// A row of tick labels or table values (`0.45 0.40 L = 8`) is not an equation; a number
-/// belongs to math only as the operand of an adjacent relation or operator.
+/// A row of tick labels or table values (`0.45 0.40 0.25 S = 1`) is not an equation; a
+/// number belongs to math as the operand of an adjacent relation or operator, or as the
+/// whole-number coefficient of the term it precedes (`2 H2 + O2 -> 2 H2O`, `2 x + 3 y = 7`);
+/// a decimal before a variable (`0.35 L = 10`) is a tick label.
 fn run_has_stray_number(text: &str, run: &[Token]) -> bool {
     let is_bare_number = |token: &Token| {
         text.get(token.start..token.end).is_some_and(|body| {
             body.chars().any(|ch| ch.is_ascii_digit()) && body.chars().all(|ch| ch.is_ascii_digit() || ch == '.')
         })
     };
+    let is_whole_number = |token: &Token| text.get(token.start..token.end).is_some_and(|body| !body.contains('.'));
     let binds = |token: &Token| token.relation || token.role == Role::Operator;
     run.iter().enumerate().any(|(index, token)| {
         is_bare_number(token)
             && !index.checked_sub(1).and_then(|prev| run.get(prev)).is_some_and(binds)
-            && !run.get(index + 1).is_some_and(binds)
+            && !run.get(index + 1).is_some_and(|next| {
+                binds(next) || (is_whole_number(token) && next.role == Role::Operand && !is_bare_number(next))
+            })
     })
 }
 
@@ -211,6 +220,7 @@ fn tokenize(text: &str) -> Vec<Option<Token>> {
 /// Classify one token, ignoring trailing sentence punctuation.
 fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
     let body = raw.trim_end_matches(['.', ',', ';', ':', '!', '?']);
+    let separator = raw[body.len()..].contains([',', ';']);
     let end = end - (raw.len() - body.len());
     if body.is_empty() {
         return None;
@@ -238,9 +248,14 @@ fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
         return Some(Token {
             start,
             end,
-            role: Role::Operator,
+            role: if body.chars().any(is_operand_symbol) {
+                Role::Operand
+            } else {
+                Role::Operator
+            },
             relation,
             superscript,
+            separator,
         });
     }
     // A relation joins its two sides, so a compact equation (`x=y`) is judged by the
@@ -254,12 +269,13 @@ fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
             role: Role::Operand,
             relation,
             superscript,
+            separator,
         });
     }
     // A word of two letters or more is prose unless it names a function or carries a
     // digit or superscript (`mc^2`, `H2O`, `sin`). An underscore alone is an identifier
     // separator in source text (`full_join`), not evidence of math.
-    if letters > 1 && numeric == 0 && !superscript && !is_math_name(body) {
+    if letters > 1 && numeric == 0 && !superscript && !is_math_name(body) && longest_word(body) > 1 {
         return None;
     }
     Some(Token {
@@ -268,7 +284,17 @@ fn classify_token(raw: &str, start: usize, end: usize) -> Option<Token> {
         role: Role::Operand,
         relation,
         superscript,
+        separator,
     })
+}
+
+/// Letters in the longest unbroken run of `body`: `f(x)` holds single-letter variables
+/// around punctuation, `mc` holds one two-letter word.
+fn longest_word(body: &str) -> usize {
+    body.split(|ch: char| !ch.is_alphabetic())
+        .map(|word| word.chars().count())
+        .max()
+        .unwrap_or(0)
 }
 
 pub(super) fn is_math_name(body: &str) -> bool {
@@ -305,7 +331,8 @@ fn relation_sides(body: &str) -> Vec<&str> {
 /// Number of operand pieces on one side of a relation, or `None` when a piece is prose.
 fn relation_side_operands(side: &str) -> Option<usize> {
     let mut operands = 0usize;
-    for piece in side.split(|ch: char| is_math_punctuation(ch) || ch == '_' || ch.is_whitespace()) {
+    let splits = |ch: char| (is_math_punctuation(ch) && !is_operand_symbol(ch)) || ch == '_' || ch.is_whitespace();
+    for piece in side.split(splits) {
         if piece.is_empty() {
             continue;
         }
@@ -349,6 +376,9 @@ fn relation_run_reads_as_math(run: &str) -> bool {
 /// Whether one side of a relation reads as an operand: a variable, a number, a product
 /// carrying a digit or superscript, or a named function.
 fn reads_as_operand(piece: &str) -> bool {
+    if piece.chars().any(is_operand_symbol) {
+        return true;
+    }
     let mut letters = 0usize;
     let mut digits = 0usize;
     for ch in piece.chars() {
@@ -362,6 +392,11 @@ fn reads_as_operand(piece: &str) -> bool {
         return digits > 0;
     }
     letters <= 1 || digits > 0 || piece.contains('^') || is_math_name(piece)
+}
+
+/// Symbols that stand as a value on their own (`x → ∞`, `A = ∅`).
+fn is_operand_symbol(ch: char) -> bool {
+    matches!(ch, '\u{221E}' | '\u{2205}')
 }
 
 /// Relational and set operators that mark a run as an equation.
@@ -414,12 +449,16 @@ fn is_math_punctuation(ch: char) -> bool {
             | '\u{222B}'
             | '\u{221A}'
             | '\u{221E}'
+            | '\u{2205}'
+            | '\u{222A}'
+            | '\u{2229}'
+            | '\u{2216}'
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::inline_math_annotations;
+    use super::{inline_math_annotations, relations_join_operands};
 
     fn spans(text: &str) -> Vec<&str> {
         inline_math_annotations(text)
@@ -529,5 +568,60 @@ mod tests {
         assert_eq!(spans("L = 4 L = 200 L = 4"), Vec::<&str>::new());
         assert_eq!(spans("so a = b = c holds"), ["a = b = c"]);
         assert_eq!(spans("so a = b + c = d holds"), ["a = b + c = d"]);
+    }
+
+    #[test]
+    fn should_keep_a_parameter_list_after_a_separator_as_math() {
+        assert_eq!(spans("take x = 1, y = 2 here"), ["x = 1, y = 2"]);
+        assert_eq!(
+            spans("with \u{03B1}=0.5, \u{03B2}=1 fixed"),
+            ["\u{03B1}=0.5, \u{03B2}=1"]
+        );
+        assert_eq!(spans("set a = 1; b = 2 now"), ["a = 1; b = 2"]);
+    }
+
+    #[test]
+    fn should_keep_a_coefficient_before_its_term_as_math() {
+        assert_eq!(
+            spans("burn 2 H2 + O2 \u{2192} 2 H2O fast"),
+            ["2 H2 + O2 \u{2192} 2 H2O"]
+        );
+        assert_eq!(spans("solve 2 x + 3 y = 7 now"), ["2 x + 3 y = 7"]);
+    }
+
+    #[test]
+    fn should_not_read_a_decimal_tick_label_before_a_variable_as_a_coefficient() {
+        assert_eq!(spans("0.35 L = 10"), Vec::<&str>::new());
+        assert_eq!(spans("0.50 L = 8"), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn should_still_reject_a_number_followed_by_a_number() {
+        assert_eq!(spans("0.40 0.00 0.25 0.50 S = 1 0.75 1.00 1.25"), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn should_keep_symbol_valued_relations_as_math() {
+        assert_eq!(spans("as x \u{2192} \u{221E} the"), ["x \u{2192} \u{221E}"]);
+        assert_eq!(spans("when A \u{222A} B = C holds"), ["A \u{222A} B = C"]);
+        assert_eq!(spans("take f(x) = 3 here"), ["f(x) = 3"]);
+        assert_eq!(spans("where E = mc^2 holds"), ["E = mc^2"]);
+    }
+
+    #[test]
+    fn relations_join_operands_accepts_equations_with_symbol_operands() {
+        for text in [
+            "E = mc^2",
+            "f(x) = 3",
+            "lim x \u{2192} \u{221E}",
+            "A \u{222A} B = C",
+            "x \u{2208} [0, 1]",
+            "\u{2211} x\u{2208}S f(x) \u{2264} \u{221E}",
+        ] {
+            assert!(relations_join_operands(text), "{text}");
+        }
+        for text in ["=4.0", "I(\u{221E}", "ED, L=6 ED, L=8 QMC, L=6", "2.0D+04 3.1D+00"] {
+            assert!(!relations_join_operands(text), "{text}");
+        }
     }
 }
