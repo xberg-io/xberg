@@ -11,7 +11,7 @@ native build scripts, the Dockerfiles, the OCR build scripts, the vendored sourc
 the pinned asset checksum manifests — so this file describes the release it ships with rather
 than a hand-maintained snapshot.
 
-It covers 16 non-Rust components and 898 Rust crates
+It covers 16 non-Rust components and 900 Rust crates
 resolved from 13 shipped dependency graphs (normal and build dependencies, all
 platforms). The Rust crate texts are collected from the same graphs `cargo deny` audits:
 
@@ -279,7 +279,7 @@ with their digests:
 
 ## Rust crate dependencies
 
-898 crates from 13 shipped dependency graphs, 519 distinct license texts. Each crate
+900 crates from 13 shipped dependency graphs, 518 distinct license texts. Each crate
 appears under every distinct license text it ships, and a crate that ships no license file of its
 own is covered by the canonical SPDX text for its declared expression. Build-only dependencies are
 listed because they are part of the audited graph, not because their code is redistributed.
@@ -1125,7 +1125,7 @@ Applies to: zopfli 0.8.4
 
 ### T-01c266bced4a
 
-Source: `COPYING`. Applies to 7 entries.
+Source: `COPYING`. Applies to 11 entries.
 
 ```text
 This project is dual-licensed under the Unlicense and MIT licenses.
@@ -1133,7 +1133,7 @@ This project is dual-licensed under the Unlicense and MIT licenses.
 You may use this code under the terms of either license.
 ```
 
-Applies to: aho-corasick 1.1.5, byteorder 1.5.0, globset 0.4.21, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
+Applies to: aho-corasick 1.1.5, byteorder 1.5.0, globset 0.4.21, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
 
 ### T-0218327e7a48
 
@@ -2692,7 +2692,7 @@ CC-BY-4.0. See https://creativecommons.org/licenses/by/4.0/legalcode for
 the full license text.
 ```
 
-Applies to: rmcp 3.11.0
+Applies to: rmcp 3.12.0
 
 ### T-0444c6991eea
 
@@ -4602,7 +4602,7 @@ Applies to: base64 0.13.1, base64 0.22.1
 
 ### T-0f96a83840e1
 
-Source: `LICENSE-MIT`. Applies to 6 entries.
+Source: `LICENSE-MIT`. Applies to 10 entries.
 
 ```text
 The MIT License (MIT)
@@ -4628,7 +4628,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.21, memchr 2.8.3, walkdir 2.5.1
+Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.21, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, walkdir 2.5.1
 
 ### T-10f96b27ddb4
 
@@ -7317,7 +7317,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 ```
 
-Applies to: gcp_auth 0.12.7
+Applies to: gcp_auth 0.13.0
 
 ### T-23c23145f6ea
 
@@ -18265,36 +18265,6 @@ SOFTWARE.
 
 Applies to: rqrr-zeroize 0.10.1
 
-### T-72686d666682
-
-Source: `LICENSE`. Applies to 1 entry.
-
-```text
-MIT License
-
-Copyright (c) 2021 Timo
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-Applies to: astral-tl 0.8.1
-
 ### T-728536b4160e
 
 Source: `LICENSE`. Applies to 1 entry.
@@ -20390,7 +20360,7 @@ Applies to: litrs 1.0.1, litrs 1.1.0
 
 ### T-7e12e5df4bae
 
-Source: `UNLICENSE`. Applies to 8 entries.
+Source: `UNLICENSE`. Applies to 12 entries.
 
 ```text
 This is free and unencumbered software released into the public domain.
@@ -20419,7 +20389,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 ```
 
-Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.21, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
+Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.21, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
 
 ### T-7e5886959f67
 
@@ -22130,7 +22100,7 @@ Applies to: async-compression 0.4.52, async-compression 0.4.54, compression-code
 
 ### T-898b1ae9821e
 
-Source: `LICENSE`. Applies to 9 entries.
+Source: `LICENSE`. Applies to 8 entries.
 
 ```text
 Copyright (c) 2019 Tokio Contributors
@@ -22160,7 +22130,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: tokio-native-tls 0.3.1, tracing 0.1.44, tracing-appender 0.2.5, tracing-core 0.1.36, tracing-futures 0.2.5, tracing-log 0.2.0, tracing-opentelemetry 0.34.0, tracing-serde 0.2.0, tracing-subscriber 0.3.23
+Applies to: tokio-native-tls 0.3.1, tracing 0.1.44, tracing-appender 0.2.5, tracing-core 0.1.36, tracing-log 0.2.0, tracing-opentelemetry 0.34.0, tracing-serde 0.2.0, tracing-subscriber 0.3.23
 
 ### T-8ada45cd9f84
 
@@ -27343,7 +27313,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: base64-simd 0.8.0, candle-nn 0.11.1, candle-transformers 0.11.1, crawlberg 1.13.4, crawlberg-robots 1.13.4, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, flutter_rust_bridge 2.13.0, gloo-timers 0.4.1, html-to-markdown-rs 3.23.3, include_dir 0.7.4, jni 0.22.4, jsonschema-regex 0.63.0, jsonschema-regex 0.63.1, jsonschema-value 0.63.0, jsonschema-value 0.63.1, liter-llm 2.7.5, lofty 0.25.5, mail-parser 1.0.2, napi 3.16.3, napi-build 2.7.0, napi-derive-backend 8.0.0, napi-sys 3.4.1, nom-language 0.1.0, objc2 0.6.5, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, outlook-pst 1.2.0, pulp-wasm-simd-flag 0.1.1, qcms 0.3.0, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, sceptre 0.10.1, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tokio_with_wasm 0.8.8, tract-extra 0.23.10, tree-sitter-language-pack 1.27.3, uuid-simd 0.8.0, vsimd 0.8.0, wasite 1.0.2, whatlang 0.18.0, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, zune-inflate 0.2.54
+Applies to: base64-simd 0.8.0, candle-nn 0.11.1, candle-transformers 0.11.1, crawlberg 1.13.5, crawlberg-robots 1.13.5, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, flutter_rust_bridge 2.13.0, gloo-timers 0.4.1, html-to-markdown-rs 3.23.3, include_dir 0.7.4, jni 0.22.4, jsonschema-regex 0.63.0, jsonschema-regex 0.63.1, jsonschema-value 0.63.0, jsonschema-value 0.63.1, liter-llm 2.7.6, lofty 0.25.5, mail-parser 1.0.2, napi 3.16.3, napi-build 2.7.0, napi-derive-backend 8.0.0, napi-sys 3.4.1, nom-language 0.1.0, objc2 0.6.5, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, outlook-pst 1.2.0, pulp-wasm-simd-flag 0.1.1, qcms 0.3.0, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, sceptre 0.10.1, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tokio_with_wasm 0.8.8, tract-extra 0.23.10, tree-sitter-language-pack 1.27.3, uuid-simd 0.8.0, vsimd 0.8.0, wasite 1.0.2, whatlang 0.18.0, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, zune-inflate 0.2.54
 
 ### T-b1181a40b2a7
 
