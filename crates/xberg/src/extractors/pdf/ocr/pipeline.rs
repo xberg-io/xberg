@@ -6854,8 +6854,8 @@ pub(super) fn adapt_batch_size_to_memory_inner(
     // An unknown reading and a reading of zero are different answers. Unknown leaves the
     // configured width alone, because nothing was measured to narrow it with. Zero was
     // measured: the host has no headroom, so the batch carries one page. Spelling both as 0
-    // handed the widest batch to exactly the host with the least memory, and `memory.current`
-    // counts page cache, so a container reporting no headroom is routine. ~keep
+    // handed the widest batch to exactly the host with the least memory. The reader does not
+    // charge a cgroup's inactive page cache, so a warmed container is not what reads as zero. ~keep
     let Some(available_bytes) = available_bytes else {
         return configured;
     };

@@ -263,22 +263,58 @@ fn read_available_memory_bytes() -> Option<u64> {
     }
 }
 
-/// What the cgroup will still hand out: its limit less what it already holds.
+/// What the cgroup will still hand out: its limit less its working set.
 ///
 /// The limit alone is not headroom. A 8 GiB cgroup already using 6 GiB grants
 /// 2 GiB, and sizing a session count against the 8 gets the process killed.
+///
+/// Usage alone is not what is held either. `memory.current` and v1's
+/// `usage_in_bytes` count the page cache, so a container that has read its
+/// documents and models reports no headroom while most of what it "uses" is
+/// cache the kernel drops on demand. The inactive file pages are subtracted the
+/// way the kubelet computes a working set: `inactive_file` under cgroup v2 and
+/// the hierarchical `total_inactive_file` under v1. ~keep
 #[cfg(target_os = "linux")]
 fn cgroup_headroom_bytes() -> Option<u64> {
     if let (Ok(max), Ok(current)) = (
         std::fs::read_to_string("/sys/fs/cgroup/memory.max"),
         std::fs::read_to_string("/sys/fs/cgroup/memory.current"),
-    ) && let Some(headroom) = parse_cgroup_headroom(&max, &current)
-    {
+    ) && let Some(headroom) = parse_cgroup_headroom(
+        &max,
+        &current,
+        read_cgroup_inactive_file_bytes("/sys/fs/cgroup/memory.stat", "inactive_file"),
+    ) {
         return Some(headroom);
     }
     let limit = std::fs::read_to_string("/sys/fs/cgroup/memory/memory.limit_in_bytes").ok()?;
     let usage = std::fs::read_to_string("/sys/fs/cgroup/memory/memory.usage_in_bytes").ok()?;
-    parse_cgroup_headroom(&limit, &usage)
+    parse_cgroup_headroom(
+        &limit,
+        &usage,
+        read_cgroup_inactive_file_bytes("/sys/fs/cgroup/memory/memory.stat", "total_inactive_file"),
+    )
+}
+
+/// `None` when `memory.stat` is unreadable or carries no such key; the caller
+/// then charges the whole usage, as it did before the cache was subtracted.
+#[cfg(target_os = "linux")]
+fn read_cgroup_inactive_file_bytes(path: &str, key: &str) -> Option<u64> {
+    parse_cgroup_stat_bytes(&std::fs::read_to_string(path).ok()?, key)
+}
+
+/// Read one `<key> <bytes>` line out of a cgroup `memory.stat`.
+///
+/// The key is matched whole: v1 writes both `inactive_file` and
+/// `total_inactive_file`, and a prefix match would take whichever came first.
+#[cfg(target_os = "linux")]
+fn parse_cgroup_stat_bytes(memory_stat: &str, key: &str) -> Option<u64> {
+    memory_stat.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        if fields.next() != Some(key) {
+            return None;
+        }
+        fields.next()?.parse::<u64>().ok()
+    })
 }
 
 /// A cgroup memory limit at or above this is read as no limit at all.
@@ -289,12 +325,13 @@ fn cgroup_headroom_bytes() -> Option<u64> {
 #[cfg(target_os = "linux")]
 const CGROUP_MEMORY_UNLIMITED_FLOOR: u64 = 1 << 62;
 
-/// Read a cgroup limit and its current usage, and return the difference.
+/// Read a cgroup limit and its current usage, and return the limit less the
+/// working set: usage without the inactive file pages, when those are known.
 ///
 /// Both spellings of "no limit" — the v2 word `max` and v1's near-`i64::MAX`
 /// count — return `None`, so an unlimited cgroup leaves the host reading alone.
 #[cfg(target_os = "linux")]
-fn parse_cgroup_headroom(limit: &str, usage: &str) -> Option<u64> {
+fn parse_cgroup_headroom(limit: &str, usage: &str, inactive_file: Option<u64>) -> Option<u64> {
     let limit = limit.trim();
     if limit == "max" {
         return None;
@@ -304,7 +341,8 @@ fn parse_cgroup_headroom(limit: &str, usage: &str) -> Option<u64> {
         return None;
     }
     let usage: u64 = usage.trim().parse().ok()?;
-    Some(limit.saturating_sub(usage))
+    let working_set = usage.saturating_sub(inactive_file.unwrap_or(0));
+    Some(limit.saturating_sub(working_set))
 }
 
 /// Read `MemAvailable` out of `/proc/meminfo`, in bytes.
