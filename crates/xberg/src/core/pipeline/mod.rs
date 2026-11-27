@@ -121,17 +121,21 @@ fn image_ocr_positions_with_a_reader(
 /// reads their OCR documents, so every read counts whether or not an element shows it.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 fn image_ocr_reads_reach_the_result(config: &ExtractionConfig) -> bool {
-    if should_retain_images_after_ocr(config)
+    should_retain_images_after_ocr(config)
         || config.result_format == crate::types::ResultFormat::ElementBased
         || config.include_document_structure
         || config.redaction.is_some()
-    {
-        return true;
-    }
-    #[cfg(feature = "redaction")]
-    if crate::text::redaction::external::external_redaction_is_scoped() {
-        return true;
-    }
+        || external_redaction_is_scoped()
+}
+
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", feature = "redaction"))]
+fn external_redaction_is_scoped() -> bool {
+    crate::text::redaction::external::external_redaction_is_scoped()
+}
+
+/// Without `redaction` no external redaction request can scope an extraction.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(feature = "redaction")))]
+fn external_redaction_is_scoped() -> bool {
     false
 }
 
