@@ -2801,16 +2801,26 @@ fn build_cells_from_intersections(
                         || xs[nxi] - xs[xi] <= MAX_UNRULED_CELL_X_GAP
                         || h_rule_spans(xs[xi], xs[nxi], ys[yi], ys[nyi])
                         || {
-                            // Only the rows this strip is connected through count: crossings at
-                            // both its X ends, unbroken, around the candidate cell. ~keep
-                            let (mut lo, mut hi) = (yi, nyi);
-                            while lo > 0 && has(xi, lo - 1) && has(nxi, lo - 1) {
-                                lo -= 1;
+                            // Only the Y levels this strip crosses at both X ends count, walked
+                            // outward from the candidate cell. A level with no crossing at either
+                            // end belongs to an unrelated grid and is skipped; a level crossed at
+                            // one end only breaks the strip. ~keep
+                            let crossed_at_both = |k: usize| has(xi, k) && has(nxi, k);
+                            let crossed_at_either = |k: usize| has(xi, k) || has(nxi, k);
+                            let mut levels = vec![ys[yi], ys[nyi]];
+                            for k in (0..yi).rev().filter(|&k| crossed_at_either(k)) {
+                                if !crossed_at_both(k) {
+                                    break;
+                                }
+                                levels.insert(0, ys[k]);
                             }
-                            while hi + 1 < ny && has(xi, hi + 1) && has(nxi, hi + 1) {
-                                hi += 1;
+                            for k in ((nyi + 1)..ny).filter(|&k| crossed_at_either(k)) {
+                                if !crossed_at_both(k) {
+                                    break;
+                                }
+                                levels.push(ys[k]);
                             }
-                            strip_holds_text_column(xs[xi], xs[nxi], &ys[lo..=hi], text_centers)
+                            strip_holds_text_column(xs[xi], xs[nxi], &levels, text_centers)
                         })
                 {
                     cells.push(IntersectionCell {
@@ -8512,6 +8522,37 @@ mod tests {
                 (100.0, 100.0, 180.0, 120.0),
                 (100.0, 120.0, 180.0, 140.0),
             ]
+        );
+    }
+
+    #[test]
+    fn levels_of_an_unrelated_grid_do_not_split_or_forge_gutter_bands() {
+        let (mut pts, mut h_edges, mut v_edges) = gutter_fixture();
+        let edge = |coord, start, end| Edge { coord, start, end };
+        for y in [10.0, 30.0] {
+            for x in [400.0, 440.0] {
+                pts.push(Intersection { x, y });
+            }
+            h_edges.push(edge(y, 400.0, 440.0));
+        }
+        v_edges.push(edge(400.0, 10.0, 30.0));
+        v_edges.push(edge(440.0, 10.0, 30.0));
+        let boxes = |centers: &[(f32, f32)]| {
+            let cells = build_cells_from_intersections(&pts, &h_edges, &v_edges, centers);
+            cell_boxes(&cells)
+                .into_iter()
+                .filter(|cell| cell.0 < 300.0)
+                .collect::<Vec<_>>()
+        };
+        let caption = boxes(&[(140.0, 9.0), (140.0, 11.0)]);
+        assert!(
+            caption.iter().all(|cell| cell.2 - cell.0 <= MAX_UNRULED_CELL_X_GAP),
+            "one caption must not forge two bands, got: {caption:?}"
+        );
+        let column = boxes(&[(140.0, 10.0), (140.0, 30.0)]);
+        assert!(
+            column.iter().any(|cell| (cell.0, cell.2) == (40.0, 240.0)),
+            "a real two-band column must still bridge, got: {column:?}"
         );
     }
 
