@@ -172,8 +172,9 @@ const POINTS_PER_INCH: f64 = 72.0;
 ///
 /// Overlapping images are summed, not unioned, so this is an upper bound: it may
 /// over-select a page for inspection, never under-select one.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn image_coverage(doc: &PdfDocument, page_index: usize) -> Option<f32> {
-    page_raster_geometry(doc, page_index).map(|(coverage, _)| coverage)
+    page_raster_geometry(doc, page_index).map(|raster| raster.coverage)
 }
 
 /// Below this raster coverage a page is never a scan for OCR, whatever its text layer holds.
@@ -204,7 +205,7 @@ const OCR_SCAN_MAX_GLYPHS: usize = 400;
 /// whatever the page's render resolution is (#1786). No pixel data is decoded.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
 pub(crate) fn full_page_raster_density(doc: &PdfDocument, page_index: usize) -> Option<f64> {
-    let (coverage, density) = page_raster_geometry(doc, page_index)?;
+    let PageRaster { coverage, density, .. } = page_raster_geometry(doc, page_index)?;
     // GH#1786 review: this is the whole-page threshold (0.80), NOT `IMAGE_COVERAGE_MIN` (0.15),
     // which is only the floor below which scoring is skipped for cost. Gating here on the floor
     // returned every page with 15% raster as a scan and made the glyph check below unreachable,
@@ -264,9 +265,25 @@ fn readable_glyph_count(spans: &[TextSpan]) -> usize {
         .sum()
 }
 
-/// Raster coverage of the page and the density of its largest image, from one pass over
-/// the page's image handles.
-fn page_raster_geometry(doc: &PdfDocument, page_index: usize) -> Option<(f32, Option<f64>)> {
+/// What one pass over a page's image handles yields.
+struct PageRaster {
+    /// Fraction of the page covered by raster images, clamped to `[0, 1]`.
+    coverage: f32,
+    /// Density, in dots per inch, of the largest visible image.
+    // ~keep: read only by `full_page_raster_density`, which is gated on the OCR and
+    // layout-detection features.
+    #[cfg_attr(
+        not(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection")),
+        allow(dead_code)
+    )]
+    density: Option<f64>,
+    /// Dominant raster codec, as `classify_page` reports it for the same handles.
+    codec: ImageCodecClass,
+}
+
+/// Raster coverage of the page, the density of its largest image and its dominant codec, from
+/// one pass over the page's image handles.
+fn page_raster_geometry(doc: &PdfDocument, page_index: usize) -> Option<PageRaster> {
     let (x0, y0, x1, y1) = doc.get_page_media_box(page_index).ok()?;
     let page_area = ((x1 - x0) * (y1 - y0)).abs();
     if page_area <= f32::EPSILON {
@@ -293,36 +310,41 @@ fn page_raster_geometry(doc: &PdfDocument, page_index: usize) -> Option<(f32, Op
         }
     }
 
-    Some((
-        (covered / page_area).clamp(0.0, 1.0),
-        largest.map(|(_, density)| density),
-    ))
+    Some(PageRaster {
+        coverage: (covered / page_area).clamp(0.0, 1.0),
+        density: largest.map(|(_, density)| density),
+        codec: PdfDocument::image_codec_class(&handles),
+    })
 }
 
 /// Signals for one page, or `None` when it yields no evidence.
 ///
 /// Pages under [`IMAGE_COVERAGE_MIN`] skip the text-layer inspection: it parses
 /// the content stream, and cannot lift their score above zero.
+///
+/// The text-layer fields come from `scan_text_signals`, which computes them as `classify_page`
+/// does without the word clustering, path extraction and quality gate the score never reads,
+/// and the codec from the handles already enumerated for the coverage, so the page's image
+/// handles are not enumerated a second time.
 fn page_signals(doc: &PdfDocument, page_index: usize) -> Option<PageScanSignals> {
-    let coverage = image_coverage(doc, page_index)?;
-    if coverage < IMAGE_COVERAGE_MIN {
+    let raster = page_raster_geometry(doc, page_index)?;
+    if raster.coverage < IMAGE_COVERAGE_MIN {
         return None;
     }
 
     // Detection is advisory: a page that panics must not abort the extraction. ~keep
-    let classified = super::native::guard_native_panic(
-        || doc.classify_page(page_index).map_err(|error| error.to_string()),
+    let signals = super::native::guard_native_panic(
+        || doc.scan_text_signals(page_index).map_err(|error| error.to_string()),
         |message| message,
     )
     .ok()?;
-    let signals = classified.signals;
 
     Some(PageScanSignals {
-        image_coverage: coverage,
+        image_coverage: raster.coverage,
         invisible_text_ratio: signals.invisible_text_ratio,
         glyph_count: signals.text_glyph_count,
         text_area_ratio: signals.text_area_ratio,
-        codec: signals.codec,
+        codec: raster.codec,
         producer_prior: signals.producer_prior,
     })
 }

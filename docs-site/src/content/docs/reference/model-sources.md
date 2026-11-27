@@ -109,7 +109,8 @@ artifacts), so prefer the environment variables when the warm and serving hosts 
 | Layout detection and table structure — RT-DETR, TATR | Always | `XBERG_CACHE_DIR/layout/` |
 | Layout option — PP-DocLayout-V3 (~131 MB) | `--layout-model pp_doc_layout_v3` | `XBERG_CACHE_DIR/layout/` |
 | Layout option — SLANeXt wired/wireless, SLANet+, table classifier (~730 MB) | `--all-table-models` | `XBERG_CACHE_DIR/layout/` |
-| Tesseract language data | Always (OCR builds) | `XBERG_CACHE_DIR/tessdata/` |
+| Tesseract language data, `tessdata_fast` (~360 MB for all 126 languages) | Always (OCR builds); `--tessdata-languages` narrows it | `XBERG_CACHE_DIR/tessdata/fast/` |
+| Tesseract language data, `tessdata_best` (~1.15 GB for all 126 languages) | `--tessdata-model best` (or `fast,best`) | `XBERG_CACHE_DIR/tessdata/best/` |
 | Formula recognition (LaTeX-OCR) | Always when compiled in | `XBERG_CACHE_DIR/formula-recognition/` |
 | PaddleOCR — detection, classification, recognition, orientation | Always (OCR builds) | Hugging Face cache (`HF_HUB_CACHE`) |
 | Dense, sparse and late-interaction embeddings | `--all-embeddings` or `--embedding-model <preset>` | Hugging Face cache |

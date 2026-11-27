@@ -101,8 +101,10 @@ impl Engine {
     pub async fn extract(&self, input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractionResult> {
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
         let result = {
-            let (engine, config) = (self.clone(), config.clone());
-            let work = async move { Box::pin(engine.extract_on_current_stack(input, &config)).await };
+            let work = crate::core::runtime::pin_boxed(|| {
+                let (engine, config) = (self.clone(), config.clone());
+                async move { crate::core::runtime::pin_boxed(|| engine.extract_on_current_stack(input, &config)).await }
+            });
             #[cfg(test)]
             let work = inherit_test_task_locals(work);
             crate::core::runtime::run_on_large_stack(work).await?
@@ -124,11 +126,13 @@ impl Engine {
         config: &ExtractionConfig,
     ) -> Result<ExtractionResult> {
         #[cfg(feature = "tokio-runtime")]
-        return seams::scope_progress(
-            Arc::clone(&self.inner.progress),
-            None,
-            extract_impl::extract(&self.inner, input, config),
-        )
+        return crate::core::runtime::pin_boxed(|| {
+            seams::scope_progress(
+                Arc::clone(&self.inner.progress),
+                None,
+                extract_impl::extract(&self.inner, input, config),
+            )
+        })
         .await;
 
         #[cfg(not(feature = "tokio-runtime"))]

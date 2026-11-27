@@ -2,7 +2,7 @@ use std::os::raw::{c_int, c_void};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::{io, slice};
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::enums::ReaderGrowStatus;
 

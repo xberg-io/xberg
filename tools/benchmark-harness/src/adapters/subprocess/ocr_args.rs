@@ -87,12 +87,14 @@ pub(super) fn ocr_uses_tesseract(ocr_object: &serde_json::Map<String, serde_json
         })
 }
 /// Sets `languages` on a JSON `ocr` object (and any Tesseract stage of a multi-stage
-/// `ocr.pipeline`), and ensures every Tesseract result cache is genuinely disabled.
+/// `ocr.pipeline`) without adding OCR fields a default user request lacks.
 ///
-/// A `tesseract_config` that already exists (an explicit PSM preset) only has its `language` and
-/// `use_cache` refreshed — its `psm` is left untouched. When `tesseract_config` is absent, cache
-/// control travels through `backend_options` so it does not turn xberg's automatic whole-image
-/// PSM selection and sparse-image fallback into an apparently explicit configuration. ~keep
+/// A `tesseract_config` that already exists (an explicit PSM preset) has its `language` and
+/// `use_cache` refreshed — its `psm` is left untouched. Nothing is materialized otherwise: in
+/// xberg the mere presence of `ocr.backend_options` or `ocr.tesseract_config` switches off
+/// default-route OCR stages (PDF number recovery, hidden-layer and stored-scan retries, the
+/// recognition orientation retry), so the cold OCR result cache comes from the request-level
+/// `use_cache: false` instead (see [`inject_ocr_config_into_args`]). ~keep
 pub(super) fn materialize_tesseract_ocr(
     ocr_object: &mut serde_json::Map<String, serde_json::Value>,
     languages: &[String],
@@ -131,17 +133,6 @@ pub(super) fn apply_tesseract_result_cache_control(
         tesseract_config.insert("language".to_string(), serde_json::json!(languages));
         tesseract_config.insert("use_cache".to_string(), serde_json::json!(false));
     }
-
-    let backend_options = object
-        .entry("backend_options".to_string())
-        .or_insert_with(|| serde_json::json!({}));
-    if !backend_options.is_object() {
-        *backend_options = serde_json::json!({});
-    }
-    backend_options
-        .as_object_mut()
-        .expect("initialized as an object above")
-        .insert("use_cache".to_string(), serde_json::json!(false));
 }
 /// Resolves the effective language list for a Tesseract benchmark call: the fixture's
 /// canonicalized `ocr_language` when present, else `["eng"]` — xberg's own default (see
@@ -154,7 +145,7 @@ pub(super) fn effective_tesseract_languages(ocr_language: Option<&str>) -> Vec<S
         .unwrap_or_else(|| vec!["eng".to_string()])
 }
 /// Rewrites the request's effective OCR config so a Tesseract benchmark subprocess gets a
-/// genuinely cold OCR result cache without changing automatic PSM/fallback behavior (see
+/// genuinely cold OCR result cache without leaving xberg's default OCR route (see
 /// [`materialize_tesseract_ocr`]).
 ///
 /// This is the final request-args boundary: it starts from [`effective_ocr_config_from_args`],
@@ -184,21 +175,25 @@ pub(super) fn apply_tesseract_ocr_override_to_args(args: &[String], ocr_language
     inject_ocr_config_into_args(args, effective_ocr)
 }
 /// Writes `ocr` into the request's `--config-json` value, replacing any `ocr` key it already
-/// carries so the cache/language settings win. Creates a `--config-json` flag
-/// (`{"ocr": ocr}`) when the request has none — the CLI-only OCR-enable path (no pre-existing
-/// `--config-json`) still needs the result cache disabled. Returns `None` (leaving
-/// the request untouched) if an existing `--config-json` value fails to parse as a JSON object,
-/// rather than risk clobbering an unparseable-but-intentional value.
+/// carries so the language settings win, and sets the request-level `use_cache: false`. Since
+/// xberg 3159746f10 that flag disables the OCR result cache for the whole request, whatever a
+/// backend option or `tesseract_config` says, so it is the cold-OCR guarantee. Creates a
+/// `--config-json` flag when the request has none — the CLI-only OCR-enable path still needs
+/// the cache disabled. Returns `None` (leaving the request untouched) if an existing
+/// `--config-json` value fails to parse as a JSON object, rather than risk clobbering an
+/// unparseable-but-intentional value.
 pub(super) fn inject_ocr_config_into_args(args: &[String], ocr: serde_json::Value) -> Option<Vec<String>> {
     let mut new_args = args.to_vec();
     if let Some(config_index) = new_args.iter().rposition(|arg| arg == "--config-json") {
         let raw = new_args.get(config_index + 1)?;
         let mut config: serde_json::Value = serde_json::from_str(raw).ok()?;
-        config.as_object_mut()?.insert("ocr".to_string(), ocr);
+        let object = config.as_object_mut()?;
+        object.insert("ocr".to_string(), ocr);
+        object.insert("use_cache".to_string(), serde_json::json!(false));
         new_args[config_index + 1] = config.to_string();
     } else {
         new_args.push("--config-json".to_string());
-        new_args.push(serde_json::json!({ "ocr": ocr }).to_string());
+        new_args.push(serde_json::json!({ "use_cache": false, "ocr": ocr }).to_string());
     }
     Some(new_args)
 }
@@ -225,10 +220,10 @@ pub(super) fn build_batch_file_configs(
         .iter()
         .zip(ocr_languages)
         .filter_map(|(path, language)| {
-            // Every Tesseract fixture needs a per-file override so its result cache is genuinely
-            // disabled — even without an explicit fixture language (defaults to "eng"). A
-            // non-Tesseract fixture without an explicit language needs no override at all: the
-            // base `--config-json` already carries its (correct) default language.
+            // Every Tesseract fixture gets a per-file language override, defaulting to "eng". The
+            // result cache is disabled batch-wide by the base `--config-json`'s `use_cache: false`
+            // (a batch-level field). A non-Tesseract fixture without an explicit language needs
+            // no override: the base `--config-json` already carries its default language.
             let languages = match language.as_deref().map(crate::adapter::canonicalize_ocr_languages) {
                 Some(languages) if !languages.is_empty() => languages,
                 _ if uses_tesseract => vec!["eng".to_string()],
@@ -258,8 +253,13 @@ impl SubprocessAdapter {
     /// Build request arguments, upgrading an adapter configured with OCR disabled
     /// when the fixture explicitly requires OCR.
     pub(super) fn request_args_from(&self, base_args: &[String], force_ocr: bool) -> Vec<String> {
+        let mut args = self.ocr_request_args_from(base_args, force_ocr);
+        self.append_xberg_tessdata_model(&mut args);
+        args
+    }
+    fn ocr_request_args_from(&self, base_args: &[String], force_ocr: bool) -> Vec<String> {
         let mut args = base_args.to_vec();
-        if !force_ocr {
+        if !force_ocr || self.ignore_fixture_force_ocr {
             return args;
         }
 
@@ -328,7 +328,7 @@ impl SubprocessAdapter {
         value
             .and_then(serde_json::Value::as_bool)
             .map(|used| if used { OcrStatus::Used } else { OcrStatus::NotUsed })
-            .or_else(|| force_ocr.then_some(OcrStatus::Used))
+            .or_else(|| (force_ocr && !self.ignore_fixture_force_ocr).then_some(OcrStatus::Used))
             .or(self.configured_ocr_status)
             .unwrap_or(OcrStatus::Unknown)
     }

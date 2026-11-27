@@ -151,22 +151,34 @@ enum PrimaryAttempt {
     Failed(std::io::Error),
 }
 
+/// Return the part of a `reserved`-byte output buffer the stream did not fill, which a dictionary
+/// overstating its raster or a truncated stream leaves behind, once it exceeds the filled part:
+/// smaller slack is not worth the copy a shrink makes. An unreserved buffer is kept as the growth
+/// left it.
+fn release_unfilled(output: &mut Vec<u8>, reserved: usize) {
+    if reserved > 0 && output.capacity() > output.len().saturating_mul(2) {
+        output.shrink_to_fit();
+    }
+}
+
 /// Strategy 1: decode `input` as zlib-wrapped deflate. Partial recovery:
 /// return only if the output *looks like* a plausible stream. The pre-fix
 /// behaviour accepted any non-empty buffer, which let strategies 2 and 3
 /// return misaligned-deflate garbage (`P\xffj!}` × 16) that the text
 /// extractor then emitted as zero bytes of output. ~keep
-fn try_zlib_decode(input: &[u8], limit: u64) -> Result<PrimaryAttempt> {
+fn try_zlib_decode(input: &[u8], limit: u64, capacity: usize, expected: usize) -> Result<PrimaryAttempt> {
     let mut decoder = ZlibDecoder::new(input).take(limit);
-    let mut output = Vec::new();
+    let mut output = Vec::with_capacity(capacity);
 
-    match decoder.read_to_end(&mut output) {
+    match read_toward_expected(&mut decoder, &mut output, expected) {
         Ok(_) => {
             check_limit(&output, limit)?;
+            release_unfilled(&mut output, capacity);
             Ok(PrimaryAttempt::Recovered(output))
         }
         Err(e) => {
             if accept_truncated_or_plausible(&output, limit, &e)? {
+                release_unfilled(&mut output, capacity);
                 tracing::warn!(
                     filter = "FlateDecode",
                     bytes = output.len(),
@@ -178,6 +190,30 @@ fn try_zlib_decode(input: &[u8], limit: u64) -> Result<PrimaryAttempt> {
             Ok(PrimaryAttempt::Failed(e))
         }
     }
+}
+
+/// Reads `reader` to its end into `output`, whose capacity is the capped reservation. A stream
+/// that fills it grows in doubling steps that stop at `expected` bytes, so a raster larger than the
+/// cap ends in a buffer of exactly its size; plain doubling from the cap overshoots it by up to the
+/// raster's own size, which then stays allocated with the image. Past `expected`, growth is the
+/// usual doubling.
+fn read_toward_expected(reader: &mut impl Read, output: &mut Vec<u8>, expected: usize) -> std::io::Result<()> {
+    loop {
+        let reserved = output.capacity();
+        if reserved == 0 || output.len() >= expected {
+            break;
+        }
+        reader
+            .by_ref()
+            .take((reserved - output.len()) as u64)
+            .read_to_end(output)?;
+        if output.len() < reserved {
+            return Ok(());
+        }
+        let grown = output.len().saturating_mul(2).min(expected);
+        output.reserve_exact(grown.saturating_sub(output.len()));
+    }
+    reader.read_to_end(output).map(drop)
 }
 
 /// Strategy 2: try raw deflate (no zlib wrapper).
@@ -270,8 +306,41 @@ impl FlateDecoder {
     }
 }
 
-impl StreamDecoder for FlateDecoder {
-    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+/// Most output reserved up front per deflate input byte. Deflate can reach 1032 bytes per input
+/// byte, so a bound at that ratio let a hostile dictionary over a 1 MB stream reserve 1 GB before
+/// decoding a byte; a stream that inflates further grows past the reservation as it decodes.
+const MAX_PRESIZED_EXPANSION: usize = 64;
+
+/// The output capacity to reserve for a stream expected to decode to `expected_size` bytes: no
+/// more than the read `limit` allows or than [`MAX_PRESIZED_EXPANSION`] times `input`, so an
+/// image dictionary that overstates its size cannot reserve memory its data is unlikely to fill.
+fn presized_capacity(input: &[u8], limit: u64, expected_size: usize) -> usize {
+    let readable = usize::try_from(limit).unwrap_or(usize::MAX);
+    expected_size
+        .min(readable)
+        .min(input.len().saturating_mul(MAX_PRESIZED_EXPANSION))
+}
+
+impl FlateDecoder {
+    /// [`StreamDecoder::decode`] for a stream expected to decode to `expected_size` bytes, such as an
+    /// image raster whose size its dictionary implies: the output is reserved at that size, capped
+    /// by [`presized_capacity`], instead of grown by doubling, which holds the old and new buffers
+    /// at once and can leave nearly twice the raster allocated.
+    pub(crate) fn decode_presized(
+        &self,
+        input: &[u8],
+        max_output_bytes: usize,
+        expected_size: usize,
+    ) -> Result<Vec<u8>> {
+        self.decode_with_capacity(input, max_output_bytes, Some(expected_size))
+    }
+
+    fn decode_with_capacity(
+        &self,
+        input: &[u8],
+        max_output_bytes: usize,
+        expected_size: Option<usize>,
+    ) -> Result<Vec<u8>> {
         if input.is_empty() {
             return Ok(Vec::new());
         }
@@ -283,8 +352,10 @@ impl StreamDecoder for FlateDecoder {
             self.max_decompressed_bytes
                 .min((max_output_bytes as u64).saturating_add(1))
         };
+        let capacity = expected_size.map_or(0, |expected| presized_capacity(input, limit, expected));
+        let expected = expected_size.map_or(0, |expected| expected.min(usize::try_from(limit).unwrap_or(usize::MAX)));
 
-        let zlib_err = match try_zlib_decode(input, limit)? {
+        let zlib_err = match try_zlib_decode(input, limit, capacity, expected)? {
             PrimaryAttempt::Recovered(output) => return Ok(output),
             PrimaryAttempt::Failed(e) => e,
         };
@@ -326,6 +397,12 @@ impl StreamDecoder for FlateDecoder {
             deflate_err,
             input.len()
         )))
+    }
+}
+
+impl StreamDecoder for FlateDecoder {
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        self.decode_with_capacity(input, max_output_bytes, None)
     }
 
     fn name(&self) -> &str {
@@ -583,6 +660,92 @@ mod tests {
 
         let decoded = decoder.decode(&compressed, 0).unwrap();
         assert_eq!(decoded, original);
+    }
+
+    /// A raster of noise, which deflate cannot shrink below [`MAX_PRESIZED_EXPANSION`] times, so
+    /// the reservation covers it.
+    fn raster(length: usize) -> (Vec<u8>, Vec<u8>) {
+        let mut state: u32 = 0x9e37_79b9;
+        let original: Vec<u8> = (0..length)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 24) as u8
+            })
+            .collect();
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&original).unwrap();
+        (original, encoder.finish().unwrap())
+    }
+
+    #[test]
+    fn a_presized_decode_holds_exactly_the_expected_raster() {
+        let (original, compressed) = raster(100_000);
+        let decoded = FlateDecoder::default()
+            .decode_presized(&compressed, 0, original.len())
+            .unwrap();
+        assert_eq!(decoded, original);
+        assert_eq!(decoded.capacity(), original.len(), "reserved once, never grown");
+        // The image pipeline hands the final filter the raster size its dictionary implies.
+        let piped = crate::decoders::decode_stream_with_params_and_expected_size(
+            &compressed,
+            &["FlateDecode".to_string()],
+            None,
+            original.len(),
+        )
+        .unwrap();
+        assert_eq!(piped, original);
+        assert_eq!(piped.capacity(), original.len());
+    }
+
+    #[test]
+    fn a_presized_decode_survives_a_dictionary_that_misstates_the_raster() {
+        let (original, compressed) = raster(100_000);
+        let overstated = FlateDecoder::default()
+            .decode_presized(&compressed, 0, original.len() * 3)
+            .unwrap();
+        assert_eq!(overstated, original);
+        assert_eq!(
+            overstated.capacity(),
+            original.len(),
+            "the unfilled reservation is released"
+        );
+        let understated = FlateDecoder::default()
+            .decode_presized(&compressed, 0, original.len() / 3)
+            .unwrap();
+        assert_eq!(understated, original);
+    }
+
+    #[test]
+    fn a_presized_reservation_never_exceeds_the_read_limit_or_a_small_multiple_of_the_input() {
+        assert_eq!(
+            presized_capacity(&[0; 10], u64::MAX, usize::MAX),
+            10 * MAX_PRESIZED_EXPANSION
+        );
+        assert_eq!(presized_capacity(&[0; 10_000], 100, 5_000), 100);
+        assert_eq!(presized_capacity(&[0; 10_000], u64::MAX, 5_000), 5_000);
+        // A dictionary claiming 1 GB over a 1 MB stream once reserved all of it up front.
+        assert_eq!(presized_capacity(&vec![0; 1 << 20], u64::MAX, 1 << 30), 64 << 20);
+    }
+
+    /// A stream that inflates past the capped reservation grows to exactly its expected size, not
+    /// to the next doubling of the cap (a 34.8 MB page raster once ended in a 47 MB buffer).
+    #[test]
+    fn a_presized_decode_grows_past_a_capped_reservation() {
+        let original = vec![0u8; 1_000_000];
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&original).unwrap();
+        let compressed = encoder.finish().unwrap();
+        assert!(
+            compressed.len() * MAX_PRESIZED_EXPANSION < original.len(),
+            "the fixture must outgrow the cap"
+        );
+
+        let decoded = FlateDecoder::default()
+            .decode_presized(&compressed, 0, original.len())
+            .unwrap();
+
+        assert_eq!(decoded, original);
+        assert_eq!(decoded.capacity(), original.len(), "grown to the raster, not past it");
     }
 
     #[test]

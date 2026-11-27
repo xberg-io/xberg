@@ -57,6 +57,12 @@ pub struct ConcurrencyConfig {
     /// ceiling instead. On hosts with more than 8 cores and no cgroup quota,
     /// set `max_threads` explicitly to use the additional cores — the
     /// default will not scale past 8 on its own.
+    ///
+    /// The shared Tokio runtime's worker count also follows this budget, but it
+    /// is sized once, by the first caller. A direct embedding or reranking call
+    /// made before any extraction builds it from the automatic budget, and a
+    /// later `max_threads` does not resize it. `TOKIO_WORKER_THREADS`, when set
+    /// to a nonzero count, takes precedence.
     pub max_threads: Option<usize>,
 
     /// Maximum number of Tesseract recognition sessions that run at once.
@@ -790,10 +796,32 @@ fn init_thread_pools_with(
 ///
 /// Model backends with private pools use this value to obey the same extraction
 /// budget. Before initialization, this resolves to the standard automatic limit.
-#[cfg(any(sceptre_ocr, paddle_ocr))]
+#[cfg(any(all(sceptre_ocr, not(target_arch = "wasm32")), paddle_ocr))]
 pub(crate) fn active_thread_budget() -> usize {
-    match ACTIVE_THREAD_BUDGET.load(Ordering::Relaxed) {
-        0 => resolve_thread_budget(None),
+    active_thread_budget_for(None)
+}
+
+/// As [`active_thread_budget`], but before initialization `config` is resolved
+/// instead of the automatic limit, so a caller that has not reached
+/// [`init_thread_pools`] yet can still size from its own `max_threads`.
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
+pub(crate) fn active_thread_budget_for(config: Option<&ConcurrencyConfig>) -> usize {
+    installed_budget_or_resolved(ACTIVE_THREAD_BUDGET.load(Ordering::Relaxed), config)
+}
+
+/// Pure core of [`active_thread_budget_for`]: `installed` is the stored budget, `0` when none is.
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
+fn installed_budget_or_resolved(installed: usize, config: Option<&ConcurrencyConfig>) -> usize {
+    match installed {
+        0 => resolve_thread_budget(config),
         budget => budget,
     }
 }

@@ -206,7 +206,8 @@ impl<'a> OutlineFace<'a> {
 ///
 /// Switching to a process-wide `OnceLock<Arc<fontdb::Database>>` loads
 /// the database exactly once per process, and every subsequent
-/// `TextRasterizer` constructor takes a cheap `Arc::clone`. Wrapping
+/// `TextRasterizer` takes a cheap `Arc::clone` on its first system-font
+/// lookup; a rasterizer that never needs one never triggers the scan. Wrapping
 /// in `Arc` is important so that the cache is still cheaply shareable
 /// across `TextRasterizer` instances in different rendering contexts
 /// without re-copying the full parsed font metadata. Callers that want
@@ -465,13 +466,15 @@ fn drop_tally_is_expected(gs: &GraphicsState, base_font: &str) -> bool {
 
 /// Rasterizer for PDF text operations.
 pub struct TextRasterizer {
-    /// Font database for system font fallback.
+    /// Font database for system font fallback, resolved through `load_fontdb`
+    /// on the first lookup ([`Self::font_db`]).
     ///
-    /// Shared across rasterizers via a process-wide `OnceLock` cache so
-    /// we don't re-scan the system font directories on every new
-    /// `PageRenderer`. See the `SYSTEM_FONTDB` docstring for the
-    /// measurement that motivated the switch.
-    fontdb: std::sync::Arc<fontdb::Database>,
+    /// Building the system database scans every installed font, so a
+    /// rasterizer whose text resolves entirely to embedded or bundled faces
+    /// never pays for it. The scan itself is shared across rasterizers via
+    /// the process-wide `SYSTEM_FONTDB` cache.
+    fontdb: std::sync::OnceLock<std::sync::Arc<fontdb::Database>>,
+    load_fontdb: fn() -> std::sync::Arc<fontdb::Database>,
 
     /// Fonts already named in a glyph-drop warning on the current page,
     /// keyed by font and drop reason so a second, different failure on the
@@ -593,13 +596,10 @@ impl GlyphTarget<'_> {
 }
 
 impl TextRasterizer {
-    /// Create a new text rasterizer using the cached system font database.
+    /// Create a new text rasterizer using the cached system font database,
+    /// built on the first font lookup that needs it.
     pub fn new() -> Self {
-        Self {
-            fontdb: system_fontdb(),
-            warned_fonts: Default::default(),
-            type0_ink_loss: Default::default(),
-        }
+        Self::with_fontdb_loader(system_fontdb)
     }
 
     /// Construct with a caller-supplied font database. Bypasses the
@@ -608,7 +608,19 @@ impl TextRasterizer {
     #[allow(dead_code)]
     pub fn with_fontdb(fontdb: std::sync::Arc<fontdb::Database>) -> Self {
         Self {
-            fontdb,
+            fontdb: std::sync::OnceLock::from(fontdb),
+            load_fontdb: system_fontdb,
+            warned_fonts: Default::default(),
+            type0_ink_loss: Default::default(),
+        }
+    }
+
+    /// Construct with a database that `load_fontdb` produces on the first
+    /// font lookup.
+    fn with_fontdb_loader(load_fontdb: fn() -> std::sync::Arc<fontdb::Database>) -> Self {
+        Self {
+            fontdb: std::sync::OnceLock::new(),
+            load_fontdb,
             warned_fonts: Default::default(),
             type0_ink_loss: Default::default(),
         }
@@ -1246,9 +1258,9 @@ impl TextRasterizer {
         None
     }
 
-    /// Access the font database.
+    /// Access the font database, building it on first use.
     fn font_db(&self) -> &fontdb::Database {
-        &self.fontdb
+        self.fontdb.get_or_init(self.load_fontdb)
     }
 
     /// Render Unicode text using shaped glyphs.
@@ -2511,6 +2523,89 @@ mod tests {
 
         rasterizer.reset_page_warnings();
         assert!(rasterizer.first_report_for("OncePerPage+UniqueA", "no outline"));
+    }
+
+    static FONTDB_LOADS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn counting_fontdb_loader() -> Arc<fontdb::Database> {
+        FONTDB_LOADS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Arc::new(fontdb::Database::new())
+    }
+
+    fn one_page_doc() -> PdfDocument {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+        ];
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (number, object) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend(format!("{} 0 obj\n{object}\nendobj\n", number + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        let size = objects.len() + 1;
+        pdf.extend(format!("xref\n0 {size}\n0000000000 65535 f \n").as_bytes());
+        for offset in offsets {
+            pdf.extend(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend(format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+        PdfDocument::from_bytes(pdf).expect("open one-page PDF")
+    }
+
+    /// The system font database is built on the first lookup of a font the
+    /// document does not embed, once per rasterizer, and never for text an
+    /// embedded font paints.
+    #[test]
+    fn system_fontdb_is_built_on_first_non_embedded_font_lookup() {
+        use std::sync::atomic::Ordering::SeqCst;
+
+        let rasterizer = TextRasterizer::with_fontdb_loader(counting_fontdb_loader);
+        assert_eq!(FONTDB_LOADS.load(SeqCst), 0, "construction must not build the database");
+
+        let mut font = make_vertical_test_font();
+        font.base_font = "DejaVuSans".to_string();
+        font.subtype = "TrueType".to_string();
+        font.encoding = Encoding::Standard("WinAnsiEncoding".to_string());
+        font.embedded_font_data = Some(Arc::new(crate::fonts::bundled::DEJAVU_SANS.to_vec()));
+        font.is_truetype_font = true;
+        font.cid_to_gid_map = None;
+        font.cid_font_type = None;
+        font.wmode = 0;
+        let fonts = HashMap::from([("F0".to_string(), Arc::new(font))]);
+        let mut gs = GraphicsState::new();
+        gs.font_size = 12.0;
+        gs.font_name = Some("F0".to_string());
+        let mut glyphs = 0;
+        rasterizer
+            .visit_text_glyphs(
+                TextRun::String(b"Ok"),
+                Transform::identity(),
+                &gs,
+                &one_page_doc(),
+                &fonts,
+                &mut |_, _, _| glyphs += 1,
+            )
+            .expect("embedded text lays out");
+        assert_eq!(glyphs, 2, "the embedded face paints both glyphs");
+        assert_eq!(
+            FONTDB_LOADS.load(SeqCst),
+            0,
+            "embedded text must not build the database"
+        );
+
+        assert!(
+            rasterizer.load_font_data("Helvetica").is_none(),
+            "the loaded database is empty"
+        );
+        assert_eq!(FONTDB_LOADS.load(SeqCst), 1, "a non-embedded font builds the database");
+        assert!(rasterizer.load_font_data("Times-Roman").is_none());
+        assert_eq!(
+            FONTDB_LOADS.load(SeqCst),
+            1,
+            "the database is built once per rasterizer"
+        );
     }
 
     /// Query helper: the family name the CJK fallback resolver looks up.

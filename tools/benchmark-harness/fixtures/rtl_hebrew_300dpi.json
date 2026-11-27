@@ -4,6 +4,7 @@
   "file_size": 147086,
   "expected_frameworks": ["xberg", "docling", "markitdown", "mineru", "pymupdf4llm", "tika", "unstructured"],
   "metadata": {
+    "family": "rtl_hebrew",
     "description": "Authored Hebrew right-to-left document page rendered as a 300-DPI PNG",
     "category": "image-scanned",
     "size_class": "medium",

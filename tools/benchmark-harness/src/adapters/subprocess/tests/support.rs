@@ -17,3 +17,16 @@ pub(super) fn test_xberg_batch_capability(per_item_timing: bool) -> BatchCapabil
         per_item_timing,
     }
 }
+
+/// The harness's default `--timeout`, which the Xberg adapters turn into their extraction limit.
+pub(super) fn default_run_timeout() -> std::time::Duration {
+    crate::config::BenchmarkConfig::default().timeout
+}
+
+/// Identity of a stand-in executable, for building the real xberg adapters without a binary.
+pub(super) fn test_build_identity() -> crate::adapter::ExecutableBuildIdentity {
+    crate::adapter::ExecutableBuildIdentity {
+        build_id: "test-build".to_string(),
+        path: std::path::PathBuf::from("xberg"),
+    }
+}

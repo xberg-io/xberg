@@ -24,6 +24,12 @@ const SEGMENT_GAP_SPACE_RATIO: f32 = 0.15;
 /// above the observed defect and 2x below the suite's word-boundary bound at every font size.
 const TOUCHING_SPAN_GAP_EM_RATIO: f32 = 0.025;
 
+/// Maximum overlap, as a fraction of the larger font size, that still counts as touching at a
+/// punctuation boundary. Italic and italic-monospace glyphs overhang the following run; the
+/// reported `E(CA)T` overlaps 0.055 em, while a reordered fragment backtracks by more than a
+/// whole em (`segments_need_space`'s severe-backtrack guard).
+const TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO: f32 = 0.1;
+
 /// Maximum baseline difference, in points, for the "touching spans" guard in
 /// [`segments_are_touching`]. Tighter than `segments_need_space`'s `eff_height`-scaled
 /// same-line check (which must tolerate wrapped-line reflow noise), because this guard only
@@ -38,20 +44,19 @@ const TOUCHING_SPAN_FONT_SIZE_TOLERANCE_RATIO: f32 = 0.01;
 /// than two lines split by a real line break.
 ///
 /// ~keep Deliberately a second constant rather than an import of pipeline.rs's private
-/// `INLINE_STYLE_BASELINE_TOLERANCE` (same value, 0.5pt): that const also drives four
-/// unrelated inline-style-grouping call sites in pipeline.rs, and coupling this module to it
-/// would let an unrelated change there silently retune dehyphenation. xberg-io/xberg#1581 was
-/// caused by a THIRD, looser notion of "line break" living at the dehyphenation call sites in
-/// assembly.rs (no geometry check at all); this gives assembly.rs the same test pipeline.rs's
-/// `spans_visual_line_break` already applies, instead of a fourth definition.
+/// `INLINE_STYLE_BASELINE_TOLERANCE` (same value, 0.5pt): that const also drives unrelated
+/// inline-style-grouping call sites in pipeline.rs, and coupling this module to it would let an
+/// unrelated change there silently retune dehyphenation. xberg-io/xberg#1581 was caused by a
+/// looser notion of "line break" at the dehyphenation call sites in assembly.rs (no geometry
+/// check at all); every dehyphenation site now gates on [`crosses_visual_line_break`].
 const LINE_BREAK_BASELINE_TOLERANCE: f32 = 0.5;
 
 /// True when `trailing` and `leading` sit on genuinely different visual lines rather than
 /// being two runs split mid-line by a style-run or font-resource boundary.
 ///
-/// Used to gate hyphen-joining in `assembly.rs`: a suspended hyphen inside one line
-/// (`onderhouds- en`) must never be welded, while a hyphen that really trails a wrapped line
-/// must still be.
+/// Gates hyphen-joining in `assembly.rs` and paragraph dehyphenation in `pipeline.rs`: a
+/// suspended hyphen inside one line (`onderhouds- en`) must never be welded, while a hyphen
+/// that really trails a wrapped line must still be.
 pub(crate) fn crosses_visual_line_break(trailing: &SegmentData, leading: &SegmentData) -> bool {
     if !trailing.has_same_rotation(leading) {
         return false;
@@ -81,7 +86,105 @@ pub(crate) fn segments_are_touching(
     if !prev_last_char.is_alphanumeric() || !next_first_char.is_alphanumeric() {
         return false;
     }
+    same_line_gap_in_em(prev_seg, next_seg).is_some_and(|gap| gap.abs() < TOUCHING_SPAN_GAP_EM_RATIO)
+}
 
+/// Touching geometry across a boundary with punctuation on one side: `CA` set in a monospace
+/// font between `E(` and `)T`, or before `-satellite`. A style change alone must not open a
+/// space the page does not draw. An italic run's glyphs overhang the next run (`A` into `)`
+/// by 0.055 em in the reported page), so overlap up to
+/// [`TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO`] still touches. Kept out of
+/// [`segments_are_touching`] because table word merging calls that guard before column
+/// assignment, where joining `59` + `.804` merges real columns (GH#2122).
+fn punctuation_boundary_touches(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    let (Some(prev_last_char), Some(next_first_char)) = (prev_word.chars().last(), next_word.chars().next()) else {
+        return false;
+    };
+    let is_punctuation = |character: char| !character.is_alphanumeric() && !character.is_whitespace();
+    // ~keep An emphasis delimiter between punctuation and a letter is not flanking under
+    // CommonMark (`x*(a)*`, `**Note.**Text`) and renders as literal asterisks, so a bold or
+    // italic change keeps its space in exactly those shapes.
+    let closes_after_prev = (prev_seg.is_bold && !next_seg.is_bold) || (prev_seg.is_italic && !next_seg.is_italic);
+    let opens_before_next = (next_seg.is_bold && !prev_seg.is_bold) || (next_seg.is_italic && !prev_seg.is_italic);
+    let breaks_flanking = (closes_after_prev && is_punctuation(prev_last_char) && next_first_char.is_alphanumeric())
+        || (opens_before_next && prev_last_char.is_alphanumeric() && is_punctuation(next_first_char));
+    if breaks_flanking {
+        return false;
+    }
+    (is_punctuation(prev_last_char) || is_punctuation(next_first_char))
+        && same_line_gap_in_em(prev_seg, next_seg)
+            .is_some_and(|gap| gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO)
+}
+
+/// Highest a trailing marker's baseline may sit above the word it follows, in ems of that word's
+/// font: a superscript footnote marker such as `(c)` is raised about a quarter em.
+const TRAILING_MARKER_MAX_RAISE_EM_RATIO: f32 = 0.5;
+
+/// A trailing comma, semicolon, colon, bracket or footnote marker printed against the word
+/// before it, as in `38` + `(c)` (a smaller raised marker) or `SE` + `,`. Table word merging
+/// runs before column assignment, so the marker must carry no digit: a digit-bearing run such
+/// as `(1,234)` or `.804` can be the next column touching the last one (GH#2122), while a cell
+/// never starts with a bare `,` or a letter marker in parentheses. ~keep
+pub(crate) fn trailing_marker_touches(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    let (Some(prev_last_char), Some(next_first_char)) = (prev_word.chars().last(), next_word.chars().next()) else {
+        return false;
+    };
+    if !prev_last_char.is_alphanumeric()
+        || !matches!(next_first_char, ',' | ';' | ':' | ')' | ']' | '(')
+        || next_word.chars().any(|character| character.is_ascii_digit())
+        || prev_seg.text.chars().last().is_some_and(char::is_whitespace)
+        || next_seg.text.chars().next().is_some_and(char::is_whitespace)
+        || !prev_seg.has_same_rotation(next_seg)
+    {
+        return false;
+    }
+    let font_size = prev_seg.font_size.max(1.0);
+    if next_seg.font_size > font_size * (1.0 + TOUCHING_SPAN_FONT_SIZE_TOLERANCE_RATIO) {
+        return false;
+    }
+    let raise = next_seg.upright_baseline() - prev_seg.upright_baseline();
+    if !(-TOUCHING_SPAN_BASELINE_TOLERANCE..=font_size * TRAILING_MARKER_MAX_RAISE_EM_RATIO).contains(&raise) {
+        return false;
+    }
+    let (_, prev_end) = prev_seg.upright_advance_extent();
+    let (next_start, _) = next_seg.upright_advance_extent();
+    let gap = (next_start - prev_end) / font_size;
+    gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO
+}
+
+/// The mirror of [`trailing_marker_touches`]: a lone opening bracket printed against the
+/// word after it, as in `(` + `Ω` where the symbol comes from another font. The bracket ends
+/// its word, so it is never a cell of its own column, and the two runs must share a baseline
+/// and touch like any split word. ~keep
+pub(crate) fn leading_opener_touches(
+    prev_seg: &SegmentData,
+    prev_word: &str,
+    next_seg: &SegmentData,
+    next_word: &str,
+) -> bool {
+    if prev_word.is_empty()
+        || !prev_word.chars().all(|character| matches!(character, '(' | '['))
+        || !next_word.chars().next().is_some_and(char::is_alphanumeric)
+    {
+        return false;
+    }
+    same_line_gap_in_em(prev_seg, next_seg)
+        .is_some_and(|gap| gap > -TOUCHING_PUNCTUATION_OVERLAP_EM_RATIO && gap < TOUCHING_SPAN_GAP_EM_RATIO)
+}
+
+/// Signed advance-axis gap between two runs, in ems of the larger font, when they share a
+/// rotation, baseline and font size and no explicit space separates them.
+fn same_line_gap_in_em(prev_seg: &SegmentData, next_seg: &SegmentData) -> Option<f32> {
     // ~keep An explicitly drawn space at the boundary outranks any geometry. The producer
     // emitted a space glyph, and its advance is already inside `prev_seg`'s extent, so the
     // measured gap to the next segment collapses to ~0 and reads as "touching" — exactly the
@@ -93,26 +196,26 @@ pub(crate) fn segments_are_touching(
     if prev_seg.text.chars().last().is_some_and(char::is_whitespace)
         || next_seg.text.chars().next().is_some_and(char::is_whitespace)
     {
-        return false;
+        return None;
     }
 
     if !prev_seg.has_same_rotation(next_seg) {
-        return false;
+        return None;
     }
 
     let baseline_gap = (prev_seg.upright_baseline() - next_seg.upright_baseline()).abs();
     if baseline_gap > TOUCHING_SPAN_BASELINE_TOLERANCE {
-        return false;
+        return None;
     }
 
     let max_font_size = prev_seg.font_size.max(next_seg.font_size).max(1.0);
     if (prev_seg.font_size - next_seg.font_size).abs() > max_font_size * TOUCHING_SPAN_FONT_SIZE_TOLERANCE_RATIO {
-        return false;
+        return None;
     }
 
     let (_, prev_end) = prev_seg.upright_advance_extent();
     let (next_start, _) = next_seg.upright_advance_extent();
-    (next_start - prev_end).abs() < max_font_size * TOUCHING_SPAN_GAP_EM_RATIO
+    Some((next_start - prev_end) / max_font_size)
 }
 
 /// Returns true if the character is a CJK ideograph, Hiragana, Katakana, or Hangul.
@@ -178,7 +281,9 @@ pub(super) fn segments_need_space(
         return false;
     }
 
-    if segments_are_touching(prev_seg, prev_word, next_seg, next_word) {
+    if segments_are_touching(prev_seg, prev_word, next_seg, next_word)
+        || punctuation_boundary_touches(prev_seg, prev_word, next_seg, next_word)
+    {
         return false;
     }
 
@@ -391,6 +496,71 @@ mod tests {
         next.is_bold = true;
 
         assert!(!segments_need_space(&prev, "pri", &next, "js"));
+    }
+
+    /// `E(CA)T` and `CA-satellite` with `CA` in CMTT10 between CMR10 runs: the monospace switch
+    /// sits on a punctuation boundary that touches, so no space may open there.
+    #[test]
+    fn should_join_touching_punctuation_across_a_monospace_switch() {
+        let mut code = segment(" CA", 489.3, 13.3, 9.96264, 700.0);
+        code.is_monospace = true;
+        let compound = segment("-satellite", 502.7, 39.0, 9.96264, 700.0);
+        assert!(!segments_need_space(&code, "CA", &compound, "-satellite"));
+
+        // Measured on the page: `(` overhangs `C` by 0.11 pt and `A` overhangs `)` by 0.55 pt.
+        let open = segment("E(", 333.72, 10.19, 9.96264, 238.32);
+        let mut inner = segment("CA", 343.8, 10.51, 9.96264, 238.32);
+        inner.is_monospace = true;
+        let close = segment(")T", 353.76, 9.19, 9.96264, 238.32);
+        assert!(!segments_need_space(&open, "E(", &inner, "CA"));
+        assert!(!segments_need_space(&inner, "CA", &close, ")T"));
+    }
+
+    #[test]
+    fn should_keep_the_space_where_joining_would_leave_emphasis_non_flanking() {
+        let roman = segment("x", 100.0, 5.0, 10.0, 700.0);
+        let mut italic_open = segment("(a)", 105.0, 12.0, 10.0, 700.0);
+        italic_open.is_italic = true;
+        assert!(segments_need_space(&roman, "x", &italic_open, "(a)"));
+
+        let mut bold_note = segment("Note.", 100.0, 25.0, 10.0, 700.0);
+        bold_note.is_bold = true;
+        let body = segment("Text", 125.0, 20.0, 10.0, 700.0);
+        assert!(segments_need_space(&bold_note, "Note.", &body, "Text"));
+
+        let mut italic_word = segment("word", 100.0, 20.0, 10.0, 700.0);
+        italic_word.is_italic = true;
+        let comma = segment(",", 120.0, 3.0, 10.0, 700.0);
+        assert!(
+            !segments_need_space(&italic_word, "word", &comma, ","),
+            "`*word*,` is flanking and joins"
+        );
+    }
+
+    #[test]
+    fn should_keep_the_style_change_space_at_a_punctuation_boundary_that_does_not_touch() {
+        let mut code = segment("CA", 100.0, 10.0, 10.0, 700.0);
+        code.is_monospace = true;
+        let gapped = segment("-satellite", 110.5, 39.0, 10.0, 700.0);
+        let spaced = segment(" -satellite", 110.0, 41.0, 10.0, 700.0);
+        let raised = segment("-satellite", 110.0, 39.0, 10.0, 703.0);
+        let smaller = segment("-satellite", 110.0, 39.0, 7.0, 700.0);
+        let overlapping = segment("-satellite", 108.5, 39.0, 10.0, 700.0);
+
+        assert!(segments_need_space(&code, "CA", &overlapping, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &gapped, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &spaced, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &raised, "-satellite"));
+        assert!(segments_need_space(&code, "CA", &smaller, "-satellite"));
+        assert!(
+            !segments_are_touching(
+                &segment("59", 100.0, 10.0, 10.0, 700.0),
+                "59",
+                &segment(".804", 110.0, 20.0, 10.0, 700.0),
+                ".804"
+            ),
+            "table word merging keeps requiring a word character on both sides (GH#2122)"
+        );
     }
 
     #[test]

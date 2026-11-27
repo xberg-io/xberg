@@ -4,6 +4,7 @@
   "file_size": 232927,
   "expected_frameworks": ["xberg", "docling", "markitdown", "mineru", "pymupdf4llm", "tika", "unstructured"],
   "metadata": {
+    "family": "rtl_arabic",
     "description": "Authored Arabic right-to-left document page rendered as a 300-DPI PNG",
     "category": "image-scanned",
     "size_class": "medium",

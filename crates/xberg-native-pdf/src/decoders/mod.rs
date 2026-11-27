@@ -386,6 +386,22 @@ pub(crate) fn supports_filter_predictor(filter: &str) -> bool {
     matches!(normalize_filter_name(filter), Ok("FlateDecode" | "LZWDecode"))
 }
 
+/// Decode `input` through one filter. A final filter that knows the size its image dictionary
+/// implies (`expected_size`) lets Flate reserve that output up front instead of growing it.
+fn decode_filter(
+    filter_name: &str,
+    input: &[u8],
+    output_limit: usize,
+    expected_size: Option<usize>,
+) -> Result<Vec<u8>> {
+    match expected_size {
+        Some(expected) if matches!(normalize_filter_name(filter_name), Ok("FlateDecode")) => {
+            FlateDecoder::default().decode_presized(input, output_limit, expected)
+        }
+        _ => create_decoder(filter_name).and_then(|decoder| decoder.decode(input, output_limit)),
+    }
+}
+
 fn decode_stream_with_options_and_expected_size(
     data: &[u8],
     filters: &[String],
@@ -416,7 +432,7 @@ fn decode_stream_with_options_and_expected_size(
             let early_change = early_changes.get(filter_index).copied().unwrap_or(true);
             decode_complete_form_filter(filter_name, &current, output_limit, early_change)
         } else {
-            create_decoder(filter_name).and_then(|decoder| decoder.decode(&current, output_limit))
+            decode_filter(filter_name, &current, output_limit, exempt_size)
         };
         current = decoded.map_err(|error| match error {
             Error::Decode(message) if message.contains("limit") && (max_size == 0 || output_limit < max_size) => {

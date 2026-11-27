@@ -5,9 +5,12 @@ use super::super::{
 use super::support::{BACKEND, LIST_PAGE_TEXT, Reply, TABLE_PAGE_TEXT, TEXT, complete_fixture, config, observer};
 use lopdf::{Document, Stream, dictionary};
 
+/// Two progressive label scans: at 80 MiB each page render is refused (the renderer decodes a
+/// progressive JPEG only at full size, 92 857 078 bytes), so both pages reach the embedded-image
+/// recovery. The baseline two-page scan now renders at that budget.
 const TWO_SCANS: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages.pdf"
+    "/../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages-progressive.pdf"
 ));
 
 #[tokio::test]

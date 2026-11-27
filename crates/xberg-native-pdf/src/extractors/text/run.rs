@@ -71,12 +71,54 @@ impl<'doc> TextExtractor<'doc> {
 
     fn extract_text_spans_impl(&mut self, content_stream: &[u8]) -> Result<Vec<TextSpan>> {
         let _warnings = self.document.map(crate::PdfDocument::warning_scope);
+        self.interpret_text_spans(content_stream)?;
+        Ok(self.finish_text_spans())
+    }
+
+    /// [`Self::extract_text_spans`] once per script geometry from a single run of the content
+    /// stream: `(flattened, preserved)`, each equal to what an extractor with
+    /// `preserve_script_baselines` off, respectively on, returns for the stream. Leaves
+    /// `preserve_script_baselines` off and `raw_script_baselines` as the flattened read left it.
+    ///
+    /// Only the steps after the stream has run read the geometry flag. They read the spans, the pen
+    /// continuations, the fonts, the merging configuration and the reversed-glyph flag, and only
+    /// the flattened snap rewrites the pen continuations, so the preserved spans are finished first,
+    /// on a copy, and the flattened ones on the extractor's own spans.
+    #[tracing::instrument(name = "pdf.extract_spans", skip_all, fields(bytes = content_stream.len()))]
+    pub(crate) fn extract_text_spans_in_both_script_geometries(
+        &mut self,
+        content_stream: &[u8],
+    ) -> Result<(Vec<TextSpan>, Vec<TextSpan>)> {
+        let _recovery_scope = self
+            .document
+            .map(|doc| crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts()));
+        let _warnings = self.document.map(crate::PdfDocument::warning_scope);
+        let result = self.interpret_text_spans(content_stream).map(|()| {
+            let copy = self.spans.clone();
+            let interpreted = std::mem::replace(&mut self.spans, copy);
+            self.preserve_script_baselines = true;
+            let preserved = self.finish_text_spans();
+            self.spans = interpreted;
+            self.preserve_script_baselines = false;
+            (self.finish_text_spans(), preserved)
+        });
+        if let Err(error) = &result {
+            crate::error::trace_failure("extract_text_spans", error);
+        }
+        result
+    }
+
+    /// Run the content stream into raw, unordered spans: the part of span extraction that does not
+    /// depend on the script geometry.
+    fn interpret_text_spans(&mut self, content_stream: &[u8]) -> Result<()> {
         self.extract_spans = true;
         self.spans.clear();
         self.span_sequence_counter = 0;
         self.pen_seam = None;
         self.forget_drawn_end();
         self.pen_continuations.clear();
+        self.ocr_layer_spans.clear();
+        self.invisible_spans.clear();
         self.placed_pdf_keep = Self::placed_pdf_text_dominates(content_stream);
 
         extract_log_debug!("Parsing content stream for text extraction");
@@ -84,11 +126,17 @@ impl<'doc> TextExtractor<'doc> {
 
         self.flush_tj_span_buffer()?;
         self.settle_span_holds();
+        self.drop_unpainted_invisible_text();
 
         // Detect RTL glyph DRAW DIRECTION on the raw stream order, BEFORE the
         // reading-order sort destroys it (ISO 32000-1 §14.8.2.3.3 method 1). ~keep
         self.detect_rtl_draw_direction();
+        Ok(())
+    }
 
+    /// Order, deduplicate and merge the raw spans for the extractor's script geometry and resolve
+    /// their fonts, handing the finished spans over.
+    fn finish_text_spans(&mut self) -> Vec<TextSpan> {
         if tracing::enabled!(tracing::Level::DEBUG) {
             let space_spans = self
                 .spans
@@ -139,27 +187,36 @@ impl<'doc> TextExtractor<'doc> {
         // is unresolvable. ~keep
         self.resolve_span_font_provenance();
 
-        Ok(std::mem::take(&mut self.spans))
+        std::mem::take(&mut self.spans)
     }
 
     /// Resolve each span's font resource alias to its `/BaseFont` name and
     /// §9.10.2 mapping provenance, in place. Split out of
-    /// `extract_text_spans_impl` for readability only — same single pass over
+    /// `finish_text_spans` for readability only — same single pass over
     /// `self.spans`, same lookup keyed by the raw resource alias. ~keep
     fn resolve_span_font_provenance(&mut self) {
-        let resolved: Vec<(Option<String>, Option<crate::fonts::MappingProvenance>)> = self
-            .spans
-            .iter()
-            .map(|s| {
-                self.fonts.get(&s.font_name).map_or((None, None), |f| {
-                    (
-                        Some(f.base_font.clone()).filter(|b| !b.is_empty()),
-                        Some(self.font_provenance_cache.resolve(f)),
-                    )
-                })
-            })
-            .collect();
-        for (span, (resolved_base_font, provenance)) in self.spans.iter_mut().zip(resolved) {
+        let fonts = &self.fonts;
+        let provenance_cache = &self.font_provenance_cache;
+        let font_names = &mut self.font_names;
+        // Spans come in runs of one alias, and each lookup answers the same for the same alias, so
+        // a run reuses its first span's answer instead of hashing the alias again. ~keep
+        let mut previous: Option<(FontName, Option<FontName>, Option<crate::fonts::MappingProvenance>)> = None;
+        for span in &mut self.spans {
+            let (resolved_base_font, provenance) = match &previous {
+                Some((alias, base_font, provenance)) if *alias == span.font_name => (base_font.clone(), *provenance),
+                _ => {
+                    let resolved = fonts.get(span.font_name.as_str()).map_or((None, None), |f| {
+                        (
+                            Some(f.base_font.as_str())
+                                .filter(|b| !b.is_empty())
+                                .map(|b| intern_font_name(font_names, b)),
+                            Some(provenance_cache.resolve(f)),
+                        )
+                    });
+                    previous = Some((span.font_name.clone(), resolved.0.clone(), resolved.1));
+                    resolved
+                }
+            };
             if let Some(base_font) = resolved_base_font {
                 span.font_name = base_font;
             }

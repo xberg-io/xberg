@@ -56,12 +56,42 @@ impl AsRef<[u8]> for FileBytes {
     }
 }
 
+impl FileBytes {
+    /// Whether the bytes are a file mapping rather than a heap buffer.
+    #[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+    pub(crate) fn is_mapped(&self) -> bool {
+        match &self.inner {
+            FileBytesInner::Heap(_) => false,
+            #[cfg(not(target_arch = "wasm32"))]
+            FileBytesInner::Mapped(_) => true,
+        }
+    }
+
+    /// Convert into [`bytes::Bytes`] without copying.
+    ///
+    /// A mapping becomes the owner of the returned `Bytes` and stays mapped until the last
+    /// clone or slice of it drops, so the [`open_file_bytes`] contract extends to that point.
+    #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
+    pub(crate) fn into_bytes(self) -> bytes::Bytes {
+        match self.inner {
+            FileBytesInner::Heap(bytes) => bytes::Bytes::from(bytes),
+            #[cfg(not(target_arch = "wasm32"))]
+            FileBytesInner::Mapped(mmap) => bytes::Bytes::from_owner(mmap),
+        }
+    }
+}
+
 /// Open a file and return its bytes with zero-copy for large files.
 ///
 /// On non-WASM targets, files larger than [`MMAP_THRESHOLD_BYTES`] are
 /// memory-mapped so that the file contents are never copied to the heap.
 /// The mapping is read-only; the file must not be modified while the returned
 /// [`FileBytes`] is alive, which is safe for document extraction.
+///
+/// Every caller shares that assumption: there is no guard against a concurrent writer.
+/// Rewriting the file in place changes the bytes under the reader, and truncating it
+/// makes a read past the new end fault with SIGBUS on Unix. On Windows the open mapping
+/// keeps the file from being truncated or deleted until it drops.
 ///
 /// On WASM or for small files, falls back to a plain `std::fs::read`.
 ///

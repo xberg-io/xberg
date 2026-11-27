@@ -22,6 +22,7 @@ use std::mem::size_of;
 use xberg_native_pdf::elements::{PathContent, PathOperation};
 
 mod definition_grid;
+mod open_columns;
 pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
@@ -126,7 +127,7 @@ enum HeuristicTableRejection {
     PostProcessing,
     TooFewRows,
     CodeListing,
-    NotWellFormed,
+    NotWellFormed { columns: usize },
     EmptyMarkdown,
     AxisTickGrid,
 }
@@ -360,7 +361,7 @@ struct PageTableContext<'a> {
     source_paths: &'a [PathContent],
     source_spans: &'a scripts::PageSpans,
     capture_members: bool,
-    source_chars: std::cell::OnceCell<Vec<xberg_native_pdf::layout::TextChar>>,
+    source_chars: std::cell::OnceCell<std::sync::Arc<Vec<xberg_native_pdf::layout::TextChar>>>,
 }
 
 fn append_extracted_table(
@@ -374,13 +375,18 @@ fn append_extracted_table(
     let characters = || {
         context
             .source_chars
-            .get_or_init(|| context.doc.doc.extract_chars(context.page_idx).unwrap_or_default())
+            .get_or_init(|| context.doc.doc.cached_page_chars(context.page_idx).unwrap_or_default())
             .as_slice()
     };
     let repaired = restore_ruled_decimal_rows(&mut extracted_table, || (characters(), context.source_paths));
     let recovered_sources = restore_open_year_columns(&mut extracted_table, &context.source_spans.spans, || {
         (characters(), context.source_paths)
     });
+    open_columns::restore_open_trailing_columns(
+        &mut extracted_table,
+        &context.source_spans.spans,
+        context.source_paths,
+    );
     let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
     if markdown.trim().is_empty() || cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
         return;
@@ -886,7 +892,8 @@ pub(crate) struct HeuristicTableExtraction {
 /// detector can lock onto.
 ///
 /// Returns the detected tables together with ownership of the exact hierarchy
-/// segments used for reconstruction.
+/// segments used for reconstruction. Pages in `skip_pages` are never read, so
+/// their segment lists are empty.
 pub(crate) fn extract_tables_heuristic(
     doc: &mut NativeDocument,
     allow_single_column: bool,
@@ -895,7 +902,10 @@ pub(crate) fn extract_tables_heuristic(
     page_paths: &mut TablePagePaths,
 ) -> Result<HeuristicTableExtraction> {
     let (per_page_segments, used_structure_tree) =
-        crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
+        crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts, |page_idx| {
+            skip_pages.contains(&((page_idx + 1) as u32))
+        })
+        .map_err(|e| {
             PdfError::TextExtractionFailed(format!(
                 "xberg_native_pdf hierarchy extraction failed for heuristic tables: {e}"
             ))
@@ -940,7 +950,15 @@ pub(crate) fn extract_tables_heuristic(
             continue;
         }
 
-        let mut regions = cluster_words_into_vertical_regions(&words);
+        let paths = page_paths.take(doc, page_idx);
+        // Rules are attributed to word rows in page space, which a lifted
+        // rotation frame does not share (see `region_rules` below). ~keep
+        let label_rules = if source_frame {
+            header_rules(&paths, page_height)
+        } else {
+            Vec::new()
+        };
+        let mut regions = cluster_words_into_vertical_regions_with_rules(&words, &label_rules);
         if regions.len() > MAX_REGIONS_PER_PAGE {
             tracing::debug!(
                 page = page_number,
@@ -952,7 +970,6 @@ pub(crate) fn extract_tables_heuristic(
         }
 
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
-        let paths = page_paths.take(doc, page_idx);
         // A lifted rotation frame gives `HocrWord`s advance/cross coordinates,
         // not page x/y, so a page-space rule cannot be attributed to its region.
         // Falling back to zero rules keeps the geometric gate (and its
@@ -1864,26 +1881,44 @@ fn supported_financial_track_centers(
         .saturating_mul(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROW_PERCENT)
         .div_ceil(100)
         .max(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROWS);
-    let mut candidates: Vec<u32> = rows
+    // Support depends only on a candidate's value, and every numeric word is a
+    // candidate, so testing each against every word of every row is quadratic in
+    // the region's numeric words (a wide value grid spent most of its table time
+    // here). Sorted per-row centers answer "does this row have a value within
+    // the tolerance" by binary search, once per distinct candidate value. ~keep
+    let row_centers: Vec<Vec<u32>> = rows
         .iter()
-        .flatten()
-        .filter(|word| is_numeric_word(&word.text))
-        .map(|word| word.left + word.width / 2)
-        .filter(|candidate| financial_track_support(rows, *candidate, x_tolerance) >= minimum_support)
+        .map(|row| {
+            let mut centers: Vec<u32> = row
+                .iter()
+                .filter(|word| is_numeric_word(&word.text))
+                .map(|word| word.left + word.width / 2)
+                .collect();
+            centers.sort_unstable();
+            centers
+        })
         .collect();
+    let mut candidates: Vec<u32> = row_centers.iter().flatten().copied().collect();
     candidates.sort_unstable();
-    candidates.dedup_by(|left, right| left.abs_diff(*right) <= x_tolerance);
-    candidates
-}
-
-fn financial_track_support(
-    rows: &[Vec<&crate::pdf::table_reconstruct::HocrWord>],
-    candidate: u32,
-    x_tolerance: u32,
-) -> usize {
-    rows.iter()
-        .filter(|row| row_has_financial_track(row, candidate, x_tolerance))
-        .count()
+    let mut supported = Vec::with_capacity(candidates.len());
+    for run in candidates.chunk_by(|left, right| left == right) {
+        let candidate = run[0];
+        let lowest = candidate.saturating_sub(x_tolerance);
+        let highest = candidate.saturating_add(x_tolerance);
+        let support = row_centers
+            .iter()
+            .filter(|centers| {
+                centers
+                    .get(centers.partition_point(|center| *center < lowest))
+                    .is_some_and(|center| *center <= highest)
+            })
+            .count();
+        if support >= minimum_support {
+            supported.extend_from_slice(run);
+        }
+    }
+    supported.dedup_by(|left, right| left.abs_diff(*right) <= x_tolerance);
+    supported
 }
 
 fn row_has_financial_track(row: &[&crate::pdf::table_reconstruct::HocrWord], track: u32, x_tolerance: u32) -> bool {
@@ -1982,15 +2017,26 @@ fn reconstruct_region_tables(
     horizontal_rules: usize,
     column_rules: &source_columns::PageRules<'_>,
 ) -> Vec<Table> {
-    let Some(parent) = source_columns::reconstruct_region_table(
+    let parent = match source_columns::reconstruct_region_table(
         region,
         page_height,
         page_number,
         allow_single_column,
         horizontal_rules,
         column_rules,
-    ) else {
-        return Vec::new();
+    ) {
+        Ok(parent) => parent,
+        Err(rejection) => {
+            return reconstruct_rejected_side_by_side(
+                region,
+                rejection,
+                page_height,
+                page_number,
+                allow_single_column,
+                horizontal_rules,
+            )
+            .unwrap_or_default();
+        }
     };
     if parent.cells.first().map_or(0, Vec::len) < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
         return vec![parent];
@@ -2039,22 +2085,257 @@ fn reconstruct_side_by_side_child(
     allow_single_column: bool,
     horizontal_rules: usize,
 ) -> Option<Table> {
-    let mut heights: Vec<u32> = region.iter().map(|word| word.height).collect();
-    heights.sort_unstable();
-    let child_gap = heights
-        .get(heights.len() / 2)
-        .copied()?
-        .max(1)
-        .saturating_mul(SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER);
     reconstruct_region_table_with_column_gap(
         region,
         page_height,
         page_number,
         allow_single_column,
-        child_gap,
+        side_by_side_child_gap(region)?,
         horizontal_rules,
     )
     .ok()
+}
+
+fn side_by_side_child_gap(region: &[crate::pdf::table_reconstruct::HocrWord]) -> Option<u32> {
+    let mut heights: Vec<u32> = region.iter().map(|word| word.height).collect();
+    heights.sort_unstable();
+    Some(
+        heights
+            .get(heights.len() / 2)
+            .copied()?
+            .max(1)
+            .saturating_mul(SIDE_BY_SIDE_CHILD_GAP_HEIGHT_MULTIPLIER),
+    )
+}
+
+/// Side-by-side split of a parent the whole-region gate rejected.
+///
+/// A two-column schedule whose records wrap over several lines fails that gate as one
+/// grid: each record's amount and value fill only its last line, so most cells of the
+/// fused grid are empty. Each side is admitted only on its own, through the full gate,
+/// after its wrapped records are collapsed into one row each, and both sides must carry
+/// the recurring numeric tracks [`side_tables_have_independent_shape`] requires, which
+/// two columns of prose do not. At least one side must have needed the collapse: wrapped
+/// records are the evidence that the rejection came from the fused grid, not the content,
+/// so two sides that pass unaided leave the rejected parent as it was. ~keep
+fn reconstruct_rejected_side_by_side(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    rejection: HeuristicTableRejection,
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+) -> Option<Vec<Table>> {
+    let HeuristicTableRejection::NotWellFormed { columns } = rejection else {
+        return None;
+    };
+    if columns < SIDE_BY_SIDE_MIN_PARENT_COLUMNS {
+        return None;
+    }
+    let (left_region, right_region) = split_side_by_side_region(region)?;
+    let child = |side: &[crate::pdf::table_reconstruct::HocrWord]| {
+        reconstruct_wrapped_side_by_side_child(side, page_height, page_number, allow_single_column, horizontal_rules)
+    };
+    let (left, left_collapsed) = child(&left_region)?;
+    let (right, right_collapsed) = child(&right_region)?;
+    if !(left_collapsed || right_collapsed) || !side_tables_have_independent_shape(&left, &right) {
+        return None;
+    }
+    let (left, right) = normalize_side_by_side_financial_tables(left, right);
+    tracing::trace!(
+        page = page_number,
+        parent_columns = columns,
+        left_columns = left.cells.first().map_or(0, Vec::len),
+        right_columns = right.cells.first().map_or(0, Vec::len),
+        "split side-by-side heuristic tables from a rejected parent"
+    );
+    Some(vec![left, right])
+}
+
+fn reconstruct_wrapped_side_by_side_child(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+) -> Option<(Table, bool)> {
+    let col_gap = side_by_side_child_gap(region)?;
+    let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
+    if let Ok(table) = admit_region_grid(
+        region,
+        grid.clone(),
+        column_positions.clone(),
+        page_height,
+        page_number,
+        allow_single_column,
+        col_gap,
+        horizontal_rules,
+    ) {
+        return Some((table, false));
+    }
+    let median_height = median_word_height(region);
+    let geometry = grid_row_geometry(region, grid.len(), median_height)?;
+    let indent_tolerance = median_height / 2;
+    let collapsed = collapse_wrapped_financial_records(&grid, &geometry, indent_tolerance)?;
+    admit_region_grid(
+        region,
+        collapsed,
+        column_positions,
+        page_height,
+        page_number,
+        allow_single_column,
+        col_gap,
+        horizontal_rules,
+    )
+    .ok()
+    .map(|table| (table, true))
+}
+
+/// Where one grid row sits on the page: its leftmost word edge and its vertical centre.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct GridRowGeometry {
+    left: u32,
+    center: u32,
+}
+
+/// Geometry of each grid row, or `None` when the region's rows do not map one to one onto
+/// the grid's (a merged header fragment or a dropped row), so no row is misread. The rows are
+/// the grid's own, a stacked header band read as one; `median_height` is the region's
+/// [`median_word_height`].
+fn grid_row_geometry(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    grid_rows: usize,
+    median_height: u32,
+) -> Option<Vec<GridRowGeometry>> {
+    let positions = crate::table_core::table_row_positions(region, REGION_ROW_THRESHOLD_RATIO, median_height);
+    let mut lefts: Vec<Option<u32>> = vec![None; positions.len()];
+    for word in region {
+        let Some(index) = crate::table_core::find_row_index(&positions, word) else {
+            continue;
+        };
+        let left = &mut lefts[index];
+        *left = Some(left.map_or(word.left, |current| current.min(word.left)));
+    }
+    let geometry: Vec<GridRowGeometry> = lefts
+        .into_iter()
+        .zip(positions)
+        .filter_map(|(left, center)| Some(GridRowGeometry { left: left?, center }))
+        .collect();
+    (geometry.len() == grid_rows).then_some(geometry)
+}
+
+/// Fewest wrapped records a side must collapse before its lines read as a wrapped schedule.
+const WRAPPED_RECORD_MIN_COLLAPSED: usize = 3;
+
+/// Gap above a line, as a percentage of the median row pitch, beyond which a line that
+/// starts a new entry is set apart from the record above it as a heading.
+const WRAPPED_HEADING_MIN_PITCH_PERCENT: u32 = 150;
+
+/// Collapse each wrapped record of a financial schedule into one row.
+///
+/// A record's description wraps over descriptor-only lines and ends on the line that holds
+/// its numeric amount or value; those lines become one row whose descriptor joins them.
+/// A new entry starts at a line back at the outdented left edge, and after a heading: a
+/// line that starts an entry with a gap above it wider than
+/// [`WRAPPED_HEADING_MIN_PITCH_PERCENT`] of the row pitch ends at the next line not indented
+/// deeper than itself. Such headings and issuer lines stay rows of their own and do not
+/// count as wrapped records. A run longer than [`WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS`]
+/// is prose, not a record, and fails the collapse, as do a grid without one
+/// `rows_geometry` entry per row (no indentation to read) and a grid with fewer than
+/// [`WRAPPED_RECORD_MIN_COLLAPSED`] records.
+fn collapse_wrapped_financial_records(
+    grid: &[Vec<String>],
+    rows_geometry: &[GridRowGeometry],
+    indent_tolerance: u32,
+) -> Option<Vec<Vec<String>>> {
+    let width = grid.first()?.len();
+    if width < CANONICAL_FINANCIAL_COLUMNS
+        || rows_geometry.len() != grid.len()
+        || grid.iter().any(|row| row.len() != width)
+    {
+        return None;
+    }
+    let outdent = rows_geometry.iter().map(|row| row.left).min()?;
+    let is_outdented = |index: usize| rows_geometry[index].left <= outdent.saturating_add(indent_tolerance);
+    let pitch = median_row_pitch(rows_geometry);
+    let is_set_apart = |index: usize| {
+        index > 0
+            && pitch > 0
+            && rows_geometry[index]
+                .center
+                .saturating_sub(rows_geometry[index - 1].center)
+                .saturating_mul(100)
+                > pitch.saturating_mul(WRAPPED_HEADING_MIN_PITCH_PERCENT)
+    };
+
+    let mut rows = Vec::with_capacity(grid.len());
+    let mut pending: Vec<&str> = Vec::new();
+    let mut heading_left: Option<u32> = None;
+    let mut collapsed = 0usize;
+    for (index, row) in grid.iter().enumerate() {
+        let descriptor = row[0].trim();
+        let values = &row[1..];
+        let ends_heading =
+            heading_left.is_some_and(|left| rows_geometry[index].left <= left.saturating_add(indent_tolerance));
+        if values.iter().any(|value| is_numeric_word(value.trim())) {
+            if ends_heading || (!descriptor.is_empty() && is_outdented(index)) {
+                flush_pending_descriptor(&mut pending, &mut rows, width);
+            }
+            if !pending.is_empty() {
+                collapsed += 1;
+            }
+            if !descriptor.is_empty() {
+                pending.push(descriptor);
+            }
+            let mut record = Vec::with_capacity(width);
+            record.push(pending.join(" "));
+            record.extend(values.iter().cloned());
+            pending.clear();
+            rows.push(record);
+            heading_left = None;
+        } else if !descriptor.is_empty() && values.iter().all(|value| value.trim().is_empty()) {
+            if ends_heading || is_outdented(index) {
+                flush_pending_descriptor(&mut pending, &mut rows, width);
+            }
+            let starts_entry = pending.is_empty();
+            pending.push(descriptor);
+            if pending.len() > WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS {
+                return None;
+            }
+            heading_left = (starts_entry && is_set_apart(index)).then_some(rows_geometry[index].left);
+        } else {
+            flush_pending_descriptor(&mut pending, &mut rows, width);
+            rows.push(row.clone());
+            heading_left = None;
+        }
+    }
+    flush_pending_descriptor(&mut pending, &mut rows, width);
+    if collapsed < WRAPPED_RECORD_MIN_COLLAPSED {
+        return None;
+    }
+    if width == CANONICAL_FINANCIAL_COLUMNS {
+        preserve_repeated_issuer_rows(&mut rows);
+    }
+    Some(rows)
+}
+
+fn median_row_pitch(rows: &[GridRowGeometry]) -> u32 {
+    let mut pitches: Vec<u32> = rows
+        .windows(2)
+        .map(|pair| pair[1].center.saturating_sub(pair[0].center))
+        .collect();
+    pitches.sort_unstable();
+    pitches.get(pitches.len() / 2).copied().unwrap_or(0)
+}
+
+fn flush_pending_descriptor(pending: &mut Vec<&str>, rows: &mut Vec<Vec<String>>, width: usize) {
+    if pending.is_empty() {
+        return;
+    }
+    let mut row = vec![String::new(); width];
+    row[0] = pending.join(" ");
+    pending.clear();
+    rows.push(row);
 }
 
 fn normalize_side_by_side_financial_tables(mut left: Table, mut right: Table) -> (Table, Table) {
@@ -2481,46 +2762,190 @@ fn horizontal_rules_for_regions(
     let bands: Vec<Option<RuleBand>> = regions.iter().map(|region| RuleBand::for_region(region)).collect();
     let mut counts = vec![0usize; regions.len()];
     for path in paths {
-        let mut best: Option<f32> = None;
-        let mut owners: Vec<usize> = Vec::new();
-        for (index, band) in bands.iter().enumerate() {
-            let Some(band) = band else {
-                continue;
-            };
-            let Some(rule_y) = crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1) else {
-                continue;
-            };
-            let Some(distance) = band.distance(page_height - rule_y) else {
-                continue;
-            };
-            match best {
-                None => {
-                    best = Some(distance);
-                    owners.clear();
-                    owners.push(index);
-                }
-                Some(best_distance) if distance < best_distance => {
-                    best = Some(distance);
-                    owners.clear();
-                    owners.push(index);
-                }
-                Some(best_distance) if distance == best_distance => owners.push(index),
-                Some(_) => {}
-            }
-        }
-        // A rule inside a region's word band belongs to it; a wide table split
-        // into side-by-side regions shares its own row rules. A rule out in the
-        // gutter is credited only when exactly one region is nearest, so two
-        // stacked candidates cannot both claim a single framing rule.
-        if best == Some(0.0) {
-            for index in owners {
-                counts[index] += 1;
-            }
-        } else if let [index] = owners.as_slice() {
-            counts[*index] += 1;
-        }
+        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |_, band| {
+            crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1)
+        });
+    }
+    for rule in segmented_horizontal_rules(paths) {
+        credit_rule_to_nearest_band(&bands, page_height, &mut counts, |index, band| {
+            (rule.covers(band)
+                && !paths_span_band_at(paths, band, rule.y)
+                && !rule.underlines(&regions[index], page_height))
+            .then_some(rule.y)
+        });
     }
     counts
+}
+
+/// Longest gap, in points, between two collinear horizontal segments that still continue one
+/// row rule. A form that boxes each field draws a row of boxes a few points apart, and their
+/// top (or bottom) edges together rule the row; a wider gap is a gutter between two tables.
+const SEGMENTED_RULE_MAX_GAP_PTS: f32 = 12.0;
+
+/// Smallest share of a region's width that a segmented rule must cover. The boxes rule the
+/// value cells, and a header label above them may overhang the last box by a few points.
+const SEGMENTED_RULE_MIN_COVERAGE: f32 = 0.9;
+
+/// A row rule drawn as several collinear horizontal segments: the shared edge of a row of
+/// boxes, each box stroked as four separate lines (pdfa_001's form fields).
+struct SegmentedRule {
+    x0: f32,
+    x1: f32,
+    y: f32,
+    covered: f32,
+    /// The left and right edge of each segment in the chain.
+    segments: Vec<(f32, f32)>,
+}
+
+impl SegmentedRule {
+    fn covers(&self, band: &RuleBand) -> bool {
+        let width = band.x1 - band.x0;
+        let tolerance = crate::pdf::rules::GRID_EDGE_ALIGN_TOLERANCE_PTS;
+        width > 0.0
+            && self.x0 <= band.x0 + tolerance
+            && self.x1 >= band.x0 + width * SEGMENTED_RULE_MIN_COVERAGE
+            && self.covered >= width * SEGMENTED_RULE_MIN_COVERAGE
+    }
+
+    /// Whether every segment underlines words of `region`: it sits at the foot of a word line
+    /// and starts and ends where words do. Underlined text draws one segment per word or phrase;
+    /// a row of boxes draws edges that clear the text inside them.
+    fn underlines(&self, region: &[crate::pdf::table_reconstruct::HocrWord], page_height: f32) -> bool {
+        let image_y = page_height - self.y;
+        let above = |word: &&crate::pdf::table_reconstruct::HocrWord| {
+            let height = word.height as f32;
+            let below_foot = image_y - word.top.saturating_add(word.height) as f32;
+            (-UNDERLINE_MAX_RISE_EM * height..=UNDERLINE_MAX_DROP_EM * height).contains(&below_foot)
+        };
+        let words: Vec<_> = region.iter().filter(above).collect();
+        let near = |edge: f32, word_edge: u32, height: u32| (edge - word_edge as f32).abs() <= 0.5 * height as f32;
+        !self.segments.is_empty()
+            && self.segments.iter().all(|&(x0, x1)| {
+                words.iter().any(|word| near(x0, word.left, word.height))
+                    && words
+                        .iter()
+                        .any(|word| near(x1, word.left.saturating_add(word.width), word.height))
+            })
+    }
+}
+
+/// How far above a word's foot, in word heights, an underline may sit: through the descenders.
+const UNDERLINE_MAX_RISE_EM: f32 = 0.4;
+
+/// How far below a word's foot, in word heights, an underline may sit. A boxed field's bottom
+/// edge clears its text by most of a line, well past this.
+const UNDERLINE_MAX_DROP_EM: f32 = 0.5;
+
+/// Chains of two or more collinear horizontal rules, each gap at most
+/// [`SEGMENTED_RULE_MAX_GAP_PTS`]. A single rule is not a chain: it is counted on its own.
+fn segmented_horizontal_rules(paths: &[PathContent]) -> Vec<SegmentedRule> {
+    let tolerance = crate::pdf::rules::GRID_EDGE_ALIGN_TOLERANCE_PTS;
+    let mut segments: Vec<(f32, f32, f32)> = paths
+        .iter()
+        .filter_map(crate::pdf::rules::horizontal_rule_extent)
+        .filter(|(x0, x1, y)| x0.is_finite() && x1.is_finite() && y.is_finite())
+        .collect();
+    segments.sort_by(|left, right| left.2.total_cmp(&right.2).then(left.0.total_cmp(&right.0)));
+    let mut rules = Vec::new();
+    let mut start = 0;
+    while start < segments.len() {
+        let mut end = start + 1;
+        while end < segments.len() && segments[end].2 - segments[start].2 <= tolerance {
+            end += 1;
+        }
+        let mut row = segments[start..end].to_vec();
+        row.sort_by(|left, right| left.0.total_cmp(&right.0));
+        let mut chain: Option<(SegmentedRule, usize)> = None;
+        for (x0, x1, y) in row {
+            match chain.as_mut() {
+                Some((rule, members)) if x0 <= rule.x1 + SEGMENTED_RULE_MAX_GAP_PTS => {
+                    rule.covered += (x1 - rule.x1.max(x0)).max(0.0);
+                    rule.x1 = rule.x1.max(x1);
+                    rule.segments.push((x0, x1));
+                    *members += 1;
+                }
+                _ => {
+                    if let Some((rule, members)) = chain.take()
+                        && members >= 2
+                    {
+                        rules.push(rule);
+                    }
+                    chain = Some((
+                        SegmentedRule {
+                            x0,
+                            x1,
+                            y,
+                            covered: x1 - x0,
+                            segments: vec![(x0, x1)],
+                        },
+                        1,
+                    ));
+                }
+            }
+        }
+        if let Some((rule, members)) = chain
+            && members >= 2
+        {
+            rules.push(rule);
+        }
+        start = end;
+    }
+    rules
+}
+
+/// Whether one drawn rule at `y` already spans `band` on its own, and so is already counted.
+fn paths_span_band_at(paths: &[PathContent], band: &RuleBand, y: f32) -> bool {
+    paths.iter().any(|path| {
+        crate::pdf::rules::horizontal_rule_center_y(path, band.x0, band.x1)
+            .is_some_and(|rule_y| (rule_y - y).abs() <= crate::pdf::rules::GRID_EDGE_ALIGN_TOLERANCE_PTS)
+    })
+}
+
+/// Credit one rule to the band it sits in, or else to the single band nearest to it.
+fn credit_rule_to_nearest_band(
+    bands: &[Option<RuleBand>],
+    page_height: f32,
+    counts: &mut [usize],
+    rule_y_for: impl Fn(usize, &RuleBand) -> Option<f32>,
+) {
+    let mut best: Option<f32> = None;
+    let mut owners: Vec<usize> = Vec::new();
+    for (index, band) in bands.iter().enumerate() {
+        let Some(band) = band else {
+            continue;
+        };
+        let Some(rule_y) = rule_y_for(index, band) else {
+            continue;
+        };
+        let Some(distance) = band.distance(page_height - rule_y) else {
+            continue;
+        };
+        match best {
+            None => {
+                best = Some(distance);
+                owners.clear();
+                owners.push(index);
+            }
+            Some(best_distance) if distance < best_distance => {
+                best = Some(distance);
+                owners.clear();
+                owners.push(index);
+            }
+            Some(best_distance) if distance == best_distance => owners.push(index),
+            Some(_) => {}
+        }
+    }
+    // A rule inside a region's word band belongs to it; a wide table split
+    // into side-by-side regions shares its own row rules. A rule out in the
+    // gutter is credited only when exactly one region is nearest, so two
+    // stacked candidates cannot both claim a single framing rule.
+    if best == Some(0.0) {
+        for index in owners {
+            counts[index] += 1;
+        }
+    } else if let [index] = owners.as_slice() {
+        counts[*index] += 1;
+    }
 }
 
 /// Horizontal rules that span this candidate's own bbox, in PDF user space.
@@ -2635,9 +3060,11 @@ fn row_center(word: &crate::pdf::table_reconstruct::HocrWord) -> f32 {
 /// page gutter separating a table from an adjacent prose column, which the
 /// y-gap test alone cannot see (xberg-io/xberg#1769). Each region is a slab
 /// of words that may form a table; the caller validates with
-/// `reconstruct_table` + `post_process_table`.
-fn cluster_words_into_vertical_regions(
+/// `reconstruct_table` + `post_process_table`. A ruled label header row joins the region whose
+/// columns it heads (see [`attach_ruled_label_headers`]).
+fn cluster_words_into_vertical_regions_with_rules(
     words: &[crate::pdf::table_reconstruct::HocrWord],
+    rules: &[HeaderRule],
 ) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {
     if words.len() < 4 {
         return Vec::new();
@@ -2688,6 +3115,8 @@ fn cluster_words_into_vertical_regions(
     split_regions_at_column_corridors(&mut regions, median_height);
 
     attach_aligned_numeric_headers(&mut regions, median_height, row_tolerance);
+
+    attach_ruled_label_headers(&mut regions, rules, median_height, row_tolerance);
 
     regions.retain(|r| {
         if r.len() < 4 {
@@ -2803,7 +3232,7 @@ fn merge_regular_row_fragments(
 /// Further split each y-clustered region on a dominant vertical corridor — a gap in x
 /// that no word's horizontal interval crosses on any row of the region. A page gutter
 /// between a table and an adjacent prose column produces exactly this shape: the y-gap
-/// test in `cluster_words_into_vertical_regions` has no x term, so a table whose row
+/// test in `cluster_words_into_vertical_regions_with_rules` has no x term, so a table whose row
 /// pitch is close to a neighbouring column's line pitch never opens a wide enough
 /// vertical gap to separate them (xberg-io/xberg#1769). This pass runs after that
 /// clustering and before the region-shape retain filter. ~keep
@@ -2916,6 +3345,141 @@ fn has_mixed_label_value_evidence(side: &[crate::pdf::table_reconstruct::HocrWor
     descriptor_count >= COLUMN_BLOCK_MIN_SEMANTIC_WORDS && numeric_count >= COLUMN_BLOCK_MIN_SEMANTIC_WORDS
 }
 
+/// A horizontal rule in image space: its vertical centre and horizontal extent.
+#[derive(Debug, Clone, Copy)]
+struct HeaderRule {
+    y: f32,
+    left: f32,
+    right: f32,
+}
+
+/// The page's horizontal rules ([`band_horizontal_rule`]) in the image space of the page's words.
+fn header_rules(paths: &[PathContent], page_height: f32) -> Vec<HeaderRule> {
+    paths
+        .iter()
+        .filter(|path| band_horizontal_rule(path))
+        .map(|path| HeaderRule {
+            y: page_height - (path.bbox.y + path.bbox.height / 2.0),
+            left: path.bbox.x,
+            right: path.bbox.x + path.bbox.width,
+        })
+        .collect()
+}
+
+/// Largest gap, in median word heights, between a ruled header row and the first row below it.
+const RULED_HEADER_MAX_GAP_HEIGHTS: u32 = 2;
+/// Fewest words a ruled header row must hold.
+const RULED_HEADER_MIN_WORDS: usize = 2;
+/// Fewest separate labels (words more than two heights apart) each table under a ruled header
+/// row must take; a heading over one column is not a header row.
+const RULED_HEADER_MIN_LABELS_PER_TABLE: usize = 2;
+
+/// Join a lone row of column labels to the table regions it heads.
+///
+/// A schedule sets its `Security | Shares | Value` labels one rule above the first body row, and
+/// that row's own spacing puts the labels more than [`ROW_GAP_SPLIT_HEIGHT_FACTOR`] heights
+/// above it (pb_fqr-retail-blackrock-global-allocation-fund-inc_page8). The label row then forms
+/// a one-row region, which is dropped as too small, and its words are left as a paragraph above
+/// the table. A single text row, separated from the region below only by a rule and a gap of at
+/// most [`RULED_HEADER_MAX_GAP_HEIGHTS`] heights, whose every word stands over words of that
+/// region and whose words form at least two separate labels, is its header. When two
+/// side-by-side regions sit under one label row, each takes the labels over its own columns. ~keep
+fn attach_ruled_label_headers(
+    regions: &mut Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>,
+    rules: &[HeaderRule],
+    median_height: u32,
+    row_tolerance: u32,
+) {
+    if rules.is_empty() {
+        return;
+    }
+    let mut index = 0;
+    while index < regions.len() {
+        let Some(targets) = ruled_label_header_targets(regions, index, rules, median_height, row_tolerance) else {
+            index += 1;
+            continue;
+        };
+        let header = regions.remove(index);
+        for (word, target) in header.into_iter().zip(targets) {
+            let target = if target > index { target - 1 } else { target };
+            regions[target].push(word);
+        }
+        tracing::trace!(index, "attached ruled label header row to the table region below it");
+    }
+}
+
+/// The region each word of `regions[index]` heads, when that region is a ruled label header row.
+fn ruled_label_header_targets(
+    regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
+    index: usize,
+    rules: &[HeaderRule],
+    median_height: u32,
+    row_tolerance: u32,
+) -> Option<Vec<usize>> {
+    let header = &regions[index];
+    let labels = header
+        .iter()
+        .filter(|word| word.text.chars().any(char::is_alphabetic))
+        .count();
+    if header.len() < RULED_HEADER_MIN_WORDS
+        || numeric_rows(header, row_tolerance).len() != 1
+        || labels.saturating_mul(3) < header.len().saturating_mul(2)
+    {
+        return None;
+    }
+    let header_bottom = header.iter().map(|word| word.top + word.height).max()?;
+    let topmost_header_center = header.iter().map(|word| word.top + word.height / 2).min()?;
+    let max_gap = median_height.saturating_mul(RULED_HEADER_MAX_GAP_HEIGHTS);
+    let candidates: Vec<(usize, u32)> = regions
+        .iter()
+        .enumerate()
+        .filter(|(candidate, _)| *candidate != index)
+        .filter_map(|(candidate, region)| {
+            let top = region.iter().map(|word| word.top).min()?;
+            (top >= header_bottom && top - header_bottom <= max_gap).then_some((candidate, top))
+        })
+        .collect();
+    let overlaps = |word: &crate::pdf::table_reconstruct::HocrWord, left: f32, right: f32| {
+        (word.left as f32) < right && left < word.right() as f32
+    };
+    let mut targets = Vec::with_capacity(header.len());
+    for word in header {
+        let (target, _) = candidates
+            .iter()
+            .filter(|(candidate, _)| {
+                regions[*candidate]
+                    .iter()
+                    .any(|below| overlaps(below, word.left as f32, word.right() as f32))
+            })
+            .min_by_key(|(_, top)| *top)?;
+        targets.push(*target);
+    }
+    let mut distinct = targets.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    let ruled_off = distinct.iter().all(|&target| {
+        let words = header.iter().zip(&targets).filter(|(_, owner)| **owner == target);
+        let top = regions[target]
+            .iter()
+            .map(|word| word.top)
+            .min()
+            .unwrap_or(header_bottom) as f32;
+        let mut spans: Vec<(u32, u32)> = words.clone().map(|(word, _)| (word.left, word.right())).collect();
+        spans.sort_unstable();
+        let labels = 1 + spans
+            .windows(2)
+            .filter(|pair| pair[1].0.saturating_sub(pair[0].1) > median_height.saturating_mul(2))
+            .count();
+        labels >= RULED_HEADER_MIN_LABELS_PER_TABLE
+            && rules.iter().any(|rule| {
+                rule.y > topmost_header_center as f32
+                    && rule.y <= top
+                    && words.clone().any(|(word, _)| overlaps(word, rule.left, rule.right))
+            })
+    });
+    ruled_off.then_some(targets)
+}
+
 fn attach_aligned_numeric_headers(
     regions: &mut Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>,
     median_height: u32,
@@ -2987,19 +3551,26 @@ fn reconstruct_region_table(
     allow_single_column: bool,
     horizontal_rules: usize,
 ) -> Option<Table> {
-    match reconstruct_region_table_with_reason(region, page_height, page_number, allow_single_column, horizontal_rules)
-    {
-        Ok(table) => Some(table),
-        Err(reason) => {
+    reconstruct_region_table_traced(region, page_height, page_number, allow_single_column, horizontal_rules).ok()
+}
+
+fn reconstruct_region_table_traced(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    horizontal_rules: usize,
+) -> std::result::Result<Table, HeuristicTableRejection> {
+    reconstruct_region_table_with_reason(region, page_height, page_number, allow_single_column, horizontal_rules)
+        .inspect_err(|reason| {
             tracing::trace!(
                 page = page_number,
                 words = region.len(),
+                horizontal_rules,
                 ?reason,
                 "heuristic table region rejected"
             );
-            None
-        }
-    }
+        })
 }
 
 fn reconstruct_region_table_with_reason(
@@ -3031,22 +3602,57 @@ fn reconstruct_region_table_with_column_gap(
     col_gap: u32,
     horizontal_rules: usize,
 ) -> std::result::Result<Table, HeuristicTableRejection> {
-    use crate::pdf::table_reconstruct::{
-        is_well_formed_borderless_table, is_well_formed_definition_grid, looks_like_code_listing,
-        post_process_table_with_columns, post_process_table_with_definition_grid, table_to_markdown,
-    };
+    let (grid, column_positions) = reconstruct_region_grid(region, col_gap);
+    admit_region_grid(
+        region,
+        grid,
+        column_positions,
+        page_height,
+        page_number,
+        allow_single_column,
+        col_gap,
+        horizontal_rules,
+    )
+}
 
+/// Row grouping tolerance, as a multiple of median word height, for heuristic region grids.
+const REGION_ROW_THRESHOLD_RATIO: f64 = 0.5;
+
+fn reconstruct_region_grid(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    col_gap: u32,
+) -> (Vec<Vec<String>>, Vec<u32>) {
     // Take the column positions from the same call that built the grid. `reconstruct_table`
     // now detects columns from post-merge cell tokens, not from `region` directly, so a
     // separate `detect_columns(region, col_gap)` no longer agrees with the grid's column
     // count — and `repair_split_numeric_track` fails safe on a count mismatch, which would
     // have silently switched the repair off rather than reporting anything (#688).
-    let (mut grid, mut column_positions) = crate::table_core::reconstruct_table_with_columns(region, col_gap, 0.5);
+    let (mut grid, mut column_positions) =
+        crate::table_core::reconstruct_table_with_columns(region, col_gap, REGION_ROW_THRESHOLD_RATIO);
     // Takes `column_positions` by &mut so a successful repair drops the merged boundary from
     // BOTH: the repair collapses two grid columns into one, and a stale extra position would
     // leave `grid` one column narrower than `column_positions` for every consumer below —
     // including `is_well_formed_borderless_table`, which is handed both.
     repair_split_numeric_track(&mut grid, region, &mut column_positions);
+    (grid, column_positions)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn admit_region_grid(
+    region: &[crate::pdf::table_reconstruct::HocrWord],
+    grid: Vec<Vec<String>>,
+    mut column_positions: Vec<u32>,
+    page_height: f32,
+    page_number: u32,
+    allow_single_column: bool,
+    col_gap: u32,
+    horizontal_rules: usize,
+) -> std::result::Result<Table, HeuristicTableRejection> {
+    use crate::pdf::table_reconstruct::{
+        is_well_formed_borderless_table, is_well_formed_definition_grid, looks_like_code_listing,
+        post_process_table_with_columns, post_process_table_with_definition_grid, table_to_markdown,
+    };
+
     if grid.is_empty() || grid[0].is_empty() {
         return Err(HeuristicTableRejection::EmptyGrid);
     }
@@ -3101,7 +3707,16 @@ fn reconstruct_region_table_with_column_gap(
         is_well_formed_borderless_table(&cleaned, region, &column_positions, horizontal_rules)
     };
     if !well_formed {
-        return Err(HeuristicTableRejection::NotWellFormed);
+        tracing::trace!(
+            page = page_number,
+            definition_evidence,
+            horizontal_rules,
+            rows = cleaned.len(),
+            "heuristic table grid not well formed"
+        );
+        return Err(HeuristicTableRejection::NotWellFormed {
+            columns: cleaned.first().map_or(0, Vec::len),
+        });
     }
 
     let bounding_box = region_bounding_box(region, page_height);
@@ -3800,6 +4415,12 @@ mod tests {
     use super::*;
     use xberg_native_pdf::layout::Color;
 
+    fn cluster_words_into_vertical_regions(
+        words: &[crate::pdf::table_reconstruct::HocrWord],
+    ) -> Vec<Vec<crate::pdf::table_reconstruct::HocrWord>> {
+        cluster_words_into_vertical_regions_with_rules(words, &[])
+    }
+
     #[test]
     fn recovered_year_token_requires_glyphs_inside_the_column() {
         use xberg_native_pdf::{
@@ -4071,7 +4692,7 @@ mod tests {
                 width: 50.0,
                 height: 10.0,
             },
-            font_name: "Helvetica".to_string(),
+            font_name: "Helvetica".into(),
             font_size: 10.0,
             font_weight: xberg_native_pdf::layout::FontWeight::Normal,
             is_italic: false,
@@ -4151,7 +4772,7 @@ mod tests {
                 width: 50.0,
                 height: 10.0,
             },
-            font_name: "Helvetica".to_string(),
+            font_name: "Helvetica".into(),
             font_size: 10.0,
             font_weight: xberg_native_pdf::layout::FontWeight::Normal,
             is_italic: false,
@@ -4321,6 +4942,51 @@ mod tests {
         );
     }
 
+    /// A grid whose header cells stack one to three label lines 7 units apart at a 10-unit
+    /// word height is built on one header row; row geometry must count that row once, or the
+    /// wrapped-record rescue sees a row-count mismatch and silently gives up.
+    #[test]
+    fn grid_row_geometry_reads_a_stacked_header_band_as_one_row() {
+        let band = [
+            ("Minimum", 180, 200, 45),
+            ("Maximum", 238, 200, 48),
+            ("UW", 62, 207, 12),
+            ("Tier", 82, 207, 20),
+            ("Comp", 378, 207, 22),
+            ("Auto", 405, 207, 22),
+            ("Vehicle", 185, 214, 35),
+            ("Vehicle", 245, 214, 35),
+            ("BI", 315, 214, 10),
+            ("Group", 67, 221, 28),
+            ("Loan", 375, 221, 20),
+            ("/Lease", 398, 221, 28),
+            ("Miles", 188, 228, 22),
+            ("Miles", 248, 228, 22),
+        ];
+        let mut words: Vec<_> = band
+            .iter()
+            .map(|&(text, left, top, width)| make_word(text, left, top, width))
+            .collect();
+        for row in 0..6 {
+            let top = 250 + row * 15;
+            words.extend([
+                make_word("002", 75, top, 15),
+                make_word(&format!("{}000", row + 1), 190, top, 22),
+                make_word(&format!("{}999", row + 1), 248, top, 22),
+                make_word("1.000", 305, top, 28),
+                make_word("1.000", 388, top, 28),
+            ]);
+        }
+        let median_height = median_word_height(&words);
+        let (grid, _) = reconstruct_region_grid(&words, side_by_side_child_gap(&words).expect("gap"));
+        assert_eq!(grid.len(), 7, "one header row above six data rows: {grid:?}");
+
+        let geometry = grid_row_geometry(&words, grid.len(), median_height).expect("one geometry row per grid row");
+
+        assert_eq!(geometry[0].left, 62, "the header row starts at its leftmost band word");
+        assert!(geometry[1..].iter().all(|row| row.left == 75));
+    }
+
     /// Build a synthetic `HocrWord` for the clustering tests.
     fn make_word(text: &str, left: u32, top: u32, width: u32) -> crate::pdf::table_reconstruct::HocrWord {
         crate::pdf::table_reconstruct::HocrWord {
@@ -4395,6 +5061,386 @@ mod tests {
         );
         assert_eq!(tables[0].cells[0].len(), 3);
         assert_eq!(tables[1].cells[0].len(), 4);
+    }
+
+    /// One side of a two-column schedule whose records wrap over three lines: an outdented
+    /// issuer line, an indented continuation, and an indented last line that alone carries the
+    /// amount and value. `values: false` puts words in those tracks instead of numbers.
+    fn extend_wrapped_schedule_words(
+        words: &mut Vec<crate::pdf::table_reconstruct::HocrWord>,
+        origin: u32,
+        values: bool,
+    ) {
+        let [descriptor, currency, par, value] = [origin, origin + 80, origin + 150, origin + 220];
+        words.push(make_word("Security", descriptor, 100, 40));
+        words.push(make_word("Par", par, 100, 20));
+        words.push(make_word("Value", value, 100, 30));
+        for record in 0..6u32 {
+            let top = 124 + record * 36;
+            words.push(make_word(&wrapped_schedule_issuer(record), descriptor, top, 60));
+            words.push(make_word("Class A1R, (3-mo. SOFR", descriptor + 10, top + 12, 50));
+            words.push(make_word(
+                &format!("+ 1.{record}5%), 5.87%"),
+                descriptor + 10,
+                top + 24,
+                50,
+            ));
+            if record < 2 {
+                words.push(make_word("USD", currency, top + 24, 20));
+            }
+            let (amount, worth) = if values {
+                (format!("{},{record}00", record + 1), wrapped_schedule_value(record))
+            } else {
+                ("pending".to_string(), "reviewed".to_string())
+            };
+            words.push(make_word(&amount, par, top + 24, 30));
+            words.push(make_word(&worth, value, top + 24, 40));
+        }
+    }
+
+    fn wrapped_schedule_issuer(record: u32) -> String {
+        format!("Issuer {record} Ltd., Series 2024-{record}A,")
+    }
+
+    fn wrapped_schedule_value(record: u32) -> String {
+        format!("{},{record}02,049", record + 1)
+    }
+
+    fn wrapped_schedule_words(values: bool) -> Vec<crate::pdf::table_reconstruct::HocrWord> {
+        let mut words = Vec::new();
+        extend_wrapped_schedule_words(&mut words, 20, values);
+        extend_wrapped_schedule_words(&mut words, 320, values);
+        words
+    }
+
+    fn assert_rejected_wide_parent(words: &[crate::pdf::table_reconstruct::HocrWord]) {
+        let parent = reconstruct_region_table_with_reason(words, 792.0, 1, false, 0);
+        assert!(
+            matches!(
+                parent,
+                Err(HeuristicTableRejection::NotWellFormed { columns }) if columns >= SIDE_BY_SIDE_MIN_PARENT_COLUMNS
+            ),
+            "fixture must exercise the rejected-parent path, got {parent:?}"
+        );
+    }
+
+    #[test]
+    fn splits_wrapped_side_by_side_schedule_rejected_as_one_grid() {
+        let words = wrapped_schedule_words(true);
+        assert_rejected_wide_parent(&words);
+        let (left, _) = split_side_by_side_region(&words).expect("central seam should be credible");
+        assert!(
+            reconstruct_side_by_side_child(&left, 792.0, 1, false, 0).is_none(),
+            "uncollapsed wrapped lines must still fail the gate, or this test proves nothing new"
+        );
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
+
+        assert_eq!(tables.len(), 2, "each side of the schedule should be its own table");
+        for table in &tables {
+            let width = table.cells[0].len();
+            assert!(table.cells.iter().all(|row| row.len() == width));
+            for record in 0..6 {
+                let descriptor = format!(
+                    "{} Class A1R, (3-mo. SOFR + 1.{record}5%), 5.87%",
+                    wrapped_schedule_issuer(record)
+                );
+                let value = wrapped_schedule_value(record);
+                assert!(
+                    table
+                        .cells
+                        .iter()
+                        .any(|row| row[0] == descriptor && row.contains(&value)),
+                    "record {record} must be one row holding its whole description and value: {:?}",
+                    table.cells
+                );
+            }
+            assert!(
+                !table.cells.iter().any(|row| row[0] == "Class A1R, (3-mo. SOFR"),
+                "no continuation line may remain a row of its own"
+            );
+        }
+    }
+
+    #[test]
+    fn rejected_side_by_side_text_columns_without_value_tracks_yield_no_table() {
+        let words = wrapped_schedule_words(false);
+        assert_rejected_wide_parent(&words);
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
+
+        assert!(
+            tables.is_empty(),
+            "text columns with no numeric value track must stay prose, got {tables:?}"
+        );
+    }
+
+    fn grid_rows(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn collapses_wrapped_financial_records_into_single_rows() {
+        let grid = grid_rows(&[
+            &["Security", "Par", "Value"],
+            &["Cayman Islands (continued)", "", ""],
+            &["RR 28 Ltd., Series 2024-28RA, Class", "", ""],
+            &["A1R, (3-mo. CME Term SOFR", "", ""],
+            &["04/15/37 . . .", "USD 5,718", "$ 5,742,049"],
+            &["TICP CLO VI Ltd.", "", ""],
+            &["Series 2016-6A, Class AR2, (3-mo.", "", ""],
+            &["CME Term SOFR", "", ""],
+            &["5.70%, 01/15/34 . . .", "500", "500,889"],
+            &["Series 2016-6A, Class BR2, (3-mo.", "", ""],
+            &["6.08%, 01/15/34 . . .", "500", "500,639"],
+            &["", "", "68,077,028"],
+        ]);
+        let geometry = evenly_pitched_rows(&[18, 18, 18, 27, 27, 18, 27, 36, 36, 27, 36, 253]);
+
+        let collapsed = collapse_wrapped_financial_records(&grid, &geometry, 5).expect("three wrapped records");
+
+        assert_eq!(
+            collapsed,
+            grid_rows(&[
+                &["Security", "Par", "Value"],
+                &["Cayman Islands (continued)", "", ""],
+                &[
+                    "RR 28 Ltd., Series 2024-28RA, Class A1R, (3-mo. CME Term SOFR 04/15/37 . . .",
+                    "USD 5,718",
+                    "$ 5,742,049"
+                ],
+                &["TICP CLO VI Ltd.", "", ""],
+                &[
+                    "Series 2016-6A, Class AR2, (3-mo. CME Term SOFR 5.70%, 01/15/34 . . .",
+                    "500",
+                    "500,889"
+                ],
+                &[
+                    "Series 2016-6A, Class BR2, (3-mo. 6.08%, 01/15/34 . . .",
+                    "500",
+                    "500,639"
+                ],
+                &["", "", "68,077,028"],
+            ])
+        );
+    }
+
+    #[test]
+    fn wrapped_record_collapse_rejects_runs_longer_than_a_record() {
+        let mut rows: Vec<&[&str]> = vec![&["Security", "Par", "Value"][..]];
+        rows.extend(std::iter::repeat_n(
+            &["prose line", "", ""][..],
+            WRAPPED_FINANCIAL_MAX_CONTINUATION_ROWS + 1,
+        ));
+        rows.push(&["end of paragraph", "500", "500,889"]);
+        let mut lefts = vec![18];
+        lefts.extend(std::iter::repeat_n(27, rows.len() - 1));
+
+        assert_eq!(
+            collapse_wrapped_financial_records(&grid_rows(&rows), &evenly_pitched_rows(&lefts), 5),
+            None
+        );
+    }
+
+    fn evenly_pitched_rows(lefts: &[u32]) -> Vec<GridRowGeometry> {
+        lefts
+            .iter()
+            .zip(0u32..)
+            .map(|(&left, row)| GridRowGeometry { left, center: row * 12 })
+            .collect()
+    }
+
+    #[test]
+    fn wrapped_record_collapse_requires_row_geometry() {
+        let grid = grid_rows(&[
+            &["Security", "Par", "Value"],
+            &["Alpha Ltd., Series 2024-A, Class", "", ""],
+            &["A1R, 5.87%, 04/15/37 . . .", "1,000", "1,002,049"],
+            &["Beta Ltd., Series 2024-B, Class", "", ""],
+            &["B1R, 5.47%, 04/15/40 . . .", "250", "249,760"],
+            &["Gamma Ltd., Series 2024-G, Class", "", ""],
+            &["G1R, 6.08%, 01/15/34 . . .", "500", "500,639"],
+        ]);
+        let geometry = evenly_pitched_rows(&[18, 18, 27, 18, 27, 18, 27]);
+        assert!(
+            collapse_wrapped_financial_records(&grid, &geometry, 5).is_some(),
+            "the fixture must collapse when its rows have geometry"
+        );
+
+        assert_eq!(
+            collapse_wrapped_financial_records(&grid, &[], 5),
+            None,
+            "without indentation every heading would join the next record"
+        );
+        assert_eq!(collapse_wrapped_financial_records(&grid, &geometry[1..], 5), None);
+    }
+
+    #[test]
+    fn set_apart_heading_stays_its_own_row_but_a_set_apart_record_does_not_split() {
+        let grid = grid_rows(&[
+            &["Security", "Par", "Value"],
+            &["Alpha Ltd., Series 2024-A, Class", "", ""],
+            &["A1R, 5.87%, 04/15/37 . . .", "1,000", "1,002,049"],
+            &["Beta Ltd., Series 2024-B, Class", "", ""],
+            &["B1R, 5.47%, 04/15/40 . . .", "250", "249,760"],
+            &["Ireland — 0.6%", "", ""],
+            &["Series 2X, Class D, (3-mo.", "", ""],
+            &["EURIBOR + 3.30%), 5.34% . . .", "2,720", "3,100,879"],
+            &["Gamma Ltd., Series 2024-G, Class", "", ""],
+            &["G1R, 6.08%, 01/15/34 . . .", "500", "500,639"],
+        ]);
+        let geometry: Vec<GridRowGeometry> = [
+            (18, 0),
+            (18, 12),
+            (27, 24),
+            (18, 36),
+            (27, 48),
+            (80, 72),
+            (27, 84),
+            (27, 96),
+            (18, 120),
+            (27, 132),
+        ]
+        .into_iter()
+        .map(|(left, center)| GridRowGeometry { left, center })
+        .collect();
+
+        let collapsed = collapse_wrapped_financial_records(&grid, &geometry, 5).expect("four wrapped records");
+
+        assert_eq!(
+            collapsed,
+            grid_rows(&[
+                &["Security", "Par", "Value"],
+                &[
+                    "Alpha Ltd., Series 2024-A, Class A1R, 5.87%, 04/15/37 . . .",
+                    "1,000",
+                    "1,002,049"
+                ],
+                &[
+                    "Beta Ltd., Series 2024-B, Class B1R, 5.47%, 04/15/40 . . .",
+                    "250",
+                    "249,760"
+                ],
+                &["Ireland — 0.6%", "", ""],
+                &[
+                    "Series 2X, Class D, (3-mo. EURIBOR + 3.30%), 5.34% . . .",
+                    "2,720",
+                    "3,100,879"
+                ],
+                &[
+                    "Gamma Ltd., Series 2024-G, Class G1R, 6.08%, 01/15/34 . . .",
+                    "500",
+                    "500,639"
+                ],
+            ])
+        );
+    }
+
+    /// Lay out `lines` of one text column as single words at a 4pt character width, with
+    /// justification gaps of 3-9pt that vary by line and word, as typeset two-column papers
+    /// produce. Each line is `(indent, text)`.
+    fn extend_justified_lines(
+        words: &mut Vec<crate::pdf::table_reconstruct::HocrWord>,
+        origin: u32,
+        lines: &[(u32, &str)],
+    ) {
+        for (line, (indent, text)) in (0u32..).zip(lines) {
+            let top = 100 + line * 12;
+            let mut left = origin + indent;
+            for (index, word) in (0u32..).zip(text.split_whitespace()) {
+                let width = word.chars().count() as u32 * 4;
+                words.push(make_word(word, left, top, width));
+                left += width + 3 + (line * 7 + index * 5) % 7;
+            }
+        }
+    }
+
+    fn assert_two_text_columns_yield_no_table(left_lines: &[(u32, &str)], right_lines: &[(u32, &str)]) {
+        let mut words = Vec::new();
+        extend_justified_lines(&mut words, 20, left_lines);
+        extend_justified_lines(&mut words, 320, right_lines);
+        let (left, right) = split_side_by_side_region(&words).expect("two text columns must show a central seam");
+        for side in [&left, &right] {
+            assert!(
+                reconstruct_wrapped_side_by_side_child(side, 792.0, 1, false, 0)
+                    .is_none_or(|(_, collapsed)| !collapsed),
+                "a text column must never be admitted as a collapsed wrapped schedule"
+            );
+        }
+
+        let tables = reconstruct_region_tables(&words, 792.0, 1, false, 0, &source_columns::PageRules::new(&[], true));
+
+        assert!(tables.is_empty(), "two text columns must stay prose, got {tables:?}");
+    }
+
+    #[test]
+    fn two_column_reference_list_with_years_and_pages_yields_no_table() {
+        assert_two_text_columns_yield_no_table(
+            &[
+                (0, "[1] A. Vaswani, N. Shazeer, and N."),
+                (18, "Parmar. Attention is all you need."),
+                (18, "NeurIPS, vol. 30, pp. 5998-6008, 2017."),
+                (0, "[2] K. He, X. Zhang, S. Ren, and J."),
+                (18, "Sun. Deep residual learning. CVPR,"),
+                (18, "vol. 1, pp. 770-778, 2016."),
+                (0, "[3] Y. LeCun, Y. Bengio, and G. Hinton."),
+                (18, "Deep learning. Nature, vol. 521,"),
+                (18, "no. 7553, pp. 436-444, 2015."),
+                (0, "[4] D. Kingma and J. Ba. Adam: a"),
+                (18, "method for stochastic optimization."),
+                (18, "ICLR, vol. 3, pp. 1-15, 2015."),
+            ],
+            &[
+                (0, "[5] I. Goodfellow, J. Pouget-Abadie,"),
+                (18, "and M. Mirza. Generative adversarial"),
+                (18, "nets. NIPS, vol. 27, pp. 2672-2680, 2014."),
+                (0, "[6] S. Hochreiter and J. Schmidhuber."),
+                (18, "Long short-term memory. Neural Comp.,"),
+                (18, "vol. 9, no. 8, pp. 1735-1780, 1997."),
+                (0, "[7] A. Krizhevsky, I. Sutskever, and"),
+                (18, "G. Hinton. ImageNet classification."),
+                (18, "NIPS, vol. 25, pp. 1097-1105, 2012."),
+                (0, "[8] J. Devlin, M. Chang, K. Lee, and"),
+                (18, "K. Toutanova. BERT. NAACL, vol. 1,"),
+                (18, "pp. 4171-4186, 2019."),
+            ],
+        );
+    }
+
+    #[test]
+    fn two_column_prose_with_citations_and_years_yields_no_table() {
+        assert_two_text_columns_yield_no_table(
+            &[
+                (0, "Recent work on transformers [12] has"),
+                (0, "shown that scaling laws hold across"),
+                (0, "model sizes (Kaplan et al., 2020)."),
+                (0, "Earlier studies in 2017 and 2018 [3,"),
+                (0, "4] reported gains of 2.1 and 3.4 points"),
+                (0, "on GLUE, while Liu et al. (2019)"),
+                (0, "found that longer training on 160GB"),
+                (0, "of text improves results by 1.5%."),
+                (0, "We follow the setup of Section 3.2"),
+                (0, "and train for 300k steps with batch"),
+                (0, "size 8192, as described in [15]."),
+                (0, "Table 2 summarizes these results."),
+            ],
+            &[
+                (0, "In contrast to prior work [7, 9], our"),
+                (0, "method requires no labelled data. On"),
+                (0, "the 2021 benchmark it reaches 84.3"),
+                (0, "accuracy, compared with 81.7 reported"),
+                (0, "by Brown et al. (2020) and 79.2 in"),
+                (0, "[21]. Training takes 14 hours on 8"),
+                (0, "GPUs, about 3x faster than the 2019"),
+                (0, "baseline [5]. Figure 4 shows that the"),
+                (0, "gap widens beyond 10^9 parameters,"),
+                (0, "consistent with the trend in [18]."),
+                (0, "Section 5 discusses limitations and"),
+                (0, "future work on multilingual data."),
+            ],
+        );
     }
 
     fn wrapped_financial_side(prefix: &str) -> Table {
@@ -4746,6 +5792,95 @@ mod tests {
         assert!(
             split_side_by_side_region(&words).is_none(),
             "occupied central column must prevent a side-by-side split"
+        );
+    }
+
+    /// The per-candidate scan `supported_financial_track_centers` replaced: every
+    /// numeric word is a candidate, kept when enough rows hold a numeric word
+    /// within the tolerance of it.
+    fn quadratic_financial_track_centers(
+        rows: &[Vec<&crate::pdf::table_reconstruct::HocrWord>],
+        x_tolerance: u32,
+    ) -> Vec<u32> {
+        let minimum_support = rows
+            .len()
+            .saturating_mul(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROW_PERCENT)
+            .div_ceil(100)
+            .max(LABEL_HEAVY_FINANCIAL_MIN_TRACK_ROWS);
+        let mut candidates: Vec<u32> = rows
+            .iter()
+            .flatten()
+            .filter(|word| is_numeric_word(&word.text))
+            .map(|word| word.left + word.width / 2)
+            .filter(|candidate| {
+                rows.iter()
+                    .filter(|row| row_has_financial_track(row, *candidate, x_tolerance))
+                    .count()
+                    >= minimum_support
+            })
+            .collect();
+        candidates.sort_unstable();
+        candidates.dedup_by(|left, right| left.abs_diff(*right) <= x_tolerance);
+        candidates
+    }
+
+    #[test]
+    fn financial_track_centers_match_the_per_candidate_scan() {
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = |bound: u32| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state % u64::from(bound)) as u32
+        };
+        let texts = [
+            "1,234",
+            "Total",
+            "(56)",
+            "2009",
+            "—",
+            "Cash and equivalents",
+            "7.5%",
+            "?",
+            "x1",
+        ];
+        let mut checked_tracks = 0;
+        for region in 0..300 {
+            let row_count = 1 + next(40) as usize;
+            let columns = 1 + next(12);
+            let pitch = 40 + next(60);
+            let jitter = next(30);
+            let mut words = Vec::new();
+            for row in 0..row_count {
+                for column in 0..columns {
+                    if next(4) == 0 {
+                        continue;
+                    }
+                    let text = texts[next(texts.len() as u32) as usize];
+                    let left = 20 + column * pitch + next(jitter + 1);
+                    let mut word = make_word(text, left, 50 + row as u32 * 14, 8 + next(50));
+                    // Includes the saturating ends of the tolerance window.
+                    if region % 50 == 0 && column == 0 {
+                        word.left = u32::MAX - 200 - next(100);
+                        word.width = 2 * next(100);
+                    }
+                    words.push(word);
+                }
+            }
+            let rows = numeric_rows(&words, 3 + next(6));
+            let x_tolerance = if region % 25 == 0 { u32::MAX } else { 1 + next(30) };
+            let expected = quadratic_financial_track_centers(&rows, x_tolerance);
+            checked_tracks += expected.len();
+            assert_eq!(
+                supported_financial_track_centers(&rows, x_tolerance),
+                expected,
+                "region {region}: {} rows, tolerance {x_tolerance}",
+                rows.len()
+            );
+        }
+        assert!(
+            checked_tracks > 100,
+            "the generated regions must keep tracks, kept {checked_tracks}"
         );
     }
 
@@ -5325,14 +6460,14 @@ mod tests {
         assert!(
             table.cells[0]
                 .windows(2)
-                .any(|cells| cells == ["icorr (A/cm2)", "Polarization resistance ( Ω )"]),
+                .any(|cells| cells == ["icorr (A/cm2)", "Polarization resistance (Ω)"]),
             "{:?}",
             table.cells[0]
         );
         assert!(
             table
                 .markdown
-                .contains("| icorr (A/cm2) | Polarization resistance ( Ω ) |"),
+                .contains("| icorr (A/cm2) | Polarization resistance (Ω) |"),
             "{}",
             table.markdown
         );
@@ -5460,6 +6595,90 @@ mod tests {
                 t
             );
         }
+    }
+
+    /// Two pages sharing one content stream of an unruled label/value grid.
+    fn build_two_page_grid_pdf() -> Vec<u8> {
+        let mut content = String::from("BT /Helvetica 10 Tf\n");
+        for (row, label) in ["Revenue", "Costs", "Margin", "Taxes", "Net", "Cash"]
+            .into_iter()
+            .enumerate()
+        {
+            let baseline = 700 - row * 16;
+            content.push_str(&format!("1 0 0 1 60 {baseline} Tm ({label}) Tj\n"));
+            for (column, x) in [220, 300, 380, 460].into_iter().enumerate() {
+                let value = 1_000 + row * 137 + column * 59;
+                content.push_str(&format!("1 0 0 1 {x} {baseline} Tm ({value}) Tj\n"));
+            }
+        }
+        content.push_str("ET\n");
+        let single = String::from_utf8(build_table_test_pdf(&content)).expect("ASCII fixture");
+        let pages = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+        let page = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] \
+                    /Contents 4 0 R /Resources << /Font << /Helvetica 5 0 R >> >> >>\nendobj\n";
+        assert!(
+            single.contains(pages) && single.contains(page),
+            "single-page fixture layout changed"
+        );
+        let body = single
+            .replace(pages, "<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>")
+            .split("xref\n")
+            .next()
+            .expect("fixture body")
+            .to_string();
+        let mut pdf = body.clone();
+        let second_page = pdf.len();
+        pdf.push_str(&page.replacen("3 0 obj", "6 0 obj", 1));
+        let mut offsets = Vec::new();
+        for id in 1..=5 {
+            offsets.push(pdf.find(&format!("\n{id} 0 obj\n")).expect("object offset") + 1);
+        }
+        offsets.push(second_page);
+        let xref = pdf.len();
+        pdf.push_str("xref\n0 7\n0000000000 65535 f \n");
+        for offset in offsets {
+            pdf.push_str(&format!("{offset:010} 00000 n \n"));
+        }
+        pdf.push_str(&format!(
+            "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+        ));
+        pdf.into_bytes()
+    }
+
+    /// A skipped page is never read for segments, and every other page's
+    /// segments and heuristic tables are what a run without skips produces.
+    #[test]
+    fn skipped_heuristic_pages_are_not_read_and_others_are_unchanged() {
+        let bytes = build_two_page_grid_pdf();
+        let mut doc = NativeDocument::open_bytes(&bytes).expect("open two-page fixture");
+        assert_eq!(doc.doc.page_count().expect("page count"), 2);
+        let run = |doc: &mut NativeDocument, skip: &HashSet<u32>| {
+            extract_tables_heuristic(doc, false, skip, Default::default(), &mut TablePagePaths::default())
+                .expect("heuristic extraction")
+        };
+        let full = run(&mut doc, &HashSet::new());
+        let skipped = run(&mut doc, &HashSet::from([1]));
+
+        let [full_first, full_second] = full.hierarchy_segments.pages.as_slice() else {
+            panic!("one segment slot per page");
+        };
+        let [skipped_first, skipped_second] = skipped.hierarchy_segments.pages.as_slice() else {
+            panic!("one segment slot per page, skipped pages included");
+        };
+        assert!(
+            !full_first.is_empty() && !full_second.is_empty(),
+            "both pages carry text"
+        );
+        assert!(skipped_first.is_empty(), "a skipped page must not be read");
+        assert_eq!(format!("{skipped_second:?}"), format!("{full_second:?}"));
+
+        let second_page_tables = |tables: &[Table]| {
+            serde_json::to_value(tables.iter().filter(|table| table.page_number == 2).collect::<Vec<_>>())
+                .expect("serialize tables")
+        };
+        assert!(skipped.tables.iter().all(|table| table.page_number == 2));
+        assert_eq!(second_page_tables(&skipped.tables), second_page_tables(&full.tables));
+        assert_eq!(skipped.grids.len(), skipped.tables.len());
     }
 
     /// Vertical-gap clustering: words all within one band become one region.
@@ -6060,7 +7279,7 @@ mod tests {
         let result = reconstruct_region_table_with_column_gap(&region, 792.0, 1, false, 30, 0);
 
         assert!(
-            matches!(result, Err(HeuristicTableRejection::NotWellFormed)),
+            matches!(result, Err(HeuristicTableRejection::NotWellFormed { .. })),
             "expected the straddled 'Name'/'Value' boundary alone to reject this as prose, got {result:?}"
         );
     }
@@ -6940,15 +8159,15 @@ mod tests {
 
     #[test]
     fn gutter_band_on_a_ruled_page_is_still_refused_gh1760() {
-        // #1399's ruling-line signal is counted per page, not per region, so a paper
-        // whose real table is ruled would otherwise admit every short band on the same
-        // page. The evidence requirement is therefore tested ahead of it. ~keep
+        // Rules are credited to the nearest candidate they span, so a ruled table beside this
+        // band can still lend it a framing pair: enough for #1399's ruled branch, not a rule
+        // between every row. The evidence requirement must refuse the band. ~keep
         let tables = reconstruct_region_tables(
             &gh1760_band_region(),
             GH1760_PAGE_HEIGHT,
             1,
             false,
-            6,
+            2,
             &source_columns::PageRules::new(&[], true),
         );
         assert!(
@@ -6971,8 +8190,9 @@ mod tests {
         flate2::read::GzDecoder::new(&bytes[..]).read_to_end(&mut pdf).unwrap();
         let mut doc = NativeDocument::open_bytes(&pdf).unwrap();
         let (segments, _) = crate::pdf::native::hierarchy::extract_all_segments_for_tables(
-            &mut doc,
+            &doc,
             crate::pdf::native::hierarchy::ArtifactRetention::default(),
+            |_| false,
         )
         .unwrap();
         let page_height = segments[0]
@@ -7094,6 +8314,175 @@ mod tests {
             tables.len(),
             1,
             "a grid framed by two rules is a table; got {:?}",
+            gh1760_table_texts(&tables)
+        );
+    }
+
+    /// pdfa_001 page 6: a header band over two rows of form fields, each field stroked as four
+    /// separate lines, so no single segment spans the row; one thick rule under the header.
+    /// Image-space tops, PDF-space paths on a 792pt page.
+    fn boxed_form_region() -> Vec<crate::pdf::table_reconstruct::HocrWord> {
+        vec![
+            framed_word("Building Number", 92, 110, 43),
+            framed_word("Building Name", 178, 110, 43),
+            framed_word("Building to be Removed / Replaced / Rebuilt", 459, 110, 124),
+            framed_word("BLD-01072", 89, 145, 51),
+            framed_word("Main Tower", 169, 145, 52),
+            framed_word("Remain", 473, 145, 34),
+            framed_word("BLD-01073", 89, 168, 51),
+            framed_word("McAuley Wing", 169, 168, 64),
+            framed_word("Retrofit", 473, 168, 32),
+        ]
+    }
+
+    fn boxed_form_paths(box_gap: f32) -> Vec<PathContent> {
+        let widths = [71.64, 299.35, 103.13];
+        let mut paths = vec![PathContent::line(
+            62.76,
+            FRAMED_PAGE_HEIGHT - 136.75,
+            599.46,
+            FRAMED_PAGE_HEIGHT - 136.75,
+        )];
+        for (top, bottom) in [(142.24_f32, 161.49_f32), (164.75, 184.0)] {
+            let (top, bottom) = (FRAMED_PAGE_HEIGHT - top, FRAMED_PAGE_HEIGHT - bottom);
+            let mut left = 87.76;
+            for width in widths {
+                let right = left + width;
+                paths.push(PathContent::line(left, top, right, top));
+                paths.push(PathContent::line(left, bottom, right, bottom));
+                paths.push(PathContent::line(left, top, left, bottom));
+                paths.push(PathContent::line(right, top, right, bottom));
+                left = right + box_gap;
+            }
+        }
+        paths
+    }
+
+    #[test]
+    fn a_row_of_boxed_fields_rules_its_row() {
+        let region = boxed_form_region();
+        assert_eq!(
+            horizontal_rules_for_regions(
+                &boxed_form_paths(6.0),
+                std::slice::from_ref(&region),
+                FRAMED_PAGE_HEIGHT
+            ),
+            vec![5],
+            "the header rule plus the top and bottom edge of each row of boxes"
+        );
+        assert_eq!(
+            horizontal_rules_for_regions(
+                &boxed_form_paths(30.0),
+                std::slice::from_ref(&region),
+                FRAMED_PAGE_HEIGHT
+            ),
+            vec![1],
+            "boxes a gutter apart do not rule one row together"
+        );
+
+        let rules = horizontal_rules_for_regions(
+            &boxed_form_paths(6.0),
+            std::slice::from_ref(&region),
+            FRAMED_PAGE_HEIGHT,
+        )[0];
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            rules,
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert_eq!(
+            tables.len(),
+            1,
+            "a ruled form grid is a table; got {:?}",
+            gh1760_table_texts(&tables)
+        );
+        assert!(
+            tables[0]
+                .cells
+                .iter()
+                .flatten()
+                .any(|cell| cell.contains("McAuley Wing"))
+        );
+    }
+
+    /// Three lines of four words each at a 12-unit pitch from image-space `top`, every word
+    /// underlined by its own segment one unit below its foot.
+    fn underlined_block(top: u32) -> (Vec<crate::pdf::table_reconstruct::HocrWord>, Vec<PathContent>) {
+        let mut words = Vec::new();
+        let mut paths = Vec::new();
+        for line in 0..3u32 {
+            let line_top = top + 12 * line;
+            let underline_y = FRAMED_PAGE_HEIGHT - (line_top + 10) as f32;
+            for (column, text) in ["alpha", "beta", "gamma", "delta"].into_iter().enumerate() {
+                let left = 40 + 44 * column as u32;
+                words.push(framed_word(text, left, line_top, 40));
+                paths.push(PathContent::line(
+                    left as f32,
+                    underline_y,
+                    (left + 40) as f32,
+                    underline_y,
+                ));
+            }
+        }
+        (words, paths)
+    }
+
+    #[test]
+    fn underlined_words_do_not_rule_their_lines() {
+        let (region, mut paths) = underlined_block(300);
+        paths.push(framed_painted_rule(FRAMED_PAGE_HEIGHT - 296.0, 36.0, 300.0));
+        assert_eq!(
+            horizontal_rules_for_regions(&paths, std::slice::from_ref(&region), FRAMED_PAGE_HEIGHT),
+            vec![1],
+            "only the rule above the block; the per-word underlines are text decoration"
+        );
+    }
+
+    #[test]
+    fn page_wide_rules_far_from_a_short_block_are_not_its_rules() {
+        let region = vec![
+            framed_word("Signed on behalf of the company", 40, 300, 160),
+            framed_word("by its director", 220, 300, 70),
+            framed_word("12 Market Street, Springfield", 40, 312, 150),
+            framed_word("and witnessed", 220, 312, 64),
+        ];
+        let paths = vec![
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 60.0, 36.0, 576.0),
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 420.0, 36.0, 576.0),
+            framed_painted_rule(FRAMED_PAGE_HEIGHT - 740.0, 36.0, 576.0),
+        ];
+        let rules = horizontal_rules_for_regions(&paths, std::slice::from_ref(&region), FRAMED_PAGE_HEIGHT);
+        assert_eq!(rules, vec![0], "a header, divider and footer rule frame nothing here");
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            rules[0],
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert!(tables.is_empty(), "got {:?}", gh1760_table_texts(&tables));
+    }
+
+    /// A box drawn around a short block of text carries two rules whatever its rows; it is not a
+    /// table on that evidence, even when the text falls into columns.
+    #[test]
+    fn a_framed_short_block_is_not_ruled_on_every_row() {
+        let region = boxed_form_region();
+        let tables = reconstruct_region_tables(
+            &region,
+            FRAMED_PAGE_HEIGHT,
+            1,
+            false,
+            2,
+            &source_columns::PageRules::new(&[], true),
+        );
+        assert!(
+            tables.is_empty(),
+            "two rules around three rows are a frame; got {:?}",
             gh1760_table_texts(&tables)
         );
     }
@@ -7656,3 +9045,6 @@ mod tests {
 
 #[cfg(test)]
 mod ruled_tier_tests;
+
+#[cfg(test)]
+mod ruled_label_header_tests;

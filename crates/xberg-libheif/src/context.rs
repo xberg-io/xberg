@@ -5,8 +5,8 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use std::{ffi, mem, ptr};
 
+use crate::lh;
 use four_cc::FourCC;
-use libheif_sys as lh;
 
 #[cfg(feature = "v1_19")]
 use crate::SecurityLimits;
@@ -119,7 +119,7 @@ impl<'a> HeifContext<'a> {
     pub fn new() -> Result<HeifContext<'a>> {
         // SAFETY: Allocation takes no caller-owned pointers. A non-null result is owned by the
         // `ContextOwner` created below, which frees it exactly once.
-        let ctx = unsafe { lh::heif_context_alloc() };
+        let ctx = unsafe { lh::heif_context_alloc() }?;
         if ctx.is_null() {
             Err(HeifError {
                 code: HeifErrorCode::ContextCreateFailed,

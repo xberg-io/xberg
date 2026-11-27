@@ -231,6 +231,29 @@ fn should_reject_ambiguous_bases_and_unrelated_small_raised_text() {
 }
 
 #[test]
+fn owner_kinds_and_validity_follow_the_captured_owners() {
+    let prose = page(vec![
+        span("Author", 100.0, 700.0, 40.0, 12.0),
+        span("names", 150.0, 700.0, 30.0, 12.0),
+    ]);
+    assert!(prose.owners.is_empty());
+    assert!(!prose.has_script_owners());
+    assert!(!prose.has_literal_primes());
+    assert!(prose.valid_owners(&prose.segments).is_empty());
+
+    let scripted = page(vec![
+        span("Author", 100.0, 700.0, 40.0, 12.0),
+        span("1", 140.0, 704.5, 4.0, 8.0),
+        span(",", 144.0, 704.5, 2.0, 8.0),
+        span("2", 146.0, 704.5, 4.0, 8.0),
+    ]);
+    assert_eq!(scripted.owners.len(), 3);
+    assert!(scripted.has_script_owners());
+    assert!(!scripted.has_literal_primes());
+    assert_eq!(scripted.valid_owners(&scripted.segments).len(), 3);
+}
+
+#[test]
 fn should_reject_changed_or_removed_endpoints_and_incomplete_runs() {
     let captured = page(vec![
         span("Author", 100.0, 700.0, 40.0, 12.0),
@@ -578,13 +601,13 @@ fn record_actual_ambiguous_native_owner_context(output: &std::path::Path) {
     ] {
         let bytes = std::fs::read(root.join("pdf/regression_pages").join(name)).expect("mandatory ambiguity fixture");
         assert_eq!(hex::encode(Sha256::digest(&bytes)), hash);
-        let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("native source");
+        let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("native source");
         let (pages, used_tree) =
-            extract_all_segment_carriers(&mut doc, ArtifactRetention::default()).expect("actual native carriers");
+            extract_all_segment_carriers(&doc, ArtifactRetention::default()).expect("actual native carriers");
         assert_eq!(pages.len(), 1);
         assert!(!pages[0].segments.is_empty(), "the actual final spans must be present");
         let neighbors =
-            super::super::extract_final_spans_from_page(&mut doc, 0, ScriptGeometry::Preserve).expect("neighbor spans");
+            super::super::extract_final_spans_from_page(&doc, 0, ScriptGeometry::Preserve).expect("neighbor spans");
         let owners: Vec<_> = pages[0]
             .owners
             .iter()
@@ -652,4 +675,84 @@ fn should_attach_a_numeric_exponent_with_a_closing_bracket_edge_overlap() {
     let mut spans = bracket_pair("(", "2");
     spans[1].bbox.x = 109.983;
     assert!(page(spans).owners.is_empty());
+}
+
+/// An untagged Helvetica PDF of `pages` pages, each with prose lines and a raised `2` after `mc`.
+fn raised_mark_pages_pdf(pages: usize) -> Vec<u8> {
+    let font_object = 3 + 2 * pages;
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        format!(
+            "<< /Type /Pages /Kids [{}] /Count {pages} >>",
+            (0..pages)
+                .map(|page| format!("{} 0 R", 3 + 2 * page))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+    ];
+    for page in 0..pages {
+        let mut stream = String::new();
+        for line in 0..5 {
+            let y = 720.0 - line as f32 * 16.0;
+            stream.push_str(&format!(
+                "BT /F1 12 Tf 72 {y:.1} Td (Page {page} line {line} of prose) Tj ET\n"
+            ));
+        }
+        stream.push_str("BT /F1 12 Tf 72 600 Td (E = mc) Tj ET\nBT /F1 8 Tf 110 604 Td (2) Tj ET\n");
+        objects.push(format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R \
+             /Resources << /Font << /F1 {font_object} 0 R >> >> >>",
+            4 + 2 * page
+        ));
+        objects.push(format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len()));
+    }
+    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string());
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+#[test]
+fn should_read_every_page_as_a_page_by_page_loop_does() {
+    const PAGES: usize = 12;
+    let bytes = raised_mark_pages_pdf(PAGES);
+    let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("fixture must parse");
+    let (pages, used_tree) = extract_all_segment_carriers(&doc, ArtifactRetention::default()).expect("carriers");
+    assert!(!used_tree);
+    assert_eq!(pages.len(), PAGES);
+    assert!(
+        pages.iter().all(|page| !page.segments.is_empty()),
+        "every page must carry text"
+    );
+
+    let sequential_doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).expect("fixture must parse");
+    let sequential: Vec<_> = (0..PAGES)
+        .map(|page| {
+            extract_page(
+                &sequential_doc,
+                page,
+                &HashMap::new(),
+                ArtifactRetention::default(),
+                ScriptGeometry::Preserve,
+            )
+            .expect("page")
+        })
+        .collect();
+    assert_eq!(format!("{pages:?}"), format!("{sequential:?}"));
 }

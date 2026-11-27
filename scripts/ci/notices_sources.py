@@ -319,20 +319,39 @@ def _package_tokens(lines: list[str]) -> list[str]:
     return tokens
 
 
+def _shipped_stage(lines: list[str], stages: list[int]) -> tuple[int, int]:
+    """Return the line span of the stage whose base image the default target ships.
+
+    A final stage built FROM an earlier stage (`FROM runtime AS fast`) ships that stage's
+    packages, so follow the chain back to the stage that names an image.
+    """
+    names = {}
+    for index in stages:
+        tokens = lines[index].split()
+        if len(tokens) == 4 and tokens[2].upper() == "AS":
+            names[tokens[3]] = index
+    position = len(stages) - 1
+    while (parent := names.get(lines[stages[position]].split()[1])) is not None and parent < stages[position]:
+        position = stages.index(parent)
+    end = stages[position + 1] if position + 1 < len(stages) else len(lines)
+    return stages[position], end
+
+
 def _docker_base(path: Path, inputs: BuildInputs) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     stages = [index for index, line in enumerate(lines) if line.startswith("FROM ")]
     if not stages:
         raise ValueError(f"{path} has no FROM line")
-    name, _, tag = lines[stages[-1]].split()[1].split("@", 1)[0].partition(":")
+    start, end = _shipped_stage(lines, stages)
+    name, _, tag = lines[start].split()[1].split("@", 1)[0].partition(":")
     if name == "alpine":
         provider = f"Alpine {tag}"
     elif name == "debian":
         provider = f"Debian {tag}"
     else:
         return
-    # Only the final stage ships: packages installed in a builder are build-time inputs.
-    packages = _package_tokens(lines[stages[-1] + 1 :])
+    # Only the shipped stage counts: packages installed in a builder are build-time inputs.
+    packages = _package_tokens(lines[start + 1 : end])
     for component, spellings in DISTRO_PACKAGES.items():
         for package in packages:
             base = re.split(r"[=:]", package, maxsplit=1)[0]

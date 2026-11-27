@@ -117,7 +117,7 @@ mod tests {
             artifact_type: None,
             text: text.to_string(),
             bbox: Rect::new(0.0, 0.0, 10.0, 10.0),
-            font_name: "Helvetica".to_string(),
+            font_name: "Helvetica".into(),
             font_size: 12.0,
             font_weight: if bold { FontWeight::Bold } else { FontWeight::Normal },
             is_italic: false,

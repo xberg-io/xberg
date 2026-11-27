@@ -21,6 +21,10 @@ COHORT_FILES = {
     "data": "native-data-fast",
     "images": "ocr-images-fast",
 }
+PROFILES = ("full", "smoke")
+# The one value a profile-aware job's `profile` matrix dimension may hold: a run's profile input.
+PROFILE_DIMENSION_VALUE = "${{ inputs.profile || 'full' }}"
+SMOKE_SKIP_CONDITION = "inputs.profile != 'smoke'"
 JOB_HEADER = re.compile(r"^  ([a-z0-9-]+):$")
 MATRIX_VALUE = re.compile(r"\$\{\{\s*matrix\.([a-z_]+)\s*\}\}")
 
@@ -29,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workflow", type=Path, default=Path(".github/workflows/benchmarks.yaml"))
     parser.add_argument("--harness", type=Path, default=Path("target/release/benchmark-harness"))
+    parser.add_argument("--profile", choices=PROFILES, default="full")
     return parser.parse_args()
 
 
@@ -242,14 +247,45 @@ def interpolate(job: str, template: str, cell: dict[str, str]) -> str:
 
 
 def is_optional_cell(framework: str, cohort: str) -> bool:
-    if framework == "mineru":
+    if framework == "mineru" or "-auto-ocr" in framework:
         return True
     if cohort in {"native-pdf-fast-b8", "ocr-pdf-fast-b4"}:
         return cohort == "ocr-pdf-fast-b4" and framework in {"tika", "unstructured"}
     return not framework.startswith("xberg-")
 
 
-def workflow_cells(workflow: str) -> list[dict[str, object]]:
+def job_condition(lines: list[str]) -> str:
+    for index, line in enumerate(lines):
+        match = re.match(r"^    if:\s*(.*?)\s*$", line)
+        if match:
+            condition = [match.group(1)]
+            condition.extend(
+                continuation.strip()
+                for continuation in itertools.takewhile(lambda item: item.startswith("      "), lines[index + 1 :])
+            )
+            return " ".join(condition)
+    return ""
+
+
+def apply_profile(job: str, lines: list[str], dimensions: dict[str, list[str]], profile: str) -> bool:
+    """Bind the job's `profile` dimension to `profile`; return False when the job does not run.
+
+    A job either carries the profile dimension (its smoke cells are chosen by `exclude`) or is
+    skipped outright in a smoke run through its `if:`. Anything else would run full cells in smoke.
+    """
+    if "profile" in dimensions:
+        if dimensions["profile"] != [PROFILE_DIMENSION_VALUE]:
+            raise ValueError(f'{job}: matrix profile must be ["{PROFILE_DIMENSION_VALUE}"]')
+        dimensions["profile"] = [profile]
+        return True
+    if SMOKE_SKIP_CONDITION not in job_condition(lines):
+        raise ValueError(f"{job}: a job without a profile dimension must skip smoke runs ({SMOKE_SKIP_CONDITION})")
+    return profile != "smoke"
+
+
+def workflow_cells(workflow: str, profile: str = "full") -> list[dict[str, object]]:
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r}")
     cells: list[dict[str, object]] = []
     jobs = split_jobs(workflow)
     benchmark_jobs = {job for job in jobs if job.startswith("bench-") and "      matrix:" in jobs[job]}
@@ -258,6 +294,8 @@ def workflow_cells(workflow: str) -> list[dict[str, object]]:
     for job in sorted(benchmark_jobs):
         lines = jobs[job]
         dimensions, excludes = parse_matrix(job, lines)
+        if not apply_profile(job, lines, dimensions, profile):
+            continue
         run_step = named_step(job, lines, "Run benchmark")
         upload_step = named_step(job, lines, "Upload artifacts")
         require_no_continue_on_error(job, "Run benchmark", run_step)
@@ -287,11 +325,11 @@ def workflow_cells(workflow: str) -> list[dict[str, object]]:
     return cells
 
 
-def contract_cells(harness: Path) -> list[dict[str, object]]:
+def contract_cells(harness: Path, profile: str) -> list[dict[str, object]]:
     cells: list[dict[str, object]] = []
     for cohort in COHORTS:
         result = subprocess.run(
-            [str(harness), "cohort-contract", "--cohort", cohort],
+            [str(harness), "cohort-contract", "--cohort", cohort, "--profile", profile],
             check=True,
             capture_output=True,
             text=True,
@@ -330,8 +368,11 @@ def require_unique(name: str, cells: list[dict[str, object]]) -> set[tuple[objec
 
 def main() -> None:
     args = parse_args()
-    actual = require_unique("benchmark workflow", workflow_cells(args.workflow.read_text()))
-    expected = require_unique("Rust benchmark contracts", contract_cells(args.harness))
+    actual = require_unique("benchmark workflow", workflow_cells(args.workflow.read_text(), args.profile))
+    expected = require_unique("Rust benchmark contracts", contract_cells(args.harness, args.profile))
+    # An empty expected set would match an empty workflow expansion. ~keep
+    if not expected:
+        raise SystemExit(f"the {args.profile} profile has no Rust contract cells")
     if actual != expected:
         missing = sorted(expected - actual)
         unexpected = sorted(actual - expected)
@@ -341,7 +382,7 @@ def main() -> None:
         if unexpected:
             details.append("unexpected workflow cells:\n  " + "\n  ".join(map(str, unexpected)))
         raise SystemExit("benchmark workflow matrix does not match Rust contracts\n" + "\n".join(details))
-    print(f"benchmark workflow matrix matches all {len(expected)} Rust contract cells")
+    print(f"benchmark workflow {args.profile} matrix matches all {len(expected)} Rust contract cells")
 
 
 if __name__ == "__main__":

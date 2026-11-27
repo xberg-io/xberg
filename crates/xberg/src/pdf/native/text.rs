@@ -606,6 +606,12 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
     false
 }
 
+/// A glyph-fragmented page's text, rebuilt from span positions with its line-wrap hyphens
+/// rejoined as every other plain page's are.
+fn fragmented_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
+    line_wrap_hyphens::rejoin_line_wrap_hyphens(rebuild_text_from_fragmented_spans(spans))
+}
+
 /// Rebuild readable text from a glyph-fragmented span list (issue #962).
 ///
 /// Algorithm:
@@ -1030,17 +1036,89 @@ fn append_visual_word_gap(text: &mut String, gap: f32, font_size: f32) {
 fn assemble_page_text(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     let notes = numeric_notes(spans);
     let ordered = order_spans_with_inline_fragments(spans, &notes);
-    assemble_ordered_page_text(spans, ordered, &notes, |_, _| {})
+    line_wrap_hyphens::rejoin_line_wrap_hyphens(assemble_ordered_page_text(spans, ordered, &notes, |_, _| {}))
 }
 
-/// Add native separators to the selected order without relocating inline fragments.
+/// Add native separators to the selected order without relocating inline fragments, with
+/// the page's math as LaTeX and its line-wrap hyphens rejoined, as the column-aware path
+/// writes them, so plain output does not depend on whether layout detection ran.
 #[cfg(feature = "layout-detection")]
-pub(crate) fn assemble_upright_layout_text(spans: &[xberg_native_pdf::layout::TextSpan], order: &[usize]) -> String {
-    assemble_upright_layout_text_observed(spans, order, |_, _| {})
+pub(crate) fn assemble_upright_layout_text(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+) -> String {
+    assemble_upright_layout_text_observed(doc, page_index, spans, order, |_, _| {})
 }
 
+/// [`assemble_upright_layout_text`], reporting each in-range `order` position's byte range
+/// in the returned text: an empty range, at the next written span, for a span a formula
+/// absorbed.
 #[cfg(feature = "layout-detection")]
 pub(crate) fn assemble_upright_layout_text_observed(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+    observe: impl FnMut(usize, usize),
+) -> String {
+    let math = super::math_latex::rewrite_page_math_indexed(doc, page_index, spans);
+    rewritten_layout_text(spans, order, math, observe)
+}
+
+#[cfg(feature = "layout-detection")]
+fn rewritten_layout_text(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    order: &[usize],
+    math: Option<super::math_latex::IndexedRewrite>,
+    mut observe: impl FnMut(usize, usize),
+) -> String {
+    let (spans, order, written): (&[TextSpan], Cow<'_, [usize]>, Option<Vec<bool>>) = match &math {
+        Some((rewritten, index_map)) => (
+            rewritten.as_slice(),
+            Cow::Owned(
+                order
+                    .iter()
+                    .filter_map(|&index| index_map.get(index).copied().flatten())
+                    .collect(),
+            ),
+            Some(
+                order
+                    .iter()
+                    .filter_map(|&index| index_map.get(index).map(Option::is_some))
+                    .collect(),
+            ),
+        ),
+        None => (spans, Cow::Borrowed(order), None),
+    };
+    let mut ranges = Vec::with_capacity(order.len());
+    let text = assemble_layout_order(spans, &order, |start, end| ranges.push((start, end)));
+    let (text, offsets) = line_wrap_hyphens::rejoin_line_wrap_hyphens_mapped(text);
+    let mut ranges = ranges
+        .into_iter()
+        .map(|(start, end)| (offsets.map(start), offsets.map(end)))
+        .peekable();
+    match written {
+        None => ranges.for_each(|(start, end)| observe(start, end)),
+        Some(written) => {
+            for written in written {
+                if written {
+                    if let Some((start, end)) = ranges.next() {
+                        observe(start, end);
+                    }
+                } else {
+                    let at = ranges.peek().map_or(text.len(), |&(start, _)| start);
+                    observe(at, at);
+                }
+            }
+        }
+    }
+    text
+}
+
+#[cfg(feature = "layout-detection")]
+fn assemble_layout_order(
     spans: &[xberg_native_pdf::layout::TextSpan],
     order: &[usize],
     observe: impl FnMut(usize, usize),
@@ -1499,7 +1577,11 @@ fn group_into_lines(spans: &[xberg_native_pdf::layout::TextSpan], order: &[usize
 /// split. Note this rejects the *widest* candidate outright rather than falling back to
 /// the next-widest one on the same line: a line whose only internal gap is that wide
 /// has no real gutter evidence to offer either way. ~keep
-fn widest_gap_midpoint(mut edges: impl Iterator<Item = (f32, f32)>, min_gutter: f32, max_gutter: f32) -> Option<f32> {
+pub(super) fn widest_gap_midpoint(
+    mut edges: impl Iterator<Item = (f32, f32)>,
+    min_gutter: f32,
+    max_gutter: f32,
+) -> Option<f32> {
     let (_, mut running_right) = edges.next()?;
     let mut best_gap = 0.0_f32;
     let mut best_split = None;
@@ -1525,7 +1607,7 @@ fn widest_gap_midpoint(mut edges: impl Iterator<Item = (f32, f32)>, min_gutter: 
 /// merges into a neighbouring span. Such a span occupies an x-range but carries no
 /// content, and must not be treated as column population or as evidence that a line
 /// runs through a gutter. ~keep
-fn span_has_ink(span: &xberg_native_pdf::layout::TextSpan) -> bool {
+pub(super) fn span_has_ink(span: &xberg_native_pdf::layout::TextSpan) -> bool {
     !span.text.trim().is_empty()
 }
 
@@ -1762,6 +1844,62 @@ fn band_lines_around_table_gap_split(
         .map(|(_, band)| band)
 }
 
+/// Fewest lines that must share both edges of a gap narrower than the dense gutter floor
+/// before it counts as gutter evidence.
+const MIN_ALIGNED_NARROW_GUTTER_LINES: usize = 3;
+/// Shortest run of text, as a fraction of the page width, that must end at a narrow gap for
+/// the gap to be a justified column's right margin.
+const MIN_NARROW_GUTTER_COLUMN_FRACTION: f32 = 0.35;
+
+/// The edges of `line`'s widest gap when it is narrower than `min_gutter` but at least
+/// `MIN_DENSE_COLUMN_GUTTER_PTS` wide and closes a run of text at least
+/// [`MIN_NARROW_GUTTER_COLUMN_FRACTION`] of the page wide: a justified column line ending at
+/// a gutter below the page-relative floor.
+fn narrow_justified_gutter(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    line: &SpanLine,
+    min_gutter: f32,
+    page_width: f32,
+) -> Option<(f32, f32)> {
+    let mut edges = line
+        .iter()
+        .map(|&index| (spans[index].bbox.left(), spans[index].bbox.right()));
+    let (line_left, mut running_right) = edges.next()?;
+    let mut widest: Option<(f32, f32)> = None;
+    for (left, right) in edges {
+        if widest.is_none_or(|(gap_left, gap_right)| left - running_right > gap_right - gap_left) {
+            widest = Some((running_right, left));
+        }
+        running_right = running_right.max(right);
+    }
+    let (gap_left, gap_right) = widest?;
+    let gap = gap_right - gap_left;
+    (gap >= MIN_DENSE_COLUMN_GUTTER_PTS
+        && gap < min_gutter
+        && gap_left - line_left >= page_width * MIN_NARROW_GUTTER_COLUMN_FRACTION)
+        .then_some((gap_left, gap_right))
+}
+
+/// Midpoints of the narrow gaps whose two edges at least
+/// [`MIN_ALIGNED_NARROW_GUTTER_LINES`] gaps share within `DENSE_COLUMN_SPLIT_SNAP_X_TOLERANCE_PTS`.
+///
+/// 2303.08597: the IEEE Letter template sets its columns 0.17in apart, and justified glyphs
+/// leave 11.96pt of it free of ink, just under the 2% (12.24pt) floor, so no line of its
+/// first page voted and the abstract was read interleaved with the introduction. Lowering the
+/// floor admits every 11-12pt gap on every page, among them table cell gaps (GH#1762). A
+/// justified column instead ends every full line at one x and the next column starts every
+/// line at one x, so the narrow gap repeats edge for edge; a word space or a table's cell gap
+/// beside a short label does not. ~keep
+fn aligned_narrow_gutter_votes(gaps: &[(f32, f32)]) -> impl Iterator<Item = f32> + '_ {
+    let aligned = |a: &(f32, f32), b: &(f32, f32)| {
+        (a.0 - b.0).abs() <= DENSE_COLUMN_SPLIT_SNAP_X_TOLERANCE_PTS
+            && (a.1 - b.1).abs() <= DENSE_COLUMN_SPLIT_SNAP_X_TOLERANCE_PTS
+    };
+    gaps.iter()
+        .filter(move |&gap| gaps.iter().filter(|&other| aligned(gap, other)).count() >= MIN_ALIGNED_NARROW_GUTTER_LINES)
+        .map(|&(left, right)| (left + right) / 2.0)
+}
+
 /// Establish the page's gutter x-position from independent per-line evidence.
 ///
 /// Each line is checked in isolation for an internal gap at least
@@ -1817,6 +1955,14 @@ fn detect_split_x(spans: &[xberg_native_pdf::layout::TextSpan], lines: &[SpanLin
             (!vote_is_a_grid_cell_gap(spans, line, &grid_columns, midpoint)).then_some(midpoint)
         })
         .collect();
+    let narrow_gaps: Vec<(f32, f32)> = voting_lines()
+        .filter(|&line| !line_has_grid_row_gaps(spans, line, min_gutter))
+        .filter_map(|line| {
+            let (left, right) = narrow_justified_gutter(spans, line, min_gutter, page_width)?;
+            (!vote_is_a_grid_cell_gap(spans, line, &grid_columns, (left + right) / 2.0)).then_some((left, right))
+        })
+        .collect();
+    midpoints.extend(aligned_narrow_gutter_votes(&narrow_gaps));
     if midpoints.len() < MIN_DENSE_COLUMN_SPLIT_LINES {
         return sole_whitespace_gutter(spans, lines, page_width);
     }
@@ -1837,6 +1983,94 @@ fn detect_split_x(spans: &[xberg_native_pdf::layout::TextSpan], lines: &[SpanLin
         return sole_whitespace_gutter(spans, lines, page_width);
     }
     Some(median)
+}
+
+/// Move a split that cuts a span to the stretch of its own gutter that the fewest lines cross.
+///
+/// The lines that vote for a split each hold a gap around it, and the split may sit anywhere
+/// all of those gaps share. Their median midpoint is one point of that shared gap only: on
+/// 2305.09790 page 1 the votes come from an abstract indented inside the left column, whose
+/// lines end 20pt short of the column edge, so the midpoint fell inside the introduction lines
+/// below it, each of them became a band boundary, and the foot of the page read row by row.
+/// The split moves to the middle of the widest stretch of the shared gap that fewer lines cross
+/// than cross it now, and stays where it is when no stretch does or fewer than
+/// `MIN_DENSE_COLUMN_SPLIT_LINES` lines hold a gap around it. ~keep
+fn slide_split_along_its_gutter(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    furniture_width: f32,
+    min_gutter: f32,
+    split_x: f32,
+) -> f32 {
+    let body_lines: Vec<&SpanLine> = lines
+        .iter()
+        .filter(|line| !line_has_width_furniture(spans, line, furniture_width))
+        .collect();
+    let crossing = |x: f32| body_lines.iter().filter(|line| line_crosses(spans, line, x)).count();
+    let crossing_now = crossing(split_x);
+    if crossing_now == 0 {
+        return split_x;
+    }
+    let (mut low, mut high) = (f32::NEG_INFINITY, f32::INFINITY);
+    let mut holding = 0usize;
+    for line in &body_lines {
+        if let Some((gap_low, gap_high)) = gap_around(spans, line, min_gutter, split_x) {
+            holding += 1;
+            low = low.max(gap_low);
+            high = high.min(gap_high);
+        }
+    }
+    if holding < MIN_DENSE_COLUMN_SPLIT_LINES || high <= low {
+        return split_x;
+    }
+    let mut edges: Vec<f32> = body_lines
+        .iter()
+        .flat_map(|line| line.iter())
+        .filter(|&&index| span_has_ink(&spans[index]))
+        .flat_map(|&index| [spans[index].bbox.left(), spans[index].bbox.right()])
+        .filter(|&edge| edge > low && edge < high)
+        .chain([low, high])
+        .collect();
+    edges.sort_by(f32::total_cmp);
+    edges.dedup();
+    let mut best: Option<(usize, f32, f32)> = None;
+    for pair in edges.windows(2) {
+        let mid = (pair[0] + pair[1]) / 2.0;
+        let (count, width) = (crossing(mid), pair[1] - pair[0]);
+        if best
+            .is_none_or(|(best_count, best_width, _)| count < best_count || (count == best_count && width > best_width))
+        {
+            best = Some((count, width, mid));
+        }
+    }
+    match best {
+        Some((count, _, mid)) if count < crossing_now => mid,
+        _ => split_x,
+    }
+}
+
+/// The internal gap of `line`, at least `min_gutter` wide, that holds `x`.
+fn gap_around(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    line: &SpanLine,
+    min_gutter: f32,
+    x: f32,
+) -> Option<(f32, f32)> {
+    let mut edges: Vec<(f32, f32)> = line
+        .iter()
+        .filter(|&&index| span_has_ink(&spans[index]))
+        .map(|&index| (spans[index].bbox.left(), spans[index].bbox.right()))
+        .collect();
+    edges.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut edges = edges.into_iter();
+    let (_, mut running_right) = edges.next()?;
+    for (left, right) in edges {
+        if left - running_right >= min_gutter && x >= running_right && x <= left {
+            return Some((running_right, left));
+        }
+        running_right = running_right.max(right);
+    }
+    None
 }
 
 /// Move a split that still cuts through a word after snapping to the page's own
@@ -1894,11 +2128,12 @@ fn redirect_split_out_of_content(
     page_width: f32,
     split_x: f32,
 ) -> f32 {
+    let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
+    let min_gutter = (page_width * MIN_DENSE_COLUMN_GUTTER_FRACTION).max(MIN_DENSE_COLUMN_GUTTER_PTS);
+    let split_x = slide_split_along_its_gutter(spans, lines, furniture_width, min_gutter, split_x);
     let cuts_a_span = spans
         .iter()
         .any(|span| span.bbox.left() < split_x && span.bbox.right() > split_x);
-    let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
-    let min_gutter = (page_width * MIN_DENSE_COLUMN_GUTTER_FRACTION).max(MIN_DENSE_COLUMN_GUTTER_PTS);
     let split_inside_a_table_gap =
         lines_with_internal_gap_at(spans, lines, furniture_width, min_gutter, split_x) >= MIN_DENSE_COLUMN_SPLIT_LINES;
     if !cuts_a_span && !split_inside_a_table_gap {
@@ -2326,6 +2561,13 @@ fn page_whitespace_corridors(
 /// visible. The corridor is therefore first sought with no span treated as furniture, and only
 /// when that finds none with the usual furniture exclusion, which still tolerates a header set
 /// across the gutter. ~keep
+///
+/// When the whole page has no qualifying corridor at all, the lower half of its lines is asked alone, and
+/// its single corridor is accepted whatever its width. 2209.05611 page 1 sets its two columns
+/// on baselines 2.7pt apart under a centred title, author block and date that cross the
+/// gutter, so no line votes and the page has no corridor; the native XY-cut then read the
+/// columns line by line. The header sits at the top of a first page, so the lower half is all
+/// column body, and the same gutter the document's other pages split at is empty there. ~keep
 fn sole_whitespace_gutter(
     spans: &[xberg_native_pdf::layout::TextSpan],
     lines: &[SpanLine],
@@ -2335,7 +2577,7 @@ fn sole_whitespace_gutter(
     let max_gutter = page_width * MAX_DENSE_COLUMN_GUTTER_FRACTION;
     let furniture_width = page_width * FULL_WIDTH_FURNITURE_FRACTION;
     let max_label_width = page_width * MAX_DENSE_COLUMN_SPLIT_SNAP_SPAN_FRACTION;
-    let qualifying_corridors = |corridor_furniture_width: f32| -> Vec<(f32, f32)> {
+    let qualifying_corridors = |lines: &[SpanLine], corridor_furniture_width: f32| -> Vec<(f32, f32)> {
         page_whitespace_corridors(spans, lines, corridor_furniture_width, min_gutter)
             .into_iter()
             .filter(|&(left, right)| right - left <= max_gutter)
@@ -2347,14 +2589,26 @@ fn sole_whitespace_gutter(
             })
             .collect()
     };
-    let mut corridors = qualifying_corridors(NO_WIDTH_FURNITURE);
-    if corridors.is_empty() {
-        corridors = qualifying_corridors(furniture_width);
+    let corridors_of = |lines: &[SpanLine]| {
+        let corridors = qualifying_corridors(lines, NO_WIDTH_FURNITURE);
+        if corridors.is_empty() {
+            qualifying_corridors(lines, furniture_width)
+        } else {
+            corridors
+        }
+    };
+    let corridors = corridors_of(lines);
+    if let &[(left, right)] = corridors.as_slice() {
+        return (right - left < xberg_native_pdf::XYCutStrategy::DEFAULT_MIN_VALLEY_WIDTH)
+            .then_some((left + right) / 2.0);
     }
-    let &[(left, right)] = corridors.as_slice() else {
+    if !corridors.is_empty() {
+        return None;
+    }
+    let &[(left, right)] = corridors_of(&lines[lines.len() / 2..]).as_slice() else {
         return None;
     };
-    (right - left < xberg_native_pdf::XYCutStrategy::DEFAULT_MIN_VALLEY_WIDTH).then_some((left + right) / 2.0)
+    Some((left + right) / 2.0)
 }
 
 /// Move a gutter estimate out of a repeated hanging-label band.
@@ -2449,10 +2703,23 @@ fn line_is_boundary(
     })
 }
 
+/// Smallest baseline step, in ems of the larger type on either side, between two inked page
+/// lines that makes the empty band between them a story break. Lines step about 1.2 em and a
+/// section heading opens about 2.5 em below the text above it; 2209.05611 page 9 leaves 5.4 em
+/// between its two-column text and its two-column references.
+const STORY_BREAK_MIN_STEP_EM: f32 = 4.0;
+
 /// Split the page's lines into bands at boundary lines (the band-splitting
 /// step). Consecutive non-boundary lines accumulate into one `Content` band;
 /// each boundary line becomes its own single-line `Boundary` band in place,
 /// so it stays between the band above it and the band below it.
+///
+/// A content band also ends at a story break (`opens_story`): an empty band across both
+/// columns, which both end above and resume below, between two blocks of columns, each read column by
+/// column before the next. Read as one band, the columns ran down the whole page,
+/// so 2209.05611's references opened inside its conclusion and its acknowledgments
+/// followed the first column of references. A story too small to reorder on its own
+/// (`MIN_DENSE_COLUMN_SPANS_PER_SIDE` inked spans a side) stays joined to its neighbour.
 fn build_bands(
     spans: &[xberg_native_pdf::layout::TextSpan],
     lines: &[SpanLine],
@@ -2461,20 +2728,134 @@ fn build_bands(
 ) -> Vec<Band> {
     let mut bands = Vec::new();
     let mut current: Vec<usize> = Vec::new();
-    for line in lines {
+    let mut last_inked_line: Option<usize> = None;
+    for (line_index, line) in lines.iter().enumerate() {
+        let inked = line.iter().any(|&index| span_has_ink(&spans[index]));
         if !line_is_boundary(spans, line, furniture_width, split_x) {
+            if inked
+                && last_inked_line.is_some_and(|above| opens_story(spans, lines, above, line_index, split_x))
+                && can_reorder_alone(spans, &current, split_x)
+            {
+                bands.push(Band::Content(std::mem::take(&mut current)));
+            }
             current.extend(line.iter().copied());
-            continue;
+        } else {
+            if !current.is_empty() {
+                bands.push(Band::Content(std::mem::take(&mut current)));
+            }
+            bands.push(Band::Boundary(line.clone()));
         }
-        if !current.is_empty() {
-            bands.push(Band::Content(std::mem::take(&mut current)));
+        if inked {
+            last_inked_line = Some(line_index);
         }
-        bands.push(Band::Boundary(line.clone()));
     }
     if !current.is_empty() {
         bands.push(Band::Content(current));
     }
-    bands
+    merge_starved_stories(spans, bands, split_x)
+}
+
+/// Largest distance, in ems, from a story break at which both columns must show text on each
+/// side of it.
+const STORY_EDGE_EM: f32 = 2.0;
+
+fn line_type_size(spans: &[xberg_native_pdf::layout::TextSpan], line: &SpanLine) -> f32 {
+    line.iter()
+        .map(|&index| {
+            let span = &spans[index];
+            if span.font_size.is_finite() && span.font_size > 0.0 {
+                span.font_size
+            } else {
+                span.bbox.height
+            }
+        })
+        .filter(|size| size.is_finite())
+        .fold(0.0_f32, f32::max)
+}
+
+/// Whether `lines[below]` opens a story under `lines[above]`, the inked line before it: the
+/// baseline step is at least [`STORY_BREAK_MIN_STEP_EM`], and both columns end within
+/// [`STORY_EDGE_EM`] above the break and resume within it below. A column that only pauses
+/// beside a figure on the other side (2303.08597's abstract beside its Fig. 1) leaves one side
+/// empty at the break, and its column keeps reading down.
+fn opens_story(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    above: usize,
+    below: usize,
+    split_x: f32,
+) -> bool {
+    let (Some(above_y), Some(below_y)) = (line_y_of(spans, &lines[above]), line_y_of(spans, &lines[below])) else {
+        return false;
+    };
+    let em = line_type_size(spans, &lines[above]).max(line_type_size(spans, &lines[below]));
+    let step = above_y - below_y;
+    if !(em > 0.0 && step.is_finite() && step >= STORY_BREAK_MIN_STEP_EM * em) {
+        return false;
+    }
+    let window = STORY_EDGE_EM * em;
+    let ends_above = lines[..=above]
+        .iter()
+        .rev()
+        .take_while(|line| line_y_of(spans, line).is_some_and(|y| y - above_y <= window));
+    let resumes_below = lines[below..]
+        .iter()
+        .take_while(|line| line_y_of(spans, line).is_some_and(|y| below_y - y <= window));
+    fills_both_columns(spans, ends_above, split_x) && fills_both_columns(spans, resumes_below, split_x)
+}
+
+fn line_y_of(spans: &[xberg_native_pdf::layout::TextSpan], line: &SpanLine) -> Option<f32> {
+    line.first().map(|&index| spans[index].bbox.y)
+}
+
+/// Whether `lines` hold inked spans on both sides of `split_x`.
+fn fills_both_columns<'a>(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: impl Iterator<Item = &'a SpanLine>,
+    split_x: f32,
+) -> bool {
+    let (mut left, mut right) = (false, false);
+    for &index in lines.flatten() {
+        if span_has_ink(&spans[index]) {
+            if spans[index].bbox.x < split_x {
+                left = true;
+            } else {
+                right = true;
+            }
+        }
+    }
+    left && right
+}
+
+/// Whether `band` holds enough inked spans on each side of `split_x` for
+/// [`reorder_band_columns`] to consider it.
+fn can_reorder_alone(spans: &[xberg_native_pdf::layout::TextSpan], band: &[usize], split_x: f32) -> bool {
+    let inked = |left: bool| {
+        band.iter()
+            .filter(|&&index| span_has_ink(&spans[index]) && (spans[index].bbox.x < split_x) == left)
+            .count()
+    };
+    inked(true) >= MIN_DENSE_COLUMN_SPANS_PER_SIDE && inked(false) >= MIN_DENSE_COLUMN_SPANS_PER_SIDE
+}
+
+/// Fold a content band that followed another content band at a story break back into it when
+/// it is too small to reorder alone. Only a story break puts two content bands side by side.
+fn merge_starved_stories(spans: &[xberg_native_pdf::layout::TextSpan], bands: Vec<Band>, split_x: f32) -> Vec<Band> {
+    let mut merged: Vec<Band> = Vec::with_capacity(bands.len());
+    for band in bands {
+        if let Band::Content(mut indices) = band {
+            if let Some(Band::Content(above)) = merged.last_mut()
+                && !can_reorder_alone(spans, &indices, split_x)
+            {
+                above.append(&mut indices);
+                continue;
+            }
+            merged.push(Band::Content(indices));
+        } else {
+            merged.push(band);
+        }
+    }
+    merged
 }
 
 /// Try to reorder one content band column-major (per-band column detection).
@@ -2581,6 +2962,76 @@ fn is_numeric_cell(text: &str) -> bool {
         && trimmed
             .chars()
             .all(|character| character.is_ascii_digit() || matches!(character, '.' | ',' | '%'))
+}
+
+/// Fewest rows with a number on each side of a split that make it a table's cell gap.
+const MIN_NUMERIC_TABLE_ROWS_AT_SPLIT: usize = 3;
+/// Widest left cell, in ems of its own type, that is a row label rather than prose.
+const MAX_TABLE_LABEL_CELL_EM: f32 = 8.0;
+
+/// True when every word of `text` is a table number: digits with separators, a sign, a
+/// percent sign, enclosing parentheses or brackets, or an exponent (`(5.2E-4)`).
+fn is_table_number(text: &str) -> bool {
+    let mut words = text.split_whitespace().peekable();
+    words.peek().is_some()
+        && words.all(|word| {
+            let bare = word
+                .trim_matches(|character| matches!(character, '(' | ')' | '[' | ']' | '%' | '+' | '±'))
+                .replace(',', "")
+                .replace('\u{2212}', "-");
+            bare.chars().any(|character| character.is_ascii_digit()) && bare.parse::<f64>().is_ok()
+        })
+}
+
+/// True when the split at `split_x` runs between a numeric table's value cells: at least
+/// [`MIN_NUMERIC_TABLE_ROWS_AT_SPLIT`] lines have a number just right of it and a number or a
+/// short label just left of it, and they are at least three in five of the lines with ink on
+/// both sides of it.
+///
+/// 1602.03238 page 22 is a single column page with two centred four-column price tables. Every
+/// row's widest gap is the one before its last value column, so the rows out-voted the page
+/// and the tables were read as a block of three columns followed by the fourth. A prose column
+/// beside the gutter is never a number, so a two-column page keeps its split even when a table
+/// sits in one of its columns. The XY-cut refuses the same cut (`cuts_numeric_table_rows` in
+/// xberg-native-pdf's reading order). ~keep
+fn split_separates_numeric_table_cells(
+    spans: &[xberg_native_pdf::layout::TextSpan],
+    lines: &[SpanLine],
+    split_x: f32,
+) -> bool {
+    let mut paired = 0usize;
+    let mut numeric = 0usize;
+    for line in lines {
+        let mut left: Option<&TextSpan> = None;
+        let mut right: Option<&TextSpan> = None;
+        let mut crossed = false;
+        for span in line
+            .iter()
+            .map(|&index| &spans[index])
+            .filter(|span| span_has_ink(span))
+        {
+            if span.bbox.right() <= split_x {
+                if left.is_none_or(|nearest| span.bbox.right() > nearest.bbox.right()) {
+                    left = Some(span);
+                }
+            } else if span.bbox.left() >= split_x {
+                if right.is_none_or(|nearest| span.bbox.left() < nearest.bbox.left()) {
+                    right = Some(span);
+                }
+            } else {
+                crossed = true;
+            }
+        }
+        let (false, Some(left), Some(right)) = (crossed, left, right) else {
+            continue;
+        };
+        paired += 1;
+        let left_is_cell = is_table_number(&left.text) || left.bbox.width < MAX_TABLE_LABEL_CELL_EM * left.font_size;
+        if left_is_cell && is_table_number(&right.text) {
+            numeric += 1;
+        }
+    }
+    numeric >= MIN_NUMERIC_TABLE_ROWS_AT_SPLIT && numeric * 5 >= paired * 3
 }
 
 /// Left-edge x positions that at least `MIN_DENSE_COLUMN_SPLIT_LINES` distinct
@@ -2828,6 +3279,14 @@ pub(crate) fn reorder_dense_two_column_page(spans: &mut [xberg_native_pdf::layou
     };
     let split_x = snap_split_left_of_hanging_labels(spans, &lines, page_width, detected_split_x);
     let split_x = redirect_split_out_of_content(spans, &lines, page_width, split_x);
+    if split_separates_numeric_table_cells(spans, &lines, split_x) {
+        tracing::debug!(
+            target: "xberg::pdf::column_split",
+            split_x,
+            "dense two-column split refused between a numeric table's value cells"
+        );
+        return false;
+    }
 
     let bands = build_bands(spans, &lines, NO_WIDTH_FURNITURE, split_x);
     let Some(final_order) = emit_band_order(spans, bands, split_x) else {
@@ -3083,6 +3542,7 @@ pub(super) fn untagged_upright_page(doc: &xberg_native_pdf::PdfDocument, page_in
 struct NativeSpanPage {
     spans: Vec<TextSpan>,
     page_width: f32,
+    structure_ordered: bool,
 }
 
 /// Keep the existing optional-content filtering and coordinate conventions while reading
@@ -3110,9 +3570,71 @@ fn page_text_with_options_excluding_layers(
     } else {
         right
     };
-    let mut page = NativeSpanPage { spans, page_width };
+    let mut page = NativeSpanPage {
+        spans,
+        page_width,
+        structure_ordered: false,
+    };
     prefer_tagged_rtl_structure_order(doc, page_index, &mut page);
     Ok(page)
+}
+
+/// The page's spans in the order the structured (markdown) path reads them: top to bottom,
+/// then `hierarchy::reorder_text_flow_reading_order` and the key/value row pass, as
+/// `hierarchy::extract_final_spans_from_page_with_primes` applies them except that a page of
+/// two side-by-side table halves under a repeated header reads one half after the other.
+///
+/// `ReadingOrder::ColumnAware` XY-cuts every page, which reads a table column by column and
+/// interleaves the columns of a page whose gutter the cut misses; the structured path cuts
+/// only pages `select_reading_order` judges balanced prose columns. Plain and Markdown output
+/// must share one reading order. A failed read returns `None` and keeps the caller's order. ~keep
+fn structured_path_page_spans(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    excluded_layers: &std::collections::HashSet<String>,
+    margins: PageMarginFractions,
+) -> Option<Vec<TextSpan>> {
+    let read = || -> std::result::Result<Vec<TextSpan>, String> {
+        let mut spans = if excluded_layers.is_empty() {
+            doc.extract_spans_with_reading_order(page_index, ReadingOrder::TopToBottom)
+        } else {
+            doc.extract_spans_filtered_with_reading_order(
+                page_index,
+                ReadingOrder::TopToBottom,
+                excluded_layers.clone(),
+                Default::default(),
+            )
+        }
+        .map_err(|error| error.to_string())?;
+        let (left, lower, right, upper) = doc.get_page_media_box(page_index).map_err(|error| error.to_string())?;
+        let (page_bottom, page_top) = (lower.min(upper), lower.max(upper));
+        retain_spans_inside_page_margins(&mut spans, page_bottom, page_top, margins);
+        super::hierarchy::reorder_text_flow_reading_order(&mut spans, right - left, page_top - page_bottom, page_index);
+        xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut spans);
+        Ok(spans)
+    };
+    let mut panicked = false;
+    let result = super::guard_native_panic(read, |panic| {
+        panicked = true;
+        panic
+    });
+    match result {
+        Ok(spans) => Some(spans),
+        Err(error) if panicked => {
+            tracing::warn!(
+                page = page_index,
+                "structured-path span order panicked; keeping column-aware order: {error}"
+            );
+            None
+        }
+        Err(error) => {
+            tracing::debug!(
+                page = page_index,
+                "structured-path span order unavailable; keeping column-aware order: {error}"
+            );
+            None
+        }
+    }
 }
 
 fn prefer_tagged_rtl_structure_order(
@@ -3135,6 +3657,7 @@ fn prefer_tagged_rtl_structure_order(
         span.order_info.source == xberg_native_pdf::pipeline::ordered_span::ReadingOrderSource::StructureTree
     }) {
         page.spans = ordered.into_iter().map(|span| span.span).collect();
+        page.structure_ordered = true;
     }
 }
 
@@ -3219,7 +3742,9 @@ fn retain_spans_inside_page_margins(
 /// Extract text from one page with column-aware ordering and guarded repairs.
 ///
 /// Applies sparse-column and glyph-fragmentation repairs before assembling the
-/// page text.
+/// page text. Pages none of the producer, panel, rotation or fragmentation paths claim are
+/// assembled from a second, top-to-bottom read in the structured path's order
+/// (`structured_path_page_spans`).
 ///
 /// Also returns the page's fabricated-mapping character counts, captured from the raw spans
 /// before margin filtering or reordering mutate them — `Some` only when `excluded_layers` is
@@ -3264,6 +3789,7 @@ fn extract_page_text_column_aware(
     retain_spans_inside_page_margins(&mut page_text_data.spans, page_bottom, page_top, options.margins);
 
     let complete_page = excluded_layers.is_empty() && widgets.is_empty() && span_count == page_text_data.spans.len();
+    let mut producer_order_applied = false;
     let financial_rows = if complete_page
         && let Some((order, arity)) = producer_financial_row_order(&page_text_data.spans, page_index)
         && untagged_upright_page(doc, page_index)
@@ -3287,6 +3813,7 @@ fn extract_page_text_column_aware(
             && untagged_upright_page(doc, page_index)
         {
             apply_span_order(&mut page_text_data.spans, &order);
+            producer_order_applied = true;
         }
         None
     };
@@ -3304,9 +3831,15 @@ fn extract_page_text_column_aware(
             span_count = page_text_data.spans.len(),
             "glyph fragmentation detected — rebuilding text from span positions (#962)"
         );
-        rebuild_text_from_fragmented_spans(&page_text_data.spans)
+        fragmented_page_text(&with_math_as_latex(doc, page_index, &page_text_data.spans))
+    } else if financial_rows.is_none()
+        && !producer_order_applied
+        && !page_text_data.structure_ordered
+        && let Some(spans) = structured_path_page_spans(doc, page_index, excluded_layers, options.margins)
+    {
+        assemble_page_text(&with_math_as_latex(doc, page_index, &spans))
     } else {
-        assemble_page_text(&page_text_data.spans)
+        assemble_page_text(&with_math_as_latex(doc, page_index, &page_text_data.spans))
     };
 
     append_missing_widget_values(&mut text, &widgets);
@@ -3316,6 +3849,17 @@ fn extract_page_text_column_aware(
         provenance_counts,
         financial_rows,
     })
+}
+
+/// The page's spans with each formula rewritten as LaTeX; the spans themselves when the page
+/// sets no math. Applied after every ordering and layout decision, so those see the source
+/// spans and only the formula text changes.
+fn with_math_as_latex<'s>(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    spans: &'s [TextSpan],
+) -> Cow<'s, [TextSpan]> {
+    super::math_latex::rewrite_page_math(doc, page_index, spans).map_or(Cow::Borrowed(spans), Cow::Owned)
 }
 
 pub(crate) fn rotation_span(span: &xberg_native_pdf::layout::TextSpan) -> crate::extractors::pdf::rotation::TextSpan {
@@ -3342,6 +3886,9 @@ fn apply_text_cleanup(text: &str) -> Cow<'_, str> {
 
     cleaned
 }
+
+#[path = "text/line_wrap_hyphens.rs"]
+mod line_wrap_hyphens;
 
 #[cfg(test)]
 #[path = "text/span_carrier_tests.rs"]
@@ -3422,9 +3969,9 @@ mod tests {
             span_with_width("Other line", 72.0, 680.0, 44.0, 12.0, 12.0),
         ];
         assert_eq!(inline_fragment_anchors(&spans), [None, Some(0), None]);
-        assert_eq!(assemble_upright_layout_text(&spans, &[2, 0, 1]), "Other line\n\nword!");
-        assert_eq!(assemble_upright_layout_text(&spans, &[1, 0]), "!word");
-        assert_eq!(assemble_upright_layout_text(&spans, &[2, 1]), "Other line\n\n!");
+        assert_eq!(layout_text(&spans, &[2, 0, 1]), "Other line\n\nword!");
+        assert_eq!(layout_text(&spans, &[1, 0]), "!word");
+        assert_eq!(layout_text(&spans, &[2, 1]), "Other line\n\n!");
     }
 
     #[cfg(feature = "layout-detection")]
@@ -3433,7 +3980,7 @@ mod tests {
         let first = span_with_width("alpha", 72.0, 700.0, 24.0, 12.0, 12.0);
         let mut second = span_with_width("beta", 96.0, 700.0, 24.0, 12.0, 12.0);
         second.split_boundary_before = true;
-        assert_eq!(assemble_upright_layout_text(&[first, second], &[0, 1]), "alpha beta");
+        assert_eq!(layout_text(&[first, second], &[0, 1]), "alpha beta");
     }
 
     #[cfg(feature = "layout-detection")]
@@ -3445,23 +3992,135 @@ mod tests {
         let spans = [base, fragment];
 
         assert_eq!(inline_fragment_anchors(&spans), [None, Some(0)]);
-        assert_eq!(assemble_upright_layout_text(&spans, &[0, 1]), "word!");
-        assert_eq!(assemble_upright_layout_text(&spans, &[1, 0]), "! word");
+        assert_eq!(layout_text(&spans, &[0, 1]), "word!");
+        assert_eq!(layout_text(&spans, &[1, 0]), "! word");
     }
 
+    #[cfg(feature = "layout-detection")]
+    fn layout_text(spans: &[TextSpan], order: &[usize]) -> String {
+        rewritten_layout_text(spans, order, None, |_, _| {})
+    }
+
+    #[cfg(feature = "layout-detection")]
+    fn observed_layout_text(
+        spans: &[TextSpan],
+        order: &[usize],
+        math: Option<super::super::math_latex::IndexedRewrite>,
+    ) -> (String, Vec<(usize, usize)>) {
+        let mut ranges = Vec::new();
+        let text = rewritten_layout_text(spans, order, math, |start, end| ranges.push((start, end)));
+        (text, ranges)
+    }
+
+    /// The layout path wrote line-wrap hyphens the column-aware path rejoins, so plain text
+    /// depended on whether layout detection ran.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn layout_order_rejoins_line_wrap_hyphens_and_maps_span_ranges() {
+        let spans = [
+            span_with_width("the per-", 72.0, 700.0, 40.0, 12.0, 12.0),
+            span_with_width("turbagens", 72.0, 686.0, 50.0, 12.0, 12.0),
+        ];
+        let (text, ranges) = observed_layout_text(&spans, &[0, 1], None);
+        assert_eq!(text, "the perturbagens");
+        let written: Vec<&str> = ranges.iter().map(|&(start, end)| &text[start..end]).collect();
+        assert_eq!(written, ["the per", "turbagens"]);
+    }
+
+    /// The layout path wrote a formula's glyphs as scattered prose, where the column-aware
+    /// path writes LaTeX; a span the formula absorbs reports an empty range.
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn layout_order_writes_math_as_latex_and_keeps_order_positions() {
+        let math_span = |text: &str, font: &str, size: f32, x: f32, width: f32, baseline: f32| TextSpan {
+            text: text.to_string(),
+            bbox: Rect::new(x, baseline, width, size),
+            font_name: font.into(),
+            font_size: size,
+            ..TextSpan::default()
+        };
+        let spans = [
+            math_span("where", "CMR10", 10.0, 100.0, 25.0, 700.0),
+            math_span("δ", "CMMI10", 10.0, 128.0, 5.0, 700.0),
+            math_span("n,n", "CMMI7", 7.0, 133.0, 10.0, 698.5),
+            math_span("represents the Kronecker delta.", "CMR10", 10.0, 146.0, 130.0, 700.0),
+        ];
+        let math = super::super::math_latex::rewrite_math_spans_indexed(&spans);
+        assert_eq!(
+            math.as_ref().map(|(_, index_map)| index_map.clone()),
+            Some(vec![Some(0), Some(1), None, Some(2)])
+        );
+        let (text, ranges) = observed_layout_text(&spans, &[0, 1, 2, 3], math);
+        let written: Vec<&str> = ranges.iter().map(|&(start, end)| &text[start..end]).collect();
+        assert_eq!(
+            written,
+            ["where", "$\\delta_{n,n}$", "", "represents the Kronecker delta."]
+        );
+        assert_eq!(
+            ranges[2].0, ranges[3].0,
+            "an absorbed span sits at the next written span"
+        );
+    }
+
+    /// The first page's column-aware text, or `None` when the fixture is absent; a missing
+    /// fixture fails the test under `XBERG_REQUIRE_TEST_FIXTURES=1`.
     fn extract_fixture_page(relative: &str) -> Option<String> {
-        let bytes = crate::utils::read_test_fixture(relative)?;
-        let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("RTL PDF fixture must parse");
+        extract_fixture_page_at(relative, 0)
+    }
+
+    /// Page `page_index`'s column-aware text, or `None` when the fixture is absent.
+    fn extract_fixture_page_at(relative: &str, page_index: usize) -> Option<String> {
+        let Some(bytes) = crate::utils::read_test_fixture(relative) else {
+            assert!(
+                std::env::var_os("XBERG_REQUIRE_TEST_FIXTURES").is_none_or(|value| value != "1"),
+                "XBERG_REQUIRE_TEST_FIXTURES=1 but {relative} is missing"
+            );
+            return None;
+        };
+        let document = xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("PDF fixture must parse");
         Some(
             extract_page_text_column_aware(
                 &document,
-                0,
+                page_index,
                 &std::collections::HashSet::new(),
                 NativePageTextOptions::default(),
             )
-            .expect("RTL PDF fixture must extract")
+            .expect("PDF fixture must extract")
             .text,
         )
+    }
+
+    #[test]
+    fn arxiv_abstract_rejoins_its_line_wrap_hyphens() {
+        let Some(text) = extract_fixture_page(".corpus-cache/pdf/2305.09790.pdf") else {
+            return;
+        };
+        for (stem, rest) in [
+            ("per", "turbagens"),
+            ("ap", "proximately"),
+            ("morpho", "logical"),
+            ("im", "provement"),
+        ] {
+            assert!(
+                !text.contains(&format!("{stem}-\n{rest}")),
+                "{stem}-/{rest} left split in {text:?}"
+            );
+            assert!(
+                text.contains(&format!("{stem}{rest}")),
+                "missing {stem}{rest} in {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn subscripts_between_same_font_runs_rejoin_their_formula() {
+        let Some(text) = extract_fixture_page("pdf/embedded_images_tables.pdf") else {
+            return;
+        };
+        assert!(
+            text.contains("0.5 M H2SO4"),
+            "formula split around its subscripts: {text:?}"
+        );
     }
 
     #[test]
@@ -3647,6 +4306,18 @@ mod tests {
             span_with_width("lower", 164.8, 467.0, 30.0, 12.0, 12.0),
         ];
         assert_eq!(rebuild_text_from_fragmented_spans(&spans), "Name first\nSecond lower");
+    }
+
+    /// The fragmented-glyph branch wrote line-wrap hyphens every other plain branch rejoins.
+    #[test]
+    fn fragmented_page_text_rejoins_line_wrap_hyphens() {
+        let spans = vec![
+            span_with_width("the", 100.0, 500.0, 18.0, 12.0, 12.0),
+            span_with_width("per-", 121.0, 500.0, 22.0, 12.0, 12.0),
+            span_with_width("turbagens", 100.0, 470.0, 54.0, 12.0, 12.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "the per-\nturbagens");
+        assert_eq!(fragmented_page_text(&spans), "the perturbagens");
     }
 
     /// A quantity symbol with a lowered or raised index, such as `c` with subscript `B`, `I` with
@@ -3942,6 +4613,16 @@ mod tests {
         ];
 
         assert_eq!(assemble_page_text(&spans), "H2SO4 solution");
+    }
+
+    #[test]
+    fn line_wrap_hyphen_is_rejoined_in_assembled_page_text() {
+        let spans = vec![
+            span_with_width("small molecule per-", 100.0, 100.0, 90.0, 10.0, 10.0),
+            span_with_width("turbagens. In this work", 100.0, 88.0, 110.0, 10.0, 10.0),
+        ];
+
+        assert_eq!(assemble_page_text(&spans), "small molecule perturbagens. In this work");
     }
 
     #[test]
@@ -4401,6 +5082,282 @@ mod tests {
                 "for readers seeking further detail here",
             ]
         );
+    }
+
+    /// 2303.08597: an IEEE Letter page keeps 11.96pt of its 0.17in column gap free of ink,
+    /// just under 2% of the page width, at the same x on every full line.
+    #[test]
+    fn ieee_letter_column_gap_is_a_dense_gutter() {
+        let left_line = |row: usize| format!("Left column line {row} carries justified running prose");
+        let right_line = |row: usize| format!("Right column line {row} carries justified running prose");
+        let mut spans = Vec::new();
+        for row in 0..8 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(span_with_width(&left_line(row), 48.96, y, 251.06, 10.0, 10.0));
+            spans.push(span_with_width(&right_line(row), 311.98, y, 251.06, 10.0, 10.0));
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = (0..8).map(left_line).chain((0..8).map(right_line)).collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// 2209.05611 page 1: a centred title block and a full-width abstract over two columns set on
+    /// baselines 2.7pt apart. No line holds both columns and the title closes the page-wide
+    /// corridor, so only the lower half of the page shows the gutter.
+    #[test]
+    fn offset_columns_under_a_centred_title_split_at_the_lower_half_gutter() {
+        let mut spans = vec![
+            span_with_width(
+                "Unidirectional propagation of spin waves",
+                190.0,
+                730.0,
+                232.0,
+                14.0,
+                14.0,
+            ),
+            span_with_width("P. I. Gerevenkov and N. E. Khokhlov", 220.0, 700.0, 172.0, 10.0, 10.0),
+            span_with_width("(Dated: March 1, 2023)", 260.0, 688.0, 92.0, 10.0, 10.0),
+        ];
+        for row in 0..4 {
+            spans.push(span_with_width(
+                &format!("Abstract line {row} runs across the whole page width in one justified block"),
+                77.0,
+                660.0 - row as f32 * 10.5,
+                458.0,
+                9.0,
+                9.0,
+            ));
+        }
+        let left_line = |row: usize| format!("left column sentence {row} continues the introduction here");
+        let right_line = |row: usize| format!("right column sentence {row} continues the discussion there");
+        for row in 0..20 {
+            let y = 600.0 - row as f32 * 11.45;
+            spans.push(span_with_width(&left_line(row), 54.0, y, 245.08, 10.0, 10.0));
+            spans.push(span_with_width(&right_line(row), 317.01, y + 2.7, 245.0, 10.0, 10.0));
+        }
+        let header: Vec<String> = spans[..7].iter().map(|span| span.text.clone()).collect();
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = header
+            .into_iter()
+            .chain((0..20).map(left_line))
+            .chain((0..20).map(right_line))
+            .collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// A single column page has no gutter in its lower half either.
+    #[test]
+    fn a_single_column_page_under_a_title_has_no_lower_half_gutter() {
+        let mut spans = vec![span_with_width("A centred title", 250.0, 730.0, 112.0, 14.0, 14.0)];
+        for row in 0..30 {
+            spans.push(span_with_width(
+                &format!("single column body line {row} of ordinary running prose"),
+                72.0,
+                700.0 - row as f32 * 12.0,
+                468.0 - (row % 3) as f32 * 40.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert_eq!(sole_whitespace_gutter(&spans, &lines, 612.0), None);
+    }
+
+    /// The same narrow gaps vote only where they repeat edge for edge: staggered gaps of the
+    /// same width are word or cell spacing, not one gutter.
+    #[test]
+    fn staggered_narrow_gaps_are_not_a_dense_gutter() {
+        let mut spans = Vec::new();
+        for row in 0..8 {
+            let y = 700.0 - row as f32 * 12.0;
+            let left_width = 230.0 + row as f32 * 3.0;
+            spans.push(span_with_width(
+                "left text run of this line",
+                48.96,
+                y,
+                left_width,
+                10.0,
+                10.0,
+            ));
+            spans.push(span_with_width(
+                "right text run of this line",
+                48.96 + left_width + 11.96,
+                y,
+                200.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert_eq!(detect_split_x(&spans, &lines, 612.0), None);
+    }
+
+    /// A narrow gap after a short run is a table's cell gap however well it repeats.
+    #[test]
+    fn a_narrow_gap_after_a_short_run_is_not_a_justified_gutter() {
+        let spans = vec![
+            span_with_width("label cell", 171.5, 700.0, 150.0, 9.0, 9.0),
+            span_with_width("value", 333.5, 700.0, 40.0, 9.0, 9.0),
+        ];
+        let line: SpanLine = vec![0, 1];
+
+        assert_eq!(narrow_justified_gutter(&spans, &line, 12.24, 612.0), None);
+        let wide = vec![
+            span_with_width("a justified column line", 48.96, 700.0, 251.06, 10.0, 10.0),
+            span_with_width("its neighbour", 311.98, 700.0, 100.0, 10.0, 10.0),
+        ];
+        let gap = narrow_justified_gutter(&wide, &line, 12.24, 612.0).expect("a justified line's gutter");
+        assert!(
+            (gap.0 - 300.02).abs() < 0.01 && (gap.1 - 311.98).abs() < 0.01,
+            "{gap:?}"
+        );
+    }
+
+    /// 2305.09790 page 1: only the indented abstract shares lines with the right column, so its
+    /// votes put the split 2pt inside the introduction below it, and a centred title across the
+    /// gutter leaves no empty corridor to redirect to. The split moves along the abstract's gap to
+    /// where only the title crosses it, and the left column reads whole before the right.
+    #[test]
+    fn indented_abstract_votes_do_not_cut_the_column_below() {
+        let mut spans = vec![
+            span_with_width(
+                "A Centred Title Set Across Both Columns",
+                150.0,
+                760.0,
+                300.0,
+                11.0,
+                11.0,
+            ),
+            span_with_width("And Its Second Line Across The Gutter", 170.0, 744.0, 270.0, 11.0, 11.0),
+            span_with_width(
+                "First Author, Second Author and Third Author",
+                180.0,
+                728.0,
+                250.0,
+                11.0,
+                11.0,
+            ),
+        ];
+        let abstract_line = |row: usize| format!("Abstract line {row} sits indented inside the column");
+        let intro_line = |row: usize| format!("Introduction line {row} runs to the column edge");
+        let right_line = |row: usize| format!("Right column line {row} carries the running prose");
+        for row in 0..16 {
+            let y = 700.0 - row as f32 * 14.0;
+            spans.push(span_with_width(&right_line(row), 307.0, y, 236.0, 11.0, 11.0));
+            if row < 8 {
+                spans.push(span_with_width(&abstract_line(row), 75.0, y, 196.0, 11.0, 11.0));
+            } else if row < 15 {
+                spans.push(span_with_width(&intro_line(row - 8), 55.0, y - 7.0, 236.0, 11.0, 11.0));
+            }
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = [
+            "A Centred Title Set Across Both Columns",
+            "And Its Second Line Across The Gutter",
+            "First Author, Second Author and Third Author",
+        ]
+        .into_iter()
+        .map(String::from)
+        .chain((0..8).map(abstract_line))
+        .chain((0..7).map(intro_line))
+        .chain((0..16).map(right_line))
+        .collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// 2209.05611 page 9: two-column text, an empty band across both columns, then two-column
+    /// references. Each story reads its left column, then its right, before the next story.
+    #[test]
+    fn dense_two_column_stories_read_one_after_the_other() {
+        let mut spans = dense_two_column_spans();
+        let top: Vec<String> = {
+            let mut top = spans.clone();
+            assert!(reorder_dense_two_column_page(&mut top, 612.0));
+            top.into_iter().map(|span| span.text).collect()
+        };
+        let story_top = 816.0 - 7.0 * 14.0 - 5.0 * 11.0;
+        let line = |column: &str, row: usize| format!("{column} reference entry {row} names its authors and journal");
+        for row in 0..8 {
+            let y = story_top - row as f32 * 14.0;
+            spans.push(span_with_width(&line("Left", row), 60.0, y, 200.0, 11.0, 11.0));
+            spans.push(span_with_width(&line("Right", row), 320.0, y, 190.0, 11.0, 11.0));
+        }
+
+        assert!(reorder_dense_two_column_page(&mut spans, 612.0));
+
+        let expected: Vec<String> = top
+            .into_iter()
+            .chain((0..8).map(|row| line("Left", row)))
+            .chain((0..8).map(|row| line("Right", row)))
+            .collect();
+        assert_eq!(spans.iter().map(|span| span.text.clone()).collect::<Vec<_>>(), expected);
+    }
+
+    /// 2303.08597 page 1: the left column pauses over an empty band while the right column
+    /// beside it holds a figure, so no text stands on the right at the break. The columns keep
+    /// reading down the page as one band.
+    #[test]
+    fn a_gap_beside_a_figure_is_no_story_break() {
+        let mut spans = dense_two_column_spans();
+        let story_top = 816.0 - 7.0 * 14.0 - 5.0 * 11.0;
+        for row in 0..8 {
+            let y = story_top - row as f32 * 14.0;
+            spans.push(span_with_width(
+                &format!("Left abstract line {row} continues below the gap"),
+                60.0,
+                y,
+                200.0,
+                11.0,
+                11.0,
+            ));
+            if row >= 2 {
+                spans.push(span_with_width(
+                    &format!("Right body line {row} resumes under the figure"),
+                    320.0,
+                    y,
+                    190.0,
+                    11.0,
+                    11.0,
+                ));
+            }
+        }
+        spans.retain(|span| !(span.bbox.x > 300.0 && span.bbox.y < 816.0 - 4.0 * 14.0 && span.bbox.y > story_top));
+        let lines = group_into_lines(&spans, &spans_sorted_top_to_bottom(&spans));
+
+        let bands = build_bands(&spans, &lines, NO_WIDTH_FURNITURE, 300.0);
+
+        assert!(matches!(bands.as_slice(), [Band::Content(indices)] if indices.len() == spans.len()));
+    }
+
+    /// A story break above a story too small to reorder alone keeps it in the band above.
+    #[test]
+    fn a_story_too_small_to_reorder_alone_joins_the_band_above() {
+        let mut spans = dense_two_column_spans();
+        let story_top = 816.0 - 7.0 * 14.0 - 5.0 * 11.0;
+        spans.push(span_with_width("Left closing note", 60.0, story_top, 200.0, 11.0, 11.0));
+        spans.push(span_with_width(
+            "Right closing note",
+            320.0,
+            story_top,
+            190.0,
+            11.0,
+            11.0,
+        ));
+        let lines = group_into_lines(&spans, &spans_sorted_top_to_bottom(&spans));
+
+        let bands = build_bands(&spans, &lines, NO_WIDTH_FURNITURE, 300.0);
+
+        assert!(matches!(bands.as_slice(), [Band::Content(indices)] if indices.len() == spans.len()));
     }
 
     /// Five body lines vote for the gutter near 310 and a running head split around its page
@@ -4875,6 +5832,103 @@ mod tests {
         assert_eq!(
             spans.iter().map(|span| span.text.as_str()).collect::<Vec<_>>(),
             original.iter().map(String::as_str).collect::<Vec<_>>()
+        );
+    }
+
+    /// 1602.03238 page 22: a fee column and three price columns, each price with its relative
+    /// error in parentheses, centred on a single column page.
+    fn centred_price_table() -> Vec<TextSpan> {
+        let mut spans = vec![
+            span_with_width("α", 175.4, 650.0, 5.9, 9.0, 9.0),
+            span_with_width("MC", 225.1, 650.0, 14.6, 9.0, 9.0),
+            span_with_width("ADI (M", 294.1, 650.0, 27.0, 9.0, 9.0),
+            span_with_width(")", 333.0, 650.0, 3.6, 9.0, 9.0),
+            span_with_width("GHQC (M", 371.4, 650.0, 34.0, 9.0, 9.0),
+        ];
+        for (row, fee) in ["0", "25", "50", "75", "100", "125", "150", "175", "200"]
+            .into_iter()
+            .enumerate()
+        {
+            let y = 636.0 - row as f32 * 14.25;
+            spans.push(span_with_width(fee, 171.5, y, 13.7, 9.0, 9.0));
+            spans.push(span_with_width("1.064589 (5.2E-4)", 197.3, y, 70.5, 9.0, 9.0));
+            spans.push(span_with_width("1.06389 (6.6E-4)", 282.2, y, 66.1, 9.0, 9.0));
+            spans.push(span_with_width("1.06434 (2.3E-4)", 365.0, y, 66.1, 9.0, 9.0));
+        }
+        spans
+    }
+
+    #[test]
+    fn a_split_before_a_tables_last_value_column_is_a_cell_gap() {
+        let spans = centred_price_table();
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert!(split_separates_numeric_table_cells(&spans, &lines, 357.8));
+    }
+
+    #[test]
+    fn a_gutter_beside_a_table_in_one_column_is_not_a_cell_gap() {
+        let mut spans = Vec::new();
+        for row in 0..9 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(span_with_width("12.5", 48.0, y, 20.0, 9.0, 9.0));
+            spans.push(span_with_width("(3.1E-4)", 220.0, y, 34.0, 9.0, 9.0));
+            spans.push(span_with_width(
+                &format!("right column prose line {row} reads on"),
+                312.0,
+                y,
+                250.0,
+                10.0,
+                10.0,
+            ));
+        }
+        let order = spans_sorted_top_to_bottom(&spans);
+        let lines = group_into_lines(&spans, &order);
+
+        assert!(!split_separates_numeric_table_cells(&spans, &lines, 290.0));
+    }
+
+    #[test]
+    fn table_numbers_take_signs_exponents_and_parentheses_but_not_words() {
+        for number in [
+            "1.064589",
+            "(5.2E-4)",
+            "1.06434 (2.3E-4)",
+            "−0.3",
+            "20%",
+            "1,250.00",
+            "[12]",
+        ] {
+            assert!(is_table_number(number), "{number}");
+        }
+        for text in ["GHQC (M", "inf", "NaN", "1/g", "Table 5:", "", "E"] {
+            assert!(!is_table_number(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_centred_price_table_keeps_its_rows_whole_on_a_single_column_page() {
+        let Some(text) = extract_fixture_page_at(".corpus-cache/pdf/1602.03238.pdf", 21) else {
+            return;
+        };
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let positions: Vec<usize> = [
+            "1.06389 (6.6E-4)",
+            "1.06434 (2.3E-4)",
+            "1.052354",
+            "1.04526 (4.5E-4)",
+            "1.04495",
+        ]
+        .into_iter()
+        .map(|anchor| {
+            text.find(anchor)
+                .unwrap_or_else(|| panic!("missing {anchor:?} in {text:?}"))
+        })
+        .collect();
+        assert!(
+            positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "a price table was read column by column: {text:?}"
         );
     }
 

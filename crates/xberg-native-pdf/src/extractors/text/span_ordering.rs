@@ -151,10 +151,18 @@ impl<'doc> TextExtractor<'doc> {
             .zip(snapped_script_baselines(&snapshot, SnapReach::EXTRACTOR))
         {
             if let Some(base_y) = base_y {
+                if moves_marks {
+                    self.raw_script_baselines
+                        .push((span.bbox.x, span.font_size, base_y, span.bbox.y));
+                }
                 let marked = moves_marks && self.pen_continuations.remove(&SpanKey::of(span));
+                let ocr_layer = moves_marks && self.ocr_layer_spans.remove(&SpanKey::of(span));
                 span.bbox.y = base_y;
                 if marked {
                     self.pen_continuations.insert(SpanKey::of(span));
+                }
+                if ocr_layer {
+                    self.ocr_layer_spans.insert(SpanKey::of(span));
                 }
             }
         }
@@ -911,7 +919,7 @@ mod script_geometry_tests {
             text: text.to_string(),
             bbox: crate::geometry::Rect::new(x, y, width, font_size),
             font_size,
-            font_name: format!("source-{text}"),
+            font_name: format!("source-{text}").into(),
             is_italic: text == "caption",
             primary_detected: text == "figure label",
             mirrored: text == "caption",

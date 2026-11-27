@@ -1,0 +1,19 @@
+{
+  "document": "../../../test_documents/images/cord_receipt_19.jpg",
+  "file_type": "jpg",
+  "file_size": 116211,
+  "expected_frameworks": ["xberg"],
+  "metadata": {
+    "description": "CORD receipt image",
+    "category": "image-ocr-realgt",
+    "dataset": "cord",
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/jpg/cord_receipt_19.txt",
+    "markdown_file": "../../../test_documents/ground_truth/jpg/cord_receipt_19.md",
+    "source": "manual"
+  }
+}

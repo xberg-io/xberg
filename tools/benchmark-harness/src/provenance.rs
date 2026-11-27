@@ -1,6 +1,6 @@
 //! Reproducibility metadata for benchmark runs.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -116,6 +116,15 @@ pub struct FrameworkProvenance {
     /// [`Self::requested_workers`] and is unavailable for other frameworks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configured_thread_budget: Option<usize>,
+    /// Non-default Tesseract model set of an Xberg run; absent for `fast` and other frameworks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tessdata_model: Option<xberg::TessdataModel>,
+    /// Environment the harness injected into this framework's xberg processes to run them as
+    /// xberg's shipped launchers do (`MallocMaxMagazines` on macOS). Absent when nothing was
+    /// injected: other frameworks, Linux and Windows, a value the user already set, and
+    /// in-process rows, which start no process.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xberg_env: Option<BTreeMap<String, String>>,
     pub worker_semantics: String,
     pub effective_warmup_iterations: usize,
     pub eligible_documents: usize,
@@ -277,6 +286,8 @@ fn capture_framework(
             requested_workers,
             effective_workers,
             configured_thread_budget,
+            tessdata_model: adapter.configured_tessdata_model(),
+            xberg_env: injected_xberg_env(adapter.as_ref()),
             worker_semantics: worker_semantics(inputs.config.benchmark_mode, capability).to_string(),
             effective_warmup_iterations: capability.map_or(inputs.config.warmup_iterations, |value| {
                 if value.timing_scope == crate::types::BatchTimingScope::ColdEndToEndSubprocess {
@@ -291,6 +302,11 @@ fn capture_framework(
         },
         build_identity,
     )
+}
+
+fn injected_xberg_env(adapter: &dyn FrameworkAdapter) -> Option<BTreeMap<String, String>> {
+    let env = adapter.injected_xberg_env();
+    (!env.is_empty()).then(|| env.into_iter().collect())
 }
 
 impl RunProvenance {

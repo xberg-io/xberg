@@ -1642,7 +1642,8 @@ def test_zigbuild_wiring_gate_rejects_missing_wrong_and_early_installers() -> No
 
 
 def test_helm_publish_does_not_depend_on_the_cli_image_manifest() -> None:
-    # The chart only references xberg:<version> and xberg:<version>-core. merge-docker is one
+    # The chart only references xberg:<version>, xberg:<version>-core and their -best twins
+    # (ocr.tesseractModelSet=best). merge-docker is one
     # matrix job, so a cli leg that fails (cli/amd64 timing out leaves a single-arch digest,
     # which "Verify digests present" rejects) turns its aggregate result into `failure` and
     # skipped the chart for v1.3.6-v1.3.8. ~keep
@@ -1655,6 +1656,8 @@ def test_helm_publish_does_not_depend_on_the_cli_image_manifest() -> None:
     assert "xberg-cli" not in images
     assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}" in images
     assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core" in images
+    assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-best" in images
+    assert "ghcr.io/xberg-io/xberg:${{ needs.prepare.outputs.version }}-core-best" in images
 
 
 def test_publish_contracts_run_in_ci() -> None:
@@ -1854,6 +1857,17 @@ def test_dart_e2e_freshness_resolves_package_language_version() -> None:
         except AssertionError as error:
             error_message = str(error)
         assert error_message == f"one dependency bootstrap must establish {directory}'s language version"
+
+
+def test_tract_parity_step_requires_the_saved_graph_bit_identity_test_by_name() -> None:
+    workflow = (WORKFLOW.parent / "ci-rust.yaml").read_text()
+    step = workflow.split("- name: Run tract/ORT parity tests", 1)[1].split("\n      - ", 1)[0]
+    test = "saved_layout_graphs_reproduce_online_outputs_bit_for_bit"
+    source = Path(__file__).parents[2] / "crates/xberg/src/inference/ort_optimized/tests.rs"
+    assert f"fn {test}()" in source.read_text(), "the required test must exist under this name"
+    assert "inference::ort_optimized" in step, "the step must select the saved-graph tests"
+    required = f"grep -qxF 'test inference::ort_optimized::tests::{test} ... ok'"
+    assert required in step, "a passing count alone cannot show the bit-identity test ran"
 
 
 def test_rust_ci_step_names_show_the_features_the_step_runs() -> None:
@@ -2180,6 +2194,148 @@ def test_cli_arm64_gnu_builds_with_thin_lto() -> None:
     arm = "aarch64-unknown-linux-gnu"
     assert any(entry["target"] == arm for entry in entries)
     assert_thin_only_on_arm64(selector, [({"matrix": entry}, entry["target"] == arm) for entry in entries])
+
+
+def test_unix_cli_loads_a_shipped_onnx_runtime_instead_of_linking_it() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    entries = matrix_entries(block)
+    unix = [entry for entry in entries if "windows" not in entry["target"]]
+    assert {entry["target"] for entry in unix} == {
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    }
+    for entry in entries:
+        features = entry.get("cargo_features") or entry.get("extra_cargo_args", "").removeprefix("--features ")
+        dynamic = "ort-dynamic" in features.split(",")
+        assert dynamic == (entry in unix), f"{entry['target']}: ort-dynamic={dynamic}"
+
+    steps = block["steps"]
+    names = [step.get("name") for step in steps]
+    [setup] = [step for step in steps if step.get("name") == "Setup ONNX Runtime (ort-dynamic CLI)"]
+    assert setup["uses"] == "./.github/actions/setup-onnx-runtime"
+    assert setup["if"] == "runner.os != 'Windows'"
+    assert setup["with"]["verify-linux-archive"] == "true", "the shipped runtime must be digest-verified on Linux"
+    build = next(
+        index
+        for index, step in enumerate(steps)
+        if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    )
+    assert build < names.index(setup["name"]), "staging the runtime must not change the ort-dynamic compile"
+
+    [package] = [step for step in steps if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    for shipped in ('"$STAGE/libonnxruntime.dylib"', '"$STAGE/libonnxruntime.so"'):
+        assert f'cp -L "${{ORT_VENDOR_LIB:?}}" {shipped}' in run, f"the archive must ship {shipped}"
+    assert 'grep -qi onnxruntime <<<"$linked"' in run, "the archive must prove xberg does not link ONNX Runtime"
+    assert names.index("Select ONNX Runtime library to ship") < names.index("Package CLI artifact")
+    smoke = run.index('bash scripts/ci/smoke-cli-ort.sh "$STAGE"')
+    for shipped in ('"$STAGE/libonnxruntime.dylib"', '"$STAGE/libonnxruntime.so"'):
+        assert run.index(f'cp -L "${{ORT_VENDOR_LIB:?}}" {shipped}') < smoke, "the smoke must run on the staged runtime"
+    assert smoke < run.index('tar -czf "${STAGE}.tar.gz" "$STAGE"'), (
+        "the ONNX Runtime smoke must run before the archive"
+    )
+
+
+def test_ort_smoke_builds_a_session_without_any_loader_override_and_proves_the_shipped_library() -> None:
+    script = (Path(__file__).parent / "smoke-cli-ort.sh").read_text(encoding="utf-8")
+    for variable in ("ORT_DYLIB_PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"):
+        assert f"-u {variable}" in script, f"the smoke must unset {variable}"
+    assert "embed --text" in script, "the smoke must build and run a real ONNX Runtime session"
+    assert 'grep -qF "$real_stage/libonnxruntime."' in script, "the session must load the staged library"
+    assert 'rm -f "$without"/libonnxruntime.*' in script, "the negative control must remove only the runtime"
+    assert "grep -q 'ONNX Runtime library not found'" in script, "the negative control must fail in the resolver"
+
+
+def test_unix_cli_opens_a_shipped_libheif_instead_of_linking_it() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    entries = matrix_entries(block)
+    for entry in entries:
+        features = entry.get("cargo_features") or entry.get("extra_cargo_args", "").removeprefix("--features ")
+        dynamic = "heic-dynamic" in features.split(",")
+        assert dynamic == ("windows" not in entry["target"]), f"{entry['target']}: heic-dynamic={dynamic}"
+
+    steps = block["steps"]
+    names = [step.get("name") for step in steps]
+    [override] = [step for step in steps if step.get("name") == "Keep libheif out of the CLI link (heic-dynamic)"]
+    assert override["if"] == "runner.os != 'Windows'"
+    assert "[target.%s.heif]\\nrustc-link-lib = []" in override["run"], "the override must drop libheif-sys's -lheif"
+    build = next(
+        index
+        for index, step in enumerate(steps)
+        if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")
+    )
+    assert names.index(override["name"]) < build, "the link override must be in place before the CLI compiles"
+
+    [package] = [step for step in steps if step.get("name") == "Package CLI artifact"]
+    run = package["run"]
+    assert 'grep -qi libheif <<<"$linked"' in run, "the archive must prove xberg does not link libheif"
+    for library in ("libheif.1.dylib", "libheif.so.1"):
+        copy = f'cp -L "$heif_libdir/{library}" "$STAGE/{library}"'
+        assert copy in run, f"the archive must ship {library} from the libheif libheif-sys built against"
+    assert 'bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/libheif.1.dylib"' in run
+    assert 'bash scripts/ci/vendor-native-closure.sh "$STAGE/libheif.so.1"' in run
+    smoke = run.index('bash scripts/ci/smoke-cli-heif.sh "$STAGE"')
+    assert smoke < run.index('tar -czf "${STAGE}.tar.gz" "$STAGE"'), "the HEIF smoke must run before the archive"
+
+
+BENCHMARKS_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "benchmarks.yaml"
+ORDER_FILE_GENERATE = "Generate the linker order file"
+ORDER_FILE_VERIFY = "Verify the linker applied the order file"
+
+
+def test_cli_order_file_is_trained_on_the_release_build_inputs_and_verified() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    entries = matrix_entries(block)
+    ordered = [entry for entry in entries if entry.get("order_file")]
+    assert {entry["target"] for entry in ordered} == {
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    }, "the order file needs fat LTO; the thin-LTO aarch64 gnu leg renames promoted locals per module"
+    for entry in ordered:
+        assert "cargo_features" not in entry, f"{entry['target']}: the generator reads extra_cargo_args only"
+        assert entry["extra_cargo_args"].startswith("--features ")
+
+    steps = block["steps"]
+    names = [step.get("name") for step in steps]
+    [generate] = [step for step in steps if step.get("name") == ORDER_FILE_GENERATE]
+    [verify] = [step for step in steps if step.get("name") == ORDER_FILE_VERIFY]
+    [build] = [step for step in steps if str(step.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")]
+    build_index = steps.index(build)
+    assert names.index("Keep libheif out of the CLI link (heic-dynamic)") < names.index(ORDER_FILE_GENERATE)
+    assert names.index(ORDER_FILE_GENERATE) < build_index < names.index(ORDER_FILE_VERIFY)
+    assert generate["if"] == verify["if"] == "matrix.order_file"
+
+    # Every input of cargo's -C metadata must equal the release build's, or no name matches. ~keep
+    assert generate["env"][LTO_ENV] == build["env"][LTO_ENV]
+    assert generate["env"]["TARGET"] == build["with"]["target"] == "${{ matrix.target }}"
+    assert generate["env"]["EXTRA_CARGO_ARGS"] == "${{ matrix.extra_cargo_args }}"
+    assert "matrix.extra_cargo_args" in build["with"]["extra-cargo-args"]
+    run = generate["run"]
+    assert "scripts/ci/rust/order_file.py generate" in run
+    assert '--target "$TARGET"' in run
+    assert '-- "${cargo_args[@]}"' in run
+    assert 'echo "XBERG_ORDER_FILE=$RUNNER_TEMP/xberg.order"' in run
+    assert 'echo "XBERG_LINK_MAP=$RUNNER_TEMP/xberg.map"' in run
+    assert "order_file.py verify-map" in verify["run"]
+    assert '"${XBERG_ORDER_FILE:?}"' in verify["run"] and '"${XBERG_LINK_MAP:?}"' in verify["run"]
+
+
+def test_benchmark_cli_order_file_is_trained_on_the_benchmark_build_inputs() -> None:
+    steps = workflow_job(BENCHMARKS_WORKFLOW, "setup")["steps"]
+    names = [step.get("name") for step in steps]
+    [generate] = [step for step in steps if step.get("name") == ORDER_FILE_GENERATE]
+    [build] = [step for step in steps if str(step.get("name", "")).startswith("Build xberg-cli (release")]
+    [verify] = [step for step in steps if step.get("name") == ORDER_FILE_VERIFY]
+    assert names.index(ORDER_FILE_GENERATE) < steps.index(build) < names.index(ORDER_FILE_VERIFY)
+    release_args = build["run"].split("cargo build --locked --release -p xberg-cli ", 1)[1].strip()
+    assert "--target" not in release_args, "a --target here must be passed to the generator too"
+    assert f"-- {release_args}" in " ".join(generate["run"].split())
+    assert build["env"]["XBERG_ORDER_FILE"] == "${{ runner.temp }}/xberg.order"
+    assert build["env"]["XBERG_LINK_MAP"] == "${{ runner.temp }}/xberg.map"
+    assert "order_file.py verify-map" in verify["run"]
 
 
 def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:

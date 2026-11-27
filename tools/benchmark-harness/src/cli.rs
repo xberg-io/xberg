@@ -16,6 +16,24 @@ pub(crate) enum CliMode {
     Batch,
 }
 
+/// CLI enum for the Tesseract model set
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum CliTessdataModel {
+    /// tessdata_fast: integer LSTM models, the smallest and fastest set
+    Fast,
+    /// tessdata_best: float LSTM models, larger and slower than fast
+    Best,
+}
+
+impl From<CliTessdataModel> for xberg::TessdataModel {
+    fn from(model: CliTessdataModel) -> Self {
+        match model {
+            CliTessdataModel::Fast => xberg::TessdataModel::Fast,
+            CliTessdataModel::Best => xberg::TessdataModel::Best,
+        }
+    }
+}
+
 /// CLI enum for output file format
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum OutputFileFormat {
@@ -42,6 +60,12 @@ pub(crate) enum CliCohort {
     Data,
     /// OCR document-image family (png, jpeg, tiff)
     Images,
+    /// Native structured PDF cohort (native-pdf-structured-v1)
+    NativeStructured,
+    /// OCR structured PDF cohort (ocr-pdf-structured-v1)
+    OcrStructured,
+    /// OCR structured document-image cohort (ocr-images-structured-v2)
+    ImagesStructured,
 }
 
 impl From<CliCohort> for benchmark_harness::bench_matrix::Cohort {
@@ -56,6 +80,28 @@ impl From<CliCohort> for benchmark_harness::bench_matrix::Cohort {
             CliCohort::Email => Cohort::Email,
             CliCohort::Data => Cohort::Data,
             CliCohort::Images => Cohort::Images,
+            CliCohort::NativeStructured => Cohort::NativeStructured,
+            CliCohort::OcrStructured => Cohort::OcrStructured,
+            CliCohort::ImagesStructured => Cohort::ImagesStructured,
+        }
+    }
+}
+
+/// CLI enum for the benchmark matrix profile a workflow run produced
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum CliMatrixProfile {
+    /// The full release contract
+    Full,
+    /// The smoke subset: one cell per benchmark job type, never published
+    Smoke,
+}
+
+impl From<CliMatrixProfile> for benchmark_harness::bench_matrix::MatrixProfile {
+    fn from(profile: CliMatrixProfile) -> Self {
+        use benchmark_harness::bench_matrix::MatrixProfile;
+        match profile {
+            CliMatrixProfile::Full => MatrixProfile::Full,
+            CliMatrixProfile::Smoke => MatrixProfile::Smoke,
         }
     }
 }
@@ -269,5 +315,9 @@ pub(crate) enum Commands {
         /// Which cohort's contract to print
         #[arg(long)]
         cohort: CliCohort,
+
+        /// Which matrix profile's cells to print
+        #[arg(long, value_enum, default_value = "full")]
+        profile: CliMatrixProfile,
     },
 }

@@ -163,10 +163,11 @@ impl PdfDocument {
         mut bottom_pagination: Option<&mut BottomPaginationSeparators>,
     ) -> Result<Vec<crate::elements::PathContent>> {
         let _warnings = self.warning_scope();
-        use crate::content::{Operator, parse_content_stream_paths_only};
+        use crate::content::Operator;
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::{FillRule, PathExtractor, PathGraphicsStateStack};
         use crate::layout::Color;
+        use std::ops::ControlFlow;
 
         let page = self.get_page(page_index)?;
         let page_dict = page.as_dict().ok_or_else(|| Error::ParseError {
@@ -174,14 +175,17 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        let parsed = if bottom_pagination.is_some() {
+        let paginating = bottom_pagination.is_some();
+        // The page's operators are visited straight from the content stream instead of being
+        // collected first; only the focused separator query hands over a ready list. ~keep
+        let (separator_ops, page_content) = if paginating {
             let Some(operators) = self.separator_operators(page_dict) else {
                 return Ok(Vec::new());
             };
-            Ok(operators)
+            (Some(operators), None)
         } else {
-            let content_data = match self.cached_page_content(page_index) {
-                Ok(data) => data,
+            match self.cached_page_content(page_index) {
+                Ok(data) => (None, Some(data)),
                 Err(error) => {
                     tracing::warn!(
                         target: crate::LOG_TARGET_ROOT,
@@ -193,21 +197,6 @@ impl PdfDocument {
                     );
                     return Ok(Vec::new());
                 }
-            };
-            parse_content_stream_paths_only(&content_data)
-        };
-        let operators = match parsed {
-            Ok(ops) => ops,
-            Err(error) => {
-                tracing::warn!(
-                    target: crate::LOG_TARGET_ROOT,
-                    operation = "parse_page_paths",
-                    page_index,
-                    error_code = error.telemetry_code(),
-                    error_offset = ?error.telemetry_offset(),
-                    "returning empty paths after parse failure"
-                );
-                return Ok(Vec::new());
             }
         };
 
@@ -223,7 +212,7 @@ impl PdfDocument {
             extractor.set_resources(resolved_resources);
         }
 
-        for op in operators {
+        let mut apply = |op: Operator| -> ControlFlow<Error> {
             if let Some(evidence) = bottom_pagination.as_deref_mut() {
                 evidence.observe(&op, &extractor);
             }
@@ -360,15 +349,15 @@ impl PdfDocument {
 
                 Operator::Do { name } => {
                     // The focused query observes page-local paths only. ~keep
-                    if bottom_pagination.is_some() {
-                        continue;
+                    if paginating {
+                        return ControlFlow::Continue(());
                     }
                     if let Err(error) =
                         self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack, &mut form_budget)
                     {
                         // A truncated paint sequence cannot safely serve as source evidence. ~keep
                         if form_budget.incomplete {
-                            return Err(error);
+                            return ControlFlow::Break(error);
                         }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
@@ -402,6 +391,15 @@ impl PdfDocument {
 
                 _ => {}
             }
+            ControlFlow::Continue(())
+        };
+        let flow = match (separator_ops, page_content) {
+            (Some(operators), _) => operators.into_iter().try_for_each(&mut apply),
+            (None, Some(data)) => crate::content::parser::visit_page_path_operators(&data, &mut apply),
+            (None, None) => ControlFlow::Continue(()),
+        };
+        if let ControlFlow::Break(error) = flow {
+            return Err(error);
         }
 
         Ok(extractor.finish())
@@ -605,7 +603,8 @@ impl PdfDocument {
         state_stack: &mut crate::extractors::paths::PathGraphicsStateStack,
         form_budget: &mut FormPathBudget,
     ) -> Result<()> {
-        use crate::content::{Matrix, Operator, parser::parse_complete_form_path_operators};
+        use crate::content::parser::{count_complete_form_path_operators, visit_form_path_operators};
+        use crate::content::{Matrix, Operator};
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::FillRule;
         use crate::layout::Color;
@@ -681,12 +680,13 @@ impl PdfDocument {
 
         // Cached Forms consume the same traversal work on each painted occurrence. ~keep
         form_budget.charge(0, stream_data.len(), 0)?;
-        let Some(operators) = parse_complete_form_path_operators(&stream_data, form_budget.operators) else {
+        let operator_limit = form_budget.operators;
+        let Some(operator_count) = count_complete_form_path_operators(&stream_data, operator_limit) else {
             extractor.pop_xobject_failed();
             return Err(form_budget.incomplete("incomplete Form path parse".into()));
         };
 
-        form_budget.charge(0, 0, operators.len())?;
+        form_budget.charge(0, 0, operator_count)?;
         let matrix = if let Some(matrix_obj) = xobject_dict.get("Matrix") {
             if let Some(array) = matrix_obj.as_array() {
                 if array.len() >= 6 {
@@ -760,7 +760,11 @@ impl PdfDocument {
         // anything this XObject leaves unbalanced (see truncate below). ~keep
         let oc_base_depth = extractor.oc_layer_depth();
 
-        for op in operators {
+        let mut nested_failure = None;
+        visit_form_path_operators(&stream_data, operator_limit, |op| {
+            if nested_failure.is_some() {
+                return;
+            }
             match op {
                 Operator::SaveState => {
                     state_stack.save();
@@ -871,7 +875,8 @@ impl PdfDocument {
                         self.process_form_xobject_paths(&nested_name, extractor, state_stack, form_budget)
                     {
                         if form_budget.incomplete {
-                            return Err(error);
+                            nested_failure = Some(error);
+                            return;
                         }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
@@ -905,6 +910,9 @@ impl PdfDocument {
 
                 _ => {}
             }
+        });
+        if let Some(error) = nested_failure {
+            return Err(error);
         }
 
         if extractor.has_current_path() {

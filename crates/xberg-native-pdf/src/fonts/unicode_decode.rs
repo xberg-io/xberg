@@ -735,12 +735,11 @@ fn decode_generic_type0_bytes(
 /// guideline; behavior is unchanged. ~keep
 fn decode_latin1_fallback(bytes: &[u8]) -> String {
     crate::extractors::recovery_tally::record(|counts| {
-        counts
-            .missing_font_decodes
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        counts
-            .missing_font_bytes
-            .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        counts.charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+            missing_font_decodes: 1,
+            missing_font_bytes: bytes.len() as u64,
+            ..Default::default()
+        });
     });
     tracing::trace!(
         "No font provided for {} bytes, using Latin-1 fallback (PDF spec compliant)",

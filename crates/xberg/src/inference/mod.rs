@@ -28,6 +28,8 @@ pub(crate) mod recording;
 
 #[cfg(inference_ort)]
 mod ort_backend;
+#[cfg(all(inference_ort, model_download, unix))]
+pub(crate) mod ort_optimized;
 // — so there it is `cfg(test)`-only, keeping non-test builds dead-code-clean.
 // `pub(crate)` so sibling modules can reuse the `cfg(test)` parity helpers
 // (`parity_required` / `resolve_model` / `PARITY_REPO`) rather than re-deriving the

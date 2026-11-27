@@ -7,8 +7,28 @@ const MAX_FONT_PROVENANCE_ENTRIES: usize = 128;
 #[derive(Debug, Default)]
 pub(super) struct FontProvenanceCache {
     entries: Mutex<HashMap<usize, (Arc<FontInfo>, MappingProvenance)>>,
+    name_traits: Mutex<HashMap<usize, (Arc<FontInfo>, FontNameTraits)>>,
     #[cfg(test)]
     computations: std::sync::atomic::AtomicUsize,
+}
+
+/// What a font's `/BaseFont` name alone says about its glyphs. Every show-text buffer asks, and
+/// deriving it case-folds the name and searches it for a dozen markers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct FontNameTraits {
+    /// The name contains `GLYPHLESS` in any case, the synthetic font of OCR text layers.
+    pub(super) glyphless: bool,
+    /// [`is_monospace_font`] holds for the name.
+    pub(super) monospace: bool,
+}
+
+impl FontNameTraits {
+    fn of(font: &FontInfo) -> Self {
+        Self {
+            glyphless: font.base_font.to_uppercase().contains("GLYPHLESS"),
+            monospace: is_monospace_font(&font.base_font),
+        }
+    }
 }
 
 impl FontProvenanceCache {
@@ -31,6 +51,25 @@ impl FontProvenanceCache {
         // Retaining the Arc prevents address reuse; Arc::make_mut gets a fresh identity. ~keep
         entries.insert(key, (Arc::clone(font), provenance));
         provenance
+    }
+
+    /// [`FontNameTraits`] of `font`, derived once per font. Keyed and bounded like the
+    /// provenance answers.
+    pub(super) fn name_traits(&self, font: &Arc<FontInfo>) -> FontNameTraits {
+        let key = Arc::as_ptr(font) as usize;
+        let mut traits = self
+            .name_traits
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((_, known)) = traits.get(&key) {
+            return *known;
+        }
+        if traits.len() >= MAX_FONT_PROVENANCE_ENTRIES {
+            traits.clear();
+        }
+        let derived = FontNameTraits::of(font);
+        traits.insert(key, (Arc::clone(font), derived));
+        derived
     }
 }
 
@@ -107,6 +146,57 @@ mod tests {
         }
         assert!(cache.entries.lock().unwrap().len() <= MAX_FONT_PROVENANCE_ENTRIES);
         assert!(weak.upgrade().is_none());
+    }
+
+    fn named_font(base_font: &str) -> Arc<FontInfo> {
+        let mut font = (*type3_font("A")).clone();
+        font.base_font = base_font.to_string();
+        Arc::new(font)
+    }
+
+    #[test]
+    fn name_traits_match_the_uncached_name_checks_for_each_font() {
+        let cache = FontProvenanceCache::default();
+        let cases = [
+            ("GlyphLessFont", true, false),
+            ("glyphlessfont", true, false),
+            ("ABCDEF+CMTT10", false, true),
+            ("Courier-Bold", false, true),
+            ("Monotype-Corsiva", false, false),
+            ("Times-Roman", false, false),
+        ];
+        let fonts: Vec<_> = cases.iter().map(|(name, ..)| named_font(name)).collect();
+        for _ in 0..3 {
+            for (font, (name, glyphless, monospace)) in fonts.iter().zip(cases) {
+                let traits = cache.name_traits(font);
+                assert_eq!(traits, FontNameTraits { glyphless, monospace }, "{name}");
+                assert_eq!(traits.monospace, is_monospace_font(name), "{name}");
+            }
+        }
+        assert_eq!(cache.name_traits.lock().unwrap().len(), cases.len());
+    }
+
+    #[test]
+    fn each_span_in_a_run_of_one_alias_gets_that_fonts_name_and_mapping() {
+        let mut procedural = (*type3_font("g02")).clone();
+        procedural.base_font = "Procedural".into();
+        let mut named = (*type3_font("A")).clone();
+        named.base_font = "Named".into();
+        // A parsed `/Differences` entry fills the encoding too; the bare helper sets only the name. ~keep
+        named.encoding = crate::fonts::Encoding::Custom(HashMap::from([(2, 'A')]));
+        let mut extractor = TextExtractor::new();
+        extractor.add_font_shared("F1".into(), Arc::new(procedural));
+        extractor.add_font_shared("F2".into(), Arc::new(named));
+        let content = b"BT /F1 12 Tf 10 100 Td (\\002) Tj 0 -20 Td (\\002) Tj \
+            /F2 12 Tf 0 -20 Td (\\002) Tj /F1 12 Tf 0 -20 Td (\\002) Tj ET";
+        let spans = extractor.extract_text_spans(content).expect("Type3 extraction");
+        let resolved: Vec<(&str, Option<MappingProvenance>)> = spans
+            .iter()
+            .map(|span| (span.font_name.as_str(), span.provenance))
+            .collect();
+        let fallback = ("Procedural", Some(MappingProvenance::Fallback));
+        let encoded = ("Named", Some(MappingProvenance::EncodingName));
+        assert_eq!(resolved, [fallback, fallback, encoded, fallback]);
     }
 
     #[test]

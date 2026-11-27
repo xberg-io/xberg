@@ -10,7 +10,7 @@ use crate::pdf::native::hierarchy::script_evidence::SegmentKey;
 use super::lines::{
     crosses_visual_line_break, needs_space_between, raised_numeric_prefix_has_word_gap, segments_need_space,
 };
-use super::text_repair::finalize_hyphens;
+use super::pipeline::{WrapHyphen, classify_wrap};
 use super::types::{LayoutHintClass, LayoutRegionPath, LayoutRegionTag, PdfParagraph};
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
 use crate::types::extraction::BoundingBox;
@@ -35,7 +35,13 @@ pub(crate) fn assemble_internal_document(
     image_positions: &[(u32, u32)],
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> InternalDocument {
-    assemble_internal_document_with_inline_math(pages, tables, images, image_positions, hyphen_witnesses, false)
+    let mut document =
+        assemble_internal_document_with_inline_math(pages, tables, images, image_positions, hyphen_witnesses, false);
+    // The native route finalizes hyphens in `normalize_element_text`; OCR has no such pass.
+    for element in &mut document.elements {
+        super::pipeline::finalize_element_hyphens(element);
+    }
+    document
 }
 
 /// [`assemble_internal_document`] with inline math written into native paragraph text.
@@ -805,7 +811,13 @@ fn assemble_page_elements_with_tables(
         unpositioned.push(*table);
     }
 
-    positioned.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let reading_tops: Vec<f32> = positioned
+        .iter()
+        .map(|&(top, table)| table_reading_top(top, table, &positioned))
+        .collect();
+    let mut positioned: Vec<_> = positioned.into_iter().zip(reading_tops).collect();
+    // Tables nested in one table's upper half share its reading top; their own tops order them.
+    positioned.sort_by(|a, b| b.1.total_cmp(&a.1).then(b.0.0.total_cmp(&a.0.0)));
 
     let table_token_counts: Vec<(&crate::types::Table, std::collections::HashMap<String, usize>)> = tables
         .iter()
@@ -829,7 +841,7 @@ fn assemble_page_elements_with_tables(
     let mut tables_at_slot: Vec<Vec<&crate::types::Table>> =
         (0..=ordered_paragraphs.len()).map(|_| Vec::new()).collect();
 
-    for (table_y, table) in positioned {
+    for ((table_y, table), _) in positioned {
         let geometric_slot = table_insertion_slot(&ordered_paragraphs, table, table_y);
         let slot = top_level_table_slot(&ordered_paragraphs, geometric_slot, table_y);
         tables_at_slot[slot].push(table);
@@ -885,6 +897,33 @@ fn assemble_page_elements_with_tables(
     }
 
     (paragraph_elem_map, page_end_transition_index)
+}
+
+/// The height a table is read at among the page's tables: its top, or just above the top of a
+/// larger table whose upper half holds it.
+///
+/// A table detected inside another one's box is a band of that table, usually its header: the
+/// SERFF rate sheet's "2.2% Simple Inflation or ..." header cells sit 0.7pt under the top of the
+/// rate table and were emitted after all its rows. Read first, the band stays next to the header
+/// row it belongs to. ~keep
+fn table_reading_top(top: f32, table: &crate::types::Table, positioned: &[(f32, &crate::types::Table)]) -> f32 {
+    let Some(inner) = table.bounding_box else {
+        return top;
+    };
+    let area = |bbox: &crate::types::BoundingBox| (bbox.x1 - bbox.x0) * (bbox.y1 - bbox.y0);
+    positioned
+        .iter()
+        .filter_map(|&(outer_top, other)| {
+            let outer = other.bounding_box?;
+            let encloses = outer.x0 <= inner.x0
+                && inner.x1 <= outer.x1
+                && outer.y0 <= inner.y0
+                && inner.y1 <= outer.y1
+                && area(&inner) < area(&outer);
+            let in_upper_half = inner.y0 + inner.y1 > outer.y0 + outer.y1;
+            (encloses && in_upper_half).then_some(outer_top.next_up())
+        })
+        .fold(top, f32::max)
 }
 
 fn close_list(builder: &mut InternalDocumentBuilder, in_list: &mut bool) {
@@ -1184,26 +1223,38 @@ fn push_paragraph_element_by_kind(
         "emitting element"
     );
 
-    let get_text = |para: &PdfParagraph| -> String {
-        let text = if paragraph_has_scripts(para) {
-            extract_text_and_annotations(para, hyphen_witnesses).0
-        } else if !para.text.is_empty() {
+    let unscripted_text = |para: &PdfParagraph| -> String {
+        if !para.text.is_empty() {
             para.text.clone()
         } else {
             join_line_texts_plain(&para.lines, hyphen_witnesses)
-        };
-        finalize_hyphens(&text).into_owned()
+        }
+    };
+
+    let get_annotated_text = |para: &PdfParagraph| extract_text_and_annotations(para, hyphen_witnesses);
+
+    let get_text = |para: &PdfParagraph| -> String {
+        if paragraph_has_scripts(para) {
+            get_annotated_text(para).0
+        } else {
+            unscripted_text(para)
+        }
     };
 
     if let Some(level) = para.heading_level {
-        let text = get_text(para);
+        let (text, annotations) = if paragraph_has_scripts(para) {
+            let (text, annotations) = get_annotated_text(para);
+            (text, Some(annotations))
+        } else {
+            (unscripted_text(para), None)
+        };
         let index = if para.layout_region_path.is_some() {
             builder.push_heading_in_current_container(level, &text, page, bbox)
         } else {
             builder.push_heading(level, &text, page, bbox)
         };
-        if paragraph_has_scripts(para) {
-            builder.set_annotations(index, extract_text_and_annotations(para, hyphen_witnesses).1);
+        if let Some(annotations) = annotations {
+            builder.set_annotations(index, annotations);
         }
         return index;
     }
@@ -1239,23 +1290,28 @@ fn push_paragraph_element_by_kind(
 
     if para.is_list_item {
         let ordered = list_item_is_ordered(para);
-        let text = get_text(para);
-        let annotations = if para.text.is_empty() || paragraph_has_scripts(para) {
-            let (annotated_text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
-            if annotated_text == text {
-                annotations
-            } else {
-                Vec::new()
-            }
+        let (text, annotations) = if paragraph_has_scripts(para) {
+            get_annotated_text(para)
         } else {
-            para.is_bold
-                .then_some(TextAnnotation {
-                    start: 0,
-                    end: text.len() as u32,
-                    kind: AnnotationKind::Bold,
-                })
-                .into_iter()
-                .collect()
+            let text = unscripted_text(para);
+            let annotations = if para.text.is_empty() {
+                let (annotated_text, annotations) = get_annotated_text(para);
+                if annotated_text == text {
+                    annotations
+                } else {
+                    Vec::new()
+                }
+            } else {
+                para.is_bold
+                    .then_some(TextAnnotation {
+                        start: 0,
+                        end: text.len() as u32,
+                        kind: AnnotationKind::Bold,
+                    })
+                    .into_iter()
+                    .collect()
+            };
+            (text, annotations)
         };
         let (normalized, removed_prefix_len) = normalize_list_text(&text);
         let annotations = shift_annotations_after_prefix_removal(annotations, removed_prefix_len, normalized.len());
@@ -1293,14 +1349,15 @@ fn push_paragraph_element_by_kind(
     }
 
     if !para.text.is_empty() && !paragraph_has_scripts(para) {
+        let text = &para.text;
         let annotations = para.is_bold.then_some(TextAnnotation {
             start: 0,
-            end: para.text.len() as u32,
+            end: text.len() as u32,
             kind: AnnotationKind::Bold,
         });
-        push_text_with_inline_math(builder, &para.text, annotations.into_iter().collect(), page, bbox)
+        push_text_with_inline_math(builder, text, annotations.into_iter().collect(), page, bbox)
     } else {
-        let (text, annotations) = extract_text_and_annotations(para, hyphen_witnesses);
+        let (text, annotations) = get_annotated_text(para);
         push_text_with_inline_math(builder, &text, annotations, page, bbox)
     }
 }
@@ -1318,6 +1375,9 @@ fn push_text_with_inline_math(
     page: Option<u32>,
     bbox: Option<BoundingBox>,
 ) -> u32 {
+    if crate::pdf::native::math_latex::sentinels::contains_sentinel(text) {
+        return push_text_with_native_math(builder, text, annotations, page, bbox);
+    }
     let spans = if !builder.inline_math()
         || text.contains('$')
         || annotations
@@ -1384,6 +1444,46 @@ fn push_text_with_inline_math(
     annotations.extend(math_annotations);
     let index = builder.push_paragraph(&marked, annotations, page, bbox);
     builder.merge_attribute(index, crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE, text);
+    index
+}
+
+/// Push a paragraph whose native formulas travel between math sentinels: each becomes
+/// `$..$` (`$$..$$` for a display formula left inside prose) with its math annotation, and
+/// the plain projection keeps the undelimited TeX. Formatting annotations that reach into a
+/// formula are dropped, since its source font (italic math) is not emphasis.
+fn push_text_with_native_math(
+    builder: &mut InternalDocumentBuilder,
+    text: &str,
+    mut annotations: Vec<TextAnnotation>,
+    page: Option<u32>,
+    bbox: Option<BoundingBox>,
+) -> u32 {
+    use crate::pdf::native::math_latex::sentinels;
+    let mut resolved = sentinels::resolve(text, builder.inline_math());
+    if !builder.inline_math() {
+        resolved.math.clear();
+    }
+    resolved.remap_annotations(&mut annotations);
+    annotations.retain(|annotation| {
+        !resolved
+            .math
+            .iter()
+            .any(|math| (annotation.start as usize) < math.end && math.start < annotation.end as usize)
+    });
+    annotations.extend(resolved.math.iter().map(|math| TextAnnotation {
+        start: math.start as u32,
+        end: math.end as u32,
+        kind: AnnotationKind::math(math.display),
+    }));
+    annotations.sort_by_key(|annotation| (annotation.start, std::cmp::Reverse(annotation.end)));
+    let index = builder.push_paragraph(&resolved.text, annotations, page, bbox);
+    if !resolved.math.is_empty() {
+        builder.merge_attribute(
+            index,
+            crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
+            sentinels::strip(text),
+        );
+    }
     index
 }
 
@@ -1744,11 +1844,13 @@ pub(super) fn extract_text_with_glyph_offset(
             let next_first = next_seg.text.split_whitespace().next().unwrap_or("");
 
             match classify_line_break_hyphen(prev_last, next_first, prev_seg, next_seg, hyphen_witnesses) {
-                LineBreakHyphen::Weld => {
+                WrapHyphen::Weld => {
                     text.pop();
+                    // The previous run's annotations closed over the hyphen just removed.
+                    clamp_annotations_to(&mut annotations, text.len());
                 }
-                LineBreakHyphen::KeepHyphen => {}
-                LineBreakHyphen::NotApplicable => {
+                WrapHyphen::KeepHyphen => {}
+                WrapHyphen::NotApplicable => {
                     if annotated_segments_need_space(
                         prev_seg,
                         prev_last,
@@ -1777,12 +1879,12 @@ pub(super) fn extract_text_with_glyph_offset(
                     all_segments[seg_idx],
                     hyphen_witnesses,
                 ) {
-                    LineBreakHyphen::Weld => {
+                    WrapHyphen::Weld => {
                         text.pop();
                         previous_end = text.len();
                     }
-                    LineBreakHyphen::KeepHyphen => {}
-                    LineBreakHyphen::NotApplicable => {
+                    WrapHyphen::KeepHyphen => {}
+                    WrapHyphen::NotApplicable => {
                         if prev_seg_idx == seg_idx {
                             if needs_space_between(prev, word) {
                                 text.push(' ');
@@ -1836,6 +1938,15 @@ pub(super) fn extract_text_with_glyph_offset(
     ((text, annotations), glyph_offset)
 }
 
+fn clamp_annotations_to(annotations: &mut Vec<TextAnnotation>, len: usize) {
+    let len = len as u32;
+    annotations.retain_mut(|annotation| {
+        annotation.start = annotation.start.min(len);
+        annotation.end = annotation.end.min(len);
+        annotation.start < annotation.end
+    });
+}
+
 /// Join line texts into a single plain string (no markup).
 fn join_line_texts_plain(
     lines: &[super::types::PdfLine],
@@ -1878,16 +1989,16 @@ fn join_line_texts_plain(
             };
 
             match classify_line_break_hyphen(prev_word, word, prev_seg, seg, hyphen_witnesses) {
-                LineBreakHyphen::Weld => {
+                WrapHyphen::Weld => {
                     result.pop();
                     result.push_str(word);
                     continue;
                 }
-                LineBreakHyphen::KeepHyphen => {
+                WrapHyphen::KeepHyphen => {
                     result.push_str(word);
                     continue;
                 }
-                LineBreakHyphen::NotApplicable => {}
+                WrapHyphen::NotApplicable => {}
             }
 
             let insert_space = if std::ptr::eq(prev_seg, seg) {
@@ -1904,63 +2015,22 @@ fn join_line_texts_plain(
     result
 }
 
-/// Check if a line-ending hyphen should be removed and words joined.
+/// How the hyphen ending `prev` joins to `next`, by the shared [`classify_wrap`] policy.
 ///
 /// Requires `prev_seg`/`next_seg` to actually cross a visual line break (xberg-io/xberg#1581):
 /// without that check, a suspended hyphen mid-line ("onderhouds- en") matches the same text
 /// pattern as a genuine wrapped-line hyphen and gets welded regardless of position.
-/// How a hyphen that ends a visual line joins to the fragment after the break.
-///
-/// Two different things happen at a line break and the positional signals cannot tell them
-/// apart: a wrap that split a word (`Mon-` + `tanide`), and a compound whose own hyphen simply
-/// landed there (`long-` + `term`). Collapsing them into one boolean is what welded real
-/// compounds into tokens that do not exist (xberg-io/xberg#1613). `KeepHyphen` is a distinct
-/// outcome from `NotApplicable`: the pair still joins with no space between them, it is only the
-/// hyphen that survives. ~keep
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LineBreakHyphen {
-    /// Not a hyphen-at-a-break pair; normal spacing rules apply.
-    NotApplicable,
-    /// A wrap split one word: drop the hyphen and join the halves.
-    Weld,
-    /// The compound's own hyphen: keep it, and join without inserting a space.
-    KeepHyphen,
-}
-
 fn classify_line_break_hyphen(
     prev: &str,
     next: &str,
     prev_seg: &crate::pdf::hierarchy::SegmentData,
     next_seg: &crate::pdf::hierarchy::SegmentData,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
-) -> LineBreakHyphen {
-    if prev.len() < 2 || !prev.ends_with('-') {
-        return LineBreakHyphen::NotApplicable;
+) -> WrapHyphen {
+    if !prev.ends_with(super::pipeline::is_wrap_hyphen) || !crosses_visual_line_break(prev_seg, next_seg) {
+        return WrapHyphen::NotApplicable;
     }
-    let before_hyphen = prev[..prev.len() - 1].chars().next_back();
-    if !before_hyphen.is_some_and(|c| c.is_alphabetic()) {
-        return LineBreakHyphen::NotApplicable;
-    }
-    if !next.chars().next().is_some_and(|c| c.is_lowercase()) {
-        return LineBreakHyphen::NotApplicable;
-    }
-    if !crosses_visual_line_break(prev_seg, next_seg) {
-        return LineBreakHyphen::NotApplicable;
-    }
-    // The four conditions above are positional and typographic; they separate a hyphen at the
-    // break from one mid-line, but cannot separate the two things that both happen at a break:
-    // a wrap that split a word, and a compound whose own hyphen landed there. That is what
-    // `should_preserve_lexical_hyphen` weighs, and this site used to decide without it
-    // (xberg-io/xberg#1613). Arguments are prepared exactly as `dehyphenate_paragraph_lines`
-    // prepares them -- the guard trims non-lexical characters but deliberately keeps `-`, so
-    // the trailing hyphen must come off here. ~keep
-    let trailing_word = prev.trim_end_matches('-').split_whitespace().last().unwrap_or("");
-    let leading_word = next.split_whitespace().next().unwrap_or("");
-    if super::pipeline::should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
-        LineBreakHyphen::KeepHyphen
-    } else {
-        LineBreakHyphen::Weld
-    }
+    classify_wrap(prev, next, hyphen_witnesses)
 }
 
 /// Collapse runs of 2+ spaces inside a line while preserving leading indentation.
@@ -2027,13 +2097,18 @@ fn normalize_list_text(text: &str) -> (&str, usize) {
         normalized = stripped.trim_start();
         return (normalized, text.len() - normalized.len());
     }
-    if let Some(stripped) = trimmed.strip_prefix("- ") {
+    // U+2010/U+2011 are still unmapped here (`pipeline::finalize_element_hyphens`) and
+    // bullet like `-`.
+    if let Some(stripped) = trimmed
+        .strip_prefix(super::pipeline::is_word_hyphen)
+        .and_then(|rest| rest.strip_prefix(' '))
+    {
         normalized = stripped;
         return (normalized, text.len() - normalized.len());
     }
     // Dashes only: the bullet glyphs this list used to also carry now come from
     // `list_marker::BULLET_GLYPHS`, handled by the loop above. ~keep
-    const DASH_BULLETS: &[char] = &['–', '—', '−', '‐', '‑', '‒', '―'];
+    const DASH_BULLETS: &[char] = &['–', '—', '−', '‒', '―'];
     for &ch in DASH_BULLETS {
         if trimmed.starts_with(ch) {
             normalized = trimmed[ch.len_utf8()..].trim_start();
@@ -3170,6 +3245,66 @@ mod tests {
         assert_eq!(page_element_labels(&document), ["Before", "<table>", "After"]);
     }
 
+    /// SERFF rate sheet: the header band detected as its own table inside the rate table's box,
+    /// 0.7pt under its top, reads before the rate table rather than after its last row.
+    #[test]
+    fn test_table_nested_at_the_top_of_another_table_is_read_first() {
+        let pages = vec![vec![
+            make_paragraph_in_box("Before", 900.0, 40.0, 560.0),
+            make_paragraph_in_box("After", 300.0, 40.0, 560.0),
+        ]];
+        let mut rates = make_table_in_box("| Rates |", 40.0, 560.0, 800.0);
+        if let Some(bbox) = rates.bounding_box.as_mut() {
+            bbox.y0 = 400.0;
+        }
+        let header_band = make_table_in_box("| Header band |", 90.0, 500.0, 799.3);
+        let tables = vec![rates, header_band];
+
+        let document = assemble_internal_document(pages, &tables, None, &[], &Default::default());
+
+        let labels: Vec<&str> = document
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                ElementKind::Paragraph => Some(element.text.as_str()),
+                ElementKind::Table { table_index } => Some(document.tables[*table_index as usize].markdown.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, ["Before", "| Header band |", "| Rates |", "After"]);
+    }
+
+    #[test]
+    fn test_tables_nested_at_the_top_of_one_table_read_top_down() {
+        let pages = vec![vec![
+            make_paragraph_in_box("Before", 900.0, 40.0, 560.0),
+            make_paragraph_in_box("After", 300.0, 40.0, 560.0),
+        ]];
+        let mut rates = make_table_in_box("| Rates |", 40.0, 560.0, 800.0);
+        if let Some(bbox) = rates.bounding_box.as_mut() {
+            bbox.y0 = 400.0;
+        }
+        let lower_band = make_table_in_box("| Lower band |", 90.0, 500.0, 760.0);
+        let upper_band = make_table_in_box("| Upper band |", 90.0, 500.0, 799.3);
+        let tables = vec![rates, lower_band, upper_band];
+
+        let document = assemble_internal_document(pages, &tables, None, &[], &Default::default());
+
+        let labels: Vec<&str> = document
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                ElementKind::Paragraph => Some(element.text.as_str()),
+                ElementKind::Table { table_index } => Some(document.tables[*table_index as usize].markdown.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            ["Before", "| Upper band |", "| Lower band |", "| Rates |", "After"]
+        );
+    }
+
     #[test]
     fn test_full_width_table_preserves_two_column_paragraph_order() {
         let pages = vec![vec![
@@ -4210,6 +4345,105 @@ mod tests {
         assert_eq!(paragraph_text(&document), "adjuvant Montanide was used");
     }
 
+    #[test]
+    fn finalizing_hyphens_moves_annotations_back_two_bytes_per_hyphen_before_them() {
+        let text = "a cross\u{2011}page \u{2010} bold".to_string();
+        let bold_start = text.find("bold").expect("fixture holds the bold word") as u32;
+        let annotations = vec![
+            TextAnnotation {
+                start: 2,
+                end: 14,
+                kind: AnnotationKind::Italic,
+            },
+            TextAnnotation {
+                start: bold_start,
+                end: bold_start + 4,
+                kind: AnnotationKind::Bold,
+            },
+        ];
+
+        let mut element = crate::types::internal::InternalElement::text(ElementKind::Paragraph, text.as_str(), 0);
+        element.annotations = annotations;
+        element.attributes = Some(
+            [(
+                crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE.to_string(),
+                text.clone(),
+            )]
+            .into_iter()
+            .collect(),
+        );
+
+        super::super::pipeline::finalize_element_hyphens(&mut element);
+
+        let (text, annotations) = (element.text.clone(), element.annotations.clone());
+        assert_eq!(text, "a cross-page - bold");
+        assert_eq!(
+            element.attributes.as_ref().and_then(|attributes| attributes
+                .get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE)
+                .map(String::as_str)),
+            Some("a cross-page - bold")
+        );
+        assert_eq!(
+            &text[annotations[0].start as usize..annotations[0].end as usize],
+            "cross-page"
+        );
+        assert_eq!(
+            &text[annotations[1].start as usize..annotations[1].end as usize],
+            "bold"
+        );
+    }
+
+    // Some producers write every hyphen as U+2011 NON-BREAKING HYPHEN, wrap hyphens included
+    // (`mem‑` / `ory`). An ASCII-only check left `mem- ory` in the output, splitting the word.
+    #[test]
+    fn a_unicode_wrap_hyphen_at_a_line_break_is_joined_and_a_compound_keeps_it() {
+        for (trailing, leading, is_list_item, expected) in [
+            (
+                "the volatile mem\u{2011}",
+                "ory of a host",
+                false,
+                "the volatile memory of a host",
+            ),
+            ("Android and An\u{2010}", "droid apps", true, "Android and Android apps"),
+            ("a long\u{2011}", "term contract", false, "a long-term contract"),
+        ] {
+            let first = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y: 700.0,
+                    ..plain_segment(trailing)
+                }],
+                baseline_y: Some(700.0),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let second = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y: 685.0,
+                    ..plain_segment(leading)
+                }],
+                baseline_y: Some(685.0),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let mut para = make_paragraph("", None);
+            para.lines = vec![first, second];
+            para.is_list_item = is_list_item;
+
+            let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
+            let text = document
+                .elements
+                .iter()
+                .find(|e| matches!(e.kind, ElementKind::Paragraph | ElementKind::ListItem { .. }))
+                .map(|e| e.text.clone())
+                .expect("the paragraph should be emitted");
+            assert_eq!(text, expected);
+        }
+    }
+
     // Same defect via `join_line_texts_plain` (list items get their text from that path,
     // not `extract_text_and_annotations`).
     #[test]
@@ -4269,6 +4503,77 @@ mod tests {
 
         let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
         assert_eq!(paragraph_text(&document), "Zie de installatiehandleiding voor details");
+    }
+
+    #[test]
+    fn a_unicode_hyphen_bullet_is_stripped_like_an_ascii_one() {
+        for hyphen in ["-", "\u{2010}", "\u{2011}"] {
+            assert_eq!(normalize_list_text(&format!("{hyphen} item")).0, "item");
+            assert_eq!(normalize_list_text(&format!("{hyphen}  item")).0, " item");
+            assert_eq!(normalize_list_text(&format!("{hyphen}item")).0, format!("{hyphen}item"));
+        }
+    }
+
+    #[test]
+    fn a_weld_at_a_style_run_boundary_ends_the_previous_run_before_the_continuation() {
+        for hyphen in ["-", "\u{2011}"] {
+            let first = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![bold_segment(&format!("bold mem{hyphen}"))],
+                baseline_y: Some(700.0),
+                dominant_font_size: 12.0,
+                is_bold: true,
+                is_monospace: false,
+            };
+            let second = PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y: 686.0,
+                    ..plain_segment("ory follows")
+                }],
+                baseline_y: Some(686.0),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let mut para = make_paragraph("", None);
+            para.lines = vec![first, second];
+
+            let (text, annotations) = extract_text_and_annotations(&para, &Default::default());
+
+            assert_eq!(text, "bold memory follows");
+            let bold: Vec<&str> = annotations
+                .iter()
+                .filter(|annotation| annotation.kind == AnnotationKind::Bold)
+                .map(|annotation| &text[annotation.start as usize..annotation.end as usize])
+                .collect();
+            assert_eq!(bold, ["bold mem"], "hyphen {hyphen:?}");
+        }
+    }
+
+    #[test]
+    fn a_suspended_hyphen_or_uppercase_stem_at_a_line_break_is_not_welded() {
+        for (trailing, leading, expected) in [
+            ("both pre-", "and post-processing", "both pre- and post-processing"),
+            ("many COVID-", "related cases", "many COVID-related cases"),
+        ] {
+            let wrapped_line = |text: &str, baseline_y: f32| PdfLine {
+                native_scripts: Vec::new(),
+                segments: vec![SegmentData {
+                    baseline_y,
+                    ..plain_segment(text)
+                }],
+                baseline_y: Some(baseline_y),
+                dominant_font_size: 12.0,
+                is_bold: false,
+                is_monospace: false,
+            };
+            let mut para = make_paragraph("", None);
+            para.lines = vec![wrapped_line(trailing, 700.0), wrapped_line(leading, 686.0)];
+
+            let document = assemble_internal_document(vec![vec![para]], &[], None, &[], &Default::default());
+            assert_eq!(paragraph_text(&document), expected);
+        }
     }
 
     /// GH#1622 duplication finding, direction 1 (suppressed when carried): a paragraph
@@ -4580,6 +4885,76 @@ mod tests {
         let document = builder.build();
         assert_eq!(document.elements[0].kind, ElementKind::Formula);
         assert_eq!(document.elements[0].text, "E = mc2");
+    }
+
+    fn native_inline(tex: &str) -> String {
+        use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+        format!("{INLINE_OPEN}{tex}{INLINE_CLOSE}")
+    }
+
+    /// A native inline formula becomes `$..$` math, not escaped prose dollars.
+    #[test]
+    fn native_inline_formula_renders_as_markdown_math() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        let text = format!("where {} represents the delta.", native_inline("\\delta_{n,n}"));
+        let where_word = TextAnnotation {
+            start: 0,
+            end: 5,
+            kind: AnnotationKind::Bold,
+        };
+        push_text_with_inline_math(&mut builder, &text, vec![where_word], None, None);
+
+        let document = builder.build();
+        let element = &document.elements[0];
+        assert_eq!(element.text, "where $\\delta_{n,n}$ represents the delta.");
+        let math = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind.math_display() == Some(false))
+            .expect("the formula carries an inline math annotation");
+        assert_eq!(&element.text[math.start as usize..math.end as usize], "$\\delta_{n,n}$");
+        let bold = element
+            .annotations
+            .iter()
+            .find(|annotation| annotation.kind == AnnotationKind::Bold)
+            .expect("an annotation before the formula survives");
+        assert_eq!(&element.text[bold.start as usize..bold.end as usize], "where");
+
+        let markdown = crate::rendering::render_markdown(&document);
+        assert!(markdown.contains("$\\delta"), "{markdown}");
+        assert!(
+            !markdown.contains("\\$"),
+            "the delimiters must not be escaped: {markdown}"
+        );
+        assert!(!crate::pdf::native::math_latex::sentinels::contains_sentinel(&markdown));
+    }
+
+    /// A display formula renders as its own `$$` block; headings and tables lose sentinels.
+    #[test]
+    fn native_display_formula_renders_as_a_block_and_no_sentinel_survives() {
+        use crate::pdf::native::math_latex::sentinels::{self, DISPLAY_CLOSE, DISPLAY_OPEN};
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.set_inline_math(true);
+        builder.push_heading(2, &format!("Bound on {}", native_inline("x^{2}")), None, None);
+        builder.push_formula(&format!("{DISPLAY_OPEN}z\\equiv2r^{{2}}-1,{DISPLAY_CLOSE}"), None, None);
+        let mut document = builder.build();
+        document.tables.push(crate::types::Table {
+            cells: vec![vec![native_inline("\\alpha"), "1.5".to_owned()]],
+            markdown: format!("| {} | 1.5 |", native_inline("\\alpha")),
+            ..Default::default()
+        });
+
+        sentinels::strip_document(&mut document);
+
+        assert_eq!(document.elements[0].text, "Bound on x^{2}");
+        assert_eq!(document.elements[1].text, "z\\equiv2r^{2}-1,");
+        assert_eq!(document.tables[0].cells[0][0], "\\alpha");
+        assert!(!sentinels::contains_sentinel(&document.tables[0].markdown));
+        let markdown = crate::rendering::render_markdown(&document);
+        assert!(markdown.contains("$$"), "{markdown}");
+        assert!(markdown.contains("\\equiv"), "{markdown}");
+        assert!(!sentinels::contains_sentinel(&markdown));
     }
 
     /// A paragraph with no inline math run keeps its annotations byte for byte.

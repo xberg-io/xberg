@@ -500,10 +500,12 @@ impl StructuralSidecar {
     }
 
     /// Derive a sidecar deterministically from GFM markdown, using the same
-    /// pulldown-cmark options as [`crate::markdown_quality::parse_markdown_blocks`].
+    /// pulldown-cmark options and front-matter handling as
+    /// [`crate::markdown_quality::parse_markdown_blocks`].
     pub fn from_markdown(md: &str) -> Self {
         let mut state = MarkdownParseState::new();
-        for event in Parser::new_ext(md, crate::markdown_quality::md_parser_options()) {
+        let body = crate::markdown_quality::strip_leading_front_matter(md);
+        for event in Parser::new_ext(body, crate::markdown_quality::md_parser_options()) {
             state.handle_event(event);
         }
         state.finish()

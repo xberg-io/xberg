@@ -1,0 +1,485 @@
+//! Paired comparisons over per-fixture rows: layout-variant vs baseline-variant
+//! ([`LayoutImpact`]) and xberg vs competitor ([`HeadToHead`]).
+//!
+//! Rows pair by fixture inside one `(output_format, mode, file_type)` bucket and only on fixtures
+//! where both sides carry a quality result: a success, or a zero-overlap failure, which returned
+//! the wrong text and pairs at the TF1 of 0 it was scored with. Dropping zero-overlap rows would
+//! hide the worst regressions, a fixture that scores 1.0 on one side and 0.0 on the other. OCR use
+//! is a property of each row, not part of the bucket: a failed row never reports it
+//! (`ocr: None`), and an auto-OCR variant reports it per document, so keying on it would split one
+//! fixture's rows apart. Every delta is the median of per-fixture deltas,
+//! never the difference of two medians, so a fixture present on one side cannot skew the other.
+
+use super::types::{FixtureDelta, HeadToHead, LayoutImpact, PairedDelta, PairedFixtureDeltas, PerFixtureRow};
+use crate::stats::{percentile_r7, sanitize_f64};
+use crate::types::{OutputFormat, ResourceMeasurementScope, TimingRegime};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// `|delta|` below this on the classification metric counts as unchanged.
+const UNCHANGED_THRESHOLD: f64 = 0.005;
+
+/// Execution mode whose rows do not carry a per-document duration or RSS: a native batch has one
+/// process-level measurement shared by every document, so a per-fixture timing delta is
+/// meaningless there.
+const BATCH_MODE: &str = "batch";
+
+/// File types the layout pass can change: PDFs and raster images. The image list mirrors the one
+/// `Fixture::requires_ocr` treats as images.
+const LAYOUT_FILE_TYPES: &[&str] = &[
+    "pdf", "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "jp2", "jpx", "jpm", "mj2",
+];
+
+/// Cap on each fixture-id list of a [`HeadToHead`] entry; the matching count field keeps the total.
+const MAX_LISTED_FIXTURE_IDS: usize = 50;
+
+/// `(output_format rank, mode, file_type)`. The format is held as a rank because `OutputFormat` is
+/// not `Ord`; see [`format_rank`] and [`format_from_rank`].
+type BucketKey = (u8, String, String);
+
+/// framework -> bucket -> fixture id -> row.
+type RowIndex<'a> = BTreeMap<&'a str, BTreeMap<BucketKey, BTreeMap<&'a str, &'a PerFixtureRow>>>;
+
+/// framework -> bucket -> fixture ids left out of pairing because they name more than one document.
+type AmbiguousIndex<'a> = BTreeMap<&'a str, BTreeMap<BucketKey, BTreeSet<&'a str>>>;
+
+fn format_rank(format: OutputFormat) -> u8 {
+    match format {
+        OutputFormat::Markdown => 0,
+        OutputFormat::Plaintext => 1,
+    }
+}
+
+fn format_from_rank(rank: u8) -> OutputFormat {
+    if rank == format_rank(OutputFormat::Plaintext) {
+        OutputFormat::Plaintext
+    } else {
+        OutputFormat::Markdown
+    }
+}
+
+/// `(file_type, fixture_id)` pairs that name more than one document. `fixture_id` is the file stem
+/// and the corpus repeats stems across directories, so one id can stand for different files. Rows
+/// carry no path, so the source file size is the discriminator: an id seen with two different
+/// non-zero sizes is ambiguous. A size of 0 means the harness could not stat the file and is
+/// ignored. Same-sized collisions stay undetectable.
+fn ambiguous_fixtures(rows: &[PerFixtureRow]) -> BTreeSet<(&str, &str)> {
+    let mut sizes: BTreeMap<(&str, &str), BTreeSet<u64>> = BTreeMap::new();
+    for row in rows.iter().filter(|row| row.file_size > 0) {
+        sizes
+            .entry((row.file_type.as_str(), row.fixture_id.as_str()))
+            .or_default()
+            .insert(row.file_size);
+    }
+    sizes
+        .into_iter()
+        .filter(|(_, sizes)| sizes.len() > 1)
+        .map(|(fixture, _)| fixture)
+        .collect()
+}
+
+/// `error_kind` of a zero-overlap row, as `PerFixtureRow` spells it (`ErrorKind`'s `Debug` name).
+const ZERO_OVERLAP_ERROR_KIND: &str = "ZeroOverlap";
+
+/// Whether the row carries a quality result that pairs: a success, or a zero-overlap failure.
+/// Mirrors `crate::types::has_quality_result` for the serialized row.
+fn has_quality_result(row: &PerFixtureRow) -> bool {
+    row.success || row.error_kind.as_deref() == Some(ZERO_OVERLAP_ERROR_KIND)
+}
+
+/// Preference among repeated rows for one fixture: success, then zero overlap, then any failure.
+fn pairing_rank(row: &PerFixtureRow) -> u8 {
+    u8::from(row.success) + u8::from(has_quality_result(row))
+}
+
+fn index_rows(rows: &[PerFixtureRow]) -> (RowIndex<'_>, AmbiguousIndex<'_>) {
+    let ambiguous_fixture_set = ambiguous_fixtures(rows);
+    let mut index: RowIndex<'_> = BTreeMap::new();
+    let mut ambiguous: AmbiguousIndex<'_> = BTreeMap::new();
+    for row in rows {
+        let key: BucketKey = (
+            format_rank(row.output_format),
+            row.execution_mode.clone(),
+            row.file_type.clone(),
+        );
+        let bucket = index
+            .entry(row.framework.as_str())
+            .or_default()
+            .entry(key.clone())
+            .or_default();
+        if ambiguous_fixture_set.contains(&(row.file_type.as_str(), row.fixture_id.as_str())) {
+            ambiguous
+                .entry(row.framework.as_str())
+                .or_default()
+                .entry(key)
+                .or_default()
+                .insert(row.fixture_id.as_str());
+            continue;
+        }
+        let slot = bucket.entry(row.fixture_id.as_str());
+        // Repeated rows for one fixture (re-runs) keep the first success, else the first
+        // zero-overlap row, else the first row.
+        slot.and_modify(|existing| {
+            if pairing_rank(row) > pairing_rank(existing) {
+                *existing = row;
+            }
+        })
+        .or_insert(row);
+    }
+    (index, ambiguous)
+}
+
+/// Ambiguous fixture ids either framework had in `key`.
+fn ambiguous_in<'a>(ambiguous: &AmbiguousIndex<'a>, frameworks: [&str; 2], key: &BucketKey) -> BTreeSet<&'a str> {
+    frameworks
+        .iter()
+        .filter_map(|framework| ambiguous.get(*framework)?.get(key))
+        .flatten()
+        .copied()
+        .collect()
+}
+
+fn finite(value: f64) -> Option<f64> {
+    value.is_finite().then_some(value)
+}
+
+fn sf1_of(row: &PerFixtureRow) -> Option<f64> {
+    if row.output_format == OutputFormat::Plaintext {
+        return None;
+    }
+    row.f1_layout.and_then(finite)
+}
+
+fn tf1_of(row: &PerFixtureRow) -> Option<f64> {
+    row.f1_text.and_then(finite)
+}
+
+fn reading_order_of(row: &PerFixtureRow) -> Option<f64> {
+    row.quality
+        .as_ref()
+        .and_then(|q| q.reading_order_score)
+        .and_then(finite)
+}
+
+fn quality_score_of(row: &PerFixtureRow) -> Option<f64> {
+    row.quality_score.and_then(finite)
+}
+
+/// Whether the row carries a per-document, cold-process timing measurement.
+fn has_document_timing(row: &PerFixtureRow) -> bool {
+    row.execution_mode != BATCH_MODE && row.timing_regime == TimingRegime::ColdProcess
+}
+
+fn duration_of(row: &PerFixtureRow) -> Option<f64> {
+    has_document_timing(row).then_some(row.duration_ms).and_then(finite)
+}
+
+fn extraction_duration_of(row: &PerFixtureRow) -> Option<f64> {
+    if !has_document_timing(row) {
+        return None;
+    }
+    row.extraction_duration_ms.and_then(finite)
+}
+
+/// Peak RSS is only comparable when the harness measured an isolated process, mirroring the
+/// memory percentiles in the per-framework aggregation.
+fn peak_memory_of(row: &PerFixtureRow) -> Option<f64> {
+    let isolated = row.framework_capabilities.resource_measurement_scope == ResourceMeasurementScope::IsolatedProcess;
+    (has_document_timing(row) && isolated)
+        .then_some(row.peak_memory_mb)
+        .and_then(finite)
+}
+
+fn median(values: &[f64]) -> f64 {
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    sanitize_f64(percentile_r7(&sorted, 0.50))
+}
+
+/// Per-fixture deltas (`b - a`) of `metric` over the pairs where both sides have a value.
+fn fixture_deltas(
+    pairs: &[(&PerFixtureRow, &PerFixtureRow)],
+    metric: impl Fn(&PerFixtureRow) -> Option<f64>,
+) -> Vec<FixtureDelta> {
+    pairs
+        .iter()
+        .filter_map(|(a, b)| {
+            let (baseline, layout) = (metric(a)?, metric(b)?);
+            Some(FixtureDelta {
+                fixture_id: a.fixture_id.clone(),
+                baseline,
+                layout,
+                delta: sanitize_f64(layout - baseline),
+            })
+        })
+        .collect()
+}
+
+fn summarize(deltas: &[FixtureDelta]) -> PairedDelta {
+    if deltas.is_empty() {
+        return PairedDelta::default();
+    }
+    let baselines: Vec<f64> = deltas.iter().map(|d| d.baseline).collect();
+    let layouts: Vec<f64> = deltas.iter().map(|d| d.layout).collect();
+    let diffs: Vec<f64> = deltas.iter().map(|d| d.delta).collect();
+    PairedDelta {
+        baseline_p50: Some(median(&baselines)),
+        layout_p50: Some(median(&layouts)),
+        delta_p50: Some(median(&diffs)),
+        sample_count: deltas.len(),
+    }
+}
+
+fn summarize_optional(deltas: &[FixtureDelta]) -> Option<PairedDelta> {
+    (!deltas.is_empty()).then(|| summarize(deltas))
+}
+
+/// Fixtures present in both maps where both rows carry a quality result (see
+/// [`has_quality_result`]), as `(a, b)` rows sorted by fixture id.
+fn scored_pairs<'a>(
+    a: &BTreeMap<&'a str, &'a PerFixtureRow>,
+    b: &BTreeMap<&'a str, &'a PerFixtureRow>,
+) -> Vec<(&'a PerFixtureRow, &'a PerFixtureRow)> {
+    a.iter()
+        .filter_map(|(id, row_a)| {
+            let row_b = b.get(id)?;
+            (has_quality_result(row_a) && has_quality_result(row_b)).then_some((*row_a, *row_b))
+        })
+        .collect()
+}
+
+/// OCR use every successful row reports, or `None` when they disagree, one did not report it, or
+/// none succeeded. Failed rows are ignored: they carry `ocr: None` because extraction never
+/// reported it.
+fn common_ocr<'a>(rows: impl IntoIterator<Item = &'a PerFixtureRow>) -> Option<bool> {
+    let mut reported = rows.into_iter().filter(|row| row.success).map(|row| row.ocr);
+    let first = reported.next()??;
+    reported.all(|ocr| ocr == Some(first)).then_some(first)
+}
+
+/// Pairs whose first (`a`) and second (`b`) rows reported OCR use, respectively.
+fn ocr_used_counts(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> (usize, usize) {
+    let used = |row: &PerFixtureRow| row.ocr == Some(true);
+    (
+        pairs.iter().filter(|pair| used(pair.0)).count(),
+        pairs.iter().filter(|pair| used(pair.1)).count(),
+    )
+}
+
+fn scored_ids<'a>(rows: &BTreeMap<&'a str, &'a PerFixtureRow>) -> BTreeSet<&'a str> {
+    rows.iter()
+        .filter(|(_, row)| has_quality_result(row))
+        .map(|(id, _)| *id)
+        .collect()
+}
+
+/// Name of the baseline variant a layout variant is compared against, if one is present.
+///
+/// The `layout` segment is replaced by `baseline`; failing that it is dropped
+/// (`xberg-markdown-sceptre-ort-layout` pairs with `xberg-markdown-sceptre-ort`); and a trailing
+/// model-version segment after it is discarded (`xberg-markdown-layout-v3` pairs with
+/// `xberg-markdown-baseline`). Returns `None` for a framework without a `layout` segment.
+pub(crate) fn baseline_framework_for(layout_framework: &str, present: &BTreeSet<&str>) -> Option<String> {
+    let segments: Vec<&str> = layout_framework.split('-').collect();
+    let at = segments.iter().position(|segment| *segment == "layout")?;
+
+    let mut replaced = segments.clone();
+    replaced[at] = "baseline";
+    let mut dropped = segments.clone();
+    dropped.remove(at);
+    let mut candidates = vec![replaced.join("-"), dropped.join("-")];
+    let is_version = |segment: &str| {
+        segment
+            .strip_prefix('v')
+            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+    };
+    if segments[at + 1..].iter().all(|segment| is_version(segment)) {
+        let mut truncated: Vec<&str> = segments[..at].to_vec();
+        truncated.push("baseline");
+        candidates.push(truncated.join("-"));
+    }
+    candidates.into_iter().find(|name| present.contains(name.as_str()))
+}
+
+/// Whether `file_type` is one [`build_layout_impact`] compares (see [`LAYOUT_FILE_TYPES`]).
+pub(crate) fn layout_applies_to(file_type: &str) -> bool {
+    LAYOUT_FILE_TYPES
+        .iter()
+        .any(|layout_type| layout_type.eq_ignore_ascii_case(file_type))
+}
+
+/// The first [`MAX_LISTED_FIXTURE_IDS`] ids, in sorted order, and the full count.
+fn capped_ids(ids: BTreeSet<&str>) -> (Vec<String>, usize) {
+    let count = ids.len();
+    let listed = ids
+        .into_iter()
+        .take(MAX_LISTED_FIXTURE_IDS)
+        .map(str::to_string)
+        .collect();
+    (listed, count)
+}
+
+fn is_xberg(framework: &str) -> bool {
+    framework.starts_with("xberg-")
+}
+
+/// Paired fixture ids by classification; together they partition the pairs.
+#[derive(Default)]
+struct Classified {
+    improved: Vec<String>,
+    regressed: Vec<String>,
+    unchanged: Vec<String>,
+    unscored: Vec<String>,
+}
+
+/// Classify each `(baseline, layout)` pair on SF1 when both sides carry it, else on
+/// `quality_score`, so a markdown bucket with partial SF1 coverage still classifies every pair. A
+/// pair with neither metric on both sides is unscored.
+fn classify(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> Classified {
+    let mut out = Classified::default();
+    for (baseline, layout) in pairs {
+        let delta = match (sf1_of(baseline), sf1_of(layout)) {
+            (Some(before), Some(after)) => Some(after - before),
+            _ => quality_score_of(baseline)
+                .zip(quality_score_of(layout))
+                .map(|(before, after)| after - before),
+        };
+        let list = match delta {
+            None => &mut out.unscored,
+            Some(delta) if delta.abs() < UNCHANGED_THRESHOLD => &mut out.unchanged,
+            Some(delta) if delta > 0.0 => &mut out.improved,
+            Some(_) => &mut out.regressed,
+        };
+        list.push(baseline.fixture_id.clone());
+    }
+    out
+}
+
+/// One [`LayoutImpact`] per (layout framework, baseline framework, output format, mode, file type)
+/// where both frameworks have rows, for the file types layout can affect ([`layout_applies_to`]);
+/// other formats would only add entries with nothing to measure. A bucket whose layout rows all failed still yields an entry
+/// with `paired_fixture_count == 0` so the loss is visible rather than absent.
+pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
+    let (index, ambiguous) = index_rows(rows);
+    let present: BTreeSet<&str> = index.keys().copied().collect();
+    let mut out = Vec::new();
+
+    for (&layout_framework, layout_buckets) in index.iter().filter(|(name, _)| is_xberg(name)) {
+        let Some(baseline_framework) = baseline_framework_for(layout_framework, &present) else {
+            continue;
+        };
+        let Some(baseline_buckets) = index.get(baseline_framework.as_str()) else {
+            continue;
+        };
+        for key in layout_buckets.keys().filter(|key| layout_applies_to(&key.2)) {
+            let Some(baseline_rows) = baseline_buckets.get(key) else {
+                continue;
+            };
+            let layout_rows = &layout_buckets[key];
+            let pairs = scored_pairs(baseline_rows, layout_rows);
+            let (baseline_ocr_fixture_count, layout_ocr_fixture_count) = ocr_used_counts(&pairs);
+
+            let sf1 = fixture_deltas(&pairs, sf1_of);
+            let tf1 = fixture_deltas(&pairs, tf1_of);
+            let reading_order = fixture_deltas(&pairs, reading_order_of);
+            let quality_score = fixture_deltas(&pairs, quality_score_of);
+            let duration_ms = fixture_deltas(&pairs, duration_of);
+            let peak_memory_mb = fixture_deltas(&pairs, peak_memory_of);
+
+            let classified = classify(&pairs);
+
+            out.push(LayoutImpact {
+                layout_framework: layout_framework.to_string(),
+                baseline_framework: baseline_framework.clone(),
+                output_format: format_from_rank(key.0),
+                mode: key.1.clone(),
+                file_type: key.2.clone(),
+                ocr: common_ocr(baseline_rows.values().chain(layout_rows.values()).copied()),
+                baseline_ocr_fixture_count,
+                layout_ocr_fixture_count,
+                paired_fixture_count: pairs.len(),
+                sf1: summarize_optional(&sf1),
+                tf1: summarize(&tf1),
+                reading_order: summarize_optional(&reading_order),
+                quality_score: summarize(&quality_score),
+                duration_ms: summarize(&duration_ms),
+                peak_memory_mb: summarize(&peak_memory_mb),
+                improved_fixture_ids: classified.improved,
+                regressed_fixture_ids: classified.regressed,
+                unchanged_fixture_ids: classified.unchanged,
+                unscored_fixture_ids: classified.unscored,
+                ambiguous_fixture_ids: ambiguous_in(&ambiguous, [layout_framework, baseline_framework.as_str()], key)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                per_fixture: PairedFixtureDeltas {
+                    sf1,
+                    tf1,
+                    reading_order,
+                    duration_ms,
+                    peak_memory_mb,
+                },
+            });
+        }
+    }
+    out
+}
+
+/// One [`HeadToHead`] per (xberg framework, competitor framework, output format, mode, file type)
+/// in which the two share at least one fixture id. Medians cover fixtures both have a quality
+/// result for; the `*_only_fixture_ids` lists name fixtures only one side has one for.
+pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
+    let (index, ambiguous) = index_rows(rows);
+    let mut out = Vec::new();
+
+    for (&xberg_framework, xberg_buckets) in index.iter().filter(|(name, _)| is_xberg(name)) {
+        for (&competitor_framework, competitor_buckets) in index.iter().filter(|(name, _)| !is_xberg(name)) {
+            for key in xberg_buckets.keys() {
+                let Some(competitor_rows) = competitor_buckets.get(key) else {
+                    continue;
+                };
+                let xberg_rows = &xberg_buckets[key];
+                if !xberg_rows.keys().any(|id| competitor_rows.contains_key(id)) {
+                    continue;
+                }
+                let pairs = scored_pairs(competitor_rows, xberg_rows);
+                let (competitor_ocr_fixture_count, xberg_ocr_fixture_count) = ocr_used_counts(&pairs);
+                let (xberg_ok, competitor_ok) = (scored_ids(xberg_rows), scored_ids(competitor_rows));
+                let (xberg_only_fixture_ids, xberg_only_fixture_count) =
+                    capped_ids(xberg_ok.difference(&competitor_ok).copied().collect());
+                let (competitor_only_fixture_ids, competitor_only_fixture_count) =
+                    capped_ids(competitor_ok.difference(&xberg_ok).copied().collect());
+                let (ambiguous_fixture_ids, ambiguous_fixture_count) =
+                    capped_ids(ambiguous_in(&ambiguous, [xberg_framework, competitor_framework], key));
+
+                let sf1 = fixture_deltas(&pairs, sf1_of);
+                let reading_order = fixture_deltas(&pairs, reading_order_of);
+                let output_format = format_from_rank(key.0);
+                out.push(HeadToHead {
+                    xberg_framework: xberg_framework.to_string(),
+                    competitor_framework: competitor_framework.to_string(),
+                    output_format,
+                    mode: key.1.clone(),
+                    file_type: key.2.clone(),
+                    ocr: common_ocr(xberg_rows.values().chain(competitor_rows.values()).copied()),
+                    xberg_ocr_fixture_count,
+                    competitor_ocr_fixture_count,
+                    shared_fixture_count: pairs.len(),
+                    xberg_only_fixture_ids,
+                    xberg_only_fixture_count,
+                    competitor_only_fixture_ids,
+                    competitor_only_fixture_count,
+                    ambiguous_fixture_ids,
+                    ambiguous_fixture_count,
+                    duration_ms: summarize(&fixture_deltas(&pairs, duration_of)),
+                    extraction_duration_ms: summarize(&fixture_deltas(&pairs, extraction_duration_of)),
+                    peak_memory_mb: summarize(&fixture_deltas(&pairs, peak_memory_of)),
+                    tf1: summarize(&fixture_deltas(&pairs, tf1_of)),
+                    sf1: summarize_optional(&sf1),
+                    reading_order: summarize_optional(&reading_order),
+                    quality_score: summarize(&fixture_deltas(&pairs, quality_score_of)),
+                });
+            }
+        }
+    }
+    out
+}

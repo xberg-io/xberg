@@ -1422,4 +1422,87 @@ mod tests {
             "each handle must share the page's color-space map instead of cloning it"
         );
     }
+
+    /// One-page PDF painting a `width` x `height` DCT image XObject (object 5) over its whole
+    /// 200 x 100 media box. The payload is filler: enumerating handles must never decode it.
+    fn pdf_with_one_image_xobject(width: u32, height: u32, payload_len: usize) -> Vec<u8> {
+        let content = b"q 200 0 0 100 0 0 cm /Im0 Do Q\n";
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = vec![0usize];
+
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] \
+              /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>\nendobj\n",
+        );
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len()).as_bytes());
+        pdf.extend_from_slice(content);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(
+            format!(
+                "5 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /BitsPerComponent 8 \
+                 /ColorSpace /DeviceRGB /Filter /DCTDecode /Length {payload_len} >>\nstream\n"
+            )
+            .as_bytes(),
+        );
+        pdf.resize(pdf.len() + payload_len, 0xAB);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        let xref_pos = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n", offsets.len()).as_bytes());
+        pdf.extend_from_slice(b"0000000000 65535 f\r\n");
+        for &offset in &offsets[1..] {
+            pdf.extend_from_slice(format!("{offset:010} 00000 n\r\n").as_bytes());
+        }
+        pdf.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n",
+                offsets.len()
+            )
+            .as_bytes(),
+        );
+        pdf
+    }
+
+    /// Scan detection measures a page's raster geometry from its image handles. That reads the
+    /// image dictionary only: the payload the object cache keeps is a slice of the document bytes,
+    /// not a copy, and no stream is decoded.
+    #[test]
+    fn image_handles_keep_the_image_payload_in_the_source_bytes() {
+        const PAYLOAD_LEN: usize = 1 << 20;
+        let document = PdfDocument::from_bytes(pdf_with_one_image_xobject(4000, 2000, PAYLOAD_LEN)).expect("open");
+
+        let handles = document.page_image_handles(0).expect("handles");
+        assert_eq!(handles.len(), 1, "the image XObject must be enumerated");
+        assert_eq!((handles[0].width, handles[0].height), (4000, 2000));
+        assert_eq!(handles[0].byte_size_compressed, PAYLOAD_LEN as u64);
+        assert!((handles[0].bbox.width - 200.0).abs() < 1e-3 && (handles[0].bbox.height - 100.0).abs() < 1e-3);
+
+        let image = document
+            .object_cache
+            .lock_or_recover()
+            .get_shared(&ObjectRef::new(5, 0))
+            .expect("the image XObject must be cached as parsed");
+        let Object::Stream { data, .. } = image.as_ref() else {
+            panic!("the image XObject must load as a stream");
+        };
+        assert_eq!(data.len(), PAYLOAD_LEN);
+        let source = document.source_bytes.as_ptr_range();
+        let payload = data.as_ptr_range();
+        assert!(
+            source.start <= payload.start && payload.end <= source.end,
+            "the cached payload must be a slice of the document bytes, not a copy"
+        );
+        assert!(
+            document.xobject_stream_cache.lock_or_recover().is_empty(),
+            "enumerating image handles must not decode any stream"
+        );
+        assert_eq!(document.xobject_stream_cache_bytes.load(Ordering::Relaxed), 0);
+    }
 }

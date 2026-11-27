@@ -1,41 +1,9 @@
-//! Tokio runtime sizing and construction for extraction work.
+//! Driving extraction work from the synchronous extract and batch commands.
 
 use xberg::{
     ExtractInput, ExtractInputWithOptions, ExtractionConfig, ExtractionResult, extract,
     extract_batch_with_input_options,
 };
-
-const DEFAULT_RUNTIME_THREAD_LIMIT: usize = 8;
-const MIN_RUNTIME_THREAD_COUNT: usize = 1;
-
-fn runtime_worker_threads(config: &ExtractionConfig) -> usize {
-    config
-        .concurrency
-        .as_ref()
-        .and_then(|concurrency| concurrency.max_threads)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(usize::from)
-                .unwrap_or(MIN_RUNTIME_THREAD_COUNT)
-                .min(DEFAULT_RUNTIME_THREAD_LIMIT)
-        })
-        .max(MIN_RUNTIME_THREAD_COUNT)
-}
-
-/// Size the async scheduler to the number of documents that can run concurrently.
-///
-/// `concurrency.max_threads` remains the core's total CPU/Rayon budget; it is only
-/// an upper bound here so the CLI does not create a second equally-sized worker pool.
-fn batch_runtime_worker_threads(config: &ExtractionConfig, input_count: usize) -> usize {
-    let total_cpu_budget = runtime_worker_threads(config);
-    let available_inputs = input_count.max(MIN_RUNTIME_THREAD_COUNT);
-    let document_workers = config
-        .max_concurrent_extractions
-        .unwrap_or(total_cpu_budget)
-        .max(MIN_RUNTIME_THREAD_COUNT);
-
-    total_cpu_budget.min(document_workers).min(available_inputs)
-}
 
 /// Worker-thread stack size for every runtime this crate builds.
 ///
@@ -44,19 +12,27 @@ fn batch_runtime_worker_threads(config: &ExtractionConfig, input_count: usize) -
 /// panic. `crates/xberg-node/src/lib.rs:62-64` hit this first and raised its pool to 16 MB;
 /// the CLI's own runtimes were never given the same budget, so the API and MCP servers ran
 /// every request on a 2 MB worker.
+#[cfg(any(
+    feature = "api",
+    feature = "mcp",
+    all(test, feature = "pdf-surface", any(feature = "pdf-ocr", feature = "ocr"))
+))]
 pub(crate) const RUNTIME_WORKER_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
-fn build_runtime(config: &ExtractionConfig) -> std::io::Result<tokio::runtime::Runtime> {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(runtime_worker_threads(config))
-        .enable_all()
-        .thread_stack_size(RUNTIME_WORKER_STACK_SIZE_BYTES)
-        .build()
+/// Drive one extraction call on the core library's shared runtime.
+///
+/// `xberg::extract*` runs the whole extraction as a task on that process-global 16 MiB-stack
+/// multi-thread runtime (`core::runtime::run_on_large_stack`). A runtime of the CLI's own would
+/// only await that task's `JoinHandle`, at the cost of one more worker thread, so the calling thread
+/// blocks on the shared runtime instead. `block_in_place` stays available because that runtime is
+/// multi-thread, and its first use sizes it from `concurrency.max_threads`.
+fn block_on_shared<F: std::future::Future>(future: F, config: &ExtractionConfig) -> xberg::Result<F::Output> {
+    xberg::core::runtime::block_on_shared_runtime(future, config.concurrency.as_ref())
 }
 
 pub(super) fn block_on_extract(input: ExtractInput, config: &ExtractionConfig) -> xberg::Result<ExtractionResult> {
-    build_runtime(config)?
-        .block_on(extract(input, config))
+    // ~keep Boxed in a frame of its own so the extract future is not copied through this one.
+    block_on_shared(xberg::core::runtime::pin_boxed(|| extract(input, config)), config)?
         .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
 }
 
@@ -64,13 +40,7 @@ pub(super) fn block_on_extract_batch(
     inputs: Vec<ExtractInputWithOptions>,
     config: &ExtractionConfig,
 ) -> xberg::Result<ExtractionResult> {
-    let worker_threads = batch_runtime_worker_threads(config, inputs.len());
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(worker_threads)
-        .enable_all()
-        .thread_stack_size(RUNTIME_WORKER_STACK_SIZE_BYTES)
-        .build()?
-        .block_on(extract_batch_with_input_options(inputs, config))
+    block_on_shared(extract_batch_with_input_options(inputs, config), config)?
 }
 
 #[cfg(test)]
@@ -78,92 +48,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn runtime_worker_threads_honors_explicit_budget() {
-        let config = ExtractionConfig {
-            concurrency: Some(xberg::core::config::ConcurrencyConfig {
-                max_threads: Some(3),
-                max_concurrent_ocr: None,
-            }),
-            ..Default::default()
-        };
-
-        assert_eq!(runtime_worker_threads(&config), 3);
+    fn repeated_single_extractions_reuse_the_shared_runtime() {
+        for _ in 0..2 {
+            let input = ExtractInput::from_bytes(b"hello".to_vec(), "text/plain", None);
+            let output = block_on_extract(input, &ExtractionConfig::default()).unwrap();
+            assert_eq!(output.results.len(), 1);
+            assert!(output.results[0].content.contains("hello"));
+        }
     }
 
     #[test]
-    fn runtime_worker_threads_clamps_zero_budget() {
-        let config = ExtractionConfig {
-            concurrency: Some(xberg::core::config::ConcurrencyConfig {
-                max_threads: Some(0),
-                max_concurrent_ocr: None,
-            }),
-            ..Default::default()
-        };
-
-        assert_eq!(runtime_worker_threads(&config), MIN_RUNTIME_THREAD_COUNT);
+    fn batch_extraction_runs_on_the_shared_runtime() {
+        let inputs = ["first", "second"]
+            .map(|text| {
+                ExtractInputWithOptions::new(ExtractInput::from_bytes(text.as_bytes().to_vec(), "text/plain", None))
+            })
+            .to_vec();
+        let output = block_on_extract_batch(inputs, &ExtractionConfig::default()).unwrap();
+        assert_eq!(output.results.len(), 2);
+        assert!(output.results[0].content.contains("first"));
+        assert!(output.results[1].content.contains("second"));
     }
 
     #[test]
-    fn runtime_worker_threads_caps_automatic_budget() {
-        let worker_threads = runtime_worker_threads(&ExtractionConfig::default());
-
-        assert!((MIN_RUNTIME_THREAD_COUNT..=DEFAULT_RUNTIME_THREAD_LIMIT).contains(&worker_threads));
-    }
-
-    #[test]
-    fn batch_runtime_worker_threads_caps_b4_to_four_with_eight_thread_budget() {
-        let config = ExtractionConfig {
-            concurrency: Some(xberg::core::config::ConcurrencyConfig {
-                max_threads: Some(8),
-                max_concurrent_ocr: None,
-            }),
-            max_concurrent_extractions: Some(8),
-            ..Default::default()
-        };
-
-        assert_eq!(batch_runtime_worker_threads(&config, 4), 4);
-    }
-
-    #[test]
-    fn batch_runtime_worker_threads_uses_one_worker_for_zero_or_one_input() {
-        let config = ExtractionConfig {
-            concurrency: Some(xberg::core::config::ConcurrencyConfig {
-                max_threads: Some(8),
-                max_concurrent_ocr: None,
-            }),
-            max_concurrent_extractions: Some(4),
-            ..Default::default()
-        };
-
-        assert_eq!(batch_runtime_worker_threads(&config, 0), MIN_RUNTIME_THREAD_COUNT);
-        assert_eq!(batch_runtime_worker_threads(&config, 1), MIN_RUNTIME_THREAD_COUNT);
-    }
-
-    #[test]
-    fn batch_runtime_worker_threads_respects_document_worker_limit() {
-        let config = ExtractionConfig {
-            concurrency: Some(xberg::core::config::ConcurrencyConfig {
-                max_threads: Some(8),
-                max_concurrent_ocr: None,
-            }),
-            max_concurrent_extractions: Some(2),
-            ..Default::default()
-        };
-
-        assert_eq!(batch_runtime_worker_threads(&config, 6), 2);
-    }
-
-    #[test]
-    fn batch_runtime_worker_threads_never_exceeds_total_cpu_budget() {
-        let config = ExtractionConfig {
-            concurrency: Some(xberg::core::config::ConcurrencyConfig {
-                max_threads: Some(3),
-                max_concurrent_ocr: None,
-            }),
-            max_concurrent_extractions: Some(8),
-            ..Default::default()
-        };
-
-        assert_eq!(batch_runtime_worker_threads(&config, 6), 3);
+    fn the_driver_allows_block_in_place() {
+        let value = block_on_shared(
+            async { tokio::task::block_in_place(|| 7) },
+            &ExtractionConfig::default(),
+        )
+        .unwrap();
+        assert_eq!(value, 7);
     }
 }

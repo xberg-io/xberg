@@ -74,6 +74,28 @@ fn test_score_document_completely_different() {
 }
 
 #[test]
+fn score_document_excludes_leading_front_matter_from_text_and_structure() {
+    let body = "# Report\n\nBody text here.\n";
+    let with_front_matter = format!("---\ntitle: Complex Table Test\nmeta-generator: pandoc\n---\n\n{body}");
+    let gt_text = "Report Body text here.";
+
+    let (tf1, structural) = score_document(&with_front_matter, gt_text, Some(body));
+    let (body_tf1, body_structural) = score_document(body, gt_text, Some(body));
+
+    assert_eq!(tf1, 1.0);
+    assert_eq!(tf1, body_tf1);
+    assert_eq!(structural.sf1, body_structural.sf1);
+}
+
+#[test]
+fn score_document_keeps_a_later_dashed_block_as_body_text() {
+    let content = "Intro.\n\n---\ntitle: kept\n---\n";
+    let (tf1, _) = score_document(content, "Intro. title: kept", None);
+
+    assert_eq!(tf1, 1.0);
+}
+
+#[test]
 fn test_score_document_with_structure() {
     let content = "# Heading\n\nSome paragraph text.\n";
     let gt_markdown = "# Heading\n\nSome paragraph text.\n";

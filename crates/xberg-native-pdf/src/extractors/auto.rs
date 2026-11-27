@@ -514,6 +514,22 @@ pub struct PageSignals {
     pub page_is_empty: bool,
 }
 
+/// The [`PageSignals`] fields raster scan grading reads, from
+/// `PdfDocument::scan_text_signals`. Each equals its namesake in the
+/// `classify_page` result for the same page.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ScanTextSignals {
+    /// [`PageSignals::text_glyph_count`].
+    pub text_glyph_count: usize,
+    /// [`PageSignals::text_area_ratio`].
+    pub text_area_ratio: f32,
+    /// [`PageSignals::invisible_text_ratio`].
+    pub invisible_text_ratio: f32,
+    /// [`PageSignals::producer_prior`].
+    pub producer_prior: ProducerPrior,
+}
+
 /// Cheap per-page classification (the `classify_page` preflight — no
 /// OCR, no rasterisation): kind + confidence + typed reason + the raw
 /// signals (explainable; our differentiator over downstream wrappers).

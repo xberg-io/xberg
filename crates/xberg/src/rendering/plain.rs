@@ -8,7 +8,7 @@
 
 use crate::types::annotations::PdfAnnotation;
 use crate::types::document_structure::ContentLayer;
-use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+use crate::types::internal::{ElementKind, InternalDocument, InternalElement, is_record_group};
 
 use super::common::{
     FootnoteCollector, annotation_display_text, annotation_type_label, get_admonition_kind, get_admonition_title,
@@ -95,7 +95,17 @@ fn render_body_plain(
     let mut last_heading_depth = None;
     let mut after_text_block = false;
     let mut last_writer: Option<usize> = None;
+    // ~keep A record group only sets records apart in markdown; plain output keeps the
+    // nesting its contents would have outside it, so records add no indentation here.
+    let mut open_groups_are_records: Vec<bool> = Vec::new();
     for (i, elem) in doc.elements.iter().enumerate() {
+        match elem.kind {
+            ElementKind::GroupStart => open_groups_are_records.push(is_record_group(elem.attributes.as_ref())),
+            ElementKind::GroupEnd => {
+                open_groups_are_records.pop();
+            }
+            _ => {}
+        }
         if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
             continue;
         }
@@ -117,7 +127,10 @@ fn render_body_plain(
             }
             after_text_block = true;
         } else {
-            render_element_plain(doc, elem, out, &mut last_heading_depth);
+            let record_depth = u16::try_from(open_groups_are_records.iter().filter(|is_record| **is_record).count())
+                .unwrap_or(u16::MAX);
+            let depth = elem.depth.saturating_sub(record_depth);
+            render_element_plain(doc, elem, depth, out, &mut last_heading_depth);
             let plain_text = elem
                 .attributes
                 .as_ref()
@@ -142,9 +155,11 @@ fn render_body_plain(
     }
 }
 
+/// `depth` is the nesting the element renders at: its own depth outside any record group.
 fn render_element_plain(
     doc: &InternalDocument,
     elem: &InternalElement,
+    depth: u16,
     out: &mut String,
     heading_depth: &mut Option<u16>,
 ) {
@@ -169,7 +184,7 @@ fn render_element_plain(
     let elem = projected.as_ref().unwrap_or(elem);
     match elem.kind {
         ElementKind::Title | ElementKind::Heading { .. } | ElementKind::Paragraph => {
-            render_text_plain(elem, out, heading_depth)
+            render_text_plain(elem, depth, out, heading_depth)
         }
         ElementKind::ListItem { .. } => render_list_item_plain(elem, out),
         ElementKind::Code | ElementKind::RawBlock => append_verbatim_plain(&elem.text, out),
@@ -201,7 +216,7 @@ fn render_element_plain(
     }
 }
 
-fn render_text_plain(elem: &InternalElement, out: &mut String, last_heading_depth: &mut Option<u16>) {
+fn render_text_plain(elem: &InternalElement, depth: u16, out: &mut String, last_heading_depth: &mut Option<u16>) {
     if elem.text.is_empty() {
         return;
     }
@@ -209,16 +224,16 @@ fn render_text_plain(elem: &InternalElement, out: &mut String, last_heading_dept
     if is_heading {
         if let Some(last_depth) = *last_heading_depth
             && (last_depth == 0 || last_depth == 1)
-            && last_depth == elem.depth
+            && last_depth == depth
             && !out.is_empty()
             && !out.ends_with("\n\n")
         {
             out.push('\n');
         }
-        *last_heading_depth = Some(elem.depth);
+        *last_heading_depth = Some(depth);
     }
-    if matches!(elem.kind, ElementKind::Paragraph) || (is_heading && elem.depth > 0) {
-        out.push_str(&"  ".repeat(elem.depth as usize));
+    if matches!(elem.kind, ElementKind::Paragraph) || (is_heading && depth > 0) {
+        out.push_str(&"  ".repeat(depth as usize));
     }
     out.push_str(&elem.text);
     if is_heading {

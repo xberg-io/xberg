@@ -64,7 +64,16 @@ impl Run {
             };
         }
 
-        let mut result = self.text.clone();
+        // Markers wrap the text between the run's outer whitespace: a closing `**` after the
+        // paragraph's trailing newline is not right-flanking, so CommonMark shows it literally. ~keep
+        let text = self.text.as_str();
+        let core = text.trim();
+        if core.is_empty() {
+            return self.text.clone();
+        }
+        let leading = &text[..text.len() - text.trim_start().len()];
+        let trailing = &text[leading.len() + core.len()..];
+        let mut result = core.to_string();
 
         if self.formatting.bold {
             result = format!("**{}**", result);
@@ -79,7 +88,7 @@ impl Run {
             result = format!("~~{}~~", result);
         }
 
-        result
+        format!("{leading}{result}{trailing}")
     }
 }
 
@@ -183,6 +192,52 @@ impl SlideElement {
             SlideElement::Unknown => ElementPosition::default(),
         }
     }
+}
+
+/// Indices of `elements` in reading order: rows top to bottom, and left to right within a
+/// row. Shapes form a row when they sit side by side, so a box a little higher than its
+/// left-hand neighbour no longer jumps ahead of it, as a plain `(y, x)` sort made it do.
+pub(super) fn reading_order(elements: &[SlideElement]) -> Vec<usize> {
+    let mut by_top: Vec<usize> = (0..elements.len()).collect();
+    by_top.sort_by_key(|&i| {
+        let pos = elements[i].position();
+        (pos.y, pos.x)
+    });
+
+    let mut ordered = Vec::with_capacity(by_top.len());
+    let mut row: Vec<usize> = Vec::new();
+    let mut row_anchor = ElementPosition::default();
+    for idx in by_top {
+        let pos = elements[idx].position();
+        if !row.is_empty() && !share_row(&row_anchor, &pos) {
+            flush_row(elements, &mut row, &mut ordered);
+        }
+        if row.is_empty() {
+            row_anchor = pos;
+        }
+        row.push(idx);
+    }
+    flush_row(elements, &mut row, &mut ordered);
+    ordered
+}
+
+/// Two shapes share a row when their vertical overlap covers at least half of the taller
+/// one, so a full-slide background or a tall sidebar does not pull every shape into its row.
+fn share_row(a: &ElementPosition, b: &ElementPosition) -> bool {
+    if a.cy <= 0 || b.cy <= 0 {
+        return false;
+    }
+    let bottom = a.y.saturating_add(a.cy).min(b.y.saturating_add(b.cy));
+    let overlap = bottom.saturating_sub(a.y.max(b.y));
+    overlap.saturating_mul(2) >= a.cy.max(b.cy)
+}
+
+fn flush_row(elements: &[SlideElement], row: &mut Vec<usize>, ordered: &mut Vec<usize>) {
+    row.sort_by_key(|&i| {
+        let pos = elements[i].position();
+        (pos.x, pos.y)
+    });
+    ordered.append(row);
 }
 
 #[derive(Debug)]
@@ -359,11 +414,7 @@ impl Slide {
             builder.add_slide_header(self.slide_number);
         }
 
-        let mut element_indices: Vec<usize> = (0..self.elements.len()).collect();
-        element_indices.sort_by_key(|&i| {
-            let pos = self.elements[i].position();
-            (pos.y, pos.x)
-        });
+        let element_indices = reading_order(&self.elements);
 
         let title_idx = Self::find_markdown_title_index(&self.elements, &element_indices);
 
@@ -419,11 +470,7 @@ impl Slide {
         config: &ParserConfig,
         image_indices: &[Option<u32>],
     ) -> Vec<PptxInternalSlideElement> {
-        let mut element_indices: Vec<usize> = (0..self.elements.len()).collect();
-        element_indices.sort_by_key(|&i| {
-            let pos = self.elements[i].position();
-            (pos.y, pos.x)
-        });
+        let element_indices = reading_order(&self.elements);
 
         let title_idx = Self::find_markdown_title_index(&self.elements, &element_indices);
         let mut internal_elements = Vec::with_capacity(element_indices.len());

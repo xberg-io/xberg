@@ -15,6 +15,17 @@
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 use once_cell::sync::OnceCell;
 
+/// Box the future `make` builds, inside a frame of its own.
+///
+/// `Box::pin(f(..))` materialises the whole future in the caller's frame before moving it to the heap
+/// (rust-lang/rust#54628). In an async fn that frame is its `poll`, which stays on the stack under every
+/// deeper poll, and a frame above 4 KiB is probed page by page on entry, so the temporary is resident
+/// whether or not the branch that builds it runs. Here it lives in a frame popped before the first poll.
+#[inline(never)]
+pub fn pin_boxed<F: std::future::Future>(make: impl FnOnce() -> F) -> std::pin::Pin<Box<F>> {
+    Box::pin(make())
+}
+
 /// The shared runtime. Initialized on first use and intentionally never dropped
 /// (it lives for the remainder of the process), so it can never trigger the
 /// "drop a runtime in a blocking context" panic.
@@ -31,8 +42,42 @@ static GLOBAL_RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
+/// Worker-thread count for the global runtime.
+///
+/// `tokio_env` is the raw `TOKIO_WORKER_THREADS` value. A nonzero count that parses (after trimming)
+/// wins; the count is always set explicitly on the builder, so tokio's own stricter env parse never
+/// runs. Otherwise the count is the process thread budget (`max_threads`, cgroup quota, or the default
+/// cap) bounded by the host CPU count, and at least one. One worker suffices to avoid deadlock with
+/// `block_in_place`, which hands the worker's core to a fresh thread before blocking.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn resolve_worker_threads(tokio_env: Option<&str>, thread_budget: usize, host_cpus: usize) -> usize {
+    tokio_env
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or_else(|| thread_budget.min(host_cpus).max(1))
+}
+
+/// Build a multi-thread runtime with exactly `workers` workers and the large worker stack.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn build_runtime(workers: usize) -> crate::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(workers)
+        .enable_all()
+        // See GLOBAL_RUNTIME_STACK_SIZE_BYTES: the extraction future overflows
+        // tokio's ~2 MB default worker stack and aborts rather than panicking.
+        .thread_stack_size(GLOBAL_RUNTIME_STACK_SIZE_BYTES)
+        .build()
+        .map_err(|e| crate::XbergError::Plugin {
+            message: format!("Failed to create global Tokio runtime: {e}"),
+            plugin_name: "runtime".to_string(),
+        })
+}
+
 /// Returns a reference to the shared multi-thread Tokio runtime, building it on
 /// first call.
+///
+/// The worker count is fixed by the first caller: it follows the thread budget in effect at
+/// that moment (see [`resolve_worker_threads`]).
 ///
 /// Use this for every synchronous wrapper that needs to `block_on` a future
 /// from a thread that is **not** already inside a Tokio runtime. Callers that
@@ -45,18 +90,50 @@ const GLOBAL_RUNTIME_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 /// exhaustion).
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn global_runtime() -> crate::Result<&'static tokio::runtime::Runtime> {
+    global_runtime_for(None)
+}
+
+/// As [`global_runtime`], but a first call made before the thread pools are initialized sizes
+/// the runtime from `concurrency` rather than the automatic budget.
+///
+/// A host that drives extraction itself (see [`block_on_shared_runtime`]) builds the runtime before
+/// `init_thread_pools` installs its budget, so without its config a `max_threads` of 4 would still
+/// get a worker per default-cap thread. Extraction entry points keep the automatic budget: a
+/// server's first request must not fix the worker count for every later one.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn global_runtime_for(
+    concurrency: Option<&crate::core::config::ConcurrencyConfig>,
+) -> crate::Result<&'static tokio::runtime::Runtime> {
     GLOBAL_RUNTIME.get_or_try_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            // See GLOBAL_RUNTIME_STACK_SIZE_BYTES: the extraction future overflows
-            // tokio's ~2 MB default worker stack and aborts rather than panicking.
-            .thread_stack_size(GLOBAL_RUNTIME_STACK_SIZE_BYTES)
-            .build()
-            .map_err(|e| crate::XbergError::Plugin {
-                message: format!("Failed to create global Tokio runtime: {e}"),
-                plugin_name: "runtime".to_string(),
-            })
+        build_runtime(resolve_worker_threads(
+            std::env::var("TOKIO_WORKER_THREADS").ok().as_deref(),
+            crate::core::config::concurrency::active_thread_budget_for(concurrency),
+            num_cpus::get(),
+        ))
     })
+}
+
+/// Drive `future` to completion on the shared 16 MiB-stack runtime from a thread outside any runtime.
+///
+/// For a host that would otherwise build a runtime only to await the task `run_on_large_stack`
+/// spawns, as the CLI does: the calling thread parks in `block_on` and the extraction runs on a
+/// worker of this same runtime, so no second runtime or worker thread exists. The runtime is
+/// multi-thread, so `block_in_place` stays available to the polled future. A first call sizes it
+/// from `concurrency` (see `global_runtime_for`).
+///
+/// # Errors
+///
+/// Returns an error if the runtime cannot be created.
+///
+/// # Panics
+///
+/// Panics when called from inside a Tokio runtime, as [`tokio::runtime::Runtime::block_on`] does.
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub fn block_on_shared_runtime<F: std::future::Future>(
+    future: F,
+    concurrency: Option<&crate::core::config::ConcurrencyConfig>,
+) -> crate::Result<F::Output> {
+    Ok(global_runtime_for(concurrency)?.block_on(future))
 }
 
 /// Keep direct calls on foreign runtimes inline: they may already hold the only blocking worker.
@@ -218,6 +295,36 @@ mod large_stack_tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
+    #[test]
+    fn worker_threads_follow_the_budget_bounded_by_host_cpus() {
+        assert_eq!(super::resolve_worker_threads(None, 4, 14), 4);
+        assert_eq!(super::resolve_worker_threads(None, 32, 8), 8);
+        assert_eq!(super::resolve_worker_threads(None, 0, 8), 1);
+        assert_eq!(super::resolve_worker_threads(None, 1, 1), 1);
+    }
+
+    #[test]
+    fn tokio_worker_threads_env_wins_and_is_trimmed() {
+        assert_eq!(super::resolve_worker_threads(Some("3"), 4, 14), 3);
+        assert_eq!(super::resolve_worker_threads(Some(" 1 "), 4, 14), 1);
+        assert_eq!(super::resolve_worker_threads(Some("20"), 4, 14), 20);
+    }
+
+    #[test]
+    fn invalid_or_zero_tokio_env_falls_back_to_the_budget() {
+        assert_eq!(super::resolve_worker_threads(Some("0"), 4, 14), 4);
+        assert_eq!(super::resolve_worker_threads(Some("many"), 4, 14), 4);
+        assert_eq!(super::resolve_worker_threads(Some(""), 4, 14), 4);
+    }
+
+    #[test]
+    fn built_runtime_has_the_requested_worker_count() {
+        let runtime = super::build_runtime(3).unwrap();
+        assert_eq!(runtime.metrics().num_workers(), 3);
+        let one = super::build_runtime(1).unwrap();
+        assert_eq!(one.metrics().num_workers(), 1);
+    }
+
     #[tokio::test]
     async fn blocking_work_reports_cancellation_after_the_parser_returns() {
         let token = crate::cancellation::CancellationToken::new();
@@ -307,19 +414,50 @@ mod large_stack_tests {
         assert_eq!(run_on_large_stack(async { 7 }).await.unwrap(), 7);
     }
 
+    #[inline(never)]
+    fn deep(depth: usize) -> usize {
+        let frame = [depth as u8; 4096];
+        if depth == 0 {
+            0
+        } else {
+            deep(depth - 1) + usize::from(std::hint::black_box(frame)[0] & 1)
+        }
+    }
+
     #[tokio::test]
     async fn task_runs_on_a_thread_with_the_large_stack() {
-        #[inline(never)]
-        fn deep(depth: usize) -> usize {
-            let frame = [depth as u8; 4096];
-            if depth == 0 {
-                0
-            } else {
-                deep(depth - 1) + usize::from(std::hint::black_box(frame)[0] & 1)
-            }
-        }
         // 4 MiB of frames: overflows a 2 MB worker, fits the 16 MiB runtime.
         assert!(run_on_large_stack(async { deep(1024) }).await.is_ok());
+    }
+
+    // The CLI drives extraction through this; a current-thread driver would panic in `block_in_place`. ~keep
+    #[test]
+    fn shared_runtime_driver_allows_block_in_place() {
+        let value = super::block_on_shared_runtime(async { tokio::task::block_in_place(|| 7) }, None).unwrap();
+        assert_eq!(value, 7);
+    }
+
+    #[test]
+    fn shared_runtime_driver_and_large_stack_task_share_one_runtime() {
+        let (outer, inner) = super::block_on_shared_runtime(
+            async {
+                let outer = tokio::runtime::Handle::current().id();
+                let inner = run_on_large_stack(async {
+                    deep(1024);
+                    tokio::runtime::Handle::current().id()
+                })
+                .await
+                .unwrap();
+                (outer, inner)
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            outer, inner,
+            "the driver and the extraction task must share one runtime"
+        );
+        assert_eq!(super::global_runtime().unwrap().handle().id(), outer);
     }
 
     // Reverting to `.instrument(Span::current())` alone drops the event: the worker has no thread-local

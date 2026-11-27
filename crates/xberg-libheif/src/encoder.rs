@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::ptr;
 use std::sync::Mutex;
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::utils::cstr_to_str;
 use crate::{ColorConversionOptions, HeifError, HeifErrorCode, HeifErrorSubCode, ImageOrientation, Result};
@@ -243,7 +243,7 @@ impl EncodingOptions {
     pub fn new() -> Result<Self> {
         // SAFETY: The allocator returns a fully defaulted struct, including `version`,
         // which this wrapper owns once the result is non-null.
-        let inner_ptr = unsafe { lh::heif_encoding_options_alloc() };
+        let inner_ptr = unsafe { lh::heif_encoding_options_alloc() }?;
         match ptr::NonNull::new(inner_ptr) {
             Some(inner) => Ok(Self { inner }),
             None => Err(HeifError {
@@ -256,8 +256,12 @@ impl EncodingOptions {
 }
 
 impl Default for EncodingOptions {
+    /// # Panics
+    ///
+    /// When libheif cannot allocate the options or cannot be loaded (`dynamic` feature);
+    /// [`EncodingOptions::new`] returns either as an error.
     fn default() -> Self {
-        Self::new().expect("heif_encoding_options_alloc() returns a null pointer")
+        Self::new().expect("libheif cannot allocate encoding options or cannot be loaded")
     }
 }
 

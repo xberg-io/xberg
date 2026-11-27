@@ -31,7 +31,7 @@ fn mock_bold_char(c: char, x: f32, y: f32, size: f32) -> TextChar {
     TextChar {
         char: c,
         bbox: Rect::new(x, y, width, size),
-        font_name: "Times-Bold".to_string(),
+        font_name: "Times-Bold".into(),
         font_size: size,
         font_weight: FontWeight::Bold,
         origin_x: x,

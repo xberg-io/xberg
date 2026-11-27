@@ -118,7 +118,7 @@ fn supports_output(config: &ExtractionConfig) -> bool {
 fn is_default_english_profile(ocr: &OcrConfig) -> bool {
     ocr.language == ["eng"]
         && ocr.tesseract_config.is_none()
-        && ocr.backend_options.is_none()
+        && !ocr.has_tuning_backend_options()
         && ocr.element_config.is_none()
         && ocr.output_format.is_none()
         && ocr.quality_thresholds.as_ref().is_none_or(|thresholds| {
@@ -721,6 +721,30 @@ pub(super) fn place(document: &mut InternalDocument, title: Title, output_format
 mod tests {
     use super::*;
     use crate::types::OcrConfidence;
+
+    #[test]
+    fn a_cold_cache_request_keeps_the_default_photo_title_route() {
+        let stock = OcrConfig::default();
+        let uncached = ExtractionConfig {
+            use_cache: false,
+            ocr: Some(stock.clone()),
+            ..Default::default()
+        };
+        assert!(eligible(&uncached, &stock, "image/png"));
+        let cache_switch_only = OcrConfig {
+            backend_options: Some(serde_json::json!({ "use_cache": false })),
+            ..stock.clone()
+        };
+        assert!(eligible(&uncached, &cache_switch_only, "image/png"));
+        let tuned = OcrConfig {
+            backend_options: Some(serde_json::json!({ "use_cache": false, "source_dpi": 150.0 })),
+            ..stock
+        };
+        assert!(
+            !eligible(&uncached, &tuned, "image/png"),
+            "a real backend tuning still opts out"
+        );
+    }
 
     fn words() -> [MaskWord; 2] {
         [

@@ -129,7 +129,7 @@ mod tests {
 
     fn failed_image(budget: bool) -> FailedOcrRun {
         if budget {
-            let (document, pages, rotations) = super::super::open_pdf_for_full_ocr(SCAN).unwrap();
+            let (document, pages, rotations) = super::super::open_pdf_for_full_ocr(PROGRESSIVE_SCAN).unwrap();
             assert_eq!(pages, 1);
             let limits = crate::extractors::security::SecurityLimits {
                 max_content_size: 80 * 1024 * 1024,
@@ -233,6 +233,12 @@ mod tests {
     const SCAN: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../fixtures/repros/label-scan-over-image-budget/label-scan.pdf"
+    ));
+    /// The same scan as a progressive JPEG. The renderer decodes it only at full size, 92 857 078
+    /// bytes at 80 MiB, so its page render is refused; the baseline scan now renders at that budget.
+    const PROGRESSIVE_SCAN: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/repros/label-scan-over-image-budget/label-scan-progressive.pdf"
     ));
 
     #[test]

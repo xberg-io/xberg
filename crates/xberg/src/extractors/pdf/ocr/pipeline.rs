@@ -181,6 +181,23 @@ pub(super) fn pdf_ocr_table_recognition_enabled(config: &ExtractionConfig) -> bo
         .is_none_or(|layout| layout.table_model != crate::core::config::layout::TableModel::Disabled)
 }
 
+/// Whether the force-OCR PDF route needs a TATR model: table recognition is on and layout
+/// detection found a table region on some page. TATR reads only `Table` regions, so a document
+/// without one would load the model for nothing.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "layout-detection"))]
+pub(super) fn pdf_ocr_needs_table_model(
+    config: &ExtractionConfig,
+    layout_detections: Option<&[crate::layout::DetectionResult]>,
+) -> bool {
+    let has_table_region = layout_detections.is_some_and(|pages| {
+        pages
+            .iter()
+            .flat_map(|page| &page.detections)
+            .any(|detection| detection.class_name == crate::layout::LayoutClass::Table)
+    });
+    has_table_region && pdf_ocr_table_recognition_enabled(config)
+}
+
 /// ~keep The warning for a force-OCR extraction whose table model could not be checked out although
 /// layout detection found table regions and table recognition is on. `None` when a model is held,
 /// recognition is off, or no page has a table region.
@@ -190,13 +207,7 @@ pub(super) fn tatr_unavailable_warning(
     layout_detections: Option<&[crate::layout::DetectionResult]>,
     model_held: bool,
 ) -> Option<crate::types::ProcessingWarning> {
-    let has_table_region = layout_detections.is_some_and(|pages| {
-        pages
-            .iter()
-            .flat_map(|page| &page.detections)
-            .any(|detection| detection.class_name == crate::layout::LayoutClass::Table)
-    });
-    (!model_held && has_table_region && pdf_ocr_table_recognition_enabled(config))
+    (!model_held && pdf_ocr_needs_table_model(config, layout_detections))
         .then(|| crate::layout::table_model_unavailable_warning("pdf_tables", "TATR"))
 }
 
@@ -1545,6 +1556,7 @@ impl<'a> MixedOcrContext<'a> {
             content,
             config,
             routing.preprocessing_render_dpi,
+            direct_route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
         )
         .await;
 
@@ -1783,7 +1795,7 @@ impl<'a> MixedOcrContext<'a> {
                     .config
                     .ocr
                     .as_ref()
-                    .is_some_and(|ocr| ocr.backend_options.is_none())
+                    .is_some_and(|ocr| !ocr.has_tuning_backend_options())
                 && self
                     .number_layers
                     .as_ref()
@@ -2248,6 +2260,10 @@ fn resolve_mixed_ocr_routing(
 /// render DPI, where one page costs an order of magnitude more than the assumption does. Each
 /// page's own peak is still checked against `max_content_size`, one page at a time, before that
 /// page is encoded. ~keep
+///
+/// A batch renders every page before any of them is read, so a page the recognizer cannot admit
+/// yet only waits with its raster resident. `recognition_sessions` caps the width at what
+/// recognition admits; see [`bound_batch_to_recognition`].
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 async fn resolve_mixed_batch_size(
     page_indices: &[usize],
@@ -2255,6 +2271,7 @@ async fn resolve_mixed_batch_size(
     content: &[u8],
     config: &ExtractionConfig,
     preprocessing_render_dpi: Option<i32>,
+    recognition_sessions: Option<usize>,
 ) -> usize {
     let configured_batch_size = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
     let render_page_cap = config
@@ -2290,8 +2307,76 @@ async fn resolve_mixed_batch_size(
             "Reduced the per-page OCR batch to fit available memory"
         );
     }
-    batch_size
+    bound_batch_to_recognition(batch_size, recognition_sessions)
 }
+
+/// The widest batch the recognizer can read at once.
+///
+/// The direct built-in Tesseract route admits `recognition_sessions` reads at a time
+/// (`max_concurrent_ocr`, or the memory-bounded default). Each page beyond that is rendered and
+/// encoded with the rest of its batch, then holds its raster until a session frees, so its
+/// render buys no throughput and only raises the peak. With `max_concurrent_ocr: 1`, an
+/// eight-page batch of a 300 DPI scan rendered all eight pages (about 1 GB resident) to read
+/// them one at a time. `None` leaves the width alone: a backend without that admission limit
+/// reads every page of its batch at once. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn bound_batch_to_recognition(batch_size: usize, recognition_sessions: Option<usize>) -> usize {
+    let Some(sessions) = recognition_sessions.map(|sessions| sessions.max(1)) else {
+        return batch_size;
+    };
+    if sessions >= batch_size {
+        return batch_size;
+    }
+    tracing::debug!(
+        batch_size,
+        recognition_sessions = sessions,
+        "Narrowed the per-page OCR batch to the recognition sessions that read it"
+    );
+    sessions
+}
+
+/// Recognition sessions that bound this route's batch width, or `None` when nothing does.
+///
+/// Only the direct route to the built-in Tesseract backend has an admission limit: the
+/// pipeline route reads through stages that may each be a different backend, and a custom
+/// backend reads every page it is handed at once.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn direct_route_recognition_sessions(
+    effective_pipeline: Option<&crate::core::config::OcrPipelineConfig>,
+    backend: Option<&std::sync::Arc<dyn crate::plugins::OcrBackend>>,
+) -> Option<usize> {
+    if effective_pipeline.is_some() {
+        return None;
+    }
+    let backend = backend?;
+    #[cfg(test)]
+    {
+        let pinned = TEST_RECOGNITION_SESSIONS.load(std::sync::atomic::Ordering::SeqCst);
+        if pinned != 0 {
+            return Some(pinned);
+        }
+    }
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    {
+        crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .is_builtin_tesseract(backend)
+            .then(crate::core::config::concurrency::recognition_concurrency)
+    }
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    {
+        let _ = backend;
+        None
+    }
+}
+
+/// Recognition sessions to report for any direct-route backend instead of asking whether it is
+/// the built-in Tesseract one, so a test can drive the batch bound with a probe backend. The
+/// process-wide limit itself is latched by the first extraction and cannot be set per test.
+///
+/// Zero means "not set". Process-wide, so every test that sets it is `#[serial]`.
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) static TEST_RECOGNITION_SESSIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 impl MixedOcrContext<'_> {
@@ -6807,10 +6892,10 @@ pub(super) fn adapt_batch_size_to_memory_inner(
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) const UNMEASURED_OCR_PAGE_WORKING_SET_BYTES: usize = 150 * 1024 * 1024;
 
-/// One page's render-and-encode working set at the DPI this route renders it: the raster,
-/// the RGB clone the PNG encoder needs, and the PNG buffer, which is what a batch holds per
-/// page while it runs. Falls back to [`UNMEASURED_OCR_PAGE_WORKING_SET_BYTES`] when the
-/// dimensions overflow the estimate.
+/// One page's render-and-encode working set at the DPI this route renders it: the renderer's
+/// RGBA bitmap, the RGB raster decoded from it, the RGB clone the PNG encoder needs, and the PNG
+/// buffer, which is what a batch holds per page while it runs. Falls back to
+/// [`UNMEASURED_OCR_PAGE_WORKING_SET_BYTES`] when the dimensions overflow the estimate.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn ocr_page_working_set_bytes(
     page_width_pt: f64,
@@ -6818,6 +6903,10 @@ pub(super) fn ocr_page_working_set_bytes(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> usize {
     const PDF_POINTS_PER_INCH: f64 = 72.0;
+    // The encode estimate starts from the decoded RGB raster, but the renderer's RGBA bitmap is
+    // resident beside it while a page renders. Without it the estimate read 87 MB for a 300 DPI
+    // A4 scan whose measured render wave cost about 115 MB a page. ~keep
+    const RENDER_SOURCE_BYTES_PER_PIXEL: u64 = 4;
 
     let render_dpi = crate::image::dpi::effective_pdf_render_dpi(images_config, page_width_pt, page_height_pt);
     let width = ((page_width_pt / PDF_POINTS_PER_INCH) * f64::from(render_dpi))
@@ -6827,8 +6916,12 @@ pub(super) fn ocr_page_working_set_bytes(
         .round()
         .max(1.0) as u32;
 
-    estimate_png_encode_page_peak_bytes(width, height)
-        .ok()
+    let render_source =
+        crate::extraction::image_decode::decoded_byte_count(width, height, RENDER_SOURCE_BYTES_PER_PIXEL).ok();
+    let encode = estimate_png_encode_page_peak_bytes(width, height).ok();
+    render_source
+        .zip(encode)
+        .and_then(|(render_source, encode)| render_source.checked_add(encode))
         .and_then(|bytes| usize::try_from(bytes).ok())
         .filter(|bytes| *bytes > 0)
         .unwrap_or(UNMEASURED_OCR_PAGE_WORKING_SET_BYTES)
@@ -8107,7 +8200,9 @@ fn open_merge_geometry_document(
         .unwrap_or(&[]);
     #[cfg(test)]
     geometry_session_tests::record_open();
-    crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords).ok()
+    let document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(content, passwords).ok()?;
+    document.doc.set_keep_white_text(super::super::keeps_white_text(config));
+    Some(document)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

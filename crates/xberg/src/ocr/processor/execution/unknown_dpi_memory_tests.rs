@@ -182,3 +182,107 @@ fn a_real_colour_receipt_shrinks_its_engine_selected_upscale_to_the_default_work
         .to_string();
     assert!(error.contains("native image workspace"), "{error}");
 }
+
+/// Ink blocks 8 px wide and 32 px tall on the 8 px JPEG grid decode exactly, so the glyph estimator reads
+/// 32 px glyphs and infers a slight (36/32) upscale to 300 DPI. ~keep
+fn glyph_block_jpeg(width: u16, height: u16) -> Vec<u8> {
+    let (columns, rows) = (usize::from(width), usize::from(height));
+    let mut rgb = vec![255; columns * rows * 3];
+    for y in (0..rows).filter(|y| y % 64 < 32) {
+        for x in (0..columns).filter(|x| x % 32 < 8) {
+            let offset = (y * columns + x) * 3;
+            rgb[offset..offset + 3].fill(0);
+        }
+    }
+    crate::extraction::image::jpeg_fixture::baseline_rgb_jpeg(&rgb, width, height)
+}
+
+/// ndl_meiji_vertical_01.jpg (3630x2777, no density): the inferred 300 DPI raster fits the native phase,
+/// but the resize that produces it holds the source, intermediate and destination RGB at once and does
+/// not. The engine-selected upscale shrinks to the largest size that fits instead of failing. ~keep
+#[test]
+fn inferred_upscale_whose_resize_alone_exceeds_the_limit_shrinks_to_fit() {
+    let (width, height) = (3630, 2777);
+    let bytes = glyph_block_jpeg(width as u16, height as u16);
+    assert!(resolve_known_source_dpi(None, &bytes, width, height).is_none());
+    let policy = crate::types::ImagePreprocessingConfig::default();
+    let decoded = image::load_from_memory(&bytes).expect("decode fixture").to_rgb8();
+    let source_dpi = crate::image::preprocessing::inferred_raster_dpi(
+        decoded.as_raw(),
+        width as usize,
+        height as usize,
+        policy.target_dpi,
+    )
+    .expect("the glyph blocks give an inferred resolution");
+    let dpi_config = super::ocr_dpi_config(&policy, None);
+    let requested =
+        crate::image::preprocessing::normalized_image_dimensions(width, height, &dpi_config, Some(source_dpi));
+    assert!(
+        requested.0 > width && requested.1 > height,
+        "{requested:?} at {source_dpi} DPI"
+    );
+    let limit = super::native_image_budget::known_phase_peak(requested.0, requested.1, bytes.len(), Some(&policy))
+        .unwrap()
+        .expect("default policy has a modelled native phase") as usize;
+    let resize_error =
+        super::dpi_workspace::check_known_dpi_resize(width, height, source_dpi, &dpi_config, bytes.len(), limit)
+            .expect_err("the requested resize workspace exceeds the native-phase limit");
+    assert!(
+        resize_error.to_string().contains("DPI resize workspace"),
+        "{resize_error}"
+    );
+
+    let prepared = prepare_encoded_ocr_image(
+        &bytes,
+        &SecurityLimits {
+            max_content_size: limit,
+            ..Default::default()
+        },
+        &TesseractConfig {
+            known_full_page_scan: true,
+            ..Default::default()
+        },
+        None,
+        false,
+    )
+    .expect("the engine-selected upscale shrinks until its resize fits");
+    assert!(
+        prepared.width > width && prepared.width < requested.0,
+        "{}x{} for requested {requested:?}",
+        prepared.width,
+        prepared.height
+    );
+    assert!(
+        prepared.height > height && prepared.height < requested.1,
+        "{}x{} for requested {requested:?}",
+        prepared.width,
+        prepared.height
+    );
+}
+
+#[test]
+fn ndl_meiji_scan_upscales_within_the_default_limit() {
+    let Some(scan) = crate::utils::read_test_fixture("images/ndl_meiji_vertical_01.jpg") else {
+        return;
+    };
+    let prepared = prepare_encoded_ocr_image(
+        &scan,
+        &SecurityLimits::default(),
+        &TesseractConfig::default(),
+        None,
+        false,
+    )
+    .expect("the inferred upscale shrinks to the default workspace instead of failing the image");
+    assert!(
+        prepared.width > 3630 && prepared.height > 2777,
+        "{}x{}",
+        prepared.width,
+        prepared.height
+    );
+    assert!(
+        prepared.width < 4092 && prepared.height < 3130,
+        "{}x{}",
+        prepared.width,
+        prepared.height
+    );
+}

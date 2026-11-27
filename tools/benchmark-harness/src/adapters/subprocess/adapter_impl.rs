@@ -105,6 +105,7 @@ impl FrameworkAdapter for SubprocessAdapter {
                 "<output-dir>",
                 "<output-format>",
                 self.args.iter().any(|arg| arg == "--no-ocr"),
+                None,
             );
             return Some(crate::provenance::ExecutableProvenance::from_invocation(
                 self.liteparse_batch_command(),
@@ -130,6 +131,12 @@ impl FrameworkAdapter for SubprocessAdapter {
             Some(crate::types::BatchEntryPoint::LiteparseBatchParse) => (Some(requested), Some(self.batch_workers)),
             None => (Some(requested), Some(requested)),
         }
+    }
+    fn configured_tessdata_model(&self) -> Option<xberg::TessdataModel> {
+        (self.is_xberg() && self.tessdata_model != xberg::TessdataModel::Fast).then_some(self.tessdata_model)
+    }
+    fn injected_xberg_env(&self) -> Vec<(String, String)> {
+        self.launcher_env.clone()
     }
     fn configured_thread_budget(&self) -> Option<usize> {
         if !self.is_xberg() {

@@ -265,19 +265,13 @@ impl PptxExtractor {
         saw_title: &mut bool,
         budget: &mut SecurityBudget,
     ) -> Result<()> {
-        let mut in_notes = false;
         for block in content.split("\n\n") {
             budget.step()?;
             let trimmed = block.trim();
             if trimmed.is_empty() {
                 continue;
             }
-            if trimmed.starts_with("### Notes:") || trimmed == "Notes:" {
-                in_notes = true;
-                continue;
-            }
             if let Some(title_text) = trimmed.strip_prefix("# ") {
-                in_notes = false;
                 *saw_title = true;
                 let (title_text, title_formulas) =
                     Self::split_line_math(title_text, context.forms, context.formulas, context.plain_output);
@@ -288,9 +282,6 @@ impl PptxExtractor {
                     builder.push_heading(2, title, Some(slide_num), None);
                 }
                 continue;
-            }
-            if in_notes {
-                in_notes = false;
             }
             if trimmed.starts_with('|') {
                 let cells = Self::parse_markdown_table(trimmed);
@@ -1511,6 +1502,61 @@ mod tests {
 
         assert!(pages[2].speaker_notes.is_none());
         assert_eq!(pages[2].section_name.as_deref(), Some("Chapter 2"));
+    }
+
+    /// Speaker notes belong to `pages[].speaker_notes`; plain content must leave them out
+    /// exactly as markdown content does.
+    #[tokio::test]
+    async fn test_plain_content_leaves_out_speaker_notes_like_markdown() {
+        use crate::core::config::{ExtractionConfig, OutputFormat, PageConfig};
+        use crate::extraction::derive::derive_extraction_result;
+        use crate::plugins::InternalDocumentExtractor;
+
+        let pptx = crate::extraction::pptx::tests::create_pptx_with_sections_and_notes(
+            &[("Title", Some("Intro notes."))],
+            &[("Chapter 1", &[1])],
+        );
+        let mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+        for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+            let config = ExtractionConfig {
+                pages: Some(PageConfig::default()),
+                output_format: output_format.clone(),
+                ..Default::default()
+            };
+            let internal_doc = PptxExtractor::new()
+                .extract_content(&pptx, mime, &config)
+                .await
+                .expect("extraction failed");
+            let result = derive_extraction_result(internal_doc, true, output_format);
+
+            assert!(!result.content.contains("Intro notes."), "{:?}", result.content);
+            assert!(!result.content.contains("Notes:"), "{:?}", result.content);
+            let pages = result.pages.as_ref().expect("pages should be populated");
+            assert_eq!(pages[0].speaker_notes.as_deref(), Some("Intro notes."));
+        }
+    }
+
+    /// Slide text that begins with "Notes:" is authored content, not speaker notes.
+    #[test]
+    fn test_build_internal_document_keeps_authored_text_starting_with_notes() {
+        let content = "# Agenda\n\nNotes:\nBring the signed forms.\n\n### Notes: on scope\n";
+        for plain_output in [true, false] {
+            let mut budget = SecurityBudget::with_defaults();
+            let slides = markdown_slides(vec![(1, content.to_string())]);
+            let doc =
+                PptxExtractor::build_internal_document(&slides, 1, &[], plain_output, false, &mut budget).unwrap();
+            let texts: Vec<&str> = doc.elements.iter().map(|e| e.text.as_str()).collect();
+            assert!(texts.contains(&"Notes:"), "plain_output={plain_output}: {texts:?}");
+            assert!(
+                texts.contains(&"Bring the signed forms."),
+                "plain_output={plain_output}: {texts:?}"
+            );
+            assert!(
+                texts.iter().any(|t| t.contains("Notes: on scope")),
+                "plain_output={plain_output}: {texts:?}"
+            );
+        }
     }
 
     /// GH#639: PPTX had no top-level archive entry-count check at all, so this fails

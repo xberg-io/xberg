@@ -32,15 +32,20 @@ impl<'doc> TextExtractor<'doc> {
         // used below to rescue a narrow word gap the fixed kerning guard
         // suppressed. Computed before the fold consumes the list. ~keep
         let line_thresholds = Self::bimodal_line_gap_thresholds(&spans);
+        let ink_rows = InkRows::new(&ink_boxes);
         let mut merged = Vec::with_capacity(old_len);
         let mut current_span: Option<TextSpan> = None;
         // Whether the last run folded into `current_span` is a ligature that the decoder expanded to
         // letters. The flag on the span itself is cleared at a merge, so the fold keeps the tail here. ~keep
         let mut tail_is_expanded_ligature = false;
+        // Whether the last run folded into `current_span` is OCR-layer text (`ocr_layer_spans`). ~keep
+        let mut tail_is_ocr_layer = false;
 
         for (span_idx, span) in spans.into_iter().enumerate() {
             let preceding_is_expanded_ligature =
                 std::mem::replace(&mut tail_is_expanded_ligature, span.is_expanded_ligature());
+            let span_is_ocr_layer = self.ocr_layer_spans.contains(&SpanKey::of(&span));
+            let preceding_is_ocr_layer = std::mem::replace(&mut tail_is_ocr_layer, span_is_ocr_layer);
             if current_span.is_none() {
                 current_span = Some(span);
                 continue;
@@ -124,7 +129,7 @@ impl<'doc> TextExtractor<'doc> {
             let reliable_widths = continues_pen
                 || self
                     .fonts
-                    .get(&current.font_name)
+                    .get(current.font_name.as_str())
                     .map(|f| f.has_explicit_widths())
                     .unwrap_or(true);
             let space_gap = corrected_space_gap(
@@ -274,11 +279,16 @@ impl<'doc> TextExtractor<'doc> {
                 0.5
             };
 
+            // A sub/superscript left on its own row by the sort (a lowered subscript is never
+            // snapped onto its base line) still occupies the gap between the two base-line runs
+            // around it, as the `2` between `H` and `SO` of `H₂SO₄`. Folding those runs into one
+            // span closes the gap, so the script can never rejoin its base downstream. ~keep
             let should_merge = (same_line
                 && is_same_font
                 && same_mcid
                 && (self.merging_config.severe_overlap_threshold_pt..merge_threshold_pt).contains(&gap)
-                && !large_gap_indicates_column)
+                && !large_gap_indicates_column
+                && !ink_rows.has_script_in_gap(&current.bbox, &span.bbox))
                 || (same_line && has_split_boundary && same_mcid)
                 || (cross_font_word_glue && same_mcid)
                 || (small_caps_glue && same_mcid);
@@ -440,6 +450,28 @@ impl<'doc> TextExtractor<'doc> {
                         {
                             space_decision = SpaceDecision::insert(SpaceSource::GeometricGap, 0.9);
                         }
+                    }
+
+                    // OCR text layer (render mode 3): the producer shows each recognised word as its
+                    // own string at the position of its box on the scan, and its glyph widths are a
+                    // stock font's, not the scan's, so the gap between two such strings carries no
+                    // kerning signal. Acrobat Paper Capture leaves gaps of 0.03 to 0.18 em between
+                    // separately shown words (scanned.pdf), under the 0.14 em space threshold. A
+                    // following string at least `OCR_LAYER_MIN_WORD_GAP_EM` clear of the previous one
+                    // is a new word. A layer that shows each glyph on its own keeps its one-letter
+                    // strings joined. ~keep
+                    if !space_decision.insert_space
+                        && matches!(
+                            space_decision.source,
+                            SpaceSource::IntraWordKerning | SpaceSource::NoSpace
+                        )
+                        && preceding_is_ocr_layer
+                        && span_is_ocr_layer
+                        && same_line
+                        && gap >= OCR_LAYER_MIN_WORD_GAP_EM * font_size_ref
+                        && breaks_ocr_layer_word(&current.text, &span.text)
+                    {
+                        space_decision = SpaceDecision::insert(SpaceSource::GeometricGap, 0.85);
                     }
 
                     // ReversedChars Arabic word-shatter guard (ISO 32000-1
@@ -713,4 +745,122 @@ impl<'doc> TextExtractor<'doc> {
             }
         });
     }
+}
+
+/// Smallest gap between two OCR-layer strings, in em of the larger font, that separates words.
+/// Separately shown words measured 0.03 to 0.18 em apart (scanned.pdf); one word that a producer
+/// split into abutting strings (`(wor)` `(ld)`) sits at 0 up to coordinate rounding. Half the
+/// smallest measured word gap stays clear of both. ~keep
+pub(super) const OCR_LAYER_MIN_WORD_GAP_EM: f32 = 0.015;
+
+/// Vertical size of one [`InkRows`] bucket, in points: about half a body line, so a gap query
+/// reads only the few buckets its band overlaps.
+const INK_ROW_BUCKET_PT: f32 = 4.0;
+
+/// Gap a script must at least partly fill before it counts, in points, as for the rescue branch.
+const MIN_SCRIPT_GAP_PT: f32 = 0.5;
+
+/// Fraction of the gap the script's ink must cover.
+const MIN_SCRIPT_GAP_COVERAGE: f32 = 0.35;
+
+/// A script is clearly shorter than the runs it sits between.
+const MAX_SCRIPT_HEIGHT_RATIO: f32 = 0.9;
+
+/// Buckets one [`InkRows`] box or query band may span. A taller box (a hostile `1e9 Tf` run) goes
+/// to the linear oversized list, and a taller band scans every stored box once, so neither loops
+/// over a saturated bucket range.
+const MAX_INK_ROW_BUCKETS: u64 = 64;
+
+/// Drawn glyph-run boxes bucketed by vertical position, so the merge fold can ask whether a
+/// sub/superscript sits in a gap without scanning every run on the page for every pair.
+struct InkRows {
+    rows: HashMap<i64, Vec<Rect>>,
+    oversized: Vec<Rect>,
+}
+
+impl InkRows {
+    fn new(boxes: &[Rect]) -> Self {
+        let mut rows: HashMap<i64, Vec<Rect>> = HashMap::new();
+        let mut oversized = Vec::new();
+        for ink in boxes {
+            if let Some((first, last)) = Self::bucket_range(ink.y, ink.y + ink.height) {
+                if last.abs_diff(first) >= MAX_INK_ROW_BUCKETS {
+                    oversized.push(*ink);
+                    continue;
+                }
+                for bucket in first..=last {
+                    rows.entry(bucket).or_default().push(*ink);
+                }
+            }
+        }
+        Self { rows, oversized }
+    }
+
+    fn bucket_range(bottom: f32, top: f32) -> Option<(i64, i64)> {
+        if !bottom.is_finite() || !top.is_finite() {
+            return None;
+        }
+        let (low, high) = (bottom.min(top), bottom.max(top));
+        Some((
+            (low / INK_ROW_BUCKET_PT).floor() as i64,
+            (high / INK_ROW_BUCKET_PT).floor() as i64,
+        ))
+    }
+
+    /// True when a glyph run shorter than `left` and `right`, centred inside their vertical
+    /// band, covers a good part of the horizontal gap between them: a script drawn between two
+    /// base-line runs. A run on a neighbouring line can clip the band under tight leading, but
+    /// its centre lies outside it.
+    fn has_script_in_gap(&self, left: &Rect, right: &Rect) -> bool {
+        let gap_start = left.x + left.width;
+        let gap_end = right.x;
+        let gap_width = gap_end - gap_start;
+        if gap_width.is_nan() || gap_width <= MIN_SCRIPT_GAP_PT {
+            return false;
+        }
+        let band_bottom = left.y.min(right.y);
+        let band_top = (left.y + left.height).max(right.y + right.height);
+        let max_script_height = left.height.max(right.height) * MAX_SCRIPT_HEIGHT_RATIO;
+        let Some((first, last)) = Self::bucket_range(band_bottom, band_top) else {
+            return false;
+        };
+        let is_script = |ink: &Rect| {
+            let overlap = (ink.x + ink.width).min(gap_end) - ink.x.max(gap_start);
+            let centre = ink.y + ink.height * 0.5;
+            overlap > gap_width * MIN_SCRIPT_GAP_COVERAGE
+                && ink.height < max_script_height
+                && centre > band_bottom
+                && centre < band_top
+        };
+        if self.oversized.iter().any(is_script) {
+            return true;
+        }
+        if last.abs_diff(first) >= MAX_INK_ROW_BUCKETS {
+            return self.rows.values().flatten().any(is_script);
+        }
+        (first..=last)
+            .filter_map(|bucket| self.rows.get(&bucket))
+            .flatten()
+            .any(is_script)
+    }
+}
+
+/// Whether two strings of an OCR text layer meet at a word boundary: each side shows a run of at
+/// least two letters or digits next to the seam, and the seam joins Latin, Greek or Cyrillic text,
+/// digits or closing and opening punctuation, never an e-mail or URL part. Scripts written without
+/// spaces or with joining marks keep the merge's own decision. ~keep
+fn breaks_ocr_layer_word(preceding: &str, following: &str) -> bool {
+    let tail = preceding.rsplit(char::is_whitespace).next().unwrap_or("");
+    let head = following.split(char::is_whitespace).next().unwrap_or("");
+    let word_chars = |token: &str| token.chars().filter(|c| c.is_alphanumeric()).count();
+    let spaced_script = |c: char| c.is_ascii_digit() || (c.is_alphabetic() && u32::from(c) < 0x0530);
+    let (Some(last), Some(first)) = (tail.chars().next_back(), head.chars().next()) else {
+        return false;
+    };
+    word_chars(tail) >= 2
+        && word_chars(head) >= 2
+        && (spaced_script(last) || matches!(last, '.' | ',' | ';' | ':' | ')'))
+        && (spaced_script(first) || first == '(')
+        && !tail.contains(['@', '/'])
+        && !head.contains(['@', '/'])
 }

@@ -10,8 +10,8 @@ use crate::adapters::subprocess::SubprocessAdapter;
 use crate::extract_xberg_file;
 use crate::monitoring::{ResourceMonitor, ResourceStats};
 use crate::types::{
-    BatchCapability, BatchEntryPoint, BatchTimingScope, BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus,
-    PerformanceMetrics, ResourceMeasurementScope, TimingRegime,
+    BatchCapability, BatchEntryPoint, BatchTimingScope, BenchmarkResult, ErrorKind, FrameworkCapabilities,
+    MemoryMethod, OcrStatus, PerformanceMetrics, ResourceMeasurementScope, TimingRegime,
 };
 use crate::{Error, Result};
 use async_trait::async_trait;
@@ -29,6 +29,8 @@ fn metrics_from(resource_stats: &ResourceStats, throughput_bytes_per_sec: f64) -
     PerformanceMetrics {
         baseline_memory_bytes: 0,
         peak_memory_bytes: 0,
+        memory_method: MemoryMethod::Sampled,
+        self_reported_peak_memory_bytes: None,
         peak_memory_delta_bytes: 0,
         avg_cpu_percent: 0.0,
         cpu_seconds: 0.0,
@@ -94,6 +96,8 @@ struct SingleResultContext<'a> {
 fn single_failure_result(context: SingleResultContext<'_>, error: &Error, timed_out: bool) -> BenchmarkResult {
     let error_kind = if timed_out {
         ErrorKind::Timeout
+    } else if matches!(error, Error::LayoutFailed(_)) {
+        ErrorKind::LayoutFailed
     } else {
         ErrorKind::HarnessError
     };
@@ -124,6 +128,7 @@ fn single_failure_result(context: SingleResultContext<'_>, error: &Error, timed_
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -170,6 +175,7 @@ fn single_success_result(
         ocr_status,
         extracted_text: Some(extraction_result.content),
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -290,7 +296,7 @@ fn assemble_batch_rows(
                         context,
                         file_path,
                         message,
-                        ErrorKind::FrameworkError,
+                        ErrorKind::LayoutFailed,
                     )),
                     _ => Ok(batch_success_result(context, file_path, documents[0], config)),
                 },
@@ -377,6 +383,7 @@ fn batch_failure_result(
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -441,6 +448,7 @@ fn batch_success_result(
         ocr_status: determine_ocr_status(extraction_result, config),
         extracted_text: Some(extraction_result.content.clone()),
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -487,10 +495,14 @@ pub struct NativeAdapter {
     reject_layout_failures: bool,
 }
 
+/// Sets the fixture's OCR language. An existing `tesseract_config` is kept in step, but none is
+/// materialized: its mere presence switches off xberg's default-route OCR stages, and the
+/// config's request-level `use_cache: false` already keeps the OCR result cache cold. ~keep
 fn apply_ocr_language(ocr: &mut xberg::OcrConfig, language: &str) {
     ocr.language = crate::adapter::canonicalize_ocr_languages(language);
-    if ocr.backend == "tesseract" {
-        let tesseract = ocr.tesseract_config.get_or_insert_with(Default::default);
+    if ocr.backend == "tesseract"
+        && let Some(tesseract) = ocr.tesseract_config.as_mut()
+    {
         tesseract.language.clone_from(&ocr.language);
         tesseract.use_cache = false;
     }
@@ -580,6 +592,19 @@ impl NativeAdapter {
         }
     }
 
+    /// Sets the Tesseract model set for every OCR pass, without adding an `ocr` section, and on
+    /// the cold subprocess probe.
+    pub fn with_tessdata_model(mut self, model: xberg::TessdataModel) -> Self {
+        // ~keep Mirrors `--ocr-tessdata-model`: the run's set replaces an `ocr` section's own one.
+        // Fast is stored as `None` so a fast config serializes as before.
+        self.config.tessdata_model = (model != xberg::TessdataModel::Fast).then_some(model);
+        if let Some(ocr) = self.config.ocr.as_mut() {
+            ocr.tessdata_model = None;
+        }
+        self.cold_adapter = self.cold_adapter.map(|adapter| adapter.with_tessdata_model(model));
+        self
+    }
+
     /// Fails any extraction whose layout pass reported a failure. Set by the LayoutV3
     /// adapter, whose rows must never carry a fallback read as a V3 result. ~keep
     pub(crate) fn reject_layout_failures(mut self) -> Self {
@@ -590,6 +615,11 @@ impl NativeAdapter {
     #[cfg(test)]
     pub(crate) fn rejects_layout_failures(&self) -> bool {
         self.reject_layout_failures
+    }
+
+    #[cfg(test)]
+    pub(crate) fn extraction_config(&self) -> &ExtractionConfig {
+        &self.config
     }
 
     #[cfg(test)]
@@ -709,7 +739,7 @@ impl FrameworkAdapter for NativeAdapter {
                     extraction_duration,
                     resource_stats: &resource_stats,
                 },
-                &Error::FrameworkError(message),
+                &Error::LayoutFailed(message),
                 false,
             ));
         }
@@ -832,6 +862,11 @@ impl FrameworkAdapter for NativeAdapter {
         self.config.concurrency.as_ref().and_then(|value| value.max_threads)
     }
 
+    fn configured_tessdata_model(&self) -> Option<xberg::TessdataModel> {
+        let model = self.config.effective_tessdata_model();
+        (model != xberg::TessdataModel::Fast).then_some(model)
+    }
+
     async fn setup(&self) -> Result<()> {
         Ok(())
     }
@@ -940,6 +975,59 @@ mod tests {
         let adapter = NativeAdapter::with_config(config);
 
         assert_eq!(adapter.configured_thread_budget(), Some(3));
+    }
+
+    #[test]
+    fn tessdata_model_sets_the_top_level_set_and_leaves_the_ocr_section_alone() {
+        let config = ExtractionConfig {
+            ocr: Some(xberg::OcrConfig::default()),
+            ..Default::default()
+        };
+        let adapter = NativeAdapter::with_config(config).with_tessdata_model(xberg::TessdataModel::Best);
+
+        assert_eq!(adapter.config.tessdata_model, Some(xberg::TessdataModel::Best));
+        assert_eq!(adapter.config.ocr.as_ref().and_then(|ocr| ocr.tessdata_model), None);
+        assert_eq!(adapter.config.effective_tessdata_model(), xberg::TessdataModel::Best);
+        assert_eq!(adapter.configured_tessdata_model(), Some(xberg::TessdataModel::Best));
+    }
+
+    #[test]
+    fn tessdata_model_never_adds_an_ocr_section() {
+        let adapter =
+            NativeAdapter::with_config(ExtractionConfig::default()).with_tessdata_model(xberg::TessdataModel::Best);
+
+        assert!(adapter.config.ocr.is_none());
+        assert_eq!(adapter.config.tessdata_model, Some(xberg::TessdataModel::Best));
+    }
+
+    #[test]
+    fn the_run_set_replaces_both_fields_like_the_cli_flag() {
+        let config = ExtractionConfig {
+            tessdata_model: Some(xberg::TessdataModel::Best),
+            ocr: Some(xberg::OcrConfig {
+                tessdata_model: Some(xberg::TessdataModel::Best),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let fast = NativeAdapter::with_config(config.clone()).with_tessdata_model(xberg::TessdataModel::Fast);
+        assert_eq!(fast.config.tessdata_model, None);
+        assert_eq!(fast.config.ocr.as_ref().and_then(|ocr| ocr.tessdata_model), None);
+        assert_eq!(fast.config.effective_tessdata_model(), xberg::TessdataModel::Fast);
+
+        let mut section_fast = config;
+        section_fast.ocr.as_mut().unwrap().tessdata_model = Some(xberg::TessdataModel::Fast);
+        let best = NativeAdapter::with_config(section_fast).with_tessdata_model(xberg::TessdataModel::Best);
+        assert_eq!(best.config.effective_tessdata_model(), xberg::TessdataModel::Best);
+    }
+
+    #[test]
+    fn fast_tessdata_model_leaves_the_config_unchanged() {
+        let adapter =
+            NativeAdapter::with_config(ExtractionConfig::default()).with_tessdata_model(xberg::TessdataModel::Fast);
+
+        assert_eq!(adapter.config.tessdata_model, None);
+        assert_eq!(adapter.configured_tessdata_model(), None);
     }
 
     #[test]

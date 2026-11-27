@@ -259,7 +259,7 @@ fn test_apply_intelligent_text_processing_ocr_font() {
     let pdf = build_minimal_pdf(b"");
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     let mut span = make_test_span("Test  Text", 0.0, 0.0, 100.0, 12.0);
-    span.font_name = "OCR".to_string();
+    span.font_name = "OCR".into();
     let result = doc.apply_intelligent_text_processing(vec![span]);
     assert!(!result[0].text.contains("  "));
 }
@@ -589,4 +589,21 @@ fn repeated_contents_refs_within_budget_are_still_concatenated() {
     let content = doc.cached_page_content(0).unwrap();
 
     assert_eq!(content.as_slice(), b"q Q\nq Q\nq Q\n");
+}
+
+/// Spans share their font name, so a long name costs the page-pass cache nothing per span.
+#[test]
+fn estimated_span_bytes_does_not_charge_the_shared_font_name() {
+    let span = |font_name: &str| crate::layout::TextSpan {
+        text: "words".to_string(),
+        font_name: font_name.into(),
+        ..crate::layout::TextSpan::default()
+    };
+    let short = vec![span("F1"); 4];
+    let long = vec![span(&"ABCDEF+VeryLongEmbeddedFontName-BoldItalic".repeat(8)); 4];
+
+    assert_eq!(
+        super::super::extract_api::estimated_span_bytes(&short),
+        super::super::extract_api::estimated_span_bytes(&long)
+    );
 }

@@ -7,6 +7,8 @@
 
 use super::*;
 
+mod paired;
+
 /// Validate one file-type bucket's failure accounting and report its sample count. Required cells
 /// must have no errors; optional cells may contain only framework-accountable failures. Cohorts
 /// can span several file types, so the caller also checks each bucket against the cohort's exact
@@ -16,7 +18,8 @@ fn validate_bucket(bucket: &PerformancePercentiles, key: &str, allow_failures: b
     // into `framework_fault_total` and `accountable_sample_count` includes it, but this sum
     // omitted it, so any bucket holding one failed the invariant against a `total_sample_count`
     // that counts every result. ~keep
-    let accountable_failures = bucket.framework_errors + bucket.timeouts + bucket.empty_content + bucket.zero_overlap;
+    let accountable_failures =
+        bucket.framework_errors + bucket.timeouts + bucket.empty_content + bucket.zero_overlap + bucket.layout_failures;
     let infrastructure_failures = bucket.harness_errors + bucket.config_setup_errors;
     let failures = accountable_failures + infrastructure_failures;
     require(
@@ -342,6 +345,7 @@ fn error_kind_from_row(row: &PerFixtureRow, path: &Path) -> Result<ErrorKind> {
         Some("FrameworkError") => Ok(ErrorKind::FrameworkError),
         Some("EmptyContent") => Ok(ErrorKind::EmptyContent),
         Some("ZeroOverlap") => Ok(ErrorKind::ZeroOverlap),
+        Some("LayoutFailed") => Ok(ErrorKind::LayoutFailed),
         Some("Timeout") => Ok(ErrorKind::Timeout),
         Some("HarnessError") => Ok(ErrorKind::HarnessError),
         Some("ConfigSetupError") => Ok(ErrorKind::ConfigSetupError),
@@ -369,6 +373,8 @@ fn performance_metrics_from_row(row: &PerFixtureRow, path: &Path) -> Result<Perf
     Ok(PerformanceMetrics {
         baseline_memory_bytes: row.baseline_memory_bytes,
         peak_memory_bytes: peak_memory_bytes.round() as u64,
+        memory_method: row.memory_method,
+        self_reported_peak_memory_bytes: row.self_reported_peak_memory_bytes,
         peak_memory_delta_bytes: row.peak_memory_delta_bytes,
         avg_cpu_percent: row.avg_cpu_percent,
         cpu_seconds: row.cpu_seconds,
@@ -481,6 +487,7 @@ fn benchmark_result_from_row(row: &PerFixtureRow, path: &Path) -> Result<Benchma
         ocr_status,
         extracted_text: None,
         system_load: row.system_load,
+        fixture_family: row.fixture_family.clone(),
     })
 }
 
@@ -522,6 +529,8 @@ fn validate_derived_aggregate_fields(
         "failure summary",
         path,
     )?;
+    require_serialized_equal(&aggregate.layout_impact, &rebuilt.layout_impact, "layout impact", path)?;
+    require_serialized_equal(&aggregate.head_to_head, &rebuilt.head_to_head, "head-to-head", path)?;
     let expected_comparison = comparison_for_cohort(&rebuilt.by_framework_mode, cohort);
     require_serialized_equal(&aggregate.comparison, &expected_comparison, "comparison rankings", path)?;
     require(
@@ -748,6 +757,16 @@ fn validate_one_aggregate_row(
         .position(|stem| *stem == row.fixture_id)
         .ok_or_else(|| contract_error(format!("{}: row has unknown fixture identity", path.display())))?;
     let quality_expectation = &context.quality_expectations[fixture_index];
+    require(
+        row.fixture_family == quality_expectation.family,
+        format!(
+            "{}: fixture row {} family {:?} does not match the fixture's declared family {:?}",
+            path.display(),
+            row.fixture_id,
+            row.fixture_family,
+            quality_expectation.family
+        ),
+    )?;
     if row.success {
         require(
             row.error_kind.is_none() && row.error_message.is_none(),
@@ -767,9 +786,12 @@ fn validate_one_aggregate_row(
             format!("{}: failed required fixture row", path.display()),
         )?;
         require(
-            row.error_kind
-                .as_deref()
-                .is_some_and(|kind| matches!(kind, "FrameworkError" | "Timeout" | "EmptyContent" | "ZeroOverlap")),
+            row.error_kind.as_deref().is_some_and(|kind| {
+                matches!(
+                    kind,
+                    "FrameworkError" | "Timeout" | "EmptyContent" | "ZeroOverlap" | "LayoutFailed"
+                )
+            }),
             format!(
                 "{}: failed fixture rows: optional row has no accountable error kind",
                 path.display()
@@ -858,7 +880,8 @@ fn validate_aggregate_group_row_reconciliation(
                         && bucket.config_setup_errors == count_kind("ConfigSetupError")
                         && bucket.timeouts == count_kind("Timeout")
                         && bucket.empty_content == count_kind("EmptyContent")
-                        && bucket.zero_overlap == count_kind("ZeroOverlap"),
+                        && bucket.zero_overlap == count_kind("ZeroOverlap")
+                        && bucket.layout_failures == count_kind("LayoutFailed"),
                     format!("{key}: group failure counts do not match fixture rows for {file_type}"),
                 )?;
             }
@@ -879,6 +902,11 @@ pub(super) fn validate_aggregate(
         aggregate.schema_version == SCHEMA_VERSION,
         format!("{}: unexpected schema", path.display()),
     )?;
+    paired::validate_paired_sections_present(&load_json_value(path)?, path)?;
+    paired::validate_layout_impact_coverage(&aggregate, path)?;
+    paired::validate_layout_impact_classification(&aggregate, path)?;
+    paired::validate_paired_delta_medians(&aggregate, path)?;
+    paired::validate_head_to_head_lists(&aggregate, path)?;
 
     let (allowed_entries, present_entries, actual_keys) = validate_aggregate_key_coverage(&aggregate, contract)?;
     validate_format_support(&aggregate, &present_entries, contract, path)?;

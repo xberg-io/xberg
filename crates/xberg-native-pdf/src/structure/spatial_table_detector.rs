@@ -3377,7 +3377,7 @@ fn detect_intersections(
     text_centers: &[(f32, f32)],
     mut recovery: Option<&mut RecoveredIntersection>,
 ) -> Vec<Table> {
-    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, text_centers, config);
+    let (groups, v_edges, cells_are_intersections) = build_grid_from_lines(lines, spans, text_centers, config);
 
     let mut tables = Vec::new();
     for (group_cells, xs, ys, num_cols) in &groups {
@@ -3490,14 +3490,21 @@ fn detect_intersections(
 /// Returns one `(group_cells, xs, ys, num_cols)` tuple per table group, plus the V edges used
 /// to build the cells and whether they came from real crossings (`cells_are_intersections`) —
 /// both needed downstream by `band_column_groups` (xberg-io/xberg#1580).
+///
+/// `spans` close the open outer columns of interior-ruled tables; `text_centers` are the
+/// centres of their unrotated horizontal spans (`horizontal_text_centers`), computed once by
+/// the caller, and keep an unruled text column inside a ruled table.
 fn build_grid_from_lines(
     lines: &[crate::elements::PathContent],
+    spans: &[TextSpan],
     text_centers: &[(f32, f32)],
     config: &TableDetectionConfig,
 ) -> (Vec<(Vec<IntersectionCell>, Vec<f32>, Vec<f32>, usize)>, Vec<Edge>, bool) {
     let (mut h_edges, mut v_edges) = extract_edges(lines);
     snap_and_merge(&mut h_edges);
     snap_and_merge(&mut v_edges);
+    let open_column_edges = open_outer_column_edges(&h_edges, &v_edges, spans);
+    v_edges.extend(open_column_edges);
 
     if h_edges.len() < 2 || v_edges.len() < 2 {
         return (Vec::new(), v_edges, false);
@@ -3579,6 +3586,121 @@ fn build_grid_from_lines(
         result.push((group_cells, xs, ys, num_cols));
     }
     (result, v_edges, cells_are_intersections)
+}
+
+/// Narrowest strip, in points, between a horizontal rule's end and the outermost vertical rule
+/// crossing it that is read as an undrawn outer column. Rules drawn a few points past a fully
+/// ruled table's frame stay well under it; the narrowest open column measured on the Federal
+/// Register tables (2026-14578's `PBR`) is 32pt. ~keep
+const MIN_OPEN_COLUMN_WIDTH: f32 = 20.0;
+
+/// A horizontal rule whose end lies beyond the outermost vertical rule crossing it on one side.
+struct OpenRuleEnd {
+    rule: Edge,
+    end: f32,
+    outermost: f32,
+}
+
+/// Vertical edges closing the outer columns of a table ruled only between its columns.
+///
+/// Federal Register tables, booktabs-style arXiv tables and zoning schedules draw horizontal
+/// rules across the whole table but vertical rules only between columns, so the grid's
+/// columns ran from the first vertical rule to the last: the stub column (`Stock`, `County
+/// subarea`) and the last value column fell outside the table and their text became a
+/// paragraph (2026-14578 tables 2, 3, 6 and 7; 2026-13845 tables 2 and 3). Where at least two
+/// rules joined by column rules run on past their outermost column rule by
+/// `MIN_OPEN_COLUMN_WIDTH` to a common end, and text lies wholly in that strip between them,
+/// the end is a column edge. A table whose frame is drawn, or whose rules overhang an empty
+/// margin, is unchanged. ~keep
+fn open_outer_column_edges(h_edges: &[Edge], v_edges: &[Edge], spans: &[TextSpan]) -> Vec<Edge> {
+    let mut edges = Vec::new();
+    if spans.is_empty() {
+        return edges;
+    }
+    for left_side in [true, false] {
+        let mut groups: Vec<Vec<OpenRuleEnd>> = Vec::new();
+        for rule in h_edges {
+            let crossing = v_edges.iter().filter(|v| {
+                v.coord > rule.start + SNAP_TOL
+                    && v.coord < rule.end - SNAP_TOL
+                    && rule.coord >= v.start - SNAP_TOL
+                    && rule.coord <= v.end + SNAP_TOL
+            });
+            let outermost = if left_side {
+                crossing.map(|v| v.coord).fold(f32::INFINITY, f32::min)
+            } else {
+                crossing.map(|v| v.coord).fold(f32::NEG_INFINITY, f32::max)
+            };
+            let end = if left_side { rule.start } else { rule.end };
+            if !outermost.is_finite() || (outermost - end).abs() < MIN_OPEN_COLUMN_WIDTH {
+                continue;
+            }
+            let end_is_drawn = v_edges.iter().any(|v| {
+                (v.coord - end).abs() <= SNAP_TOL && rule.coord >= v.start - SNAP_TOL && rule.coord <= v.end + SNAP_TOL
+            });
+            if end_is_drawn {
+                continue;
+            }
+            let open_end = OpenRuleEnd {
+                rule: *rule,
+                end,
+                outermost,
+            };
+            match groups.iter_mut().find(|group| (group[0].end - end).abs() <= SNAP_TOL) {
+                Some(group) => group.push(open_end),
+                None => groups.push(vec![open_end]),
+            }
+        }
+        for mut group in groups {
+            group.sort_by(|a, b| crate::utils::safe_float_cmp(a.rule.coord, b.rule.coord));
+            let mut run_start = 0;
+            for index in 1..=group.len() {
+                // Consecutive rules belong to one table when a column rule runs between them.
+                let linked = index < group.len() && {
+                    let (lower, upper) = (&group[index - 1].rule, &group[index].rule);
+                    v_edges.iter().any(|v| {
+                        v.coord > lower.start.max(upper.start) + SNAP_TOL
+                            && v.coord < lower.end.min(upper.end) - SNAP_TOL
+                            && v.start <= lower.coord + SNAP_TOL
+                            && v.end >= upper.coord - SNAP_TOL
+                    })
+                };
+                if linked {
+                    continue;
+                }
+                let run = &group[run_start..index];
+                run_start = index;
+                let [first, .., last] = run else {
+                    continue;
+                };
+                // The strip beyond every band's outermost column rule.
+                let (low, high) = if left_side {
+                    let inner = run.iter().map(|open| open.outermost).fold(f32::INFINITY, f32::min);
+                    (first.end, inner)
+                } else {
+                    let inner = run.iter().map(|open| open.outermost).fold(f32::NEG_INFINITY, f32::max);
+                    (inner, first.end)
+                };
+                let (bottom, top) = (first.rule.coord, last.rule.coord);
+                let holds_text = spans.iter().any(|span| {
+                    let center_y = span.bbox.center().y;
+                    !span.text.trim().is_empty()
+                        && span.bbox.left() >= low - SNAP_TOL
+                        && span.bbox.right() <= high + SNAP_TOL
+                        && center_y > bottom
+                        && center_y < top
+                });
+                if holds_text {
+                    edges.push(Edge {
+                        coord: first.end,
+                        start: bottom,
+                        end: top,
+                    });
+                }
+            }
+        }
+    }
+    edges
 }
 
 /// Tolerance for judging whether a V edge spans a row band's full height.
@@ -6097,6 +6219,108 @@ mod tests {
         }
     }
 
+    /// 2026-14578 table 2: rules run across the whole table, column rules only between columns.
+    fn interior_ruled_table(drawn_frame: bool) -> Vec<crate::elements::PathContent> {
+        use crate::elements::PathContent;
+        let mut lines = vec![
+            PathContent::line(45., 400., 567., 400.),
+            PathContent::line(45., 380., 567., 380.),
+            PathContent::line(45., 300., 567., 300.),
+        ];
+        let columns: &[f32] = if drawn_frame {
+            &[45., 389., 464., 500., 535., 567.]
+        } else {
+            &[389., 464., 500., 535.]
+        };
+        lines.extend(columns.iter().map(|&x| PathContent::line(x, 300., x, 400.)));
+        lines
+    }
+
+    fn interior_ruled_table_text(with_outer_columns: bool) -> Vec<TextSpan> {
+        let mut spans = vec![
+            create_test_span("669", 420., 355., 15., 9.),
+            create_test_span("0.04", 470., 355., 18., 9.),
+            create_test_span("0.4", 505., 355., 12., 9.),
+        ];
+        if with_outer_columns {
+            spans.extend([
+                create_test_span("Stock", 150., 385., 25., 9.),
+                create_test_span("Laguna Madre ........", 50., 355., 300., 9.),
+                create_test_span("PBR", 545., 385., 18., 9.),
+                create_test_span("2", 555., 355., 5., 9.),
+            ]);
+        }
+        spans
+    }
+
+    #[test]
+    fn rules_running_past_the_column_rules_close_the_stub_and_last_columns() {
+        let lines = interior_ruled_table(false);
+        let spans = interior_ruled_table_text(true);
+
+        let (groups, _, _) =
+            build_grid_from_lines(&lines, &spans, &horizontal_text_centers(&spans), &ruled_grid_config());
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].1.first().copied(), Some(45.));
+        assert_eq!(groups[0].1.last().copied(), Some(567.));
+        assert_eq!(groups[0].3, 5, "stub, three value columns and the last column");
+    }
+
+    #[test]
+    fn a_drawn_frame_adds_no_open_column_edge() {
+        let (mut h_edges, mut v_edges) = extract_edges(&interior_ruled_table(true));
+        snap_and_merge(&mut h_edges);
+        snap_and_merge(&mut v_edges);
+
+        assert!(open_outer_column_edges(&h_edges, &v_edges, &interior_ruled_table_text(true)).is_empty());
+    }
+
+    /// 2026-13845 tables 2 and 3: a year band over the value columns has its own column rules, so
+    /// its outermost rule stands inside the body's. The last year (`2031`) sat in the open strip
+    /// and was lost from the header row; the header line then failed the carried-text test and
+    /// was emitted again as prose. The closing edge must span the year band as well as the body.
+    #[test]
+    fn the_open_column_edge_spans_a_header_band_with_its_own_column_rules() {
+        use crate::elements::PathContent;
+        let mut lines = vec![
+            PathContent::line(45., 400., 567., 400.),
+            PathContent::line(45., 380., 567., 380.),
+            PathContent::line(45., 300., 567., 300.),
+            PathContent::line(300., 380., 300., 400.),
+        ];
+        lines.extend([142., 389., 464., 535.].map(|x| PathContent::line(x, 300., x, 380.)));
+        let spans = vec![
+            create_test_span("County subarea", 60., 385., 70., 9.),
+            create_test_span("2026", 210., 385., 20., 9.),
+            create_test_span("2031", 480., 385., 20., 9.),
+            create_test_span("4.5", 545., 355., 12., 9.),
+        ];
+        let (mut h_edges, mut v_edges) = extract_edges(&lines);
+        snap_and_merge(&mut h_edges);
+        snap_and_merge(&mut v_edges);
+
+        let edges = open_outer_column_edges(&h_edges, &v_edges, &spans);
+
+        let right = edges.iter().find(|edge| (edge.coord - 567.).abs() <= SNAP_TOL);
+        assert!(
+            right.is_some_and(|edge| edge.start <= 300. && edge.end >= 400.),
+            "{edges:?}"
+        );
+    }
+
+    #[test]
+    fn rules_overhanging_an_empty_strip_add_no_column() {
+        let lines = interior_ruled_table(false);
+        let spans = interior_ruled_table_text(false);
+
+        let (groups, _, _) =
+            build_grid_from_lines(&lines, &spans, &horizontal_text_centers(&spans), &ruled_grid_config());
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].3, 3, "only the ruled value columns");
+    }
+
     #[test]
     fn a_rule_of_another_section_adds_no_column_to_a_projected_grid() {
         use crate::elements::PathContent;
@@ -6109,7 +6333,7 @@ mod tests {
             PathContent::line(394., 430., 394., 719.),
             PathContent::line(306., 110., 306., 399.),
         ];
-        let (groups, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &[], &ruled_grid_config());
         assert!(
             groups.is_empty(),
             "the lone in-band column pair is one column: {groups:?}"
@@ -6126,7 +6350,7 @@ mod tests {
             PathContent::line(150., 100., 150., 370.),
             PathContent::line(250., 100., 250., 370.),
         ];
-        let (groups, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &[], &ruled_grid_config());
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].3, 2);
     }
@@ -7015,7 +7239,7 @@ mod tests {
             ..Default::default()
         };
 
-        let (groups, _, _) = build_grid_from_lines(&table_paths, &[], &config);
+        let (groups, _, _) = build_grid_from_lines(&table_paths, &[], &[], &config);
         assert_eq!(groups.len(), 1, "fixture assumption: one cell group");
         assert_eq!(groups[0].0.len(), 24, "fixture assumption: the grid itself is complete");
         assert_eq!(groups[0].2.len(), 13, "fixture assumption: 12 row bands");
@@ -7543,7 +7767,7 @@ mod tests {
             artifact_type: None,
             text: text.to_string(),
             bbox: Rect::new(x, y, width, height),
-            font_name: "TestFont".to_string(),
+            font_name: "TestFont".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             is_italic: false,
@@ -8487,7 +8711,7 @@ mod tests {
             lines.push(PathContent::line(x, 0.0, x, 40.0));
         }
         let centers = [(140.0, 10.0), (140.0, 30.0)];
-        let (groups, _, _) = build_grid_from_lines(&lines, &centers, &ruled_grid_config());
+        let (groups, _, _) = build_grid_from_lines(&lines, &[], &centers, &ruled_grid_config());
         assert_eq!(groups.len(), 1, "text column joins both ruled sides: {groups:?}");
         let (cells, xs, ys, num_cols) = &groups[0];
         assert_eq!(cells.len(), 6);
@@ -8495,7 +8719,7 @@ mod tests {
         assert_eq!(ys, &[0.0, 20.0, 40.0]);
         assert_eq!(*num_cols, 3);
 
-        let (split, _, _) = build_grid_from_lines(&lines, &[], &ruled_grid_config());
+        let (split, _, _) = build_grid_from_lines(&lines, &[], &[], &ruled_grid_config());
         assert!(
             split
                 .iter()
@@ -9387,7 +9611,7 @@ mod tests {
                         );
                         if matches!(paint, HeaderPaint::BoldGroup) && row <= 1 && column == 1 {
                             span.font_weight = crate::layout::FontWeight::Bold;
-                            span.font_name = "Helvetica-Bold".to_string();
+                            span.font_name = "Helvetica-Bold".into();
                         }
                         if glyph_widths && value.contains('.') && is_data_value(value) {
                             span.char_widths = vec![width / value.len() as f32; value.len()];
@@ -11837,7 +12061,7 @@ mod tests {
             text: text.to_string(),
             bbox: Rect::new(x, y, width, fs),
             font_size: fs,
-            font_name: String::new(),
+            font_name: Default::default(),
             font_weight: crate::layout::text_block::FontWeight::Normal,
             color: Color::black(),
             mcid: None,

@@ -148,16 +148,38 @@ pub(crate) fn block_outer_result_publication() {
     }
 }
 
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[cfg(all(test, feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) async fn with_ocr_cancellation<F: Future>(
     token: Option<&crate::cancellation::CancellationToken>,
+    future: F,
+) -> F::Output {
+    scoped_ocr(token, false, future).await
+}
+
+/// Like [`with_ocr_cancellation`], and when `use_cache` is false no OCR result is read from or
+/// written to the persistent OCR cache for the whole operation, whatever a backend option says.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) async fn with_ocr_request<F: Future>(
+    token: Option<&crate::cancellation::CancellationToken>,
+    use_cache: bool,
+    future: F,
+) -> F::Output {
+    scoped_ocr(token, !use_cache, future).await
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+async fn scoped_ocr<F: Future>(
+    token: Option<&crate::cancellation::CancellationToken>,
+    disable_result_cache: bool,
     future: F,
 ) -> F::Output {
     let mut context = current().unwrap_or_default();
     if let Some(token) = token {
         context.1 = Some(token.clone());
     }
-    let models = Arc::new(request_models::RequestModels::default());
+    // A nested scope never re-enables caching a caller already turned off. ~keep
+    let disable_result_cache = disable_result_cache || ocr_result_cache_disabled();
+    let models = Arc::new(request_models::RequestModels::new(disable_result_cache));
     context.2 = Some(Arc::clone(&models));
     ASYNC_CONTEXT
         .scope(context, async {
@@ -173,6 +195,13 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
             result
         })
         .await
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_result_cache_disabled() -> bool {
+    current()
+        .and_then(|context| context.2)
+        .is_some_and(|models| models.result_cache_disabled())
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

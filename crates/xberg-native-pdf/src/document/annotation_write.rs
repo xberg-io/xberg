@@ -139,7 +139,7 @@ impl PdfDocument {
                     "the source PDF has no readable startxref offset to chain from".to_string(),
                 )
             })?;
-        let mut output = self.source_bytes.clone();
+        let mut output = self.source_bytes.to_vec();
         if !output.ends_with(b"\n") {
             output.push(b'\n');
         }

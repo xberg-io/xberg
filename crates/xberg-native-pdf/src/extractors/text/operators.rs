@@ -116,7 +116,8 @@ impl<'doc> TextExtractor<'doc> {
                                         }
                                     },
                                 )
-                                .is_some() =>
+                                .is_some()
+                                && !(self.xobject_depth == 0 && Self::tm_parts_ocr_layer_words(buffer, e)) =>
                         {
                             // Fixed-pitch word-gap recovery (GH#1770). This
                             // continuation path glues consecutive Tm+Tj glyph
@@ -423,6 +424,7 @@ impl<'doc> TextExtractor<'doc> {
                                         let font_name = state.font_name.clone();
                                         let font_size = state.font_size;
                                         let fill_color_rgb = state.fill_color_rgb;
+                                        let white = super::paints_invisible_text(state);
 
                                         let combined = ctm.multiply(&text_matrix);
                                         let effective_font_size =
@@ -454,7 +456,7 @@ impl<'doc> TextExtractor<'doc> {
                                         let space_char = TextChar {
                                             char: ' ',
                                             bbox: Rect::new(pos.x, pos.y, tx.abs(), effective_font_size),
-                                            font_name: font_name_str,
+                                            font_name: font_name_str.into(),
                                             font_size: effective_font_size,
                                             font_weight,
                                             color: Color::new(r, g, b),
@@ -477,7 +479,13 @@ impl<'doc> TextExtractor<'doc> {
                                                 final_matrix.f,
                                             ]),
                                         };
-                                        self.push_char(space_char);
+                                        let unpainted_white = white
+                                            && self.char_drop_regions().is_some_and(|painted| {
+                                                !painted.iter().any(|region| region.intersects(&space_char.bbox))
+                                            });
+                                        if !unpainted_white {
+                                            self.push_char(space_char);
+                                        }
                                     }
 
                                     // Route through advance_text_matrix so the
@@ -623,7 +631,11 @@ impl<'doc> TextExtractor<'doc> {
             Operator::SetFillRgb { r, g, b } => {
                 // rg operator implicitly sets DeviceRGB — a process color. ~keep
                 self.inside_excluded_ink = false;
-                self.state_stack.current_mut().fill_color_rgb = (r, g, b);
+                let state = self.state_stack.current_mut();
+                if state.fill_color_space != "DeviceRGB" {
+                    state.fill_color_space = "DeviceRGB".to_string();
+                }
+                state.fill_color_rgb = (r, g, b);
             }
             Operator::SetStrokeRgb { r, g, b } => {
                 self.state_stack.current_mut().stroke_color_rgb = (r, g, b);
@@ -632,7 +644,11 @@ impl<'doc> TextExtractor<'doc> {
                 // g operator implicitly sets DeviceGray — a process color,
                 // so clear any active ink exclusion. ~keep
                 self.inside_excluded_ink = false;
-                self.state_stack.current_mut().fill_color_rgb = (gray, gray, gray);
+                let state = self.state_stack.current_mut();
+                if state.fill_color_space != "DeviceGray" {
+                    state.fill_color_space = "DeviceGray".to_string();
+                }
+                state.fill_color_rgb = (gray, gray, gray);
             }
             Operator::SetStrokeGray { gray } => {
                 self.state_stack.current_mut().stroke_color_rgb = (gray, gray, gray);
@@ -641,6 +657,9 @@ impl<'doc> TextExtractor<'doc> {
                 // k operator implicitly sets DeviceCMYK — a process color. ~keep
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
+                if state.fill_color_space != "DeviceCMYK" {
+                    state.fill_color_space = "DeviceCMYK".to_string();
+                }
                 state.fill_color_cmyk = Some((c, m, y, k));
                 state.fill_color_rgb = cmyk_to_rgb(c, m, y, k);
             }

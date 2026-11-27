@@ -32,80 +32,198 @@ pub(crate) fn execution_provider_override() -> Option<crate::core::config::accel
         .and_then(|value| parse_execution_provider_override(&value))
 }
 
-/// Prepare the runtime before callers that may create their own session builders.
+/// Note how this build obtains ONNX Runtime. A dynamic build loads it in [`ort_environment`],
+/// which every session builder goes through first and which returns the cached load failure.
 #[cfg(any(ort_session_providers, feature = "ner-onnx"))]
 pub(crate) fn ensure_ort_available() {
     #[cfg(all(feature = "ort-bundled", not(feature = "ort-dynamic")))]
     tracing::debug!("ONNX Runtime is linked; skipping system library discovery");
+}
 
-    #[cfg(ort_dynamic_discovery)]
-    if let Err(error) = preload_ort_runtime() {
-        tracing::warn!(%error, "Could not preload the discovered ONNX Runtime");
+/// Explicit ONNX Runtime library override; the name is ort's own.
+#[cfg(ort_dynamic_discovery)]
+const ORT_DYLIB_PATH_ENV_VAR: &str = "ORT_DYLIB_PATH";
+
+#[cfg(any(test, ort_dynamic_discovery))]
+#[path = "ort_discovery/library.rs"]
+mod library;
+
+#[cfg(ort_dynamic_discovery)]
+use library::{OrtSource, SearchPolicy};
+
+#[cfg(ort_dynamic_discovery)]
+const SEARCH_POLICY: SearchPolicy = if cfg!(feature = "ort-strict-discovery") {
+    SearchPolicy::Strict
+} else {
+    SearchPolicy::LoaderFallback
+};
+
+/// Why the dynamically loaded ONNX Runtime library is unavailable.
+#[cfg(ort_dynamic_discovery)]
+#[derive(Debug)]
+pub(crate) enum OrtRuntimeError {
+    /// `ORT_DYLIB_PATH` is relative, which `ort-strict-discovery` refuses: the loader would
+    /// resolve it against the current directory.
+    RelativeOverride { value: std::path::PathBuf },
+    /// No candidate the search order names exists, is trusted and loads.
+    NotFound {
+        tried: Vec<std::path::PathBuf>,
+        untrusted: Vec<(std::path::PathBuf, String)>,
+        /// The bare name handed to the platform loader, and why it did not open.
+        loader: Option<(&'static str, String)>,
+    },
+    /// The explicit library, or the first discovered one when none loaded, could not be loaded.
+    Load {
+        path: std::path::PathBuf,
+        source: ort::LoadDynamicError,
+    },
+}
+
+#[cfg(ort_dynamic_discovery)]
+impl std::fmt::Display for OrtRuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RelativeOverride { value } => write!(
+                f,
+                "{ORT_DYLIB_PATH_ENV_VAR} is the relative path `{}`; set it to the absolute path of an \
+                 ONNX Runtime 1.{}+ library",
+                value.display(),
+                ort::MINOR_VERSION
+            ),
+            Self::NotFound {
+                tried,
+                untrusted,
+                loader,
+            } => {
+                write!(f, "ONNX Runtime library not found; searched:")?;
+                for path in tried {
+                    write!(f, " `{}`", path.display())?;
+                }
+                for (path, reason) in untrusted {
+                    write!(f, "; skipped `{}`: {reason}", path.display())?;
+                }
+                if let Some((name, reason)) = loader {
+                    write!(f, "; the platform library search did not open `{name}`: {reason}")?;
+                }
+                write!(
+                    f,
+                    ". The release CLI ships the library next to the xberg executable; otherwise set \
+                     {ORT_DYLIB_PATH_ENV_VAR} to the absolute path of an ONNX Runtime 1.{}+ library",
+                    ort::MINOR_VERSION
+                )
+            }
+            Self::Load { path, source } => write!(
+                f,
+                "could not load the ONNX Runtime library `{}`: {source}. Point \
+                 {ORT_DYLIB_PATH_ENV_VAR} at a working ONNX Runtime 1.{}+ library",
+                path.display(),
+                ort::MINOR_VERSION
+            ),
+        }
     }
 }
 
 #[cfg(ort_dynamic_discovery)]
-pub(crate) fn preload_ort_runtime() -> Result<(), ort::LoadDynamicError> {
-    static INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
-    INIT.get_or_try_init(|| {
-        let explicit = std::env::var("ORT_DYLIB_PATH").ok();
-        preload_ort_runtime_from(
-            explicit.as_deref().map(std::path::Path::new),
-            platform_candidates().iter().map(std::path::Path::new),
-        )
-    })
-    .copied()
+impl std::error::Error for OrtRuntimeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::RelativeOverride { .. } | Self::NotFound { .. } => None,
+            Self::Load { source, .. } => Some(source),
+        }
+    }
 }
 
+/// Load ONNX Runtime the first time a model needs it, exactly once per process.
+///
+/// The outcome, success or failure, is cached: later callers get the same result instead of
+/// a second `dlopen`, and a failure never falls through to ort's own loader on a later ort call.
 #[cfg(ort_dynamic_discovery)]
-fn preload_ort_runtime_from<'a>(
-    explicit: Option<&std::path::Path>,
-    mut candidates: impl Iterator<Item = &'a std::path::Path>,
-) -> Result<(), ort::LoadDynamicError> {
-    // Leave explicit existing paths and the default search to ort. A bare library
-    // name may resolve through the executable directory or the system loader. ~keep
-    if explicit.is_some_and(std::path::Path::exists) {
-        return Ok(());
-    }
-    if let Some(path) = candidates.find(|path| path.exists()) {
+pub(crate) fn preload_ort_runtime() -> Result<(), std::sync::Arc<OrtRuntimeError>> {
+    static RUNTIME: std::sync::OnceLock<Result<(), std::sync::Arc<OrtRuntimeError>>> = std::sync::OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            let explicit = std::env::var_os(ORT_DYLIB_PATH_ENV_VAR);
+            let image = match SEARCH_POLICY {
+                SearchPolicy::Strict => library::running_executable(),
+                SearchPolicy::LoaderFallback => library::xberg_image().or_else(library::running_executable),
+            };
+            let system: Vec<&std::path::Path> = library::platform_candidates()
+                .iter()
+                .map(std::path::Path::new)
+                .collect();
+            let path = preload_ort_runtime_from(explicit.as_deref(), image.as_deref(), &system, SEARCH_POLICY)
+                .map_err(std::sync::Arc::new)?;
+            tracing::debug!(path = %path.display(), "Loaded ONNX Runtime");
+            Ok(())
+        })
+        .clone()
+}
+
+/// Resolve the library with [`library::resolve_ort_library`] and load it; uncached.
+///
+/// A discovered library that does not load (a wrong architecture, a missing dependency, too
+/// old a version) is skipped for the next one; the first such failure is reported when nothing
+/// loads. An explicit library is never skipped.
+#[cfg(ort_dynamic_discovery)]
+fn preload_ort_runtime_from(
+    explicit: Option<&std::ffi::OsStr>,
+    image: Option<&std::path::Path>,
+    system: &[&std::path::Path],
+    policy: SearchPolicy,
+) -> Result<std::path::PathBuf, OrtRuntimeError> {
+    let search = match library::resolve_ort_library(explicit, image, system, policy) {
         // Load the library and leave environment creation to the caller. ~keep
-        let _builder = ort::init_from(path)?;
+        OrtSource::Explicit(path) => {
+            return match ort::init_from(&path) {
+                Ok(_builder) => Ok(path),
+                Err(source) => Err(OrtRuntimeError::Load { path, source }),
+            };
+        }
+        OrtSource::RelativeOverride(value) => return Err(OrtRuntimeError::RelativeOverride { value }),
+        OrtSource::Search(search) => search,
+    };
+    for (path, reason) in &search.untrusted {
+        // Library consumers may still reach the same file through the platform loader. ~keep
+        if policy == SearchPolicy::Strict {
+            tracing::warn!(path = %path.display(), %reason, "Skipping an ONNX Runtime library another user could have placed");
+        } else {
+            tracing::debug!(path = %path.display(), %reason, "Skipping an ONNX Runtime library another user could have placed");
+        }
     }
-    Ok(())
-}
-
-#[cfg(all(ort_dynamic_discovery, target_os = "macos"))]
-fn platform_candidates() -> &'static [&'static str] {
-    &[
-        "/opt/homebrew/lib/libonnxruntime.dylib",
-        "/usr/local/lib/libonnxruntime.dylib",
-    ]
-}
-
-#[cfg(all(ort_dynamic_discovery, target_os = "linux"))]
-fn platform_candidates() -> &'static [&'static str] {
-    &[
-        "/usr/lib/libonnxruntime.so",
-        "/usr/local/lib/libonnxruntime.so",
-        "/usr/lib/x86_64-linux-gnu/libonnxruntime.so",
-        "/usr/lib/aarch64-linux-gnu/libonnxruntime.so",
-    ]
-}
-
-#[cfg(all(ort_dynamic_discovery, target_os = "windows"))]
-fn platform_candidates() -> &'static [&'static str] {
-    &[
-        "C:\\Program Files\\onnxruntime\\bin\\onnxruntime.dll",
-        "C:\\Windows\\System32\\onnxruntime.dll",
-    ]
-}
-
-#[cfg(all(
-    ort_dynamic_discovery,
-    not(any(target_os = "macos", target_os = "linux", target_os = "windows"))
-))]
-fn platform_candidates() -> &'static [&'static str] {
-    &[]
+    let mut first_failure = None;
+    for path in search.found {
+        match ort::init_from(&path) {
+            Ok(_builder) => return Ok(path),
+            Err(source) => {
+                tracing::debug!(path = %path.display(), %source, "ONNX Runtime candidate did not load; trying the next");
+                if first_failure.is_none() {
+                    first_failure = Some(OrtRuntimeError::Load { path, source });
+                }
+            }
+        }
+    }
+    let mut loader = None;
+    if let Some(name) = search.loader_name {
+        // ort resolves a bare name beside the executable when present, else through the
+        // platform loader's search path. ~keep
+        match ort::init_from(name) {
+            Ok(_builder) => return Ok(std::path::PathBuf::from(name)),
+            Err(ort::LoadDynamicError::Dlopen { error, .. }) => loader = Some((name, error.to_string())),
+            Err(source) => {
+                if first_failure.is_none() {
+                    first_failure = Some(OrtRuntimeError::Load {
+                        path: std::path::PathBuf::from(name),
+                        source,
+                    });
+                }
+            }
+        }
+    }
+    Err(first_failure.unwrap_or(OrtRuntimeError::NotFound {
+        tried: search.tried,
+        untrusted: search.untrusted,
+        loader,
+    }))
 }
 
 /// Outcome of deciding how to register a GPU execution provider, given whether it was
@@ -203,12 +321,34 @@ pub(crate) fn is_explicit_provider_request(
     resolve_execution_provider(accel) != crate::core::config::acceleration::ExecutionProviderType::Auto
 }
 
+/// A session-building failure that stays constructible when ONNX Runtime is not loaded.
+///
+/// Building an [`ort::Error`] calls `CreateStatus` through the ORT API, which with
+/// `load-dynamic` makes ort `dlopen` its default library name and panic when that fails. A
+/// runtime that could not be loaded is therefore carried as [`OrtSessionError::Runtime`] and
+/// must never be converted into an [`ort::Error`]. [`OrtSessionError::Ort`] only ever holds an
+/// error ort produced, which implies the runtime was loaded.
+#[cfg(any(ort_session_providers, feature = "ner-onnx"))]
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum OrtSessionError {
+    /// The ONNX Runtime library could not be resolved or loaded.
+    #[cfg(ort_dynamic_discovery)]
+    #[error(transparent)]
+    Runtime(std::sync::Arc<OrtRuntimeError>),
+    /// ONNX Runtime itself reported an error.
+    #[error(transparent)]
+    Ort(#[from] ort::Error),
+}
+
 /// The process-wide ONNX Runtime environment every session builder in this crate shares; ort
 /// rc.14 takes it as an argument and ONNX Runtime requires it to outlive every session.
 /// The `xberg-paddle-ocr` and `xberg-gliner` session builders are handed this same
 /// environment when it is created, so call this before they load a model. ~keep
+///
+/// This is the only way into ort for session builders: it loads the runtime first, so every
+/// later ort call and [`ort::Error`] runs against the resolved library.
 #[cfg(any(ort_session_providers, feature = "ner-onnx"))]
-pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment, ort::Error> {
+pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment, OrtSessionError> {
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     static ENVIRONMENT: std::sync::OnceLock<ort::environment::Environment> = std::sync::OnceLock::new();
     #[cfg(feature = "sceptre-ocr-ort")]
@@ -224,8 +364,13 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
         return Ok(environment);
     }
     ensure_ort_available();
+    // A failed dynamic load must stop here: any ort call would otherwise make ort retry with
+    // its own name-based loader search. ~keep
+    #[cfg(ort_dynamic_discovery)]
+    preload_ort_runtime().map_err(OrtSessionError::Runtime)?;
     #[cfg(not(feature = "sceptre-ocr-ort"))]
     let environment = ort::init().build()?;
+    // The runtime is loaded (or linked) by now, so building an `ort::Error` is safe here. ~keep
     #[cfg(feature = "sceptre-ocr-ort")]
     let environment = sceptre::ort_environment()
         .map_err(|error| ort::Error::from(Box::new(error) as Box<dyn std::error::Error + Send + Sync>))?;
@@ -239,6 +384,33 @@ pub(crate) fn ort_environment() -> Result<&'static ort::environment::Environment
         tracing::warn!("GLiNER already holds its own ONNX Runtime environment");
     }
     Ok(environment)
+}
+
+/// The shared environment for a test that runs ONNX Runtime, or `None` after printing why when
+/// the runtime cannot be loaded and `XBERG_REQUIRE_TRACT_PARITY` (set by CI's model jobs) does
+/// not require it. The load is checked before [`ort_environment`]: building any `ort::Error`
+/// calls into the runtime, so on a failed dynamic load ort falls back to a bare-name `dlopen`
+/// and panics.
+#[cfg(all(
+    test,
+    any(ort_session_providers, feature = "ner-onnx"),
+    any(
+        feature = "onnx-runtime",
+        feature = "paddle-ocr-ort",
+        all(inference_ort, any(layout_detection, auto_rotate), model_download, unix)
+    )
+))]
+pub(crate) fn test_ort_environment(test: &str) -> Option<&'static ort::environment::Environment> {
+    #[cfg(ort_dynamic_discovery)]
+    if let Err(error) = preload_ort_runtime() {
+        assert!(
+            std::env::var_os("XBERG_REQUIRE_TRACT_PARITY").is_none(),
+            "XBERG_REQUIRE_TRACT_PARITY is set but ONNX Runtime cannot be loaded for {test}: {error}"
+        );
+        eprintln!("SKIP: ONNX Runtime not available ({error}): {test}");
+        return None;
+    }
+    Some(ort_environment().unwrap_or_else(|error| panic!("{test}: ONNX Runtime environment failed: {error}")))
 }
 
 /// Apply execution providers to an ORT session builder based on [`AccelerationConfig`].
@@ -300,6 +472,49 @@ pub(crate) fn apply_execution_providers(
     };
 
     Ok(builder)
+}
+
+/// Whether `auto` can register a GPU execution provider in this build: CoreML on macOS, CUDA on
+/// Linux builds with the `cuda` feature. Elsewhere `auto` is the CPU provider alone.
+/// `register_auto_providers` makes the same choice with `cfg` blocks; keep the two in step.
+#[cfg(any(
+    all(feature = "pdf", feature = "layout-detection"),
+    all(
+        ort_session_providers,
+        inference_ort,
+        any(layout_detection, auto_rotate),
+        model_download,
+        unix
+    )
+))]
+pub(crate) const fn auto_may_register_gpu() -> bool {
+    cfg!(any(target_os = "macos", all(target_os = "linux", feature = "cuda")))
+}
+
+/// Whether a session built with `apply_execution_providers(builder, accel)` (or without it, when
+/// `with_eps` is false) runs on the CPU execution provider alone. Mirrors the provider choice in
+/// `apply_execution_providers` and `register_auto_providers` (`auto_may_register_gpu`).
+#[cfg(all(
+    ort_session_providers,
+    inference_ort,
+    any(layout_detection, auto_rotate),
+    model_download,
+    unix
+))]
+pub(crate) fn session_is_cpu_only(
+    accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
+    with_eps: bool,
+) -> bool {
+    use crate::core::config::acceleration::ExecutionProviderType;
+
+    if !with_eps {
+        return true;
+    }
+    match resolve_execution_provider(accel) {
+        ExecutionProviderType::Cpu => true,
+        ExecutionProviderType::Auto => !auto_may_register_gpu(),
+        ExecutionProviderType::CoreMl | ExecutionProviderType::Cuda | ExecutionProviderType::TensorRt => false,
+    }
 }
 
 /// Build the CoreML execution provider, honouring the `XBERG_COREML_FORMAT` and
@@ -418,7 +633,8 @@ fn register_tensorrt_strict(
 }
 
 /// `auto`: try the platform GPU provider best-effort and fall back to CPU with an info-level log
-/// when it is unavailable or fails to load. ~keep
+/// when it is unavailable or fails to load. The platforms with a GPU branch here are exactly
+/// those where `auto_may_register_gpu` is true. ~keep
 #[cfg(ort_session_providers)]
 fn register_auto_providers(
     builder: ort::session::builder::SessionBuilder,
@@ -626,6 +842,10 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+#[path = "ort_discovery/resolution_tests.rs"]
+mod resolution_tests;
+
 #[cfg(all(
     test,
     any(
@@ -722,6 +942,15 @@ mod sceptre_tests;
 #[cfg(all(test, feature = "sceptre-ocr-ort", ort_dynamic_discovery))]
 #[path = "ort_discovery/dynamic_sceptre_tests.rs"]
 mod dynamic_sceptre_tests;
+
+#[cfg(all(
+    test,
+    ort_dynamic_discovery,
+    any(ort_session_providers, feature = "ner-onnx"),
+    any(target_os = "linux", target_os = "macos")
+))]
+#[path = "ort_discovery/unloaded_runtime_tests.rs"]
+mod unloaded_runtime_tests;
 
 #[cfg(all(
     test,

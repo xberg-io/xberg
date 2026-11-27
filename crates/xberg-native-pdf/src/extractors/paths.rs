@@ -864,7 +864,8 @@ impl PathExtractor {
     }
 
     /// Finish extraction and return all extracted paths.
-    pub fn finish(self) -> Vec<PathContent> {
+    pub fn finish(mut self) -> Vec<PathContent> {
+        self.paths.shrink_to_fit();
         self.paths
     }
 

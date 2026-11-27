@@ -2,6 +2,8 @@
 //! the flags with no dedicated domain of their own.
 
 use anyhow::{Result, bail};
+#[cfg(feature = "ocr-surface")]
+use xberg::TessdataModel;
 use xberg::{ExecutionProviderType, ExtractionConfig};
 
 use super::ExtractionOverrides;
@@ -31,6 +33,26 @@ impl From<AccelerationArg> for ExecutionProviderType {
             AccelerationArg::CoreMl => ExecutionProviderType::CoreMl,
             AccelerationArg::Cuda => ExecutionProviderType::Cuda,
             AccelerationArg::TensorRt => ExecutionProviderType::TensorRt,
+        }
+    }
+}
+
+/// Tesseract model set, for `--ocr-tessdata-model` and `cache warm --tessdata-model`.
+#[cfg(feature = "ocr-surface")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum TessdataModelArg {
+    /// tessdata_fast: integer LSTM models, smallest and fastest.
+    Fast,
+    /// tessdata_best: float LSTM models, about three times larger and slower.
+    Best,
+}
+
+#[cfg(feature = "ocr-surface")]
+impl From<TessdataModelArg> for TessdataModel {
+    fn from(arg: TessdataModelArg) -> Self {
+        match arg {
+            TessdataModelArg::Fast => TessdataModel::Fast,
+            TessdataModelArg::Best => TessdataModel::Best,
         }
     }
 }

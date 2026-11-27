@@ -795,6 +795,13 @@ impl InternalElement {
             .map(String::as_str)
     }
 
+    /// Remove and return the literal source list-marker text, for an item that stops being a
+    /// list item.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    pub(crate) fn take_list_item_source_label(&mut self) -> Option<String> {
+        self.attributes.as_mut()?.remove(LIST_ITEM_SOURCE_LABEL_ATTRIBUTE)
+    }
+
     /// Attributes safe to expose through the public document structure.
     pub(crate) fn public_attributes(&self) -> Option<std::collections::HashMap<String, String>> {
         let original = self.attributes.as_ref()?;
@@ -857,6 +864,18 @@ fn is_internal_only_attribute(key: &str) -> bool {
 /// (`rendering::comrak_bridge`) rather than keeping `&InternalElement` around.
 pub(crate) fn list_item_source_label_from_attributes(attributes: Option<&AHashMap<String, String>>) -> Option<&str> {
     attributes?.get(LIST_ITEM_SOURCE_LABEL_ATTRIBUTE).map(String::as_str)
+}
+
+/// `label` of a `GroupStart` that opens a record: one entry of a repeated collection,
+/// such as a JSON array item. Namespaced so a source group label (an HTML or djot class)
+/// cannot claim it.
+pub(crate) const RECORD_GROUP_LABEL: &str = "xberg:record";
+
+/// Whether a `GroupStart` with these attributes opens a record.
+pub(crate) fn is_record_group(attributes: Option<&AHashMap<String, String>>) -> bool {
+    attributes
+        .and_then(|attributes| attributes.get("label"))
+        .is_some_and(|label| label == RECORD_GROUP_LABEL)
 }
 
 /// Semantic role of an internal element.

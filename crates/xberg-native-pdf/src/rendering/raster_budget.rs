@@ -35,15 +35,47 @@ impl PageRenderer {
 ///
 /// Returns `None` on failure (zero dimensions, SIMD dispatch error) so callers
 /// can fall back to tiny_skia's own resampling path.
+///
+/// The resize only reads the source: the caller lends its raster rather than holding a copy beside
+/// it. `image_budget::resize_working_bytes` bounds what this allocates: the output, the
+/// intermediate and the coefficient tables.
 pub(super) fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
-    use fast_image_resize::images::Image;
+    resize_samples(src, (src_w, src_h), (dst_w, dst_h), 4)
+}
+
+/// [`resize_rgba`] for opaque samples of `components` bytes per pixel: 1 (gray), 3 (RGB) or 4.
+///
+/// Every `u8` kernel of `fast_image_resize` 6, scalar and SIMD, computes each output byte as
+/// `clamp((2^(p-1) + sum(k_i * s_i)) >> p, 0, 255)` in exact `i32` arithmetic, with one coefficient
+/// table per axis whatever the pixel type and the vertical pass first for every `u8` type. A gray
+/// or RGB raster resized here and then widened to opaque RGBA is therefore byte-identical to the
+/// same raster widened first and resized by [`resize_rgba`]; the constant 255 alpha resizes to 255.
+/// `samples` must hold exactly `source` pixels. `image_budget::resize_samples_working_bytes` bounds
+/// what this allocates. ~keep
+pub(super) fn resize_samples(
+    samples: &[u8],
+    (src_w, src_h): (u32, u32),
+    (dst_w, dst_h): (u32, u32),
+    components: u8,
+) -> Option<Vec<u8>> {
+    use fast_image_resize::images::{Image, ImageRef};
     use fast_image_resize::pixels::PixelType;
     use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 
-    // from_slice_u8 needs a mutable slice; copy into a local buffer. ~keep
-    let mut buf = src.to_vec();
-    let src_img = Image::from_slice_u8(src_w, src_h, &mut buf, PixelType::U8x4).ok()?;
-    let mut dst_img = Image::new(dst_w, dst_h, PixelType::U8x4);
+    let pixel_type = match components {
+        1 => PixelType::U8,
+        3 => PixelType::U8x3,
+        4 => PixelType::U8x4,
+        _ => return None,
+    };
+    let expected = (src_w as usize)
+        .checked_mul(src_h as usize)?
+        .checked_mul(usize::from(components))?;
+    if samples.len() != expected {
+        return None;
+    }
+    let src_img = ImageRef::new(src_w, src_h, samples, pixel_type).ok()?;
+    let mut dst_img = Image::new(dst_w, dst_h, pixel_type);
     Resizer::new()
         .resize(
             &src_img,
@@ -265,6 +297,53 @@ pub(super) fn png_working_bytes_fit(
     width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)
 }
 
+/// Convert one premultiplied RGBA pixel to straight alpha in place, rounding to nearest.
+fn demultiply(pixel: &mut [u8; 4]) {
+    let a = pixel[3];
+    if a != 0 && a != 255 {
+        let a32 = a as u32;
+        for channel in &mut pixel[..3] {
+            *channel = ((*channel as u32 * 255 + a32 / 2) / a32).min(255) as u8;
+        }
+    }
+}
+
+/// The straight-alpha RGB channels of premultiplied RGBA pixels, alpha dropped: exactly what
+/// decoding [`encode_png`]'s output and converting it to RGB8 yields, without the round trip.
+#[cfg(test)]
+pub(in crate::rendering) fn straight_rgb8(premultiplied_rgba: &[u8]) -> Vec<u8> {
+    let pixels = premultiplied_rgba.as_chunks::<4>().0;
+    let mut rgb = Vec::with_capacity(pixels.len() * 3);
+    for pixel in pixels {
+        let mut pixel = *pixel;
+        demultiply(&mut pixel);
+        rgb.extend_from_slice(&pixel[..3]);
+    }
+    rgb
+}
+
+/// The straight-alpha RGB channels of premultiplied RGBA pixels, alpha dropped (what decoding
+/// [`encode_png`]'s output to RGB8 yields), computed in the RGBA buffer itself so a page raster
+/// never holds the RGBA and RGB copies at once. Pixel `i` moves from offset `4i` to `3i`, never
+/// past a pixel still unread.
+pub(in crate::rendering) fn straight_rgb8_in_place(mut premultiplied_rgba: Vec<u8>) -> Vec<u8> {
+    let pixels = premultiplied_rgba.len() / 4;
+    for index in 0..pixels {
+        let source = index * 4;
+        let mut pixel = [
+            premultiplied_rgba[source],
+            premultiplied_rgba[source + 1],
+            premultiplied_rgba[source + 2],
+            premultiplied_rgba[source + 3],
+        ];
+        demultiply(&mut pixel);
+        premultiplied_rgba[index * 3..index * 3 + 3].copy_from_slice(&pixel[..3]);
+    }
+    premultiplied_rgba.truncate(pixels * 3);
+    premultiplied_rgba.shrink_to_fit();
+    premultiplied_rgba
+}
+
 /// Encode a tiny_skia `Pixmap` to PNG.
 ///
 /// Uses fdeflate (ultra-fast) compression via the `image` crate instead of
@@ -278,13 +357,7 @@ pub(super) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
     let src = pixmap.data();
     let mut data = src.to_vec();
     for chunk in data.as_chunks_mut::<4>().0 {
-        let a = chunk[3];
-        if a != 0 && a != 255 {
-            let a32 = a as u32;
-            chunk[0] = ((chunk[0] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[1] = ((chunk[1] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[2] = ((chunk[2] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-        }
+        demultiply(chunk);
     }
 
     use image::ImageEncoder;
@@ -294,4 +367,43 @@ pub(super) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
         .write_image(&data, w, h, image::ExtendedColorType::Rgba8)
         .map_err(|e| Error::InvalidPdf(format!("PNG encoding failed: {}", e)))?;
     Ok(output)
+}
+
+#[cfg(test)]
+mod straight_rgb8_tests {
+    use super::*;
+
+    /// Every premultiplied (value, alpha) pair a canvas can hold, against the PNG round trip.
+    #[test]
+    fn straight_rgb8_matches_the_decoded_png_for_every_alpha() {
+        let width = 256;
+        let height = 256;
+        let mut pixmap = Pixmap::new(width, height).unwrap();
+        for (index, pixel) in pixmap.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            let alpha = (index / 256) as u8;
+            let value = ((index % 256) as u8).min(alpha);
+            *pixel = [value, value / 2, alpha.saturating_sub(value), alpha];
+        }
+
+        let png = encode_png(&pixmap).unwrap();
+        let decoded = image::load_from_memory(&png).unwrap().into_rgb8();
+
+        assert_eq!(straight_rgb8(pixmap.data()), decoded.into_raw());
+    }
+
+    #[test]
+    fn straight_rgb8_in_place_matches_the_copying_conversion_for_every_alpha() {
+        let mut rgba = Vec::with_capacity(256 * 256 * 4);
+        for index in 0..256 * 256 {
+            let alpha = (index / 256) as u8;
+            let value = ((index % 256) as u8).min(alpha);
+            rgba.extend_from_slice(&[value, value / 2, alpha.saturating_sub(value), alpha]);
+        }
+
+        let expected = straight_rgb8(&rgba);
+        let converted = straight_rgb8_in_place(rgba);
+
+        assert_eq!(converted, expected);
+        assert_eq!(converted.capacity(), converted.len());
+    }
 }

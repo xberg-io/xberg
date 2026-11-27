@@ -175,3 +175,120 @@ fn classify_page_with_no_images_reports_none_codec() {
     assert_eq!(classification.signals.codec, ImageCodecClass::None);
     assert_eq!(classification.signals.image_area_ratio, 0.0);
 }
+
+/// A PDF whose objects are `bodies`, numbered from 1, with object 1 the catalog.
+fn pdf_from_objects(bodies: &[Vec<u8>]) -> Vec<u8> {
+    let mut buf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::with_capacity(bodies.len());
+    for (index, body) in bodies.iter().enumerate() {
+        offsets.push(buf.len());
+        buf.extend_from_slice(format!("{} 0 obj\n", index + 1).as_bytes());
+        buf.extend_from_slice(body);
+        buf.extend_from_slice(b"\nendobj\n");
+    }
+    let xref_offset = buf.len();
+    let total_objs = bodies.len() + 1;
+    buf.extend_from_slice(format!("xref\n0 {total_objs}\n0000000000 65535 f \n").as_bytes());
+    for off in &offsets {
+        buf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    buf.extend_from_slice(format!("trailer\n<</Size {total_objs} /Root 1 0 R>>\n").as_bytes());
+    buf.extend_from_slice(format!("startxref\n{xref_offset}\n%%EOF\n").as_bytes());
+    buf
+}
+
+fn stream_object(dict: &str, data: &[u8]) -> Vec<u8> {
+    let mut body = format!("<<{dict} /Length {}>>\nstream\n", data.len()).into_bytes();
+    body.extend_from_slice(data);
+    body.extend_from_slice(b"\nendstream");
+    body
+}
+
+/// A 200x200 page painting a 150x150 DeviceRGB image, a 4x4 CCITT stamp under the 8x8 px size
+/// floor, and then `text_ops`.
+fn image_and_text_page(text_ops: &str) -> Vec<u8> {
+    let content = format!("q 150 0 0 150 25 25 cm /Im0 Do Q q 4 0 0 4 0 0 cm /Im1 Do Q {text_ops}");
+    let pixels: Vec<u8> = (0..150 * 150 * 3).map(|i| (i % 251) as u8).collect();
+    pdf_from_objects(&[
+        b"<</Type /Catalog /Pages 2 0 R>>".to_vec(),
+        b"<</Type /Pages /Kids [3 0 R] /Count 1>>".to_vec(),
+        b"<</Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources \
+           <</XObject <</Im0 5 0 R /Im1 6 0 R>> \
+           /Font <</F1 <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>>>>>>>"
+            .to_vec(),
+        stream_object("", content.as_bytes()),
+        stream_object(
+            "/Type /XObject /Subtype /Image /Width 150 /Height 150 /ColorSpace /DeviceRGB /BitsPerComponent 8",
+            &pixels,
+        ),
+        stream_object(
+            "/Type /XObject /Subtype /Image /Width 4 /Height 4 /ColorSpace /DeviceGray /BitsPerComponent 1 \
+             /Filter /CCITTFaxDecode",
+            &[0, 0],
+        ),
+    ])
+}
+
+/// `scan_text_signals` and `image_codec_class` exist so scan grading can skip the rest of
+/// `classify_page`; every field they report must equal the one `classify_page` reports.
+#[test]
+fn scan_signals_equal_the_classify_page_signals() {
+    let cases = [
+        (
+            "BT /F1 12 Tf 20 180 Td (A running header over a scanned sheet) Tj ET",
+            false,
+        ),
+        (
+            "BT 3 Tr /F1 12 Tf 20 100 Td (An invisible OCR sidecar line of text) Tj ET",
+            true,
+        ),
+        ("", false),
+    ];
+    for (text_ops, invisible) in cases {
+        let doc = PdfDocument::from_bytes(image_and_text_page(text_ops)).expect("fixture must open");
+        let classified = doc.classify_page(0).expect("classify_page must succeed").signals;
+        let scan = doc.scan_text_signals(0).expect("scan_text_signals must succeed");
+        let handles = doc.page_image_handles(0).expect("image handles must enumerate");
+
+        assert_eq!(scan.text_glyph_count, classified.text_glyph_count, "{text_ops:?}");
+        assert_eq!(
+            scan.text_area_ratio.to_bits(),
+            classified.text_area_ratio.to_bits(),
+            "{text_ops:?}"
+        );
+        assert_eq!(
+            scan.invisible_text_ratio.to_bits(),
+            classified.invisible_text_ratio.to_bits(),
+            "{text_ops:?}"
+        );
+        assert_eq!(scan.producer_prior, classified.producer_prior, "{text_ops:?}");
+        assert_eq!(
+            PdfDocument::image_codec_class(&handles),
+            classified.codec,
+            "{text_ops:?}"
+        );
+
+        assert_eq!(handles.len(), 2, "both images must be enumerated, the stamp included");
+        assert_eq!(
+            classified.codec,
+            ImageCodecClass::Other,
+            "the CCITT stamp is under the size floor and must not set the codec"
+        );
+        if text_ops.is_empty() {
+            assert_eq!(scan.text_glyph_count, 0);
+        } else if !invisible {
+            assert!(scan.text_glyph_count > 0, "visible text must be counted: {text_ops:?}");
+            assert!(scan.text_area_ratio > 0.0, "visible text must cover area: {text_ops:?}");
+        }
+        assert_eq!(scan.invisible_text_ratio > 0.0, invisible, "{text_ops:?}");
+    }
+}
+
+#[test]
+fn image_codec_class_prefers_ccitt_and_skips_images_under_the_size_floor() {
+    let doc = PdfDocument::from_bytes(image_and_text_page("")).expect("fixture must open");
+    let handles = doc.page_image_handles(0).expect("image handles must enumerate");
+    assert_eq!(PdfDocument::image_codec_class(&handles[1..]), ImageCodecClass::None);
+    assert_eq!(PdfDocument::image_codec_class(&handles[..1]), ImageCodecClass::Other);
+    assert_eq!(PdfDocument::image_codec_class(&[]), ImageCodecClass::None);
+}

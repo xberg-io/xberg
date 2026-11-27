@@ -22,6 +22,8 @@ annotations:
   artifacthub.io/images: |
     - name: xberg
       image: ghcr.io/xberg-io/xberg:{image_version}
+    - name: xberg-best
+      image: ghcr.io/xberg-io/xberg:{image_version}-best
 """
 
 
@@ -52,6 +54,7 @@ def test_helm_metadata_reports_every_mismatched_release_field() -> None:
     assert helm_metadata_errors(chart, "1.0.14") == [
         "chart appVersion is 1.0.13, expected 1.0.14",
         "Artifact Hub image tag is 1.0.0-rc.25, expected 1.0.14",
+        "Artifact Hub best image tag is 1.0.0-rc.25-best, expected 1.0.14-best",
         "Artifact Hub prerelease is true, expected false",
     ]
 
@@ -65,6 +68,36 @@ def test_helm_metadata_rejects_missing_required_annotation() -> None:
     assert helm_metadata_errors(chart, "1.1.0") == [
         "chart is missing artifacthub.io/prerelease",
     ]
+
+
+def test_helm_metadata_rejects_a_missing_best_image() -> None:
+    chart = chart_metadata(version="1.1.0").replace(
+        "    - name: xberg-best\n      image: ghcr.io/xberg-io/xberg:1.1.0-best\n",
+        "",
+    )
+
+    assert helm_metadata_errors(chart, "1.1.0") == [
+        "chart is missing artifacthub.io/images xberg-best image",
+    ]
+
+
+def test_helm_sync_renders_both_artifacthub_images(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    import scripts.sync_integration_versions as sync
+
+    chart = tmp_path / "charts/xberg/Chart.yaml"
+    chart.parent.mkdir(parents=True)
+    chart.write_text(
+        chart_metadata(version="1.0.0").replace(
+            "    - name: xberg-best\n      image: ghcr.io/xberg-io/xberg:1.0.0-best\n", ""
+        )
+    )
+    monkeypatch.setattr(sync, "ROOT", tmp_path)
+
+    _, updated = transform(sync.HELM_CHART, True, False, "1.2.0", "1.2.0")
+
+    assert helm_metadata_errors(updated, "1.2.0") == []
+    assert updated.count("ghcr.io/xberg-io/xberg:1.2.0") == 2
+    assert "image: ghcr.io/xberg-io/xberg:1.2.0-best" in updated
 
 
 def test_helm_metadata_rejects_invalid_expected_semver() -> None:

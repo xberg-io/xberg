@@ -29,6 +29,8 @@ pub struct SubprocessAdapter {
     command: PathBuf,
     args: Vec<String>,
     env: Vec<(String, String)>,
+    /// The part of `env` added to match xberg's shipped launchers, recorded in provenance.
+    launcher_env: Vec<(String, String)>,
     batch_capability: Option<BatchCapability>,
     working_dir: Option<PathBuf>,
     supported_formats: Vec<String>,
@@ -47,6 +49,9 @@ pub struct SubprocessAdapter {
     /// Reject an item whose extraction reports a failed layout pass, so a benchmark row can
     /// never be scored as a layout-pipeline result when the requested detector never ran. ~keep
     reject_layout_failures: bool,
+    /// Do not upgrade the request to forced OCR when a fixture requires OCR. For adapters whose
+    /// point is that the extractor decides per page whether to OCR. ~keep
+    ignore_fixture_force_ocr: bool,
     /// Worker limit passed to native batch implementations.
     batch_workers: usize,
     /// Resolved executable used by a specialized native batch path.
@@ -58,6 +63,8 @@ pub struct SubprocessAdapter {
     /// When unset, single-file mode preserves Xberg's automatic budget while
     /// native batch mode falls back to [`Self::batch_workers`].
     xberg_max_threads: Option<usize>,
+    /// Tesseract model set passed to Xberg as `--ocr-tessdata-model` when it is not the default.
+    tessdata_model: xberg::TessdataModel,
     /// CLI flag an external wrapper uses to receive the fixture's OCR language,
     /// forwarded in canonical Tesseract form (e.g. `eng+kor`, `jpn_vert`). The
     /// wrapper maps it onto its own engine's codes. `None` means the framework
@@ -89,6 +96,7 @@ impl SubprocessAdapter {
             command: command.into(),
             args,
             env,
+            launcher_env: Vec::new(),
             batch_capability: None,
             working_dir: None,
             supported_formats,
@@ -99,10 +107,12 @@ impl SubprocessAdapter {
             single_file_args: None,
             configured_ocr_status: None,
             reject_layout_failures: false,
+            ignore_fixture_force_ocr: false,
             batch_workers: 1,
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
             xberg_max_threads: None,
+            tessdata_model: xberg::TessdataModel::Fast,
             ocr_language_arg: None,
             ocr_language_policy: crate::adapter::OcrLanguagePolicy::DefaultOnly,
             executable_build_identity: None,
@@ -132,6 +142,7 @@ impl SubprocessAdapter {
             command: command.into(),
             args,
             env,
+            launcher_env: Vec::new(),
             batch_capability: Some(batch_capability),
             working_dir: None,
             supported_formats,
@@ -142,10 +153,12 @@ impl SubprocessAdapter {
             single_file_args: None,
             configured_ocr_status: None,
             reject_layout_failures: false,
+            ignore_fixture_force_ocr: false,
             batch_workers: 1,
             native_batch_command: None,
             batch_sequence: AtomicU64::new(0),
             xberg_max_threads: None,
+            tessdata_model: xberg::TessdataModel::Fast,
             ocr_language_arg: None,
             ocr_language_policy: crate::adapter::OcrLanguagePolicy::DefaultOnly,
             executable_build_identity: None,
@@ -156,6 +169,12 @@ impl SubprocessAdapter {
     /// Rejects any item whose `processing_warnings` report a failed layout pass.
     pub fn with_layout_failure_rejection(mut self) -> Self {
         self.reject_layout_failures = true;
+        self
+    }
+
+    /// Keep OCR optional for fixtures that require it, leaving the decision to the extractor.
+    pub fn with_ignored_fixture_force_ocr(mut self) -> Self {
+        self.ignore_fixture_force_ocr = true;
         self
     }
 
@@ -207,6 +226,17 @@ impl SubprocessAdapter {
         self.executable_build_identity = Some(identity);
         self
     }
+    /// Add the environment xberg's shipped launchers set to every process this adapter spawns,
+    /// and record it as injected.
+    pub(crate) fn with_launcher_env(mut self, launcher_env: Vec<(String, String)>) -> Self {
+        self.env.extend(launcher_env.iter().cloned());
+        self.launcher_env = launcher_env;
+        self
+    }
+    #[cfg(test)]
+    pub(crate) fn env(&self) -> &[(String, String)] {
+        &self.env
+    }
     /// Set the bounded worker count used by native batch implementations.
     pub fn with_batch_workers(mut self, workers: usize) -> Self {
         self.batch_workers = workers.max(1);
@@ -219,6 +249,11 @@ impl SubprocessAdapter {
     /// Set Xberg's configured thread budget independently of batch workers.
     pub fn with_xberg_max_threads(mut self, max_threads: usize) -> Self {
         self.xberg_max_threads = Some(max_threads.max(1));
+        self
+    }
+    /// Set the Tesseract model set Xberg resolves. Ignored by other frameworks.
+    pub fn with_tessdata_model(mut self, model: xberg::TessdataModel) -> Self {
+        self.tessdata_model = model;
         self
     }
     /// Set the working directory for subprocess execution
@@ -235,6 +270,8 @@ impl Default for PerformanceMetrics {
         Self {
             baseline_memory_bytes: 0,
             peak_memory_bytes: 0,
+            memory_method: crate::types::MemoryMethod::default(),
+            self_reported_peak_memory_bytes: None,
             peak_memory_delta_bytes: 0,
             avg_cpu_percent: 0.0,
             cpu_seconds: 0.0,

@@ -23,23 +23,6 @@ const MAX_PARAGRAPH_WORDS: f64 = 300.0;
 static DASH_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"[-]{3,}").expect("Dash pattern regex is valid and should compile"));
 
-/// Combined OCR artifact pattern for single-pass scanning (used in calculate_ocr_penalty).
-/// This pattern combines 5 of the 6 OCR patterns with alternation to reduce regex passes
-/// from 5 separate find_iter calls to 1. The dash pattern is handled separately due to
-/// line-based context checking.
-static COMBINED_OCR_ARTIFACTS_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?x)
-        \b[a-zA-Z]\s{2,}[a-zA-Z]\s{2,}[a-zA-Z]\b |  # Scattered chars
-        [.]{3,}|[_]{3,} |                              # Repeated punctuation
-        \s[.,;:!?]\s |                                 # Isolated punctuation
-        \b[a-zA-Z]+[0-9]+[a-zA-Z]+[a-zA-Z0-9]*\b |   # Malformed words
-        \s{3,}                                        # Excessive whitespace
-    ",
-    )
-    .expect("Combined OCR artifacts regex pattern is valid and should compile")
-});
-
 static JS_FUNCTION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)function\s+\w+\s*\([^)]*\)\s*\{[^}]*\}")
         .expect("JavaScript function regex pattern is valid and should compile")
@@ -48,18 +31,9 @@ static CSS_RULES_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)\.[a-zA-Z][\w-]*\s*\{[^}]*\}").expect("CSS rules regex pattern is valid and should compile")
 });
 
-static NAV_WORDS_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(?:Skip to main content|Back to top|Main navigation|Site navigation)\b")
-        .expect("Navigation words regex pattern is valid and should compile")
-});
 static BREADCRUMB_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?:Home\s*[>»]\s*|[>»]\s*){2,}").expect("Breadcrumb regex pattern is valid and should compile")
 });
-static PAGINATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(?:Page \d+ of \d+|First page|Last page|Previous page|Next page|^\d+ of \d+$)\b")
-        .expect("Pagination regex pattern is valid and should compile")
-});
-
 static SENTENCE_DETECT: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"[.!?]\s+[A-Z]").expect("Sentence detection regex pattern is valid and should compile"));
 static PUNCTUATION_DETECT: Lazy<Regex> =
@@ -68,6 +42,257 @@ static PUNCTUATION_DETECT: Lazy<Regex> =
 #[cfg(test)]
 static NEWLINE_CLEANUP: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\n+").expect("Newline cleanup regex pattern is valid and should compile"));
+
+static WORD_CHAR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\A\w\z").expect("word-char regex is valid"));
+static DECIMAL_DIGIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"\A\d\z").expect("digit regex is valid"));
+
+/// Equivalent to the regex crate's Unicode `\w`. ASCII, Latin letters and whitespace are
+/// answered directly; every other code point is delegated to the regex, so the answer is exact.
+fn is_word_char(c: char) -> bool {
+    if c.is_ascii() {
+        return c.is_ascii_alphanumeric() || c == '_';
+    }
+    // Latin-1 Supplement and Latin Extended-A/B letters are \w in every Unicode version. Other
+    // alphabetic code points go to the regex: std and regex-syntax can carry different Unicode
+    // tables (U+0558 is alphabetic in std but not \w in regex-syntax).
+    if matches!(c as u32, 0xC0..=0x24F) && !matches!(c, '\u{D7}' | '\u{F7}') {
+        return true;
+    }
+    if c.is_whitespace() {
+        return false;
+    }
+    WORD_CHAR.is_match(c.encode_utf8(&mut [0u8; 4]))
+}
+
+/// Equivalent to the regex crate's Unicode `\d` (general category Nd).
+fn is_decimal_digit(c: char) -> bool {
+    if c.is_ascii() {
+        return c.is_ascii_digit();
+    }
+    c.is_numeric() && DECIMAL_DIGIT.is_match(c.encode_utf8(&mut [0u8; 4]))
+}
+
+fn char_at(text: &str, i: usize) -> Option<char> {
+    text[i..].chars().next()
+}
+
+fn word_before(text: &str, i: usize) -> bool {
+    text[..i].chars().next_back().is_some_and(is_word_char)
+}
+
+fn word_at(text: &str, i: usize) -> bool {
+    char_at(text, i).is_some_and(is_word_char)
+}
+
+/// End of the whitespace run starting at `i` and its length in chars.
+fn whitespace_run(text: &str, i: usize) -> (usize, usize) {
+    let mut end = i;
+    let mut count = 0;
+    for c in text[i..].chars() {
+        if !c.is_whitespace() {
+            break;
+        }
+        end += c.len_utf8();
+        count += 1;
+    }
+    (end, count)
+}
+
+fn ascii_letter_at(text: &str, i: usize) -> bool {
+    text.as_bytes().get(i).is_some_and(u8::is_ascii_alphabetic)
+}
+
+/// `\b[a-zA-Z]\s{2,}[a-zA-Z]\s{2,}[a-zA-Z]\b` anchored at `i`.
+fn scattered_chars_end(text: &str, i: usize) -> Option<usize> {
+    let (j, n) = whitespace_run(text, i + 1);
+    if n < 2 || !ascii_letter_at(text, j) {
+        return None;
+    }
+    let (k, n) = whitespace_run(text, j + 1);
+    if n < 2 || !ascii_letter_at(text, k) {
+        return None;
+    }
+    let end = k + 1;
+    (!word_at(text, end)).then_some(end)
+}
+
+/// `\b[a-zA-Z]+[0-9]+[a-zA-Z]+[a-zA-Z0-9]*\b` anchored at `i`. Any shorter end would be
+/// followed by an ASCII alphanumeric, so only the maximal run can satisfy the final `\b`.
+fn malformed_word_end(text: &str, i: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let run_end = i + bytes[i..].iter().take_while(|b| b.is_ascii_alphanumeric()).count();
+    let mut p = i;
+    while p < run_end && bytes[p].is_ascii_alphabetic() {
+        p += 1;
+    }
+    let mut q = p;
+    while q < run_end && bytes[q].is_ascii_digit() {
+        q += 1;
+    }
+    (p > i && q > p && q < run_end && !word_at(text, run_end)).then_some(run_end)
+}
+
+fn byte_run_end(text: &str, i: usize, byte: u8) -> usize {
+    i + text.as_bytes()[i..].iter().take_while(|&&b| b == byte).count()
+}
+
+/// Spans of the OCR-artifact alternation: scattered single letters, runs of `.` or `_`
+/// (3+), an isolated punctuation mark, a digit-embedded word, or 3+ whitespace chars,
+/// with leftmost-first alternative priority.
+fn scan_ocr_artifacts(text: &str, mut emit: impl FnMut(usize, usize)) {
+    let mut i = 0;
+    while i < text.len() {
+        let Some(c) = char_at(text, i) else { break };
+        let end = if c.is_ascii_alphabetic() {
+            if word_before(text, i) {
+                None
+            } else {
+                scattered_chars_end(text, i).or_else(|| malformed_word_end(text, i))
+            }
+        } else if c == '.' || c == '_' {
+            let end = byte_run_end(text, i, c as u8);
+            (end - i >= 3).then_some(end)
+        } else if c.is_whitespace() {
+            let after = i + c.len_utf8();
+            let isolated = char_at(text, after)
+                .filter(|p| matches!(p, '.' | ',' | ';' | ':' | '!' | '?'))
+                .and_then(|_| {
+                    let last = char_at(text, after + 1)?;
+                    last.is_whitespace().then(|| after + 1 + last.len_utf8())
+                });
+            isolated.or_else(|| {
+                let (end, n) = whitespace_run(text, i);
+                (n >= 3).then_some(end)
+            })
+        } else {
+            None
+        };
+        match end {
+            Some(end) => {
+                emit(i, end);
+                i = end;
+            }
+            None => i += c.len_utf8(),
+        }
+    }
+}
+
+/// Folds the only non-ASCII characters that Unicode simple case folding maps onto
+/// ASCII letters in the phrases below (U+017F and the Kelvin sign), then lowercases.
+fn fold(c: char) -> char {
+    match c {
+        '\u{17F}' => 's',
+        '\u{212A}' => 'k',
+        c => c.to_ascii_lowercase(),
+    }
+}
+
+/// End of `lower` matched case-insensitively at `i`.
+fn match_ci(text: &str, i: usize, lower: &str) -> Option<usize> {
+    let mut end = i;
+    let mut chars = text[i..].chars();
+    for want in lower.chars() {
+        let c = chars.next()?;
+        if fold(c) != want {
+            return None;
+        }
+        end += c.len_utf8();
+    }
+    Some(end)
+}
+
+/// End of one or more Unicode decimal digits at `i`.
+fn digits_end(text: &str, i: usize) -> Option<usize> {
+    let mut end = i;
+    for c in text[i..].chars() {
+        if !is_decimal_digit(c) {
+            break;
+        }
+        end += c.len_utf8();
+    }
+    (end > i).then_some(end)
+}
+
+/// `\bPAGE \d+ OF \d+` (ASCII case-insensitive) anchored at `i`, without the trailing `\b`.
+fn page_x_of_y_end(text: &str, i: usize) -> Option<usize> {
+    let j = digits_end(text, match_ci(text, i, "page ")?)?;
+    digits_end(text, match_ci(text, j, " of ")?)
+}
+
+/// Scans for `\b(?:alt1|alt2|...)\b` where each alternative is a literal phrase
+/// matched case-insensitively; spans are reported with leftmost-first semantics.
+fn scan_phrases(text: &str, phrases: &[&str], mut emit: impl FnMut(usize, usize)) {
+    scan_with(
+        text,
+        |i| {
+            phrases
+                .iter()
+                .filter_map(|p| match_ci(text, i, p))
+                .find(|&end| !word_at(text, end))
+        },
+        &mut emit,
+    );
+}
+
+/// Shared driver: at each char boundary whose preceding char is not a word char, ask
+/// `end_at` for a match end that also satisfies the trailing boundary. `end_at` must be pure:
+/// it runs first, so the leading-boundary test, a regex lookup for a non-ASCII char, runs
+/// only where a match ends.
+fn scan_with(text: &str, mut end_at: impl FnMut(usize) -> Option<usize>, emit: &mut impl FnMut(usize, usize)) {
+    let mut i = 0;
+    while i < text.len() {
+        let Some(c) = char_at(text, i) else { break };
+        let end = end_at(i).filter(|_| !word_before(text, i));
+        match end {
+            Some(end) => {
+                emit(i, end);
+                i = end;
+            }
+            None => i += c.len_utf8(),
+        }
+    }
+}
+
+const NAV_PHRASES: [&str; 4] = [
+    "skip to main content",
+    "back to top",
+    "main navigation",
+    "site navigation",
+];
+
+fn scan_nav_words(text: &str, emit: impl FnMut(usize, usize)) {
+    scan_phrases(text, &NAV_PHRASES, emit);
+}
+
+/// Pagination markers: `Page N of M`, `First/Last/Previous/Next page`, and a whole text
+/// that is exactly `N of M`.
+fn scan_pagination(text: &str, mut emit: impl FnMut(usize, usize)) {
+    const LITERALS: [&str; 4] = ["first page", "last page", "previous page", "next page"];
+    scan_with(
+        text,
+        |i| {
+            let ends = page_x_of_y_end(text, i)
+                .into_iter()
+                .chain(LITERALS.iter().filter_map(|p| match_ci(text, i, p)))
+                .chain(
+                    (i == 0)
+                        .then(|| {
+                            let j = digits_end(text, 0)?;
+                            digits_end(text, match_ci(text, j, " of ")?).filter(|&e| e == text.len())
+                        })
+                        .flatten(),
+                );
+            ends.into_iter().find(|&end| !word_at(text, end))
+        },
+        &mut emit,
+    );
+}
+
+fn sum_scanned(text: &str, scan: impl FnOnce(&str, &mut dyn FnMut(usize, usize))) -> usize {
+    let mut total = 0;
+    scan(text, &mut |s, e| total += e - s);
+    total
+}
 
 #[inline]
 fn sum_match_lengths(text: &str, pattern: &Regex) -> usize {
@@ -174,8 +399,7 @@ fn calculate_ocr_penalty(text: &str, total_chars: f64) -> f64 {
         return 0.0;
     }
 
-    let artifact_chars =
-        sum_match_lengths(text, &COMBINED_OCR_ARTIFACTS_PATTERN) + count_non_table_dash_artifacts(text);
+    let artifact_chars = sum_scanned(text, |t, f| scan_ocr_artifacts(t, f)) + count_non_table_dash_artifacts(text);
 
     (artifact_chars as f64 / total_chars).min(1.0)
 }
@@ -251,9 +475,15 @@ fn calculate_navigation_penalty(text: &str, total_chars: f64) -> f64 {
         return 0.0;
     }
 
-    let nav_chars = sum_match_lengths(text, &NAV_WORDS_PATTERN)
-        + sum_match_lengths(text, &BREADCRUMB_PATTERN)
-        + sum_match_lengths(text, &PAGINATION_PATTERN);
+    let breadcrumb_chars =
+        if memchr(b'>', text.as_bytes()).is_some() || memmem::find(text.as_bytes(), "»".as_bytes()).is_some() {
+            sum_match_lengths(text, &BREADCRUMB_PATTERN)
+        } else {
+            0
+        };
+    let nav_chars = sum_scanned(text, |t, f| scan_nav_words(t, f))
+        + breadcrumb_chars
+        + sum_scanned(text, |t, f| scan_pagination(t, f));
 
     (nav_chars as f64 / total_chars).min(1.0)
 }
@@ -568,5 +798,188 @@ mod tests {
             score < 1.0,
             "script-heavy short text must be penalized, got score {score}"
         );
+    }
+}
+
+#[cfg(test)]
+mod scanner_equivalence_tests {
+    use super::*;
+
+    static OLD_OCR: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r"(?x)
+        \b[a-zA-Z]\s{2,}[a-zA-Z]\s{2,}[a-zA-Z]\b |
+        [.]{3,}|[_]{3,} |
+        \s[.,;:!?]\s |
+        \b[a-zA-Z]+[0-9]+[a-zA-Z]+[a-zA-Z0-9]*\b |
+        \s{3,}
+    ",
+        )
+        .unwrap()
+    });
+    static OLD_NAV: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)\b(?:Skip to main content|Back to top|Main navigation|Site navigation)\b").unwrap()
+    });
+    static OLD_PAGINATION: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)\b(?:Page \d+ of \d+|First page|Last page|Previous page|Next page|^\d+ of \d+$)\b").unwrap()
+    });
+    static WHITESPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\A\s\z").unwrap());
+
+    fn old_spans(re: &Regex, text: &str) -> Vec<(usize, usize)> {
+        re.find_iter(text).map(|m| (m.start(), m.end())).collect()
+    }
+
+    fn new_spans(scan: impl FnOnce(&str, &mut dyn FnMut(usize, usize)), text: &str) -> Vec<(usize, usize)> {
+        let mut spans = Vec::new();
+        scan(text, &mut |s, e| spans.push((s, e)));
+        spans
+    }
+
+    fn assert_equivalent(text: &str) {
+        assert_eq!(
+            new_spans(|t, f| scan_ocr_artifacts(t, f), text),
+            old_spans(&OLD_OCR, text),
+            "ocr artifacts diverge on {text:?}"
+        );
+        assert_eq!(
+            new_spans(|t, f| scan_nav_words(t, f), text),
+            old_spans(&OLD_NAV, text),
+            "nav words diverge on {text:?}"
+        );
+        assert_eq!(
+            new_spans(|t, f| scan_pagination(t, f), text),
+            old_spans(&OLD_PAGINATION, text),
+            "pagination diverges on {text:?}"
+        );
+    }
+
+    #[test]
+    fn word_and_digit_and_space_classifiers_match_regex_for_every_char() {
+        let word = Regex::new(r"\A\w\z").unwrap();
+        let digit = Regex::new(r"\A\d\z").unwrap();
+        let mut buf = [0u8; 4];
+        for c in (0..=0x10FFFFu32).filter_map(char::from_u32) {
+            let s = c.encode_utf8(&mut buf);
+            assert_eq!(is_word_char(c), word.is_match(s), "\\w differs for U+{:04X}", c as u32);
+            assert_eq!(
+                is_decimal_digit(c),
+                digit.is_match(s),
+                "\\d differs for U+{:04X}",
+                c as u32
+            );
+            assert_eq!(
+                c.is_whitespace(),
+                WHITESPACE.is_match(s),
+                "\\s differs for U+{:04X}",
+                c as u32
+            );
+        }
+    }
+
+    #[test]
+    fn handpicked_strings_match_the_regexes() {
+        let cases = [
+            "",
+            "a  b  c",
+            "a  b  c é",
+            "éa  b  c",
+            "a\t\tb  c\u{a0}\u{a0}d",
+            "é1",
+            "a1b é1b a1bé a1b1 ab12cd9 x1y_ x1y-",
+            "中a1b中 a1b中 中a1b",
+            "...  ___ .. __ ....",
+            "a . b ; c ,d  !  ?",
+            "x\u{a0}.\u{a0}y \u{3000}.\u{3000}",
+            "§ 12 — Page 3 of 14 §",
+            "page 3 of 14é Page ٣ of ١٤ page 3 of",
+            "12 of 34",
+            "12 of 34\n",
+            " 12 of 34",
+            "٣ of ٤",
+            "First page. Last Page Previous PAGE next page éNext page Next pageé",
+            "skip to main content, BACK TO TOP, ſkip to main content, \u{212a}ip to main content",
+            "Skip to main content_ Site navigation1 xSite navigation Main  navigation",
+            "ſite navigation Site navigation",
+            "tab\t\t\tseparated \n\n\n lines   with    gaps",
+            "Home > Docs » API",
+            "ǅ1a a1ǅ ᾳ1b",
+            "a  b  cé a  b  c_ a  b  c1",
+        ];
+        for text in cases {
+            assert_equivalent(text);
+        }
+    }
+
+    #[test]
+    fn generated_strings_match_the_regexes() {
+        const TOKENS: &[&str] = &[
+            "a",
+            "b",
+            "Z",
+            "x",
+            "1",
+            "9",
+            "٣",
+            " ",
+            "  ",
+            "\t",
+            "\n",
+            "\u{a0}",
+            "\u{3000}",
+            ".",
+            "...",
+            ",",
+            ";",
+            "!",
+            "_",
+            "-",
+            "é",
+            "中",
+            "§",
+            "—",
+            "ſ",
+            "\u{212a}",
+            "k",
+            "s",
+            "»",
+            ">",
+            "Page ",
+            "page ",
+            " of ",
+            "of",
+            "First ",
+            "Last ",
+            "Next ",
+            "Previous ",
+            "Skip to main content",
+            "Back to top",
+            "Main navigation",
+            "Site navigation",
+            "skip",
+            "site",
+            " page",
+            "Page 3 of 4",
+            "12 of 34",
+        ];
+        let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as usize
+        };
+        for _ in 0..30_000 {
+            let len = 1 + next() % 12;
+            let text: String = (0..len).map(|_| TOKENS[next() % TOKENS.len()]).collect();
+            assert_equivalent(&text);
+        }
+    }
+
+    #[test]
+    fn breadcrumb_prefilter_never_hides_a_match() {
+        for text in ["Home > Docs", "a » b » c", "plain text with no markers"] {
+            let has_marker = text.contains('>') || text.contains('»');
+            assert!(has_marker || BREADCRUMB_PATTERN.find(text).is_none());
+        }
     }
 }

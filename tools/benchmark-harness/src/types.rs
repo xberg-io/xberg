@@ -248,6 +248,8 @@ pub enum OcrStatus {
 /// - **EmptyContent**: framework ran but produced no content
 /// - **ZeroOverlap**: framework produced non-empty output that shares zero tokens with a
 ///   non-empty ground truth
+/// - **LayoutFailed**: a layout-bearing variant extracted the document without the requested
+///   layout analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorKind {
@@ -269,6 +271,10 @@ pub enum ErrorKind {
     /// empty). Distinct from [`ErrorKind::EmptyContent`], which means the framework produced
     /// no content at all. Both are framework-fault failures and both are timing-eligible.
     ZeroOverlap,
+    /// A layout-bearing variant produced text, but its layout pass failed or was skipped, so the
+    /// row would otherwise be scored as the requested detector's output. A framework-fault
+    /// failure like [`ErrorKind::EmptyContent`].
+    LayoutFailed,
     /// No error occurred
     #[default]
     None,
@@ -362,6 +368,12 @@ pub struct BenchmarkResult {
     /// field or were constructed outside a measurement path.
     #[serde(default)]
     pub system_load: Option<crate::system_load::SystemLoad>,
+
+    /// Content family of the fixture this result came from (`metadata.family`): fixtures that
+    /// render the same source content share one. `None` when the fixture declares none, in which
+    /// case the document is its own family. Absent from results that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixture_family: Option<String>,
 }
 
 impl BenchmarkResult {
@@ -395,6 +407,16 @@ impl BenchmarkResult {
 /// looking slower than it actually is relative to a framework (like xberg) that rarely produces
 /// zero-overlap output.
 pub(crate) fn is_timing_eligible(result: &BenchmarkResult) -> bool {
+    result.success || result.error_kind == ErrorKind::ZeroOverlap
+}
+
+/// Whether a result carries a quality score that quality comparisons must count.
+///
+/// A [`ErrorKind::ZeroOverlap`] result stays a failure for success-rate accounting, but its
+/// output was scored against the ground truth (TF1 = 0): it is the worst quality result, not a
+/// missing one. Dropping it from a mean or a per-document pairing hides exactly the regressions
+/// where one configuration scores 1.0 and another returns the wrong text.
+pub(crate) fn has_quality_result(result: &BenchmarkResult) -> bool {
     result.success || result.error_kind == ErrorKind::ZeroOverlap
 }
 
@@ -458,8 +480,22 @@ pub struct PerformanceMetrics {
     #[serde(default)]
     pub baseline_memory_bytes: u64,
 
-    /// Absolute peak RSS in bytes.
+    /// Absolute peak RSS in bytes, measured as `memory_method` says.
+    ///
+    /// With [`MemoryMethod::RusageMaxRss`] this is the peak RSS of the largest single process
+    /// in the child's tree (the child folds in every descendant it reaped), not the sum of the
+    /// tree's concurrent RSS.
     pub peak_memory_bytes: u64,
+
+    /// How `peak_memory_bytes` was measured. Results written before this field existed
+    /// deserialize as [`MemoryMethod::Sampled`].
+    #[serde(default)]
+    pub memory_method: MemoryMethod,
+
+    /// Peak RSS the framework reported about itself, kept for diagnostics only; it never
+    /// replaces `peak_memory_bytes`.
+    #[serde(default)]
+    pub self_reported_peak_memory_bytes: Option<u64>,
 
     /// Peak RSS above the captured baseline.
     #[serde(default)]
@@ -491,6 +527,31 @@ pub struct PerformanceMetrics {
 
     /// 99th percentile memory usage in bytes
     pub p99_memory_bytes: u64,
+}
+
+/// How a result's `peak_memory_bytes` was obtained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryMethod {
+    /// `ru_maxrss` from `wait4(2)` on the harness's direct child, normalised to bytes.
+    RusageMaxRss,
+    /// Maximum of the polling sampler's process-tree RSS samples; misses processes that
+    /// live shorter than one sampling interval.
+    #[default]
+    Sampled,
+    /// The framework's own report of its peak RSS.
+    SelfReported,
+}
+
+impl MemoryMethod {
+    /// The snake_case name this method serializes to.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RusageMaxRss => "rusage_max_rss",
+            Self::Sampled => "sampled",
+            Self::SelfReported => "self_reported",
+        }
+    }
 }
 
 /// Quality metrics comparing extraction output to ground truth
@@ -780,228 +841,4 @@ pub struct DurationStatistics {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_framework_capabilities_fail_closed() {
-        let capabilities = FrameworkCapabilities::default();
-        assert_eq!(capabilities.timing_regime, TimingRegime::Unknown);
-        assert_eq!(
-            capabilities.resource_measurement_scope,
-            ResourceMeasurementScope::Unknown
-        );
-    }
-
-    #[test]
-    fn legacy_paddle_pipeline_parses_supported_spellings() {
-        for value in ["paddle-ocr", "paddle_ocr", "paddleocr"] {
-            assert_eq!(value.parse::<XbergPipeline>(), Ok(XbergPipeline::PaddleOcr));
-        }
-    }
-
-    #[test]
-    fn layout_v3_pipeline_round_trips_through_str_and_serde() {
-        for value in ["layout-v3", "layout_v3"] {
-            assert_eq!(value.parse::<XbergPipeline>(), Ok(XbergPipeline::LayoutV3));
-        }
-        assert_eq!(XbergPipeline::LayoutV3.as_str(), "layout-v3");
-        assert_eq!(
-            serde_json::to_string(&XbergPipeline::LayoutV3).unwrap(),
-            "\"layout-v3\""
-        );
-        assert_eq!(
-            serde_json::from_str::<XbergPipeline>("\"layout-v3\"").unwrap(),
-            XbergPipeline::LayoutV3
-        );
-    }
-
-    #[test]
-    fn sceptre_pipeline_identities_are_explicit_and_alias_defaults_to_ort() {
-        assert_eq!("sceptre".parse(), Ok(XbergPipeline::SceptreOrt));
-        for pipeline in [
-            XbergPipeline::SceptreOrt,
-            XbergPipeline::SceptreOrtLayout,
-            XbergPipeline::SceptreOrtAutoRotate,
-            XbergPipeline::SceptreTract,
-        ] {
-            assert_eq!(pipeline.as_str().parse(), Ok(pipeline));
-            assert!(pipeline.as_str().contains("ort") || pipeline.as_str().contains("tract"));
-        }
-    }
-
-    #[test]
-    fn pdf_backend_parses_case_and_separator_insensitively() {
-        for value in ["native", "Native", "NATIVE"] {
-            assert_eq!(value.parse::<XbergPdfBackend>(), Ok(XbergPdfBackend::Native));
-        }
-        for value in ["pdfium", "Pdfium", "PDFIUM"] {
-            assert_eq!(value.parse::<XbergPdfBackend>(), Ok(XbergPdfBackend::Pdfium));
-        }
-    }
-
-    #[test]
-    fn pdf_backend_rejects_unknown_value_and_lists_valid_ones() {
-        let error = "pdf_oxide".parse::<XbergPdfBackend>().unwrap_err();
-        assert_eq!(error, "unknown Xberg PDF backend 'pdf-oxide'. Valid: native, pdfium");
-    }
-
-    #[test]
-    fn stage_timings_round_trips_with_ort_field_present() {
-        let timings = StageTimings {
-            process_init_ms: 12.5,
-            first_parse_ms: 1150.25,
-            ort_session_and_inference_ms: Some(1150.25),
-        };
-
-        let json = serde_json::to_string(&timings).expect("serialize StageTimings");
-        let parsed: StageTimings = serde_json::from_str(&json).expect("deserialize StageTimings");
-
-        assert_eq!(parsed.process_init_ms, 12.5);
-        assert_eq!(parsed.first_parse_ms, 1150.25);
-        assert_eq!(parsed.ort_session_and_inference_ms, Some(1150.25));
-    }
-
-    #[test]
-    fn stage_timings_omits_ort_field_when_absent() {
-        let timings = StageTimings {
-            process_init_ms: 8.0,
-            first_parse_ms: 235.0,
-            ort_session_and_inference_ms: None,
-        };
-
-        let json = serde_json::to_string(&timings).expect("serialize StageTimings");
-
-        assert!(
-            !json.contains("ort_session_and_inference_ms"),
-            "expected ort_session_and_inference_ms to be skipped when None, got: {json}"
-        );
-    }
-
-    #[test]
-    fn stage_timings_parses_from_cli_json_shape() {
-        // Mirrors the exact JSON shape emitted by `xberg-cli`'s `output::StageTimings` when
-        // XBERG_EMIT_STAGE_TIMING is set and layout/OCR is active. ~keep
-        let raw = r#"{
-            "process_init_ms": 4.2,
-            "first_parse_ms": 1171.0,
-            "ort_session_and_inference_ms": 1171.0
-        }"#;
-
-        let parsed: StageTimings = serde_json::from_str(raw).expect("parse CLI stage_timings JSON");
-
-        assert_eq!(parsed.process_init_ms, 4.2);
-        assert_eq!(parsed.first_parse_ms, 1171.0);
-        assert_eq!(parsed.ort_session_and_inference_ms, Some(1171.0));
-    }
-
-    fn minimal_result(success: bool, error_kind: ErrorKind, duration_ms: u64, throughput_bps: f64) -> BenchmarkResult {
-        BenchmarkResult {
-            framework: "fw".to_string(),
-            output_format: OutputFormat::Markdown,
-            file_path: PathBuf::from("test.pdf"),
-            file_size: 1024,
-            success,
-            error_message: if success { None } else { Some("failed".to_string()) },
-            error_kind,
-            duration: Duration::from_millis(duration_ms),
-            extraction_duration: None,
-            subprocess_overhead: None,
-            metrics: PerformanceMetrics {
-                baseline_memory_bytes: 0,
-                peak_memory_bytes: 1_000_000,
-                peak_memory_delta_bytes: 1_000_000,
-                avg_cpu_percent: 50.0,
-                cpu_seconds: 1.0,
-                throughput_bytes_per_sec: throughput_bps,
-                p50_memory_bytes: 1_000_000,
-                p95_memory_bytes: 1_000_000,
-                p99_memory_bytes: 1_000_000,
-            },
-            quality: None,
-            iterations: vec![],
-            statistics: None,
-            cold_start_duration: None,
-            file_extension: "pdf".to_string(),
-            framework_capabilities: FrameworkCapabilities::default(),
-            pdf_metadata: None,
-            ocr_status: OcrStatus::NotUsed,
-            extracted_text: None,
-            system_load: None,
-        }
-    }
-
-    #[test]
-    fn error_kind_zero_overlap_round_trips_through_json() {
-        let json = serde_json::to_string(&ErrorKind::ZeroOverlap).expect("serialize ErrorKind::ZeroOverlap");
-        assert_eq!(json, "\"zero_overlap\"");
-
-        let parsed: ErrorKind = serde_json::from_str(&json).expect("deserialize ErrorKind::ZeroOverlap");
-        assert_eq!(parsed, ErrorKind::ZeroOverlap);
-    }
-
-    /// The Defect A fix: a zero-overlap result is not a quality success, but it is still
-    /// timing-eligible, so it must survive into the performance-sample set alongside genuine
-    /// successes. A genuinely-empty result (`ErrorKind::EmptyContent`) is not timing-eligible and
-    /// stays excluded, proving the two `success == false` cases are treated differently on
-    /// purpose rather than both being swept up by a broad `!success` check.
-    #[test]
-    fn successful_performance_samples_includes_zero_overlap_but_not_empty_content() {
-        let success = minimal_result(true, ErrorKind::None, 100, 1_000_000.0);
-        let zero_overlap = minimal_result(false, ErrorKind::ZeroOverlap, 200, 2_000_000.0);
-        let empty_content = minimal_result(false, ErrorKind::EmptyContent, 300, 3_000_000.0);
-
-        let results = [success, zero_overlap, empty_content];
-        let samples = successful_performance_samples(results.iter());
-
-        assert_eq!(
-            samples.len(),
-            2,
-            "expected the success and the zero-overlap result, got {samples:?}"
-        );
-        assert!(samples.iter().any(|r| r.error_kind == ErrorKind::None));
-        assert!(samples.iter().any(|r| r.error_kind == ErrorKind::ZeroOverlap));
-        assert!(!samples.iter().any(|r| r.error_kind == ErrorKind::EmptyContent));
-    }
-
-    #[test]
-    fn is_timing_eligible_matches_success_or_zero_overlap() {
-        assert!(is_timing_eligible(&minimal_result(true, ErrorKind::None, 100, 1.0)));
-        assert!(is_timing_eligible(&minimal_result(
-            false,
-            ErrorKind::ZeroOverlap,
-            100,
-            1.0
-        )));
-        assert!(!is_timing_eligible(&minimal_result(
-            false,
-            ErrorKind::EmptyContent,
-            100,
-            1.0
-        )));
-        assert!(!is_timing_eligible(&minimal_result(
-            false,
-            ErrorKind::FrameworkError,
-            100,
-            1.0
-        )));
-        assert!(!is_timing_eligible(&minimal_result(
-            false,
-            ErrorKind::HarnessError,
-            100,
-            1.0
-        )));
-        assert!(!is_timing_eligible(&minimal_result(
-            false,
-            ErrorKind::Timeout,
-            100,
-            1.0
-        )));
-        assert!(!is_timing_eligible(&minimal_result(
-            false,
-            ErrorKind::ConfigSetupError,
-            100,
-            1.0
-        )));
-    }
-}
+mod tests;

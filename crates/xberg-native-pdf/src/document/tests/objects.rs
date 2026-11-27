@@ -128,12 +128,17 @@ fn warm_object_reads_share_the_cache_and_owned_loads_stay_independent() {
     let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
     let reference = ObjectRef::new(1, 0);
     document.object_cache.lock_or_recover().clear();
-    let cold = document.load_object_for_read(reference).unwrap();
-    assert!(matches!(cold, super::super::objects::LoadedObject::Owned(_)));
+    let super::super::objects::LoadedObject::Fresh(cold) = document.load_object_for_read(reference).unwrap() else {
+        panic!("a cold read that fills the cache must share the cached allocation");
+    };
 
     let super::super::objects::LoadedObject::Cached(first) = document.load_object_for_read(reference).unwrap() else {
         panic!("the warm object must share the cached allocation");
     };
+    assert!(
+        std::sync::Arc::ptr_eq(&cold, &first),
+        "the cold read must not copy the object it cached"
+    );
     let super::super::objects::LoadedObject::Cached(second) = document.load_object_for_read(reference).unwrap() else {
         panic!("a second warm read must share the cached allocation");
     };
@@ -747,4 +752,115 @@ fn test_open_pdf_version_2_0() {
     pdf.extend_from_slice(format!("{:010} 00000 n \n", off2).as_bytes());
     pdf.extend_from_slice(format!("trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off).as_bytes());
     assert_eq!(PdfDocument::from_bytes(pdf).unwrap().version(), (2, 0));
+}
+
+#[test]
+fn a_loaded_stream_object_borrows_its_payload_from_the_source_allocation() {
+    let doc = PdfDocument::from_bytes(build_nested_xobject_do_with_orphaned_operands_pdf()).expect("parse pdf");
+    let Object::Stream { data, .. } = doc.load_object(ObjectRef::new(4, 0)).expect("load stream object") else {
+        panic!("object 4 is a content stream");
+    };
+
+    assert!(!data.is_empty());
+    let source = doc.source_bytes.as_ptr() as usize..doc.source_bytes.as_ptr() as usize + doc.source_bytes.len();
+    let payload = data.as_ptr() as usize..data.as_ptr() as usize + data.len();
+    assert!(source.start <= payload.start && payload.end <= source.end);
+}
+
+#[test]
+fn cold_owned_load_is_independent_of_the_cached_object() {
+    let document = PdfDocument::from_bytes(build_minimal_pdf(b"")).unwrap();
+    let reference = ObjectRef::new(1, 0);
+    document.object_cache.lock_or_recover().clear();
+    let clones_before = document.cached_object_clone_count();
+
+    let mut owned = document.load_object(reference).unwrap();
+    assert_eq!(
+        document.cached_object_clone_count(),
+        clones_before,
+        "a miss is not a cache-hit clone"
+    );
+    let cached = document.load_object_shared(reference).unwrap();
+    assert_eq!(owned, *cached);
+
+    owned = Object::Null;
+    assert_ne!(owned, *cached, "mutating the owned copy leaves the cached object alone");
+}
+
+/// Catalog and empty page tree as objects 1 and 2, then `bodies` as objects 3, 4, ...
+fn pdf_with_trailing_objects(bodies: &[&[u8]]) -> Vec<u8> {
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![pdf.len()];
+    pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(pdf.len());
+    pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n");
+    for (index, body) in bodies.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n", index + 3).as_bytes());
+        pdf.extend_from_slice(body);
+        pdf.extend_from_slice(b"\nendobj\n");
+    }
+    let xref_offset = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for offset in &offsets {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n",
+            offsets.len() + 1
+        )
+        .as_bytes(),
+    );
+    pdf
+}
+
+fn stream_payload(doc: &PdfDocument, id: u32) -> Vec<u8> {
+    match doc.load_object(ObjectRef::new(id, 0)).expect("load stream object") {
+        Object::Stream { data, .. } => data.to_vec(),
+        other => panic!("object {id} should be a stream, got {other:?}"),
+    }
+}
+
+#[test]
+fn stream_with_a_declared_length_is_stepped_over_to_its_endobj() {
+    let pdf = pdf_with_trailing_objects(&[
+        b"<< /Length 22 >>\nstream\nfirst line\nsecond line\nendstream",
+        b"<< /Length 5 >>\r\nstream\r\nCRLF!\r\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]);
+    let doc = PdfDocument::from_bytes(pdf).expect("open pdf");
+
+    assert_eq!(stream_payload(&doc, 3), b"first line\nsecond line");
+    assert_eq!(stream_payload(&doc, 4), b"CRLF!");
+    let font = doc
+        .load_object(ObjectRef::new(5, 0))
+        .expect("load object after the streams");
+    assert_eq!(
+        font.as_dict()
+            .and_then(|dict| dict.get("BaseFont"))
+            .and_then(Object::as_name),
+        Some("Helvetica")
+    );
+}
+
+#[test]
+fn stream_payload_holding_endobj_is_read_whole_when_its_length_is_declared() {
+    let pdf = pdf_with_trailing_objects(&[b"<< /Length 19 >>\nstream\n1 0 obj\nendobj\nxyz\nendstream"]);
+    let doc = PdfDocument::from_bytes(pdf).expect("open pdf");
+
+    assert_eq!(stream_payload(&doc, 3), b"1 0 obj\nendobj\nxyz\n");
+}
+
+#[test]
+fn stream_with_a_wrong_or_indirect_length_still_ends_at_endstream() {
+    let pdf = pdf_with_trailing_objects(&[
+        b"<< /Length 30 >>\nstream\nhello world\nendstream",
+        b"<< /Length 5 0 R >>\nstream\nindirect\nendstream",
+        b"11",
+    ]);
+    let doc = PdfDocument::from_bytes(pdf).expect("open pdf");
+
+    assert_eq!(stream_payload(&doc, 3), b"hello world");
+    assert_eq!(stream_payload(&doc, 4), b"indirect");
 }

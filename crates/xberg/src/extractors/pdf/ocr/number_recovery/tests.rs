@@ -287,7 +287,7 @@ fn page_policy_cases() -> [EligibilityCase; 7] {
     ]
 }
 
-fn ocr_override_cases() -> [EligibilityCase; 5] {
+fn ocr_override_cases() -> [EligibilityCase; 6] {
     [
         ("missing OCR", |c| c.ocr = None, 0, false),
         (
@@ -304,9 +304,15 @@ fn ocr_override_cases() -> [EligibilityCase; 5] {
         ),
         (
             "caller backend options",
-            |c| c.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({})),
+            |c| c.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({"psm": 6})),
             0,
             false,
+        ),
+        (
+            "result cache switch alone",
+            |c| c.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({"use_cache": false})),
+            0,
+            true,
         ),
         (
             "explicit pipeline",

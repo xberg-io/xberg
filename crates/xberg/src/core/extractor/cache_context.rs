@@ -1,4 +1,5 @@
-//! Mutable model dependencies of OSD recognition, script retry and optional PDF recovery.
+//! Mutable model dependencies of OSD recognition, script retry, optional PDF recovery and the
+//! standalone-image PaddleOCR fallback.
 
 use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::ExtractionConfig;
@@ -13,6 +14,10 @@ pub(crate) struct CacheDependency {
     script_retry: Option<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     uncertifiable: bool,
+    /// The OCR configuration of a request the image PaddleOCR fallback may run for; its model
+    /// files' identity enters the key, so cold and warm model caches never share an entry.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    paddle_image_fallback: Option<crate::core::config::OcrConfig>,
 }
 
 impl CacheDependency {
@@ -22,6 +27,8 @@ impl CacheDependency {
             let dependency = Self {
                 model: ModelSelection::for_config(config, mime),
                 script_retry: ModelSelection::for_script_retry(config, mime),
+                #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+                paddle_image_fallback: crate::extractors::image::paddle_fallback_model_request(config, mime),
                 ..Self::default()
             };
             #[cfg(feature = "pdf")]
@@ -85,7 +92,8 @@ async fn fingerprint_with_reader(
         .iter()
         .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty());
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
-    if has_orientation_models || has_script_retry {
+    let has_paddle_fallback = paddle_fallback_requested(dependencies);
+    if has_orientation_models || has_script_retry || has_paddle_fallback {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
@@ -100,6 +108,7 @@ async fn fingerprint_with_reader(
                 String::new()
             };
             context.push_str(&retry_context);
+            context.push_str(&paddle_fallback_context(&dependencies));
             Ok(Some(context))
         }))
         .await;
@@ -122,13 +131,55 @@ async fn fingerprint_with_reader(
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn paddle_fallback_requested(dependencies: &[CacheDependency]) -> bool {
+    #[cfg(all(paddle_ocr, feature = "pdf"))]
+    {
+        dependencies
+            .iter()
+            .any(|dependency| dependency.paddle_image_fallback.is_some())
+    }
+    #[cfg(not(all(paddle_ocr, feature = "pdf")))]
+    {
+        let _ = dependencies;
+        false
+    }
+}
+
+/// The PaddleOCR model state of every request the image fallback may run for, or nothing when
+/// none may. Stats the model files on the caller's blocking thread; never reads or downloads.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn paddle_fallback_context(dependencies: &[CacheDependency]) -> String {
+    #[cfg(all(paddle_ocr, feature = "pdf"))]
+    {
+        let mut hash = blake3::Hasher::new();
+        let mut any = false;
+        for ocr in dependencies
+            .iter()
+            .filter_map(|dependency| dependency.paddle_image_fallback.as_ref())
+        {
+            any = true;
+            hash.update(crate::extractors::image::paddle_fallback_model_state(ocr).as_bytes());
+        }
+        if any {
+            format!(":paddle-image-fallback-v1:{}", hash.finalize().to_hex())
+        } else {
+            String::new()
+        }
+    }
+    #[cfg(not(all(paddle_ocr, feature = "pdf")))]
+    {
+        let _ = dependencies;
+        String::new()
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn script_retry_cache_context(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
 ) -> crate::Result<Option<String>> {
     use crate::ocr::processor::{script_retry, validation::TessdataEnv};
 
-    let env = TessdataEnv::from_process();
     let mut checked = std::collections::HashSet::new();
     let mut vertical = blake3::Hasher::new();
     for model in dependencies
@@ -139,6 +190,7 @@ fn script_retry_cache_context(
         if !checked.insert(model) {
             continue;
         }
+        let env = TessdataEnv::from_process().for_model(model.tessdata_model);
         let languages = model.languages.join("+");
         let directory = model.directory.as_deref();
         if checked.len() > MAX_MODEL_SELECTIONS
@@ -170,6 +222,7 @@ fn script_retry_cache_context(
 struct ModelSelection {
     languages: Vec<String>,
     directory: Option<std::path::PathBuf>,
+    tessdata_model: crate::core::config::TessdataModel,
     mixed_pdf_khmer: bool,
     vertical_japanese_retry: bool,
 }
@@ -193,8 +246,8 @@ impl ModelSelection {
         if !(image || pdf || mime.is_none_or(str::is_empty) || config.runs_ocr_on_embedded_images()) {
             return None;
         }
-        let default_ocr = crate::core::config::OcrConfig::default();
-        let ocr = config.ocr.as_ref().unwrap_or(&default_ocr);
+        let default_ocr = config.ocr_or_default();
+        let ocr: &crate::core::config::OcrConfig = &default_ocr;
         if ocr.backend != "tesseract" || ocr.pipeline.is_some() {
             return None;
         }
@@ -226,6 +279,7 @@ impl ModelSelection {
         Some(Self {
             languages,
             directory: ocr.tessdata_path.clone(),
+            tessdata_model: ocr.effective_tessdata_model(),
             mixed_pdf_khmer,
             vertical_japanese_retry: ocr
                 .tesseract_config
@@ -270,6 +324,7 @@ impl ModelSelection {
         Some(Self {
             languages: ocr.effective_tesseract_language(),
             directory: ocr.tessdata_path.clone(),
+            tessdata_model: config.effective_tessdata_model(),
             mixed_pdf_khmer: false,
             vertical_japanese_retry: false,
         })
@@ -337,7 +392,7 @@ fn model_fingerprint_with_reader(
     let Some(directory) = existing_tessdata_dir_for(
         &model.languages,
         model.directory.as_deref(),
-        &TessdataEnv::from_process(),
+        &TessdataEnv::from_process().for_model(model.tessdata_model),
     ) else {
         super::cacheability::invalidate_current();
         hash.update(b"primary-language-unavailable");
@@ -412,6 +467,7 @@ impl CacheDependency {
             let model = ModelSelection {
                 languages: inputs.languages(),
                 directory: inputs.directory().map(std::path::Path::to_path_buf),
+                tessdata_model: config.effective_tessdata_model(),
                 mixed_pdf_khmer: false,
                 vertical_japanese_retry: false,
             };

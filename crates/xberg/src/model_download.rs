@@ -1220,6 +1220,8 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
     }
 
     let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for checksum: {e}"))?;
+    #[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+    let identity_before = file.metadata().ok().map(|metadata| FileIdentity::of(&metadata));
     let mut hasher = Sha256::new();
 
     let mut buf = vec![0u8; 1024 * 1024];
@@ -1241,8 +1243,145 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
         ));
     }
 
+    // Only a file that did not change while it was hashed is recorded as holding the hashed bytes.
+    #[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+    if let Some(identity) = identity_before
+        && file
+            .metadata()
+            .is_ok_and(|metadata| FileIdentity::of(&metadata) == identity)
+    {
+        record_pinned_file(&hash_hex, identity);
+    }
+
     tracing::debug!(label, "Checksum verified");
     Ok(())
+}
+
+/// Device, inode, size and nanosecond modification and change times of a file. A write,
+/// truncation, or rename over the path changes it; ctime cannot be set from userland.
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileIdentity {
+    dev: u64,
+    ino: u64,
+    size: u64,
+    mtime: (i64, i64),
+    ctime: (i64, i64),
+}
+
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+impl FileIdentity {
+    pub(crate) fn of(metadata: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+
+        Self {
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+            size: metadata.size(),
+            mtime: (metadata.mtime(), metadata.mtime_nsec()),
+            ctime: (metadata.ctime(), metadata.ctime_nsec()),
+        }
+    }
+}
+
+/// A file this process hashed and found equal to the digest its caller required.
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PinnedFile {
+    /// Lowercase hex SHA-256 of the verified contents.
+    pub(crate) sha256: String,
+    identity: FileIdentity,
+}
+
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+impl PinnedFile {
+    /// Whether `path` still resolves to the file whose contents were verified, unchanged.
+    pub(crate) fn still_at(&self, path: &Path) -> bool {
+        std::fs::metadata(path).is_ok_and(|metadata| FileIdentity::of(&metadata) == self.identity)
+    }
+}
+
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+static PINNED_FILES: std::sync::Mutex<Vec<PinnedFile>> = std::sync::Mutex::new(Vec::new());
+
+/// Distinct verified files remembered per process; the oldest is forgotten first.
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+const MAX_PINNED_FILES: usize = 256;
+
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+fn record_pinned_file(sha256: &str, identity: FileIdentity) {
+    let mut files = PINNED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    files.retain(|file| file.identity != identity);
+    if files.len() >= MAX_PINNED_FILES {
+        files.remove(0);
+    }
+    files.push(PinnedFile {
+        sha256: sha256.to_ascii_lowercase(),
+        identity,
+    });
+}
+
+/// The digest `path` was verified against by [`verify_sha256`] in this process, if the file has
+/// not changed since. The record lives in memory only: a record on disk could be written by
+/// whoever can write the cache, which is why every process still hashes a model before using it.
+#[cfg(all(unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+pub(crate) fn pinned_file(path: &Path) -> Option<PinnedFile> {
+    let identity = FileIdentity::of(&std::fs::metadata(path).ok()?);
+    let files = PINNED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    files.iter().rev().find(|file| file.identity == identity).cloned()
+}
+
+#[cfg(all(test, unix, inference_ort, model_download, any(layout_detection, auto_rotate)))]
+mod pinned_file_tests {
+    use super::*;
+
+    fn sha256(payload: &[u8]) -> String {
+        hex::encode(Sha256::digest(payload))
+    }
+
+    #[test]
+    fn a_verified_file_is_pinned_to_its_digest() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        std::fs::write(&path, b"verified weights").unwrap();
+
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+
+        let pinned = pinned_file(&path).expect("a verified file is pinned");
+        assert_eq!(pinned.sha256, sha256(b"verified weights"));
+        assert!(pinned.still_at(&path));
+    }
+
+    #[test]
+    fn a_rewritten_file_is_no_longer_pinned() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        std::fs::write(&path, b"verified weights").unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        let pinned = pinned_file(&path).unwrap();
+
+        std::fs::write(&path, b"tampered weights").unwrap();
+
+        assert!(!pinned.still_at(&path));
+        assert_eq!(pinned_file(&path), None);
+    }
+
+    #[test]
+    fn a_mismatched_or_unchecked_file_is_never_pinned() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        std::fs::write(&path, b"weights").unwrap();
+
+        verify_sha256(&path, &sha256(b"other weights"), "model").unwrap_err();
+        assert_eq!(pinned_file(&path), None, "a failed check pins nothing");
+
+        verify_sha256(&path, "", "model").unwrap();
+        assert_eq!(
+            pinned_file(&path),
+            None,
+            "an empty digest skips the check and pins nothing"
+        );
+    }
 }
 
 #[cfg(all(test, model_download))]

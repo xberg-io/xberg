@@ -95,25 +95,24 @@ tokio::task_local! {
     static CURRENT_PROGRESS: ProgressContext;
 }
 
+// ~keep Not an `async fn`: that would hold `future` as its argument and again inside the scope, doubling it.
 #[cfg(feature = "tokio-runtime")]
-pub(crate) async fn scope_progress<F, T>(
+pub(crate) fn scope_progress<F, T>(
     sink: std::sync::Arc<dyn ProgressSink>,
     input_index: Option<usize>,
     future: F,
-) -> T
+) -> impl std::future::Future<Output = T>
 where
     F: std::future::Future<Output = T>,
 {
-    CURRENT_PROGRESS
-        .scope(
-            ProgressContext {
-                sink,
-                input_index,
-                completed_pages: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            },
-            future,
-        )
-        .await
+    CURRENT_PROGRESS.scope(
+        ProgressContext {
+            sink,
+            input_index,
+            completed_pages: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+        },
+        future,
+    )
 }
 
 #[cfg(feature = "tokio-runtime")]
@@ -227,6 +226,21 @@ mod tests {
                     input_index: Some(3),
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn scope_progress_holds_the_wrapped_future_once() {
+        let payload = [7_u8; 8192];
+        let inner = async move { std::hint::black_box(&payload).len() };
+        let inner_size = std::mem::size_of_val(&inner);
+
+        let scoped = scope_progress(Arc::new(RecordingSink::default()), None, inner);
+
+        assert!(
+            std::mem::size_of_val(&scoped) < inner_size + 1024,
+            "scope_progress future is {} B around a {inner_size} B future",
+            std::mem::size_of_val(&scoped)
         );
     }
 

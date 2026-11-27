@@ -66,6 +66,7 @@ fn nested_form_pdf_with_leaf(roots: &[usize], leaf: &str) -> Vec<u8> {
 }
 
 fn raw_span_text(document: &PdfDocument, page: usize) -> String {
+    document.clear_completed_span_caches();
     document
         .extract_spans_raw(page)
         .expect("extract nested forms")
@@ -75,7 +76,7 @@ fn raw_span_text(document: &PdfDocument, page: usize) -> String {
 }
 
 fn public_text(document: &PdfDocument, page: usize, mode: &str) -> String {
-    document.page_spans_cache.lock().unwrap().clear();
+    document.clear_completed_span_caches();
     let text = match mode {
         "spans" => document
             .extract_spans(page)
@@ -173,6 +174,36 @@ fn complete_nested_form_cache_reuses_spans_at_compatible_depths() {
         assert_eq!(raw_span_text(&document, page), complete_text());
         assert_eq!(document.xobject_stream_cache.lock().unwrap().len(), 0);
     }
+}
+
+/// Extraction releases text interpretation's decoded Form streams before table ruling. A later
+/// read decodes them again and must find the text a document that kept them finds.
+#[test]
+fn released_form_streams_decode_again_to_the_same_text() {
+    let pdf = nested_form_pdf(&[9, 8]);
+    let control = PdfDocument::from_bytes(pdf.clone()).expect("open control");
+    let expected: Vec<String> = (0..2).map(|page| raw_span_text(&control, page)).collect();
+    assert_eq!(expected[1], complete_text());
+
+    let document = PdfDocument::from_bytes(pdf).expect("open released");
+    assert_eq!(raw_span_text(&document, 0), expected[0]);
+    assert!(!document.xobject_stream_cache.lock().unwrap().is_empty());
+    document.release_form_stream_cache();
+    assert!(document.xobject_stream_cache.lock().unwrap().is_empty());
+    assert_eq!(
+        document
+            .xobject_stream_cache_bytes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+
+    assert_eq!(raw_span_text(&document, 1), expected[1]);
+    assert_eq!(
+        document.xobject_stream_cache.lock().unwrap().len(),
+        1,
+        "page 1 decodes its uncached Form again"
+    );
+    assert_eq!(raw_span_text(&document, 0), expected[0]);
 }
 
 #[test]

@@ -48,6 +48,9 @@ pub mod sidecar;
 mod text_contrast_probe;
 mod text_rasterizer;
 
+#[cfg(feature = "budget-probe")]
+#[doc(hidden)]
+pub use page_renderer::budget_probe;
 pub use page_renderer::{ImageFormat, PageRenderer, RenderOptions, RenderedImage};
 pub use separation_renderer::{SeparationPlate, render_separation, render_separations};
 
@@ -455,6 +458,58 @@ pub fn render_png_page_with_dpi_budget(
         .map(|(image, dpi, _)| (image, dpi))
 }
 
+/// A page raster as straight-alpha RGB8, row-major from the top-left, alpha dropped.
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rgb8Raster {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// `width * height * 3` bytes.
+    pub data: Vec<u8>,
+}
+
+/// Internal Core bridge: [`render_png_page_with_dpi_budget`] without the PNG encode. The page is
+/// admitted under the same budget, so it renders at the same DPI, and the pixels equal the RGB
+/// channels of that PNG decoded to RGB8.
+#[doc(hidden)]
+pub fn render_rgb8_page_with_dpi_budget(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> Result<(Rgb8Raster, u32)> {
+    render_rgb8_page_with_budget_evidence(doc, page_num, dpi, minimum_dpi, max_working_bytes)
+        .map(|(raster, dpi, _)| (raster, dpi))
+        .map_err(|(error, _)| error)
+}
+
+/// Internal Core bridge: [`render_png_page_with_budget_evidence`] without the PNG encode, with the
+/// same admission, DPI, Type0 ink-loss flag and source-budget error flag.
+#[doc(hidden)]
+pub fn render_rgb8_page_with_budget_evidence(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    minimum_dpi: u32,
+    max_working_bytes: usize,
+) -> std::result::Result<(Rgb8Raster, u32, bool), (crate::Error, bool)> {
+    let budget = page_renderer::PngRenderBudget {
+        max_working_bytes,
+        minimum_dpi,
+    };
+    let (image, dpi, type0_ink_loss) =
+        render_page_impl(doc, page_num, &RenderOptions::with_dpi(dpi).as_raw(), Some(budget))?;
+    let raster = Rgb8Raster {
+        width: image.width,
+        height: image.height,
+        data: page_renderer::straight_rgb8_in_place(image.data),
+    };
+    Ok((raster, dpi, type0_ink_loss))
+}
+
 /// Internal Core bridge returning whether a Type0 glyph lost ink during this render.
 #[doc(hidden)]
 pub fn render_png_page_with_ink_evidence(
@@ -703,6 +758,8 @@ pub fn exact_text_show_has_contrast(
     Ok(renderer.text_contrast_probe.is_some_and(|probe| probe.visible()))
 }
 
+#[cfg(test)]
+mod rgb8_raster_tests;
 #[cfg(test)]
 mod text_ink_tests;
 

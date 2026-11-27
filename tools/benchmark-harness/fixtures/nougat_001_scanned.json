@@ -1,0 +1,32 @@
+{
+  "document": "../../../test_documents/pdf_scanned/nougat_001_scanned.pdf",
+  "file_type": "pdf",
+  "file_size": 1594277,
+  "expected_frameworks": [
+    "xberg",
+    "docling",
+    "markitdown",
+    "mineru",
+    "pdfminer",
+    "pdfplumber",
+    "pdftotext",
+    "pymupdf4llm",
+    "pypdf",
+    "tika",
+    "unstructured"
+  ],
+  "metadata": {
+    "description": "5-page image-only scan of Virginia lesson-plan handout",
+    "category": "pdf-scanned",
+    "size_class": "medium",
+    "pages": 5,
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/nougat_001.txt",
+    "markdown_file": "../../../test_documents/ground_truth/pdf/nougat_001.md",
+    "source": "manual"
+  }
+}

@@ -126,6 +126,24 @@ fn synthetic_pdf_max_ops_setter_affects_extraction() {
     xberg_native_pdf::content::parser::set_max_ops_per_stream(original);
 }
 
+/// The page path scan stops at the effective operator cap, keeping the operators before it.
+#[test]
+fn page_path_scan_stops_at_the_operator_cap() {
+    use xberg_native_pdf::content::Operator;
+    let _guard = GLOBAL_FLAG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let original = xberg_native_pdf::content::parser::set_max_ops_per_stream(Some(3));
+    let capped = xberg_native_pdf::content::parse_content_stream_paths_only(b"q 0 0 m 5 5 l S Q");
+    xberg_native_pdf::content::parser::set_max_ops_per_stream(original);
+    assert_eq!(
+        capped.expect("a capped scan still returns its operators"),
+        vec![
+            Operator::SaveState,
+            Operator::MoveTo { x: 0.0, y: 0.0 },
+            Operator::LineTo { x: 5.0, y: 5.0 },
+        ]
+    );
+}
+
 // ===========================================================================
 // Span bbox.x positioning — the buffer's user_pos_x must capture the
 // matrix position where the next character will actually be drawn, not

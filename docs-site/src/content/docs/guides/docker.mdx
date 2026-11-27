@@ -55,7 +55,7 @@ The Core and Full images use Debian 13 (Trixie) and support API server (default)
 |                   | **Core**                               | **Full**                                 |
 | ----------------- | -------------------------------------- | ---------------------------------------- |
 | **Image**         | `ghcr.io/xberg-io/xberg:core` | `ghcr.io/xberg-io/xberg:latest` |
-| **Size**          | ~1.0–1.3 GB                            | ~1.5–2.1 GB                              |
+| **Size**          | ~239 MB compressed                     | ~1.2 GB compressed                       |
 | **Tesseract OCR** | 12 languages                           | 12 languages                             |
 | **Modern Office** | DOCX, PPTX, XLSX                       | DOCX, PPTX, XLSX                         |
 | **Legacy Office** | DOC, PPT, XLS (native OLE/CFB)         | DOC, PPT, XLS (native OLE/CFB)           |
@@ -64,6 +64,17 @@ The Core and Full images use Debian 13 (Trixie) and support API server (default)
 **Core** is optimized for production deployments where image size matters. Both images support all major formats — choose based on deployment constraints.
 
 All images include: Tesseract OCR (eng, spa, fra, deu, ita, por, chi-sim, chi-tra, jpn, ara, rus, hin), PDF (xberg-native-pdf), images, HTML, email, and archives.
+
+### tessdata_best images
+
+Core and Full each have a twin with Tesseract's `tessdata_best` models, which are more accurate but several times slower per page and need more memory per OCR request:
+
+| Image     | Tags                                                   | Size (compressed, est.) |
+| --------- | ------------------------------------------------------ | ----------------------- |
+| Core best | `ghcr.io/xberg-io/xberg:core-best`, `:<version>-core-best` | ~363 MB             |
+| Full best | `ghcr.io/xberg-io/xberg:latest-best`, `:<version>-best`    | ~1.3 GB             |
+
+They ship the best models for the image languages plus `jpn_vert`, `kor`, `osd` and `equ` in `/usr/share/xberg/tessdata/best` and set `XBERG_OCR_TESSDATA_MODEL=best`, so OCR needs no download. Do not set `TESSDATA_PREFIX` on them: it is used as given for every model set and would replace the best models. Setting `XBERG_OCR_TESSDATA_MODEL=fast` on a best image goes back to the fast models.
 
 :::note[CPU only]
 All published Docker images (Core, Full, and CLI) run ONNX Runtime on CPU. There is no published GPU/CUDA image. GPU acceleration is available, but requires building from source with the `cuda` feature against a CUDA-enabled ONNX Runtime — the prebuilt ORT binaries these images ship with do not include CUDA support. See [GPU Acceleration](/getting-started/installation/#gpu-acceleration).

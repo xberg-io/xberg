@@ -16,7 +16,9 @@ use comrak::nodes::{
 };
 
 use crate::types::document_structure::{AnnotationKind, ContentLayer, TextAnnotation};
-use crate::types::internal::{ElementKind, InternalDocument, InternalElement, list_item_source_label_from_attributes};
+use crate::types::internal::{
+    ElementKind, InternalDocument, InternalElement, is_record_group, list_item_source_label_from_attributes,
+};
 
 use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, handle_container_end, has_tex_comment,
@@ -1307,6 +1309,19 @@ fn build_comrak_ast_with_table_mode<'a>(
         stack.last().map(|e| e.node).unwrap_or(*root)
     }
 
+    // The bullet list closed last and whether only page breaks have followed it: a list the
+    // pages split is one list, and a second sibling would make the writer emit a
+    // `<!-- end list -->` comment between the halves. Only PDF assembly closes its lists at
+    // every page end; elsewhere two lists around a page break are two authored lists.
+    let mut paged_list: Option<(&'a AstNode<'a>, bool)> = None;
+    let lists_close_at_page_ends = doc.source_format == "pdf";
+    // For each open group, `Some(last child of its container when it opened)` when it is a
+    // record, and where the last record that appended a node closed: its parent and that
+    // parent's last child then. A record opening right there follows it directly and is set
+    // apart by a thematic break; an empty record sets nothing apart.
+    let mut open_records: Vec<Option<Option<&'a AstNode<'a>>>> = Vec::new();
+    let mut closed_record: Option<(&'a AstNode<'a>, &'a AstNode<'a>)> = None;
+
     for consolidated_elem in &consolidated {
         let orig_idx = consolidated_elem.original_index();
         let view = consolidated_elem.resolve(&doc.elements);
@@ -1319,10 +1334,29 @@ fn build_comrak_ast_with_table_mode<'a>(
                     }
                     if is_container_end(elem) {
                         handle_container_end(&elem.kind, &mut state);
+                        paged_list = None;
                         match elem.kind {
-                            ElementKind::ListEnd => pop_container(&mut container_stack, ContainerKind::List),
+                            ElementKind::ListEnd => {
+                                paged_list = container_stack
+                                    .iter()
+                                    .rev()
+                                    .find(|entry| matches!(entry.kind, ContainerKind::List))
+                                    .filter(|_| lists_close_at_page_ends)
+                                    .map(|entry| (entry.node, false));
+                                pop_container(&mut container_stack, ContainerKind::List);
+                            }
                             ElementKind::QuoteEnd => pop_container(&mut container_stack, ContainerKind::BlockQuote),
-                            ElementKind::GroupEnd => pop_container(&mut container_stack, ContainerKind::Group),
+                            ElementKind::GroupEnd => {
+                                pop_container(&mut container_stack, ContainerKind::Group);
+                                closed_record = None;
+                                if let Some(Some(last_at_open)) = open_records.pop() {
+                                    let parent = current_parent(&root, &container_stack);
+                                    closed_record = parent
+                                        .last_child()
+                                        .filter(|last| !last_at_open.is_some_and(|open| std::ptr::eq(open, *last)))
+                                        .map(|last| (parent, last));
+                                }
+                            }
                             _ => {}
                         }
                         continue;
@@ -1342,6 +1376,16 @@ fn build_comrak_ast_with_table_mode<'a>(
                     (ElementKind::Paragraph, *text, *annotations, 0u16, None, None, true)
                 }
             };
+
+        match elem_kind {
+            ElementKind::PageBreak => {
+                if let Some((_, crossed_page_break)) = &mut paged_list {
+                    *crossed_page_break = true;
+                }
+            }
+            ElementKind::ListStart { ordered: false } => {}
+            _ => paged_list = None,
+        }
 
         let parent = current_parent(&root, &container_stack);
 
@@ -1725,6 +1769,17 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::ListStart { ordered } => {
                 state.push_container(NestingKind::List { ordered, item_count: 0 }, elem_depth);
 
+                if let Some((list_node, true)) = paged_list.take()
+                    && resumes_list_across_page_break(list_node, parent)
+                {
+                    container_stack.push(ContainerEntry {
+                        node: list_node,
+                        kind: ContainerKind::List,
+                        empty_list_cursor: false,
+                    });
+                    continue;
+                }
+
                 let list_meta = configured(NodeList::default(), |list| {
                     list.list_type = if ordered {
                         comrak::nodes::ListType::Ordered
@@ -1778,6 +1833,18 @@ fn build_comrak_ast_with_table_mode<'a>(
             ElementKind::QuoteEnd => {}
 
             ElementKind::GroupStart => {
+                let is_record = is_record_group(elem_attributes);
+                let container = current_parent(&root, &container_stack);
+                let follows_record = closed_record.is_some_and(|(closed_parent, closed_last)| {
+                    std::ptr::eq(closed_parent, container)
+                        && container
+                            .last_child()
+                            .is_some_and(|last| std::ptr::eq(last, closed_last))
+                });
+                if is_record && follows_record {
+                    parent.append(mk(arena, NodeValue::ThematicBreak(Default::default())));
+                }
+                open_records.push(is_record.then(|| container.last_child()));
                 state.push_container(NestingKind::Group, elem_depth);
                 container_stack.push(ContainerEntry {
                     node: parent,
@@ -1833,6 +1900,19 @@ fn build_comrak_ast_with_table_mode<'a>(
     root
 }
 
+/// Whether a bullet list opening after a page break continues `list_node`: that list is still
+/// the last block of the same parent, so nothing but the page break separates the two.
+fn resumes_list_across_page_break<'a>(list_node: &'a AstNode<'a>, parent: &'a AstNode<'a>) -> bool {
+    list_node
+        .parent()
+        .is_some_and(|list_parent| std::ptr::eq(list_parent, parent))
+        && parent.last_child().is_some_and(|last| std::ptr::eq(last, list_node))
+        && matches!(
+            &list_node.data.borrow().value,
+            NodeValue::List(list) if list.list_type == comrak::nodes::ListType::Bullet
+        )
+}
+
 /// Pop the innermost container matching the given kind from the stack.
 fn pop_container(stack: &mut Vec<ContainerEntry<'_>>, target: ContainerKind) {
     for i in (0..stack.len()).rev() {
@@ -1879,6 +1959,46 @@ mod tests {
             heading_level: None,
             style_name: None,
         }
+    }
+
+    fn two_groups(first: Option<&str>, second: Option<&str>) -> String {
+        let mut b = InternalDocumentBuilder::new("json");
+        b.push_group_start(first, None);
+        b.push_paragraph("one", vec![], None, None);
+        b.push_group_end();
+        b.push_group_start(second, None);
+        b.push_paragraph("two", vec![], None, None);
+        b.push_group_end();
+        render(&b.build())
+    }
+
+    #[test]
+    fn consecutive_records_are_split_by_a_thematic_break() {
+        let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
+        assert_eq!(two_groups(record, record), "one\n\n-----\n\ntwo\n");
+    }
+
+    /// `{"a": [{}, {"x": "1"}]}`: the empty first record leaves nothing to set apart, so no
+    /// break follows the "a" heading.
+    #[test]
+    fn an_empty_record_sets_nothing_apart() {
+        let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
+        let mut b = InternalDocumentBuilder::new("json");
+        b.push_heading(1, "a", None, None);
+        b.push_group_start(record, None);
+        b.push_group_end();
+        b.push_group_start(record, None);
+        b.push_paragraph("x: 1", vec![], None, None);
+        b.push_group_end();
+        assert_eq!(render(&b.build()), "# a\n\nx: 1\n");
+    }
+
+    #[test]
+    fn other_groups_and_a_first_record_get_no_thematic_break() {
+        let record = Some(crate::types::internal::RECORD_GROUP_LABEL);
+        assert_eq!(two_groups(None, None), "one\n\ntwo\n");
+        assert_eq!(two_groups(Some("record"), Some("record")), "one\n\ntwo\n");
+        assert_eq!(two_groups(None, record), "one\n\ntwo\n");
     }
 
     #[test]
@@ -2209,6 +2329,127 @@ mod tests {
         let out = render(&doc);
         assert!(out.contains("Alpha"), "got: {}", out);
         assert!(out.contains("Beta"), "got: {}", out);
+    }
+
+    /// A PDF closes its list at every page end; a bullet list running over the break came out as
+    /// two sibling lists, which the writer separates with a literal `<!-- end list -->` line.
+    #[test]
+    fn a_bullet_list_split_only_by_a_page_break_renders_as_one_list() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        b.push_list(false);
+        b.push_list_item("Docker Forensics", false, vec![], Some(1), None);
+        b.end_list();
+        b.push_page_break();
+        b.push_list(false);
+        b.push_list_item("Browser Artifacts", false, vec![], Some(2), None);
+        b.end_list();
+        let out = render(&b.build());
+        assert_eq!(out.matches("<!-- end list -->").count(), 0, "got: {out}");
+        assert!(out.contains("- Docker Forensics\n- Browser Artifacts"), "got: {out}");
+    }
+
+    /// EPUB and DocTags close a list where the author did; a page break between two bullet
+    /// lists there does not make them one.
+    #[test]
+    fn a_page_break_joins_bullet_lists_only_in_pdf_output() {
+        for source_format in ["epub", "doctags"] {
+            let mut b = InternalDocumentBuilder::new(source_format);
+            b.push_list(false);
+            b.push_list_item("Docker Forensics", false, vec![], Some(1), None);
+            b.end_list();
+            b.push_page_break();
+            b.push_list(false);
+            b.push_list_item("Browser Artifacts", false, vec![], Some(2), None);
+            b.end_list();
+            let out = render(&b.build());
+            assert_eq!(out.matches("<!-- end list -->").count(), 1, "{source_format}: {out}");
+        }
+    }
+
+    /// Without a page break between them, or for numbered lists, two lists stay two lists.
+    #[test]
+    fn lists_not_split_by_a_page_break_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        b.push_list(false);
+        b.push_list_item("First", false, vec![], Some(1), None);
+        b.end_list();
+        b.push_list(false);
+        b.push_list_item("Second", false, vec![], Some(1), None);
+        b.end_list();
+        b.push_list(true);
+        b.push_list_item("Third", true, vec![], Some(1), None);
+        b.end_list();
+        b.push_page_break();
+        b.push_list(true);
+        b.push_list_item("Fourth", true, vec![], Some(2), None);
+        b.end_list();
+        let out = render(&b.build());
+        // First|Second (no page break), Second|Third (bullet then numbered), Third|Fourth (numbered).
+        assert_eq!(out.matches("<!-- end list -->").count(), 3, "got: {out}");
+    }
+
+    /// One list holding one item, inside a layout region of its own, as PDF assembly emits an
+    /// OCR'd numbered line whose neighbours sit in other regions.
+    fn one_item_list_in_region(b: &mut InternalDocumentBuilder, region: &str, ordered: bool, label: &str, text: &str) {
+        b.push_group_start(Some(region), Some(1));
+        b.push_list(ordered);
+        let item = b.push_list_item(text, ordered, vec![], Some(1), None);
+        if !label.is_empty() {
+            b.set_list_item_source_label(item, label);
+        }
+        b.end_list();
+        b.push_group_end();
+    }
+
+    /// nougat_002_scanned: "1. Agenda", "2. Minutes", "3. Business Arising" each closed their own
+    /// list, and the writer put `<!-- end list -->` between the numbered items.
+    #[test]
+    fn numbered_lists_whose_numbering_continues_render_as_one_list() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", true, "1.", "Agenda");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", true, "2.", "Minutes");
+        b.push_page_break();
+        one_item_list_in_region(&mut b, "pdf-layout:p2:r1:text", true, "3.", "Business Arising");
+        let doc = b.build();
+        assert_eq!(
+            crate::rendering::render_markdown(&doc),
+            "1. Agenda\n2. Minutes\n3. Business Arising\n"
+        );
+        assert_eq!(crate::rendering::render_html(&doc).matches("<ol").count(), 1);
+    }
+
+    #[test]
+    fn numbered_lists_whose_numbering_restarts_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", true, "1.", "Agenda");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", true, "1.", "Restart");
+        assert_eq!(
+            crate::rendering::render_markdown(&b.build()),
+            "1. Agenda\n\n<!-- end list -->\n\n1. Restart\n"
+        );
+    }
+
+    #[test]
+    fn bullet_lists_in_separate_regions_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", false, "", "First");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", false, "", "Second");
+        assert_eq!(
+            crate::rendering::render_markdown(&b.build()),
+            "- First\n\n<!-- end list -->\n\n- Second\n"
+        );
+    }
+
+    #[test]
+    fn numbered_lists_with_a_paragraph_between_stay_separate() {
+        let mut b = InternalDocumentBuilder::new("pdf");
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r1:text", true, "1.", "Agenda");
+        b.push_paragraph("Motion carried.", vec![], Some(1), None);
+        one_item_list_in_region(&mut b, "pdf-layout:p1:r2:text", true, "2.", "Minutes");
+        assert_eq!(
+            crate::rendering::render_markdown(&b.build()),
+            "1. Agenda\n\nMotion carried.\n\n2. Minutes\n"
+        );
     }
 
     #[test]

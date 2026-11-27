@@ -99,7 +99,11 @@ async fn cancellation_signals_active_work_and_waits_for_its_native_return() {
 
 #[test]
 fn cancellation_terminates_the_actual_native_run_options_before_graph_execution() {
-    let environment = crate::ort_discovery::ort_environment().unwrap();
+    let Some(environment) = crate::ort_discovery::test_ort_environment(
+        "cancellation_terminates_the_actual_native_run_options_before_graph_execution",
+    ) else {
+        return;
+    };
     let mut session = ort::session::Session::builder(environment)
         .unwrap()
         .with_no_environment_execution_providers()

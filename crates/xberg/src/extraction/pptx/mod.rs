@@ -58,7 +58,7 @@ use crate::types::{ExtractedImage, PptxExtractionResult, ProcessingWarning};
 
 use container::{PptxContainer, SlideIterator};
 use content_builder::ContentBuilder;
-use elements::{ParserConfig, Run, SlideElement};
+use elements::{ParserConfig, Run, SlideElement, reading_order};
 use image_handling::detect_image_format;
 use metadata::{extract_all_notes, extract_metadata, extract_section_names};
 
@@ -155,23 +155,57 @@ fn enforce_slide_limit(slide_count: usize, max_pages: Option<usize>) -> Result<(
     Ok(crate::extractors::security::enforce_page_count(slide_count, max_pages)?)
 }
 
-/// Join text runs with smart spacing: inserts a space between adjacent runs
-/// only when the previous run doesn't end with whitespace and the next run
-/// doesn't start with whitespace.
+/// Join a paragraph's runs. Text runs are contiguous, so `<a:t>Sum</a:t><a:t>mary</a:t>`
+/// reads "Summary"; a math run carries no source whitespace, so it gets a space on each
+/// side that does not already have one. Neighbouring text runs that render alike are joined
+/// before `extract` sees them, so a bold word split across language runs renders as one
+/// `**Summary**`, not `**Sum****mary**`.
 fn join_runs_with_spacing(runs: &[Run], extract: impl Fn(&Run) -> String) -> String {
     let mut result = String::new();
-    for run in runs {
+    let mut previous_is_math = false;
+    let mut start = 0;
+    while start < runs.len() {
+        let mut end = start + 1;
+        while end < runs.len() && renders_alike(&runs[start], &runs[end]) {
+            end += 1;
+        }
+        let merged;
+        let run = if end - start == 1 {
+            &runs[start]
+        } else {
+            merged = Run {
+                text: runs[start..end].iter().map(|run| run.text.as_str()).collect(),
+                formatting: runs[start].formatting.clone(),
+                hyperlink_id: runs[start].hyperlink_id.clone(),
+                math_latex: None,
+            };
+            &merged
+        };
+        start = end;
         let text = extract(run);
-        if !result.is_empty() && !text.is_empty() {
+        let is_math = run.math_latex.is_some();
+        if (is_math || previous_is_math) && !result.is_empty() && !text.is_empty() {
             let ends_ws = result.ends_with(|c: char| c.is_whitespace());
             let starts_ws = text.starts_with(|c: char| c.is_whitespace());
             if !ends_ws && !starts_ws {
                 result.push(' ');
             }
         }
-        result.push_str(&text);
+        if !text.is_empty() {
+            result.push_str(&text);
+            previous_is_math = is_math;
+        }
     }
     result
+}
+
+/// Whether two text runs carry the same markers and link, so their text renders as one run.
+fn renders_alike(one: &Run, other: &Run) -> bool {
+    let (a, b) = (&one.formatting, &other.formatting);
+    one.math_latex.is_none()
+        && other.math_latex.is_none()
+        && one.hyperlink_id == other.hyperlink_id
+        && (a.bold, a.italic, a.underlined, a.strikethrough) == (b.bold, b.italic, b.underlined, b.strikethrough)
 }
 
 /// Extract PPTX content from a file path.
@@ -223,16 +257,13 @@ pub(crate) fn extract_pptx_from_bytes_with_slide_contents(
 }
 
 fn ordered_slide_images(slide: &elements::Slide) -> Vec<(&elements::ImageReference, &elements::ElementPosition)> {
-    let mut images: Vec<_> = slide
-        .elements
-        .iter()
-        .filter_map(|element| match element {
+    reading_order(&slide.elements)
+        .into_iter()
+        .filter_map(|idx| match &slide.elements[idx] {
             SlideElement::Image(image, position) => Some((image, position)),
             _ => None,
         })
-        .collect();
-    images.sort_by_key(|(_, position)| (position.y, position.x));
-    images
+        .collect()
 }
 
 /// Read one slide's referenced images (by relationship ID, not iteration
@@ -369,7 +400,6 @@ struct SlideProcessingContext<'a> {
     section_names: &'a std::collections::HashMap<u32, String>,
     config: &'a ParserConfig,
     page_config: Option<&'a crate::core::config::PageConfig>,
-    plain: bool,
     content_builder: &'a mut ContentBuilder,
     doc_builder: &'a mut Option<DocumentStructureBuilder>,
     image_index_counter: &'a mut u32,
@@ -409,19 +439,9 @@ fn process_one_slide<R: std::io::Read + std::io::Seek>(
     } else {
         Vec::new()
     };
-    let mut internal_elements = slide.to_internal_elements(ctx.config, &image_indices);
-    if let Some(ref note_text) = slide_notes
-        && !note_text.trim().is_empty()
-    {
-        let mut note_content = String::new();
-        if ctx.plain {
-            note_content.push_str("Notes:\n");
-        } else {
-            note_content.push_str("### Notes:\n");
-        }
-        note_content.push_str(note_text);
-        internal_elements.push(PptxInternalSlideElement::Markdown(note_content));
-    }
+    // Speaker notes reach `pages[].speaker_notes` through `content_builder`, never the slide's
+    // elements: an element would need its text sniffed to be told apart from authored slide text.
+    let internal_elements = slide.to_internal_elements(ctx.config, &image_indices);
     ctx.slide_contents.push(PptxInternalSlide {
         slide_number: slide.slide_number,
         elements: internal_elements,
@@ -522,7 +542,6 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
         section_names: &section_names,
         config: &config,
         page_config,
-        plain: options.plain,
         content_builder: &mut content_builder,
         doc_builder: &mut doc_builder,
         image_index_counter: &mut image_index_counter,
@@ -727,11 +746,7 @@ fn build_slide_structure(
     doc_builder: &mut DocumentStructureBuilder,
     image_index_counter: &mut u32,
 ) {
-    let mut sorted_indices: Vec<usize> = (0..slide.elements.len()).collect();
-    sorted_indices.sort_by_key(|&i| {
-        let pos = slide.elements[i].position();
-        (pos.y, pos.x)
-    });
+    let sorted_indices = reading_order(&slide.elements);
 
     let slide_title = sorted_indices
         .iter()

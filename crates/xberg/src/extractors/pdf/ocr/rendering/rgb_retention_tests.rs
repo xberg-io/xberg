@@ -41,3 +41,46 @@ fn encode_for_backend(image: &image::DynamicImage, limits: &crate::extractors::s
         .unwrap();
     png
 }
+
+#[test]
+fn png_encode_borrows_rgb8_pixels_and_admits_exactly_what_the_clone_admits() {
+    let rgb = image::RgbImage::from_fn(31, 17, |x, y| image::Rgb([x as u8, y as u8, (x * y) as u8]));
+    let rgb_page = image::DynamicImage::ImageRgb8(rgb.clone());
+    let rgba_page = image::DynamicImage::ImageRgba8(image::DynamicImage::ImageRgb8(rgb.clone()).to_rgba8());
+    let unlimited = crate::extractors::security::SecurityLimits::default();
+
+    let borrowed = rgb_for_png_encode(&rgb_page, &unlimited).unwrap();
+    assert!(matches!(borrowed, std::borrow::Cow::Borrowed(_)));
+    assert_eq!(borrowed.as_raw().as_ptr(), rgb_page.as_bytes().as_ptr());
+    let converted = rgb_for_png_encode(&rgba_page, &unlimited).unwrap();
+    assert!(matches!(converted, std::borrow::Cow::Owned(_)));
+    assert_eq!(*converted, rgb);
+
+    let admitted_at = |page: &image::DynamicImage| {
+        // Spans both pages' peaks: pixels plus the 256 KiB encode allowance. ~keep
+        (266_000..269_000)
+            .map(|max_content_size| {
+                let limits = crate::extractors::security::SecurityLimits {
+                    max_content_size,
+                    ..Default::default()
+                };
+                (
+                    rgb_for_png_encode(page, &limits).is_ok(),
+                    clone_rgb_for_png_encode(page, &limits).is_ok(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    for page in [&rgb_page, &rgba_page] {
+        let decisions = admitted_at(page);
+        assert!(decisions.iter().all(|(borrowing, cloning)| borrowing == cloning));
+        assert!(
+            decisions.iter().any(|(admitted, _)| *admitted),
+            "some budget admits the page"
+        );
+        assert!(
+            decisions.iter().any(|(admitted, _)| !*admitted),
+            "some budget refuses the page"
+        );
+    }
+}

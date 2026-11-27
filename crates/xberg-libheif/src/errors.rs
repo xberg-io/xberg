@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::fmt;
 
-use libheif_sys as lh;
+use crate::lh;
 
 #[derive(Debug, Copy, Clone, enumn::N)]
 #[non_exhaustive]

@@ -1,0 +1,13 @@
+{
+  "document": "../../../../test_documents/pdf/proof_of_concept_or_gtfo_v13_october_18th_2016.pdf",
+  "file_type": "pdf",
+  "file_size": 62061798,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "PoC||GTFO 13: 72-page, 62 MB polyglot journal, two-column, many fonts and images",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 72,
+    "opt_in": true
+  }
+}

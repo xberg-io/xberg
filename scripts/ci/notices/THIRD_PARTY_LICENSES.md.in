@@ -217,6 +217,11 @@ notices carried in those crates' license texts, reproduced below under the Rust 
   revision pinned in `crates/xberg-tesseract/build.rs` after checksum verification. `tessdata_fast`
   uses the same Apache-2.0 license text as Tesseract, so the preserved Tesseract license covers
   the model artifact.
+- **tessdata_best:** the `core-best`/`full-best` images also redistribute `tessdata_best` models
+  (Apache-2.0) for their OCR languages, downloaded at the revision and SHA-256 digests pinned in
+  `crates/xberg/src/ocr/tessdata_download/pins.rs` and checked against
+  `scripts/ci/tessdata/tessdata_best.sha256`. The repository's `LICENSE` at that revision, verified
+  by the same manifest, ships beside them at `/usr/local/share/licenses/tessdata_best/LICENSE`.
 
 ## Embedded fonts
 

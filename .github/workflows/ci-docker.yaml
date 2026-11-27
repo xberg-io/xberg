@@ -13,6 +13,7 @@ on:
       - "scripts/ci/actions/setup-onnx-runtime/checksums.sha256"
       - "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
       - "scripts/ci/docker/**"
+      - "scripts/ci/tessdata/**"
       - "scripts/test/test-docker-config-local.sh"
       - "crates/xberg/Cargo.toml"
       - "crates/xberg-cli/Cargo.toml"
@@ -142,6 +143,34 @@ jobs:
           # it keeps the contract suite meaningful rather than raising the timeout
           # to something a cold model download might still exceed. ~keep
           extra-args: "--exclude-path /cache/warm"
+
+      # The tessdata_best twin, core only: the `best` stage is the same in both Dockerfiles, and
+      # on top of this job's cached layers it adds the model download and one more test_docker.py
+      # pass (about 10-15 minutes). Full adds only its longer suite here; the publish workflow
+      # still tests full-best before pushing it. ~keep
+      - name: Build best Docker image
+        if: matrix.variant == 'core'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.variant }}
+          target: best
+          push: false
+          load: true
+          tags: xberg:${{ matrix.variant }}-best
+          build-args: |
+            ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
+            XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
+          cache-from: type=gha,scope=ci-docker-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=ci-docker-${{ matrix.variant }}
+
+      - name: Verify best image notices
+        if: matrix.variant == 'core'
+        run: python3 scripts/ci/docker/verify_image_notices.py --image xberg:${{ matrix.variant }}-best
+
+      - name: Run best image tests
+        if: matrix.variant == 'core'
+        run: python3 scripts/ci/docker/test_docker.py --image xberg:${{ matrix.variant }}-best --variant ${{ matrix.variant }}-best --verbose
 
       - name: Run CLI tests
         if: matrix.variant == 'cli'

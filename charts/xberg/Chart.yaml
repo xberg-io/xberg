@@ -41,6 +41,8 @@ annotations:
   artifacthub.io/images: |
     - name: xberg
       image: ghcr.io/xberg-io/xberg:1.5.4
+    - name: xberg-best
+      image: ghcr.io/xberg-io/xberg:1.5.4-best
   artifacthub.io/maintainers: |
     - name: "Na'aman Hirschfeld"
       email: naaman@xberg.io

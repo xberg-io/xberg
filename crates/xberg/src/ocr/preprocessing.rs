@@ -32,7 +32,7 @@ pub(crate) fn shaded_row_normalization_is_inert(config: &ImagePreprocessingConfi
     config.normalize_shaded_rows && !binarization_enabled && config.contrast_enhance
 }
 
-pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Result<Pix, OcrError> {
+fn validated_binarization(config: &ImagePreprocessingConfig) -> Result<bool, OcrError> {
     crate::core::config_validation::validate_image_preprocessing_config(config).map_err(|error| {
         if let crate::XbergError::Validation { message, .. } = error {
             OcrError::InvalidConfiguration(message)
@@ -41,19 +41,55 @@ pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Res
         }
     })?;
     let binarization_method = config.binarization_method.to_ascii_lowercase();
-    let binarization_enabled = !matches!(binarization_method.as_str(), "none" | "off");
+    Ok(!matches!(binarization_method.as_str(), "none" | "off"))
+}
 
+/// Only non-binarized contrast re-reads the colour source after the grayscale conversion.
+fn rereads_colour_source(config: &ImagePreprocessingConfig, binarization_enabled: bool) -> bool {
+    !binarization_enabled && config.contrast_enhance
+}
+
+pub(crate) fn preprocess_pix(pix: Pix, config: &ImagePreprocessingConfig) -> Result<Pix, OcrError> {
+    let binarization_enabled = validated_binarization(config)?;
     let gray = pix
         .to_grayscale()
         .map_err(preprocessing_error("convert to grayscale"))?;
-    // Only non-binarized contrast re-reads the color source. Release it before
-    // thresholding allocates full-page grayscale tiles and sampling copies. ~keep
-    let contrast_source = if !binarization_enabled && config.contrast_enhance {
+    // Release the colour source before thresholding allocates full-page grayscale tiles and
+    // sampling copies, unless the contrast path re-reads it. ~keep
+    let contrast_source = if rereads_colour_source(config, binarization_enabled) {
         Some(pix)
     } else {
         drop(pix);
         None
     };
+    preprocess_from_gray(gray, contrast_source, config, binarization_enabled)
+}
+
+/// [`preprocess_pix`] of `Pix::from_raw_rgb(rgb, width, height)`. A policy that never re-reads the
+/// colour source starts from [`Pix::gray_from_raw_rgb`], the same gray raster without the 32 bpp
+/// page Pix, so the result is pixel-identical.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn preprocess_rgb(
+    rgb: &[u8],
+    width: u32,
+    height: u32,
+    config: &ImagePreprocessingConfig,
+) -> Result<Pix, OcrError> {
+    let binarization_enabled = validated_binarization(config)?;
+    if rereads_colour_source(config, binarization_enabled) {
+        let pix = Pix::from_raw_rgb(rgb, width, height).map_err(preprocessing_error("create raster"))?;
+        return preprocess_pix(pix, config);
+    }
+    let gray = Pix::gray_from_raw_rgb(rgb, width, height).map_err(preprocessing_error("convert to grayscale"))?;
+    preprocess_from_gray(gray, None, config, binarization_enabled)
+}
+
+fn preprocess_from_gray(
+    gray: Pix,
+    contrast_source: Option<Pix>,
+    config: &ImagePreprocessingConfig,
+    binarization_enabled: bool,
+) -> Result<Pix, OcrError> {
     // ~keep normalize_shaded_rows only touches `gray`; the `contrast_enhance` path with
     // binarization disabled below reconverts from the original `pix` and does not see it
     // (GH#1785 scope: the fix targets the binarized path, which is the config default).
@@ -802,6 +838,80 @@ mod gray_route_tests {
                 "dark={dark} invert={invert}"
             );
         }
+    }
+
+    fn pixels(pix: &Pix) -> (i32, i32, i32, Vec<u8>) {
+        let bytes = if pix.depth() == 1 {
+            pix.binary_bytes().unwrap()
+        } else {
+            pix.grayscale_bytes().unwrap()
+        };
+        (pix.width(), pix.height(), pix.depth(), bytes)
+    }
+
+    /// Coloured strokes over a tinted gradient, 160x120.
+    fn colour_page() -> Vec<u8> {
+        let mut rgb = Vec::new();
+        for y in 0..120u32 {
+            for x in 0..160u32 {
+                let ink = (x / 6 + y / 5) % 4 == 0 && (x % 6) < 3;
+                let base = 150 + (x / 4) as u8;
+                rgb.extend(if ink {
+                    [30 + (y % 7) as u8, 60, 140 - (x % 9) as u8]
+                } else {
+                    [base, base.saturating_add(20), base.saturating_sub(35)]
+                });
+            }
+        }
+        rgb
+    }
+
+    #[test]
+    fn preprocess_rgb_equals_preprocess_pix_of_the_colour_raster_for_every_policy() {
+        let rgb = colour_page();
+        assert!(!rgb_is_gray(&rgb));
+        let policies = [
+            ImagePreprocessingConfig::default(),
+            ImagePreprocessingConfig {
+                binarization_method: "adaptive".to_owned(),
+                deskew: false,
+                ..Default::default()
+            },
+            ImagePreprocessingConfig {
+                binarization_method: "sauvola".to_owned(),
+                contrast_enhance: true,
+                denoise: true,
+                ..Default::default()
+            },
+            ImagePreprocessingConfig {
+                normalize_shaded_rows: true,
+                invert_colors: true,
+                ..Default::default()
+            },
+            ImagePreprocessingConfig {
+                contrast_enhance: false,
+                ..contrast_config(false)
+            },
+            contrast_config(false),
+        ];
+        for config in &policies {
+            let expected = preprocess_pix(Pix::from_raw_rgb(&rgb, 160, 120).unwrap(), config).expect("32 bpp path");
+            let actual = preprocess_rgb(&rgb, 160, 120, config).expect("rgb path");
+            assert_eq!(pixels(&actual), pixels(&expected), "{config:?}");
+            assert_eq!(actual.get_resolution().unwrap(), expected.get_resolution().unwrap());
+        }
+    }
+
+    #[test]
+    fn preprocess_rgb_rejects_an_invalid_policy_like_preprocess_pix() {
+        let config = ImagePreprocessingConfig {
+            binarization_method: "unknown".to_owned(),
+            ..Default::default()
+        };
+        let rgb = colour_page();
+        let expected = preprocess_pix(Pix::from_raw_rgb(&rgb, 160, 120).unwrap(), &config).unwrap_err();
+        let actual = preprocess_rgb(&rgb, 160, 120, &config).unwrap_err();
+        assert_eq!(actual.to_string(), expected.to_string());
     }
 
     #[test]

@@ -147,12 +147,16 @@ impl NativePageSegments {
                 .map(|(_, segment)| segment.clone())
                 .collect(),
         );
-        let source_counts = projection_counts(&projected);
-        let retained_counts = projection_counts(&segments);
-        let owners = owners
-            .into_iter()
-            .filter(|owner| owner.survives_inventory(&source_counts) && owner.survives_inventory(&retained_counts))
-            .collect();
+        let owners = if owners.is_empty() {
+            owners
+        } else {
+            let source_counts = projection_counts(&projected);
+            let retained_counts = projection_counts(&segments);
+            owners
+                .into_iter()
+                .filter(|owner| owner.survives_inventory(&source_counts) && owner.survives_inventory(&retained_counts))
+                .collect()
+        };
         let prose_rows = certified_prose_row_keys(&spans, &projected);
         Self {
             #[cfg(feature = "formula-recognition")]
@@ -199,7 +203,16 @@ impl NativePageSegments {
         self.owners.iter().any(|owner| owner.literal_prime_right.is_some())
     }
 
+    /// Whether any owner is a raised script rather than a literal prime.
+    pub(crate) fn has_script_owners(&self) -> bool {
+        self.owners.iter().any(|owner| owner.literal_prime_right.is_none())
+    }
+
     pub(crate) fn valid_owners(&self, segments: &[SegmentData]) -> Vec<ScriptOwner> {
+        // Counting the inventory hashes every segment; with no owner it decides nothing. ~keep
+        if self.owners.is_empty() {
+            return Vec::new();
+        }
         let counts = projection_counts(segments);
         self.owners
             .iter()
@@ -612,26 +625,31 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
 }
 
 pub(crate) fn extract_all_segment_carriers(
-    doc: &mut super::NativeDocument,
+    doc: &super::NativeDocument,
     artifacts: ArtifactRetention,
 ) -> crate::pdf::error::Result<(Vec<NativePageSegments>, bool)> {
-    let (pages, used_tree) =
-        super::extract_pages_with_structure_tree(doc, artifacts, ScriptGeometry::Preserve, extract_page, |page| {
+    if let Some(page_roles) = super::structure_tree_page_roles(doc)? {
+        let pages = super::read_pages(page_roles.len(), |page| {
+            extract_page(doc, page, &page_roles[page], artifacts, ScriptGeometry::Preserve)
+        })?;
+        super::log_structure_tree_roles(&pages, |page| {
             page.segments
                 .iter()
                 .filter(|segment| segment.assigned_role.is_some())
                 .count()
-        })?;
-    if used_tree && !pages.is_empty() {
-        return Ok((pages, true));
+        });
+        if !pages.is_empty() {
+            return Ok((pages, true));
+        }
     }
     let count = doc
         .doc
         .page_count()
         .map_err(|error| crate::pdf::error::PdfError::TextExtractionFailed(error.to_string()))?;
-    let pages = (0..count)
-        .map(|index| extract_page(doc, index, &HashMap::new(), artifacts, ScriptGeometry::Preserve))
-        .collect::<crate::pdf::error::Result<Vec<_>>>()?;
+    let no_roles = HashMap::new();
+    let pages = super::read_pages(count, |page| {
+        extract_page(doc, page, &no_roles, artifacts, ScriptGeometry::Preserve)
+    })?;
     Ok((pages, false))
 }
 
@@ -652,7 +670,7 @@ fn certified_prose_row_keys(spans: &[TextSpan], projected: &[SegmentData]) -> Ve
 }
 
 fn extract_page(
-    doc: &mut super::NativeDocument,
+    doc: &super::NativeDocument,
     page: usize,
     roles: &HashMap<u32, Option<u8>>,
     artifacts: ArtifactRetention,
@@ -662,8 +680,14 @@ fn extract_page(
     let mut cmsy = Vec::new();
     let capture = (cfg!(feature = "formula-recognition") && matches!(doc.doc.get_page_rotation(page), Ok(0)))
         .then_some(&mut cmsy);
-    let spans =
-        super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses), capture)?;
+    let spans = super::extract_final_spans_from_page_with_primes(
+        doc,
+        page,
+        geometry,
+        Some(&mut prime_witnesses),
+        capture,
+        Some(super::super::math_latex::Delimiters::Sentinels),
+    )?;
     #[cfg(feature = "formula-recognition")]
     let inline_math_glyphs = surviving_inline_math_glyphs(&cmsy, &spans, roles, geometry);
     #[cfg(feature = "formula-recognition")]

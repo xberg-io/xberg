@@ -4,6 +4,7 @@
 	"file_size": 1089256,
 	"expected_frameworks": ["xberg"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "Portable Pixmap (color) with text for OCR",
 		"category": "image"
 	},

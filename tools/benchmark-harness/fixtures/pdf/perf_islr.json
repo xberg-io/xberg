@@ -1,0 +1,13 @@
+{
+  "document": "../../../../test_documents/pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf",
+  "file_type": "pdf",
+  "file_size": 9433354,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "ISLR sixth printing: 440-page textbook with figures and R code",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 440,
+    "opt_in": true
+  }
+}

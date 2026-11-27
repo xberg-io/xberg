@@ -96,6 +96,17 @@ impl Rect {
     }
 }
 
+/// The smallest `(left, bottom, right, top)` box covering both boxes, or the one that exists.
+pub(crate) fn union_bbox(
+    a: Option<(f32, f32, f32, f32)>,
+    b: Option<(f32, f32, f32, f32)>,
+) -> Option<(f32, f32, f32, f32)> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some((a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3))),
+        (bbox, None) | (None, bbox) => bbox,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "ocr-pdf-structured-v1",
+  "batch_size": 4,
+  "ocr_enabled": true,
+  "fixtures": [
+    "pdf_non_searchable.json",
+    "pdf_scanned_ocr.json",
+    "pdf_image_only_german.json",
+    "docling_scanned.json",
+    "multi_page_scanned.json",
+    "nougat_001_scanned.json",
+    "nougat_002_scanned.json",
+    "nougat_005_scanned.json",
+    "nougat_007_scanned.json",
+    "nougat_009_scanned.json",
+    "nougat_010_scanned.json",
+    "nougat_012_scanned.json"
+  ]
+}

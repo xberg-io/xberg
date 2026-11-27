@@ -66,6 +66,10 @@ LAUNCHER_PIN_RE = re.compile(r'(?m)^(PINNED_VERSION=")([^"]*)(")')
 HELM_CHART = "charts/xberg/Chart.yaml"
 HELM_CHART_README = "charts/xberg/README.md"
 HELM_IMAGE_REPOSITORY = "ghcr.io/xberg-io/xberg"
+# The artifacthub.io/images entries: the image the default values deploy, and its tessdata_best
+# twin that ocr.tesseractModelSet=best selects. Each tag is <version><suffix>. ~keep
+HELM_ARTIFACTHUB_IMAGES = (("xberg", ""), ("xberg-best", "-best"))
+HELM_ARTIFACTHUB_IMAGES_BLOCK = re.compile(r"(?m)^  artifacthub\.io/images: \|\n(?:    .*\n)+")
 SEMVER_PRERELEASE_IDENTIFIER = r"(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
 SEMVER_PATTERN = re.compile(
     r"^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
@@ -144,6 +148,18 @@ def _single_metadata_value(text: str, pattern: str) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
+def artifacthub_images_block(version: str) -> str:
+    """Render the artifacthub.io/images annotation for a chart at ``version``."""
+    lines = ["  artifacthub.io/images: |"]
+    for name, suffix in HELM_ARTIFACTHUB_IMAGES:
+        lines += [f"    - name: {name}", f"      image: {HELM_IMAGE_REPOSITORY}:{version}{suffix}"]
+    return "\n".join(lines) + "\n"
+
+
+def _artifacthub_image_pattern(name: str) -> str:
+    return rf"^\s*- name: {re.escape(name)}\n\s*image:\s*[\"']?{re.escape(HELM_IMAGE_REPOSITORY)}:([^\"'\s]+)[\"']?\s*$"
+
+
 def helm_metadata_errors(chart: str, expected_version: str) -> list[str]:
     """Validate release-sensitive Chart.yaml metadata before publishing."""
     semver = SEMVER_PATTERN.fullmatch(expected_version)
@@ -153,10 +169,8 @@ def helm_metadata_errors(chart: str, expected_version: str) -> list[str]:
     fields = {
         "chart version": _single_metadata_value(chart, r"^version:\s*[\"']?([^\"'\s]+)[\"']?\s*$"),
         "chart appVersion": _single_metadata_value(chart, r"^appVersion:\s*[\"']?([^\"'\s]+)[\"']?\s*$"),
-        "Artifact Hub image tag": _single_metadata_value(
-            chart,
-            rf"^\s*image:\s*[\"']?{re.escape(HELM_IMAGE_REPOSITORY)}:([^\"'\s]+)[\"']?\s*$",
-        ),
+        "Artifact Hub image tag": _single_metadata_value(chart, _artifacthub_image_pattern("xberg")),
+        "Artifact Hub best image tag": _single_metadata_value(chart, _artifacthub_image_pattern("xberg-best")),
         "Artifact Hub prerelease": _single_metadata_value(
             chart,
             r'^\s*artifacthub\.io/prerelease:\s*["\']?(true|false)["\']?\s*$',
@@ -166,12 +180,14 @@ def helm_metadata_errors(chart: str, expected_version: str) -> list[str]:
         "chart version": expected_version,
         "chart appVersion": expected_version,
         "Artifact Hub image tag": expected_version,
+        "Artifact Hub best image tag": f"{expected_version}-best",
         "Artifact Hub prerelease": "true" if semver.group("prerelease") else "false",
     }
     missing_names = {
         "chart version": "version",
         "chart appVersion": "appVersion",
         "Artifact Hub image tag": "artifacthub.io/images xberg image",
+        "Artifact Hub best image tag": "artifacthub.io/images xberg-best image",
         "Artifact Hub prerelease": "artifacthub.io/prerelease",
     }
 
@@ -208,10 +224,12 @@ def transform(rel: str, sync_version: bool, sync_dep: bool, maven: str, pep440: 
         if sync_version:
             updated = re.sub(r"(?m)^version: .*$", f"version: {maven}", updated, count=1)
             updated = re.sub(r"(?m)^appVersion: .*$", f'appVersion: "{maven}"', updated, count=1)
-            # The artifacthub.io/images tag documents the image `helm install` actually
-            # resolves (values.image.tag defaults to .Chart.AppVersion), so it must move
+            # The artifacthub.io/images tags document the images `helm install` actually
+            # resolves (values.image.tag defaults to .Chart.AppVersion), so they must move
             # with appVersion or ArtifactHub advertises an image the chart never deploys.
-            updated = re.sub(r"(?m)^(\s*image: ghcr\.io/xberg-io/xberg:).*$", rf"\g<1>{maven}", updated)
+            if HELM_ARTIFACTHUB_IMAGES_BLOCK.search(updated) is None:
+                sys.exit(f"{HELM_CHART} has no artifacthub.io/images block")
+            updated = HELM_ARTIFACTHUB_IMAGES_BLOCK.sub(artifacthub_images_block(maven), updated, count=1)
             # A version with no pre-release suffix is, by definition, not a prerelease.
             semver = SEMVER_PATTERN.fullmatch(maven)
             if semver is None:

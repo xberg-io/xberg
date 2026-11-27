@@ -9,6 +9,14 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
+pub(crate) mod overlap;
+pub(crate) mod word_spacing;
+
+use overlap::{
+    STACKED_BAND_MAX_ROW_STEP, STACKED_BAND_MIN_ROW_WORDS, STACKED_BAND_MIN_ROWS, STACKED_BAND_MIN_STACKED_COLUMNS,
+    extents_overlap, overlap_columns, ranges_intersect,
+};
+
 /// Represents a word extracted from hOCR (or any source) with position and confidence information.
 #[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone)]
@@ -29,7 +37,6 @@ pub struct HocrWord {
 
 impl HocrWord {
     /// Get the right edge position.
-    #[cfg(test)]
     #[inline]
     pub(crate) fn right(&self) -> u32 {
         self.left + self.width
@@ -502,60 +509,72 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
     };
 
     let mut position_groups: Vec<Vec<f64>> = Vec::new();
-
+    // Each word joins the earliest-created group whose first position is within
+    // the threshold. A group is only created when no first position is, so they
+    // lie pairwise farther apart than the threshold and a window around the word
+    // in this position-sorted index holds a handful of them. Positions are exact
+    // halves, so the widened window is a superset of the exact predicate. ~keep
+    let threshold = row_threshold as f64;
+    let mut group_firsts: Vec<(f64, usize)> = Vec::new();
     for word in seed_words {
         let y_center = word.y_center();
-
-        let mut found_group = false;
-        for group in &mut position_groups {
-            if let Some(&first_pos) = group.first()
-                && (y_center - first_pos).abs() <= row_threshold as f64
-            {
-                group.push(y_center);
-                found_group = true;
-                break;
+        let low = group_firsts.partition_point(|&(first, _)| first < y_center - threshold - 1.0);
+        let high = group_firsts.partition_point(|&(first, _)| first <= y_center + threshold + 1.0);
+        let earliest = group_firsts[low..high]
+            .iter()
+            .filter(|&&(first, _)| (y_center - first).abs() <= threshold)
+            .map(|&(_, group)| group)
+            .min();
+        match earliest {
+            Some(group) => position_groups[group].push(y_center),
+            None => {
+                let at = group_firsts.partition_point(|&(first, _)| first < y_center);
+                group_firsts.insert(at, (y_center, position_groups.len()));
+                position_groups.push(vec![y_center]);
             }
         }
-
-        if !found_group {
-            position_groups.push(vec![y_center]);
-        }
     }
 
-    let half_height = median_height / 2;
-    for word in tall_words {
-        let bottom = word.top.saturating_add(word.height);
-        let overlaps_seeded_row = position_groups
-            .iter()
-            .filter_map(|group| median_row_position(group))
-            .any(|row_y| {
-                let band_top = row_y.saturating_sub(half_height);
-                let band_bottom = row_y.saturating_add(half_height);
-                bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
-            });
-        if !overlaps_seeded_row {
-            position_groups.push(vec![word.y_center()]);
-        }
-    }
-
+    // A tall word that seeds a row is a one-position group whose median is its centre. ~keep
     let mut rows: Vec<u32> = position_groups
         .iter()
         .filter_map(|group| median_row_position(group))
         .collect();
+    let half_height = median_height / 2;
+    for word in tall_words {
+        let bottom = word.top.saturating_add(word.height);
+        let overlaps_seeded_row = rows.iter().any(|&row_y| {
+            let band_top = row_y.saturating_sub(half_height);
+            let band_bottom = row_y.saturating_add(half_height);
+            bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+        });
+        if !overlaps_seeded_row {
+            rows.push(word.y_center() as u32);
+        }
+    }
 
     rows.sort_unstable();
     rows
 }
 
-/// Find which row a word belongs to based on its y-center.
+/// Find which row a word belongs to based on its y-center: the nearest of the
+/// ascending `row_positions` ([`detect_rows`] output), the first on a tie.
 pub(crate) fn find_row_index(row_positions: &[u32], word: &HocrWord) -> Option<usize> {
+    debug_assert!(row_positions.is_sorted(), "row positions must ascend");
     let y_center = word.y_center() as u32;
 
-    row_positions
-        .iter()
-        .enumerate()
-        .min_by_key(|&(_, row_y)| row_y.abs_diff(y_center))
-        .map(|(idx, _)| idx)
+    let at_or_above = row_positions.partition_point(|&row_y| row_y < y_center);
+    let below = at_or_above
+        .checked_sub(1)
+        .map(|nearest| row_positions.partition_point(|&row_y| row_y < row_positions[nearest]));
+    match (below, row_positions.get(at_or_above)) {
+        (Some(below), Some(&above_y)) if above_y.abs_diff(y_center) < row_positions[below].abs_diff(y_center) => {
+            Some(at_or_above)
+        }
+        (Some(below), _) => Some(below),
+        (None, Some(_)) => Some(at_or_above),
+        (None, None) => None,
+    }
 }
 
 /// Find the row whose median-height band overlaps `word` most, breaking ties by centre distance.
@@ -574,6 +593,101 @@ fn find_row_index_by_overlap(row_positions: &[u32], word: &HocrWord, median_heig
             (std::cmp::Reverse(overlap), row_y.abs_diff(word_center))
         })
         .map(|(index, _)| index)
+}
+
+/// Read a stacked header band at the top of a table as one row.
+///
+/// A header whose cells stack a different number of centred label lines ("UW Tier / Group"
+/// beside "Minimum / Vehicle / Miles" beside "BI") interleaves the cells' lines into rows closer
+/// together than a line of text (pb_sample_page_16: 2.8pt apart at a 4.3pt glyph height). Read
+/// as rows, each cell's label is scattered over several header rows, and `post_process_table`
+/// keeps only the last two as the header and demotes the others below it. Lines that close cannot
+/// share a column with the line next to them without their glyphs colliding, so the band is
+/// recognised by text rows that step less than a line apart and never overlap the adjacent row
+/// horizontally while covering the same horizontal range, and a column's own lines, two rows
+/// apart, do overlap. The band's rows are
+/// replaced by its last row: every band word lies above it and every later row at least a line
+/// below, so each band word is nearest to it, and [`order_cell_words_in_reading_order`] still
+/// reads each cell's lines top to bottom. The same pass reorders such a band in the native
+/// reading order (`pdf::native::hierarchy::stacked_header_band`). ~keep
+///
+/// Returns the row positions and whether a band was collapsed.
+fn collapse_stacked_header_band(
+    words: &[HocrWord],
+    mut row_positions: Vec<u32>,
+    median_height: u32,
+) -> (Vec<u32>, bool) {
+    let band = stacked_header_band_rows(words, &row_positions, median_height);
+    let collapsed = band >= STACKED_BAND_MIN_ROWS;
+    if collapsed {
+        row_positions.drain(..band - 1);
+    }
+    (row_positions, collapsed)
+}
+
+/// The row centres [`reconstruct_table_with_columns`] builds its grid on: the detected rows,
+/// with a leading stacked header band read as one row. `median_height` is
+/// [`median_word_height`] of `words`.
+#[cfg(feature = "pdf")]
+pub(crate) fn table_row_positions(words: &[HocrWord], row_threshold_ratio: f64, median_height: u32) -> Vec<u32> {
+    collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height).0
+}
+
+/// The number of leading rows of `row_positions` that form a stacked header band, or 0.
+fn stacked_header_band_rows(words: &[HocrWord], row_positions: &[u32], median_height: u32) -> usize {
+    if median_height == 0 || row_positions.len() <= STACKED_BAND_MIN_ROWS {
+        return 0;
+    }
+    let mut rows: Vec<Vec<&HocrWord>> = vec![Vec::new(); row_positions.len()];
+    for word in words {
+        if let Some(row) = find_row_index_by_overlap(row_positions, word, median_height) {
+            rows[row].push(word);
+        }
+    }
+    let is_label_row = |row: &[&HocrWord]| {
+        row.len() >= STACKED_BAND_MIN_ROW_WORDS && row.iter().all(|word| !text_is_value(word.text.trim()))
+    };
+    if !is_label_row(&rows[0]) {
+        return 0;
+    }
+    let mut band = 1;
+    while band < rows.len()
+        && is_label_row(&rows[band])
+        && (row_positions[band].abs_diff(row_positions[band - 1]) as f32)
+            < STACKED_BAND_MAX_ROW_STEP * median_height as f32
+        && rows_interleave(&rows[band - 1], &rows[band])
+    {
+        band += 1;
+    }
+    let stacked = band >= STACKED_BAND_MIN_ROWS
+        && band < rows.len()
+        && stacked_column_count(&rows[..band]) >= STACKED_BAND_MIN_STACKED_COLUMNS;
+    if stacked { band } else { 0 }
+}
+
+/// Whether two adjacent rows can be lines of one stacked band: no word of one overlaps a word of
+/// the other, and the two rows cover one horizontal range.
+fn rows_interleave(upper: &[&HocrWord], lower: &[&HocrWord]) -> bool {
+    let extent = |word: &&HocrWord| (word.left, word.right());
+    !extents_overlap(upper.iter().map(extent), lower.iter().map(extent))
+        && ranges_intersect(upper.iter().map(extent), lower.iter().map(extent))
+}
+
+/// The number of horizontally overlapping word clusters in `rows` that hold words of two or more
+/// rows.
+fn stacked_column_count(rows: &[Vec<&HocrWord>]) -> usize {
+    let (word_rows, extents): (Vec<usize>, Vec<(u32, u32)>) = rows
+        .iter()
+        .enumerate()
+        .flat_map(|(row, words)| words.iter().map(move |word| (row, (word.left, word.right()))))
+        .unzip();
+    overlap_columns(&extents)
+        .iter()
+        .filter(|column| {
+            let first_row = word_rows[column.members[0]];
+            column.members.iter().any(|&member| word_rows[member] != first_row)
+        })
+        .count()
 }
 
 /// Find which column a word belongs to, by the nearest left edge of the tracks it was folded from
@@ -875,12 +989,15 @@ fn merge_row_into_cell_tokens<'a>(
                 let gap = word.left as f64 - (token.left + token.width) as f64;
                 let (allowed_gap, is_connector) = allowed_merge_gap(word, next_word, merge_gap, previous_was_connector);
                 if gap <= allowed_gap && !column_edges.contains(&std::ptr::from_ref(word)) {
+                    let unspaced = crate::table_core::word_spacing::hocr_words_join_without_space(&token, word);
                     let new_right = (word.left + word.width).max(token.left + token.width);
                     let new_bottom = (word.top + word.height).max(token.top + token.height);
                     token.top = token.top.min(word.top);
                     token.width = new_right.saturating_sub(token.left);
                     token.height = new_bottom.saturating_sub(token.top);
-                    token.text.push(' ');
+                    if !unspaced {
+                        token.text.push(' ');
+                    }
                     token.text.push_str(&word.text);
                     members.push(word);
                     previous_was_connector = is_connector;
@@ -947,8 +1064,9 @@ pub(crate) fn reconstruct_table_with_columns(
         return (Vec::new(), Vec::new());
     }
 
-    let row_positions = detect_rows(words, row_threshold_ratio);
     let median_height = median_word_height(words);
+    let (row_positions, stacked_header) =
+        collapse_stacked_header_band(words, detect_rows(words, row_threshold_ratio), median_height);
     let groups = group_words_into_cell_tokens(words, &row_positions);
     let cell_tokens: Vec<HocrWord> = groups.iter().map(|(token, _)| token.clone()).collect();
     let columns = detect_columns(&cell_tokens, &row_positions, column_threshold);
@@ -957,7 +1075,7 @@ pub(crate) fn reconstruct_table_with_columns(
         return (Vec::new(), Vec::new());
     }
 
-    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, median_height, &columns);
+    let mut result = assign_grouped_words_to_cells(&groups, &row_positions, median_height, &columns, stacked_header);
     let mut col_positions: Vec<u32> = columns.iter().map(|column| column.left).collect();
     merge_header_fragments_by_geometry(&mut result, &mut col_positions);
 
@@ -1285,11 +1403,20 @@ fn assign_grouped_words_to_cells<'a>(
     row_positions: &[u32],
     median_height: u32,
     columns: &[ColumnTrack],
+    stacked_header: bool,
 ) -> Vec<Vec<String>> {
     let num_rows = row_positions.len();
     let num_cols = columns.len();
     let mut table: Vec<Vec<Vec<&'a HocrWord>>> = vec![vec![vec![]; num_cols]; num_rows];
     let data_supported = columns_with_data_support(groups, row_positions, median_height, columns);
+    let mut labelled = vec![false; num_cols];
+    for (token, _) in groups {
+        if find_row_index_by_overlap(row_positions, token, median_height) == Some(0)
+            && let Some(col) = find_column_index(columns, token).filter(|&col| col < num_cols)
+        {
+            labelled[col] = true;
+        }
+    }
 
     for (token, members) in groups {
         let Some(row) = find_row_index_by_overlap(row_positions, token, median_height) else {
@@ -1307,7 +1434,16 @@ fn assign_grouped_words_to_cells<'a>(
             // `merge_header_fragments_by_geometry` reconcile it (#2219). ~keep
             let token_column = find_column_index(columns, token);
             if let Some(col) = token_column.filter(|&col| col < num_cols && data_supported[col]) {
-                table[row][col].extend(members.iter().copied());
+                let spanned = if stacked_header {
+                    unlabelled_columns_under(token, col, columns, &data_supported, &labelled)
+                } else {
+                    Vec::new()
+                };
+                if spanned.is_empty() {
+                    table[row][col].extend(members.iter().copied());
+                } else {
+                    split_header_token(&mut table[row], members, col, &spanned, columns);
+                }
             } else {
                 assign_words_to_row(&mut table[row], members, columns);
             }
@@ -1319,6 +1455,57 @@ fn assign_grouped_words_to_cells<'a>(
     }
 
     finish_cell_assignment(table)
+}
+
+/// The data columns, other than `col`, whose left edge lies under a header token and which have no
+/// header token of their own. Read only for a collapsed stacked header band, where every column
+/// carries its own label stack; elsewhere a token over two columns is usually a spanning group
+/// header.
+///
+/// Labels set side by side can reach the header row as one token: the native PDF path merges a
+/// line's spans into one segment and places its words proportionally, which narrows the 4.4pt
+/// gap between `UW Tier` and `Vehicle Type` (pb_sample_page_16) below the cell-merge gap. The
+/// token then sits over two data columns, one of which would be left without a header. ~keep
+fn unlabelled_columns_under(
+    token: &HocrWord,
+    col: usize,
+    columns: &[ColumnTrack],
+    data_supported: &[bool],
+    labelled: &[bool],
+) -> Vec<usize> {
+    columns
+        .iter()
+        .enumerate()
+        .filter(|&(index, column)| {
+            index != col
+                && data_supported[index]
+                && !labelled[index]
+                && column.left > token.left
+                && column.left < token.right()
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
+/// Place each word of a header token that spans unlabelled data columns in whichever of `col` and
+/// `spanned` has its centre nearest the word's centre. A column's own left edge cannot decide it:
+/// a label set over a right-aligned or narrow column starts left of the column.
+fn split_header_token<'a>(
+    row: &mut [Vec<&'a HocrWord>],
+    members: &[&'a HocrWord],
+    col: usize,
+    spanned: &[usize],
+    columns: &[ColumnTrack],
+) {
+    let center = |column: &ColumnTrack| u64::from(column.left) + u64::from(column.right);
+    for &word in members {
+        let word_center = u64::from(word.left) * 2 + u64::from(word.width);
+        let target = std::iter::once(col)
+            .chain(spanned.iter().copied())
+            .min_by_key(|&index| center(&columns[index]).abs_diff(word_center))
+            .unwrap_or(col);
+        row[target].push(word);
+    }
 }
 
 fn columns_with_data_support(
@@ -1370,28 +1557,87 @@ fn finish_cell_assignment(table: Vec<Vec<Vec<&HocrWord>>>) -> Vec<Vec<String>> {
 fn join_cell_words(words: &[&HocrWord]) -> String {
     let mut text = String::new();
     let mut previous = None;
-    for word in words {
+    let mut previous_was_bridging_separator = false;
+    for (index, word) in words.iter().enumerate() {
         let normalized = word.text.split_whitespace().collect::<Vec<_>>().join(" ");
         if normalized.is_empty() {
             previous = None;
+            previous_was_bridging_separator = false;
             continue;
         }
-        if !text.is_empty() && !previous.is_some_and(|prev| is_touching_numeric_continuation(prev, word)) {
+        let is_bridging_separator =
+            previous.is_some_and(|prev| is_bridging_decimal_separator(prev, word, words.get(index + 1).copied()));
+        let glued = previous_was_bridging_separator
+            || is_bridging_separator
+            || previous.is_some_and(|prev| {
+                is_touching_numeric_continuation(prev, word)
+                    || crate::table_core::word_spacing::hocr_words_join_without_space(prev, word)
+            });
+        if !text.is_empty() && !glued {
             text.push(' ');
         }
         text.push_str(&normalized);
         previous = Some(*word);
+        previous_was_bridging_separator = is_bridging_separator;
     }
     text
+}
+
+fn is_numeric_prefix(text: &str) -> bool {
+    text.ends_with(|character: char| character.is_ascii_digit())
+        && text
+            .chars()
+            .all(|character| character.is_ascii_digit() || matches!(character, '.' | ',' | '(' | '[' | '+' | '-' | '−'))
+}
+
+fn numeric_gap_tolerance(previous: &HocrWord, next: &HocrWord) -> f64 {
+    // ~keep HocrWord rounds PDF coordinates to pixels; allow one rounding pixel at either edge.
+    (previous.height.max(next.height) as f64 * NUMERIC_CONTINUATION_GAP_HEIGHT_RATIO)
+        .max(NUMERIC_CONTINUATION_ROUNDING_TOLERANCE as f64)
+}
+
+fn horizontal_gap(previous: &HocrWord, next: &HocrWord) -> f64 {
+    next.left as f64 - previous.left as f64 - previous.width as f64
+}
+
+/// A decimal point or comma drawn as its own text run between two digit runs: TeX typesets
+/// the `.` of a math-mode number from the math italic font (CMMI) and the digits from the
+/// roman one (CMR), so `0.511` reaches a cell as the touching words `0`, `.`, `511`.
+///
+/// The separator may carry its glyph's own ink box (a dot sits low and is short), so it is
+/// only required to lie inside the line band of the digit run before it, while the two digit
+/// runs must share a line and size like any other numeric continuation.
+fn is_bridging_decimal_separator(previous: &HocrWord, separator: &HocrWord, next: Option<&HocrWord>) -> bool {
+    let Some(next) = next else {
+        return false;
+    };
+    let suffix = next.text.trim_end().trim_end_matches([')', ']', '%']);
+    if !matches!(separator.text.trim(), "." | ",")
+        || !is_numeric_prefix(previous.text.trim_end())
+        || !suffix.starts_with(|character: char| character.is_ascii_digit())
+        || !suffix
+            .chars()
+            .all(|character| character.is_ascii_digit() || matches!(character, '.' | ','))
+    {
+        return false;
+    }
+
+    let rounding = NUMERIC_CONTINUATION_ROUNDING_TOLERANCE;
+    let band_top = previous.top.saturating_sub(rounding);
+    let band_bottom = previous.top + previous.height + rounding;
+    let tolerance = numeric_gap_tolerance(previous, next);
+    previous.top.abs_diff(next.top) <= rounding
+        && previous.height.abs_diff(next.height) <= rounding
+        && separator.top >= band_top
+        && separator.top + separator.height <= band_bottom
+        && horizontal_gap(previous, separator).abs() <= tolerance
+        && horizontal_gap(separator, next).abs() <= tolerance
 }
 
 fn is_touching_numeric_continuation(previous: &HocrWord, next: &HocrWord) -> bool {
     let prefix = previous.text.as_str();
     let suffix = next.text.trim_end().trim_end_matches([')', ']', '%']);
-    if !prefix.ends_with(|character: char| character.is_ascii_digit())
-        || !prefix
-            .chars()
-            .all(|character| character.is_ascii_digit() || matches!(character, '.' | ',' | '(' | '[' | '+' | '-' | '−'))
+    if !is_numeric_prefix(prefix)
         || !suffix.starts_with(['.', ','])
         || !suffix
             .chars()
@@ -1404,13 +1650,9 @@ fn is_touching_numeric_continuation(previous: &HocrWord, next: &HocrWord) -> boo
         return false;
     }
 
-    // ~keep HocrWord rounds PDF coordinates to pixels; allow one rounding pixel at either edge.
-    let tolerance = (previous.height.max(next.height) as f64 * NUMERIC_CONTINUATION_GAP_HEIGHT_RATIO)
-        .max(NUMERIC_CONTINUATION_ROUNDING_TOLERANCE as f64);
-    let gap = next.left as f64 - previous.left as f64 - previous.width as f64;
     previous.top.abs_diff(next.top) <= NUMERIC_CONTINUATION_ROUNDING_TOLERANCE
         && previous.height.abs_diff(next.height) <= NUMERIC_CONTINUATION_ROUNDING_TOLERANCE
-        && gap.abs() <= tolerance
+        && horizontal_gap(previous, next).abs() <= numeric_gap_tolerance(previous, next)
 }
 
 /// Convert a table grid to markdown format.
@@ -1877,6 +2119,131 @@ mod tests {
         }
     }
 
+    /// `detect_rows` as a first-fit scan over every group, re-deriving each group median per tall word.
+    fn detect_rows_oracle(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u32> {
+        if words.is_empty() {
+            return Vec::new();
+        }
+        let median_height = median_word_height(words);
+        let row_threshold = (median_height as f64 * row_threshold_ratio) as u32;
+        let maximum_seed_height = median_height.saturating_add(median_height / 2);
+        let (seed_words, tall_words): (Vec<&HocrWord>, Vec<&HocrWord>) =
+            words.iter().partition(|word| word.height <= maximum_seed_height);
+        let (seed_words, tall_words) = if seed_words.is_empty() {
+            (words.iter().collect(), Vec::new())
+        } else {
+            (seed_words, tall_words)
+        };
+        let mut position_groups: Vec<Vec<f64>> = Vec::new();
+        for word in seed_words {
+            let y_center = word.y_center();
+            match position_groups
+                .iter_mut()
+                .find(|group| (y_center - group[0]).abs() <= row_threshold as f64)
+            {
+                Some(group) => group.push(y_center),
+                None => position_groups.push(vec![y_center]),
+            }
+        }
+        let half_height = median_height / 2;
+        for word in tall_words {
+            let bottom = word.top.saturating_add(word.height);
+            let overlaps_seeded_row = position_groups
+                .iter()
+                .filter_map(|group| median_row_position(group))
+                .any(|row_y| {
+                    let band_top = row_y.saturating_sub(half_height);
+                    let band_bottom = row_y.saturating_add(half_height);
+                    bottom.min(band_bottom).saturating_sub(word.top.max(band_top)) > 0
+                });
+            if !overlaps_seeded_row {
+                position_groups.push(vec![word.y_center()]);
+            }
+        }
+        let mut rows: Vec<u32> = position_groups
+            .iter()
+            .filter_map(|group| median_row_position(group))
+            .collect();
+        rows.sort_unstable();
+        rows
+    }
+
+    /// `find_row_index` as a linear scan keeping the first nearest row.
+    fn find_row_index_oracle(row_positions: &[u32], word: &HocrWord) -> Option<usize> {
+        let y_center = word.y_center() as u32;
+        row_positions
+            .iter()
+            .enumerate()
+            .min_by_key(|&(_, row_y)| row_y.abs_diff(y_center))
+            .map(|(index, _)| index)
+    }
+
+    /// A deterministic xorshift stream, so a failing seed reproduces.
+    struct Xorshift(u64);
+
+    impl Xorshift {
+        fn below(&mut self, bound: u32) -> u32 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 % u64::from(bound)) as u32
+        }
+    }
+
+    fn random_row_words(rng: &mut Xorshift) -> Vec<HocrWord> {
+        let pitch = 1 + rng.below(30);
+        let rows = 1 + rng.below(25);
+        (0..rng.below(120))
+            .map(|index| {
+                let row = rng.below(rows);
+                let height = match rng.below(10) {
+                    0 => 0,
+                    1 => 25 + rng.below(40),
+                    _ => 8 + rng.below(5),
+                };
+                let top = (row * pitch + rng.below(9)).saturating_sub(rng.below(3) * 4);
+                word("w", index * 7 % 400, top, 10, height)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn detect_rows_and_find_row_index_match_their_linear_scans() {
+        let mut rng = Xorshift(0x2545_f491_4f6c_dd1d);
+        let mut multi_row_cases = 0;
+        for case in 0..4000 {
+            let words = random_row_words(&mut rng);
+            let ratio = [0.0, 0.3, 0.5, 1.0, 2.5][case % 5];
+            let rows = detect_rows(&words, ratio);
+            assert_eq!(rows, detect_rows_oracle(&words, ratio), "case {case}, ratio {ratio}");
+            multi_row_cases += usize::from(rows.len() > 3);
+            let mut duplicated = rows.clone();
+            duplicated.extend(rows.iter().step_by(2).copied());
+            duplicated.sort_unstable();
+            for positions in [&rows, &duplicated, &Vec::new()] {
+                for word in &words {
+                    assert_eq!(
+                        find_row_index(positions, word),
+                        find_row_index_oracle(positions, word),
+                        "case {case}, rows {positions:?}, word top {} height {}",
+                        word.top,
+                        word.height
+                    );
+                }
+            }
+        }
+        assert!(multi_row_cases > 1000, "too few multi-row cases: {multi_row_cases}");
+    }
+
+    #[test]
+    fn find_row_index_keeps_the_first_of_equally_near_rows() {
+        let probe = word("w", 0, 10, 10, 0);
+        assert_eq!(find_row_index(&[8, 8, 12, 12], &probe), Some(0));
+        assert_eq!(find_row_index(&[8, 11, 11], &probe), Some(1));
+        assert_eq!(find_row_index(&[10, 10], &probe), Some(0));
+        assert_eq!(find_row_index(&[], &probe), None);
+    }
+
     #[test]
     fn median_of_takes_the_middle_of_an_odd_count() {
         assert_eq!(median_of(vec![50, 10, 30]), 30);
@@ -2133,6 +2500,134 @@ mod tests {
         assert_eq!(table.len(), 12);
         assert_eq!(table[10][5], "10500");
         assert_eq!(table[10][6], "10600");
+    }
+
+    const BAND_DATA_ROWS: u32 = 6;
+
+    /// The pb_sample_page_16 header band as the native PDF path rounds it: 4pt words whose lines
+    /// step 3pt, each cell's one to three label lines centred on the band, above 6pt-pitch data rows.
+    fn stacked_header_band_table() -> Vec<HocrWord> {
+        let mut words = vec![
+            word("Minimum", 72, 86, 18, 4),
+            word("Maximum", 95, 86, 19, 4),
+            word("UW", 25, 89, 5, 4),
+            word("Tier", 33, 89, 8, 4),
+            word("Vehicle", 45, 89, 12, 4),
+            word("Type", 59, 89, 7, 4),
+            word("Comp", 151, 89, 9, 4),
+            word("Auto", 162, 89, 9, 4),
+            word("Coll", 176, 89, 7, 4),
+            word("Auto", 184, 89, 9, 4),
+            word("Vehicle", 74, 92, 14, 4),
+            word("Vehicle", 98, 92, 14, 4),
+            word("BI", 126, 92, 4, 4),
+            word("Group", 27, 95, 11, 4),
+            word("Group", 51, 95, 11, 4),
+            word("Loan", 150, 95, 8, 4),
+            word("/Lease", 159, 95, 11, 4),
+            word("Loan", 174, 95, 8, 4),
+            word("/Lease", 183, 95, 11, 4),
+            word("Miles", 75, 98, 9, 4),
+            word("Miles", 99, 98, 9, 4),
+        ];
+        for row in 0..BAND_DATA_ROWS {
+            let top = 105 + row * 6;
+            words.extend([
+                word("002", 30, top, 6, 4),
+                word("AO", 54, top, 5, 4),
+                word(&format!("{}000", row + 1), 76, top, 9, 4),
+                word(&format!("{}999", row + 1), 99, top, 9, 4),
+                word("1.000", 122, top, 11, 4),
+                word("1.000", 155, top, 11, 4),
+                word("1.000", 179, top, 11, 4),
+            ]);
+        }
+        words
+    }
+
+    #[test]
+    fn stacked_header_band_is_read_as_one_header_row() {
+        let table = reconstruct_table(&stacked_header_band_table(), 20, 0.5);
+
+        assert_eq!(
+            table[0],
+            [
+                "UW Tier Group",
+                "Vehicle Type Group",
+                "Minimum Vehicle Miles",
+                "Maximum Vehicle Miles",
+                "BI",
+                "Comp Auto Loan /Lease",
+                "Coll Auto Loan /Lease",
+            ]
+        );
+        assert_eq!(table.len(), 1 + BAND_DATA_ROWS as usize);
+        assert_eq!(table[1], ["002", "AO", "1000", "1999", "1.000", "1.000", "1.000"]);
+    }
+
+    /// The same band as the native PDF path projects it when each header line reaches it as one
+    /// segment: words placed in proportion to their characters, which narrows the gap between
+    /// side-by-side labels (`Tier` / `Vehicle`, `Auto` / `Coll`) below the cell-merge gap.
+    #[test]
+    fn stacked_header_band_splits_side_by_side_labels_merged_into_one_token() {
+        let mut words = stacked_header_band_table();
+        for word in &mut words {
+            let moved = match (word.text.as_str(), word.top, word.left) {
+                ("Tier", 89, _) => Some((32, 8)),
+                ("Vehicle", 89, _) => Some((42, 13)),
+                ("Type", 89, _) => Some((56, 8)),
+                ("Auto", 89, 162) => Some((161, 9)),
+                ("Coll", 89, _) => Some((172, 7)),
+                ("Auto", 89, 184) => Some((180, 9)),
+                ("Loan", 95, 174) => Some((172, 8)),
+                ("/Lease", 95, 183) => Some((181, 11)),
+                _ => None,
+            };
+            if let Some((left, width)) = moved {
+                word.left = left;
+                word.width = width;
+            }
+        }
+
+        let table = reconstruct_table(&words, 20, 0.5);
+
+        assert_eq!(
+            table[0],
+            [
+                "UW Tier Group",
+                "Vehicle Type Group",
+                "Minimum Vehicle Miles",
+                "Maximum Vehicle Miles",
+                "BI",
+                "Comp Auto Loan /Lease",
+                "Coll Auto Loan /Lease",
+            ]
+        );
+    }
+
+    #[test]
+    fn stacked_header_band_rows_counts_the_interleaved_band() {
+        let words = stacked_header_band_table();
+        let rows = detect_rows(&words, 0.5);
+
+        assert_eq!(stacked_header_band_rows(&words, &rows, median_word_height(&words)), 5);
+    }
+
+    #[test]
+    fn close_text_rows_sharing_columns_are_not_a_stacked_band() {
+        let mut words = Vec::new();
+        for (row, top) in [86, 89, 92, 95].into_iter().enumerate() {
+            words.push(word(&format!("label{row}"), 20, top, 20, 4));
+            words.push(word(&format!("note{row}"), 60, top, 20, 4));
+        }
+        for row in 0..BAND_DATA_ROWS {
+            words.push(word("item", 20, 105 + row * 6, 20, 4));
+            words.push(word("12.5", 60, 105 + row * 6, 20, 4));
+        }
+        let rows = detect_rows(&words, 0.5);
+
+        assert_eq!(stacked_header_band_rows(&words, &rows, median_word_height(&words)), 0);
+        assert_eq!(reconstruct_table(&words, 20, 0.5).len(), 4 + BAND_DATA_ROWS as usize);
     }
 
     #[test]
@@ -2806,6 +3301,83 @@ mod tests {
             let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
             assert_eq!(table, vec![vec![expected.to_string()]]);
         }
+    }
+
+    #[test]
+    fn cell_joins_adjacent_cjk_words_without_a_space() {
+        let words = [
+            word("用地", 100, 100, 60, 30),
+            word("指标", 165, 100, 60, 30),
+            word("Q", 235, 100, 15, 30),
+            word("（pcu/d）", 255, 100, 90, 30),
+            word("值", 400, 100, 30, 30),
+        ];
+        let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+        assert_eq!(table, vec![vec!["用地指标 Q （pcu/d） 值".to_string()]]);
+    }
+
+    #[test]
+    fn row_token_merge_joins_adjacent_cjk_words_without_a_space() {
+        let words = [word("基准", 100, 100, 60, 30), word("值", 165, 100, 30, 30)];
+        let row = words.iter().collect::<Vec<_>>();
+        let tokens = merge_row_into_cell_tokens(&row, 20.0, &HashSet::new());
+        assert_eq!(
+            tokens.iter().map(|(token, _)| token.text.as_str()).collect::<Vec<_>>(),
+            ["基准值"]
+        );
+    }
+
+    /// TeX draws a math-mode decimal point from CMMI between CMR digit runs, so the cell
+    /// `0.511 ± 0.008` arrives as touching words `0` `.` `511` `±` `0` `.` `008`. The
+    /// separator may carry a font-size box or its own short ink box low on the line.
+    #[test]
+    fn should_join_a_decimal_separator_drawn_as_its_own_touching_run() {
+        for (separator_top, separator_height) in [(157, 6), (162, 1)] {
+            let words = [
+                word("0", 230, 157, 5, 6),
+                word(".", 235, separator_top, 3, separator_height),
+                word("511", 238, 157, 14, 6),
+                word("±", 254, 157, 7, 6),
+                word("0", 263, 157, 5, 6),
+                word(".", 268, separator_top, 3, separator_height),
+                word("008", 271, 157, 14, 6),
+            ];
+            let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+            assert_eq!(table, vec![vec!["0.511 ± 0.008".to_string()]]);
+        }
+        for (prefix, suffix, expected) in [("3", "9%", "3.9%"), ("(0", "027%)", "(0.027%)"), ("1", "000", "1.000")] {
+            let words = [
+                word(prefix, 100, 100, 10, 8),
+                word(".", 110, 100, 3, 8),
+                word(suffix, 113, 100, 20, 8),
+            ];
+            let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+            assert_eq!(table, vec![vec![expected.to_string()]]);
+        }
+    }
+
+    #[test]
+    fn should_keep_spaces_around_a_separator_that_does_not_bridge_two_touching_numbers() {
+        for (prefix, separator, separator_left, separator_top, suffix, suffix_left, expected) in [
+            ("0", ".", 114, 100, "511", 117, "0 . 511"),
+            ("0", ".", 110, 100, "511", 117, "0 . 511"),
+            ("Item", ".", 110, 100, "5", 113, "Item . 5"),
+            ("0", ".", 110, 100, "note", 113, "0 . note"),
+            ("0", "-", 110, 100, "511", 113, "0 - 511"),
+            // Raised out of the line band, the separator reads as its own line (GH#1628 order).
+            ("0", ".", 110, 90, "511", 113, ". 0 511"),
+        ] {
+            let words = [
+                word(prefix, 100, 100, 10, 8),
+                word(separator, separator_left, separator_top, 3, 8),
+                word(suffix, suffix_left, 100, 20, 8),
+            ];
+            let table = finish_cell_assignment(vec![vec![words.iter().collect()]]);
+            assert_eq!(table, vec![vec![expected.to_string()]], "{prefix} {separator} {suffix}");
+        }
+        let trailing = [word("12", 100, 100, 10, 8), word(".", 110, 100, 3, 8)];
+        let table = finish_cell_assignment(vec![vec![trailing.iter().collect()]]);
+        assert_eq!(table, vec![vec!["12 .".to_string()]]);
     }
 
     /// GH#1628: a cell's words must read left-to-right, not in the order they happened to

@@ -42,11 +42,15 @@ impl<'doc> TextExtractor<'doc> {
             state_stack: GraphicsStateStack::new(),
             fonts: HashMap::new(),
             cmsy_witnesses: None,
+            raw_script_baselines: Vec::new(),
             cmsy_proof_budget: 32,
             font_provenance_cache: Default::default(),
             spans: Vec::new(),
             preserve_script_baselines: false,
             skip_nonpainting_text: false,
+            invisible_text_page: None,
+            invisible_spans: Vec::new(),
+            char_painted_regions: None,
             chars: Vec::new(),
             after_ligature: false,
             resources: None,
@@ -66,6 +70,7 @@ impl<'doc> TextExtractor<'doc> {
             span_sequence_counter: 0,
             pen_seam: None,
             pen_continuations: HashSet::new(),
+            ocr_layer_spans: HashSet::new(),
             marked_content_stack: Vec::new(),
             saw_reversed_chars: false,
             inside_artifact: false,
@@ -93,6 +98,8 @@ impl<'doc> TextExtractor<'doc> {
             lead_threshold: None,
             word_boundary_mode,
             cached_current_font: None,
+            glyph_font_name: FontName::default(),
+            font_names: HashSet::new(),
             extraction_width_tables: HashMap::new(),
             cached_extraction_widths: None,
             // Default to Page(0); `set_page_index` overrides before
@@ -127,6 +134,9 @@ impl<'doc> TextExtractor<'doc> {
                 .or_insert_with(|| (font.clone(), Arc::new(font.build_extraction_byte_widths())))
                 .1
                 .clone()
+        });
+        self.glyph_font_name = font.as_ref().map_or_else(FontName::default, |font| {
+            intern_font_name(&mut self.font_names, &font.base_font)
         });
         self.cached_current_font = font;
     }
@@ -233,6 +243,7 @@ impl<'doc> TextExtractor<'doc> {
         self.pen_seam = None;
         self.forget_drawn_end();
         self.pen_continuations.clear();
+        self.ocr_layer_spans.clear();
     }
 
     pub(crate) fn density_probe_font_height(&self) -> f32 {

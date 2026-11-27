@@ -1,4 +1,4 @@
-# Aggregation Schema v2.11.0
+# Aggregation Schema v2.13.0
 
 This document describes the structure of `aggregated.json` produced by `benchmark-harness consolidate`.
 
@@ -6,7 +6,7 @@ This document describes the structure of `aggregated.json` produced by `benchmar
 
 ```json
 {
-  "schema_version": "2.11.0",
+  "schema_version": "2.13.0",
   "by_framework_mode": {
     "<aggregate_key>": {
       /* FrameworkModeAggregation */
@@ -34,7 +34,13 @@ This document describes the structure of `aggregated.json` produced by `benchmar
   },
   "format_support": {
     /* FormatSupportMatrix — v2.9.0+, see "FormatSupportMatrix" */
-  }
+  },
+  "layout_impact": [
+    /* LayoutImpact[] — v2.12.0+, see "LayoutImpact" */
+  ],
+  "head_to_head": [
+    /* HeadToHead[] — v2.12.0+, see "HeadToHead" */
+  ]
 }
 ```
 
@@ -102,6 +108,7 @@ suppression and dispersion contract (v2.10.0+):
   "timeouts": 3,
   "empty_content": 0,       // framework produced no content at all
   "zero_overlap": 0,        // framework produced non-empty output with zero token overlap vs a non-empty ground truth
+  "layout_failures": 0,     // a layout-bearing variant extracted without its requested layout pass
   "error_details": {
     "error message": 2
   },
@@ -111,7 +118,13 @@ suppression and dispersion contract (v2.10.0+):
   "extraction_duration": { "p50": 80.0, "p95": 120.0, "p99": 160.0, "sample_count": 40, "std_dev": 12.0 }, // Optional
   "quality": {
     /* QualityPercentiles */
-  }, // Optional, if quality data available
+  }, // Optional, if quality data available; successful results only
+  "quality_including_failures": {
+    /* QualityPercentiles */
+  }, // Optional (v2.13.0+); successes plus zero_overlap failures at their scored TF1 of 0
+  "quality_means": {
+    /* QualityMeans */
+  }, // Optional (v2.13.0+); per-document and family-clustered means over the same results
   "success_rate_percent": 84.0,
   "pages_per_sec": { "p50": 12.5, "p95": 8.0, "p99": 5.0, "sample_count": 40, "std_dev": 1.1 }, // Optional (v2.7.0+, PDF only)
   "cpu_seconds": { "p50": 1.2, "p95": 2.1, "p99": 3.4, "sample_count": 38, "std_dev": 0.6 }, // v2.7.0+
@@ -119,7 +132,8 @@ suppression and dispersion contract (v2.10.0+):
   "system_load": {
     /* SystemLoadPercentiles */
   }, // Optional (v2.7.0+)
-  "throughput_excluded_sample_count": 0 // v2.8.0+
+  "throughput_excluded_sample_count": 0, // v2.8.0+
+  "memory_methods": { "rusage_max_rss": 24 } // samples per memory method behind `memory` (v2.12.0+)
 }
 ```
 
@@ -164,9 +178,49 @@ Includes p50, p95, p99 for all F1 metrics. Layout percentiles are `null` for pla
   "f1_layout_p99": 0.65, // null for plaintext output format
   "quality_score_p50": 0.85,
   "quality_score_p95": 0.8,
-  "quality_score_p99": 0.7
+  "quality_score_p99": 0.7,
+  "reading_order_p50": 0.81, // null when no result carries a reading-order score (v2.12.0+)
+  "reading_order_sample_count": 38 // results with a reading-order score (v2.12.0+)
 }
 ```
+
+`reading_order_p50` is the median of `quality.reading_order_score` over the successful results that
+have one; results without it (too few anchor tokens, see `quality::reading_order_score`) are not
+counted as 0. It is report-only and is not part of `quality_score`.
+
+`quality` covers successful results only; the quality rankings read it and apply success coverage
+separately, so a failure is penalised once. `quality_including_failures` (v2.13.0+) is the same
+block over successful results plus `zero_overlap` failures, each counted at the quality it was
+scored with (TF1 = 0). A zero-overlap row returned the wrong text, which is a quality result, not a
+missing one: without it a document that scores 1.0 under one configuration and 0.0 under another
+drops out of the second configuration's distribution instead of pulling it down. Read
+`quality_including_failures` when comparing quality without a coverage adjustment. Failures
+without a scored output (`empty_content`, `framework_errors`, timeouts) are in neither block.
+
+## QualityMeans (v2.13.0+)
+
+Per-document and family-clustered means over the results behind `quality_including_failures`
+(successes plus zero-overlap failures):
+
+```json
+{
+  "document_count": 24,
+  "family_count": 12,
+  "f1_text_mean": 0.81,
+  "f1_text_family_mean": 0.74,
+  "quality_score_mean": 0.79,
+  "quality_score_family_mean": 0.72,
+  "f1_layout_mean": 0.55, // null when no result carries SF1
+  "f1_layout_family_mean": 0.49
+}
+```
+
+The corpus holds families of fixtures with the same content (`fixture_family`, declared as
+`metadata.family` in the fixture): one image in eleven encodings, a page in four rotations and as
+a PDF, a text as native PDF, rendered image and scan. A per-document mean counts that content once
+per copy. The family mean first averages each family's results, then averages the families, so each
+distinct content counts once and the result is a cluster mean over independent units. A result
+without a declared family is its own family, so both means agree on a corpus without families.
 
 ## SystemLoadPercentiles (v2.7.0+)
 
@@ -201,13 +255,15 @@ The batch dedup that collapses a native batch to one `performance_sample_count` 
   "file_type": "pdf",
   "duration_ms": 125.4,
   "peak_memory_mb": 180.5,
+  "memory_method": "rusage_max_rss", // how peak RSS was measured (v2.12.0+)
+  "self_reported_peak_memory_bytes": null, // framework's own report, diagnostic only (v2.12.0+)
   "f1_text": 0.92,
   "f1_layout": 0.78, // null for plaintext mode
   "f1_numeric": 0.85,
   "quality_score": 0.85,
   "correct": true,
   "success": true,
-  "error_kind": null, // "FrameworkError", "HarnessError", "Timeout", "EmptyContent", "ZeroOverlap", etc. if !success
+  "error_kind": null, // "FrameworkError", "HarnessError", "Timeout", "EmptyContent", "ZeroOverlap", "LayoutFailed", etc. if !success
   "file_size": 45210, // v2.8.0+
   "throughput_bytes_per_sec": 361280.5, // v2.8.0+
   "avg_cpu_percent": 42.1, // v2.8.0+
@@ -233,6 +289,7 @@ The batch dedup that collapses a native batch to one `performance_sample_count` 
   "system_load": {
     /* SystemLoad — Optional, v2.8.0+ */
   },
+  "fixture_family": "ocr_image", // Optional, v2.13.0+; the fixture's metadata.family, omitted when it declares none
   "iterations": [
     {
       "iteration": 1,
@@ -284,8 +341,9 @@ Each `FailureCounts` object:
   "framework_errors": 0,     // framework hit a hard error on a supported document
   "empty_content": 0,        // framework produced no content at all for a supported document
   "zero_overlap": 0,         // framework produced non-empty output with zero token overlap vs a non-empty ground truth
+  "layout_failures": 0,      // a layout-bearing variant produced text without its requested layout pass
   "timeouts": 0,             // framework exceeded the timeout on a supported document
-  "framework_fault_total": 0, // sum of the four above; these penalize quality + success rate
+  "framework_fault_total": 0, // sum of the five above; these penalize quality + success rate
   "harness_errors": 0,       // our harness failed (process crash, bad JSON): never penalizes
   "config_setup_errors": 0,  // our config/setup failed (missing deps): never penalizes
   "infra_total": 0           // sum of the two infrastructure kinds above
@@ -305,6 +363,12 @@ a non-empty ground truth (set by the runner's post-scoring reclassification — 
 reclassification" below). Both are excluded from quality percentiles and both still contribute
 their duration/throughput/memory/cpu_seconds/pages_per_sec measurements to `PerformancePercentiles`
 — see "Timing eligibility" below.
+
+`layout_failures` counts rows of a layout-bearing variant (for example `layout`, `layout-paddle`)
+whose layout pass failed or was skipped, so the text came from the plain path rather than the
+requested detector. Scoring such a row as the variant's output would credit the detector with
+work it did not do, so it is a framework-fault failure (`error_kind = "LayoutFailed"`), counted and
+scored like `empty_content`. Older aggregates without the field read it as `0`.
 
 ### Zero-overlap reclassification
 
@@ -352,6 +416,161 @@ aggregate cannot list a format that produced no result for any selected framewor
 maps each logical framework to observed file types absent from its declared capabilities; xberg is
 never listed because it is the full-corpus subject under test. Both fields default empty when older
 v2.9.0 aggregates are deserialized.
+
+## LayoutImpact (v2.12.0+)
+
+Top-level `layout_impact` answers "what does the layout pass buy". One entry per
+(layout framework, baseline framework, `output_format`, `mode`, `file_type`) where both
+frameworks have rows, for the file types layout can affect only: `pdf` and the raster images
+(`jpg`, `jpeg`, `png`, `gif`, `bmp`, `tiff`, `tif`, `webp`, `jp2`, `jpx`, `jpm`, `mj2`). Other
+formats get no entry. Frameworks pair by name: the variant's `layout` segment is replaced by
+`baseline` (`xberg-markdown-layout` with `xberg-markdown-baseline`,
+`xberg-markdown-layout-paddle` with `xberg-markdown-baseline-paddle`), or dropped when no such
+framework exists (`xberg-markdown-sceptre-ort-layout` with `xberg-markdown-sceptre-ort`); a
+trailing model-version segment (`-layout-v3`) is discarded as a last resort.
+
+```json
+{
+  "layout_framework": "xberg-markdown-layout",
+  "baseline_framework": "xberg-markdown-baseline",
+  "output_format": "markdown",
+  "mode": "single",
+  "file_type": "pdf",
+  "ocr": false, // shared by every successful row on both sides, else null
+  "baseline_ocr_fixture_count": 0, // paired fixtures the baseline variant OCRed
+  "layout_ocr_fixture_count": 0, // paired fixtures the layout variant OCRed
+  "paired_fixture_count": 41, // fixtures where both variants have a quality result (success or zero overlap)
+  "sf1": { "baseline_p50": 0.5, "layout_p50": 0.7, "delta_p50": 0.18, "sample_count": 41 }, // null for plaintext
+  "tf1": { /* PairedDelta */ },
+  "reading_order": { /* PairedDelta */ }, // null when no paired fixture carries a score
+  "quality_score": { /* PairedDelta */ },
+  "duration_ms": { "baseline_p50": 410.0, "layout_p50": 655.0, "delta_p50": 240.0, "sample_count": 41 }, // medians null when sample_count is 0 (batch)
+  "peak_memory_mb": { /* PairedDelta */ },
+  "improved_fixture_ids": ["doc_a"],
+  "regressed_fixture_ids": ["doc_b"],
+  "unchanged_fixture_ids": ["doc_c"],
+  "unscored_fixture_ids": [], // paired, but neither SF1 nor quality_score on both sides
+  "ambiguous_fixture_ids": [], // stems naming more than one document; not paired
+  "per_fixture": {
+    "sf1": [{ "fixture_id": "doc_a", "baseline": 0.5, "layout": 0.8, "delta": 0.3 }],
+    "tf1": [], "reading_order": [], "duration_ms": [], "peak_memory_mb": []
+  }
+}
+```
+
+- **`PairedDelta`**: `baseline_p50` and `layout_p50` are the medians of each side's per-fixture
+  values; `delta_p50` is the **median of the per-fixture deltas** (`layout - baseline`), not
+  `layout_p50 - baseline_p50`. `sample_count` is the number of fixtures with a value on both sides;
+  the three medians are `null` exactly when it is `0` (e.g. `duration_ms` in batch mode), so an
+  unmeasured metric never reads as "no difference". `validate-artifacts` enforces this.
+- **Pairing** happens by fixture inside one (`output_format`, `mode`, `file_type`) bucket and only
+  for fixtures where both variants have a quality result: a success, or (v2.13.0+) a `ZeroOverlap`
+  failure, which pairs at the TF1 of 0 it was scored with so a fixture that falls from 1.0 to 0.0
+  is `regressed` instead of dropping out. A bucket whose layout rows all failed otherwise still gets
+  an entry, with `paired_fixture_count: 0`.
+- **Ambiguous fixture ids**: `fixture_id` is the file stem and the corpus repeats stems, so one id
+  can name several documents. Rows carry no path; an id seen (per `file_type`) with two different
+  non-zero `file_size` values is excluded from pairing on every side and listed in
+  `ambiguous_fixture_ids`. Repeated rows with one size are treated as re-runs of one document
+  (first success wins, then the first zero-overlap row). Same-sized collisions cannot be detected.
+- **OCR** is a property of each row, not part of the bucket: failed rows never report it
+  (`ocr: null`), and an auto-OCR variant decides per document. `ocr` is the value every successful
+  row on both sides reports, and `null` when they disagree, any did not report it, or none
+  succeeded; `baseline_ocr_fixture_count` / `layout_ocr_fixture_count` count the paired fixtures
+  on which each side reported OCR use.
+- **Classification**: a fixture is `improved` when its delta is at least `0.005`, `regressed` at most
+  `-0.005`, otherwise `unchanged`. The metric is chosen per fixture: SF1 when both sides carry it,
+  else `quality_score` (always for plaintext). A paired fixture with neither on both sides (no
+  ground truth) is `unscored`. The four lists partition the paired fixtures, so their lengths sum
+  to `paired_fixture_count`; `validate-artifacts` enforces this.
+- **Timing**: `duration_ms` and `peak_memory_mb` use only single-file, cold-process rows
+  (`peak_memory_mb` also requires an isolated-process measurement). A native batch has one
+  process-level measurement shared by all documents, so batch buckets report `sample_count: 0` there
+  while quality deltas are unaffected.
+
+## HeadToHead (v2.12.0+)
+
+Top-level `head_to_head` compares every xberg framework with every non-xberg framework on the
+documents both have a quality result for (success or, v2.13.0+, zero overlap; see LayoutImpact),
+one entry per (xberg framework, competitor framework,
+`output_format`, `mode`, `file_type`) in which the two share at least one fixture id. OCR use does
+not split entries (see LayoutImpact): a scan xberg auto-OCRed and the competitor read without OCR
+is one shared fixture.
+
+```json
+{
+  "xberg_framework": "xberg-markdown-layout",
+  "competitor_framework": "liteparse",
+  "output_format": "markdown",
+  "mode": "single",
+  "file_type": "pdf",
+  "ocr": false, // shared by every successful row on both sides, else null
+  "xberg_ocr_fixture_count": 0, // shared fixtures xberg OCRed
+  "competitor_ocr_fixture_count": 0, // shared fixtures the competitor OCRed
+  "shared_fixture_count": 3, // both have a quality result
+  "xberg_only_fixture_ids": ["doc_d"], // only xberg has a quality result; first 50, sorted
+  "xberg_only_fixture_count": 1, // total, so a capped list shows as count > length
+  "competitor_only_fixture_ids": [], // only the competitor has a quality result; first 50, sorted
+  "competitor_only_fixture_count": 0,
+  "ambiguous_fixture_ids": [], // stems naming more than one document (see LayoutImpact); not compared
+  "ambiguous_fixture_count": 0,
+  "duration_ms": { /* PairedDelta */ },
+  "extraction_duration_ms": { /* PairedDelta */ },
+  "peak_memory_mb": { /* PairedDelta */ },
+  "tf1": { /* PairedDelta */ },
+  "sf1": { /* PairedDelta */ }, // null for plaintext
+  "reading_order": { /* PairedDelta */ }, // null when no shared fixture carries a score
+  "quality_score": { /* PairedDelta */ }
+}
+```
+
+Each only-list and `ambiguous_fixture_ids` holds at most 50 ids (the first in sorted order) so the file stays bounded across a
+large corpus; its `*_count` field is the total, and `validate-artifacts` checks the list holds
+exactly `min(count, 50)` ids.
+
+`PairedDelta` reads with `baseline` = competitor and `layout` = xberg, so a positive `delta_p50` on
+a quality metric means xberg scored higher. All medians cover only the shared fixtures, so a
+competitor that ran 3 of 4 documents is compared on those 3 rather than credited or penalised for
+the fourth.
+
+## Migration from v2.12.0 to v2.13.0
+
+2.12.0 aggregates still deserialize (every new field defaults); `validate-artifacts` accepts only
+the current version.
+
+- **`PerformancePercentiles.quality_including_failures`**: quality percentiles that also count
+  `zero_overlap` failures at their scored TF1 of 0. `quality` and every ranking are unchanged.
+- **`layout_impact` / `head_to_head` pairing**: zero-overlap rows now pair (and leave the
+  `*_only` lists) instead of being dropped, so `paired_fixture_count`, `shared_fixture_count` and
+  the quality and timing deltas can move between 2.12.0 and 2.13.0 on the same results.
+- **`PerformancePercentiles.quality_means`** and **`PerFixtureRow.fixture_family`**: per-document
+  and family-clustered quality means (see QualityMeans). Results carry `fixture_family` from the
+  fixture's `metadata.family`; `validate-artifacts` rejects a row whose family differs from its
+  fixture's.
+- **CJK tokenization** (scoring, not schema): spaces and tabs between two CJK characters are
+  removed from ground truth and output before TF1 tokenization, so TF1, `quality_score` and SF1 of
+  documents with CJK text can change for every framework. Do not compare CJK scores across this
+  boundary.
+
+## Migration from v2.11.0 to v2.12.0
+
+Additive only; 2.11.0 aggregates still deserialize (every new field defaults).
+
+- **`QualityPercentiles.reading_order_p50` / `reading_order_sample_count`**: report-only reading
+  order median and its sample count.
+- **`ComparisonData.pdf_reading_order_ranking_markdown` / `_plaintext`**: coverage-adjusted, same
+  convention as the other `pdf_*` quality rankings: an OCR bucket attempted and failed entirely
+  contributes 0 at its accountable weight. Frameworks with no reading-order sample in any bucket
+  are omitted rather than scored 0.
+- **`layout_impact`** and **`head_to_head`**: see above.
+- **Peak memory method**: `peak_memory_bytes` is now `ru_maxrss` from `wait4(2)` on the harness's
+  direct child (normalised to bytes) for every subprocess framework, on unix. It includes every
+  descendant the child reaped and is the peak of the largest single process in the tree, not a
+  sum. xberg's self-reported peak no longer replaces the measurement; it is kept in
+  `self_reported_peak_memory_bytes`. Rows carry `memory_method` (`rusage_max_rss`, `sampled`,
+  `self_reported`), and `PerformancePercentiles.memory_methods` counts them per bucket. Memory
+  figures before 2.12.0 compared an exact xberg self-report with a polled sampler that missed
+  short-lived competitor processes; do not compare memory across that boundary.
 
 ## Migration from v2.10.0 to v2.11.0
 
@@ -556,6 +775,12 @@ Contains all cross-framework rankings split by output format for quality metrics
   "pdf_sf1_ranking_markdown": [
     /* RankedFramework[] — markdown-only, never plaintext */
   ],
+  "pdf_reading_order_ranking_markdown": [
+    /* RankedFramework[] — markdown-only, coverage-adjusted median reading order (v2.12.0+) */
+  ],
+  "pdf_reading_order_ranking_plaintext": [
+    /* RankedFramework[] — plaintext-only (v2.12.0+) */
+  ],
   "pages_per_sec_ranking": [
     /* RankedFramework[] — descending, higher pages/sec first (v2.7.0+); segmented by
        (output_format, mode), see below */
@@ -692,6 +917,13 @@ value, it records the legacy `--max-concurrent` fallback passed to `xberg batch
 cap. `effective_workers` remains `null` because Xberg resolves effective document concurrency
 from the workload. Non-Xberg rows and automatic-budget single-file rows omit
 `configured_thread_budget`.
+
+`frameworks[].xberg_env` is an optional object mapping each environment variable the harness
+injected into that framework's xberg processes to its value, so they run as xberg's shipped
+launchers start them (ADR 0022): `{"MallocMaxMagazines": "1"}` on macOS when the harness
+environment does not already define the variable. It is omitted when nothing was injected:
+non-Xberg rows, Linux and Windows, a user-set value, and in-process rows, which start no process.
+Older sidecars without the field still load, and it does not change the schema version.
 
 #### Run provenance migration from schema 2 to schema 3
 

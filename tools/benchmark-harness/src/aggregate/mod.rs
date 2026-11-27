@@ -1,10 +1,13 @@
-//! Aggregation module for benchmark results (v2.11.0 output schema).
+//! Aggregation module for benchmark results (v2.13.0 output schema).
 //!
 //! Groups [`BenchmarkResult`] records by framework-and-mode, output format, file type, and
 //! OCR usage (yes/no), then computes percentile-based statistics for each
-//! group. The output schema (`schema_version: "2.11.0"`) surfaces TF1 and SF1 separately
+//! group. The output schema (`schema_version: "2.13.0"`) surfaces TF1 and SF1 separately
 //! with per-fixture rows preserved and split rankings by output format, plus a cohort-wide
-//! [`FailureSummary`] rolling up framework-fault vs infrastructure failures (v2.9.0+).
+//! [`FailureSummary`] rolling up framework-fault vs infrastructure failures (v2.9.0+), plus
+//! paired layout-vs-baseline ([`LayoutImpact`]) and xberg-vs-competitor ([`HeadToHead`])
+//! deltas computed from the per-fixture rows (v2.12.0+). Zero-overlap failures count as quality
+//! results (TF1 = 0) in `quality_including_failures` and in the paired sections (v2.13.0+).
 //!
 //! # Percentile methodology
 //!
@@ -23,7 +26,8 @@
 //!
 //! Failed results (non-zero `error_kind`) are excluded from percentile
 //! calculations but still counted in `total_sample_count` to preserve the
-//! `success_rate_percent` metric.
+//! `success_rate_percent` metric. The one exception is `quality_including_failures`, which also
+//! counts zero-overlap failures at the quality they were scored with.
 //!
 //! # Output format support
 //!
@@ -48,6 +52,7 @@
 //! from, plus the aggregate-key helpers shared across the other submodules.
 
 mod failures;
+mod paired;
 mod percentiles;
 mod ranking;
 mod types;
@@ -67,6 +72,7 @@ use failures::build_failure_summary;
 
 use percentiles::{aggregate_cold_starts, calculate_percentiles, parse_aggregate_key};
 
+pub(crate) use paired::{baseline_framework_for, layout_applies_to};
 pub use ranking::apply_pinned_cohort_comparison;
 use ranking::build_comparison;
 pub(crate) use ranking::{comparison_for_cohort, resolve_shared_corpus_file_types};
@@ -107,6 +113,8 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
     let comparison = build_comparison(&aggregated_by_framework_mode, None);
     let failure_summary = build_failure_summary(results);
     let format_support = build_format_support_matrix(results, &grouped.file_types);
+    let layout_impact = paired::build_layout_impact(&per_fixture_results);
+    let head_to_head = paired::build_head_to_head(&per_fixture_results);
 
     NewConsolidatedResults {
         schema_version: SCHEMA_VERSION.to_string(),
@@ -118,6 +126,8 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         run_provenance: Vec::new(),
         failure_summary,
         format_support,
+        layout_impact,
+        head_to_head,
     }
 }
 
@@ -138,6 +148,8 @@ fn empty_consolidated_results() -> NewConsolidatedResults {
             pdf_tf1_ranking_markdown: Vec::new(),
             pdf_tf1_ranking_plaintext: Vec::new(),
             pdf_sf1_ranking_markdown: Vec::new(),
+            pdf_reading_order_ranking_markdown: Vec::new(),
+            pdf_reading_order_ranking_plaintext: Vec::new(),
             pages_per_sec_ranking: Vec::new(),
             cpu_seconds_ranking: Vec::new(),
             deltas_vs_baseline: HashMap::new(),
@@ -157,6 +169,8 @@ fn empty_consolidated_results() -> NewConsolidatedResults {
         run_provenance: Vec::new(),
         failure_summary: FailureSummary::default(),
         format_support: FormatSupportMatrix::default(),
+        layout_impact: Vec::new(),
+        head_to_head: Vec::new(),
     }
 }
 
@@ -254,6 +268,7 @@ fn build_framework_mode_aggregations(
                     file_type: file_type.clone(),
                     no_ocr: aggregation.0,
                     with_ocr: aggregation.1,
+                    unknown_ocr: aggregate_unknown_ocr_status(&results_for_type),
                 },
             );
         }
@@ -396,6 +411,8 @@ fn build_per_fixture_results(results: &[BenchmarkResult]) -> Vec<PerFixtureRow> 
             cpu_seconds: result.metrics.cpu_seconds,
             baseline_memory_bytes: result.metrics.baseline_memory_bytes,
             peak_memory_delta_bytes: result.metrics.peak_memory_delta_bytes,
+            memory_method: result.metrics.memory_method,
+            self_reported_peak_memory_bytes: result.metrics.self_reported_peak_memory_bytes,
             p50_memory_bytes: result.metrics.p50_memory_bytes,
             p95_memory_bytes: result.metrics.p95_memory_bytes,
             p99_memory_bytes: result.metrics.p99_memory_bytes,
@@ -409,6 +426,7 @@ fn build_per_fixture_results(results: &[BenchmarkResult]) -> Vec<PerFixtureRow> 
             system_load: result.system_load,
             iterations: result.iterations.clone(),
             statistics: result.statistics.clone(),
+            fixture_family: result.fixture_family.clone(),
         });
     }
 
@@ -450,6 +468,18 @@ fn aggregate_by_ocr_status(
     };
 
     (no_ocr_stats, with_ocr_stats)
+}
+
+/// Aggregate results whose OCR status is `Unknown`, or `None` when there are none. These stay out
+/// of the no-OCR and with-OCR cohorts but are ranked, so unreported-status failures still count
+/// against a framework. ~keep
+fn aggregate_unknown_ocr_status(results: &[&BenchmarkResult]) -> Option<PerformancePercentiles> {
+    let unknown: Vec<&BenchmarkResult> = results
+        .iter()
+        .filter(|result| result.ocr_status == crate::types::OcrStatus::Unknown)
+        .copied()
+        .collect();
+    (!unknown.is_empty()).then(|| calculate_percentiles(&unknown))
 }
 
 /// Extract framework name and mode from a raw framework string.

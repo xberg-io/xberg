@@ -168,7 +168,7 @@ mod tests {
         TextChar {
             char: c,
             bbox,
-            font_name: "Times".to_string(),
+            font_name: "Times".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),

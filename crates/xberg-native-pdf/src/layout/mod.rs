@@ -9,6 +9,7 @@
 pub mod area_filter;
 pub mod clustering;
 pub mod document_analyzer;
+pub mod font_name;
 pub mod font_stats;
 pub mod reading_order;
 pub mod region_classifier;
@@ -19,6 +20,7 @@ pub mod font_normalization;
 
 pub use area_filter::{LayoutObjectSpatial, RectFilterMode, SpatialCollectionFiltering};
 pub use document_analyzer::{AdaptiveLayoutParams, DocumentProperties};
+pub use font_name::FontName;
 pub use font_stats::PageFontStats;
 pub use reading_order::graph_based_reading_order;
 pub use region_classifier::{RegionClass, classify_region};

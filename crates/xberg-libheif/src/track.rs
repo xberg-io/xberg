@@ -1,8 +1,8 @@
 use std::ptr;
 use std::rc::Rc;
 
+use crate::lh;
 use four_cc::FourCC;
-use libheif_sys as lh;
 
 use crate::context::ContextOwner;
 use crate::decoder::get_decoding_options_ptr;

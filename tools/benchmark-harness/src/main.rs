@@ -102,7 +102,9 @@ async fn main() -> Result<()> {
 
         Commands::ValidateArtifacts(args) => commands::validate_artifacts::execute(args),
 
-        Commands::CohortContract { cohort } => commands::cohort_contract::execute(cohort.into()),
+        Commands::CohortContract { cohort, profile } => {
+            commands::cohort_contract::execute(cohort.into(), profile.into())
+        }
     }
 }
 

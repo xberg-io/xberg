@@ -200,6 +200,82 @@ cached_binary() { printf '%s/bin/%s' "$PLUGIN_ROOT" "$BINARY_NAME"; }
 	[[ "$output" != *"ONPATH:ran"* ]]
 }
 
+# --- malloc magazines ---------------------------------------------------------------------------
+
+# An executable that reports a version, then prints the MallocMaxMagazines value it received.
+make_env_cli() {
+	local target="$1"
+	mkdir -p "$(dirname "$target")"
+	printf '%s\n' \
+		'#!/usr/bin/env bash' \
+		"if [ \"\$1\" = \"--version\" ]; then printf '%s\\n' \"${PINNED_VERSION}\"; exit 0; fi" \
+		'printf "MAGAZINES[%s]\n" "${MallocMaxMagazines-<unset>}"' >"$target"
+	chmod +x "$target"
+}
+
+stub_kernel() {
+	xberg_stub uname "printf '%s\\n' '$1'"
+}
+
+# `launch` with MallocMaxMagazines preset in the clean environment.
+launch_with_magazines() {
+	run env -i \
+		PATH="$(xberg_isolated_path)" \
+		HOME="$XBERG_WORK/home" \
+		CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+		"${LAUNCHER_VAR}=${LAUNCH_MODE}" \
+		MallocMaxMagazines="$1" \
+		"$SCRIPT"
+}
+
+@test "mcp-launch should_give_the_binary_one_malloc_magazine_on_macos" {
+	stub_kernel Darwin
+	make_env_cli "$(cached_binary)"
+	launch
+
+	xberg_assert_status 0
+	xberg_assert_output_contains "MAGAZINES[1]"
+}
+
+@test "mcp-launch should_give_a_path_binary_one_malloc_magazine_on_macos" {
+	stub_kernel Darwin
+	make_env_cli "$XBERG_STUB_BIN/$BINARY_NAME"
+	launch
+
+	xberg_assert_status 0
+	xberg_assert_output_contains "MAGAZINES[1]"
+}
+
+@test "mcp-launch should_keep_a_malloc_magazine_value_the_user_set" {
+	stub_kernel Darwin
+	make_env_cli "$(cached_binary)"
+	local preset
+	for preset in 4 ""; do
+		launch_with_magazines "$preset"
+		xberg_assert_status 0
+		xberg_assert_output_contains "MAGAZINES[$preset]"
+	done
+}
+
+@test "mcp-launch should_not_set_malloc_magazines_off_macos" {
+	stub_kernel Linux
+	make_env_cli "$(cached_binary)"
+	launch
+
+	xberg_assert_status 0
+	xberg_assert_output_contains "MAGAZINES[<unset>]"
+}
+
+@test "mcp-launch should_leave_malloc_magazines_to_the_npm_launcher_when_it_runs_npx" {
+	stub_kernel Darwin
+	xberg_stub node 'exit 0'
+	xberg_stub npx 'printf "NPX[%s]\n" "${MallocMaxMagazines-<unset>}"'
+	launch
+
+	xberg_assert_status 0
+	xberg_assert_output_contains "NPX[<unset>]"
+}
+
 # --- version gate -------------------------------------------------------------------------------
 
 @test "mcp-launch should_ignore_a_cached_binary_older_than_the_pinned_version" {

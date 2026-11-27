@@ -889,6 +889,79 @@ impl OcrStrategy {
     }
 }
 
+/// Which upstream Tesseract model set (`tessdata_fast` or `tessdata_best`) xberg resolves and
+/// downloads language data from.
+///
+/// The set only selects among the directories xberg manages: an explicit
+/// [`OcrConfig::tessdata_path`] or the `TESSDATA_PREFIX` environment variable is used as given,
+/// whatever this says. Each set has its own cache directory (`<cache>/tessdata/fast`,
+/// `<cache>/tessdata/best`), so a request for one set never reads the other's files. System
+/// tessdata directories (apt, Homebrew) ship `tessdata_fast` and are searched only for
+/// [`TessdataModel::Fast`]; [`TessdataModel::Best`] also reads the read-only
+/// `/usr/share/xberg/tessdata/best` an image can provide.
+///
+/// Values are lowercase in every form (config files, JSON, environment, CLI).
+///
+/// WebAssembly does not bundle or download `tessdata_best`: it refuses `Best` unless the caller
+/// supplies the model bytes in `tessdata_bytes`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TessdataModel {
+    /// `tessdata_fast`: integer LSTM models, the smallest and fastest set.
+    // ~keep Changing the default also changes DEFAULT_TESSDATA_MODEL, needs a binding regeneration,
+    // and WebAssembly and mobile then need an explicit fast default (see the assert below).
+    #[default]
+    Fast,
+    /// `tessdata_best`: float LSTM models, about three times larger and slower than `fast`.
+    Best,
+}
+
+/// The model set used when a config does not name one: [`TessdataModel::default`].
+pub const DEFAULT_TESSDATA_MODEL: TessdataModel = TessdataModel::Fast;
+
+// ~keep WebAssembly bundles tessdata_fast English, and a bundled tessdata_best model would push the
+// published module over the npm/jsDelivr size caps, so a wasm build must never default to best.
+#[cfg(target_arch = "wasm32")]
+const _: () = assert!(matches!(DEFAULT_TESSDATA_MODEL, TessdataModel::Fast));
+
+impl TessdataModel {
+    /// The wire name: `"fast"` or `"best"`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Fast => "fast",
+            Self::Best => "best",
+        }
+    }
+
+    /// The upstream `tesseract-ocr` repository this set is downloaded from.
+    #[must_use]
+    pub fn repository(self) -> &'static str {
+        match self {
+            Self::Fast => "tessdata_fast",
+            Self::Best => "tessdata_best",
+        }
+    }
+}
+
+impl std::fmt::Display for TessdataModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for TessdataModel {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "fast" => Ok(Self::Fast),
+            "best" => Ok(Self::Best),
+            other => Err(format!("Invalid tessdata model '{other}'. Must be 'fast' or 'best'")),
+        }
+    }
+}
+
 /// OCR configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1090,6 +1163,23 @@ pub struct OcrConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tessdata_path: Option<PathBuf>,
 
+    /// Tesseract model set for this OCR section: `"fast"` or `"best"`. `None` (the default)
+    /// inherits `ExtractionConfig::tessdata_model`, else `fast`.
+    ///
+    /// Applies only to the directories xberg manages. An explicit `tessdata_path` or
+    /// `TESSDATA_PREFIX` that holds every requested language is used as given, whichever set it
+    /// contains (a `best` request logs a warning then). Otherwise `fast` searches the older flat
+    /// `<cache>/tessdata`, `<cache>/tessdata/fast` and the system tessdata directories, and
+    /// downloads into `<cache>/tessdata/fast` (or into the flat cache when it already holds some
+    /// of the requested languages); `best` searches `<cache>/tessdata/best` and, on Unix,
+    /// `/usr/share/xberg/tessdata/best`, and downloads into `<cache>/tessdata/best`, because
+    /// system packages ship `tessdata_fast`. Every download is pinned and SHA-256 verified. With
+    /// `best`, OSD and the script retries (Han, Khmer, vertical Japanese) use only models in the
+    /// `best` directories. REST and MCP callers cannot change it. WebAssembly refuses `best`
+    /// unless the model bytes come in `tessdata_bytes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tessdata_model: Option<TessdataModel>,
+
     /// Repair OCR tokens that are clearly numeric but mis-punctuated: a dropped thousands
     /// separator, a decimal point misread for a grouping comma, or one number split into two
     /// tokens at a rendering gap (GH#1789).
@@ -1117,6 +1207,27 @@ pub struct OcrConfig {
     /// `"tsv"`, because it would re-punctuate the bare coordinate integers in that markup.
     #[serde(default)]
     pub numeric_repair: bool,
+
+    /// Read a standalone camera photo again with the built-in PaddleOCR backend when the default
+    /// Tesseract read of it is sparse and unreliable, and keep the PaddleOCR read when its text
+    /// keeps at least the word- and number-shaped tokens Tesseract read with confidence (and at
+    /// least four), is about as word-like as Tesseract's read, and passes the OCR quality gate.
+    ///
+    /// Defaults to `true`. It applies only to a JPEG or WebP whose pixel size is not a standard
+    /// page at a scan resolution (PNG, BMP, GIF and TIFF images, and HEIC, which reaches OCR as
+    /// PNG, never qualify). The request must use `backend = "tesseract"` and leave every other
+    /// OCR choice unset: no `tesseract_config` (even a default one), `element_config`,
+    /// `paddle_ocr_settings`, `paddle_ocr_config`, `tessdata_path`, `tessdata_bytes`,
+    /// `numeric_repair`, backend tuning, `pipeline`, `vlm_fallback`, layout detection or
+    /// `include_document_structure`, and one Latin-script language. Tesseract must have read
+    /// between 1 and 80 words with word confidences that fail the sparse-text robustness check.
+    /// It needs a build with PaddleOCR and models already in the local cache: this re-read never
+    /// downloads a model, so the output for such a photo depends on whether the models are
+    /// cached, and the extraction cache keys on their state. An explicit `backend = "tesseract"`
+    /// with no other setting cannot be told apart from the default, so set this to `false` to
+    /// keep Tesseract's read on every image. A backend other than `tesseract` is never replaced.
+    #[serde(default = "default_image_paddle_fallback")]
+    pub image_paddle_fallback: bool,
 }
 
 impl Default for OcrConfig {
@@ -1141,12 +1252,22 @@ impl Default for OcrConfig {
             security_limits: None,
             tessdata_bytes: None,
             tessdata_path: None,
+            tessdata_model: None,
             numeric_repair: false,
+            image_paddle_fallback: default_image_paddle_fallback(),
         }
     }
 }
 
 impl OcrConfig {
+    /// The model set this section resolves: its own, else `fast`. An `OcrConfig` taken from an
+    /// `ExtractionConfig` carries the inherited top-level set once
+    /// `ExtractionConfig::resolve_tessdata_model` or `ExtractionConfig::ocr_or_default` ran.
+    #[must_use]
+    pub fn effective_tessdata_model(&self) -> TessdataModel {
+        self.tessdata_model.unwrap_or_default()
+    }
+
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     pub(crate) fn select_public_elements(
         &self,
@@ -1279,6 +1400,19 @@ impl OcrConfig {
     ))]
     pub(crate) fn effective_tesseract_language(&self) -> Vec<String> {
         effective_tesseract_language_for(&self.language, self.tesseract_config.as_ref())
+    }
+
+    /// Whether [`OcrConfig::backend_options`] tunes the backend: any key besides the result-cache
+    /// switch (`use_cache`). The stock-profile recovery lanes opt out of caller tuning, but turning
+    /// the cache off for a cold read (as `use_cache: false` requests and benchmarks do) changes no
+    /// recognition, so it must not move a request off the default route.
+    #[cfg(feature = "ocr")]
+    pub(crate) fn has_tuning_backend_options(&self) -> bool {
+        self.backend_options.as_ref().is_some_and(|options| {
+            options
+                .as_object()
+                .is_none_or(|fields| fields.keys().any(|key| key != "use_cache"))
+        })
     }
 
     /// Returns the effective quality thresholds, using configured values or defaults.
@@ -1561,6 +1695,10 @@ fn default_tesseract_backend() -> String {
     "tesseract".to_string()
 }
 
+fn default_image_paddle_fallback() -> bool {
+    true
+}
+
 /// Default OCR language (Tesseract/ISO 639 naming): English.
 ///
 /// Use the effective language resolver for the active backend when a defaulted
@@ -1615,6 +1753,52 @@ fn default_eng() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_parse_both_tessdata_models_and_default_to_fast() {
+        let parse = |json: &str| serde_json::from_str::<OcrConfig>(json).map(|config| config.tessdata_model);
+
+        assert_eq!(
+            parse(r#"{"tessdata_model":"fast"}"#).unwrap(),
+            Some(TessdataModel::Fast)
+        );
+        assert_eq!(
+            parse(r#"{"tessdata_model":"best"}"#).unwrap(),
+            Some(TessdataModel::Best)
+        );
+        assert_eq!(parse("{}").unwrap(), None, "an unset section inherits");
+        assert_eq!(OcrConfig::default().effective_tessdata_model(), DEFAULT_TESSDATA_MODEL);
+        assert_eq!(TessdataModel::default(), DEFAULT_TESSDATA_MODEL);
+        assert_eq!(DEFAULT_TESSDATA_MODEL, TessdataModel::Fast);
+        assert!(parse(r#"{"tessdata_model":"medium"}"#).is_err());
+    }
+
+    #[test]
+    fn should_parse_tessdata_model_from_toml_and_round_trip_through_json() {
+        let config: OcrConfig = toml::from_str("tessdata_model = \"best\"").unwrap();
+        assert_eq!(config.tessdata_model, Some(TessdataModel::Best));
+
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["tessdata_model"], "best");
+        let default_json = serde_json::to_value(OcrConfig::default()).unwrap();
+        assert!(
+            default_json.get("tessdata_model").is_none(),
+            "an unset set is not serialized"
+        );
+        let round_trip: OcrConfig = serde_json::from_value(default_json).unwrap();
+        assert_eq!(round_trip.tessdata_model, None);
+        assert_eq!(round_trip.effective_tessdata_model(), TessdataModel::Fast);
+        assert_eq!("best".parse::<TessdataModel>(), Ok(TessdataModel::Best));
+        assert_eq!("fast".parse::<TessdataModel>(), Ok(TessdataModel::Fast));
+        assert!(
+            "Best".parse::<TessdataModel>().is_err(),
+            "values are lowercase everywhere"
+        );
+        assert!(serde_json::from_str::<TessdataModel>(r#""Best""#).is_err());
+        assert!("medium".parse::<TessdataModel>().is_err());
+        assert_eq!(TessdataModel::Best.to_string(), "best");
+        assert_eq!(TessdataModel::Best.repository(), "tessdata_best");
+    }
 
     fn tesseract_config_with(psm: i32, oem: i32) -> crate::types::TesseractConfig {
         crate::types::TesseractConfig {

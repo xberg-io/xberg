@@ -33,9 +33,12 @@
 //! token stream), strip non-alphanumeric characters except periods and commas embedded
 //! between alphanumeric characters (preserving decimal numbers like "3.14" and European
 //! format "3,14"). CJK runs use character bigrams because Chinese, Japanese, and Korean OCR
-//! engines commonly insert layout-dependent line breaks mid-word; bigrams never cross a
-//! whitespace/line boundary, so reordered lines are still detected as errors. This preserves
-//! punctuation that is semantically meaningful while ignoring decorative punctuation.
+//! engines commonly insert layout-dependent line breaks mid-word; bigrams never cross a line
+//! boundary, so reordered lines are still detected as errors. Horizontal whitespace between two
+//! CJK characters is removed from both sides before splitting, because CJK scripts do not
+//! delimit words with spaces and OCR engines differ only in whether they emit one per glyph;
+//! without this, `日 本 語` and `日本語` share no token. This preserves punctuation that is
+//! semantically meaningful while ignoring decorative punctuation.
 //!
 //! # Reading order (report-only)
 //!
@@ -108,6 +111,8 @@ pub fn compute_quality_with_structure(
         return compute_quality(extracted, ground_truth);
     }
 
+    // Leading front matter is metadata, not body text, for TF1 and SF1 alike. ~keep
+    let extracted = crate::markdown_quality::strip_leading_front_matter(extracted);
     let mut metrics = compute_quality(extracted, ground_truth);
 
     if let Some(md_gt) = ground_truth_markdown {
@@ -298,10 +303,15 @@ const INVISIBLE_CHARACTERS: [char; 5] = [
 /// NFKC folds compatibility forms — fullwidth digits (`１２３` -> `123`), ligatures (`ﬁ` ->
 /// `fi`) — into their canonical form so semantically identical text always tokenizes the same
 /// regardless of source-encoding quirks. Applied BEFORE the alphanumeric filter. ~keep
+///
+/// Horizontal whitespace between two CJK characters is then removed (see
+/// [`remove_whitespace_between_cjk`]), so one output that spaces every CJK glyph and another
+/// that does not tokenize identically. Line breaks are kept as bigram boundaries.
 pub fn tokenize(text: &str) -> Vec<String> {
     let text = strip_markdown_links(text);
     let text: String = text.chars().filter(|c| !INVISIBLE_CHARACTERS.contains(c)).collect();
     let text: String = text.nfkc().collect();
+    let text = remove_whitespace_between_cjk(&text);
     let tokens = text
         .to_lowercase()
         .replace('|', " ")
@@ -339,7 +349,9 @@ fn normalize_numeric_token(token: String) -> String {
 /// Expand CJK script runs into overlapping bigrams while preserving non-CJK tokens.
 ///
 /// The CJK accumulator is scoped to a single whitespace-delimited token (line/word) and is
-/// always flushed at that boundary — bigrams never span a whitespace or line break. Bigrams
+/// always flushed at that boundary — bigrams never span a whitespace or line break. Spaces
+/// between two CJK characters are already gone (see [`remove_whitespace_between_cjk`]), so
+/// the boundaries left inside CJK text are line breaks. Bigrams
 /// within a contiguous CJK run (including one interrupted only by decorative punctuation) are
 /// still correct and desirable; bigrams welded across a line break are not, because that
 /// erases the very reading-order/layout information the benchmark needs to score against —
@@ -381,6 +393,44 @@ fn push_cjk_bigrams(result: &mut Vec<String>, run: &mut String) {
         result.extend(characters.windows(2).map(|pair| pair.iter().collect()));
     }
     run.clear();
+}
+
+/// Remove each run of horizontal whitespace that has a CJK character on both sides.
+///
+/// CJK scripts do not separate words with spaces, so a space between two CJK glyphs is an OCR or
+/// typesetting convention (Tesseract's `chi_*` models emit one after every glyph), not content.
+/// It is applied to ground truth and extraction alike, so neither gains or loses tokens from the
+/// convention. Line breaks are kept: they stay bigram boundaries, which is how reordered lines are
+/// detected. A run next to a non-CJK character (`東京 Tokyo`) is kept, so Latin and mixed-script
+/// tokenization is unchanged.
+fn remove_whitespace_between_cjk(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut pending_whitespace = String::new();
+    let mut previous_is_cjk = false;
+    for character in text.chars() {
+        if is_horizontal_whitespace(character) {
+            pending_whitespace.push(character);
+            continue;
+        }
+        let is_cjk = is_cjk_character(character);
+        if !(previous_is_cjk && is_cjk) {
+            out.push_str(&pending_whitespace);
+        }
+        pending_whitespace.clear();
+        out.push(character);
+        previous_is_cjk = is_cjk;
+    }
+    out.push_str(&pending_whitespace);
+    out
+}
+
+/// Whitespace that does not end a line.
+fn is_horizontal_whitespace(character: char) -> bool {
+    character.is_whitespace()
+        && !matches!(
+            character,
+            '\n' | '\u{0b}' | '\u{0c}' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}'
+        )
 }
 
 /// Whether a character belongs to a Chinese, Japanese, or Korean script block.

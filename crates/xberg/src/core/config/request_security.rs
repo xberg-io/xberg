@@ -201,6 +201,7 @@ pub(crate) fn resolve_caller_extraction_config(
     }
     let caller_json = caller
         .map(|caller| {
+            check_caller_tessdata_model(operator, caller)?;
             let mut caller = caller.clone();
             merge_html_override(operator, &mut caller)?;
             Ok::<_, String>(caller.to_string())
@@ -252,6 +253,14 @@ pub(crate) fn merge_html_override(operator: &super::ExtractionConfig, caller: &m
 /// egress comes from the operator, and resource limits can only tighten.
 pub(crate) fn adopt_operator_policy(config: &mut super::ExtractionConfig, operator: &super::ExtractionConfig) {
     adopt_operator_crawl_egress(config, operator);
+    // ~keep A caller `"ocr": null` drops the operator's section, and its set with it; carry that
+    // set on the top level so the caller cannot change the set by removing the section.
+    config.tessdata_model = if config.ocr.is_some() {
+        operator.tessdata_model
+    } else {
+        operator_section_model(operator).or(operator.tessdata_model)
+    };
+    adopt_operator_tessdata_model(config.ocr.as_mut(), operator.ocr.as_ref());
     config.concurrency = operator.concurrency.clone();
     #[cfg(feature = "html")]
     preserve_operator_css_file(config.html_output.as_mut(), operator.html_output.as_ref());
@@ -273,6 +282,7 @@ pub(crate) fn adopt_file_operator_policy(
     effective: &super::ExtractionConfig,
 ) {
     adopt_file_operator_crawl_egress(config, effective);
+    adopt_operator_tessdata_model(config.ocr.as_mut(), effective.ocr.as_ref());
     #[cfg(feature = "html")]
     preserve_operator_css_file(config.html_output.as_mut(), effective.html_output.as_ref());
     if let Some(timeout) = config.timeout_secs {
@@ -284,6 +294,74 @@ pub(crate) fn adopt_file_operator_policy(
     #[cfg(feature = "transcription-types")]
     if let Some(transcription) = config.transcription.as_mut() {
         tighten_transcription_limits(transcription, effective.transcription.as_ref());
+    }
+}
+
+fn operator_section_model(operator: &super::ExtractionConfig) -> Option<super::TessdataModel> {
+    operator.ocr.as_ref().and_then(|ocr| ocr.tessdata_model)
+}
+
+/// Reject a caller `tessdata_model` or `ocr.tessdata_model` that differs from what the operator's
+/// config holds in the same place (its effective set where it holds none): the set decides what
+/// the server downloads and caches. Echoing the operator's config, including a mixed one with a
+/// different set per field, is allowed. A value that is not a set name is left to config
+/// deserialization, which reports it as invalid.
+pub(crate) fn check_caller_tessdata_model(operator: &super::ExtractionConfig, caller: &Value) -> Result<(), String> {
+    let effective = operator.effective_tessdata_model();
+    for (pointer, path, expected) in [
+        (
+            "/tessdata_model",
+            "tessdata_model",
+            operator.tessdata_model.unwrap_or(effective),
+        ),
+        (
+            "/ocr/tessdata_model",
+            "ocr.tessdata_model",
+            operator_section_model(operator).unwrap_or(effective),
+        ),
+    ] {
+        let Some(value) = caller.pointer(pointer).filter(|value| !value.is_null()) else {
+            continue;
+        };
+        if let Ok(requested) = serde_json::from_value::<super::TessdataModel>(value.clone())
+            && requested != expected
+        {
+            return Err(format!("Caller extraction config may not set {path}"));
+        }
+    }
+    Ok(())
+}
+
+/// Reject a top-level `tessdata_model` in a per-input config with a message that says where it
+/// belongs, instead of an unknown-field error, and drop it when it restates the request's set.
+pub(crate) fn strip_per_input_tessdata_model(
+    effective: &super::ExtractionConfig,
+    input: &mut Value,
+) -> Result<(), String> {
+    let Some(object) = input.as_object_mut() else {
+        return Ok(());
+    };
+    let Some(value) = object.get("tessdata_model") else {
+        return Ok(());
+    };
+    let restated = value.is_null()
+        || serde_json::from_value::<super::TessdataModel>(value.clone())
+            .is_ok_and(|model| model == effective.tessdata_model.unwrap_or(effective.effective_tessdata_model()));
+    if !restated {
+        return Err(
+            "Per-input config may not set tessdata_model: the request's Tesseract model set applies to every input"
+                .to_string(),
+        );
+    }
+    object.remove("tessdata_model");
+    Ok(())
+}
+
+/// A caller `ocr` object replaces the operator's, so restore the operator's Tesseract model set:
+/// it selects what the server downloads and caches. `None` inherits the top-level set.
+fn adopt_operator_tessdata_model(ocr: Option<&mut super::OcrConfig>, operator: Option<&super::OcrConfig>) {
+    if let Some(ocr) = ocr {
+        ocr.tessdata_model = operator.and_then(|operator| operator.tessdata_model);
     }
 }
 

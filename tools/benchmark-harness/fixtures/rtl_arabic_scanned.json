@@ -16,6 +16,7 @@
     "unstructured"
   ],
   "metadata": {
+    "family": "rtl_arabic",
     "description": "Image-only one-page Arabic right-to-left PDF rasterized at 300 DPI from the authored native fixture",
     "category": "pdf-scanned",
     "size_class": "small",

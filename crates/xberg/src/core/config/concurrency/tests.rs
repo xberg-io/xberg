@@ -242,6 +242,35 @@ fn test_resolve_thread_budget_clamps_to_one() {
     assert_eq!(resolve_thread_budget(Some(&config)), 1);
 }
 
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
+#[test]
+fn uninitialized_budget_follows_the_callers_max_threads() {
+    let config = ConcurrencyConfig {
+        max_threads: Some(3),
+        max_concurrent_ocr: None,
+    };
+    assert_eq!(installed_budget_or_resolved(0, Some(&config)), 3);
+}
+
+#[cfg(any(
+    all(sceptre_ocr, not(target_arch = "wasm32")),
+    paddle_ocr,
+    all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+))]
+#[test]
+fn installed_budget_wins_over_a_later_callers_max_threads() {
+    let config = ConcurrencyConfig {
+        max_threads: Some(3),
+        max_concurrent_ocr: None,
+    };
+    assert_eq!(installed_budget_or_resolved(5, Some(&config)), 5);
+    assert_eq!(installed_budget_or_resolved(5, None), 5);
+}
+
 /// A config that sets no maximum takes the same default cap, asserted
 /// against an injected core count for the same reason.
 #[test]

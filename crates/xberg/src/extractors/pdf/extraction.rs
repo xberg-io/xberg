@@ -350,6 +350,27 @@ fn table_stage_failure_warning(stage: &str, error: &impl std::fmt::Display) -> c
 }
 
 #[cfg(feature = "pdf")]
+/// The warning for white text dropped where no painted content lies under it, naming each page
+/// (1-indexed) with the spans it lost. `None` when nothing was dropped.
+fn dropped_white_text_warning(dropped: &[(usize, usize)]) -> Option<crate::types::ProcessingWarning> {
+    if dropped.is_empty() {
+        return None;
+    }
+    let total: usize = dropped.iter().map(|&(_, spans)| spans).sum();
+    let pages = dropped
+        .iter()
+        .map(|&(page_index, spans)| format!("{} ({spans})", page_index + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("pdf_white_text"),
+        message: std::borrow::Cow::Owned(format!(
+            "Dropped {total} white text span(s) that sit on no painted content, by page (spans): {pages}. \
+             Set pdf_options.keep_white_text to keep them."
+        )),
+    })
+}
+
 fn extract_annotations_with_empty_body_fallback(
     doc: &mut crate::pdf::native::NativeDocument,
     requested: bool,
@@ -397,22 +418,22 @@ fn extract_annotations_with_empty_body_fallback(
         });
     }
 
-    let fallback = (recovered_count > 0).then_some(AnnotationTextFallback {
-        native_pages,
+    let fallback = (recovered_count > 0).then(|| AnnotationTextFallback {
+        native_pages: native_pages.into_iter().map(str::to_owned).collect(),
         annotation_pages,
     });
     (None, fallback, warnings)
 }
 
 #[cfg(feature = "pdf")]
-fn native_page_texts(
-    native_text: &str,
-    page_contents: Option<&[PageContent]>,
+fn native_page_texts<'a>(
+    native_text: &'a str,
+    page_contents: Option<&'a [PageContent]>,
     boundaries: Option<&[PageBoundary]>,
     page_count: usize,
-) -> Vec<String> {
+) -> Vec<&'a str> {
     if let Some(pages) = page_contents.filter(|pages| pages.len() == page_count) {
-        return pages.iter().map(|page| page.content.clone()).collect();
+        return pages.iter().map(|page| page.content.as_str()).collect();
     }
     if let Some(boundaries) = boundaries.filter(|boundaries| boundaries.len() == page_count) {
         return boundaries
@@ -421,14 +442,13 @@ fn native_page_texts(
                 native_text
                     .get(boundary.byte_start..boundary.byte_end)
                     .unwrap_or_default()
-                    .to_string()
             })
             .collect();
     }
     if native_text.trim().is_empty() {
-        return vec![String::new(); page_count];
+        return vec![""; page_count];
     }
-    vec![native_text.to_string()]
+    vec![native_text]
 }
 
 #[cfg(feature = "pdf")]
@@ -635,6 +655,7 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(feature = "layout-detection"))]
     let layout_hints = None::<&[Vec<crate::pdf::structure::types::LayoutHint>]>;
     let _span = tracing::debug_span!("extract_xberg_native_pdf").entered();
+    let _reading_orders = crate::pdf::native::hierarchy::ReadingOrderMemoScope::begin(doc.doc.source_bytes.len());
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
     let artifacts =
         crate::pdf::native::hierarchy::ArtifactRetention::from_content_filter(config.content_filter.as_ref());
@@ -689,6 +710,20 @@ pub(crate) fn extract_all_from_native_document(
     };
     let page_structure_was_implicitly_tracked =
         force_annotation_page_tracking && !crate::pdf::native::text::page_boundaries_required(config);
+
+    let ocr_inline_images = super::inline_image_ocr_enabled(config);
+    let needs_structured = needs_structured_extraction(
+        hierarchy_enabled,
+        config.include_document_structure,
+        &config.output_format,
+        ocr_inline_images,
+        config.content_filter.is_some(),
+    );
+    if needs_structured && !config.force_ocr {
+        // The structure pass reads every page again in preserved script geometry; the text pass's
+        // content run of each page then serves that read too. ~keep
+        doc.doc.expect_preserved_script_geometry();
+    }
 
     #[cfg_attr(not(feature = "layout-detection"), allow(unused_mut))]
     let (mut native_text, mut boundaries, mut page_contents, mut pdf_metadata, financial_rows) =
@@ -750,19 +785,15 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(feature = "layout-detection"))]
     let _ = layout_hints;
 
-    let ocr_inline_images = super::inline_image_ocr_enabled(config);
-    let needs_structured = needs_structured_extraction(
-        hierarchy_enabled,
-        config.include_document_structure,
-        &config.output_format,
-        ocr_inline_images,
-        config.content_filter.is_some(),
-    );
     if cut_short && needs_structured {
         skipped_stages.push("document structure");
     }
     let needs_structured = needs_structured && !cut_short;
     let retain_hierarchy_segments = needs_structured && !config.force_ocr;
+
+    // The text passes are done; table ruling decodes the Forms it walks on its own. ~keep
+    doc.doc.release_form_stream_cache();
+    xberg_native_pdf::release_memory::return_freed_memory_to_os();
 
     let tables_requested = config.pdf_options.as_ref().is_none_or(|opts| opts.extract_tables);
     if cut_short && tables_requested {
@@ -921,6 +952,9 @@ pub(crate) fn extract_all_from_native_document(
         (Vec::new(), Vec::new(), None, Vec::new())
     };
     extraction_warnings.extend(table_warnings);
+    // The table and structure passes are done with their per-page buffers; give the OS the pages
+    // before annotations, images and the output assembly allocate on top. ~keep
+    xberg_native_pdf::release_memory::return_freed_memory_to_os();
 
     let (annotations, annotation_text_fallback, annotation_warnings) = extract_annotations_with_empty_body_fallback(
         doc,
@@ -1287,6 +1321,8 @@ pub(crate) fn extract_all_from_native_document(
         }
     }
 
+    extraction_warnings.extend(dropped_white_text_warning(&doc.doc.dropped_white_text_spans()));
+
     if !skipped_stages.is_empty() {
         extraction_warnings.push(crate::types::ProcessingWarning {
             source: std::borrow::Cow::Borrowed("pdf_time_limit"),
@@ -1386,15 +1422,13 @@ fn apply_reading_order_reordering(
                 .detector_classes
                 .get(page_idx)
                 .filter(|classes| classes.len() == hints.len())
-            && let Some(page_number) = u32::try_from(page_idx).ok().and_then(|index| index.checked_add(1))
-            && let Some(area) = layout_region_text::page_area(&doc.doc, page_idx, hints)
         {
             let (text, pending) =
-                layout_region_text::assemble(page_number, &native_spans, &spans, &span_order, hints, classes, area);
+                layout_region_text::assemble(&doc.doc, page_idx, &native_spans, &spans, &span_order, hints, classes);
             region_evidence.extend(pending);
             text
         } else {
-            assemble_upright_layout_text(&native_spans, &span_order)
+            assemble_upright_layout_text(&doc.doc, page_idx, &native_spans, &span_order)
         };
         reordered_pages.push(text);
     }
@@ -1474,10 +1508,78 @@ fn join_pages_with_boundaries(
 #[cfg(test)]
 mod tests {
     use super::{
-        hierarchy_cluster_count, map_native_text_error, needs_structured_extraction, page_has_exact_text_block,
-        retain_segments_inside_page_margins, table_stage_failure_warning,
+        dropped_white_text_warning, hierarchy_cluster_count, map_native_text_error, needs_structured_extraction,
+        page_has_exact_text_block, retain_segments_inside_page_margins, table_stage_failure_warning,
     };
     use crate::core::config::OutputFormat;
+
+    #[test]
+    fn dropped_white_text_warning_names_each_page_and_its_spans() {
+        assert!(dropped_white_text_warning(&[]).is_none());
+
+        let warning = dropped_white_text_warning(&[(0, 2), (4, 1)]).expect("spans were dropped");
+
+        assert_eq!(warning.source, "pdf_white_text");
+        assert_eq!(
+            warning.message,
+            "Dropped 3 white text span(s) that sit on no painted content, by page (spans): 1 (2), 5 (1). \
+             Set pdf_options.keep_white_text to keep them."
+        );
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn native_page_texts_borrows_page_text_instead_of_copying_it() {
+        let page = |page_number: u32, content: &str| crate::types::PageContent {
+            page_number,
+            content: content.to_owned(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+            geometry: None,
+            viewports: None,
+            image_preprocessing: None,
+        };
+        let pages = vec![page(1, "first"), page(2, "  ")];
+
+        let texts = super::native_page_texts("first\n\n  ", Some(&pages), None, 2);
+
+        assert_eq!(texts, ["first", "  "]);
+        assert_eq!(texts[0].as_ptr(), pages[0].content.as_ptr());
+        assert_eq!(texts[1].as_ptr(), pages[1].content.as_ptr());
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn native_page_texts_slices_boundaries_and_falls_back_to_the_whole_text() {
+        let text = "one\n\ntwo";
+        let boundaries = [
+            crate::types::PageBoundary {
+                byte_start: 0,
+                byte_end: 3,
+                page_number: 1,
+            },
+            crate::types::PageBoundary {
+                byte_start: 5,
+                byte_end: 8,
+                page_number: 2,
+            },
+        ];
+
+        assert_eq!(
+            super::native_page_texts(text, None, Some(&boundaries), 2),
+            ["one", "two"]
+        );
+        assert_eq!(super::native_page_texts(text, None, None, 2), [text]);
+        assert_eq!(super::native_page_texts(" \n", None, None, 3), ["", "", ""]);
+    }
 
     #[test]
     fn native_text_cancellation_remains_a_typed_cancellation() {

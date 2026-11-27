@@ -88,3 +88,74 @@ impl<K: Eq + std::hash::Hash + Copy, V> BoundedEntryCache<K, V> {
         self.map.len()
     }
 }
+
+/// Cache bounded by an estimated byte budget that admits entries while the
+/// budget lasts and never evicts.
+///
+/// Whole-document passes read pages 0..N one after another. Under LRU or FIFO
+/// eviction a budget smaller than the document makes every later pass miss on
+/// every page, because each page is evicted before the next pass reaches it;
+/// admitting until full keeps the first pages that fit warm for every pass. ~keep
+pub(crate) struct AdmissionBudgetCache<K: Eq + std::hash::Hash, V> {
+    map: HashMap<K, (V, usize)>,
+    used_bytes: usize,
+    budget_bytes: usize,
+}
+
+impl<K: Eq + std::hash::Hash, V> AdmissionBudgetCache<K, V> {
+    pub(crate) fn new(budget_bytes: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            used_bytes: 0,
+            budget_bytes,
+        }
+    }
+
+    pub(crate) fn get(&self, key: &K) -> Option<&V> {
+        self.map.get(key).map(|(value, _)| value)
+    }
+
+    /// Whether [`Self::insert`] would store an entry of `bytes` under `key`.
+    pub(crate) fn admits(&self, key: &K, bytes: usize) -> bool {
+        let replaced = self.map.get(key).map_or(0, |(_, bytes)| *bytes);
+        bytes <= self.budget_bytes - (self.used_bytes - replaced)
+    }
+
+    /// The bytes in use once an entry of `bytes` is stored under `key`.
+    pub(crate) fn used_bytes_with(&self, key: &K, bytes: usize) -> usize {
+        let replaced = self.map.get(key).map_or(0, |(_, bytes)| *bytes);
+        self.used_bytes - replaced + bytes
+    }
+
+    /// Store `value` under `key`, replacing an existing entry, when the budget
+    /// still fits it. Returns whether the value was stored; a value that does
+    /// not fit leaves any existing entry in place.
+    pub(crate) fn insert(&mut self, key: K, value: V, bytes: usize) -> bool {
+        if !self.admits(&key, bytes) {
+            return false;
+        }
+        let replaced = self.map.get(&key).map_or(0, |(_, bytes)| *bytes);
+        self.used_bytes = self.used_bytes - replaced + bytes;
+        self.map.insert(key, (value, bytes));
+        true
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.map.clear();
+        self.used_bytes = 0;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn used_bytes(&self) -> usize {
+        self.used_bytes
+    }
+
+    pub(crate) fn budget_bytes(&self) -> usize {
+        self.budget_bytes
+    }
+}

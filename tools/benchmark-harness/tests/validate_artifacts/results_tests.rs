@@ -27,6 +27,46 @@ fn accepts_exact_raw_contract_for_every_format_cohort() {
 }
 
 #[test]
+fn smoke_profile_accepts_exactly_the_smoke_cells() {
+    for (cohort, cells) in [(Cohort::Native, 4), (Cohort::Ocr, 1), (Cohort::Images, 1)] {
+        let scenario = artifact_scenario_for(cohort, MatrixProfile::Smoke);
+        let message =
+            validate(&scenario.args).unwrap_or_else(|error| panic!("{} smoke failed: {error}", cohort.as_str()));
+        assert_eq!(
+            message,
+            format!("validated {cells} {} benchmark artifacts", cohort.as_str())
+        );
+    }
+}
+
+#[test]
+fn full_profile_rejects_a_smoke_cell_set() {
+    let mut scenario = artifact_scenario_for(Cohort::Native, MatrixProfile::Smoke);
+    scenario.args.profile = MatrixProfile::Full;
+
+    assert_err_contains(validate(&scenario.args), "artifacts mismatch; missing=");
+}
+
+#[test]
+fn smoke_profile_rejects_cells_outside_the_smoke_set() {
+    let mut scenario = artifact_scenario(Cohort::Native);
+    scenario.args.profile = MatrixProfile::Smoke;
+
+    assert_err_contains(validate(&scenario.args), "allowed artifacts mismatch");
+}
+
+#[test]
+fn smoke_profile_rejects_a_cohort_it_does_not_run() {
+    let mut scenario = artifact_scenario(Cohort::Office);
+    scenario.args.profile = MatrixProfile::Smoke;
+
+    assert_err_contains(
+        validate(&scenario.args),
+        "cohort office has no cells in the Smoke profile",
+    );
+}
+
+#[test]
 fn rejects_provenance_schema_2_without_required_measurement_contract() {
     let scenario = artifact_scenario(Cohort::Native);
     tamper_json(&provenance_path(&scenario, 0), |value| {
@@ -362,6 +402,43 @@ fn rejects_source_sha_mismatch() {
         value["repository"]["commit"] = serde_json::Value::String("d".repeat(40));
     });
     assert_err_contains(validate(&scenario.args), "source SHA mismatch");
+}
+
+fn ocr_scenario_index(scenario: &ArtifactScenario, is_auto_ocr: bool) -> usize {
+    scenario
+        .contract
+        .matrix
+        .iter()
+        .position(|entry| {
+            entry.framework.starts_with("xberg-")
+                && entry.framework.contains("-auto-ocr") == is_auto_ocr
+                && !entry.framework.contains("paddle")
+        })
+        .expect("matrix entry")
+}
+
+fn set_every_ocr_status(scenario: &ArtifactScenario, index: usize, status: &str) {
+    tamper_json(&results_path(scenario, index), |value| {
+        for result in value.as_array_mut().unwrap() {
+            result["ocr_status"] = serde_json::Value::String(status.to_string());
+        }
+    });
+}
+
+#[test]
+fn accepts_auto_ocr_rows_that_declined_to_ocr() {
+    let scenario = artifact_scenario(Cohort::Ocr);
+    let index = ocr_scenario_index(&scenario, true);
+    set_every_ocr_status(&scenario, index, "not_used");
+    validate(&scenario.args).expect("auto-ocr rows may report OCR as not used");
+}
+
+#[test]
+fn rejects_forced_ocr_rows_that_did_not_use_ocr() {
+    let scenario = artifact_scenario(Cohort::Ocr);
+    let index = ocr_scenario_index(&scenario, false);
+    set_every_ocr_status(&scenario, index, "not_used");
+    assert_err_contains(validate(&scenario.args), "OCR status mismatch");
 }
 
 #[test]

@@ -29,7 +29,7 @@ struct Proposal {
 }
 
 pub(super) struct Authority {
-    chars: Vec<TextChar>,
+    chars: Arc<Vec<TextChar>>,
     by_y: Vec<usize>,
     fonts: HashMap<String, Option<Arc<FontInfo>>>,
 }
@@ -56,7 +56,7 @@ impl Authority {
                 }
             }
         }
-        let chars = doc.extract_chars(page).ok()?;
+        let chars = doc.cached_page_chars(page).ok()?;
         let mut by_y: Vec<_> = (0..chars.len()).filter(|&i| chars[i].origin_y.is_finite()).collect();
         by_y.sort_by(|&a, &b| chars[a].origin_y.total_cmp(&chars[b].origin_y));
         Some(Self { chars, by_y, fonts })
@@ -74,7 +74,7 @@ impl Authority {
     }
 
     fn matches(&self, glyph: &TextChar, span: &TextSpan) -> bool {
-        let Some(font) = self.fonts.get(&span.font_name).and_then(Option::as_ref) else {
+        let Some(font) = self.fonts.get(span.font_name.as_str()).and_then(Option::as_ref) else {
             return false;
         };
         font.has_explicit_widths()

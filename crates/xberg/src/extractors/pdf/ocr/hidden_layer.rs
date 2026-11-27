@@ -46,7 +46,7 @@ pub(super) fn stock_backend(config: &ExtractionConfig) -> Option<Arc<dyn OcrBack
         || ocr.backend != "tesseract"
         || ocr.tesseract_config.is_some()
         || ocr.pipeline.is_some()
-        || ocr.backend_options.is_some()
+        || ocr.has_tuning_backend_options()
         || ocr.output_format.is_some()
         || ocr.element_config.is_some()
         || ocr.quality_thresholds.is_some()

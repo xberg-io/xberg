@@ -113,23 +113,14 @@ cargo build --release -p xberg-cli
 
 ### Platform-Specific Requirements
 
-#### ONNX Runtime (for embeddings)
+#### ONNX Runtime (for embeddings, layout detection and ONNX OCR)
 
-If using embeddings functionality, ONNX Runtime must be installed:
-
-```bash
-# macOS
-brew install onnxruntime
-
-# Ubuntu/Debian
-sudo apt install libonnxruntime libonnxruntime-dev
-
-# Windows (MSVC)
-scoop install onnxruntime
-# OR download from https://github.com/microsoft/onnxruntime/releases
-```
-
-Without ONNX Runtime, embeddings will raise `MissingDependencyError` with installation instructions.
+No separate install is needed. `cargo install xberg-cli` links ONNX Runtime into the binary. The
+Linux (glibc) and macOS release archives ship `libonnxruntime` next to the `xberg` binary instead,
+and xberg loads it only the first time a model runs, so text-only extraction never loads it. Keep
+the library beside the binary when you move it, or set `ORT_DYLIB_PATH` to the absolute path of an
+ONNX Runtime library (for example a GPU-enabled build from
+<https://github.com/microsoft/onnxruntime/releases>).
 
 #### OCR Support (Optional)
 

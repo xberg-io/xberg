@@ -125,6 +125,49 @@ pub(crate) fn resolve_relationships(doc: &mut InternalDocument) {
     }
 }
 
+/// Open a list, quote or group node for a container-start element and push it on `stack`.
+fn push_container_start(
+    ds: &mut DocumentStructure,
+    stack: &mut Vec<(u16, NodeIndex)>,
+    elem_to_node: &mut [Option<NodeIndex>],
+    elem: &InternalElement,
+    elem_idx: usize,
+) {
+    pop_stack_to_depth(stack, elem.depth);
+    let is_record = crate::types::internal::is_record_group(elem.attributes.as_ref());
+    let content = match elem.kind {
+        ElementKind::ListStart { ordered } => NodeContent::List { ordered },
+        ElementKind::QuoteStart => NodeContent::Quote,
+        ElementKind::GroupStart => NodeContent::Group {
+            label: elem
+                .attributes
+                .as_ref()
+                .and_then(|a| a.get("label").cloned())
+                .filter(|_| !is_record),
+            heading_level: None,
+            heading_text: None,
+        },
+        _ => unreachable!("variant already checked by is_container_start()"),
+    };
+    let node_idx = push_node(ds, stack, content, elem, elem_idx as u32);
+    if is_record {
+        drop_record_label(&mut ds.nodes[node_idx.0 as usize]);
+    }
+    elem_to_node[elem_idx] = Some(node_idx);
+    stack.push((elem.depth, node_idx));
+}
+
+/// A record's group label is an internal rendering marker, not a source label, so it
+/// stays out of the public node.
+fn drop_record_label(node: &mut DocumentNode) {
+    if let Some(attributes) = node.attributes.as_mut() {
+        attributes.remove("label");
+        if attributes.is_empty() {
+            node.attributes = None;
+        }
+    }
+}
+
 /// Inner implementation that assumes relationships are already resolved.
 ///
 /// Takes `&mut` so it can move data out of elements via `std::mem::take`,
@@ -159,20 +202,7 @@ fn process_document_element(
     let elem = &doc.elements[elem_idx];
 
     if elem.kind.is_container_start() {
-        pop_stack_to_depth(stack, elem.depth);
-        let content = match elem.kind {
-            ElementKind::ListStart { ordered } => NodeContent::List { ordered },
-            ElementKind::QuoteStart => NodeContent::Quote,
-            ElementKind::GroupStart => NodeContent::Group {
-                label: elem.attributes.as_ref().and_then(|a| a.get("label").cloned()),
-                heading_level: None,
-                heading_text: None,
-            },
-            _ => unreachable!("variant already checked by is_container_start()"),
-        };
-        let node_idx = push_node(ds, stack, content, elem, elem_idx as u32);
-        elem_to_node[elem_idx] = Some(node_idx);
-        stack.push((elem.depth, node_idx));
+        push_container_start(ds, stack, elem_to_node, elem, elem_idx);
         return;
     }
 

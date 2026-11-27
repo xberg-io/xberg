@@ -482,7 +482,13 @@ async fn unkeyable_reads_are_never_retained() {
 #[test]
 fn model_identity_tracks_override_traineddata_and_osd() {
     let directory = tempfile::tempdir().unwrap();
-    let identity = || model_identity(&ModelFiles::resolve(vec!["eng".into()], Some(directory.path()))?);
+    let identity = || {
+        model_identity(&ModelFiles::resolve(
+            vec!["eng".into()],
+            Some(directory.path()),
+            Default::default(),
+        )?)
+    };
     std::fs::write(directory.path().join("eng.traineddata"), b"fake model a").unwrap();
     let first = identity().expect("an override directory holding eng resolves");
     assert_eq!(identity(), Some(first), "unchanged files hash identically");
@@ -1005,7 +1011,7 @@ async fn recent_model_with_an_unchanged_stamp_is_rechecked_before_a_hit() {
 
     std::fs::write(fixture._models.path().join("eng.traineddata"), b"fake model b").unwrap();
     let mut snapshot = Arc::get_mut(&mut reuse).unwrap().models.take().unwrap().unwrap();
-    let files = ModelFiles::resolve(vec!["eng".into()], Some(fixture._models.path())).unwrap();
+    let files = ModelFiles::resolve(vec!["eng".into()], Some(fixture._models.path()), Default::default()).unwrap();
     assert_ne!(model_identity(&files), Some(snapshot.digest));
     // Simulate a filesystem reporting the same stamp for a same-length write in one clock tick. ~keep
     snapshot.files = files;

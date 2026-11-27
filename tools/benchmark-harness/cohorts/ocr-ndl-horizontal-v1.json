@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "name": "ocr-ndl-horizontal-v1",
+  "batch_size": 5,
+  "ocr_enabled": true,
+  "fixtures": [
+    "ndl_horizontal_01.json",
+    "ndl_horizontal_02.json",
+    "ndl_horizontal_03.json",
+    "ndl_horizontal_04.json",
+    "ndl_horizontal_05.json"
+  ]
+}

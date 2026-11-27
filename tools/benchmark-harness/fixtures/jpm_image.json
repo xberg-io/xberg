@@ -4,6 +4,7 @@
 	"file_size": 11830,
 	"expected_frameworks": ["xberg"],
 	"metadata": {
+		"family": "invoice_image",
 		"description": "JPEG 2000 multi-component invoice image (JPM extension)",
 		"category": "image",
 		"size_class": "small",

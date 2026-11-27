@@ -17,6 +17,16 @@ fn associate_matching_suffixes(
     page: &NativePageSegments,
     literal_primes: bool,
 ) -> bool {
+    // Only an owner of the requested kind can move a suffix; the inventory below is skipped
+    // without one. ~keep
+    let has_owners = if literal_primes {
+        page.has_literal_primes()
+    } else {
+        page.has_script_owners()
+    };
+    if !has_owners {
+        return false;
+    }
     let segments: Vec<_> = paragraphs
         .iter()
         .flat_map(|paragraph| &paragraph.lines)

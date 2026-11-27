@@ -64,11 +64,13 @@ pub(super) fn prepare_with_dpi_policy(
         gray_input: std::cell::Cell::new(false),
     };
     let mut assessment = Assessment {
-        policy: config
-            .preprocessing
-            .clone()
-            .map(Some)
-            .or_else(|| config.known_full_page_scan.then(|| Some(Default::default()))),
+        policy: match &config.preprocessing {
+            Some(policy) => Some(Some(policy.clone())),
+            None if config.known_full_page_scan => {
+                Some(Some(super::known_full_page_scan_preprocessing(config.tessdata_model)))
+            }
+            None => None,
+        },
         maximum_pixels: u64::MAX,
     };
     // Full, half, quarter and eighth are the only JPEG output candidates. ~keep
@@ -214,6 +216,7 @@ impl Preparation<'_> {
             height,
             self.config.preprocessing.as_ref(),
             self.config.known_full_page_scan,
+            self.config.tessdata_model,
         );
         let policy = preprocessing.as_deref();
         self.gray_input.set(
@@ -290,7 +293,7 @@ impl Preparation<'_> {
             || normalized.1 <= height
             || !self.can_shrink_upscale(decoded)
             || (!self.allow_bounded_inferred_upscale && self.source_dpi(width, height).is_none())
-            || self.known_native_fits(normalized, Some(policy))?
+            || self.requested_upscale_fits(width, height, normalized, source_dpi, policy)?
         {
             return Ok(None);
         }
@@ -338,6 +341,29 @@ impl Preparation<'_> {
                 )
                 .is_ok())
         })
+    }
+
+    /// Both the final native phase and the resize that produces it must fit: a slight upscale can leave
+    /// the native phase under the limit while the source, intermediate and destination RGB of the resize
+    /// together exceed it. ~keep
+    fn requested_upscale_fits(
+        &self,
+        width: u32,
+        height: u32,
+        normalized: (u32, u32),
+        source_dpi: f64,
+        policy: &ImagePreprocessingConfig,
+    ) -> crate::Result<bool> {
+        Ok(self.known_native_fits(normalized, Some(policy))?
+            && dpi_workspace::check_known_dpi_resize(
+                width,
+                height,
+                source_dpi,
+                &ocr_dpi_config(policy, self.images),
+                self.bytes.len(),
+                self.limits.max_content_size,
+            )
+            .is_ok())
     }
 
     fn finish_budgeted_upscale(

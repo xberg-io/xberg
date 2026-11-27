@@ -421,7 +421,7 @@ mod tests {
             std::fs::write(bundled_models.path().join("eng.traineddata"), english).unwrap();
             bundled_models.path().to_path_buf()
         } else {
-            crate::ocr::processor::validation::resolve_tessdata_path(&["eng".into()], None)
+            crate::ocr::processor::validation::resolve_tessdata_path(&["eng".into()], None, Default::default())
                 .expect("provide pinned eng.traineddata through TESSDATA_PREFIX")
                 .into()
         };

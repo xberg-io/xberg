@@ -19,6 +19,15 @@ pub(crate) use bytes::{extract_bytes, extract_bytes_with_layout_pages};
 #[allow(unused_imports)]
 pub(crate) use file::extract_file;
 
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr-pipeline",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod tessdata_model_tests;
+
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod tests {
     use super::*;

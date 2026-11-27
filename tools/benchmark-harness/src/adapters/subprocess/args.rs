@@ -20,6 +20,14 @@ impl SubprocessAdapter {
             args.extend(["--max-threads".to_string(), max_threads.to_string()]);
         }
     }
+    pub(super) fn append_xberg_tessdata_model(&self, args: &mut Vec<String>) {
+        if self.is_xberg() && self.tessdata_model != xberg::TessdataModel::Fast {
+            args.extend([
+                "--ocr-tessdata-model".to_string(),
+                self.tessdata_model.as_str().to_string(),
+            ]);
+        }
+    }
     pub(super) fn single_file_request_args(&self, force_ocr: bool) -> Vec<String> {
         let mut args = self.request_args_from(self.single_file_args.as_deref().unwrap_or(&self.args), force_ocr);
         self.append_explicit_xberg_thread_budget(&mut args);
@@ -30,6 +38,7 @@ impl SubprocessAdapter {
             crate::config::BenchmarkMode::SingleFile => self.single_file_args.as_deref().unwrap_or(&self.args).to_vec(),
             crate::config::BenchmarkMode::Batch => self.args.clone(),
         };
+        self.append_xberg_tessdata_model(&mut args);
         match mode {
             crate::config::BenchmarkMode::SingleFile => self.append_explicit_xberg_thread_budget(&mut args),
             crate::config::BenchmarkMode::Batch
@@ -61,6 +70,7 @@ impl SubprocessAdapter {
         output_dir: impl Into<String>,
         output_format: impl Into<String>,
         disable_ocr: bool,
+        ocr_language_arg: Option<String>,
     ) -> Vec<String> {
         let mut args = vec![
             "batch-parse".to_string(),
@@ -71,10 +81,15 @@ impl SubprocessAdapter {
             "--num-workers".to_string(),
             self.batch_workers.to_string(),
             "--quiet".to_string(),
+            // lit defaults to ocria-nano once that model package is pulled; pin Tesseract, the
+            // engine family xberg uses by default, so results do not depend on host model state.
+            "--ocr-backend".to_string(),
+            "tesseract".to_string(),
         ];
         if disable_ocr {
             args.push("--no-ocr".to_string());
         }
+        args.extend(ocr_language_arg);
         args
     }
     pub(super) fn batch_sample_id(&self, file_paths: &[&Path], force_ocr: bool, output_format: OutputFormat) -> String {
@@ -90,6 +105,9 @@ impl SubprocessAdapter {
         hasher.update(&invocation_time.to_le_bytes());
         hasher.update(&(self.batch_workers as u64).to_le_bytes());
         hasher.update(&(self.effective_xberg_max_threads() as u64).to_le_bytes());
+        if self.is_xberg() && self.tessdata_model != xberg::TessdataModel::Fast {
+            hasher.update(self.tessdata_model.as_str().as_bytes());
+        }
         let output_format = output_format.to_string();
         let ocr_mode: &[u8] = match (force_ocr, self.configured_ocr_status) {
             (true, _) => b"force-ocr",

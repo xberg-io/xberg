@@ -503,11 +503,13 @@ mod tests {
 
     #[test]
     fn should_keep_issue_2275_table_carets_when_escaping_disabled() {
-        let mut builder = InternalDocumentBuilder::new("test");
-        builder.push_table_from_cells(&[vec!["Value".into()], vec!["10^9^/l".into()]], None, None);
-        let mut doc = builder.build();
-        doc.escape_markdown = false;
-        assert_eq!(render_markdown(&doc), "| Value |\n| --- |\n| 10^9^/l |\n");
+        for cell in ["10^9^/l", "10^9^ H~2~O"] {
+            let mut builder = InternalDocumentBuilder::new("test");
+            builder.push_table_from_cells(&[vec!["Value".into()], vec![cell.into()]], None, None);
+            let mut doc = builder.build();
+            doc.escape_markdown = false;
+            assert_eq!(render_markdown(&doc), format!("| Value |\n| --- |\n| {cell} |\n"));
+        }
     }
 
     #[test]

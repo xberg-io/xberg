@@ -90,6 +90,8 @@ runtime_root() {
 	root="$(runtime_root x64)"
 	mkdir -p "$root/lib"
 	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so.1.24.2"
+	ln -s libonnxruntime.so.1.24.2 "$root/lib/libonnxruntime.so.1"
+	ln -s libonnxruntime.so.1 "$root/lib/libonnxruntime.so"
 	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 'node output' x64 system
 	xberg_assert_status 0
 	xberg_assert_file "$GITHUB_WORKSPACE/node output/libonnxruntime.so.1.24.2" 'runtime bytes'
@@ -97,11 +99,32 @@ runtime_root() {
 ORT_PREFER_DYNAMIC_LINK=1
 ORT_SKIP_DOWNLOAD=1
 ORT_STRATEGY=system
-ORT_DYLIB_PATH=$root/lib/libonnxruntime.so.1.24.2
+ORT_DYLIB_PATH=$root/lib/libonnxruntime.so
 LD_LIBRARY_PATH=$root/lib:$GITHUB_WORKSPACE/node output:ambient-loader
 LIBRARY_PATH=$root/lib:$GITHUB_WORKSPACE/node output:ambient-linker
 RUSTFLAGS=-C debuginfo=1 -L $root/lib -C link-arg=-Wl,-rpath,\$ORIGIN"
 	[ ! -e "$XBERG_TRACE" ]
+}
+
+@test "Linux ORT setup should point ORT_DYLIB_PATH at the runtime, never the providers library" {
+	root="$(runtime_root x64)"
+	mkdir -p "$root/lib"
+	printf 'providers bytes\n' >"$root/lib/libonnxruntime_providers_shared.so"
+	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system
+	xberg_assert_status 0
+	[ "$(sed -n 's/^ORT_DYLIB_PATH=//p' "$GITHUB_ENV")" = "$root/lib/libonnxruntime.so" ]
+}
+
+@test "Linux ORT setup should fail without exports when the runtime has no unversioned name" {
+	root="$(runtime_root x64)"
+	mkdir -p "$root/lib"
+	printf 'providers bytes\n' >"$root/lib/libonnxruntime_providers_shared.so"
+	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so.1.24.2"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system
+	xberg_assert_status 1
+	xberg_assert_output_contains 'libonnxruntime.so missing from the staged ONNX Runtime'
+	xberg_assert_github_env ''
 }
 
 @test "Linux bundled ORT setup should stage runtime libraries without overriding Cargo strategy or flags" {

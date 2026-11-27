@@ -4564,7 +4564,11 @@ pub(super) fn heuristically_restructured_ocr_pages(
     );
 
     match result {
-        Ok(doc) if !doc.elements.is_empty() && restructured_document_retains_prose(pages, collected_tables, &doc) => {
+        Ok(mut doc)
+            if !doc.elements.is_empty() && restructured_document_retains_prose(pages, collected_tables, &doc) =>
+        {
+            promote_isolated_title_lines(&mut doc);
+            promote_lone_numbered_titles(&mut doc);
             Some(doc)
         }
         Ok(_) => None,
@@ -4576,6 +4580,178 @@ pub(super) fn heuristically_restructured_ocr_pages(
             None
         }
     }
+}
+
+/// Fewest and most words of a line read as a section title by [`promote_isolated_title_lines`].
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const ISOLATED_TITLE_WORDS: std::ops::RangeInclusive<usize> = 2..=12;
+/// Fewest words of the paragraph a title must introduce.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MIN_TITLED_PARAGRAPH_WORDS: usize = 15;
+/// Share of a title's content words that must start with a capital letter.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MIN_TITLE_CAPITALISED_SHARE: f64 = 0.75;
+/// Words a title case leaves in lower case.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const TITLE_MINOR_WORDS: &[&str] = &[
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or", "that", "the", "to", "vs", "with",
+];
+
+/// Make section headings of the title lines in a document whose type sizes gave none.
+///
+/// OCR line heights of a scanned report rarely separate its headings from its body
+/// (multi_page_scanned: every paragraph between 20 and 26 px), so the size clustering finds
+/// no heading at all. A title still reads as one: a single title-case line without closing
+/// punctuation, written once in the document, that opens a paragraph of prose. Running only
+/// when no heading was found keeps every size-derived structure as it is; the closing
+/// punctuation, title-case, single-occurrence and page-number rules keep out wrapped sentence
+/// ends, list labels, running headers and folios. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn promote_isolated_title_lines(doc: &mut crate::types::internal::InternalDocument) {
+    use crate::types::document_structure::ContentLayer;
+    use crate::types::internal::ElementKind;
+
+    if doc
+        .elements
+        .iter()
+        .any(|element| matches!(element.kind, ElementKind::Heading { .. } | ElementKind::Title))
+    {
+        return;
+    }
+    let body: Vec<usize> = doc
+        .elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| {
+            element.layer == ContentLayer::Body
+                && matches!(element.kind, ElementKind::Paragraph | ElementKind::ListItem { .. })
+        })
+        .map(|(index, _)| index)
+        .collect();
+    let mut occurrences = std::collections::HashMap::<&str, usize>::new();
+    for &index in &body {
+        *occurrences.entry(doc.elements[index].text.trim()).or_default() += 1;
+    }
+    let titles: Vec<usize> = body
+        .windows(2)
+        .filter(|pair| {
+            let (title, next) = (&doc.elements[pair[0]], &doc.elements[pair[1]]);
+            let text = title.text.trim();
+            title.kind == ElementKind::Paragraph
+                && occurrences.get(text) == Some(&1)
+                && is_isolated_title(text)
+                && next.text.split_whitespace().count() >= MIN_TITLED_PARAGRAPH_WORDS
+        })
+        .map(|pair| pair[0])
+        .collect();
+    for index in titles {
+        doc.elements[index].kind = ElementKind::Heading { level: 2 };
+    }
+}
+
+/// Most words after the number of a numbered line read as a title by
+/// [`promote_lone_numbered_titles`].
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MAX_NUMBERED_TITLE_WORDS: usize = 5;
+/// Fewest words of the paragraph a numbered title must introduce.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MIN_NUMBERED_TITLED_PARAGRAPH_WORDS: usize = 8;
+
+/// Make section headings of the numbered title lines the list pass read as one-item lists.
+///
+/// A scanned action plan titles each commitment "4. Leading" or "2. Good progress" above a
+/// sentence (nougat_005); the marker makes each a separate ordered list of one item. A real
+/// list item has a neighbouring item, so only an ordered item with no list item on either
+/// side, a few words of text without closing punctuation, and a paragraph of prose after it
+/// becomes a heading, keeping its number. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn promote_lone_numbered_titles(doc: &mut crate::types::internal::InternalDocument) {
+    use crate::types::document_structure::ContentLayer;
+    use crate::types::internal::ElementKind;
+
+    let body: Vec<usize> = doc
+        .elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| element.layer == ContentLayer::Body)
+        .map(|(index, _)| index)
+        .collect();
+    let is_list_item = |index: Option<&usize>| {
+        index.is_some_and(|&index| matches!(doc.elements[index].kind, ElementKind::ListItem { .. }))
+    };
+    let titles: Vec<usize> = body
+        .iter()
+        .enumerate()
+        .filter(|&(position, &index)| {
+            let element = &doc.elements[index];
+            let Some(next) = body.get(position + 1).map(|&next| &doc.elements[next]) else {
+                return false;
+            };
+            element.kind == (ElementKind::ListItem { ordered: true })
+                && element.list_item_source_label().is_some()
+                && !is_list_item(position.checked_sub(1).and_then(|previous| body.get(previous)))
+                && is_numbered_title_text(element.text.trim())
+                && next.kind == ElementKind::Paragraph
+                && next.text.split_whitespace().count() >= MIN_NUMBERED_TITLED_PARAGRAPH_WORDS
+        })
+        .map(|(_, &index)| index)
+        .collect();
+    for index in titles {
+        let element = &mut doc.elements[index];
+        let Some(label) = element.take_list_item_source_label() else {
+            continue;
+        };
+        let shift = label.len() + 1;
+        let removed = element.text.len() - element.text.trim_start().len();
+        let title = format!("{label} {}", element.text.trim_start());
+        element.text = title;
+        for annotation in &mut element.annotations {
+            annotation.start = (annotation.start as usize + shift).saturating_sub(removed) as u32;
+            annotation.end = (annotation.end as usize + shift).saturating_sub(removed) as u32;
+        }
+        element.kind = ElementKind::Heading { level: 2 };
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn is_numbered_title_text(text: &str) -> bool {
+    let words = text.split_whitespace().count();
+    !text.contains('\n')
+        && (1..=MAX_NUMBERED_TITLE_WORDS).contains(&words)
+        && text.starts_with(char::is_uppercase)
+        && text.ends_with(char::is_alphanumeric)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn is_isolated_title(text: &str) -> bool {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if text.contains('\n') || !ISOLATED_TITLE_WORDS.contains(&words.len()) {
+        return false;
+    }
+    let (Some(first), Some(last)) = (text.chars().next(), text.chars().last()) else {
+        return false;
+    };
+    if !first.is_uppercase() || !(last.is_alphanumeric() || last == ')') {
+        return false;
+    }
+    let lower = text.to_lowercase();
+    if lower.strip_prefix("page").is_some_and(|rest| {
+        rest.trim_start()
+            .starts_with(|character: char| character.is_ascii_digit())
+    }) {
+        return false;
+    }
+    let content: Vec<&str> = words
+        .into_iter()
+        .filter(|word| {
+            word.starts_with(char::is_alphabetic) && !TITLE_MINOR_WORDS.contains(&word.to_lowercase().as_str())
+        })
+        .collect();
+    let capitalised = content
+        .iter()
+        .filter(|word| word.starts_with(char::is_uppercase))
+        .count();
+    !content.is_empty() && capitalised as f64 >= MIN_TITLE_CAPITALISED_SHARE * content.len() as f64
 }
 
 /// Every canonical alphanumeric character of the baseline text must survive in the
@@ -4711,10 +4887,53 @@ fn restructured_document_retains_prose(
         &Default::default(),
     );
     let baseline_text = crate::rendering::render_plain(&baseline);
-    let restructured_text = crate::rendering::render_plain(doc);
-    ocr_structure_heuristic_char_retention(&restructured_text, &baseline_text)
-        >= MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION
+    let restructured_text = restructured_text_with_furniture(doc);
+    let retention = ocr_structure_heuristic_char_retention(&restructured_text, &baseline_text);
+    let retained = retention >= MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION;
+    if !retained && tracing::enabled!(tracing::Level::DEBUG) {
+        let mut kept = std::collections::HashMap::<char, usize>::new();
+        for character in ocr_structure_heuristic_canonical_chars(&restructured_text) {
+            *kept.entry(character).or_default() += 1;
+        }
+        let missing: String = ocr_structure_heuristic_canonical_chars(&baseline_text)
+            .into_iter()
+            .filter(|character| match kept.get_mut(character) {
+                Some(count) if *count > 0 => {
+                    *count -= 1;
+                    false
+                }
+                _ => true,
+            })
+            .take(64)
+            .collect();
+        tracing::debug!(
+            retention,
+            missing = %missing,
+            "OCR document-level heading/list heuristic dropped characters; keeping the per-page structure"
+        );
+    }
+    retained
 }
+
+/// `doc`'s plain text followed by the text of the page furniture that plain rendering leaves
+/// out. The restructuring pass classifies a repeated "Page 3 of 5" line as a running footer,
+/// which the lossless baseline keeps as body text; the line is still in the document, so the
+/// retention gate must not read it as dropped prose (nougat_005 lost all 22 headings to the
+/// footers of pages 2 to 4, exactly the 24 characters the gate reported missing). ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn restructured_text_with_furniture(doc: &crate::types::internal::InternalDocument) -> String {
+    let mut text = crate::rendering::render_plain(doc);
+    for element in doc
+        .elements
+        .iter()
+        .filter(|element| !crate::rendering::common::is_body_element(element))
+    {
+        text.push('\n');
+        text.push_str(&element.text);
+    }
+    text
+}
+
 /// Split the single, document-wide [`crate::types::internal::InternalDocument`]
 /// [`heuristically_restructured_ocr_pages`] produced back into one per-page document per
 /// real OCR'd page number, for [`extract_mixed_ocr_native`].
@@ -5359,6 +5578,157 @@ mod tests {
         let restructured = builder.build();
 
         assert!(restructured_document_retains_prose(&pages, &[table], &restructured));
+    }
+
+    /// nougat_005: the restructuring pass made each "Page N of 5" line a running footer, which
+    /// plain rendering leaves out, and the gate read the five footers as lost prose and
+    /// discarded every heading. A footer is still in the document; a dropped word is not.
+    #[test]
+    fn should_accept_restructured_document_that_moved_a_footer_to_page_furniture() {
+        let pages = vec![vec![
+            bare_paragraph("Criteria 3.1 packaging"),
+            bare_paragraph("Page 3 of 5"),
+        ]];
+        let mut restructured = doc_with_paragraph("Criteria 3.1 packaging");
+        let mut footer = crate::types::internal::InternalElement::text(
+            crate::types::internal::ElementKind::Paragraph,
+            "Page 3 of 5",
+            0,
+        );
+        footer.layer = crate::types::document_structure::ContentLayer::Footer;
+        restructured.push_element(footer.clone());
+        assert!(!crate::rendering::render_plain(&restructured).contains("Page 3 of 5"));
+
+        assert!(restructured_document_retains_prose(&pages, &[], &restructured));
+
+        let mut dropped_word = doc_with_paragraph("Criteria 3.1");
+        dropped_word.push_element(footer);
+        assert!(!restructured_document_retains_prose(&pages, &[], &dropped_word));
+    }
+
+    const PROSE: &str = "The origins of word processing can be traced back to the invention of the typewriter \
+                         in the mid-19th century, which changed written communication.";
+
+    fn paragraphs(texts: &[&str]) -> InternalDocument {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        for text in texts {
+            builder.push_paragraph(text, vec![], None, None);
+        }
+        builder.build()
+    }
+
+    fn heading_texts(doc: &InternalDocument) -> Vec<&str> {
+        doc.elements
+            .iter()
+            .filter(|element| matches!(element.kind, crate::types::internal::ElementKind::Heading { level: 2 }))
+            .map(|element| element.text.as_str())
+            .collect()
+    }
+
+    /// multi_page_scanned: OCR line heights give no heading by size, yet each section opens
+    /// with a single title-case line.
+    #[test]
+    fn isolated_title_lines_become_headings_when_type_size_found_none() {
+        let mut doc = paragraphs(&[
+            "Pre-Digital Era (19th - Early 20th Century)",
+            PROSE,
+            "The Birth of Word Processing",
+            PROSE,
+        ]);
+        promote_isolated_title_lines(&mut doc);
+        assert_eq!(
+            heading_texts(&doc),
+            [
+                "Pre-Digital Era (19th - Early 20th Century)",
+                "The Birth of Word Processing"
+            ]
+        );
+    }
+
+    #[test]
+    fn sentence_ends_labels_folios_and_running_headers_stay_paragraphs() {
+        let mut doc = paragraphs(&[
+            "Convenience of Document Creation.",
+            PROSE,
+            "Workflows:",
+            PROSE,
+            "Page 3 of 5",
+            PROSE,
+            "Grekos Restaurant, Regina",
+            PROSE,
+            "Grekos Restaurant, Regina",
+            PROSE,
+            "academics, scientists, and engineers",
+            PROSE,
+            "A Title Before a Short Line",
+            "Too short to be prose.",
+        ]);
+        promote_isolated_title_lines(&mut doc);
+        assert!(heading_texts(&doc).is_empty(), "{:?}", heading_texts(&doc));
+    }
+
+    fn numbered(builder: &mut InternalDocumentBuilder, label: &str, text: &str) {
+        let index = builder.push_list_item(text, true, vec![], None, None);
+        builder.set_list_item_source_label(index, label);
+    }
+
+    const COMMITMENT: &str = "Your organisation is committed to: Having targets that are specific, timed \
+                              and time-based.";
+
+    /// nougat_005: each commitment's level, "4. Leading", sits alone above its sentence and was
+    /// read as a one-item ordered list.
+    #[test]
+    fn a_lone_numbered_line_above_prose_becomes_a_heading_that_keeps_its_number() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.push_paragraph(
+            "Criteria 1.1 PACKAGING SUSTAINABILITY STRATEGY (core)",
+            vec![],
+            None,
+            None,
+        );
+        numbered(&mut builder, "4.", "Leading");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        numbered(&mut builder, "2.", "Good progress");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        let mut doc = builder.build();
+
+        promote_lone_numbered_titles(&mut doc);
+
+        assert_eq!(heading_texts(&doc), ["4. Leading", "2. Good progress"]);
+        assert!(
+            doc.elements
+                .iter()
+                .all(|element| element.list_item_source_label().is_none())
+        );
+    }
+
+    #[test]
+    fn real_lists_sentences_and_items_without_prose_after_stay_list_items() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        numbered(&mut builder, "1.", "First finding");
+        numbered(&mut builder, "2.", "Second finding");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        numbered(&mut builder, "3.", "Targets were met.");
+        builder.push_paragraph(COMMITMENT, vec![], None, None);
+        numbered(&mut builder, "4.", "Leading");
+        builder.push_paragraph("Too short to be prose.", vec![], None, None);
+        numbered(&mut builder, "5.", "Leading");
+        let mut doc = builder.build();
+
+        promote_lone_numbered_titles(&mut doc);
+
+        assert!(heading_texts(&doc).is_empty(), "{:?}", heading_texts(&doc));
+    }
+
+    #[test]
+    fn a_document_with_size_derived_headings_is_left_alone() {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.push_heading(1, "Report", None, None);
+        builder.push_paragraph("The Birth of Word Processing", vec![], None, None);
+        builder.push_paragraph(PROSE, vec![], None, None);
+        let mut doc = builder.build();
+        promote_isolated_title_lines(&mut doc);
+        assert!(heading_texts(&doc).is_empty());
     }
 
     /// A restructured document with no elements at all, compared against a baseline

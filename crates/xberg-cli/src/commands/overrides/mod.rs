@@ -26,6 +26,8 @@ use xberg::ExtractionConfig;
 #[cfg(feature = "analysis")]
 pub use self::analysis::ReductionLevelArg;
 pub use self::general::AccelerationArg;
+#[cfg(feature = "ocr-surface")]
+pub use self::general::TessdataModelArg;
 pub use self::output::JupyterCellRenderingArg;
 use crate::ContentOutputFormatArg;
 
@@ -127,6 +129,15 @@ pub struct ExtractionOverrides {
     #[cfg(feature = "ocr-surface")]
     #[arg(long)]
     pub ocr_no_cache: Option<bool>,
+
+    /// Tesseract model set to resolve and download: fast or best.
+    ///
+    /// A directory from `ocr.tessdata_path` or `TESSDATA_PREFIX` that holds every requested
+    /// language is used as given, whichever set it holds. Sets the top-level `tessdata_model`, so it
+    /// also applies to automatic OCR and never enables OCR. Overrides `XBERG_OCR_TESSDATA_MODEL`.
+    #[cfg(feature = "ocr-surface")]
+    #[arg(long, value_name = "SET")]
+    pub ocr_tessdata_model: Option<TessdataModelArg>,
 
     /// JSON object of per-backend OCR options (e.g. `{"layout_mode":"whole_page"}`).
     #[cfg(feature = "ocr-surface")]

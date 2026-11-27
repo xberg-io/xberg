@@ -639,11 +639,11 @@ fn alphabetic_run_at(text: &str, start: usize) -> &str {
     &tail[..end]
 }
 
-/// Normalize Unicode characters commonly found in PDFs to their ASCII equivalents.
+/// Normalize curly quotes and the fraction slash to ASCII and the bullet to a middle dot.
 ///
-/// Matches the reference `sanitize_text()` normalizations for curly quotes, fraction
-/// slash, and bullet characters. This improves TF1 by ensuring extracted text
-/// matches ground truth tokenization.
+/// Matches the reference `sanitize_text()` normalizations so extracted text tokenizes like
+/// the ground truth. U+2010/U+2011 hyphens are left alone here: segment repair still needs to
+/// see them, and [`finalize_hyphens`] maps them once each element's text is assembled.
 pub(super) fn normalize_unicode_text(text: &str) -> Cow<'_, str> {
     normalize_unicode_text_mapped(text, false).text
 }
@@ -679,41 +679,63 @@ pub(super) fn normalize_unicode_text_mapped(text: &str, record: bool) -> Repaire
     }
 }
 
-/// Final hyphen polish applied to assembled paragraph text.
+/// Final hyphen polish applied to assembled element text: maps U+2010/U+2011
+/// to ASCII `-` to match ground-truth tokenization.
 ///
-/// Runs after segments are joined into a line/paragraph string (the spaced
-/// pattern only exists post-join when the hyphen was its own PDF text run):
-/// collapses spaced U+2010/U+2011 artifacts via [`collapse_spaced_hyphens`],
-/// then maps the remaining Unicode hyphens to ASCII `-` to match ground-truth
-/// tokenization.
+/// Spacing around the hyphen is left alone. Once segments are joined, a space the
+/// PDF draws (`unfurl ‑ Extract`, a name/description separator) cannot be told
+/// from one the join inserted, and the drawn kind is the common one. A hyphen
+/// isolated by line breaks inside one segment is collapsed earlier, by
+/// [`collapse_spaced_hyphens`] during text repair.
 pub(super) fn finalize_hyphens(text: &str) -> Cow<'_, str> {
-    if text.contains(['\u{2010}', '\u{2011}']) {
-        tracing::debug!(input = %text, "finalize_hyphens: unicode hyphen present");
-    }
-    let collapsed = collapse_spaced_hyphens(text);
-    if !collapsed.contains(['\u{2010}', '\u{2011}']) {
-        return collapsed;
-    }
-    Cow::Owned(collapsed.replace(['\u{2010}', '\u{2011}'], "-"))
+    finalize_hyphens_mapped(text, false).text
 }
 
-/// Collapse spacing artifacts around Unicode hyphens between alphanumerics.
+pub(super) fn finalize_hyphens_mapped(text: &str, record: bool) -> RepairedText<'_> {
+    if !text.contains(['\u{2010}', '\u{2011}']) {
+        return RepairedText::unchanged(text);
+    }
+    let mut result = String::with_capacity(text.len());
+    let mut replacements = Vec::new();
+    for (offset, ch) in text.char_indices() {
+        if matches!(ch, '\u{2010}' | '\u{2011}') {
+            let output_start = result.len();
+            result.push('-');
+            record_replacement(
+                &mut replacements,
+                record,
+                offset..offset + ch.len_utf8(),
+                output_start..result.len(),
+            );
+        } else {
+            result.push(ch);
+        }
+    }
+    RepairedText {
+        text: Cow::Owned(result),
+        replacements,
+    }
+}
+
+/// Collapse line breaks isolating a Unicode hyphen between alphanumerics.
 ///
-/// Hyphenated identifiers rendered as separate PDF text runs ("DARPA", "‐",
-/// "BAA-15-58") get reassembled with kerning-gap spaces: `DARPA ‐ BAA ‐ 15`.
-/// A spaced U+2010/U+2011 hyphen between alphanumerics is not a typographic
-/// construct (spaced dashes use en/em dashes), so `X ‐ Y` collapses to `X‐Y`.
-/// ASCII `-`, en dashes, and em dashes are left untouched — a spaced ASCII
-/// hyphen can be a legitimate range or minus sign.
+/// A hyphenated identifier whose U+2010/U+2011 hyphens are separate PDF text runs
+/// ("DARPA", "‐", "BAA") can arrive with each hyphen on a line of its own:
+/// `DARPA\n‐\nBAA`. A hyphen with a line break on both sides joins nothing on
+/// either line, so it collapses to `DARPA‐BAA`. A hyphen flanked by plain spaces
+/// is kept as it is: there the PDF draws the spaces, and the hyphen separates a
+/// name from its description (`Velociraptor ‐ Velociraptor is`). ASCII `-`, en
+/// dashes, and em dashes are left untouched.
 ///
-/// Must run before [`normalize_unicode_text`] maps U+2010/U+2011 to ASCII `-`,
-/// while the artifact is still distinguishable.
+/// Must run before [`finalize_hyphens`] maps U+2010/U+2011 to ASCII `-`, while the
+/// artifact is still distinguishable from a spaced ASCII hyphen.
 pub(super) fn collapse_spaced_hyphens(text: &str) -> Cow<'_, str> {
     if !text.contains(['\u{2010}', '\u{2011}']) {
         return Cow::Borrowed(text);
     }
 
     let is_gap = |c: char| matches!(c, ' ' | '\u{00A0}' | '\n' | '\r' | '\t');
+    let has_break = |gap: &[char]| gap.iter().any(|c| matches!(c, '\n' | '\r'));
     let chars: Vec<char> = text.chars().collect();
     let mut result = String::with_capacity(text.len());
     let mut i = 0;
@@ -723,12 +745,12 @@ pub(super) fn collapse_spaced_hyphens(text: &str) -> Cow<'_, str> {
             while j < chars.len() && is_gap(chars[j]) {
                 j += 1;
             }
-            if j > i + 1 && j < chars.len() && matches!(chars[j], '\u{2010}' | '\u{2011}') {
+            if has_break(&chars[i + 1..j]) && j < chars.len() && matches!(chars[j], '\u{2010}' | '\u{2011}') {
                 let mut k = j + 1;
                 while k < chars.len() && is_gap(chars[k]) {
                     k += 1;
                 }
-                if k > j + 1 && k < chars.len() && chars[k].is_alphanumeric() {
+                if has_break(&chars[j + 1..k]) && k < chars.len() && chars[k].is_alphanumeric() {
                     result.push(chars[i]);
                     result.push('-');
                     i = k;
@@ -987,17 +1009,21 @@ mod tests {
     }
 
     #[test]
-    fn test_collapse_spaced_unicode_hyphen_chain() {
-        assert_eq!(
-            collapse_spaced_hyphens("DARPA \u{2010} BAA \u{2010} 15 \u{2010} 58 September"),
-            "DARPA-BAA-15-58 September"
-        );
-        assert_eq!(collapse_spaced_hyphens("VA 22203 \u{2010} 2114"), "VA 22203-2114");
+    fn test_collapse_line_isolated_unicode_hyphen_chain() {
         assert_eq!(
             collapse_spaced_hyphens("DARPA\n\u{2010}\nBAA\n\u{2010}\n15\n\u{2010}\n58"),
             "DARPA-BAA-15-58"
         );
+        assert_eq!(collapse_spaced_hyphens("VA 22203\n\u{2010} \n2114"), "VA 22203-2114");
         assert_eq!(collapse_spaced_hyphens("multi\u{2010}\nline"), "multi\u{2010}\nline");
+    }
+
+    #[test]
+    fn test_collapse_keeps_drawn_spaces_around_a_separator_hyphen() {
+        let separator = "Velociraptor \u{2011} Velociraptor is a tool";
+        assert_eq!(collapse_spaced_hyphens(separator), separator);
+        let wrapped = "unfurl \u{2011}\nExtract and visualize data";
+        assert_eq!(collapse_spaced_hyphens(wrapped), wrapped);
     }
 
     #[test]
@@ -1008,10 +1034,14 @@ mod tests {
     }
 
     #[test]
-    fn test_finalize_hyphens_collapses_and_maps() {
+    fn test_finalize_hyphens_maps_and_keeps_drawn_spacing() {
         assert_eq!(
-            finalize_hyphens("DARPA \u{2010} BAA \u{2010} 15 \u{2010} 58 September"),
-            "DARPA-BAA-15-58 September"
+            finalize_hyphens("unfurl \u{2011} Extract and visualize data"),
+            "unfurl - Extract and visualize data"
+        );
+        assert_eq!(
+            finalize_hyphens("quark\u{2011}engine \u{2011} An Obfuscation\u{2011}Neglect scorer"),
+            "quark-engine - An Obfuscation-Neglect scorer"
         );
         assert_eq!(finalize_hyphens("DARPA\u{2010}BAA"), "DARPA-BAA");
         assert_eq!(finalize_hyphens("non\u{2011}breaking"), "non-breaking");

@@ -24,7 +24,7 @@ pub(super) fn eligible(config: &ExtractionConfig, page: u32) -> bool {
             ocr.backend == "tesseract"
                 && ocr.language.as_slice() == ["eng"]
                 && ocr.pipeline.is_none()
-                && ocr.backend_options.is_none()
+                && !ocr.has_tuning_backend_options()
                 && ocr.tesseract_config.is_none()
                 && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
                 && ocr.auto_rotate != Some(true)

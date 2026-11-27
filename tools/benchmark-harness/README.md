@@ -100,6 +100,10 @@ split ownership have been verified; do not use either model's predictions as tru
 Token-level bag-of-words F1 between extracted text and ground truth.
 
 - Tokenization: lowercase, split on whitespace, keep alphanumeric tokens plus `.` and `,`
+- CJK (Han, Hiragana, Katakana, Hangul) runs become character bigrams. Spaces and tabs between
+  two CJK characters are removed from ground truth and output alike before splitting, so an OCR
+  engine that emits a space after every glyph scores the same as one that does not; line breaks
+  stay bigram boundaries, and spacing next to Latin text or digits is unchanged
 - Separate numeric-token F1 for number-heavy documents (financial, scientific)
 - Combined score: `quality_score = 0.6 * f1_text + 0.4 * f1_numeric`
 
@@ -143,6 +147,20 @@ Fixtures are JSON files organized by format directory under `fixtures/`:
   }
 }
 ```
+
+`metadata.opt_in: true` keeps a fixture out of directory scans (`-f fixtures/` without `--cohort`); it runs only
+when a cohort manifest or `PROFILING_FIXTURES` names it. The long performance-only PDFs use it.
+
+`metadata.family` names the content a fixture shares with others: one image in several encodings
+(`ocr_image`: gif, jp2, jpg, mj2, pbm, pgm, pnm, ppm, tif, tiff, webp; `invoice_image`: jpg, jpm),
+rotations and PDF renderings of one page (`ocr_test`, `complex_document`), one text as native PDF,
+rendered PNG and scan (`rtl_arabic`, `rtl_hebrew`), and the five NDL Meiji pages
+(`ndl_meiji_vertical`): different pages, but one dataset, era and script, so they are clustered
+rather than counted as five independent documents. Results and aggregate rows carry it as `fixture_family`, and
+each aggregate group reports a family-clustered mean next to the per-document mean (`quality_means`,
+see [SCHEMA.md](SCHEMA.md)), so eleven copies of one image weigh as one document rather than eleven. A
+fixture without a family is its own. Give a new fixture the family of any existing fixture that
+renders the same content.
 
 ### Ground Truth Coverage
 
@@ -363,6 +381,13 @@ failures (`FrameworkError`, `Timeout`, `EmptyContent`, and `ZeroOverlap`). Unsup
 execution. Infrastructure failures are reported separately and do not enter this rate; a framework
 with no accountable results still fails validation.
 
+A `ZeroOverlap` row is a failure for this rate but still a quality result: its output was scored
+(TF1 = 0). The aggregate's `quality_including_failures` percentiles, the `layout_impact` and
+`head_to_head` pairings and the gap report count it at that score, so a document that scores 1.0
+under one configuration and 0.0 under another shows as a regression instead of disappearing. The
+`quality` percentiles and quality rankings stay success-only, because rankings already apply
+success coverage (see [SCHEMA.md](SCHEMA.md)).
+
 `--max-concurrent` and `--xberg-max-threads` can be varied independently for Xberg.
 An explicit thread budget applies to both single-file and native batch invocations.
 Omitting it preserves Xberg's automatic single-file budget and uses the worker limit
@@ -372,6 +397,18 @@ as the native-batch fallback. Docling and LiteParse do not receive this setting.
 repository state, ordered fixture/document digests, framework executable identities, model IDs,
 timing configuration, worker semantics, and the actual Xberg thread budget reported by the
 adapter. It deliberately stores no local absolute paths.
+
+Xberg rows run the CLI the way its shipped npm, PyPI and plugin launchers start it (ADR 0022): on
+macOS the harness sets `MallocMaxMagazines=1` for every xberg process it spawns (single-file,
+batch, auto-OCR, and the steady-state adapter's cold CLI probe) unless the harness's own
+environment already defines the variable, even as an empty string, in which case the child
+inherits that value. Competitor processes never receive it, and Linux and Windows runs are
+unchanged. Provenance records what was injected per framework as
+`frameworks[].xberg_env`, e.g. `{"MallocMaxMagazines": "1"}`, and omits the field when nothing
+was. In-process steady-state rows cannot get the setting, because libmalloc reads it when the
+process starts, and record no `xberg_env`; their memory and timing therefore reflect the default
+allocator configuration, not the launchers'. To measure a launcher-equivalent in-process run, set
+`MallocMaxMagazines=1` in the environment that starts the harness.
 
 The remote comparative workflow publishes eight independently validated cohorts. The pinned matrix
 contract contains these cell counts:
@@ -433,6 +470,9 @@ benchmark-harness validate-artifacts \
 
 benchmark-harness cohort-contract --cohort native
 ```
+
+Both commands take `--profile full|smoke` (default `full`). `smoke` restricts the contract to
+`bench_matrix::SMOKE_ARTIFACTS`, the cells a `profile: smoke` Benchmarks run produces.
 
 ### `consolidate` -- Merge multi-job results
 
@@ -625,6 +665,43 @@ uv run --locked --isolated --python 3.12 --only-group bench-rapidocr \
 
 `--only-group` omits the editable Xberg workspace package, while `--isolated` prevents another benchmark environment
 from changing the selected OCR runtime.
+
+## Synthetic OCR scan corpus
+
+`scripts/synth_ocr_corpus.py` builds a stratified OCR corpus from native PDFs in `test_documents` (those pinned in
+`corpus.lock.json`, minus `pdf_scanned/`, `user_reports/` and fuzz inputs). Each selected page is rendered with
+`pdftoppm` as a clean 300 dpi grayscale PNG, as mildly degraded "scans" at 150, 200 and 300 dpi (seeded ImageMagick
+rotation within ±1°, blur, Gaussian noise and JPEG quality 60-85) and as a harsh 100 dpi scan (twice the blur and
+noise, JPEG quality 30-50). Ground truth is poppler `pdftotext` in its default
+reading-order mode, one file per page, with `ground_truth.source = "pdf_text_layer"`; no xberg output is used.
+Default mode is chosen over `-layout`, which interleaves the lines of side-by-side columns, and `-raw`, which follows
+content-stream order: the harness reading-order score compares OCR order with ground-truth order, and OCR engines emit
+text column by column.
+
+A page is excluded when its text layer fails an automatic check: fewer than 25 tokens, CID or private-use garbage,
+mostly non-alphanumeric text, no language stopword signal (shifted or reversed glyph maps), split or glued words,
+backward line jumps inside a column (extraction-order chaos), raster images over 5% of the page (text inside images
+has no ground truth; also rejects scans with an OCR layer), or words with no ink in a 100 dpi render (invisible or
+white text). Selection gives every detected language and every layout class (`single_column`, `multi_column`, `table`,
+`sparse`) up to `--per-stratum` pages (default 20), spreading pages across source documents.
+
+```bash
+python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py build --out /tmp/ocr-corpus
+python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py verify --out /tmp/ocr-corpus --samples 10
+python3 -I tools/benchmark-harness/scripts/synth_ocr_corpus.py build --out /tmp/ocr-corpus --sources /tmp/extra-pdfs
+```
+
+`--sources DIR` adds native PDFs that are not in `corpus.lock.json` (for example downloads kept outside the
+repository). `DIR/sources.json` must map every PDF's path relative to `DIR` to its provenance,
+`{"eu/act-fr.pdf": {"url": "https://...", "license": "...", "note": "optional"}}`; a PDF without a `url` and `license`
+stops the run. Each fixture records its source's provenance in `metadata.source_provenance`, and files identical to a
+corpus PDF are skipped.
+
+The output directory holds `images/`, `ground_truth/`, `fixtures/` (paths relative to the fixture), `cohorts/`
+(`ocr-synth-{clean300,scan150,scan200,scan300,harsh}-v1`), `inventory.jsonl` (every inspected page with its checks) and
+`manifest.json` (seed, tool versions, exclusion counts, stratum counts, under-filled strata). Output is deterministic
+for a fixed `--seed`, source set and tool versions. `verify` OCRs the same sampled pages for any `--variant` with plain `tesseract` and reports
+token F1 plus reading-order agreement against each `pdftotext` mode; run the harness on the fixtures for real scores.
 
 ## Development
 

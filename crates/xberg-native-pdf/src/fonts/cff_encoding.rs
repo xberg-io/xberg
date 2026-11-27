@@ -652,9 +652,10 @@ fn resolve_cff_data(font_data: &[u8]) -> Option<&[u8]> {
         Some(cff)
     } else {
         crate::extractors::recovery_tally::record(|counts| {
-            counts
-                .unsupported_cff_versions
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            counts.charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                unsupported_cff_versions: 1,
+                ..Default::default()
+            });
         });
         tracing::trace!("CFF version {} not supported (expected 1)", font_data[0]);
         None

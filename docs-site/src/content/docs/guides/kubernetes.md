@@ -78,9 +78,26 @@ helm install xberg oci://ghcr.io/xberg-io/charts/xberg \
   -f values.yaml
 ```
 
+## Tesseract models
+
+The chart runs OCR with `tessdata_fast` by default. Set `ocr.tesseractModelSet: best` for `tessdata_best`, which is more accurate but several times slower and needs more memory per OCR request:
+
+```yaml title="values.yaml"
+ocr:
+  tesseractModelSet: best
+  # image: run the -best image tag, which ships the models ("" -> <appVersion>-best,
+  # latest -> latest-best, core -> core-best). download: keep the tag and download each
+  # model into the cache volume on first use.
+  tesseractModelSource: image
+```
+
+`xberg.tessdataPrefix` (empty by default) sets `TESSDATA_PREFIX`, which is used as given for every model set; the chart refuses to render it together with `best`.
+
 ## Cache and replicas
 
 Embedding and OCR models range from ~90 MB to 1.2 GB and are re-downloaded on every pod restart without a cache. The chart enables a `ReadWriteOnce` PVC (`cache.enabled: true`) mounted at `/app/.xberg` (with `HF_HOME` under it) to persist them.
+
+The full image pre-downloads its PaddleOCR and layout models into `/app/.xberg`, which the cache volume hides. With `cache.seedFromImage: true` (the default) a `seed-cache` init container copies the image's `/app/.xberg` into the volume before the server starts, keeping files the volume already holds. Without a PVC the copy repeats on every pod start; set `cache.seedFromImage: false` to skip it, for example with the core image, which ships no models.
 
 :::caution
 A `ReadWriteOnce` volume can only attach to one node, so the chart defaults to `replicaCount: 1` with a `Recreate` strategy. To run multiple replicas, either switch the cache to `ReadWriteMany` storage or set `cache.enabled: false` (each pod then re-downloads models into an ephemeral volume).

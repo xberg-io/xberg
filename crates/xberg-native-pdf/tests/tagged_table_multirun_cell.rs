@@ -12,7 +12,7 @@ fn span(text: &str, x: f32, y: f32, mcid: u32, seq: usize) -> TextSpan {
         artifact_type: None,
         text: text.to_string(),
         bbox: xberg_native_pdf::geometry::Rect::new(x, y, 30.0, 12.0),
-        font_name: "Helvetica".to_string(),
+        font_name: "Helvetica".into(),
         font_size: 12.0,
         font_weight: FontWeight::Normal,
         is_italic: false,

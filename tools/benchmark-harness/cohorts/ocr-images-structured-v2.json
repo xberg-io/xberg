@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "name": "ocr-images-structured-v2",
+  "batch_size": 5,
+  "ocr_enabled": true,
+  "fixtures": [
+    "doclaynet_page_01.json",
+    "doclaynet_page_02.json",
+    "image_table.json",
+    "balance_sheet_1.json",
+    "financial_table_1.json"
+  ]
+}

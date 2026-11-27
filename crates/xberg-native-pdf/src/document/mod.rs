@@ -70,7 +70,7 @@ pub enum PageRotation {
 /// future file-backed variant can be re-introduced without touching call
 /// sites.
 enum PdfReader {
-    Memory(BufReader<Cursor<Vec<u8>>>),
+    Memory(BufReader<Cursor<bytes::Bytes>>),
 }
 
 impl Read for PdfReader {
@@ -191,6 +191,10 @@ pub(crate) struct CachedFormSpans {
     pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
     /// The spans among `spans` that start at the pen of the previous `TJ` array (GH#2664).
     pen_continuations: Vec<crate::extractors::text::SpanKey>,
+    /// Sequence and bounds of each white span among `spans` ([`crate::extractors::text`]'s
+    /// `paints_invisible_text`), relative to the Form's first sequence, so a hit drops the same
+    /// unpainted white text as the walk that stored it.
+    invisible: Vec<(usize, crate::geometry::Rect)>,
     sequence_len: usize,
     pub(crate) descendants: FormDescendantPlacements,
     /// Weak references retain allocation identity without retaining font data.
@@ -228,6 +232,7 @@ impl CachedFormSpans {
             required_depth,
             spans,
             pen_continuations: Vec::new(),
+            invisible: Vec::new(),
             sequence_len: sequence.len(),
             descendants,
             fonts,
@@ -253,6 +258,30 @@ impl CachedFormSpans {
             self.pen_continuations
                 .iter()
                 .map(|key| key.shift_sequence(0, sequence_start)),
+        );
+    }
+
+    pub(crate) fn with_invisible(
+        mut self,
+        invisible: &[(usize, crate::geometry::Rect)],
+        sequence_start: usize,
+    ) -> Self {
+        self.invisible = invisible
+            .iter()
+            .filter_map(|&(sequence, bbox)| Some((sequence.checked_sub(sequence_start)?, bbox)))
+            .collect();
+        self
+    }
+
+    pub(crate) fn replay_invisible(
+        &self,
+        destination: &mut Vec<(usize, crate::geometry::Rect)>,
+        sequence_start: usize,
+    ) {
+        destination.extend(
+            self.invisible
+                .iter()
+                .map(|&(sequence, bbox)| (sequence + sequence_start, bbox)),
         );
     }
 
@@ -319,6 +348,10 @@ struct BoundedObjectCache {
     /// Synthetic recovery objects have no byte offset to re-read from, so
     /// evicting one makes it permanently unreachable. ~keep
     pinned: HashSet<ObjectRef>,
+    /// Address range of the document's source bytes. A stream payload sliced from them costs the
+    /// cache nothing, since the document holds those bytes anyway; charging it let large images
+    /// evict the dictionaries and fonts the cache exists to keep.
+    shared_source: std::ops::Range<usize>,
 }
 
 /// Byte-accounted FIFO cache for decoded object-stream maps.
@@ -449,13 +482,21 @@ impl BoundedObjectStreamCache {
 }
 
 impl BoundedObjectCache {
+    #[cfg(test)]
     fn new(max_bytes: usize) -> Self {
+        Self::sharing(max_bytes, &[])
+    }
+
+    /// A cache that does not charge stream payloads sliced from `source`.
+    fn sharing(max_bytes: usize, source: &[u8]) -> Self {
+        let source = source.as_ptr_range();
         Self {
             map: HashMap::new(),
             insertion_order: std::collections::VecDeque::new(),
             current_bytes: 0,
             max_bytes,
             pinned: HashSet::new(),
+            shared_source: source.start as usize..source.end as usize,
         }
     }
 
@@ -477,14 +518,19 @@ impl BoundedObjectCache {
     }
 
     fn insert(&mut self, key: ObjectRef, value: Object) {
-        let entry_size = Self::estimate_size(&value);
+        self.insert_shared(key, Arc::new(value));
+    }
+
+    /// Cache `value` without copying it, so the caller and the cache share one allocation.
+    fn insert_shared(&mut self, key: ObjectRef, value: Arc<Object>) {
+        let entry_size = self.estimate_size(&value);
 
         if entry_size > self.max_bytes {
             return;
         }
 
         if let Some(old_val) = self.map.get(&key) {
-            self.current_bytes = self.current_bytes.saturating_sub(Self::estimate_size(old_val));
+            self.current_bytes = self.current_bytes.saturating_sub(self.estimate_size(old_val));
         }
 
         // Evict oldest entries until under budget. If the front of the
@@ -513,14 +559,14 @@ impl BoundedObjectCache {
                         continue;
                     }
                     if let Some(old_val) = self.map.remove(&old_key) {
-                        self.current_bytes = self.current_bytes.saturating_sub(Self::estimate_size(&old_val));
+                        self.current_bytes = self.current_bytes.saturating_sub(self.estimate_size(&old_val));
                     }
                 }
                 None => break,
             }
         }
 
-        if self.map.insert(key, Arc::new(value)).is_none() && !self.pinned.contains(&key) {
+        if self.map.insert(key, value).is_none() && !self.pinned.contains(&key) {
             self.insertion_order.push_back(key);
         }
         self.current_bytes += entry_size;
@@ -538,18 +584,18 @@ impl BoundedObjectCache {
         let pinned = std::mem::take(&mut self.pinned);
         self.map.retain(|k, _| pinned.contains(k));
         self.insertion_order.clear();
-        self.current_bytes = self.map.values().map(|v| Self::estimate_size(v)).sum();
+        self.current_bytes = self.map.values().map(|v| self.estimate_size(v)).sum();
         self.pinned = pinned;
     }
 
-    fn estimate_size(obj: &Object) -> usize {
-        Self::estimate_size_depth(obj, 8)
+    fn estimate_size(&self, obj: &Object) -> usize {
+        self.estimate_size_depth(obj, 8)
     }
 
     /// Rough estimate of an Object's heap size in bytes.
     /// Recurses into nested containers up to `depth` levels to avoid
     /// both underestimation and stack overflow on adversarial input.
-    fn estimate_size_depth(obj: &Object, depth: u8) -> usize {
+    fn estimate_size_depth(&self, obj: &Object, depth: u8) -> usize {
         if depth == 0 {
             return 64;
         }
@@ -557,19 +603,23 @@ impl BoundedObjectCache {
             Object::Stream { dict, data } => {
                 let dict_size: usize = dict
                     .iter()
-                    .map(|(k, v)| k.len() + 32 + Self::estimate_size_depth(v, depth - 1))
+                    .map(|(k, v)| k.len() + 32 + self.estimate_size_depth(v, depth - 1))
                     .sum();
-                data.len() + dict_size + 64
+                let payload = data.as_ptr_range();
+                let shared = self.shared_source.start <= payload.start as usize
+                    && payload.end as usize <= self.shared_source.end;
+                let charged = if shared { 0 } else { data.len() };
+                charged + dict_size + 64
             }
             Object::Dictionary(d) => {
                 let inner: usize = d
                     .iter()
-                    .map(|(k, v)| k.len() + 32 + Self::estimate_size_depth(v, depth - 1))
+                    .map(|(k, v)| k.len() + 32 + self.estimate_size_depth(v, depth - 1))
                     .sum();
                 inner + 64
             }
             Object::Array(a) => {
-                let inner: usize = a.iter().map(|v| Self::estimate_size_depth(v, depth - 1)).sum();
+                let inner: usize = a.iter().map(|v| self.estimate_size_depth(v, depth - 1)).sum();
                 inner + 64
             }
             Object::String(s) => s.len() + 32,
@@ -724,7 +774,7 @@ pub struct PdfDocument {
     /// by absolute offset (see `bytes_at`), so the document carries no shared
     /// read cursor and a page read never depends on what another page read
     /// first. ~keep
-    pub source_bytes: Vec<u8>,
+    pub source_bytes: bytes::Bytes,
     /// PDF version (major, minor)
     version: (u8, u8),
     /// Cross-reference table mapping object IDs to byte offsets
@@ -855,6 +905,9 @@ pub struct PdfDocument {
     /// it covers, so a struct-tree-scope `/ActualText` on an ancestor
     /// element must NOT override it.
     pub(crate) mc_actualtext_mcids: Mutex<HashMap<usize, HashSet<u32>>>,
+    /// Per page, the raw baselines of the script spans its last flattened-geometry read
+    /// snapped onto their bases (`PdfDocument::flattened_script_baselines`).
+    pub(crate) script_baselines: Mutex<HashMap<usize, Vec<(f32, f32, f32, f32)>>>,
     /// `Table` structure elements bucketed by page, built once via
     /// `find_table_elements_all_pages_shared` (one tree walk) so the converter
     /// table path does an O(1) lookup instead of walking the tree per page.
@@ -922,7 +975,35 @@ pub struct PdfDocument {
     /// `extract_page_tables` → `extract_words` → `page_reading_order`; this serves
     /// the second from cache. Cleared by redaction (`erase_region` /
     /// `clear_erase_regions`), the only span-affecting mutation.
-    page_spans_cache: Mutex<BoundedEntryCache<usize, std::sync::Arc<Vec<crate::layout::TextSpan>>>>,
+    page_spans_cache:
+        Mutex<BoundedEntryCache<usize, std::sync::Arc<(Vec<crate::layout::TextSpan>, Option<HashSet<u32>>)>>>,
+    /// Unfiltered, default-config content interpretations per page, before any
+    /// ordering or postprocessing. One extraction reads the same page through the
+    /// text pass, the ruled-table words, the heuristic table segments, the table
+    /// script geometry and the structure pass; this serves every read after the
+    /// first. The key holds every input the interpretation depends on besides the
+    /// page's immutable content and resources. `None` outside
+    /// `begin_page_passes`/`release_page_caches`; emptied when authentication
+    /// changes what a page decodes to.
+    raw_page_spans_cache: Mutex<
+        Option<
+            crate::cache::AdmissionBudgetCache<extract_api::RawSpanKey, std::sync::Arc<extract_api::InterpretedPage>>,
+        >,
+    >,
+    /// The document's page count while a flattened-geometry read in the page passes also finishes
+    /// and caches the page's preserved-geometry spans, else 0. Set by
+    /// `expect_preserved_script_geometry`, cleared by `release_page_caches`.
+    paired_geometry_pages: AtomicUsize,
+    /// Painted regions of the last pages a white-text drop read
+    /// (`PdfDocument::painted_regions`). `None` outside
+    /// `begin_page_passes`/`release_page_caches`.
+    painted_regions_cache: Mutex<Option<BoundedEntryCache<usize, Option<Arc<Vec<crate::geometry::Rect>>>>>>,
+    /// Keep white text over unpainted page area instead of dropping it
+    /// (`PdfDocument::set_keep_white_text`).
+    keep_white_text: AtomicBool,
+    /// White text spans dropped over unpainted page area, by page index: the most any one read of
+    /// the page dropped (`PdfDocument::dropped_white_text_spans`).
+    dropped_white_text: Mutex<HashMap<usize, usize>>,
     /// Small-text density evidence for a single-page document.
     small_painted_text: std::sync::OnceLock<bool>,
     /// Per-page lightweight search index (page text + span bounding boxes,
@@ -1949,6 +2030,7 @@ mod objects;
 mod open;
 mod pages;
 mod pagination_separators;
+pub(crate) mod painted;
 mod paths;
 mod picture_text;
 mod reading_order;

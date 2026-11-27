@@ -103,6 +103,23 @@ pub enum TranscriptionError {
     /// The mel spectrogram computation failed.
     #[error("mel spectrogram error: {0}")]
     MelSpec(String),
+    /// The ONNX Runtime library could not be resolved or loaded.
+    #[error("{0}")]
+    RuntimeUnavailable(String),
+}
+
+impl TranscriptionError {
+    /// Never routes an unloaded runtime through `ort::Error`, whose construction would make ort
+    /// retry its own library search. ~keep
+    fn from_ort_session(error: crate::ort_discovery::OrtSessionError) -> Self {
+        match error {
+            crate::ort_discovery::OrtSessionError::Ort(error) => Self::Ort(error),
+            #[cfg(ort_dynamic_discovery)]
+            unavailable @ crate::ort_discovery::OrtSessionError::Runtime(_) => {
+                Self::RuntimeUnavailable(unavailable.to_string())
+            }
+        }
+    }
 }
 
 /// A transcribed segment: `(start_ms, end_ms, text)`.
@@ -301,7 +318,8 @@ fn build_session(path: &std::path::Path) -> Result<Session, TranscriptionError> 
     crate::ort_discovery::ensure_ort_available();
     let thread_budget = crate::core::config::concurrency::resolve_thread_budget(None);
 
-    let mut builder = Session::builder(crate::ort_discovery::ort_environment()?)?;
+    let environment = crate::ort_discovery::ort_environment().map_err(TranscriptionError::from_ort_session)?;
+    let mut builder = Session::builder(environment)?;
     builder = builder
         .with_optimization_level(GraphOptimizationLevel::All)
         .map_err(|e| ort::Error::new(e.message()))?;

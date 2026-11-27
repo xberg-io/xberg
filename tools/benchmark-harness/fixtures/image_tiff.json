@@ -4,6 +4,7 @@
 	"file_size": 367848,
 	"expected_frameworks": ["xberg", "docling", "markitdown", "pymupdf4llm", "tika", "unstructured"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "TIFF image with text for OCR testing",
 		"category": "image",
 		"requires_ocr": true

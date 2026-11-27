@@ -1,0 +1,20 @@
+{
+  "document": "../../../test_documents/images/ndl_horizontal_05.jpg",
+  "file_type": "jpg",
+  "file_size": 1110572,
+  "expected_frameworks": ["xberg"],
+  "metadata": {
+    "description": "NDL 1920s horizontal Japanese page",
+    "category": "image-ocr-realgt",
+    "dataset": "ndl-pdm-ocr",
+    "requires_ocr": true,
+    "languages": ["ja"],
+    "ocr_language": "jpn",
+    "text_orientation": "horizontal"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/jpg/ndl_horizontal_05.txt",
+    "markdown_file": "../../../test_documents/ground_truth/jpg/ndl_horizontal_05.md",
+    "source": "manual"
+  }
+}

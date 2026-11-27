@@ -448,6 +448,12 @@ pub struct WarmOptions {
     pub all_ner_models: bool,
     #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
     pub onnx: super::onnx_candidates::StageSelection,
+    /// Tesseract model sets to warm; empty means the default set.
+    #[cfg(feature = "paddle-ocr")]
+    pub tessdata_models: Vec<xberg::TessdataModel>,
+    /// Tesseract languages to warm; empty means every pinned language.
+    #[cfg(feature = "paddle-ocr")]
+    pub tessdata_languages: Vec<String>,
 }
 
 /// Resolve the Hugging Face cache label shown in the warm summary: `Some` only when at
@@ -602,20 +608,42 @@ fn warm_layout_detection(
     Ok(())
 }
 
-/// Download (or confirm already cached) the Tesseract language data files.
+/// Download (or confirm already cached) the Tesseract language data files of each requested
+/// model set into `<cache>/tessdata/<model>`, the directory OCR resolves that set from.
 #[cfg(feature = "paddle-ocr")]
-fn warm_tessdata(cache_base: &Path, downloaded: &mut Vec<String>, already_cached: &mut Vec<String>) -> Result<()> {
-    let tessdata_dir = cache_base.join("tessdata");
-    let manager = xberg::ocr::TessdataManager::new(Some(tessdata_dir));
-
-    let newly_downloaded = manager
-        .ensure_all_languages()
-        .context("Failed to download tessdata files")?;
-
-    if newly_downloaded > 0 {
-        downloaded.push(format!("tessdata ({newly_downloaded} languages)"));
+fn warm_tessdata(
+    cache_base: &Path,
+    options: &WarmOptions,
+    downloaded: &mut Vec<String>,
+    already_cached: &mut Vec<String>,
+) -> Result<()> {
+    let (models, languages) = (&options.tessdata_models, &options.tessdata_languages);
+    let default_models = [xberg::TessdataModel::default()];
+    let models = if models.is_empty() {
+        &default_models[..]
     } else {
-        already_cached.push("tessdata (all languages)".to_string());
+        models.as_slice()
+    };
+    for &model in models {
+        let manager =
+            xberg::ocr::TessdataManager::for_model(Some(cache_base.join("tessdata").join(model.as_str())), model);
+        let newly_downloaded = if languages.is_empty() {
+            manager.ensure_all_languages()
+        } else {
+            manager.ensure_languages(&languages.iter().map(String::as_str).collect::<Vec<_>>())
+        }
+        .with_context(|| format!("Failed to download tessdata_{model} files"))?;
+
+        let scope = if languages.is_empty() {
+            "all languages".to_string()
+        } else {
+            languages.join(", ")
+        };
+        if newly_downloaded > 0 {
+            downloaded.push(format!("tessdata_{model} ({newly_downloaded} languages)"));
+        } else {
+            already_cached.push(format!("tessdata_{model} ({scope})"));
+        }
     }
     Ok(())
 }
@@ -771,7 +799,7 @@ fn warm_model_families(
     )?;
 
     #[cfg(feature = "paddle-ocr")]
-    warm_tessdata(cache_base, downloaded, already_cached)?;
+    warm_tessdata(cache_base, options, downloaded, already_cached)?;
 
     #[cfg(feature = "embeddings")]
     warm_embeddings(

@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 use std::os::raw::c_int;
 use std::{ptr, slice};
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::{
     Channel, ColorProfileNCLX, ColorProfileRaw, ColorProfileType, ColorSpace, HeifError, HeifErrorCode,
@@ -64,7 +64,7 @@ impl Image {
                 color_space.heif_chroma(),
                 c_image.as_mut_ptr(),
             )
-        };
+        }?;
         HeifError::from_heif_error(err)?;
         Ok(Image {
             // SAFETY: `heif_image_create` returned success, which is libheif's contract for having written

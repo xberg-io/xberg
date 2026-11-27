@@ -9,6 +9,7 @@ pub(crate) mod forms;
 pub(crate) mod geometry;
 pub(crate) mod hierarchy;
 pub(crate) mod images;
+pub(crate) mod math_latex;
 pub(crate) mod metadata;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod proven_dpi;
@@ -83,10 +84,10 @@ impl NativeDocument {
     /// silently yielding empty text.
     #[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
     pub(crate) fn open_bytes_with_passwords(bytes: &[u8], passwords: &[String]) -> Result<Self> {
-        Self::open_owned_bytes_with_passwords(bytes.to_vec(), passwords)
+        Self::open_owned_bytes_with_passwords(bytes::Bytes::copy_from_slice(bytes), passwords)
     }
 
-    pub(crate) fn open_owned_bytes_with_passwords(bytes: Vec<u8>, passwords: &[String]) -> Result<Self> {
+    pub(crate) fn open_owned_bytes_with_passwords(bytes: bytes::Bytes, passwords: &[String]) -> Result<Self> {
         let doc = xberg_native_pdf::PdfDocument::from_bytes(bytes).map_err(|e| XbergError::Parsing {
             message: format!("xberg_native_pdf: failed to load bytes: {e}"),
             source: None,

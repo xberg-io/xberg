@@ -114,17 +114,7 @@ impl SubprocessAdapter {
             duration,
             extraction_duration: None,
             subprocess_overhead: None,
-            metrics: PerformanceMetrics {
-                baseline_memory_bytes: resource_stats.baseline_memory_bytes,
-                peak_memory_bytes: resource_stats.peak_memory_bytes,
-                peak_memory_delta_bytes: resource_stats.peak_memory_delta_bytes,
-                avg_cpu_percent: resource_stats.avg_cpu_percent,
-                cpu_seconds: resource_stats.cpu_seconds,
-                throughput_bytes_per_sec: 0.0,
-                p50_memory_bytes: resource_stats.p50_memory_bytes,
-                p95_memory_bytes: resource_stats.p95_memory_bytes,
-                p99_memory_bytes: resource_stats.p99_memory_bytes,
-            },
+            metrics: Self::measured_metrics(resource_stats, None, 0.0),
             quality: None,
             iterations: vec![],
             statistics: None,
@@ -139,6 +129,7 @@ impl SubprocessAdapter {
             ocr_status: OcrStatus::Unknown,
             extracted_text: None,
             system_load: None,
+            fixture_family: None,
         }
     }
 
@@ -182,11 +173,9 @@ impl SubprocessAdapter {
             if let (Some(obj), Some(t)) = (flat.as_object_mut(), raw.get("extraction_time_ms")) {
                 obj.insert("_extraction_time_ms".to_string(), t.clone());
             }
-            // Xberg self-reports peak RSS the same way every competitor wrapper does (see
-            // `crates/xberg-cli/src/peak_memory.rs`). Surface it under the same
-            // `_peak_memory_bytes` key the Python wrappers use so the memory comparison downstream
-            // treats xberg identically to them instead of only ever trusting the sysinfo sampler
-            // for xberg. ~keep
+            // Xberg self-reports peak RSS (see `crates/xberg-cli/src/peak_memory.rs`). Surface it
+            // under the `_peak_memory_bytes` key the Python wrappers use; it is recorded as a
+            // diagnostic only, never as the measured peak. ~keep
             if let (Some(obj), Some(mem)) = (flat.as_object_mut(), raw.get("peak_memory_bytes")) {
                 obj.insert("_peak_memory_bytes".to_string(), mem.clone());
             }
@@ -233,7 +222,7 @@ impl SubprocessAdapter {
         if self.reject_layout_failures
             && let Some(message) = crate::adapters::layout_failures::layout_failure_in_item(&parsed)
         {
-            return Err(Error::FrameworkError(message));
+            return Err(Error::LayoutFailed(message));
         }
 
         Ok(parsed)
@@ -306,38 +295,26 @@ impl SubprocessAdapter {
         Ok((parsed, duration, resource_stats))
     }
 
-    /// Merge the framework's self-reported peak RSS (when present and not lower than what the
-    /// harness's own sampler observed) into the measured metrics. Xberg self-reports peak RSS
-    /// precisely; a self-report lower than the sampler's observation is treated as unreliable
-    /// and the sampled metrics are kept instead. ~keep
-    fn merge_reported_metrics(
+    /// Build the metrics from the harness's own measurement. The framework's self-reported
+    /// peak RSS is recorded for diagnostics only: every framework's peak comes from the same
+    /// method, so a self-report never replaces it. ~keep
+    pub(super) fn measured_metrics(
         resource_stats: &crate::monitoring::ResourceStats,
         self_reported_memory: Option<u64>,
         throughput: f64,
     ) -> PerformanceMetrics {
-        match self_reported_memory {
-            Some(reported_mem) if reported_mem >= resource_stats.peak_memory_bytes => PerformanceMetrics {
-                baseline_memory_bytes: resource_stats.baseline_memory_bytes,
-                peak_memory_bytes: reported_mem,
-                peak_memory_delta_bytes: reported_mem.saturating_sub(resource_stats.baseline_memory_bytes),
-                avg_cpu_percent: resource_stats.avg_cpu_percent,
-                cpu_seconds: resource_stats.cpu_seconds,
-                throughput_bytes_per_sec: throughput,
-                p50_memory_bytes: reported_mem,
-                p95_memory_bytes: reported_mem,
-                p99_memory_bytes: reported_mem,
-            },
-            _ => PerformanceMetrics {
-                baseline_memory_bytes: resource_stats.baseline_memory_bytes,
-                peak_memory_bytes: resource_stats.peak_memory_bytes,
-                peak_memory_delta_bytes: resource_stats.peak_memory_delta_bytes,
-                avg_cpu_percent: resource_stats.avg_cpu_percent,
-                cpu_seconds: resource_stats.cpu_seconds,
-                throughput_bytes_per_sec: throughput,
-                p50_memory_bytes: resource_stats.p50_memory_bytes,
-                p95_memory_bytes: resource_stats.p95_memory_bytes,
-                p99_memory_bytes: resource_stats.p99_memory_bytes,
-            },
+        PerformanceMetrics {
+            baseline_memory_bytes: resource_stats.baseline_memory_bytes,
+            peak_memory_bytes: resource_stats.peak_memory_bytes,
+            memory_method: resource_stats.memory_method,
+            self_reported_peak_memory_bytes: self_reported_memory,
+            peak_memory_delta_bytes: resource_stats.peak_memory_delta_bytes,
+            avg_cpu_percent: resource_stats.avg_cpu_percent,
+            cpu_seconds: resource_stats.cpu_seconds,
+            throughput_bytes_per_sec: throughput,
+            p50_memory_bytes: resource_stats.p50_memory_bytes,
+            p95_memory_bytes: resource_stats.p95_memory_bytes,
+            p99_memory_bytes: resource_stats.p99_memory_bytes,
         }
     }
 
@@ -418,7 +395,7 @@ impl SubprocessAdapter {
 
         let self_reported_memory = parsed.get("_peak_memory_bytes").and_then(|v| v.as_u64());
 
-        let metrics = Self::merge_reported_metrics(&resource_stats, self_reported_memory, throughput);
+        let metrics = Self::measured_metrics(&resource_stats, self_reported_memory, throughput);
 
         let ocr_status = self.resolve_ocr_status(parsed.get("_ocr_used"), force_ocr);
 
@@ -450,6 +427,7 @@ impl SubprocessAdapter {
             ocr_status,
             extracted_text,
             system_load: None,
+            fixture_family: None,
         })
     }
 }

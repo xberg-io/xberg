@@ -4,6 +4,7 @@
 
 use super::super::*;
 use super::*;
+use crate::extractors::pdf::ocr::rendering::rgb_for_png_encode;
 use image::ImageEncoder;
 use image::codecs::png::PngEncoder;
 // rayon's work-stealing pool needs OS threads; wasm32 has none, so the parallel encode
@@ -246,12 +247,12 @@ impl<'a> PageOcrContext<'a> {
                     let page_idx = batch_start + offset;
                     let default_security_limits = crate::extractors::security::SecurityLimits::default();
                     let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                    let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
+                    let rgb_image = rgb_for_png_encode(image, security_limits)?;
                     let (width, height) = rgb_image.dimensions();
                     let mut image_bytes = Cursor::new(Vec::new());
                     let encoder = PngEncoder::new(&mut image_bytes);
                     encoder
-                        .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
+                        .write_image(rgb_image.as_raw(), width, height, image::ColorType::Rgb8.into())
                         .map_err(|e| crate::XbergError::Parsing {
                             message: format!("Failed to encode image: {}", e),
                             source: None,
@@ -268,12 +269,12 @@ impl<'a> PageOcrContext<'a> {
                     let page_idx = batch_start + offset;
                     let default_security_limits = crate::extractors::security::SecurityLimits::default();
                     let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                    let rgb_image = clone_rgb_for_png_encode(image, security_limits)?;
+                    let rgb_image = rgb_for_png_encode(image, security_limits)?;
                     let (width, height) = rgb_image.dimensions();
                     let mut image_bytes = Cursor::new(Vec::new());
                     let encoder = PngEncoder::new(&mut image_bytes);
                     encoder
-                        .write_image(&rgb_image, width, height, image::ColorType::Rgb8.into())
+                        .write_image(rgb_image.as_raw(), width, height, image::ColorType::Rgb8.into())
                         .map_err(|e| crate::XbergError::Parsing {
                             message: format!("Failed to encode image: {}", e),
                             source: None,

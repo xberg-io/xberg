@@ -209,7 +209,7 @@ mod tests {
         TextSpan {
             text: text.to_string(),
             bbox: Rect::new(x, y, text.chars().count() as f32 * size * 0.5, size),
-            font_name: font.to_string(),
+            font_name: font.into(),
             font_size: size,
             ..Default::default()
         }

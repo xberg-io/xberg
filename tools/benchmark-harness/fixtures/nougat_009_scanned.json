@@ -1,0 +1,32 @@
+{
+  "document": "../../../test_documents/pdf_scanned/nougat_009_scanned.pdf",
+  "file_type": "pdf",
+  "file_size": 1427628,
+  "expected_frameworks": [
+    "xberg",
+    "docling",
+    "markitdown",
+    "mineru",
+    "pdfminer",
+    "pdfplumber",
+    "pdftotext",
+    "pymupdf4llm",
+    "pypdf",
+    "tika",
+    "unstructured"
+  ],
+  "metadata": {
+    "description": "1-page image-only scan of marketing case study with headings and a table",
+    "category": "pdf-scanned",
+    "size_class": "small",
+    "pages": 1,
+    "requires_ocr": true,
+    "languages": ["en"],
+    "ocr_language": "eng"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/nougat_009.txt",
+    "markdown_file": "../../../test_documents/ground_truth/pdf/nougat_009.md",
+    "source": "manual"
+  }
+}

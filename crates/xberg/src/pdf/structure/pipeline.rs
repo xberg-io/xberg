@@ -15,22 +15,29 @@ use rayon::prelude::*;
 
 #[cfg(test)]
 use super::assembly::assemble_internal_document;
+use super::classify::effective_text as paragraph_text_raw;
+#[cfg(test)]
+use super::classify::is_body_size_bold_heading_candidate;
 use super::classify::{
-    classify_formula_paragraphs, classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings,
-    demote_unnumbered_subsections, is_body_size_bold_heading_candidate, is_body_size_bold_signal,
-    is_numbered_section_heading, mark_arxiv_noise, mark_cross_page_repeating_short_text,
-    mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
+    body_size_bold_signal_text, classify_formula_paragraphs, classify_paragraphs, demote_heading_runs,
+    demote_structure_annotation_headings, demote_unnumbered_subsections, is_body_size_bold_signal,
+    is_numbered_section_heading, level_numbered_headings_by_depth, level_outline_enumerated_headings, mark_arxiv_noise,
+    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_as_body_size_bold_heading,
+    reads_as_short_section_title, reads_vertically, refine_heading_hierarchy,
 };
-use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
-use super::lines::{is_cjk_char, segments_need_space};
+use super::constants::{
+    FULL_LINE_FRACTION, MAX_HEADING_WORD_COUNT, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP,
+    MIN_HEADING_FONT_RATIO,
+};
+use super::lines::{crosses_visual_line_break, is_cjk_char, segments_need_space};
 use super::paragraphs::{
     accent_letter_over_formula_start, merge_continuation_paragraphs, merge_continuation_paragraphs_with_gaps,
     split_embedded_list_items,
 };
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
-    collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
-    normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
+    collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, finalize_hyphens, finalize_hyphens_mapped,
+    normalize_text_encoding, normalize_unicode_text, normalize_unicode_text_mapped, repair_contextual_ligatures,
     repair_contextual_ligatures_mapped, repair_ligature_spaces,
 };
 use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
@@ -43,6 +50,11 @@ const MIN_BODY_SIZE_BOLD_SIGNALS: usize = 3;
 const MAX_OTHER_HEADING_RATIO: usize = 2;
 const BODY_SIZE_BOLD_ALIGNMENT_TOLERANCE_EM: f32 = 1.5;
 const MIN_OPENED_BODY_WORDS: usize = 4;
+const MAX_SHORT_TITLE_REPEATS: usize = 2;
+const BODY_SIZE_HEADING_LEVEL: u8 = 3;
+/// Bold body-size sections are the top section tier of a document that has no
+/// other heading, under an implied title. ~keep
+const HEADINGLESS_BODY_SIZE_HEADING_LEVEL: u8 = 2;
 const SAME_ROW_MIN_VERTICAL_OVERLAP_RATIO: f32 = 0.5;
 /// Font-size "same tier" tolerance (absolute, in the unit `font_size` happens to carry —
 /// points for native PDFs, a render-DPI-dependent pixel measurement for OCR segments).
@@ -310,11 +322,32 @@ fn shares_same_text_row(candidate: &PdfParagraph, following: &PdfParagraph, is_s
 
     let candidate_bottom = candidate_bbox.1.min(candidate_bbox.3);
     let candidate_top = candidate_bbox.1.max(candidate_bbox.3);
-    let following_bottom = following_bbox.1.min(following_bbox.3);
-    let following_top = following_bbox.1.max(following_bbox.3);
+    // The row is the following paragraph's first line, not its block: a paragraph that runs
+    // on into the next column spans the page's height, so its block overlaps every row of the
+    // column the candidate sits in. 2026-14578 lost `Summary of Request` and four more
+    // section titles that way. ~keep
+    let block_bottom = following_bbox.1.min(following_bbox.3);
+    let block_top = following_bbox.1.max(following_bbox.3);
+    let (following_bottom, following_top) = first_line_vertical_extent(following)
+        .filter(|&(bottom, top)| bottom >= block_bottom && top <= block_top)
+        .unwrap_or((block_bottom, block_top));
     let minimum_height = (candidate_top - candidate_bottom).min(following_top - following_bottom);
     let overlap = candidate_top.min(following_top) - candidate_bottom.max(following_bottom);
     minimum_height > 0.0 && overlap.max(0.0) / minimum_height >= SAME_ROW_MIN_VERTICAL_OVERLAP_RATIO
+}
+
+/// Bottom and top of a paragraph's first line, in the same space as `block_bbox`.
+fn first_line_vertical_extent(paragraph: &PdfParagraph) -> Option<(f32, f32)> {
+    let segments = &paragraph.lines.first()?.segments;
+    let bottom = segments
+        .iter()
+        .map(|segment| segment.baseline_y)
+        .fold(f32::MAX, f32::min);
+    let top = segments
+        .iter()
+        .map(|segment| segment.baseline_y + segment.height)
+        .fold(f32::MIN, f32::max);
+    (bottom.is_finite() && top.is_finite() && bottom <= top && !segments.is_empty()).then_some((bottom, top))
 }
 
 fn opens_aligned_body_block(
@@ -375,14 +408,19 @@ fn is_explicit_numbered_body_size_section(text: &str) -> bool {
             .all(char::is_uppercase)
 }
 
-fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size: f32) -> Vec<Vec<bool>> {
+/// `candidates[page][index]` says whether that paragraph is a heading candidate.
+fn body_size_heading_eligibility(
+    all_pages: &[Vec<PdfParagraph>],
+    body_font_size: f32,
+    candidates: &[Vec<bool>],
+) -> Vec<Vec<bool>> {
     let mut next_content: Option<(usize, &PdfParagraph)> = None;
     let mut eligibility = Vec::with_capacity(all_pages.len());
     for (page_index, page) in all_pages.iter().enumerate().rev() {
         let mut page_eligibility = Vec::with_capacity(page.len());
-        for paragraph in page.iter().rev() {
-            let is_candidate = is_body_size_bold_heading_candidate(paragraph, body_font_size);
-            let is_explicit_section = is_explicit_numbered_body_size_section(paragraph_text_raw(paragraph).trim());
+        for (index, paragraph) in page.iter().enumerate().rev() {
+            let is_candidate = candidates[page_index][index];
+            let is_explicit_section = || is_explicit_numbered_body_size_section(paragraph_text_raw(paragraph).trim());
             let has_non_finite_geometry = paragraph
                 .block_bbox
                 .is_some_and(|bbox| !bbox_coordinates_are_finite(bbox))
@@ -394,7 +432,7 @@ fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size
             page_eligibility.push(
                 is_candidate
                     && !has_non_finite_geometry
-                    && if is_explicit_section {
+                    && if is_explicit_section() {
                         !next_content.is_some_and(|(following_page_index, following)| {
                             shares_same_text_row(paragraph, following, page_index == following_page_index)
                         })
@@ -420,29 +458,224 @@ fn body_size_heading_eligibility(all_pages: &[Vec<PdfParagraph>], body_font_size
     eligibility
 }
 
+/// Centroid of the heading map's body cluster: the non-heading cluster that carries
+/// the most text, which is how `assign_heading_levels_smart` chose it.
+///
+/// The first non-heading entry of the descending map is not that cluster when a
+/// slightly larger tier stays under the heading ratio. Measured on a Federal Register
+/// rule (2026-14578, clusters 10.1 / 8.9 / 6.2pt) the first entry was the 10.1pt
+/// running-head tier, so every 9pt bold section heading failed the body-size test
+/// and the document emitted no headings at all. ~keep
+fn body_cluster_font_size(heading_map: &[(f32, Option<u8>)], all_page_segments: &[Vec<SegmentData>]) -> Option<f32> {
+    let mut text_mass = vec![0usize; heading_map.len()];
+    for segment in all_page_segments.iter().flatten() {
+        if segment.text.trim().is_empty() || !segment.font_size.is_finite() {
+            continue;
+        }
+        let nearest = heading_map
+            .iter()
+            .enumerate()
+            .min_by(|(_, (left, _)), (_, (right, _))| {
+                (left - segment.font_size)
+                    .abs()
+                    .total_cmp(&(right - segment.font_size).abs())
+            })
+            .map(|(index, _)| index);
+        if let Some(index) = nearest {
+            text_mass[index] += segment.text.len();
+        }
+    }
+    heading_map
+        .iter()
+        .zip(text_mass)
+        .filter(|((_, level), mass)| level.is_none() && *mass > 0)
+        .max_by_key(|(_, mass)| *mass)
+        .map(|((size, _), _)| *size)
+}
+
 fn promote_repeated_body_size_bold_headings(all_pages: &mut [Vec<PdfParagraph>], body_font_size: Option<f32>) {
     let Some(body_font_size) = body_font_size else {
         return;
     };
-    let eligible = body_size_heading_eligibility(all_pages, body_font_size);
-    let signal_count = eligible.iter().flatten().filter(|&&is_eligible| is_eligible).count();
+    let joins = join_wrapped_bold_titles(all_pages, body_font_size);
     let other_heading_count = all_pages
         .iter()
         .flatten()
         .filter(|paragraph| paragraph.heading_level.is_some())
         .count();
-    if signal_count < MIN_BODY_SIZE_BOLD_SIGNALS
-        || signal_count <= other_heading_count.saturating_mul(MAX_OTHER_HEADING_RATIO)
-    {
-        return;
+    // With no other heading in the document, bold body-size lines are its only
+    // heading convention, so one- and two-word titles (`Introduction`, `Background`)
+    // count too: 1004.1028 and 2026-14578 emitted no heading at all without them.
+    // Where another heading system exists the short form stays a label. ~keep
+    let headingless = other_heading_count == 0;
+    let titles: Vec<Vec<BodySizeTitle>> = all_pages
+        .iter()
+        .map(|page| {
+            page.iter()
+                .map(|paragraph| body_size_title(paragraph, body_font_size, headingless))
+                .collect()
+        })
+        .collect();
+    // A short bold line repeated on many pages (`Federal Register` atop rotated table pages)
+    // is a running label, not a section; a real title repeats at most per rule or chapter.
+    let mut short_title_counts = ahash::AHashMap::<&str, usize>::new();
+    for key in titles.iter().flatten().filter_map(|title| title.short_title.as_deref()) {
+        *short_title_counts.entry(key).or_default() += 1;
     }
-
-    for (page, page_eligibility) in all_pages.iter_mut().zip(eligible) {
-        for (paragraph, is_eligible) in page.iter_mut().zip(page_eligibility) {
-            if is_eligible {
-                paragraph.heading_level = Some(3);
+    let candidates: Vec<Vec<bool>> = titles
+        .iter()
+        .map(|page| {
+            page.iter()
+                .map(|title| {
+                    title.candidate
+                        || title
+                            .short_title
+                            .as_deref()
+                            .is_some_and(|key| short_title_counts[key] <= MAX_SHORT_TITLE_REPEATS)
+                })
+                .collect()
+        })
+        .collect();
+    let eligible = body_size_heading_eligibility(all_pages, body_font_size, &candidates);
+    let signal_count = eligible.iter().flatten().filter(|&&is_eligible| is_eligible).count();
+    if signal_count >= MIN_BODY_SIZE_BOLD_SIGNALS
+        && signal_count > other_heading_count.saturating_mul(MAX_OTHER_HEADING_RATIO)
+    {
+        let level = if headingless {
+            HEADINGLESS_BODY_SIZE_HEADING_LEVEL
+        } else {
+            BODY_SIZE_HEADING_LEVEL
+        };
+        for (page, page_eligibility) in all_pages.iter_mut().zip(eligible) {
+            for (paragraph, is_eligible) in page.iter_mut().zip(page_eligibility) {
+                if is_eligible {
+                    paragraph.heading_level = Some(level);
+                }
             }
         }
+    }
+    split_unpromoted_titles(all_pages, joins);
+}
+
+/// Baseline pitch, in body font sizes, within which the next bold paragraph is the following
+/// line of the same title rather than a title of its own. Tighter than classify's
+/// `WRAPPED_TITLE_MAX_PITCH_EM` (2.0) for display titles: a body-size title sits among body
+/// paragraphs, whose gap a 2.0 em pitch would bridge, while display titles are set loose. ~keep
+const WRAPPED_TITLE_MAX_LINE_PITCH_EM: f32 = 1.6;
+
+/// Join a body-size bold title with the bold lines it wraps onto in its column.
+///
+/// The line grouper ends a paragraph after a numbered section line, so 2026-13845's
+/// `IV. Proposed Action and Request for` and `V. Statutory and Executive Order` were
+/// promoted alone and their remainders (`Public Comment`, `Reviews`) followed as bold
+/// prose. A following bold paragraph in the title's size, on the next line, is joined when
+/// the title is unterminated, the follower opens no section of its own, and the joined block
+/// still reads as one title in one column (see [`is_body_size_bold_signal`]).
+///
+/// The join is provisional: it returns the paragraphs each join consumed, and
+/// [`split_unpromoted_titles`] restores them where the joined block is not promoted.
+fn join_wrapped_bold_titles(all_pages: &mut [Vec<PdfParagraph>], body_font_size: f32) -> Vec<WrappedTitleJoin> {
+    let mut joins: Vec<WrappedTitleJoin> = Vec::new();
+    for (page_index, page) in all_pages.iter_mut().enumerate() {
+        let mut index = 0;
+        while index + 1 < page.len() {
+            let joined = continues_bold_title(&page[index], &page[index + 1], body_font_size)
+                .then(|| joined_paragraph(&page[index], &page[index + 1]))
+                .filter(|joined| is_body_size_bold_signal(joined, body_font_size));
+            if let Some(joined) = joined {
+                let title = std::mem::replace(&mut page[index], joined);
+                let follower = page.remove(index + 1);
+                let extends_last_join = joins
+                    .last()
+                    .is_some_and(|join| join.page == page_index && join.index == index);
+                if extends_last_join && let Some(join) = joins.last_mut() {
+                    join.originals.push(follower);
+                } else {
+                    joins.push(WrappedTitleJoin {
+                        page: page_index,
+                        index,
+                        originals: vec![title, follower],
+                    });
+                }
+            } else {
+                index += 1;
+            }
+        }
+    }
+    joins
+}
+
+/// The source paragraphs one provisional title join replaced at `all_pages[page][index]`.
+struct WrappedTitleJoin {
+    page: usize,
+    index: usize,
+    originals: Vec<PdfParagraph>,
+}
+
+/// Undo every join whose block did not become a heading: two adjacent bold paragraphs are
+/// one title only when the document's bold body-size convention promotes them.
+fn split_unpromoted_titles(all_pages: &mut [Vec<PdfParagraph>], joins: Vec<WrappedTitleJoin>) {
+    for join in joins.into_iter().rev() {
+        let page = &mut all_pages[join.page];
+        if page[join.index].heading_level.is_none() {
+            page.splice(join.index..=join.index, join.originals);
+        }
+    }
+}
+
+fn continues_bold_title(title: &PdfParagraph, next: &PdfParagraph, body_font_size: f32) -> bool {
+    let plain = |paragraph: &PdfParagraph| {
+        paragraph.heading_level.is_none()
+            && paragraph.is_bold
+            && !paragraph.is_list_item
+            && !paragraph.is_code_block
+            && !paragraph.is_formula
+            && !paragraph.is_page_furniture
+    };
+    let pitch = title
+        .lines
+        .last()
+        .and_then(|line| line.baseline_y)
+        .zip(next.lines.first().and_then(|line| line.baseline_y))
+        .map(|(above, below)| above - below);
+    let title_text = paragraph_text_raw(title);
+    plain(title)
+        && plain(next)
+        && (title.dominant_font_size - next.dominant_font_size).abs() <= 0.5
+        && pitch.is_some_and(|pitch| pitch > 0.0 && pitch <= body_font_size * WRAPPED_TITLE_MAX_LINE_PITCH_EM)
+        && !title_text.trim_end().ends_with(['.', ':', ';', '!', '?'])
+        && !is_numbered_section_heading(paragraph_text_raw(next).trim())
+}
+
+fn joined_paragraph(title: &PdfParagraph, next: &PdfParagraph) -> PdfParagraph {
+    let mut joined = title.clone();
+    joined.lines.extend(next.lines.iter().cloned());
+    joined.block_bbox = super::geometry::union_bbox(title.block_bbox, next.block_bbox);
+    joined.text.clear();
+    joined.word_count = PdfParagraph::compute_word_count("", &joined.lines);
+    joined
+}
+
+/// What one paragraph offers the bold body-size heading convention, judged once.
+struct BodySizeTitle {
+    /// A body-size bold signal that reads as a heading on its own evidence.
+    candidate: bool,
+    /// In a headingless document, the count key of a one- or two-word section title.
+    short_title: Option<String>,
+}
+
+fn body_size_title(paragraph: &PdfParagraph, body_font_size: f32, headingless: bool) -> BodySizeTitle {
+    let Some(text) = body_size_bold_signal_text(paragraph, body_font_size) else {
+        return BodySizeTitle {
+            candidate: false,
+            short_title: None,
+        };
+    };
+    let trimmed = text.trim();
+    BodySizeTitle {
+        candidate: reads_as_body_size_bold_heading(paragraph, trimmed),
+        short_title: (headingless && reads_as_short_section_title(paragraph, trimmed))
+            .then(|| paragraph_text_raw(paragraph).trim().to_string()),
     }
 }
 
@@ -2245,6 +2478,34 @@ fn place_markers_before_their_row_bodies(mut lines: Vec<SegmentData>) -> Vec<Seg
     lines
 }
 
+/// Whether `line`, upright, follows a block that is wholly an italic outline heading: an
+/// unterminated title of at most [`MAX_HEADING_WORD_COUNT`] words opened by an outline
+/// enumerator, set in italic apart from its marker.
+fn ends_italic_outline_heading(current_lines: &[&SegmentData], line: &SegmentData) -> bool {
+    if line.is_italic || line.text.trim().is_empty() {
+        return false;
+    }
+    // Bounding the words first keeps a long italic paragraph from being rescanned whole
+    // at every one of its line starts. ~keep
+    let mut word_count = 0;
+    for segment in current_lines {
+        word_count += segment.text.split_whitespace().count();
+        if word_count > MAX_HEADING_WORD_COUNT {
+            return false;
+        }
+    }
+    if !super::classify::segments_all_emphasized(current_lines.iter().copied(), |segment| segment.is_italic) {
+        return false;
+    }
+    let text = current_lines
+        .iter()
+        .map(|segment| segment.text.trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    super::classify::outline_enumerator(&text).is_some() && !super::classify::ends_with_sentence_period(&text)
+}
+
 fn blocks_to_paragraphs(
     lines: Vec<SegmentData>,
     heading_map: &[(f32, Option<u8>)],
@@ -2482,6 +2743,11 @@ fn blocks_to_paragraphs(
                     (prev_right <= corridor_left && line_left >= corridor_right)
                         || (line_right <= corridor_left && prev_left >= corridor_right)
                 });
+            // An italic outline heading (`B. Motor Vehicle Emissions Budgets and Transportation
+            // Conformity`) ends where the upright body beneath it begins. The heading and its
+            // body share size, weight and line pitch, so without this term 2026-13845's
+            // lettered subsections were welded to their first body paragraph. ~keep
+            let ends_italic_heading = starts_new_line && ends_italic_outline_heading(&current_lines, line);
             rotation_change
                 || font_change
                 || role_change
@@ -2492,6 +2758,7 @@ fn blocks_to_paragraphs(
                 || follows_section
                 || crossed_gap
                 || crosses_column_corridor
+                || ends_italic_heading
         };
 
         if should_break && !current_lines.is_empty() {
@@ -2528,6 +2795,8 @@ fn blocks_to_paragraphs(
     {
         paragraphs.push(para);
     }
+
+    keep_adjacent_numbered_entries_as_list(&mut paragraphs);
 
     tracing::debug!(
         input_lines = lines.len(),
@@ -3335,6 +3604,89 @@ fn paragraph_text(lines: &[&SegmentData]) -> String {
     text
 }
 
+/// A numbered heading wraps onto at most two visual lines.
+const MAX_NUMBERED_HEADING_LINES: usize = 2;
+/// A font this close to the body size reads as body text, not as a size step.
+const BODY_SIZE_TOLERANCE_PT: f32 = 0.5;
+
+/// Whether a bold line led by a section number reads as a heading on its own evidence.
+///
+/// A single-level number ("1. Introduction") is also an ordered-list marker, so it
+/// needs the full bold font gate: a bold, body-sized "1. First step" stays a list item.
+/// Multi-level numbering ("3.1. Overview") is never a list marker, so a size just
+/// above body suffices -- CVPR-style 11pt subsection titles over a 10pt body clear
+/// neither the bold gate nor the body-size bold pass. ~keep
+fn is_bold_numbered_section_heading(
+    text: &str,
+    word_count: usize,
+    font_size: f32,
+    body_font_size: f32,
+    clears_bold_font_gate: bool,
+) -> bool {
+    let multi_level = is_numbered_section_heading(text) && super::classify::infer_section_level(text) >= 3;
+    let mut tokens = text.split_whitespace();
+    let number_is_section_shaped = tokens.next().is_some_and(is_section_shaped_number);
+    let title_is_capitalised = tokens
+        .next()
+        .and_then(|word| word.chars().next())
+        .is_some_and(char::is_uppercase);
+    body_font_size > 0.0
+        && font_size > body_font_size + BODY_SIZE_TOLERANCE_PT
+        && super::classify::starts_with_section_number(text)
+        && number_is_section_shaped
+        && (clears_bold_font_gate || multi_level)
+        && title_is_capitalised
+        && !text.ends_with(['.', ',', ';', ':'])
+        && !super::classify::reads_as_body_content(text, word_count)
+        && !super::layout_classify::is_separator_text(text)
+        && !super::regions::looks_like_figure_label(text)
+}
+
+/// A section number has components of one to
+/// [`MAX_SECTION_NUMBER_COMPONENT_DIGITS`](super::classify::MAX_SECTION_NUMBER_COMPONENT_DIGITS)
+/// digits, none zero-padded, so a year ("2024 Highlights") or a dotted date ("12.03.2024",
+/// "12.03.24") is not one. Roman and letter enumerators are left to `starts_with_section_number`.
+fn is_section_shaped_number(token: &str) -> bool {
+    let number = token.trim_end_matches(['.', ')']);
+    if !number.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.') {
+        return true;
+    }
+    !number.is_empty()
+        && number.split('.').all(|component| {
+            (1..=super::classify::MAX_SECTION_NUMBER_COMPONENT_DIGITS).contains(&component.len())
+                && component.bytes().all(|byte| byte.is_ascii_digit())
+                && !(component.len() > 1 && component.starts_with('0'))
+        })
+}
+
+/// Whether a paragraph opens with a single-level number ("1.", "2)", "3").
+fn opens_with_single_level_number(paragraph: &PdfParagraph) -> bool {
+    let text = paragraph_text_raw(paragraph);
+    text.split_whitespace().next().is_some_and(|token| {
+        let number = token.trim_end_matches(['.', ')']);
+        (1..=super::classify::MAX_SECTION_NUMBER_COMPONENT_DIGITS).contains(&number.len())
+            && number.bytes().all(|byte| byte.is_ascii_digit())
+    })
+}
+
+/// Turn adjacent single-level numbered headings back into list items.
+///
+/// Sections have body text between them; a bold, larger "1. Plan" directly followed by
+/// "2. Build" is a styled ordered list, not two empty sections. ~keep
+fn keep_adjacent_numbered_entries_as_list(paragraphs: &mut [PdfParagraph]) {
+    let entries: Vec<bool> = paragraphs
+        .iter()
+        .map(|paragraph| paragraph.heading_level.is_some() && opens_with_single_level_number(paragraph))
+        .collect();
+    for (index, paragraph) in paragraphs.iter_mut().enumerate() {
+        let has_entry_sibling = (index > 0 && entries[index - 1]) || entries.get(index + 1).copied().unwrap_or(false);
+        if entries[index] && has_entry_sibling {
+            paragraph.heading_level = None;
+            paragraph.is_list_item = true;
+        }
+    }
+}
+
 fn finalize_paragraph(
     lines: &[&SegmentData],
     heading_map: &[(f32, Option<u8>)],
@@ -3403,6 +3755,12 @@ fn finalize_paragraph(
     let page_number_like =
         word_count <= MAX_PAGE_NUMBER_WORD_COUNT && super::page_number::classify_page_number_text(trimmed).is_some();
 
+    let body_font_size = heading_map
+        .iter()
+        .find(|(_, level)| level.is_none())
+        .map(|(centroid, _)| *centroid)
+        .unwrap_or(0.0);
+
     let mut heading_level = super::classify::find_heading_level(first.font_size, heading_map, gap_info);
     if heading_level.is_some()
         && (word_count > 20
@@ -3416,16 +3774,12 @@ fn finalize_paragraph(
             // judgement, plus the case where the line runs on past an interior full stop. GH#1599.
             // ~keep
             || super::classify::reads_as_body_content(trimmed, word_count)
-            || (SUPPRESS_LOWERCASE_START_HEADINGS && super::classify::starts_with_lowercase_or_continuation(trimmed)))
+            || (SUPPRESS_LOWERCASE_START_HEADINGS
+                && super::classify::starts_with_lowercase_or_continuation(trimmed)
+                && !is_title_scale_capitalized_opener(trimmed, first.font_size, body_font_size)))
     {
         heading_level = None;
     }
-
-    let body_font_size = heading_map
-        .iter()
-        .find(|(_, level)| level.is_none())
-        .map(|(centroid, _)| *centroid)
-        .unwrap_or(0.0);
 
     // A bold, short, single-line paragraph is only a heading candidate when
     // its font is also meaningfully larger than the document's body font
@@ -3439,11 +3793,14 @@ fn finalize_paragraph(
         && first.font_size >= body_font_size * super::constants::MIN_HEADING_FONT_RATIO
         && first.font_size >= body_font_size + super::constants::MIN_HEADING_FONT_GAP;
 
+    // One visual line, not only one segment: a producer that sets each word as its own run
+    // (2212.11694's 14pt bold title) never met a one-segment test. A multi-run line that
+    // opens with a list marker keeps to the numbered-heading rules below. ~keep
     if heading_level.is_none()
         && is_bold
         && clears_bold_font_gate
         && (1..=8).contains(&word_count)
-        && lines.len() == 1
+        && (lines.len() == 1 || (reconstructed_lines.len() == 1 && !is_list_candidate))
         && !trimmed.ends_with('.')
         && !trimmed.ends_with(':')
         && !trimmed.ends_with(',')
@@ -3459,6 +3816,22 @@ fn finalize_paragraph(
         && !super::regions::looks_like_figure_label(trimmed)
     {
         heading_level = Some(2);
+    }
+
+    if heading_level.is_none()
+        && is_bold
+        && !page_number_like
+        && reconstructed_lines.len() <= MAX_NUMBERED_HEADING_LINES
+        && word_count <= super::constants::MAX_BOLD_HEADING_WORD_COUNT
+        && is_bold_numbered_section_heading(
+            trimmed,
+            word_count,
+            first.font_size,
+            body_font_size,
+            clears_bold_font_gate,
+        )
+    {
+        heading_level = Some(super::classify::infer_section_level(trimmed));
     }
 
     if heading_level.is_none() {
@@ -3485,6 +3858,10 @@ fn finalize_paragraph(
         {
             heading_level = Some(2);
         }
+    }
+
+    if heading_level.is_some() && !names_a_section(trimmed) {
+        heading_level = None;
     }
 
     let is_list_item = heading_level.is_none() && is_list_candidate;
@@ -3694,6 +4071,63 @@ fn is_structural_heading_word(text: &str) -> bool {
             | "Results"
             | "Methodology"
     )
+}
+
+/// Labels that open a table or figure caption (`TABLE 1—`, `Figure 3:`).
+const CAPTION_LABELS: &[&str] = &["table", "figure", "fig.", "fig", "chart", "exhibit", "plate", "scheme"];
+
+/// Whether a block set in a heading's font can name a section. A run with no letter is a
+/// folio or a figure, and a caption label opens a caption: 2026-13845 set its five-digit
+/// page numbers in 11pt bold and its table titles (`TABLE 1—SAN JOAQUIN VALLEY ...`) at
+/// 10pt over a 9pt body, so both became H1s, and the dozen false headings then outnumbered
+/// the bold body-size section titles enough to block their promotion.
+fn names_a_section(text: &str) -> bool {
+    text.chars().any(char::is_alphabetic) && !opens_with_caption_label(text)
+}
+
+fn opens_with_caption_label(text: &str) -> bool {
+    let lower = text.trim_start().to_lowercase();
+    CAPTION_LABELS.iter().any(|label| {
+        lower
+            .strip_prefix(label)
+            .map(str::trim_start)
+            .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()) && caption_number_ends_label(rest))
+    })
+}
+
+/// Whether the number opening `rest` (`1`, `10.1`, `3a`) is followed by a caption separator
+/// or ends the block: `TABLE 1—`, `Figure 3:`, `Table 2. Results`, `Figure 4`. A title that
+/// runs straight on after its number is a section (`Exhibit 10.1 Material Contracts`).
+fn caption_number_ends_label(rest: &str) -> bool {
+    let mut tail = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+    while let Some(fraction) = tail
+        .strip_prefix('.')
+        .filter(|fraction| fraction.starts_with(|c: char| c.is_ascii_digit()))
+    {
+        tail = fraction.trim_start_matches(|c: char| c.is_ascii_digit());
+    }
+    if let Some(after_suffix) = tail
+        .strip_prefix(char::is_alphabetic)
+        .filter(|after| !after.starts_with(char::is_alphabetic))
+    {
+        tail = after_suffix;
+    }
+    let tail = tail.trim_start();
+    tail.is_empty() || tail.starts_with(['\u{2014}', '\u{2013}', ':', '.', '-'])
+}
+
+/// Font ratio over body at which a line is set at display-title scale.
+const TITLE_SCALE_FONT_RATIO: f32 = 1.5;
+
+/// Whether a capitalized opener (`A`, `The`, `In`) belongs to a display-scale title rather
+/// than to a sentence fragment. The continuation-word guard exists for fragments a column
+/// break strands at heading size, but a line set at least half again above body size that
+/// opens with a capital is a title: 1710.02091's `A Bayesian spatial hierarchical model ...`
+/// was emitted as prose for its leading article. A lowercase opener is still a fragment.
+fn is_title_scale_capitalized_opener(text: &str, font_size: f32, body_font_size: f32) -> bool {
+    body_font_size > 0.0
+        && font_size >= body_font_size * TITLE_SCALE_FONT_RATIO
+        && text.trim_start().chars().next().is_some_and(char::is_uppercase)
 }
 
 /// Build a structured `InternalDocument` from pre-extracted per-page segments.
@@ -3930,7 +4364,7 @@ fn build_document_structure_with_native(
     let struct_tree_results: Vec<Option<Vec<PdfParagraph>>> = vec![None; page_count];
     let heuristic_pages: Vec<usize> = (0..page_count).collect();
 
-    let (heading_map, doc_body_font_size) = if used_structure_tree {
+    let (heading_map, doc_body_font_size, bold_heading_body_font_size) = if used_structure_tree {
         let mut heading_map = build_heading_map_from_assigned_roles(&all_page_segments);
         if !suppress_all_heading_roles_when_sparse_and_untrusted(&mut heading_map, &mut all_page_segments)
             && promote_untagged_document_title(&mut heading_map, &all_page_segments)
@@ -3945,7 +4379,7 @@ fn build_document_structure_with_native(
             heading_map_len = heading_map.len(),
             "native structure pipeline: heading map from structure tree"
         );
-        (heading_map, doc_body_font_size)
+        (heading_map, doc_body_font_size, doc_body_font_size)
     } else {
         let (heading_map, _struct_tree_needs_classify) =
             build_heading_map(&all_page_segments, &struct_tree_results, &heuristic_pages, k_clusters)?;
@@ -3953,7 +4387,9 @@ fn build_document_structure_with_native(
             .iter()
             .find(|(_, level)| level.is_none())
             .map(|(size, _)| *size);
-        (heading_map, doc_body_font_size)
+        let bold_heading_body_font_size =
+            body_cluster_font_size(&heading_map, &all_page_segments).or(doc_body_font_size);
+        (heading_map, doc_body_font_size, bold_heading_body_font_size)
     };
 
     let page_heights: Vec<f32> = all_page_segments
@@ -4058,10 +4494,11 @@ fn build_document_structure_with_native(
                 TableModel::Disabled => "disabled",
             };
 
-            let has_table_model = if use_model_inference {
+            // The availability probe loads the model, so skip it when no page has a table to recognise.
+            let has_table_model = if use_model_inference && !table_pages.is_empty() {
                 let available = (loaders.available)(table_model, acceleration, session_thread_budget);
 
-                if !available && !table_pages.is_empty() {
+                if !available {
                     table_model_warning =
                         Some(crate::layout::table_model_unavailable_warning("pdf_tables", model_name));
                 }
@@ -4334,6 +4771,9 @@ fn build_document_structure_with_native(
     );
 
     // Source-owned children must replace the aggregate before table coverage suppresses prose. ~keep
+    for table in &mut emitted_tables {
+        crate::pdf::native::math_latex::sentinels::strip_table(table);
+    }
     if crate::pdf::native::table::repeated_schema_header::apply_splits(schemas, &mut emitted_tables, true) {
         assign_deterministic_table_ids(&mut emitted_tables);
     }
@@ -4533,13 +4973,18 @@ fn build_document_structure_with_native(
     recover_headings_from_outline(&mut all_page_paragraphs, outline_entries);
     // Runs after heading recovery (so recovered headings are excluded) and
     // immediately before the deletion pass it feeds. It needs every page in
-    // hand, which is why it cannot live in `process_single_page`.
-    mark_validated_page_numbers(
-        &mut all_page_paragraphs,
-        &page_heights,
-        include_headers,
-        include_footers,
-    );
+    // hand, which is why it cannot live in `process_single_page`. OCR text keeps its page
+    // numbers (`page_number`'s module docs): the OCR heading pass is discarded unless every
+    // character of its input survives, so deleting "Page 3 of 5" here threw away all of
+    // nougat_005's headings. ~keep
+    if !ocr_text {
+        mark_validated_page_numbers(
+            &mut all_page_paragraphs,
+            &page_heights,
+            include_headers,
+            include_footers,
+        );
+    }
     for page in &mut all_page_paragraphs {
         retain_page_furniture_safely(page);
     }
@@ -4547,7 +4992,11 @@ fn build_document_structure_with_native(
         deduplicate_paragraphs(&mut all_page_paragraphs, &extracted_table_bboxes_by_page);
     }
     compact_final_heading_hierarchy(&mut all_page_paragraphs);
-    promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, doc_body_font_size);
+    promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, bold_heading_body_font_size);
+    if !used_structure_tree {
+        level_numbered_headings_by_depth(&mut all_page_paragraphs);
+        level_outline_enumerated_headings(&mut all_page_paragraphs, bold_heading_body_font_size);
+    }
     #[cfg(feature = "layout-detection")]
     for ((page, projection), accepted_folio) in all_page_paragraphs
         .iter_mut()
@@ -4566,6 +5015,8 @@ fn build_document_structure_with_native(
     // Native semantic roles are finalized in source order before the
     // independent layout geometry projection controls final reading order.
     reorder_pages_by_layout_region(&mut all_page_paragraphs);
+    // After layout projection, which addresses paragraphs by position; this pass folds some. ~keep
+    super::references::mark_author_year_bibliography_entries(&mut all_page_paragraphs);
     #[cfg(feature = "formula-recognition")]
     let mut inline_math_glyphs = if ocr_text {
         Vec::new()
@@ -4661,6 +5112,7 @@ fn build_document_structure_with_native(
     #[cfg(feature = "formula-recognition")]
     tracing::trace!(target: "xberg::pdf::cmsy", matched = inline_math_bounds.iter().map(Vec::len).sum::<usize>(), "paragraph offsets recovered");
 
+    super::display_math::split_display_formulas(&mut all_page_paragraphs);
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(
         total_paragraphs,
@@ -4677,6 +5129,7 @@ fn build_document_structure_with_native(
         &witnesses.hyphens,
         !ocr_text,
     );
+    crate::pdf::native::math_latex::sentinels::strip_document(&mut doc);
     #[cfg(feature = "formula-recognition")]
     for element in &mut doc.elements {
         let bounds = element
@@ -4692,9 +5145,9 @@ fn build_document_structure_with_native(
         let candidates: Vec<_> = bounds
             .iter()
             .filter_map(|((left, bottom, right, top), text, offset)| {
-                (text == &element.text
-                    && [*left, *bottom, *right, *top].map(f64::from) == [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
-                .then_some(*offset)
+                ([*left, *bottom, *right, *top].map(f64::from) == [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
+                    .then(|| glyph_offset_in_element(text, *offset, &element.text))
+                    .flatten()
             })
             .collect();
         super::assembly::annotate_native_volume_limit(&mut element.text, &mut element.annotations, candidates);
@@ -4736,11 +5189,54 @@ fn build_document_structure_with_native(
     Ok(doc)
 }
 
+/// `offset` into a paragraph's assembled source `text`, moved onto `element_text`: the same
+/// text after assembly resolved its formula sentinels, into `$` delimiters for prose or to
+/// nothing elsewhere.
+#[cfg(feature = "formula-recognition")]
+fn glyph_offset_in_element(text: &str, offset: usize, element_text: &str) -> Option<usize> {
+    use crate::pdf::native::math_latex::sentinels;
+    if !sentinels::contains_sentinel(text) {
+        return (text == element_text).then_some(offset);
+    }
+    [true, false].into_iter().find_map(|delimit| {
+        let resolved = sentinels::resolve(text, delimit);
+        (resolved.text == element_text).then(|| resolved.remap(offset))
+    })
+}
+
 fn normalize_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
+    finalize_element_hyphens(elem);
     if elem.annotations.is_empty() {
         normalize_unannotated_element_text(elem, ocr_text);
+    } else {
+        normalize_annotated_element_text(elem, ocr_text);
+    }
+}
+
+/// Map U+2010/U+2011 to ASCII `-` in one assembled element, moving its annotations with the
+/// text and keeping its Markdown plain-text projection in step. The one place assembled text
+/// loses its Unicode hyphens: dehyphenation and segment repair need to see them until here.
+/// An image element carries its OCR result verbatim.
+pub(super) fn finalize_element_hyphens(elem: &mut crate::types::internal::InternalElement) {
+    if matches!(elem.kind, crate::types::internal::ElementKind::Image { .. }) {
         return;
     }
+    let repaired = finalize_hyphens_mapped(&elem.text, !elem.annotations.is_empty());
+    remap_repaired_annotations(&mut elem.annotations, &repaired.replacements);
+    if let Cow::Owned(finalized) = repaired.text {
+        elem.text = finalized;
+    }
+    if let Some(plain) = elem
+        .attributes
+        .as_mut()
+        .and_then(|attributes| attributes.get_mut(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
+        && plain.contains(['\u{2010}', '\u{2011}'])
+    {
+        *plain = finalize_hyphens(plain).into_owned();
+    }
+}
+
+fn normalize_annotated_element_text(elem: &mut crate::types::internal::InternalElement, ocr_text: bool) {
     for step in 0..3 {
         let repaired = match step {
             0 => repair_contextual_ligatures_mapped(&elem.text, true),
@@ -4857,6 +5353,48 @@ mod annotation_text_repair_tests {
             };
             assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), expected);
         }
+    }
+
+    #[cfg(feature = "formula-recognition")]
+    #[test]
+    fn a_glyph_offset_follows_its_paragraph_through_sentinel_resolution() {
+        use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+        let source = format!("so {INLINE_OPEN}x^{{2}}{INLINE_CLOSE} and V(\u{03c8}m) \u{2192} +\u{221e}.");
+        let offset = source.find('V').unwrap();
+        for element_text in [
+            "so $x^{2}$ and V(\u{03c8}m) \u{2192} +\u{221e}.",
+            "so x^{2} and V(\u{03c8}m) \u{2192} +\u{221e}.",
+        ] {
+            let moved = super::glyph_offset_in_element(&source, offset, element_text).expect("same paragraph");
+            assert_eq!(&element_text[moved..moved + 1], "V");
+        }
+        assert_eq!(
+            super::glyph_offset_in_element(&source, offset, "another paragraph"),
+            None
+        );
+        assert_eq!(super::glyph_offset_in_element("plain V", 6, "plain V"), Some(6));
+    }
+
+    #[test]
+    fn unicode_hyphens_map_to_ascii_with_annotations_on_both_repair_paths() {
+        let source = "a cross\u{2011}page \u{2010} ﬁ bold";
+        let expected = "a cross-page - fi bold";
+        assert_eq!(normalized(source, Vec::new()).text, expected);
+        let result = normalized(
+            source,
+            vec![
+                annotation(source, "cross\u{2011}page", AnnotationKind::Italic),
+                annotation(source, "bold", AnnotationKind::Bold),
+            ],
+        );
+        assert_eq!(result.text, expected);
+        assert_eq!(
+            result.annotations,
+            vec![
+                annotation(expected, "cross-page", AnnotationKind::Italic),
+                annotation(expected, "bold", AnnotationKind::Bold),
+            ]
+        );
     }
 
     #[test]
@@ -6045,10 +6583,97 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
     if tables.is_empty() {
         return segments;
     }
+    let split_numbers = carried_split_numbers(&segments, tables);
+    let split_words = carried_split_words(&segments, tables);
     segments
         .into_iter()
-        .filter(|seg| !segment_is_carried(seg, tables))
+        .enumerate()
+        .filter(|(index, seg)| !split_numbers[*index] && !split_words[*index] && !segment_is_carried(seg, tables))
+        .map(|(_, seg)| seg)
         .collect()
+}
+
+/// Segments that print one word in two runs because a kerning pair split it: `Body T` +
+/// `emperature`, the `Te` pair pulled `e` back under the `T`. The grid holds `Body Temperature`;
+/// the long piece matches its row, but the short one ends in `T`, which is no cell word, so it
+/// survived as a prose copy after the table. A pair is carried together when the two runs touch
+/// on one baseline, the seam falls between letters or digits, and a covering table carries the
+/// joined word. ~keep
+fn carried_split_words(segments: &[SegmentData], tables: &[TableCoverage]) -> Vec<bool> {
+    const MAX_KERN_OVERLAP_EM: f32 = 0.3;
+    const MAX_TOUCH_GAP_EM: f32 = 0.1;
+    let mut carried = vec![false; segments.len()];
+    for start in 0..segments.len().saturating_sub(1) {
+        let [left, right] = [&segments[start], &segments[start + 1]];
+        let font_size = left.font_size.max(right.font_size).max(1.0);
+        let gap = right.x - (left.x + left.width);
+        let splits_a_word = left.text.ends_with(char::is_alphanumeric) && right.text.starts_with(char::is_alphanumeric);
+        if !splits_a_word
+            || !left.is_unrotated()
+            || !right.is_unrotated()
+            || (left.baseline_y - right.baseline_y).abs() > font_size * MAX_TOUCH_GAP_EM
+            || gap < -font_size * MAX_KERN_OVERLAP_EM
+            || gap > font_size * MAX_TOUCH_GAP_EM
+        {
+            continue;
+        }
+        let joined = SegmentData {
+            text: format!("{}{}", left.text, right.text),
+            width: right.x + right.width - left.x,
+            ..left.clone()
+        };
+        if segment_is_carried(&joined, tables) {
+            carried[start..start + 2].fill(true);
+        }
+    }
+    carried
+}
+
+/// Segments that print one number in three font runs, `8` `.` `63%`: TeX sets a math-mode
+/// decimal point in CMMI between CMR digits. The grid holds `8.63%` as one run, which neither
+/// digit piece matches on its own, so without this the digits survived as prose beside the
+/// table while the point alone was suppressed. A piece is carried only together with its
+/// touching neighbours, as the whole number some covering table carries; a lone piece of a
+/// cell number is still not that cell's text. ~keep
+fn carried_split_numbers(segments: &[SegmentData], tables: &[TableCoverage]) -> Vec<bool> {
+    let mut carried = vec![false; segments.len()];
+    for start in 0..segments.len().saturating_sub(2) {
+        let [integer, point, fraction] = [&segments[start], &segments[start + 1], &segments[start + 2]];
+        if !prints_one_split_number(integer, point, fraction) {
+            continue;
+        }
+        let joined = SegmentData {
+            text: format!("{}{}{}", integer.text.trim(), point.text.trim(), fraction.text.trim()),
+            width: fraction.x + fraction.width - integer.x,
+            ..integer.clone()
+        };
+        if segment_is_carried(&joined, tables) {
+            carried[start..start + 3].fill(true);
+        }
+    }
+    carried
+}
+
+fn prints_one_split_number(integer: &SegmentData, point: &SegmentData, fraction: &SegmentData) -> bool {
+    const TOUCH_EM: f32 = 0.1;
+    let integer_text = integer.text.trim();
+    let fraction_text = fraction.text.trim();
+    let font_size = integer.font_size.max(fraction.font_size).max(1.0);
+    let touches =
+        |left: &SegmentData, right: &SegmentData| (right.x - (left.x + left.width)).abs() <= font_size * TOUCH_EM;
+    matches!(point.text.trim(), "." | ",")
+        && integer.is_unrotated()
+        && point.is_unrotated()
+        && fraction.is_unrotated()
+        && integer_text.ends_with(|character: char| character.is_ascii_digit())
+        && fraction_text.starts_with(|character: char| character.is_ascii_digit())
+        && !integer_text.contains(char::is_whitespace)
+        && !fraction_text.contains(char::is_whitespace)
+        && (integer.baseline_y - fraction.baseline_y).abs() <= font_size * TOUCH_EM
+        && point.y + point.height >= integer.y - font_size * TOUCH_EM
+        && point.y <= integer.y + integer.height + font_size * TOUCH_EM
+        && touches(integer, point)
+        && touches(point, fraction)
 }
 
 /// Whether some table both covers a segment and carries its text. See [`filter_segments_by_table_bboxes`].
@@ -8050,7 +8675,7 @@ fn dehyphenate_paragraphs(paragraphs: &mut [PdfParagraph], has_positions: bool, 
         if has_positions {
             dehyphenate_paragraph_lines(para, hyphen_witnesses);
         } else {
-            dehyphenate_hyphen_only(para, hyphen_witnesses);
+            dehyphenate_line_breaks(para, hyphen_witnesses, None);
         }
     }
 }
@@ -8093,35 +8718,31 @@ const MIN_HYPHEN_WITNESS_WORD_LEN: usize = 2;
 fn collect_hyphen_witnesses(all_page_segments: &[Vec<SegmentData>]) -> HyphenWitnesses {
     let mut witnesses = HyphenWitnesses::default();
     for segment in all_page_segments.iter().flatten() {
-        let characters: Vec<char> = segment.text.chars().collect();
-        if characters.len() < 3 {
-            continue;
-        }
-        for position in 1..characters.len() - 1 {
-            if characters[position] != '-' {
-                continue;
-            }
-            let left: String = characters[..position]
-                .iter()
-                .rev()
-                .take_while(|character| character.is_alphabetic())
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            let right: String = characters[position + 1..]
-                .iter()
-                .take_while(|character| character.is_alphabetic())
-                .collect();
-            let left_len = left.chars().count();
-            let right_len = right.chars().count();
-            if left_len < MIN_HYPHEN_WITNESS_WORD_LEN || right_len < MIN_HYPHEN_WITNESS_WORD_LEN {
-                continue;
-            }
-            witnesses.insert((left.to_ascii_lowercase(), right.to_ascii_lowercase()));
-        }
+        record_hyphen_witnesses(&segment.text, &mut witnesses);
     }
     witnesses
+}
+
+/// Record every `(left, right)` letter-run pair `text` joins with a word hyphen inside a
+/// token. A hyphen that ends its token (a wrap hyphen before a break) has no right-hand
+/// letters and so never witnesses itself.
+pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesses) {
+    for word in text.split_whitespace() {
+        let mut parts = word.split(is_word_hyphen);
+        let Some(mut left) = parts.next() else {
+            continue;
+        };
+        for right in parts {
+            let left_run = trailing_letters(left);
+            let right_run = leading_letters(right);
+            if left_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
+                && right_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
+            {
+                witnesses.insert((left_run.to_ascii_lowercase(), right_run.to_ascii_lowercase()));
+            }
+            left = right;
+        }
+    }
 }
 
 /// Collect standalone alphabetic words the document itself writes elsewhere, so
@@ -8168,6 +8789,139 @@ fn collect_word_witnesses(all_page_segments: &[Vec<SegmentData>]) -> WordWitness
     witnesses
 }
 
+/// A hyphen that can end a wrapped line: ASCII `-`, U+2010 HYPHEN and U+2011
+/// NON-BREAKING HYPHEN. Some PDF producers write every hyphen, wrap hyphens included,
+/// as U+2011 (`mem‑` + `ory`), so the line-wrap checks must not key on ASCII alone.
+/// En and em dashes are punctuation, not word hyphens, and stay excluded.
+pub(crate) fn is_word_hyphen(character: char) -> bool {
+    matches!(character, '-' | '\u{2010}' | '\u{2011}')
+}
+
+/// A hyphen that can end a wrapped line: a word hyphen, or U+00AD SOFT HYPHEN, which only
+/// ever marks a discretionary break. Dashes and the math minus are excluded.
+pub(crate) fn is_wrap_hyphen(character: char) -> bool {
+    is_word_hyphen(character) || character == '\u{00ad}'
+}
+
+/// TeX and most hyphenation dictionaries leave at least two letters before a break, so a
+/// single letter before a line-final hyphen is a label or an initial, not a word stem.
+const MIN_WRAPPED_STEM_LETTERS: usize = 2;
+
+/// Continuations that mark a suspended hyphen (`pre- and post-processing`), where the
+/// hyphen belongs to the word before the break and must not be merged into the next one.
+const SUSPENDED_HYPHEN_CONTINUATIONS: [&str; 3] = ["and", "or", "nor"];
+
+/// How a hyphen that ends a visual line joins to the fragment after the break.
+///
+/// Two different things happen at a line break and the positional signals cannot tell them
+/// apart: a wrap that split a word (`Mon-` + `tanide`), and a compound whose own hyphen simply
+/// landed there (`long-` + `term`). Collapsing them into one boolean is what welded real
+/// compounds into tokens that do not exist (xberg-io/xberg#1613). `KeepHyphen` is a distinct
+/// outcome from `NotApplicable`: the pair still joins with no space between them, it is only the
+/// hyphen that survives. ~keep
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WrapHyphen {
+    /// Not a hyphen-at-a-break pair; normal spacing rules apply.
+    NotApplicable,
+    /// A wrap split one word: drop the hyphen and join the halves.
+    Weld,
+    /// The compound's own hyphen: keep it, and join without inserting a space.
+    KeepHyphen,
+}
+
+/// The one line-wrap hyphen policy shared by the plain-text rejoin, paragraph
+/// dehyphenation and annotated assembly. `left` is the text ending at the break, `right`
+/// the text after it; callers apply their own geometry gates before asking.
+///
+/// A weld needs a stem of at least [`MIN_WRAPPED_STEM_LETTERS`] non-CJK letters before the
+/// hyphen and a lowercase continuation that is not a conjunction completing a suspended
+/// hyphen. The hyphen survives, and only the break goes, for an uncased or uppercase stem
+/// (`COVID-` / `related`), a known compound, a pair the document writes hyphenated mid-line,
+/// a word hyphen after a digit, a closing bracket or a lone letter (`24-` / `hour`,
+/// `(m − n)-` / `dimensional`, `k-` / `th`), and an all-caps word on both sides
+/// (`INTER-` / `ACTIONS`).
+pub(crate) fn classify_wrap(left: &str, right: &str, witnesses: &HyphenWitnesses) -> WrapHyphen {
+    let mut left_chars = left.chars();
+    let Some(hyphen) = left_chars.next_back().filter(|&c| is_wrap_hyphen(c)) else {
+        return WrapHyphen::NotApplicable;
+    };
+    let stem = left_chars.as_str();
+    let stem_word = stem.rsplit(char::is_whitespace).next().unwrap_or(stem);
+    let right = right.trim_start();
+    let right_letters = leading_letters(right);
+    // A word hyphen joining a compound keeps its hyphen; a soft hyphen never does, and a
+    // token the hyphen also opens (a form's `-0-`) is a dash pair, not a compound. ~keep
+    let compound = if is_word_hyphen(hyphen) && !stem_word.starts_with(is_wrap_hyphen) {
+        WrapHyphen::KeepHyphen
+    } else {
+        WrapHyphen::NotApplicable
+    };
+    let stem_letters = trailing_letters(stem);
+    let Some(last_letter) = stem_letters.chars().next_back() else {
+        let numeric_or_bracketed = stem.ends_with(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']'));
+        return if numeric_or_bracketed && starts_lowercase_word(right_letters) {
+            compound
+        } else {
+            WrapHyphen::NotApplicable
+        };
+    };
+    if is_cjk_char(last_letter) {
+        return WrapHyphen::NotApplicable;
+    }
+    if is_all_caps_word(stem_letters) && is_all_caps_word(right_letters) {
+        return compound;
+    }
+    if !starts_lowercase_word(right_letters) {
+        return WrapHyphen::NotApplicable;
+    }
+    if stem_letters.chars().count() < MIN_WRAPPED_STEM_LETTERS {
+        return compound;
+    }
+    let right_word = right.split_whitespace().next().unwrap_or("");
+    if !last_letter.is_lowercase() || should_preserve_lexical_hyphen(stem_word, right_word, witnesses) {
+        WrapHyphen::KeepHyphen
+    } else {
+        WrapHyphen::Weld
+    }
+}
+
+/// A lowercase continuation that does not complete a suspended hyphen (`pre-` / `and`).
+fn starts_lowercase_word(letters: &str) -> bool {
+    letters.chars().next().is_some_and(char::is_lowercase) && !completes_suspended_hyphen(letters)
+}
+
+/// At least [`MIN_WRAPPED_STEM_LETTERS`] letters, all uppercase, and no `AND`/`OR`/`NOR`
+/// completing a suspended hyphen: a word set in capitals.
+fn is_all_caps_word(letters: &str) -> bool {
+    letters.chars().count() >= MIN_WRAPPED_STEM_LETTERS
+        && letters.chars().all(char::is_uppercase)
+        && !completes_suspended_hyphen(letters)
+}
+
+fn completes_suspended_hyphen(letters: &str) -> bool {
+    SUSPENDED_HYPHEN_CONTINUATIONS
+        .iter()
+        .any(|conjunction| conjunction.eq_ignore_ascii_case(letters))
+}
+
+fn trailing_letters(text: &str) -> &str {
+    let start = text
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| c.is_alphabetic())
+        .last()
+        .map_or(text.len(), |(index, _)| index);
+    &text[start..]
+}
+
+fn leading_letters(text: &str) -> &str {
+    let end = text
+        .char_indices()
+        .find(|(_, c)| !c.is_alphabetic())
+        .map_or(text.len(), |(index, _)| index);
+    &text[..end]
+}
+
 pub(crate) fn should_preserve_lexical_hyphen(
     trailing_word: &str,
     leading_word: &str,
@@ -8185,23 +8939,49 @@ pub(crate) fn should_preserve_lexical_hyphen(
     matches_static_compound || hyphen_witnesses.contains(&(left.to_ascii_lowercase(), right.to_ascii_lowercase()))
 }
 
-/// Whether adjacent extraction runs actually cross a visual line boundary.
+/// Rejoin words that a hyphen split across a visual line boundary inside a paragraph.
 ///
-/// `PdfLine` boundaries can also be introduced by inline style/run splitting. A
-/// suspended hyphen such as `vracht- en` may therefore appear at the end of one
-/// logical line and the start of the next while both runs still share a baseline.
-/// Dehyphenation is only licensed when the runs use the same reading frame and
-/// their upright baselines differ by more than the inline-style tolerance.
-fn spans_visual_line_break(trailing: &SegmentData, leading: &SegmentData) -> bool {
-    if !trailing.has_same_rotation(leading) {
-        return false;
-    }
+/// `full_line_threshold` is the positional gate of the heuristic path: a line whose
+/// right edge stops short of it ended for another reason than wrapping, so its hyphen
+/// is left alone. `None` (structure-tree pages, where x/width may be zero) applies only
+/// the hyphen and line-crossing gates.
+fn dehyphenate_line_breaks(
+    para: &mut PdfParagraph,
+    hyphen_witnesses: &HyphenWitnesses,
+    full_line_threshold: Option<f32>,
+) {
+    for i in 0..para.lines.len().saturating_sub(1) {
+        let (Some(trailing), Some(leading)) = (para.lines[i].segments.last(), para.lines[i + 1].segments.first())
+        else {
+            continue;
+        };
+        if full_line_threshold.is_some_and(|threshold| trailing.x + trailing.width < threshold)
+            || !crosses_visual_line_break(trailing, leading)
+        {
+            continue;
+        }
+        let keeps_hyphen = match classify_wrap(&trailing.text, &leading.text, hyphen_witnesses) {
+            WrapHyphen::NotApplicable => continue,
+            WrapHyphen::Weld => false,
+            WrapHyphen::KeepHyphen => true,
+        };
+        let continuation = leading.text.trim_start();
+        let leading_word = continuation.split_whitespace().next().unwrap_or("");
+        let remainder = continuation[leading_word.len()..].trim_start().to_string();
+        let leading_word = leading_word.to_string();
 
-    let trailing_baseline = trailing.upright_baseline();
-    let leading_baseline = leading.upright_baseline();
-    trailing_baseline.is_finite()
-        && leading_baseline.is_finite()
-        && (trailing_baseline - leading_baseline).abs() > INLINE_STYLE_BASELINE_TOLERANCE
+        if let Some(seg) = para.lines[i].segments.last_mut() {
+            let hyphen_len = seg.text.chars().next_back().map_or(0, char::len_utf8);
+            seg.text.truncate(seg.text.len() - hyphen_len);
+            if keeps_hyphen {
+                seg.text.push('-');
+            }
+            seg.text.push_str(&leading_word);
+        }
+        if let Some(seg) = para.lines[i + 1].segments.first_mut() {
+            seg.text = remainder;
+        }
+    }
 }
 
 /// Core dehyphenation with position-based full-line detection.
@@ -8216,147 +8996,8 @@ fn dehyphenate_paragraph_lines(para: &mut PdfParagraph, hyphen_witnesses: &Hyphe
         .flat_map(|l| l.segments.iter())
         .map(|s| s.x + s.width)
         .fold(0.0_f32, f32::max);
-
-    if max_right_edge <= 0.0 {
-        dehyphenate_hyphen_only(para, hyphen_witnesses);
-        return;
-    }
-
-    let threshold = max_right_edge * FULL_LINE_FRACTION;
-
-    let n = para.lines.len();
-    for i in 0..(n - 1) {
-        let trailing_right = para.lines[i].segments.last().map(|s| s.x + s.width).unwrap_or(0.0);
-        if trailing_right < threshold {
-            continue;
-        }
-
-        let crosses_visual_line = match (para.lines[i].segments.last(), para.lines[i + 1].segments.first()) {
-            (Some(trailing), Some(leading)) => spans_visual_line_break(trailing, leading),
-            _ => false,
-        };
-        if !crosses_visual_line {
-            continue;
-        }
-
-        let trailing_text = match para.lines[i].segments.last() {
-            Some(s) if !s.text.is_empty() => s.text.clone(),
-            _ => continue,
-        };
-        let leading_text = match para.lines[i + 1].segments.first() {
-            Some(s) if !s.text.is_empty() => s.text.clone(),
-            _ => continue,
-        };
-
-        let has_trailing_hyphen = trailing_text.ends_with('-');
-        if !has_trailing_hyphen {
-            continue;
-        }
-
-        let leading_word = leading_text.split_whitespace().next().unwrap_or("");
-        if leading_word.chars().next().is_some_and(|c| c.is_uppercase()) {
-            continue;
-        }
-
-        let trailing_word = trailing_text
-            .trim_end_matches('-')
-            .split_whitespace()
-            .last()
-            .unwrap_or("");
-        if trailing_word.chars().last().is_some_and(is_cjk_char) {
-            continue;
-        }
-
-        let preserved_hyphen = if should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
-            "-"
-        } else {
-            ""
-        };
-        let joined_word = format!("{trailing_word}{preserved_hyphen}{leading_word}");
-
-        if let Some(seg) = para.lines[i].segments.last_mut() {
-            let text_without_word: String = seg
-                .text
-                .chars()
-                .rev()
-                .skip(trailing_word.len() + 1)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            seg.text = format!("{text_without_word}{joined_word}");
-        }
-
-        if let Some(seg) = para.lines[i + 1].segments.first_mut() {
-            let after_leading_word = seg.text.trim_start_matches(leading_word).trim_start();
-            seg.text = after_leading_word.to_string();
-        }
-    }
-}
-
-/// Hyphen-only dehyphenation (no position data required).
-///
-/// Only joins lines when the trailing segment ends with an explicit hyphen.
-/// Used for structure tree pages where x/width may be zero.
-fn dehyphenate_hyphen_only(para: &mut PdfParagraph, hyphen_witnesses: &HyphenWitnesses) {
-    let n = para.lines.len();
-    for i in 0..(n - 1) {
-        let crosses_visual_line = match (para.lines[i].segments.last(), para.lines[i + 1].segments.first()) {
-            (Some(trailing), Some(leading)) => spans_visual_line_break(trailing, leading),
-            _ => false,
-        };
-        if !crosses_visual_line {
-            continue;
-        }
-
-        let trailing_text = match para.lines[i].segments.last() {
-            Some(s) if s.text.ends_with('-') => s.text.clone(),
-            _ => continue,
-        };
-        let leading_text = match para.lines[i + 1].segments.first() {
-            Some(s) if !s.text.is_empty() => s.text.clone(),
-            _ => continue,
-        };
-
-        let leading_word = leading_text.split_whitespace().next().unwrap_or("");
-        if leading_word.chars().next().is_some_and(|c| c.is_uppercase()) {
-            continue;
-        }
-
-        let trailing_word = trailing_text
-            .trim_end_matches('-')
-            .split_whitespace()
-            .last()
-            .unwrap_or("");
-        if trailing_word.chars().last().is_some_and(is_cjk_char) {
-            continue;
-        }
-
-        let preserved_hyphen = if should_preserve_lexical_hyphen(trailing_word, leading_word, hyphen_witnesses) {
-            "-"
-        } else {
-            ""
-        };
-        let joined_word = format!("{trailing_word}{preserved_hyphen}{leading_word}");
-
-        if let Some(seg) = para.lines[i].segments.last_mut() {
-            let text_without_word: String = seg
-                .text
-                .chars()
-                .rev()
-                .skip(trailing_word.len() + 1)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            seg.text = format!("{text_without_word}{joined_word}");
-        }
-
-        if let Some(seg) = para.lines[i + 1].segments.first_mut() {
-            let after_leading_word = seg.text.trim_start_matches(leading_word).trim_start();
-            seg.text = after_leading_word.to_string();
-        }
-    }
+    let full_line_threshold = (max_right_edge > 0.0).then_some(max_right_edge * FULL_LINE_FRACTION);
+    dehyphenate_line_breaks(para, hyphen_witnesses, full_line_threshold);
 }
 
 /// Detect whether a set of paragraphs contains any font-size variation.
@@ -8468,6 +9109,7 @@ struct OutlineParagraphMatch {
 }
 
 fn recover_headings_from_outline(all_pages: &mut [Vec<PdfParagraph>], outline_entries: &[PdfOutlineEntry]) {
+    split_stacked_outline_titles(all_pages, outline_entries);
     let matches = collect_unique_outline_matches(all_pages, outline_entries);
     let offset = calibrated_outline_heading_offset(all_pages, &matches);
 
@@ -8486,41 +9128,178 @@ fn recover_headings_from_outline(all_pages: &mut [Vec<PdfParagraph>], outline_en
     }
 }
 
+/// Split a body paragraph whose leading visual lines spell an outline title of its page.
+///
+/// A section title stacked directly over its first sub-section title, both bold and
+/// unterminated, is joined into one paragraph by the continuation merge: 231425210 emitted
+/// `Android General - Blogs, Papers, How To's` and `Tools Static Analysis`, which no outline
+/// entry matches, so `Android`, `iOS` and `Tools` were lost as headings and every section
+/// below them lost its parent. The outline names the title exactly, so the paragraph is cut
+/// at the line boundary where the title ends; the remainder is classified on its own.
+fn split_stacked_outline_titles(all_pages: &mut [Vec<PdfParagraph>], outline_entries: &[PdfOutlineEntry]) {
+    let mut titles_by_page = ahash::AHashMap::<usize, ahash::AHashSet<String>>::new();
+    for entry in outline_entries {
+        if let Some((page_index, title)) = outline_match_key(entry, all_pages.len()) {
+            titles_by_page.entry(page_index).or_default().insert(title);
+        }
+    }
+    for (page_index, page) in all_pages.iter_mut().enumerate() {
+        let Some(titles) = titles_by_page.get(&page_index) else {
+            continue;
+        };
+        let mut index = 0;
+        while index < page.len() {
+            let split_at = (page[index].heading_level.is_none() && page[index].lines.len() > 1)
+                .then(|| outline_title_split_line(&page[index], titles))
+                .flatten();
+            if let Some(line_count) = split_at {
+                let mut title = page[index].clone();
+                let remainder_lines = title.lines.split_off(line_count);
+                let mut remainder = page[index].clone();
+                remainder.lines = remainder_lines;
+                refresh_split_paragraph(&mut title);
+                refresh_split_paragraph(&mut remainder);
+                page[index] = title;
+                page.insert(index + 1, remainder);
+            }
+            index += 1;
+        }
+    }
+}
+
+/// Most visual lines an outline title found inside a paragraph, after a sentence, may span.
+const MAX_INTERIOR_OUTLINE_TITLE_LINES: usize = 3;
+
+/// The line index at which to cut `paragraph` so an outline title of its page stands alone.
+///
+/// Leading lines that spell a title, set apart from the rest as a title is, are cut after the
+/// title (see [`split_stacked_outline_titles`]). A title can also sit inside a paragraph: a
+/// two-column article whose run of lines carries no break signal welds whole columns, section
+/// titles included (medium.pdf: `... IL28B variation. Methods Samples Pre-treatment serum ...`).
+/// There the cut goes before the title when the line ahead of it ends a sentence; the title's
+/// own leading cut then follows on the remainder.
+fn outline_title_split_line(paragraph: &PdfParagraph, titles: &ahash::AHashSet<String>) -> Option<usize> {
+    let line_count = paragraph.lines.len();
+    for start in 0..line_count - 1 {
+        if start > 0 && !line_ends_sentence(&paragraph.lines[start - 1]) {
+            continue;
+        }
+        let max_end = if start == 0 {
+            line_count - 1
+        } else {
+            (start + MAX_INTERIOR_OUTLINE_TITLE_LINES).min(line_count - 1)
+        };
+        let mut prefix = String::new();
+        for end in start..max_end {
+            for segment in &paragraph.lines[end].segments {
+                prefix.push(' ');
+                prefix.push_str(&segment.text);
+            }
+            if titles.contains(&normalize_outline_title(&prefix)) {
+                if outline_title_set_apart(&paragraph.lines[start..=end], &paragraph.lines[end + 1..]) {
+                    return Some(if start == 0 { end + 1 } else { start });
+                }
+                break;
+            }
+        }
+    }
+    None
+}
+
+/// Whether title lines stand apart from the lines after them as a title does: bold, or in
+/// another size tier (a smaller sans run-in title over serif body counts as much as a larger one).
+fn outline_title_set_apart(title_lines: &[super::types::PdfLine], rest: &[super::types::PdfLine]) -> bool {
+    let title_size = title_lines
+        .iter()
+        .map(|line| line.dominant_font_size)
+        .fold(0.0, f32::max);
+    let rest_size = rest.iter().map(|line| line.dominant_font_size).fold(0.0, f32::max);
+    title_lines.iter().all(|line| line.is_bold) || (title_size - rest_size).abs() > SPARSE_FONT_TIER_TOLERANCE
+}
+
+fn line_ends_sentence(line: &super::types::PdfLine) -> bool {
+    let last = line.segments.last().map_or("", |segment| segment.text.trim_end());
+    matches!(
+        last.chars().last(),
+        Some('.' | '?' | '!' | ':' | ';' | '\u{3002}' | '\u{FF1F}' | '\u{FF01}')
+    )
+}
+
+/// Bounds follow `finalize_paragraph`'s baseline-to-baseline-plus-height convention, so a split
+/// paragraph's box matches an unsplit one's; [`paragraph_geometry_bbox`]'s wider fallback
+/// (glyph `y` included) applies only where no block box was recorded.
+fn refresh_split_paragraph(paragraph: &mut PdfParagraph) {
+    let (mut left, mut bottom, mut right, mut top) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for segment in paragraph.lines.iter().flat_map(|line| &line.segments) {
+        left = left.min(segment.x);
+        bottom = bottom.min(segment.baseline_y);
+        right = right.max(segment.x + segment.width);
+        top = top.max(segment.baseline_y + segment.height);
+    }
+    if paragraph.block_bbox.is_some() {
+        paragraph.block_bbox = Some((left, bottom, right, top));
+    }
+    paragraph.dominant_font_size = paragraph
+        .lines
+        .iter()
+        .map(|line| line.dominant_font_size)
+        .fold(0.0, f32::max);
+    paragraph.is_bold = paragraph.lines.iter().filter(|line| line.is_bold).count() * 2 > paragraph.lines.len();
+    paragraph.text.clear();
+    paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
+}
+
 fn collect_unique_outline_matches(
     all_pages: &[Vec<PdfParagraph>],
     outline_entries: &[PdfOutlineEntry],
 ) -> Vec<OutlineParagraphMatch> {
-    let mut outline_counts = ahash::AHashMap::<(usize, String), usize>::new();
+    // Per (page, title): how many outline entries carry it, and their shared depth
+    // (`None` once two of them disagree).
+    let mut outline_counts = ahash::AHashMap::<(usize, String), (usize, Option<usize>)>::new();
     for entry in outline_entries {
         if let Some(key) = outline_match_key(entry, all_pages.len()) {
-            *outline_counts.entry(key).or_default() += 1;
+            let (count, depth) = outline_counts.entry(key).or_insert((0, Some(entry.depth)));
+            *count += 1;
+            if *depth != Some(entry.depth) {
+                *depth = None;
+            }
         }
     }
     let paragraph_matches = all_pages
         .iter()
         .map(|page| {
-            let mut matches = ahash::AHashMap::<String, (usize, usize)>::new();
+            let mut matches = ahash::AHashMap::<String, Vec<usize>>::new();
             for (index, paragraph) in page.iter().enumerate() {
                 let title = normalize_outline_title(&paragraph_text_raw(paragraph));
-                let entry = matches.entry(title).or_insert((0, index));
-                entry.0 += 1;
+                matches.entry(title).or_default().push(index);
             }
             matches
         })
         .collect::<Vec<_>>();
 
+    // A page that repeats a sub-section title (two `Description` sections on one
+    // page) is matched only when the page carries the title exactly as often as the
+    // outline does, at one depth: outline order need not follow reading order, so
+    // pairing is sound only when every pairing assigns the same level. ~keep
+    let mut consumed = ahash::AHashMap::<(usize, String), usize>::new();
     outline_entries
         .iter()
         .filter_map(|entry| {
-            let (page_index, title) = outline_match_key(entry, all_pages.len())?;
-            if outline_counts.get(&(page_index, title.clone())) != Some(&1) {
+            let key = outline_match_key(entry, all_pages.len())?;
+            let &(outline_count, depth) = outline_counts.get(&key)?;
+            let depth = depth?;
+            let paragraph_indices = paragraph_matches[key.0].get(&key.1)?;
+            if paragraph_indices.len() != outline_count {
                 return None;
             }
-            let &(paragraph_count, paragraph_index) = paragraph_matches[page_index].get(&title)?;
-            (paragraph_count == 1).then_some(OutlineParagraphMatch {
+            let page_index = key.0;
+            let ordinal = consumed.entry(key).or_default();
+            let paragraph_index = *paragraph_indices.get(*ordinal)?;
+            *ordinal += 1;
+            Some(OutlineParagraphMatch {
                 page_index,
                 paragraph_index,
-                depth: entry.depth,
+                depth,
             })
         })
         .collect()
@@ -8616,19 +9395,6 @@ fn strip_section_label(text: &str) -> &str {
         rest.trim_start()
     } else {
         text
-    }
-}
-
-fn paragraph_text_raw(para: &PdfParagraph) -> String {
-    if para.text.is_empty() {
-        para.lines
-            .iter()
-            .flat_map(|line| line.segments.iter())
-            .map(|segment| segment.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        para.text.clone()
     }
 }
 

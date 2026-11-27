@@ -1,5 +1,6 @@
 use crate::error::{Error, Result};
 use crate::extractors::images::{ImageData, PdfImage};
+use tiny_skia::Transform;
 
 #[derive(Clone)]
 enum Failure {
@@ -25,37 +26,230 @@ pub(super) struct ImageBudget {
     failure: Option<Failure>,
 }
 
+/// How an admitted JPEG is decoded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum JpegDecode {
+    /// At full size through `PdfImage::to_dynamic_image`, then converted to RGBA.
+    Full,
+    /// At full size straight into the RGBA paint raster, with [`decode_jpeg_into_rgba`].
+    InPlace,
+    /// At 1/n with [`decode_reduced_jpeg`].
+    Reduced(u8),
+}
+
+/// How `render_image` draws an axis-aligned downscale (`fast_resize_target`); every other image is
+/// drawn by tiny-skia's scaled pattern draw either way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Blit {
+    /// Pre-resize with `fast_image_resize`, then copy 1:1.
+    PreResize,
+    /// Let tiny-skia scale while drawing, bicubic, holding no resized copy. Admitted only when the
+    /// pre-resize does not fit.
+    Direct,
+}
+
+/// An admitted JPEG paint: how it is decoded and how it is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct JpegPaint {
+    pub(super) decode: JpegDecode,
+    pub(super) blit: Blit,
+}
+
+/// Bytes a tiny-skia `draw_pixmap` allocates beyond the pixmaps it reads and writes: the pattern
+/// borrows the source and the raster pipeline lives on the stack, leaving a 64-entry edge list
+/// (at most 64 x 96 bytes), the transformed rect path copies (under 100 bytes each, a few alive at
+/// once, one per tile on a canvas wider or taller than 8191 px) and allocation rounding.
+pub(super) const TINY_SKIA_DRAW_BYTES: u64 = 16 * 1024;
+
+/// Smallest scale, on either axis, at which a [`Blit::Direct`] draw is admitted. tiny-skia's bicubic
+/// kernel reads only the 4x4 source pixels around each sample, so the further it shrinks the more
+/// source pixels it skips: on dense text strokes a direct draw differs from the pre-resize by about
+/// 6 levels on average at 0.8, 9 at 0.7 and 12.6 at 0.6. Below 0.8 an image is refused rather than
+/// drawn that way, which also leaves a tall scan rendered well below its own resolution to the OCR
+/// path that reads its stored image.
+const MIN_DIRECT_DRAW_SCALE: f32 = 0.8;
+
+/// Where and how an image is painted: the device transform of its unit square and the [`Blit`].
+#[derive(Clone, Copy)]
+pub(super) struct Placement {
+    transform: Transform,
+    blit: Blit,
+}
+
+impl Placement {
+    pub(super) fn new(transform: Transform) -> Self {
+        Self {
+            transform,
+            blit: Blit::PreResize,
+        }
+    }
+
+    /// The unit square painted upright over `width` x `height` device pixels.
+    #[cfg(test)]
+    pub(super) fn extent(width: f32, height: f32) -> Self {
+        Self::new(Transform::from_row(width, 0.0, 0.0, -height, 0.0, height))
+    }
+
+    fn with_blit(self, blit: Blit) -> Self {
+        Self { blit, ..self }
+    }
+
+    /// The device extent, in canvas pixels, the image is painted over on each axis.
+    fn painted(self) -> (f32, f32) {
+        let transform = self.transform;
+        (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy))
+    }
+
+    /// Bytes drawing a `source` RGBA raster holds beside that raster: the larger of a pre-resize's
+    /// working set and its resized copy during the draw, or the draw alone. `None` for a direct draw
+    /// that would shrink either axis below [`MIN_DIRECT_DRAW_SCALE`].
+    fn paint_bytes(self, source: (u32, u32)) -> Option<u64> {
+        let image_transform = super::image_unit_square_transform(self.transform, source.0, source.1);
+        match (super::fast_resize_target(image_transform, source), self.blit) {
+            (Some(target), Blit::PreResize) => {
+                let resized = u64::from(target.0)
+                    .saturating_mul(u64::from(target.1))
+                    .saturating_mul(4);
+                Some(resize_working_bytes(source, target).max(resized.saturating_add(TINY_SKIA_DRAW_BYTES)))
+            }
+            (Some(_), Blit::Direct)
+                if image_transform.sx < MIN_DIRECT_DRAW_SCALE || image_transform.sy < MIN_DIRECT_DRAW_SCALE =>
+            {
+                None
+            }
+            _ => Some(TINY_SKIA_DRAW_BYTES),
+        }
+    }
+}
+
 impl ImageBudget {
     pub(super) fn new(limit: usize) -> Self {
         Self { limit, failure: None }
     }
 
+    /// [`Self::admit_jpeg_at`] for an image painted at its own pixel size, where no pre-resize runs.
+    #[cfg(test)]
     pub(super) fn admit_jpeg(&mut self, image: &PdfImage, retained_canvas: u64) -> Result<()> {
-        let ImageData::Jpeg(bytes) = image.data() else {
-            return Ok(());
-        };
-        self.admit_required(jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4))
+        let own_size = Placement::extent(image.width() as f32, image.height() as f32);
+        self.admit_jpeg_at(image, retained_canvas, own_size).map(drop)
     }
 
-    /// Admit `image`, or the IDCT-scaled decode that keeps its rasters within the budget when the
-    /// full-size decode does not. Returns the scale denominator to decode at (1, 2, 4 or 8): the
-    /// finest scale that fits, provided each axis of the reduced raster is at least
-    /// [`MIN_PAINTED_COVERAGE`] of the `device` extent (in canvas pixels) the image is painted at,
-    /// less one pixel of slack (`reduced >= 0.9 * device - 1`). An image that cannot be reduced that
-    /// way is refused exactly as [`Self::admit_jpeg`] refuses it.
+    /// Admit `image`'s full-size decode, drawn with the pre-resize when that fits and directly
+    /// otherwise.
+    pub(super) fn admit_jpeg_at(
+        &mut self,
+        image: &PdfImage,
+        retained_canvas: u64,
+        placement: Placement,
+    ) -> Result<Blit> {
+        let ImageData::Jpeg(bytes) = image.data() else {
+            return Ok(Blit::PreResize);
+        };
+        let full = |blit| {
+            let placement = placement.with_blit(blit);
+            jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4, Some(placement))
+        };
+        for blit in [Blit::PreResize, Blit::Direct] {
+            if full(blit).is_ok_and(|required| self.fits(required)) {
+                return Ok(blit);
+            }
+        }
+        self.admit_required(smaller(full(Blit::PreResize), full(Blit::Direct)))
+            .map(|()| Blit::PreResize)
+    }
+
+    /// [`Self::admit_jpeg_decode`] without the in-place decode, as the scale denominator, for an
+    /// image painted upright over `device` pixels.
+    #[cfg(test)]
     pub(super) fn admit_jpeg_reducing(
         &mut self,
         image: &PdfImage,
         retained_canvas: u64,
         device: (f32, f32),
     ) -> Result<u8> {
+        self.admit_jpeg_ladder(image, retained_canvas, device, false)
+            .map(|decode| match decode {
+                JpegDecode::Reduced(denominator) => denominator,
+                JpegDecode::Full => 1,
+                JpegDecode::InPlace => unreachable!("a masked image is never decoded in place"),
+            })
+    }
+
+    /// The decode [`Self::admit_jpeg_decode`] admits for an image painted upright over `device`
+    /// pixels; `unmasked` opens the in-place rung.
+    #[cfg(test)]
+    pub(super) fn admit_jpeg_ladder(
+        &mut self,
+        image: &PdfImage,
+        retained_canvas: u64,
+        device: (f32, f32),
+        unmasked: bool,
+    ) -> Result<JpegDecode> {
+        self.admit_jpeg_decode(image, retained_canvas, Placement::extent(device.0, device.1), unmasked)
+            .map(|paint| paint.decode)
+    }
+
+    /// Admit `image`, or a decode that keeps its rasters within the budget when the full-size decode
+    /// does not. The first that fits wins:
+    ///
+    /// 1. the full-size decode;
+    /// 2. the finest IDCT-scaled decode (1/2, 1/4 or 1/8) whose reduced raster spans at least
+    ///    [`MIN_PAINTED_COVERAGE`] of the device extent (in canvas pixels) `placement` paints the image
+    ///    over on each axis, less one pixel of slack (`reduced >= 0.9 * device - 1`);
+    /// 3. when `unmasked` (no /Mask, /SMask or in-data soft mask reads the decoded samples), the
+    ///    full-size decode straight into the RGBA paint raster, which never holds the decoded raster
+    ///    beside a converted copy.
+    ///
+    /// Each charge covers drawing the RGBA raster, including the pre-resize `render_image` runs on an
+    /// axis-aligned downscale. Only when none of them fits with that pre-resize does the same ladder
+    /// run again with a [`Blit::Direct`] draw. An image neither ladder fits is refused exactly as
+    /// [`Self::admit_jpeg_at`] refuses it.
+    pub(super) fn admit_jpeg_decode(
+        &mut self,
+        image: &PdfImage,
+        retained_canvas: u64,
+        placement: Placement,
+        unmasked: bool,
+    ) -> Result<JpegPaint> {
         let ImageData::Jpeg(bytes) = image.data() else {
-            return Ok(1);
+            return Ok(JpegPaint {
+                decode: JpegDecode::Full,
+                blit: Blit::PreResize,
+            });
         };
-        let capacity = bytes.capacity();
-        let full = jpeg_image_bytes(image, bytes, capacity, retained_canvas, 4);
-        if full.as_ref().is_ok_and(|required| *required <= self.limit as u64) {
-            return Ok(1);
+        for blit in [Blit::PreResize, Blit::Direct] {
+            let placement = placement.with_blit(blit);
+            if let Some(decode) =
+                self.fitting_decode(image, (bytes, bytes.capacity()), retained_canvas, placement, unmasked)
+            {
+                return Ok(JpegPaint { decode, blit });
+            }
+        }
+        let full = |blit| {
+            let placement = placement.with_blit(blit);
+            jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4, Some(placement))
+        };
+        self.admit_required(smaller(full(Blit::PreResize), full(Blit::Direct)))
+            .map(|()| JpegPaint {
+                decode: JpegDecode::Full,
+                blit: Blit::PreResize,
+            })
+    }
+
+    /// The first decode of [`Self::admit_jpeg_decode`]'s ladder that fits, drawn as `placement` says.
+    /// `capacity` is that of the buffer holding the encoded `bytes`.
+    fn fitting_decode(
+        &self,
+        image: &PdfImage,
+        (bytes, capacity): (&[u8], usize),
+        retained_canvas: u64,
+        placement: Placement,
+        unmasked: bool,
+    ) -> Option<JpegDecode> {
+        let device = placement.painted();
+        let full = jpeg_image_bytes(image, bytes, capacity, retained_canvas, 4, Some(placement));
+        if full.is_ok_and(|required| self.fits(required)) {
+            return Some(JpegDecode::Full);
         }
         // The rayon worker's batched `append_rows` path serves progressive scans only, and
         // `sequential_frame` excludes those. A frame that cannot be read, or that disagrees with the
@@ -69,13 +263,20 @@ impl ImageBudget {
                 if !covers_device((frame_width, frame_height), denominator, device) {
                     break;
                 }
-                let reduced = reduced_jpeg_image_bytes(bytes, capacity, retained_canvas, denominator);
-                if reduced.is_ok_and(|required| required <= self.limit as u64) {
-                    return Ok(denominator);
+                let reduced = reduced_jpeg_image_bytes(bytes, capacity, retained_canvas, denominator, placement);
+                if reduced.is_ok_and(|required| self.fits(required)) {
+                    return Some(JpegDecode::Reduced(denominator));
                 }
             }
+            if unmasked
+                && single_scan_frame(bytes)
+                && in_place_jpeg_image_bytes(bytes, capacity, retained_canvas, placement)
+                    .is_ok_and(|required| self.fits(required))
+            {
+                return Some(JpegDecode::InPlace);
+            }
         }
-        self.admit_required(full).map(|()| 1)
+        None
     }
 
     pub(super) fn admit_referenced_mask(
@@ -90,25 +291,35 @@ impl ImageBudget {
             return Ok(());
         };
         let retained = parent_image_bytes(parent, dynamic, paint, retained_canvas);
-        self.admit_required(retained.and_then(|retained| jpeg_image_bytes(image, bytes, bytes.capacity(), retained, 1)))
+        self.admit_required(
+            retained.and_then(|retained| jpeg_image_bytes(image, bytes, bytes.capacity(), retained, 1, None)),
+        )
     }
 
-    /// Record the refusal for an image whose reduced decode failed after admission, which reads
-    /// headers only. The page is then refused as the full-size decode would have been, not rendered
+    /// Record the refusal for an image whose reduced or in-place decode failed after admission, which
+    /// reads headers only. The page is then refused as the full-size decode would have been, not rendered
     /// without the image.
-    pub(super) fn refuse_failed_reduction(&mut self, image: &PdfImage, retained_canvas: u64) {
+    pub(super) fn refuse_failed_reduction(&mut self, image: &PdfImage, retained_canvas: u64, placement: Placement) {
         if let ImageData::Jpeg(bytes) = image.data() {
-            let full = jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4);
+            let full = jpeg_image_bytes(image, bytes, bytes.capacity(), retained_canvas, 4, Some(placement));
             let _ = self.admit_required(full);
             if self.failure.is_none() {
-                self.failure = Some(Failure::Unqualified("the reduced JPEG decode failed".into()));
+                self.failure = Some(Failure::Unqualified(
+                    "the reduced or in-place JPEG decode failed".into(),
+                ));
             }
         }
     }
 
+    /// Whether a `required` charge fits the budget. A charge that saturated at `u64::MAX` overflowed
+    /// its arithmetic, so it never fits, whatever the limit.
+    fn fits(&self, required: u64) -> bool {
+        required != u64::MAX && required <= self.limit as u64
+    }
+
     fn admit_required(&mut self, required: std::result::Result<u64, String>) -> Result<()> {
         let failure = match required {
-            Ok(required) if required <= self.limit as u64 => return Ok(()),
+            Ok(required) if self.fits(required) => return Ok(()),
             Ok(required) => Failure::Exceeded {
                 required,
                 limit: self.limit,
@@ -134,6 +345,7 @@ fn jpeg_image_bytes(
     encoded_capacity: usize,
     retained_canvas: u64,
     paint_components: u64,
+    placement: Option<Placement>,
 ) -> std::result::Result<u64, String> {
     let mut decoder = jpeg_decoder::Decoder::new(bytes);
     decoder.read_info().map_err(|error| error.to_string())?;
@@ -156,18 +368,43 @@ fn jpeg_image_bytes(
     } else {
         0
     };
-    let rgba_pixels = if cmyk {
-        u64::from(image.width()) * u64::from(image.height())
+    let paint_size = if cmyk {
+        (image.width(), image.height())
     } else {
-        pixels
+        (u32::from(info.width), u32::from(info.height))
     };
-    decoded
-        .checked_add(converted)
-        .and_then(|sum| sum.checked_add(rgba_pixels.checked_mul(paint_components)?))
-        .and_then(|sum| sum.checked_add(encoded_capacity as u64))
-        .and_then(|sum| sum.checked_add(bytes.len() as u64))
-        .and_then(|sum| sum.checked_add(retained_canvas))
-        .ok_or_else(|| "JPEG source image workspace arithmetic overflow".into())
+    let rgba_pixels = u64::from(paint_size.0) * u64::from(paint_size.1);
+    // `render_image` frees the decoded raster before it draws the paint raster, so the draw's working
+    // set shares the paint raster with it but not the decoded one. ~keep
+    let draw = paint_bytes(placement, paint_size)?;
+    Ok(decoded
+        .saturating_add(converted)
+        .max(draw)
+        .saturating_add(rgba_pixels.saturating_mul(paint_components))
+        .saturating_add(encoded_capacity as u64)
+        .saturating_add(bytes.len() as u64)
+        .saturating_add(retained_canvas))
+}
+
+/// What drawing a `source` raster as `placement` says holds beside it (nothing without a
+/// placement), or why that draw is not admitted.
+fn paint_bytes(placement: Option<Placement>, source: (u32, u32)) -> std::result::Result<u64, String> {
+    placement
+        .map_or(Some(0), |placement| placement.paint_bytes(source))
+        .ok_or_else(|| format!("a direct draw below {MIN_DIRECT_DRAW_SCALE} scale is not admitted"))
+}
+
+/// The smaller of two charges, so a refusal reports the cheapest draw that still did not fit. Every
+/// charge saturates instead of overflowing, so it stays a definite `Exceeded` refusal.
+fn smaller(
+    first: std::result::Result<u64, String>,
+    second: std::result::Result<u64, String>,
+) -> std::result::Result<u64, String> {
+    match (first, second) {
+        (Ok(first), Ok(second)) => Ok(first.min(second)),
+        (Ok(charge), Err(_)) | (Err(_), Ok(charge)) => Ok(charge),
+        (Err(reason), Err(_)) => Err(reason),
+    }
 }
 
 fn parent_image_bytes(
@@ -256,9 +493,10 @@ fn reduced_dimension(dimension: u32, denominator: u8) -> u64 {
     u64::from(dimension).div_ceil(u64::from(denominator))
 }
 
-/// The JPEG working set at `denominator`: the larger of the paint phase (scaled raster plus its
-/// RGBA conversion) and the decode phase (component planes, output and one MCU row of
-/// coefficients), on top of the encoded bytes and the retained canvas.
+/// The JPEG working set at `denominator`: the largest of the paint phase (scaled raster plus its
+/// RGBA conversion), the decode phase (component planes, output and one MCU row of coefficients)
+/// and the draw phase (RGBA raster plus what drawing it as `placement` says needs), on top of the encoded
+/// bytes and the retained canvas.
 ///
 /// The one-MCU-row bound holds because `jpeg-decoder` converts each coefficient row as it is read:
 /// its `rayon` worker (enabled for this crate on every target that supports it) and its immediate
@@ -270,6 +508,7 @@ fn reduced_jpeg_image_bytes(
     encoded_capacity: usize,
     retained_canvas: u64,
     denominator: u8,
+    placement: Placement,
 ) -> std::result::Result<u64, String> {
     let mut decoder = jpeg_decoder::Decoder::new(bytes);
     decoder.read_info().map_err(|error| error.to_string())?;
@@ -293,28 +532,24 @@ fn reduced_jpeg_image_bytes(
     if chosen.map(|(w, h)| (u64::from(w), u64::from(h))) != Some((width, height)) {
         return Err("the decoder would not decode this frame at the admitted reduced size".into());
     }
-    let pixels = width
-        .checked_mul(height)
-        .ok_or("reduced JPEG raster arithmetic overflow")?;
+    // Both sides fit u16, which `chosen` checked, so the raster arithmetic below cannot overflow. ~keep
+    let pixels = width * height;
     let components = info.pixel_format.pixel_bytes() as u64;
     let decoded = pixels * components;
-    let paint = decoded.checked_add(pixels * 4);
-    let coefficients = u64::from(info.width)
-        .div_ceil(8)
-        .checked_mul(components * MAX_VERTICAL_BLOCKS * 2 * COEFFICIENT_BLOCK_BYTES);
-    let decoding = decoded
-        .checked_mul(2)
-        .and_then(|planes_and_output| planes_and_output.checked_add(coefficients?));
-    paint
-        .zip(decoding)
-        .map(|(paint, decoding)| paint.max(decoding))
-        .and_then(|sum| sum.checked_add(encoded_capacity as u64))
-        .and_then(|sum| sum.checked_add(bytes.len() as u64))
-        .and_then(|sum| sum.checked_add(retained_canvas))
-        .ok_or_else(|| "reduced JPEG source image workspace arithmetic overflow".into())
+    let paint = decoded + pixels * 4;
+    let coefficients =
+        u64::from(info.width).div_ceil(8) * components * MAX_VERTICAL_BLOCKS * 2 * COEFFICIENT_BLOCK_BYTES;
+    let decoding = decoded * 2 + coefficients;
+    let drawing = (pixels * 4).saturating_add(paint_bytes(Some(placement), (width as u32, height as u32))?);
+    Ok(paint
+        .max(decoding)
+        .max(drawing)
+        .saturating_add(encoded_capacity as u64)
+        .saturating_add(bytes.len() as u64)
+        .saturating_add(retained_canvas))
 }
 
-/// Decode a JPEG admitted by [`ImageBudget::admit_jpeg_reducing`] at `denominator`, never holding
+/// Decode a JPEG admitted by [`ImageBudget::admit_jpeg_decode`] at `denominator`, never holding
 /// the full-resolution raster.
 pub(super) fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<image::DynamicImage> {
     let failed =
@@ -347,4 +582,207 @@ pub(super) fn decode_reduced_jpeg(bytes: &[u8], denominator: u8) -> Result<image
         _ => None,
     }
     .ok_or_else(|| Error::Decode("reduced JPEG decoded to an unexpected pixel layout".into()))
+}
+
+/// Bytes per output pixel of one resized axis that hold its convolution coefficients beyond the
+/// window itself: the `i16` chunk's struct, its allocation rounding and the pixel's bounds.
+const COEFFICIENT_BYTES_PER_OUTPUT: u64 = 64;
+/// Bytes per window slot per output pixel: the `f64` weight and the `i16` normalized copy, which
+/// coexist while the normalizer builds its chunks.
+const COEFFICIENT_BYTES_PER_SLOT: u64 = 8 + 2;
+
+/// Bytes `resize_rgba` allocates to resize a `source` RGBA raster to `target` with
+/// `fast_image_resize` (no `rayon`, bilinear convolution, alpha untouched): the output raster; for a
+/// resize on both axes, the vertical-first intermediate of at most the source width by the target
+/// height plus one alignment pixel; and each resized axis's coefficient table, whose bilinear window
+/// is `2 * ceil(in / out) + 1` slots (3 for an enlarged axis) per output pixel. Saturates rather
+/// than wrapping, so an absurd target is refused.
+pub(super) fn resize_working_bytes(source: (u32, u32), target: (u32, u32)) -> u64 {
+    resize_samples_working_bytes(source, target, 4)
+}
+
+/// [`resize_working_bytes`] for samples of `components` bytes per pixel, which
+/// `raster_budget::resize_samples` resizes: the output and intermediate rasters (and the
+/// intermediate's one alignment pixel) hold `components` bytes per pixel, the coefficient tables
+/// depend on the geometry alone.
+pub(super) fn resize_samples_working_bytes(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
+    let components = u64::from(components);
+    let (source_width, source_height) = (u64::from(source.0), u64::from(source.1));
+    let (target_width, target_height) = (u64::from(target.0), u64::from(target.1));
+    let output = target_width.saturating_mul(target_height).saturating_mul(components);
+    let horizontal = target_width != source_width;
+    let vertical = target_height != source_height;
+    let intermediate = if horizontal && vertical {
+        source_width
+            .saturating_mul(target_height)
+            .saturating_mul(components)
+            .saturating_add(components)
+    } else {
+        0
+    };
+    let coefficients = |resized: bool, input: u64, output: u64| {
+        if !resized || output == 0 {
+            return 0;
+        }
+        let window = input.div_ceil(output).max(1) * 2 + 1;
+        output.saturating_mul(window * COEFFICIENT_BYTES_PER_SLOT + COEFFICIENT_BYTES_PER_OUTPUT)
+    };
+    output
+        .saturating_add(intermediate)
+        .saturating_add(coefficients(horizontal, source_width, target_width))
+        .saturating_add(coefficients(vertical, source_height, target_height))
+}
+
+/// Peak bytes of `render_image`'s native downscale of a `components`-byte `source` raster: the
+/// source beside the resize's working set; then, with the source freed, the resized samples and
+/// the RGBA raster they are widened into (a moving reallocation holds both); then that RGBA raster
+/// during the draw.
+///
+/// For a `target` no larger than `source` on either axis, the only downscale that path takes, this
+/// never exceeds the full-size RGBA raster plus the pre-resize draw [`Placement::paint_bytes`]
+/// charges, which is what the RGBA path holds and the JPEG charges count: the source is at most
+/// the RGBA raster, the native resize allocates at most the RGBA one, and the widened target is at
+/// most the source in RGBA plus the target in RGBA.
+#[cfg(any(test, feature = "budget-probe"))]
+pub(super) fn native_downscale_peak_bytes(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
+    let pixel_bytes = u64::from(components);
+    let source_bytes = u64::from(source.0)
+        .saturating_mul(u64::from(source.1))
+        .saturating_mul(pixel_bytes);
+    let pixels = u64::from(target.0).saturating_mul(u64::from(target.1));
+    let resizing = source_bytes.saturating_add(resize_samples_working_bytes(source, target, components));
+    let widening = pixels.saturating_mul(pixel_bytes + 4);
+    resizing
+        .max(widening)
+        .max(pixels.saturating_mul(4).saturating_add(TINY_SKIA_DRAW_BYTES))
+}
+
+/// Widest MCU, in pixels: 8 times the largest horizontal sampling factor.
+const MAX_MCU_COLUMNS: u64 = 32;
+/// Bytes per padded frame column, per component, bounding zune-jpeg's row buffers when the first
+/// scan holds every component. With sampling factors up to 4, its raw coefficient rows (32),
+/// upsampling destination (256, doubled for misaligned factors), first-row copy (64),
+/// `row`/`row_up` (8) and upsampler scratch (8) total at most 368 `i16` per column of the frame
+/// padded to whole MCUs, which bounds every component's stride.
+const SINGLE_SCAN_ROW_BYTES_PER_COLUMN: u64 = 1024;
+
+/// Whether the first scan of `bytes` carries every frame component. zune-jpeg then converts each
+/// MCU row into output pixels as it decodes it; a frame split over several scans holds the
+/// coefficients of the whole image until its last scan.
+pub(super) fn single_scan_frame(bytes: &[u8]) -> bool {
+    let mut components = None;
+    let mut position = 2;
+    while bytes.get(position) == Some(&0xff) {
+        let Some(&marker) = bytes.get(position + 1) else {
+            return false;
+        };
+        match marker {
+            0xc0 | 0xc1 => components = bytes.get(position + 9).copied(),
+            0xda => return components.is_some() && bytes.get(position + 4).copied() == components,
+            _ => {}
+        }
+        let Some(length) = bytes.get(position + 2..position + 4) else {
+            return false;
+        };
+        position += 2 + usize::from(u16::from_be_bytes([length[0], length[1]]));
+    }
+    false
+}
+
+/// The frame size, RGBA raster bytes and zune-jpeg row-buffer bound of a JPEG [`decode_jpeg_into_rgba`]
+/// can decode.
+fn in_place_frame(bytes: &[u8]) -> std::result::Result<((u32, u32), u64, u64), String> {
+    let mut decoder = jpeg_decoder::Decoder::new(bytes);
+    decoder.read_info().map_err(|error| error.to_string())?;
+    let info = decoder.info().ok_or_else(|| "missing JPEG frame header".to_string())?;
+    if !matches!(
+        info.pixel_format,
+        jpeg_decoder::PixelFormat::L8 | jpeg_decoder::PixelFormat::RGB24
+    ) {
+        return Err("only 8-bit grayscale and RGB JPEG sources can be decoded in place".into());
+    }
+    let raster = u64::from(info.width) * u64::from(info.height) * 4;
+    let rows = u64::from(info.width).div_ceil(MAX_MCU_COLUMNS)
+        * MAX_MCU_COLUMNS
+        * info.pixel_format.pixel_bytes() as u64
+        * SINGLE_SCAN_ROW_BYTES_PER_COLUMN;
+    Ok(((u32::from(info.width), u32::from(info.height)), raster, rows))
+}
+
+/// Bytes [`decode_jpeg_into_rgba`] itself allocates, the share of [`in_place_jpeg_image_bytes`]
+/// beside the caller's encoded buffer and canvas: the RGBA raster, the decoder's row buffers, its
+/// copy of the encoded bytes and the metadata it may copy out of them (at most the input).
+#[cfg(feature = "budget-probe")]
+pub(super) fn in_place_decode_bytes(bytes: &[u8]) -> std::result::Result<u64, String> {
+    let (_, raster, rows) = in_place_frame(bytes)?;
+    Ok(raster + rows + bytes.len() as u64 * 2)
+}
+
+/// The working set of [`decode_jpeg_into_rgba`] and the paint after it: the RGBA raster the samples
+/// are decoded into, the larger of zune-jpeg's row buffers and what drawing it as `placement` says
+/// needs, the encoded bytes, the decoder's copy of them and the metadata it may copy out of them (at
+/// most the input), and the retained canvas.
+fn in_place_jpeg_image_bytes(
+    bytes: &[u8],
+    encoded_capacity: usize,
+    retained_canvas: u64,
+    placement: Placement,
+) -> std::result::Result<u64, String> {
+    let (frame, raster, rows) = in_place_frame(bytes)?;
+    let draw = paint_bytes(Some(placement), frame)?;
+    Ok(raster
+        .saturating_add(rows.max(draw))
+        .saturating_add(encoded_capacity as u64)
+        .saturating_add(bytes.len() as u64 * 2)
+        .saturating_add(retained_canvas))
+}
+
+/// Decode a JPEG admitted as [`JpegDecode::InPlace`] at its full `frame` size straight into its RGBA
+/// paint raster. The decoder writes its gray or RGB samples to the front of the RGBA buffer, which
+/// is then widened from the back, so the decoded raster never coexists with a converted copy. The
+/// decoder, its allocation limit and so the pixels are those of `image::load_from_memory` followed
+/// by `to_rgba8`.
+pub(super) fn decode_jpeg_into_rgba(bytes: &[u8], (width, height): (u32, u32)) -> Result<image::RgbaImage> {
+    use image::ImageDecoder;
+    let failed = |error: image::ImageError| Error::Decode(format!("Failed to decode JPEG in place: {error}"));
+    let mut decoder = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(bytes)).map_err(failed)?;
+    let mut limits = image::Limits::default();
+    limits.reserve(decoder.total_bytes()).map_err(failed)?;
+    decoder.set_limits(limits).map_err(failed)?;
+    let channels = match decoder.color_type() {
+        image::ColorType::L8 => 1,
+        image::ColorType::Rgb8 => 3,
+        other => return Err(Error::Decode(format!("JPEG decodes to {other:?}, not gray or RGB"))),
+    };
+    if decoder.dimensions() != (width, height) {
+        let (decoded_width, decoded_height) = decoder.dimensions();
+        return Err(Error::Decode(format!(
+            "JPEG decodes at {decoded_width}x{decoded_height}, not the admitted {width}x{height}"
+        )));
+    }
+    let pixels = usize::try_from(u64::from(width) * u64::from(height))
+        .map_err(|_| Error::Decode("JPEG raster exceeds the address space".into()))?;
+    let rgba_len = pixels
+        .checked_mul(4)
+        .ok_or_else(|| Error::Decode("JPEG raster exceeds the address space".into()))?;
+    let mut raster = vec![0; rgba_len];
+    decoder.read_image(&mut raster[..pixels * channels]).map_err(failed)?;
+    widen_to_rgba(&mut raster, channels);
+    image::RgbaImage::from_raw(width, height, raster)
+        .ok_or_else(|| Error::Decode("in-place JPEG decoded to an unexpected pixel layout".into()))
+}
+
+/// Widen `channels`-byte gray or RGB samples packed at the front of `raster` into opaque RGBA over
+/// the whole of it. Back to front, pixel `i` lands at `4 * i`, at or after every sample of pixels
+/// `0..=i`, so no sample is overwritten before it is read.
+pub(super) fn widen_to_rgba(raster: &mut [u8], channels: usize) {
+    for index in (0..raster.len() / 4).rev() {
+        let source = index * channels;
+        let pixel = if channels == 1 {
+            [raster[source], raster[source], raster[source], u8::MAX]
+        } else {
+            [raster[source], raster[source + 1], raster[source + 2], u8::MAX]
+        };
+        raster[index * 4..index * 4 + 4].copy_from_slice(&pixel);
+    }
 }

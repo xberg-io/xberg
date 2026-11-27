@@ -4,16 +4,19 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 
-use xberg::core::config::ExtractionConfig;
+use xberg::core::config::{ExtractionConfig, OutputFormat};
 
 mod helpers;
 use helpers::extract_bytes_document;
 
-/// #155: a top-level JSON array of objects must render as headings/list items,
-/// not as one opaque code block.
+/// #155: a top-level JSON array of objects must render its fields, not one opaque
+/// code block, keep its records apart, and not invent "Item N" labels the source lacks.
 #[tokio::test]
 async fn should_render_structure_for_top_level_json_array() {
-    let config = ExtractionConfig::default();
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        ..ExtractionConfig::default()
+    };
     let json = br#"[{"name": "Ada"}, {"name": "Grace"}]"#;
 
     let extraction = extract_bytes_document(json, "application/json", &config)
@@ -21,13 +24,15 @@ async fn should_render_structure_for_top_level_json_array() {
         .expect("json extraction should succeed");
 
     assert!(
-        extraction.content.contains("Item 1") && extraction.content.contains("Item 2"),
-        "expected per-item headings, got: {}",
+        !extraction.content.contains("Item 1") && !extraction.content.contains("Item 2"),
+        "expected no synthetic per-item labels, got: {}",
         extraction.content
     );
+    let ada = extraction.content.find("name: Ada").expect("first record missing");
+    let grace = extraction.content.find("name: Grace").expect("second record missing");
     assert!(
-        extraction.content.contains("name: Ada") && extraction.content.contains("name: Grace"),
-        "expected rendered field values, got: {}",
+        extraction.content[ada..grace].contains("\n-----\n"),
+        "expected the records to be separated by a thematic break, got: {}",
         extraction.content
     );
     assert!(
@@ -82,11 +87,14 @@ async fn should_render_structure_for_toml() {
     );
 }
 
-/// #155: JSONL (an array of records) must render per-record structure instead of one
-/// opaque code block.
+/// #155: JSONL (an array of records) must render per-record structure, each record set
+/// apart, instead of one opaque code block.
 #[tokio::test]
 async fn should_render_structure_for_jsonl() {
-    let config = ExtractionConfig::default();
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        ..ExtractionConfig::default()
+    };
     let jsonl = b"{\"name\": \"Alice\"}\n{\"name\": \"Bob\"}";
 
     let extraction = extract_bytes_document(jsonl, "application/x-ndjson", &config)
@@ -94,12 +102,17 @@ async fn should_render_structure_for_jsonl() {
         .expect("jsonl extraction should succeed");
 
     assert!(
-        extraction.content.contains("Item 1") && extraction.content.contains("Item 2"),
-        "expected per-record headings, got: {}",
+        !extraction.content.contains("Item 1") && !extraction.content.contains("Item 2"),
+        "expected no synthetic per-record labels, got: {}",
         extraction.content
     );
-    assert!(extraction.content.contains("name: Alice"));
-    assert!(extraction.content.contains("name: Bob"));
+    let alice = extraction.content.find("name: Alice").expect("first record missing");
+    let bob = extraction.content.find("name: Bob").expect("second record missing");
+    assert!(
+        extraction.content[alice..bob].contains("\n-----\n"),
+        "expected the records to be separated by a thematic break, got: {}",
+        extraction.content
+    );
 }
 
 /// #166: the flattened `path: value` view must be surfaced in metadata instead of

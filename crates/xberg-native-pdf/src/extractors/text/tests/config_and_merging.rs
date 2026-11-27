@@ -783,7 +783,7 @@ fn snap_span(text: &str, x: f32, y: f32, w: f32, fs: f32, seq: usize) -> TextSpa
         artifact_type: None,
         text: text.to_string(),
         bbox: Rect::new(x, y, w, fs),
-        font_name: "F1".to_string(),
+        font_name: "F1".into(),
         font_size: fs,
         font_weight: FontWeight::Normal,
         color: Color::black(),
@@ -823,6 +823,29 @@ fn test_snap_superscript_baselines_correctness() {
     assert_eq!(
         extractor.spans[1].bbox.y, 700.0,
         "superscript must snap onto the base baseline (y=700)"
+    );
+}
+
+#[test]
+fn test_snap_superscript_baselines_records_the_raw_baseline() {
+    let mut extractor = TextExtractor::new();
+    extractor.spans = vec![
+        snap_span("x", 100.0, 700.0, 30.0, 12.0, 0),
+        snap_span("2", 130.0, 704.0, 4.0, 6.0, 1),
+    ];
+    extractor.snap_superscript_baselines();
+    assert_eq!(extractor.raw_script_baselines, [(130.0, 6.0, 700.0, 704.0)]);
+
+    let mut preserving = TextExtractor::new();
+    preserving.preserve_script_baselines = true;
+    preserving.spans = vec![
+        snap_span("x", 100.0, 700.0, 30.0, 12.0, 0),
+        snap_span("2", 130.0, 704.0, 4.0, 6.0, 1),
+    ];
+    preserving.snap_superscript_baselines();
+    assert!(
+        preserving.raw_script_baselines.is_empty(),
+        "a preserving read restores the raw baseline itself"
     );
 }
 

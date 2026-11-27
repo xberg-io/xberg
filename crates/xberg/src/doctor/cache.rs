@@ -16,11 +16,20 @@ use std::path::{Path, PathBuf};
 
 /// Known xberg-owned cache modules (from `resolve_cache_dir` and
 /// `cache_base.join` call sites: tessdata/ocr/paddle-ocr resolvers,
-/// `GenericCache` extraction, MCP layout/embeddings warmup). Anything else in
+/// `GenericCache` extraction, MCP layout/embeddings warmup, the ORT saved-graph
+/// cache). Anything else in
 /// the cache base — e.g. staged layout models, older versions' dirs, the
 /// CoreML bundle cache — is inspected but NEVER deleted: a static allowlist
 /// that lags the code must not become a deletion rule.
-const KNOWN_MODULE_DIRS: &[&str] = &["tessdata", "ocr", "paddle-ocr", "extraction", "layout", "embeddings"];
+const KNOWN_MODULE_DIRS: &[&str] = &[
+    "tessdata",
+    "ocr",
+    "paddle-ocr",
+    "extraction",
+    "layout",
+    "embeddings",
+    "ort-optimized",
+];
 
 pub(super) fn check_cache(_config: &ExtractionConfig) -> Vec<DoctorCheck> {
     let mut checks = cache_base_checks(&crate::cache_dir::resolve_cache_base(), cache_dir_overridden());

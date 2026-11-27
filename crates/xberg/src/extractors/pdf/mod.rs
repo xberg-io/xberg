@@ -236,32 +236,6 @@ pub(crate) fn accepted_mixed_ocr_coordinate_frames(
         .collect()
 }
 
-#[cfg(feature = "pdf")]
-const PDF_OUTLINES_MARKER: &[u8] = b"/Outlines";
-#[cfg(feature = "pdf")]
-const PDF_PREVIOUS_XREF_MARKER: &[u8] = b"/Prev";
-
-#[cfg(feature = "pdf")]
-fn contains_pdf_marker(content: &[u8], marker: &[u8]) -> bool {
-    memchr::memmem::find(content, marker).is_some()
-}
-
-#[cfg(feature = "pdf")]
-fn catalog_needs_lopdf_compatibility_pass(catalog: Option<&xberg_native_pdf::object::Object>) -> bool {
-    let Some(catalog) = catalog else {
-        return true;
-    };
-    let Some(dictionary) = catalog.as_dict() else {
-        return true;
-    };
-    dictionary.contains_key("Outlines")
-}
-
-#[cfg(feature = "pdf")]
-fn raw_pdf_needs_lopdf_compatibility_pass(content: &[u8]) -> bool {
-    contains_pdf_marker(content, PDF_PREVIOUS_XREF_MARKER) || contains_pdf_marker(content, PDF_OUTLINES_MARKER)
-}
-
 /// Reject a document whose page count exceeds `security_limits.max_pages` before any
 /// per-page work (layout detection, OCR, rendering) begins (#1451).
 ///
@@ -269,8 +243,7 @@ fn raw_pdf_needs_lopdf_compatibility_pass(content: &[u8]) -> bool {
 /// open the document at all.
 ///
 /// The fallback exists because the `xberg_native_pdf` open is the sole gate on this cap, and
-/// `raw_pdf_needs_lopdf_compatibility_pass` below documents that some structures only
-/// `lopdf` can walk — so without it, a document `xberg_native_pdf` rejects skips the cap
+/// some documents only `lopdf` can open — so without it, a document `xberg_native_pdf` rejects skips the cap
 /// entirely and is then handed to an extraction path that may still recover it. That
 /// is the shape a hostile input would take against a security limit.
 ///
@@ -327,6 +300,15 @@ fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
 #[cfg(feature = "ocr-pipeline")]
 use crate::plugins::registry::automatic_ocr_backend_is_registered;
 
+/// Whether `pdf_options.keep_white_text` keeps white text that sits on no painted content.
+#[cfg(feature = "pdf")]
+fn keeps_white_text(config: &ExtractionConfig) -> bool {
+    config
+        .pdf_options
+        .as_ref()
+        .is_some_and(|options| options.keep_white_text)
+}
+
 /// Page count via `xberg_native_pdf`. `None` when it cannot open or count the document,
 /// in which case the caller falls back to [`lopdf_page_count`].
 #[cfg(feature = "pdf")]
@@ -345,41 +327,34 @@ fn lopdf_page_count(content: &[u8]) -> Option<usize> {
 }
 
 #[cfg(feature = "pdf")]
-fn parsed_pdf_needs_lopdf_compatibility_pass(document: &crate::pdf::native::NativeDocument) -> bool {
-    match document.doc.catalog() {
-        Ok(catalog) => catalog_needs_lopdf_compatibility_pass(Some(&catalog)),
-        Err(error) => {
-            tracing::debug!(
-                error = %error,
-                "xberg_native_pdf catalog inspection failed; retaining lopdf compatibility pass"
-            );
-            catalog_needs_lopdf_compatibility_pass(None)
-        }
-    }
+struct OutlineAndRevisionData {
+    outline_entries: Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
+    bookmark_uris: Vec<crate::types::ExtractedUri>,
+    revisions: Option<Vec<crate::types::DocumentRevision>>,
 }
 
+/// The outline and incremental-update history, read from the document extraction already
+/// opened instead of a second, whole-file lopdf parse.
+///
+/// It runs on every document rather than behind a raw-byte scan for `/Outlines` or `/Prev`:
+/// both reads stop at the catalog and the trailer chain, while the scan read every byte of a
+/// mapped file and so kept all of it resident. ~keep
 #[cfg(feature = "pdf")]
-fn extract_lopdf_compatibility_data(
-    content: &[u8],
-) -> (
-    Vec<crate::pdf::bookmarks::PdfOutlineEntry>,
-    Vec<crate::types::ExtractedUri>,
-    Option<Vec<crate::types::DocumentRevision>>,
-) {
-    match lopdf::Document::load_mem(content) {
-        Ok(lopdf_doc) => {
-            let entries = crate::pdf::bookmarks::extract_outline_entries(&lopdf_doc);
-            let uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&entries);
-            let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(content, &lopdf_doc);
-            (entries, uris, revisions)
-        }
-        Err(_) => (Vec::new(), Vec::new(), None),
+fn extract_outline_and_revision_data(document: &xberg_native_pdf::PdfDocument) -> OutlineAndRevisionData {
+    let graph = crate::pdf::object_graph::NativeObjectGraph::new(document);
+    let outline_entries = crate::pdf::bookmarks::extract_outline_entries(&graph);
+    let bookmark_uris = crate::pdf::bookmarks::extract_bookmarks_from_entries(&outline_entries);
+    let revisions = crate::pdf::xref_revisions::extract_pdf_xref_revisions(&document.source_bytes, &graph);
+    OutlineAndRevisionData {
+        outline_entries,
+        bookmark_uris,
+        revisions,
     }
 }
 
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
-    source: Vec<u8>,
+    source: bytes::Bytes,
     #[cfg(feature = "tokio-runtime")]
     may_have_embedded_files: bool,
     extraction: extraction::PdfExtractionPhaseResult,
@@ -446,18 +421,116 @@ where
     work()
 }
 
+/// The PDF bytes an extraction reads: borrowed from an in-memory caller, or a shared buffer
+/// the native engine takes over without a copy.
+enum PdfSource<'a> {
+    Borrowed(&'a [u8]),
+    /// A heap buffer, or a file mapping from [`crate::core::io::open_file_bytes`].
+    #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
+    Shared(bytes::Bytes),
+}
+
+impl std::ops::Deref for PdfSource<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        match self {
+            Self::Borrowed(bytes) => bytes,
+            Self::Shared(bytes) => bytes,
+        }
+    }
+}
+
+impl<'a> From<&'a [u8]> for PdfSource<'a> {
+    fn from(bytes: &'a [u8]) -> Self {
+        Self::Borrowed(bytes)
+    }
+}
+
+/// Load a PDF from disk without copying a large file onto the heap.
+///
+/// Files over the `open_file_bytes` threshold are mapped and the mapping becomes the native
+/// document's source, so object and stream reads page in only what they touch. The file must
+/// not be modified or truncated while the extraction runs (the `open_file_bytes` contract); the
+/// extractor copies any result buffer that slices the mapping before returning.
+#[cfg(feature = "tokio-runtime")]
+async fn load_pdf_source(path: &Path) -> Result<bytes::Bytes> {
+    let open = |path: &Path| -> Result<bytes::Bytes> {
+        let file = crate::core::io::open_file_bytes(path)?;
+        #[cfg(all(test, feature = "pdf"))]
+        source_mapping_tests::record_loaded(&file);
+        Ok(file.into_bytes())
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let path = path.to_path_buf();
+        tokio::task::spawn_blocking(move || open(&path))
+            .await
+            .map_err(|error| crate::XbergError::Other(format!("PDF file read task failed: {error}")))?
+    }
+    #[cfg(target_arch = "wasm32")]
+    open(path)
+}
+
+/// Copy every result buffer that is a slice of the file mapping onto the heap.
+///
+/// A returned document outlives the extraction and may be cached, while a mapped file can be
+/// truncated by another process at any time and a read of the vanished pages then raises
+/// SIGBUS. The engine copies image payloads already; this makes that a checked invariant
+/// instead of an assumption, so a future zero-copy slice cannot keep the mapping alive.
+#[cfg(feature = "tokio-runtime")]
+fn detach_from_source(document: &mut InternalDocument, source: &std::ops::Range<usize>) {
+    fn detach_images(images: &mut [crate::types::ExtractedImage], source: &std::ops::Range<usize>) {
+        for image in images {
+            let start = image.data.as_ptr() as usize;
+            if !image.data.is_empty() && source.contains(&start) {
+                image.data = bytes::Bytes::copy_from_slice(&image.data);
+            }
+            if let Some(nested) = image.ocr_result.as_mut() {
+                detach_document(nested, source);
+            }
+        }
+    }
+    fn detach_document(document: &mut crate::types::ExtractedDocument, source: &std::ops::Range<usize>) {
+        if let Some(images) = document.images.as_mut() {
+            detach_images(images, source);
+        }
+        for child in document.children.iter_mut().flatten() {
+            detach_document(&mut child.result, source);
+        }
+    }
+    detach_images(&mut document.images, source);
+    for child in document.children.iter_mut().flatten() {
+        detach_document(&mut child.result, source);
+    }
+}
+
 #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
 fn may_have_embedded_files(document: &xberg_native_pdf::PdfDocument) -> bool {
-    document.is_encrypted()
-        || !document.has_unrecovered_catalog()
-        || !document
-            .catalog()
-            .is_ok_and(|catalog| catalog.as_dict().is_some_and(|dict| !dict.contains_key("Names")))
+    if document.is_encrypted() || !document.has_unrecovered_catalog() {
+        return true;
+    }
+    let Ok(catalog) = document.catalog() else {
+        return true;
+    };
+    let Some(catalog) = catalog.as_dict() else {
+        return true;
+    };
+    let Some(names) = catalog.get("Names") else {
+        return false;
+    };
+    // A name tree of only `/Dests` or `/JavaScript` holds no attachment; anything this
+    // parser cannot resolve is left to the lopdf attachment pass.
+    document
+        .resolve_object(names)
+        .ok()
+        .and_then(|names| names.as_dict().map(|names| names.contains_key("EmbeddedFiles")))
+        .unwrap_or(true)
 }
 
 #[cfg(feature = "pdf")]
 fn extract_native_blocking(
-    content: Vec<u8>,
+    content: bytes::Bytes,
     config: ExtractionConfig,
     #[cfg(feature = "layout-detection")] layout_images: Option<Vec<image::RgbImage>>,
     #[cfg(feature = "layout-detection")] layout_results: Option<Vec<crate::pdf::structure::types::PageLayoutResult>>,
@@ -475,23 +548,17 @@ fn extract_native_blocking(
         .as_ref()
         .and_then(|options| options.passwords.as_deref())
         .unwrap_or(&[]);
-    let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
-    let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
     let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
-    let compatibility_data = match compatibility_data {
-        Some(data) => Some(data),
-        None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
-            let source = std::mem::take(&mut native_document.doc.source_bytes);
-            drop(native_document);
-            let data = extract_lopdf_compatibility_data(&source);
-            native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(source, passwords)?;
-            Some(data)
-        }
-        None => None,
-    };
+    native_document.doc.set_keep_white_text(keeps_white_text(&config));
+    #[cfg(all(test, feature = "tokio-runtime"))]
+    source_mapping_tests::record_opened(&native_document.doc.source_bytes);
+    let OutlineAndRevisionData {
+        outline_entries,
+        bookmark_uris,
+        revisions: pdf_revisions,
+    } = extract_outline_and_revision_data(&native_document.doc);
     #[cfg(feature = "tokio-runtime")]
-    let may_have_embedded_files = compatibility_data.is_some() || may_have_embedded_files(&native_document.doc);
-    let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
+    let may_have_embedded_files = may_have_embedded_files(&native_document.doc);
     ensure_pdf_not_cancelled(&config)?;
     let diagrams = if wants_dot_output(&config) {
         crate::extraction::diagram::pdf::recover(&mut native_document)
@@ -505,6 +572,7 @@ fn extract_native_blocking(
         not(target_arch = "wasm32")
     ))]
     let mut image_gap = None;
+    native_document.doc.begin_page_passes();
     let extraction = extract_all_from_native_document(
         &mut native_document,
         &config,
@@ -524,7 +592,10 @@ fn extract_native_blocking(
             acceleration: layout_acceleration_override.as_ref(),
             region_text: region_text_layout.as_ref(),
         },
-    )?;
+    );
+    native_document.doc.release_page_caches();
+    xberg_native_pdf::release_memory::return_freed_memory_to_os();
+    let extraction = extraction?;
     ensure_pdf_not_cancelled(&config)?;
 
     Ok(NativeBlockingOutput {
@@ -640,13 +711,16 @@ fn apply_extracted_pdf_metadata(
 const MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE: usize = 20;
 const MIN_STRUCTURED_NATIVE_TOKEN_COVERAGE: f64 = 0.70;
 
+/// Lowercased words of `text` with edge ASCII punctuation trimmed. Tokens with no
+/// alphanumeric character (bullet and dash glyphs) are dropped: a structured list
+/// renders them as markers, so they can never be matched against the native text.
 fn normalized_pdf_tokens(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split_whitespace()
         .map(|word| {
             word.trim_matches(|character: char| character.is_ascii_punctuation())
                 .to_lowercase()
         })
-        .filter(|word| !word.is_empty())
+        .filter(|word| word.chars().any(char::is_alphanumeric))
 }
 
 fn structured_native_token_coverage(document: &InternalDocument, native_text: &str) -> Option<f64> {
@@ -975,8 +1049,8 @@ fn record_implausible_text_pages(
     boundaries: Option<&[crate::types::PageBoundary]>,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) {
-    let default_ocr_config = crate::core::config::OcrConfig::default();
-    let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
+    let default_ocr_config = config.ocr_or_default();
+    let ocr_config: &crate::core::config::OcrConfig = &default_ocr_config;
     let thresholds = ocr_config.effective_thresholds();
 
     let scan = ocr::scan_text_plausibility(
@@ -1125,8 +1199,8 @@ fn scanned_pages_to_ocr(
         // Thresholds come from the caller's `ocr` block when there is one; the gate can now
         // be switched on without one, and then reads the same defaults every other
         // no-explicit-block OCR route reads. ~keep
-        let default_ocr_config = crate::core::config::OcrConfig::default();
-        let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
+        let default_ocr_config = config.ocr_or_default();
+        let ocr_config: &crate::core::config::OcrConfig = &default_ocr_config;
         let decision = ocr::evaluate_per_page_ocr(
             native_text,
             boundaries,
@@ -1502,8 +1576,8 @@ async fn run_ocr_with_layout_pages(
         hints
     };
 
-    let default_ocr_config = crate::core::config::OcrConfig::default();
-    let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
+    let default_ocr_config = config.ocr_or_default();
+    let ocr_config: &crate::core::config::OcrConfig = &default_ocr_config;
     #[cfg(all(
         paddle_ocr,
         feature = "ocr",
@@ -2931,11 +3005,12 @@ impl InternalDocumentExtractor for PdfExtractor {
 
     #[cfg(feature = "tokio-runtime")]
     async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
-        let bytes = crate::core::io::read_file_async(path).await?;
+        let bytes = load_pdf_source(path).await?;
+        let source = bytes.as_ptr() as usize..bytes.as_ptr() as usize + bytes.len();
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(Some(path.to_path_buf()));
         let result = crate::pdf::render::with_task_render_warnings(self.extract_core(
-            std::borrow::Cow::Owned(bytes),
+            PdfSource::Shared(bytes),
             mime_type,
             config,
             Some(path),
@@ -2943,7 +3018,10 @@ impl InternalDocumentExtractor for PdfExtractor {
         .await;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(None);
-        result
+        result.map(|mut document| {
+            detach_from_source(&mut document, &source);
+            document
+        })
     }
 
     fn supported_mime_types(&self) -> &[&str] {
@@ -3004,7 +3082,7 @@ impl PdfExtractor {
     /// as pdfium.
     async fn extract_core(
         &self,
-        content: std::borrow::Cow<'_, [u8]>,
+        content: PdfSource<'_>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3090,19 +3168,22 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native(
         &self,
-        content: std::borrow::Cow<'_, [u8]>,
+        content: PdfSource<'_>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
     ) -> Result<InternalDocument> {
         // ~keep Keep the added compatibility wrapper from doubling the native future's stack footprint.
-        Box::pin(self.extract_core_native_with_layout_pages(content, mime_type, config, path, None)).await
+        crate::core::runtime::pin_boxed(|| {
+            self.extract_core_native_with_layout_pages(content, mime_type, config, path, None)
+        })
+        .await
     }
 
     #[cfg(feature = "pdf")]
     async fn extract_core_native_with_layout_pages(
         &self,
-        content: std::borrow::Cow<'_, [u8]>,
+        content: PdfSource<'_>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3132,10 +3213,11 @@ impl PdfExtractor {
         ) = layout_runner::maybe_run_layout_for_markdown_with_pages(&content, config, layout_pages).await;
 
         let (blocking_content, borrowed_content) = match content {
-            std::borrow::Cow::Owned(bytes) => (bytes, None),
-            std::borrow::Cow::Borrowed(bytes) => (bytes.to_vec(), Some(bytes)),
+            PdfSource::Shared(bytes) => (bytes, None),
+            PdfSource::Borrowed(bytes) => (bytes::Bytes::copy_from_slice(bytes), Some(bytes)),
         };
-        let blocking_config = config.clone();
+        // ~keep Boxed so the ~10 KiB config is not copied with the closure through spawn_blocking's frames.
+        let blocking_config = Box::new(config.clone());
         #[cfg(feature = "layout-detection")]
         let region_text_layout = layout_pages
             .filter(|pages| pages.region_text.is_some() && crate::engine::layout_region_text::capture_allowed(config))
@@ -3152,7 +3234,7 @@ impl PdfExtractor {
         let native_output = spawn_pdf_blocking(move || {
             extract_native_blocking(
                 blocking_content,
-                blocking_config,
+                *blocking_config,
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_images,
                 #[cfg(feature = "layout-detection")]
@@ -3655,7 +3737,7 @@ impl PdfExtractor {
     #[cfg(not(feature = "pdf"))]
     async fn extract_core_native(
         &self,
-        _content: std::borrow::Cow<'_, [u8]>,
+        _content: PdfSource<'_>,
         mime_type: &str,
         _config: &ExtractionConfig,
         _path: Option<&std::path::Path>,
@@ -3665,6 +3747,8 @@ impl PdfExtractor {
     }
 }
 
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+mod source_mapping_tests;
 #[cfg(test)]
 mod tests;
 
@@ -3694,4 +3778,187 @@ fn recovered_catalog_without_names_keeps_attachment_compatibility() {
     assert!(!catalog.as_dict().unwrap().contains_key("Names"));
     assert!(!recovered.has_unrecovered_catalog());
     assert!(may_have_embedded_files(&recovered));
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+#[test]
+fn name_tree_without_embedded_files_skips_attachment_parsing() {
+    use lopdf::{Object, dictionary};
+    use xberg_native_pdf::PdfDocument;
+
+    let with_names = |names: Object| {
+        let mut pdf = lopdf::Document::with_version("1.7");
+        let pages = pdf.add_object(dictionary! { "Type" => "Pages", "Count" => 0, "Kids" => Vec::<Object>::new() });
+        let names = pdf.add_object(names);
+        let root = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages, "Names" => names });
+        pdf.trailer.set("Root", root);
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        PdfDocument::from_bytes(bytes).unwrap()
+    };
+
+    let dests_only = with_names(Object::Dictionary(dictionary! { "Dests" => dictionary! {} }));
+    assert!(dests_only.has_unrecovered_catalog());
+    assert!(!may_have_embedded_files(&dests_only));
+
+    let attachments = with_names(Object::Dictionary(dictionary! { "EmbeddedFiles" => dictionary! {} }));
+    assert!(may_have_embedded_files(&attachments));
+
+    let unreadable = with_names(Object::Integer(7));
+    assert!(may_have_embedded_files(&unreadable));
+}
+
+/// One page of text whose catalog carries `/Outlines`, which sends it through the outline
+/// pass, and optionally a `/Names` → `/EmbeddedFiles` tree holding `attachment`.
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+fn outlined_pdf_with_attachment(attachment: Option<&[u8]>) -> Vec<u8> {
+    use lopdf::{Object, Stream, dictionary};
+
+    let mut pdf = lopdf::Document::with_version("1.7");
+    let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let contents = pdf.add_object(Stream::new(
+        dictionary! {},
+        b"BT /F1 24 Tf 72 720 Td (Outlined body) Tj ET".to_vec(),
+    ));
+    let pages = pdf.new_object_id();
+    let page = pdf.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages,
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        "Contents" => contents,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    pdf.objects.insert(
+        pages,
+        Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }),
+    );
+    let outlines = pdf.add_object(dictionary! { "Type" => "Outlines", "Count" => 0 });
+    let mut catalog = dictionary! { "Type" => "Catalog", "Pages" => pages, "Outlines" => outlines };
+    if let Some(payload) = attachment {
+        let data = pdf.add_object(Stream::new(dictionary! {}, payload.to_vec()));
+        let filespec = pdf.add_object(dictionary! { "EF" => dictionary! { "F" => data } });
+        catalog.set(
+            "Names",
+            dictionary! {
+                "EmbeddedFiles" => dictionary! {
+                    "Names" => vec![Object::string_literal("attachment.txt"), filespec.into()],
+                },
+            },
+        );
+    }
+    let root = pdf.add_object(catalog);
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+#[test]
+fn outlined_pdf_reports_whether_an_attachment_tree_exists() {
+    let without = outlined_pdf_with_attachment(None);
+    let with = outlined_pdf_with_attachment(Some(b"Attachment text"));
+
+    let open = |bytes: Vec<u8>| xberg_native_pdf::PdfDocument::from_bytes(bytes).expect("open");
+    assert!(!may_have_embedded_files(&open(without)));
+    assert!(may_have_embedded_files(&open(with)));
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[tokio::test]
+async fn outlined_pdf_keeps_its_attachment_after_the_outline_pass() {
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let extractor = PdfExtractor::new();
+
+    let document = extractor
+        .extract_content(
+            &outlined_pdf_with_attachment(Some(b"Attachment text")),
+            "application/pdf",
+            &config,
+        )
+        .await
+        .unwrap();
+    let [child] = document.children.as_deref().expect("the attachment must be extracted") else {
+        panic!("expected one attachment, got {:?}", document.children);
+    };
+    assert_eq!(child.path, "attachment.txt");
+    assert_eq!(child.result.content.trim(), "Attachment text");
+
+    let document = extractor
+        .extract_content(&outlined_pdf_with_attachment(None), "application/pdf", &config)
+        .await
+        .unwrap();
+    assert!(document.children.is_none(), "{:?}", document.children);
+}
+
+/// A catalog without `/Outlines` whose only incremental update links back through `/Prev`:
+/// the case the removed raw `/Prev` scan existed for, so its revision must still be reported.
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[tokio::test]
+async fn incremental_update_without_outline_still_reports_its_revision() {
+    use lopdf::{Object, Stream, dictionary};
+
+    let mut pdf = lopdf::Document::with_version("1.4");
+    let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let contents = pdf.add_object(Stream::new(
+        dictionary! {},
+        b"BT /F1 24 Tf 72 720 Td (Revised body) Tj ET".to_vec(),
+    ));
+    let pages = pdf.new_object_id();
+    let page = pdf.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages,
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        "Contents" => contents,
+        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    pdf.objects.insert(
+        pages,
+        Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }),
+    );
+    let root = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    assert!(memchr::memmem::find(&bytes, b"/Outlines").is_none());
+
+    let tail = &bytes[bytes.len().saturating_sub(64)..];
+    let keyword = memchr::memmem::rfind(tail, b"startxref").expect("base startxref");
+    let base_xref: usize = std::str::from_utf8(&tail[keyword + b"startxref".len()..])
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .and_then(|offset| offset.parse().ok())
+        .expect("base xref offset");
+    let added = pdf.max_id + 1;
+    let added_offset = bytes.len();
+    bytes.extend_from_slice(format!("{added} 0 obj\n<</Update true>>\nendobj\n").as_bytes());
+    let update_xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n{added} 1\n{added_offset:010} 00000 n \n").as_bytes());
+    bytes.extend_from_slice(
+        format!(
+            "trailer\n<</Size {} /Root {} {} R /Prev {base_xref}>>\nstartxref\n{update_xref}\n%%EOF\n",
+            added + 1,
+            root.0,
+            root.1
+        )
+        .as_bytes(),
+    );
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let document = PdfExtractor::new()
+        .extract_content(&bytes, "application/pdf", &config)
+        .await
+        .unwrap();
+    let revisions = document.revisions.expect("the incremental update must be reported");
+    assert_eq!(revisions.len(), 1);
+    assert_eq!(revisions[0].revision_id, format!("xref-offset-{base_xref}"));
 }

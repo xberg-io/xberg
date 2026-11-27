@@ -12,6 +12,7 @@ run = [
   "scripts/ci/benchmarks/validate-workflow-build-config.sh",
   "python3 -m unittest scripts/ci/benchmarks/test_validate_workflow_matrix.py",
   "python3 -m unittest scripts/ci/benchmarks/test_dependency_groups.py",
+  "python3 -m unittest tools/benchmark-harness/tests/test_build_corpus.py",
   "python3 -m unittest tools/benchmark-harness/tests/test_corpus_cache_manifest.py",
   "python3 -m unittest tools/benchmark-harness/tests/test_docling_extract.py",
   "python3 -m unittest tools/benchmark-harness/tests/test_mineru_extract.py",

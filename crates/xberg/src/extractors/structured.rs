@@ -687,17 +687,17 @@ fn build_json_internal_structure(
 ///
 /// Lists are closed before an object or nested array is rendered so headings
 /// and paragraphs do not become implicit children of the preceding list item.
+/// Each structured item is a record group, so markdown sets consecutive items apart with
+/// a thematic break instead of an invented "Item N" heading the source never contained.
 fn build_json_array(
     values: &[serde_json::Value],
     builder: &mut InternalDocumentBuilder,
     depth: u8,
     budget: &mut SecurityBudget,
 ) -> Result<()> {
-    const ARRAY_ITEM_LABEL: &str = "Item";
-
     budget.enter()?;
     let mut list_is_open = false;
-    for (index, value) in values.iter().enumerate() {
+    for value in values {
         budget.step()?;
         match value {
             serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
@@ -705,10 +705,9 @@ fn build_json_array(
                     builder.end_list();
                     list_is_open = false;
                 }
-                let label = format!("{ARRAY_ITEM_LABEL} {}", index + 1);
-                budget.account_text(label.len())?;
-                builder.push_heading(depth.min(6), &label, None, None);
-                build_json_internal_structure(value, builder, depth + 1, budget)?;
+                builder.push_record_start();
+                build_json_internal_structure(value, builder, depth, budget)?;
+                builder.push_group_end();
             }
             serde_json::Value::String(text) => {
                 budget.check_entity(text)?;

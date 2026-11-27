@@ -7,19 +7,30 @@
 
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, extract as extract_public};
 
-const LABEL_SCAN: &[u8] = include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan.pdf");
+/// The refusal tests read progressive copies of the scans: the same pixels, but the renderer can
+/// decode a progressive JPEG neither at a reduced size nor in place, so only its full-size decode is
+/// left and the page render is still refused. The baseline `label-scan.pdf` now renders.
+const ORIGINAL_LABEL_SCAN: &[u8] =
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan.pdf");
+const LABEL_SCAN: &[u8] =
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-progressive.pdf");
 const DOWNSCALED_LABEL_SCAN: &[u8] =
-    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-downscaled.pdf");
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-downscaled-progressive.pdf");
 const MIXED_LABEL_SCAN: &[u8] =
-    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed.pdf");
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed-progressive.pdf");
 const TWO_PAGE_LABEL_SCAN: &[u8] =
-    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages.pdf");
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages-progressive.pdf");
 const LOW_DPI_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-low-dpi.pdf");
 
-/// The page render needs about 93 MB of image working memory and the budget below is 80 MiB, so the
-/// render is refused and OCR retries on the embedded image at its proven 300 dpi. That image fits
-/// the configured size limit and is not shrunk, so the read keeps its glyphs.
+/// Under the budget below (80 MiB, 83 886 080 bytes) a page renders at 261 dpi to a 3132 x 2219
+/// canvas (27 799 632 bytes). The progressive scan can only be decoded at full size: its 3600 x 2550
+/// RGB raster and RGBA copy (64 260 000) beside the canvas and two copies of its 398 723 encoded
+/// bytes need 92 857 078 bytes even drawn without a pre-resize, so the render is refused. OCR then
+/// retries on the embedded image at its proven 300 dpi, unshrunk: that read needs 74 242 138 bytes
+/// (Otsu and deskew workspace 45 904 692, the 27 540 000-byte RGB raster, the encoded bytes twice),
+/// so it fits. The render is refused up to about 97 MB and the read needs at least 74.2 MB.
+/// The baseline scan instead renders, from an in-place decode drawn directly (77 141 340 bytes).
 const REFUSING_BUDGET: usize = 80 * 1024 * 1024;
 const RECOVERY_CLAIM: &str = "was recovered from the page's embedded image XObjects";
 
@@ -196,6 +207,9 @@ fn explicit_pipeline_discards_the_retry_read_when_the_caller_asks_and_says_why()
 #[test]
 fn a_downscaled_but_legible_retry_read_is_kept_with_the_warning() {
     let mut config = config(false, false);
+    // 112 MiB (117 440 512 bytes): the render at 255 dpi (3825 x 2550 canvas, 39 015 000 bytes) needs
+    // 134 611 970 for the progressive scan's full-size decode and is refused, up to about 143 MB; the
+    // retry read's resize to 4095 x 2730 needs 112 931 273, so it runs.
     config
         .security_limits
         .get_or_insert_with(Default::default)
@@ -280,4 +294,25 @@ fn explicit_pipeline_warns_once_per_page_of_a_two_scan_document_like_the_default
         assert_ne!(explicit_warnings[0], explicit_warnings[1]);
         assert_eq!(explicit_warnings, default_warnings);
     }
+}
+
+/// The baseline scan renders within the budget the progressive copy is refused under: its in-place
+/// decode, drawn by tiny-skia without a pre-resize, needs 77 141 340 of the 83 886 080 bytes. The
+/// page is read from that render, so nothing is retried on the embedded image.
+#[test]
+fn the_baseline_scan_now_renders_within_the_budget_instead_of_being_retried() {
+    let document = extract(ORIGINAL_LABEL_SCAN, &config(false, false));
+    assert!(document.content.contains("GENERAL NOTES"), "{:?}", document.content);
+    for part in [RECOVERY_CLAIM, "rendered blank but contains", "image working budget"] {
+        assert!(
+            warnings_containing(&document, part).is_empty(),
+            "{part}: {:?}",
+            document.processing_warnings
+        );
+    }
+    assert!(
+        document.ocr_page_failures.as_ref().is_none_or(Vec::is_empty),
+        "{:?}",
+        document.ocr_page_failures
+    );
 }

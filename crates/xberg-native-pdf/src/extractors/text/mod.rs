@@ -22,7 +22,8 @@ use crate::fonts::unicode_decode::{
     without_symbol_marker,
 };
 use crate::geometry::Rect;
-use crate::layout::{Color, FontWeight, TextChar, TextSpan};
+use crate::layout::font_name::intern_font_name;
+use crate::layout::{Color, FontName, FontWeight, TextChar, TextSpan};
 use crate::object::{Object, ObjectRef};
 use crate::pipeline::config::WordBoundaryMode;
 use crate::text::{BoundaryContext, CharacterInfo, DocumentScript, WordBoundaryDetector};
@@ -1853,6 +1854,8 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// Whether the run is white text ([`paints_invisible_text`]).
+    invisible: bool,
     /// How far, in text-space units, the pen sits left of the right edge of the last glyph
     /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
     pullback: f32,
@@ -2029,11 +2032,11 @@ impl TjBuffer {
             || state.render_mode == 7
             || cached_font
                 .as_ref()
-                .is_some_and(|f| f.base_font.to_uppercase().contains("GLYPHLESS"));
+                .is_some_and(|f| provenance_cache.name_traits(f).glyphless);
         let is_monospace = !is_invisible_or_glyphless
-            && cached_font
-                .as_ref()
-                .is_some_and(|f| f.flags.is_some_and(|flags| flags & 1 != 0) || is_monospace_font(&f.base_font));
+            && cached_font.as_ref().is_some_and(|f| {
+                f.flags.is_some_and(|flags| flags & 1 != 0) || provenance_cache.name_traits(f).monospace
+            });
         let rotation_degrees = snap_run_rotation(&combined);
         let text_pos = state.text_matrix.transform_point(0.0, 0.0);
         let user_pos = state.ctm.transform_point(text_pos.x, text_pos.y);
@@ -2067,6 +2070,7 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            invisible: paints_invisible_text(state),
             pullback: 0.0,
             ligature_tail: false,
             pen_continuation: false,
@@ -2107,6 +2111,7 @@ impl TjBuffer {
             && self.word_space == state.word_space
             && self.horizontal_scaling == state.horizontal_scaling
             && self.render_mode == state.render_mode
+            && self.invisible == paints_invisible_text(state)
             && self.text_rise == text_rise
     }
 
@@ -2397,6 +2402,9 @@ struct MarkedContentContext {
 #[derive(Debug)]
 pub struct TextExtractor<'doc> {
     pub(crate) cmsy_witnesses: Option<Vec<TextSpan>>,
+    /// `(origin x, font size, snapped baseline, raw baseline)` of each script span a flattened-geometry read
+    /// snapped onto its base's baseline.
+    pub(crate) raw_script_baselines: Vec<(f32, f32, f32, f32)>,
     cmsy_proof_budget: usize,
     /// Graphics state stack for handling q/Q operators
     state_stack: GraphicsStateStack,
@@ -2407,6 +2415,14 @@ pub struct TextExtractor<'doc> {
     spans: Vec<TextSpan>,
     pub(crate) preserve_script_baselines: bool,
     pub(crate) skip_nonpainting_text: bool,
+    /// The page whose white text ([`paints_invisible_text`]) is dropped unless painted content lies
+    /// under it; `None` keeps all text.
+    pub(crate) invisible_text_page: Option<usize>,
+    /// Sequence number and bounds of each emitted white span.
+    invisible_spans: Vec<(usize, Rect)>,
+    /// Painted regions of `invisible_text_page`, read at the first white glyph of a char run
+    /// (`None` until then).
+    char_painted_regions: Option<Option<Arc<Vec<Rect>>>>,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
     /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
@@ -2546,6 +2562,11 @@ pub struct TextExtractor<'doc> {
     /// The spans that start where the previous `TJ` array left the pen. The merge reads their gap
     /// raw, without the fallback-width correction. Reset with `span_sequence_counter`. ~keep
     pen_continuations: HashSet<SpanKey>,
+    /// The page-level spans drawn in render mode 3, the invisible text an OCR layer is drawn in. The
+    /// merge breaks words between such spans (see `merge_adjacent_spans`). Form XObject text is not
+    /// noted, so a cached form replays the same merge as its first walk. Reset with
+    /// `span_sequence_counter`. ~keep
+    ocr_layer_spans: HashSet<SpanKey>,
     /// History of TJ array offsets for statistical analysis
     ///
     /// Tracks TJ offset values to detect justified vs. normal text through
@@ -2589,6 +2610,10 @@ pub struct TextExtractor<'doc> {
     /// Cached current font (updated on Tf). Avoids per-Tj HashMap lookup
     /// in advance_position_for_string.
     cached_current_font: Option<Arc<FontInfo>>,
+    /// `/BaseFont` of `cached_current_font`, shared by every glyph drawn in it. ~keep
+    glyph_font_name: FontName,
+    /// Font names this extractor handed out, so glyphs and spans of one font share an allocation. ~keep
+    font_names: HashSet<FontName>,
     /// Extraction-only simple-font width tables, keyed by stable `Arc` identity.
     /// Each embedded font is parsed at most once per extractor. ~keep
     extraction_width_tables: HashMap<usize, (Arc<FontInfo>, Arc<[f32; 256]>)>,
@@ -2616,6 +2641,30 @@ pub struct TextExtractor<'doc> {
 /// silently move from `xberg_native_pdf::extractors::text` to
 /// `…::text::<child>`, breaking consumer `EnvFilter`s that name the old target. ~keep
 pub(super) const LOG_TARGET: &str = module_path!();
+
+/// Largest CMYK component of a white fill.
+const WHITE_CMYK_MAX: f32 = 0.001;
+
+/// Whether text shown under `state` is filled white in a device or calibrated colour space with a
+/// fill-only render mode, so it paints no ink on a white page. White in another space (ICCBased,
+/// Indexed, Separation, DeviceN, a named resource) is not resolved here and never counts. Render
+/// modes 3 and 7 do not count either: an OCR text layer is drawn that way and is the page's text
+/// even where its scan is drawn by means this check cannot see. ~keep
+pub(super) fn paints_invisible_text(state: &crate::content::graphics_state::GraphicsState) -> bool {
+    if !matches!(state.render_mode, 0 | 4) {
+        return false;
+    }
+    let (r, g, b) = state.fill_color_rgb;
+    match state.fill_color_space.as_str() {
+        "DeviceCMYK" => state
+            .fill_color_cmyk
+            .is_some_and(|(c, m, y, k)| [c, m, y, k].iter().all(|component| *component <= WHITE_CMYK_MAX)),
+        space if crate::document::painted::is_resolved_colour_space(space) => [r, g, b]
+            .iter()
+            .all(|channel| *channel >= crate::document::painted::WHITE_PAINT_MIN),
+        _ => false,
+    }
+}
 
 impl<'doc> TextExtractor<'doc> {
     fn capture_cmsy_witness(&mut self, span: &TextSpan, buffer: &TjBuffer, resource: Option<&str>) {
@@ -2683,7 +2732,7 @@ impl<'doc> TextExtractor<'doc> {
         if let Some(witnesses) = &mut self.cmsy_witnesses {
             let mut witness = span.clone();
             // Retained spans resolve the resource alias to /BaseFont after merging. ~keep
-            witness.font_name = base.to_owned();
+            witness.font_name = base.into();
             witnesses.push(witness);
         }
     }

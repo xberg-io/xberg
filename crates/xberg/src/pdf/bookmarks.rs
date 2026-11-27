@@ -1,13 +1,16 @@
-//! PDF bookmark/outline extraction using lopdf.
+//! PDF bookmark/outline extraction.
 //!
 //! Extracts the document outline (bookmarks) from the PDF catalog and returns
 //! them as a list of `Uri` values: external URLs as `ExtractedUri::hyperlink()`,
-//! page destinations as `ExtractedUri::anchor()`.
+//! page destinations as `ExtractedUri::anchor()`. Objects are read through an
+//! [`ObjectGraph`], so extraction reads the document the native engine already opened.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
+use crate::pdf::object_graph::{self, ObjectGraph};
 use crate::types::uri::ExtractedUri;
-use lopdf::{Dictionary, Document, Object, ObjectId};
+use lopdf::{Dictionary, Object, ObjectId};
 
 const MAX_OUTLINE_DEPTH: usize = 50;
 const MAX_OUTLINE_ITEMS: usize = 500;
@@ -48,18 +51,22 @@ impl PdfOutlineEntry {
     }
 }
 
-/// Extract rich outline entries from a PDF document loaded via lopdf.
+/// Extract rich outline entries from a PDF's object graph.
 ///
 /// Traversal is bounded independently of successfully decoded entries, and
 /// indirect object IDs are visited at most once so malformed outline cycles
 /// cannot recurse indefinitely.
-pub(crate) fn extract_outline_entries(document: &Document) -> Vec<PdfOutlineEntry> {
+pub(crate) fn extract_outline_entries<G: ObjectGraph>(document: &G) -> Vec<PdfOutlineEntry> {
     let Some(first_id) = first_outline_item(document) else {
         return Vec::new();
     };
 
     let named_destinations = collect_named_destinations(document);
-    let page_numbers = document.get_pages().into_iter().map(|(page, id)| (id, page)).collect();
+    let page_numbers = object_graph::page_ids(document)
+        .into_iter()
+        .enumerate()
+        .map(|(index, id)| (id, (index + 1) as u32))
+        .collect();
     let mut walker = OutlineWalker::new(document, named_destinations, page_numbers);
     walker.walk(first_id, 0);
     walker.entries
@@ -70,7 +77,7 @@ pub(crate) fn extract_outline_entries(document: &Document) -> Vec<PdfOutlineEntr
 /// Resolved named destinations retain their anchor URL and now also carry page
 /// metadata when the destination points into this document.
 #[cfg(test)]
-pub(crate) fn extract_bookmarks(document: &Document) -> Vec<ExtractedUri> {
+pub(crate) fn extract_bookmarks<G: ObjectGraph>(document: &G) -> Vec<ExtractedUri> {
     extract_bookmarks_from_entries(&extract_outline_entries(document))
 }
 
@@ -78,14 +85,14 @@ pub(crate) fn extract_bookmarks_from_entries(entries: &[PdfOutlineEntry]) -> Vec
     entries.iter().filter_map(|entry| entry.uri.clone()).collect()
 }
 
-fn first_outline_item(document: &Document) -> Option<ObjectId> {
-    let catalog = document.catalog().ok()?;
+fn first_outline_item<G: ObjectGraph>(document: &G) -> Option<ObjectId> {
+    let catalog = object_graph::catalog(document)?;
     let outlines = dereferenced_dictionary(document, catalog.get(b"Outlines").ok()?)?;
     outlines.get(b"First").ok()?.as_reference().ok()
 }
 
-struct OutlineWalker<'a> {
-    document: &'a Document,
+struct OutlineWalker<'a, G> {
+    document: &'a G,
     named_destinations: NamedDestinations,
     page_numbers: PageNumbers,
     visited: HashSet<ObjectId>,
@@ -93,8 +100,8 @@ struct OutlineWalker<'a> {
     entries: Vec<PdfOutlineEntry>,
 }
 
-impl<'a> OutlineWalker<'a> {
-    fn new(document: &'a Document, named_destinations: NamedDestinations, page_numbers: PageNumbers) -> Self {
+impl<'a, G: ObjectGraph> OutlineWalker<'a, G> {
+    fn new(document: &'a G, named_destinations: NamedDestinations, page_numbers: PageNumbers) -> Self {
         Self {
             document,
             named_destinations,
@@ -111,15 +118,10 @@ impl<'a> OutlineWalker<'a> {
         }
         self.visited_count += 1;
 
-        let Some(dict) = self
-            .document
-            .get_object(item_id)
-            .ok()
-            .and_then(|object| object.as_dict().ok())
-        else {
+        let Some(Object::Dictionary(dict)) = object_graph::get_object(self.document, item_id) else {
             return;
         };
-        let entry = self.extract_entry(dict, depth);
+        let entry = self.extract_entry(&dict, depth);
         let child = dict.get(b"First").ok().and_then(|object| object.as_reference().ok());
         let sibling = dict.get(b"Next").ok().and_then(|object| object.as_reference().ok());
 
@@ -173,13 +175,13 @@ impl<'a> OutlineWalker<'a> {
     }
 
     fn internal_destination_uri(&self, destination: &Object, label: Option<String>) -> Option<ExtractedUri> {
-        let resolved = self.document.dereference(destination).ok()?.1;
-        if let Some(name) = destination_name(resolved) {
+        let (_, resolved) = object_graph::dereference(self.document, destination)?;
+        if let Some(name) = destination_name(&resolved) {
             let page = self.resolve_named_page(name);
             return Some(page_anchor(format!("#{}", String::from_utf8_lossy(name)), label, page));
         }
 
-        let destination = self.resolve_page_destination(resolved, &mut HashSet::new(), 0)?;
+        let destination = self.resolve_page_destination(&resolved, &mut HashSet::new(), 0)?;
         Some(page_anchor(
             format!("#page={}", destination.page_number.unwrap_or(1)),
             label,
@@ -204,8 +206,8 @@ impl<'a> OutlineWalker<'a> {
         if hops > MAX_DESTINATION_HOPS {
             return None;
         }
-        let resolved = self.document.dereference(destination).ok()?.1;
-        match resolved {
+        let (_, resolved) = object_graph::dereference(self.document, destination)?;
+        match &*resolved {
             Object::Array(items) => Some(ResolvedPageDestination {
                 page_number: items
                     .first()
@@ -222,9 +224,9 @@ impl<'a> OutlineWalker<'a> {
     }
 }
 
-fn decode_pdf_text(document: &Document, object: &Object) -> Option<String> {
-    let object = document.dereference(object).ok()?.1;
-    lopdf::decode_text_string(object).ok().or_else(|| {
+fn decode_pdf_text<G: ObjectGraph>(document: &G, object: &Object) -> Option<String> {
+    let (_, object) = object_graph::dereference(document, object)?;
+    lopdf::decode_text_string(&object).ok().or_else(|| {
         object
             .as_str()
             .ok()
@@ -232,8 +234,8 @@ fn decode_pdf_text(document: &Document, object: &Object) -> Option<String> {
     })
 }
 
-fn decode_uri(document: &Document, object: &Object) -> Option<String> {
-    let object = document.dereference(object).ok()?.1;
+fn decode_uri<G: ObjectGraph>(document: &G, object: &Object) -> Option<String> {
+    let (_, object) = object_graph::dereference(document, object)?;
     object
         .as_str()
         .ok()
@@ -253,13 +255,17 @@ fn page_anchor(url: String, label: Option<String>, page: Option<u32>) -> Extract
     uri
 }
 
-fn dereferenced_dictionary<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Dictionary> {
-    document.dereference(object).ok()?.1.as_dict().ok()
+fn dereferenced_dictionary<G: ObjectGraph>(document: &G, object: &Object) -> Option<Dictionary> {
+    match object_graph::dereference(document, object)?.1 {
+        Cow::Borrowed(Object::Dictionary(dict)) => Some(dict.clone()),
+        Cow::Owned(Object::Dictionary(dict)) => Some(dict),
+        _ => None,
+    }
 }
 
-fn collect_named_destinations(document: &Document) -> NamedDestinations {
+fn collect_named_destinations<G: ObjectGraph>(document: &G) -> NamedDestinations {
     let mut destinations = HashMap::new();
-    let Some(catalog) = document.catalog().ok() else {
+    let Some(catalog) = object_graph::catalog(document) else {
         return destinations;
     };
 
@@ -270,14 +276,14 @@ fn collect_named_destinations(document: &Document) -> NamedDestinations {
         .get(b"Names")
         .ok()
         .and_then(|object| dereferenced_dictionary(document, object))
-        .and_then(|names| names.get(b"Dests").ok())
+        .and_then(|names| names.get(b"Dests").ok().cloned())
     {
-        collect_name_tree(document, dests, &mut destinations, &mut NameTreeBudget::default(), 0);
+        collect_name_tree(document, &dests, &mut destinations, &mut NameTreeBudget::default(), 0);
     }
     destinations
 }
 
-fn collect_legacy_destinations(document: &Document, object: &Object, destinations: &mut NamedDestinations) {
+fn collect_legacy_destinations<G: ObjectGraph>(document: &G, object: &Object, destinations: &mut NamedDestinations) {
     let Some(dict) = dereferenced_dictionary(document, object) else {
         return;
     };
@@ -293,8 +299,8 @@ struct NameTreeBudget {
     attempted_pairs: usize,
 }
 
-fn collect_name_tree(
-    document: &Document,
+fn collect_name_tree<G: ObjectGraph>(
+    document: &G,
     object: &Object,
     destinations: &mut NamedDestinations,
     budget: &mut NameTreeBudget,
@@ -313,13 +319,15 @@ fn collect_name_tree(
         return;
     };
 
-    collect_name_pairs(document, dict, destinations, budget);
-    let Some(kids) = dict
+    collect_name_pairs(document, &dict, destinations, budget);
+    let Some((_, kids)) = dict
         .get(b"Kids")
         .ok()
-        .and_then(|value| document.dereference(value).ok())
-        .and_then(|(_, value)| value.as_array().ok())
+        .and_then(|value| object_graph::dereference(document, value))
     else {
+        return;
+    };
+    let Ok(kids) = kids.as_array() else {
         return;
     };
     for kid in kids {
@@ -330,18 +338,20 @@ fn collect_name_tree(
     }
 }
 
-fn collect_name_pairs(
-    document: &Document,
+fn collect_name_pairs<G: ObjectGraph>(
+    document: &G,
     dict: &Dictionary,
     destinations: &mut NamedDestinations,
     budget: &mut NameTreeBudget,
 ) {
-    let Some(names) = dict
+    let Some((_, names)) = dict
         .get(b"Names")
         .ok()
-        .and_then(|value| document.dereference(value).ok())
-        .and_then(|(_, value)| value.as_array().ok())
+        .and_then(|value| object_graph::dereference(document, value))
     else {
+        return;
+    };
+    let Ok(names) = names.as_array() else {
         return;
     };
 
@@ -360,7 +370,7 @@ fn collect_name_pairs(
 mod tests {
     use super::*;
     use crate::types::uri::UriKind;
-    use lopdf::{StringFormat, dictionary};
+    use lopdf::{Document, StringFormat, dictionary};
 
     fn document_with_pages(page_count: usize) -> (Document, Vec<ObjectId>) {
         let mut document = Document::with_version("1.7");

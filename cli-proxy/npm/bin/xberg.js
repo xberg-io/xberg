@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { resolveBundledBinary } from "../install.js";
 
 const BIN_NAME = "xberg";
+const MALLOC_MAGAZINES = "MallocMaxMagazines";
 
 function binaryName() {
 	return os.type() === "Windows_NT" ? `${BIN_NAME}.exe` : BIN_NAME;
@@ -69,6 +70,13 @@ function printUnavailable() {
 	);
 }
 
+// On macOS one libmalloc magazine lowers the CLI's peak RSS and wall time (ADR 0022). libmalloc
+// reads the variable before main, so only the launcher can set it; a value the user set is kept.
+function nativeEnv() {
+	if (process.platform !== "darwin" || Object.hasOwn(process.env, MALLOC_MAGAZINES)) return process.env;
+	return { ...process.env, [MALLOC_MAGAZINES]: "1" };
+}
+
 async function main() {
 	const bundled = resolveBundledBinary();
 	if (bundled) ensureExecutable(bundled);
@@ -80,7 +88,7 @@ async function main() {
 			process.exit(1);
 		}
 	}
-	const result = spawnSync(target ?? binPath, process.argv.slice(2), { stdio: "inherit" });
+	const result = spawnSync(target ?? binPath, process.argv.slice(2), { stdio: "inherit", env: nativeEnv() });
 	if (result.error) {
 		process.stderr.write(`${BIN_NAME}: failed to spawn binary: ${result.error.message}\n`);
 		process.exit(1);

@@ -20,8 +20,8 @@
 /// ~keep GH#1617: the five torn pairs on the reproducer sit 0.63--1.07pt off a 11.59pt baseline,
 /// i.e. 0.054--0.092 font-sizes, while a wrapped line is separated by a full leading (>= 1.0). The
 /// 3x margin either side is why this is expressible as a predicate instead of by widening
-/// `pdf::structure::pipeline`'s `INLINE_STYLE_BASELINE_TOLERANCE`, which is read at seven sites
-/// there and gates dehyphenation at `spans_visual_line_break`.
+/// `pdf::structure::pipeline`'s `INLINE_STYLE_BASELINE_TOLERANCE`, which is read at several sites
+/// there.
 pub(crate) const SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR: f32 = 0.35;
 
 /// Largest baseline offset, as a multiple of the base's font size, at which a smaller run still joins

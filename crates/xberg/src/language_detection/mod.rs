@@ -81,8 +81,16 @@ impl ChunkReliability {
 /// counts as confidence `0.0` and not reliable, rather than being skipped: skipping it would
 /// undercount `chunks` and let a page of entirely unclassifiable text score an artificially
 /// high `reliable_ratio` off a near-empty denominator. ~keep
+///
+/// Chunks are read in order and the read stops once `stop_at_reliable` of them have been
+/// classified reliable, returning `None`: the reliable count only grows, so a caller whose
+/// verdict is settled by that count need not pay whatlang for the rest. `usize::MAX` reads
+/// every chunk. ~keep
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-pub(crate) fn chunk_reliability(chunks: &[&str]) -> ChunkReliability {
+pub(crate) fn chunk_reliability(chunks: &[&str], stop_at_reliable: usize) -> Option<ChunkReliability> {
+    if stop_at_reliable == 0 {
+        return None;
+    }
     let mut reliable_chunks = 0usize;
     let mut confidence_sum = 0.0f64;
 
@@ -91,15 +99,18 @@ pub(crate) fn chunk_reliability(chunks: &[&str]) -> ChunkReliability {
             confidence_sum += info.confidence();
             if info.is_reliable() {
                 reliable_chunks += 1;
+                if reliable_chunks >= stop_at_reliable {
+                    return None;
+                }
             }
         }
     }
 
-    ChunkReliability {
+    Some(ChunkReliability {
         chunks: chunks.len(),
         reliable_chunks,
         confidence_sum,
-    }
+    })
 }
 
 /// Detect languages in text using whatlang.

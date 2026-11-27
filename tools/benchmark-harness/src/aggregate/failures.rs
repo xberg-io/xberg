@@ -11,12 +11,14 @@ impl FailureCounts {
             ErrorKind::FrameworkError => self.framework_errors += 1,
             ErrorKind::EmptyContent => self.empty_content += 1,
             ErrorKind::ZeroOverlap => self.zero_overlap += 1,
+            ErrorKind::LayoutFailed => self.layout_failures += 1,
             ErrorKind::Timeout => self.timeouts += 1,
             ErrorKind::HarnessError => self.harness_errors += 1,
             ErrorKind::ConfigSetupError => self.config_setup_errors += 1,
             ErrorKind::None => {}
         }
-        self.framework_fault_total = self.framework_errors + self.empty_content + self.zero_overlap + self.timeouts;
+        self.framework_fault_total =
+            self.framework_errors + self.empty_content + self.zero_overlap + self.layout_failures + self.timeouts;
         self.infra_total = self.harness_errors + self.config_setup_errors;
     }
 }
@@ -48,6 +50,10 @@ pub(super) fn is_framework_fault_failure(result: &BenchmarkResult) -> bool {
     !result.success
         && matches!(
             result.error_kind,
-            ErrorKind::FrameworkError | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap | ErrorKind::Timeout
+            ErrorKind::FrameworkError
+                | ErrorKind::EmptyContent
+                | ErrorKind::ZeroOverlap
+                | ErrorKind::LayoutFailed
+                | ErrorKind::Timeout
         )
 }

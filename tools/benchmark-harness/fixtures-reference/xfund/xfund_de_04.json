@@ -1,0 +1,20 @@
+{
+  "document": "../../../../test_documents/.reference-ocr-cache/images/xfund_de_04.jpg",
+  "file_type": "jpg",
+  "file_size": 734394,
+  "expected_frameworks": ["xberg"],
+  "metadata": {
+    "description": "XFUND filled form (CC BY-NC-SA 4.0, private bucket)",
+    "category": "image-ocr-realgt",
+    "dataset": "xfund",
+    "requires_ocr": true,
+    "languages": ["de"],
+    "ocr_language": "deu",
+    "opt_in": true
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/.reference-ocr-cache/ground_truth/jpg/xfund_de_04.txt",
+    "markdown_file": "../../../../test_documents/.reference-ocr-cache/ground_truth/jpg/xfund_de_04.md",
+    "source": "manual"
+  }
+}

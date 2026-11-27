@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .downloader import run
+from .downloader import native_env, run
 
 
 def _find_bundled_binary() -> str | None:
@@ -35,7 +35,7 @@ def main() -> None:
     """Resolve the native binary (bundled or downloaded) and exec it with forwarded argv."""
     bundled = _find_bundled_binary()
     if bundled:
-        completed = subprocess.run([bundled, *sys.argv[1:]], check=False)
+        completed = subprocess.run([bundled, *sys.argv[1:]], check=False, env=native_env())
         sys.exit(completed.returncode)
 
     sys.exit(run(sys.argv[1:]))

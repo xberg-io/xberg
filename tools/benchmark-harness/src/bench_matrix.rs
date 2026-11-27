@@ -121,11 +121,17 @@ pub enum Cohort {
     Data,
     /// OCR document-image family (png, jpeg, tiff).
     Images,
+    /// Native (non-OCR) structured PDF cohort (`native-pdf-structured-v1`).
+    NativeStructured,
+    /// OCR structured PDF cohort (`ocr-pdf-structured-v1`).
+    OcrStructured,
+    /// OCR structured document-image cohort (`ocr-images-structured-v2`).
+    ImagesStructured,
 }
 
 impl Cohort {
     /// Every cohort, in canonical order.
-    pub const ALL: [Cohort; 8] = [
+    pub const ALL: [Cohort; 11] = [
         Cohort::Native,
         Cohort::Ocr,
         Cohort::Office,
@@ -134,6 +140,9 @@ impl Cohort {
         Cohort::Email,
         Cohort::Data,
         Cohort::Images,
+        Cohort::NativeStructured,
+        Cohort::OcrStructured,
+        Cohort::ImagesStructured,
     ];
 
     /// The `--cohort` CLI value for this cohort.
@@ -147,6 +156,26 @@ impl Cohort {
             Cohort::Email => "email",
             Cohort::Data => "data",
             Cohort::Images => "images",
+            Cohort::NativeStructured => "native-structured",
+            Cohort::OcrStructured => "ocr-structured",
+            Cohort::ImagesStructured => "images-structured",
+        }
+    }
+
+    /// File stem of this cohort's manifest under `cohorts/`.
+    pub fn manifest_file_stem(self) -> &'static str {
+        match self {
+            Cohort::Native => "native-pdf-fast-b8",
+            Cohort::Ocr => "ocr-pdf-fast-b4",
+            Cohort::Office => "native-office-fast",
+            Cohort::Markup => "native-markup-fast",
+            Cohort::Ebook => "native-ebook-fast",
+            Cohort::Email => "native-email-fast",
+            Cohort::Data => "native-data-fast",
+            Cohort::Images => "ocr-images-fast",
+            Cohort::NativeStructured => "native-pdf-structured-v1",
+            Cohort::OcrStructured => "ocr-pdf-structured-v1",
+            Cohort::ImagesStructured => "ocr-images-structured-v2",
         }
     }
 
@@ -170,14 +199,25 @@ impl Cohort {
     /// `FormatMetadata::Ocr` case. Requiring `NotUsed` here made every genuine image OCR result
     /// fail validation (xberg-io/xberg#1604).
     pub fn expects_ocr(self) -> bool {
-        matches!(self, Cohort::Ocr | Cohort::Images)
+        matches!(
+            self,
+            Cohort::Ocr | Cohort::Images | Cohort::OcrStructured | Cohort::ImagesStructured
+        )
     }
 
     /// Whether this cohort's xberg cells include the rendered-page `layout` pipeline variant in
     /// addition to `baseline`. Only formats with a rendered page (PDF, images) benefit; for the
     /// other families a `layout` run would merely duplicate `baseline`.
     pub fn includes_layout(self) -> bool {
-        matches!(self, Cohort::Native | Cohort::Ocr | Cohort::Images)
+        matches!(
+            self,
+            Cohort::Native
+                | Cohort::Ocr
+                | Cohort::Images
+                | Cohort::NativeStructured
+                | Cohort::OcrStructured
+                | Cohort::ImagesStructured
+        )
     }
 
     /// Whether this cohort's xberg cells include the PaddleOCR-engine variants (`baseline-paddle`,
@@ -185,12 +225,15 @@ impl Cohort {
     /// `baseline`/`layout` runs. Only the OCR cohorts (scanned PDF, images) force OCR, so only they
     /// benefit from a second OCR engine; the native/office/markup/... families never run OCR.
     pub fn includes_paddle_ocr(self) -> bool {
-        matches!(self, Cohort::Ocr | Cohort::Images)
+        matches!(
+            self,
+            Cohort::Ocr | Cohort::Images | Cohort::OcrStructured | Cohort::ImagesStructured
+        )
     }
 
     /// Whether this release cohort includes the normal ONNX Runtime Sceptre variants.
     pub fn includes_sceptre_ort(self) -> bool {
-        matches!(self, Cohort::Ocr)
+        matches!(self, Cohort::Ocr | Cohort::OcrStructured)
     }
 
     /// Build this cohort's pinned release contract.
@@ -204,9 +247,49 @@ impl Cohort {
             Cohort::Email => email_contract(),
             Cohort::Data => data_contract(),
             Cohort::Images => images_contract(),
+            Cohort::NativeStructured => native_structured_contract(),
+            Cohort::OcrStructured => ocr_structured_contract(),
+            Cohort::ImagesStructured => images_structured_contract(),
         }
     }
+
+    /// This cohort's contract restricted to the cells `profile` runs. [`MatrixProfile::Full`] is
+    /// [`Cohort::contract`] unchanged; [`MatrixProfile::Smoke`] keeps only [`SMOKE_ARTIFACTS`],
+    /// every one of them a required cell of the full contract, so a smoke run is held to the
+    /// full-run rules for each cell it does produce.
+    pub fn contract_for(self, profile: MatrixProfile) -> CohortContract {
+        let mut contract = self.contract();
+        if profile == MatrixProfile::Smoke {
+            contract
+                .matrix
+                .retain(|entry| SMOKE_ARTIFACTS.contains(&entry.artifact.as_str()));
+        }
+        contract
+    }
 }
+
+/// Which benchmark cells a workflow run produces and its validators expect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MatrixProfile {
+    /// The full release contract.
+    #[default]
+    Full,
+    /// The minimal cell set that runs every benchmark job type end to end: xberg on native PDF
+    /// (single-file and batch), OCR PDF and images, plus one LiteParse and one Docling cell.
+    /// Smoke runs are never published.
+    Smoke,
+}
+
+/// The cells a [`MatrixProfile::Smoke`] run produces, by artifact name. The workflow's smoke
+/// matrix and `validate-workflow-matrix.py --profile smoke` are checked against this list.
+pub const SMOKE_ARTIFACTS: [&str; 6] = [
+    "benchmarks-rust-baseline-markdown-single-file-native-pdf-fast-b8",
+    "benchmarks-rust-baseline-markdown-batch-native-pdf-fast-b8",
+    "benchmarks-rust-baseline-markdown-single-file-ocr-pdf-fast-b4",
+    "benchmarks-rust-baseline-markdown-single-file-ocr-images-fast",
+    "benchmarks-liteparse-markdown-single-file-native-pdf-fast-b8",
+    "benchmarks-docling-markdown-single-file-native-pdf-fast-b8",
+];
 
 const NATIVE_COHORT: &str = "native-pdf-fast-b8";
 const OCR_COHORT: &str = "ocr-pdf-fast-b4";
@@ -470,7 +553,10 @@ fn matrix_entry(
 /// Rendered-page cohorts (`include_layout`) run both `baseline` and `layout`; OCR cohorts
 /// (`include_paddle`) additionally run the PaddleOCR-engine variants `baseline-paddle` (and
 /// `layout-paddle` when layout is also included). Sceptre-enabled cohorts add three ORT variants.
-/// Each pipeline contributes four cells: the OCR/Image cohorts therefore contain 28 Xberg cells.
+/// Layout pipelines run markdown only: plain output discards layout-detected structure, so a
+/// plaintext layout cell would only repeat the baseline at twice the cost. Each remaining
+/// pipeline contributes four cells (two for a layout pipeline): the OCR cohort contains 22
+/// Xberg cells and the image cohort 12.
 fn xberg_entries(cohort: &str, include_layout: bool, include_paddle: bool, include_sceptre: bool) -> Vec<MatrixEntry> {
     let mut pipelines: Vec<&str> = vec!["baseline"];
     if include_layout {
@@ -485,11 +571,25 @@ fn xberg_entries(cohort: &str, include_layout: bool, include_paddle: bool, inclu
     if include_sceptre {
         pipelines.extend(["sceptre-ort", "sceptre-ort-layout", "sceptre-ort-autorotate"]);
     }
+    pipeline_entries(cohort, &pipelines, false)
+}
+
+/// The OCR variants that leave `force_ocr` unset (xberg's own per-page trigger decides), run in
+/// the OCR PDF cohort only: image fixtures are OCR'd regardless, so an image cell would duplicate
+/// the baseline. Optional until a CI run has proven the pipeline end to end.
+fn xberg_auto_ocr_entries(cohort: &str) -> Vec<MatrixEntry> {
+    pipeline_entries(cohort, &["auto-ocr", "auto-ocr-paddle"], true)
+}
+
+fn pipeline_entries(cohort: &str, pipelines: &[&str], optional: bool) -> Vec<MatrixEntry> {
     let mut entries = Vec::new();
-    for &pipeline in &pipelines {
+    for &pipeline in pipelines {
         for output_format in [OutputFormat::Markdown, OutputFormat::Plaintext] {
+            if output_format == OutputFormat::Plaintext && pipeline.contains("layout") {
+                continue;
+            }
             for mode in [ExecutionMode::SingleFile, ExecutionMode::Batch] {
-                entries.push(matrix_entry(
+                let entry = matrix_entry(
                     format!(
                         "benchmarks-rust-{pipeline}-{output_format}-{}-{cohort}",
                         mode.artifact_slug()
@@ -497,7 +597,8 @@ fn xberg_entries(cohort: &str, include_layout: bool, include_paddle: bool, inclu
                     format!("xberg-{output_format}-{pipeline}"),
                     output_format,
                     mode,
-                ));
+                );
+                entries.push(if optional { entry.into_optional() } else { entry });
             }
         }
     }
@@ -572,48 +673,49 @@ fn optional(entries: Vec<MatrixEntry>) -> Vec<MatrixEntry> {
     entries.into_iter().map(MatrixEntry::into_optional).collect()
 }
 
-fn native_matrix() -> Vec<MatrixEntry> {
-    let mut matrix = xberg_entries(NATIVE_COHORT, true, false, false);
-    matrix.extend(xberg_pdfium_entries(NATIVE_COHORT));
-    matrix.extend(grid_entries("docling", NATIVE_COHORT));
+fn native_matrix(cohort: &str) -> Vec<MatrixEntry> {
+    let mut matrix = xberg_entries(cohort, true, false, false);
+    matrix.extend(xberg_pdfium_entries(cohort));
+    matrix.extend(grid_entries("docling", cohort));
     matrix.push(matrix_entry(
-        format!("benchmarks-markitdown-markdown-single-file-{NATIVE_COHORT}"),
+        format!("benchmarks-markitdown-markdown-single-file-{cohort}"),
         "markitdown",
         OutputFormat::Markdown,
         ExecutionMode::SingleFile,
     ));
     matrix.push(matrix_entry(
-        format!("benchmarks-unstructured-plaintext-single-file-{NATIVE_COHORT}"),
+        format!("benchmarks-unstructured-plaintext-single-file-{cohort}"),
         "unstructured",
         OutputFormat::Plaintext,
         ExecutionMode::SingleFile,
     ));
     matrix.push(matrix_entry(
-        format!("benchmarks-tika-plaintext-single-file-{NATIVE_COHORT}"),
+        format!("benchmarks-tika-plaintext-single-file-{cohort}"),
         "tika",
         OutputFormat::Plaintext,
         ExecutionMode::SingleFile,
     ));
     matrix.push(matrix_entry(
-        format!("benchmarks-pymupdf4llm-markdown-single-file-{NATIVE_COHORT}"),
+        format!("benchmarks-pymupdf4llm-markdown-single-file-{cohort}"),
         "pymupdf4llm",
         OutputFormat::Markdown,
         ExecutionMode::SingleFile,
     ));
-    matrix.push(markdown_single_file_entry("mineru", NATIVE_COHORT).into_optional());
-    matrix.extend(grid_entries("liteparse", NATIVE_COHORT));
+    matrix.push(markdown_single_file_entry("mineru", cohort).into_optional());
+    matrix.extend(grid_entries("liteparse", cohort));
     matrix
 }
 
-fn ocr_matrix() -> Vec<MatrixEntry> {
-    let mut matrix = xberg_entries(OCR_COHORT, true, true, true);
-    matrix.extend(grid_entries("docling", OCR_COHORT));
-    matrix.push(markdown_single_file_entry("mineru", OCR_COHORT).into_optional());
+fn ocr_matrix(cohort: &str) -> Vec<MatrixEntry> {
+    let mut matrix = xberg_entries(cohort, true, true, true);
+    matrix.extend(xberg_auto_ocr_entries(cohort));
+    matrix.extend(grid_entries("docling", cohort));
+    matrix.push(markdown_single_file_entry("mineru", cohort).into_optional());
     // Tika and Unstructured are Tesseract-backed and now run the OCR cohorts too
     // (single-file, plaintext). Best-effort: absence never fails validation.
-    matrix.push(plaintext_single_file_entry("unstructured", OCR_COHORT).into_optional());
-    matrix.push(plaintext_single_file_entry("tika", OCR_COHORT).into_optional());
-    matrix.extend(grid_entries("liteparse", OCR_COHORT));
+    matrix.push(plaintext_single_file_entry("unstructured", cohort).into_optional());
+    matrix.push(plaintext_single_file_entry("tika", cohort).into_optional());
+    matrix.extend(grid_entries("liteparse", cohort));
     matrix
 }
 
@@ -630,6 +732,7 @@ fn broad_office_competitors(cohort: &str) -> Vec<MatrixEntry> {
 fn office_matrix() -> Vec<MatrixEntry> {
     let mut matrix = xberg_entries(OFFICE_COHORT, false, false, false);
     matrix.extend(broad_office_competitors(OFFICE_COHORT));
+    matrix.extend(optional(grid_entries("liteparse", OFFICE_COHORT)));
     matrix
 }
 
@@ -642,6 +745,8 @@ fn markup_matrix() -> Vec<MatrixEntry> {
 fn data_matrix() -> Vec<MatrixEntry> {
     let mut matrix = xberg_entries(DATA_COHORT, false, false, false);
     matrix.extend(broad_office_competitors(DATA_COHORT));
+    // LiteParse converts the csv/tsv fixtures through LibreOffice; json/yaml are outside its formats.
+    matrix.extend(optional(grid_entries("liteparse", DATA_COHORT)));
     matrix
 }
 
@@ -659,21 +764,22 @@ fn email_matrix() -> Vec<MatrixEntry> {
     matrix
 }
 
-fn images_matrix() -> Vec<MatrixEntry> {
+fn images_matrix(cohort: &str) -> Vec<MatrixEntry> {
     // Sceptre's structured-image coverage runs as a bounded diagnostic outside
     // the published release contract. Keep the release cohort limited to the
     // pipelines whose full 14-image matrix is a stable comparison surface.
-    let mut matrix = xberg_entries(IMAGES_COHORT, true, true, false);
-    matrix.extend(optional(grid_entries("docling", IMAGES_COHORT)));
+    let mut matrix = xberg_entries(cohort, true, true, false);
+    matrix.extend(optional(grid_entries("docling", cohort)));
     // pymupdf4llm has no OCR path (`pymupdf4llm.to_markdown` only reads existing text layers), so on
     // a scanned-image cohort it always returns empty content and can never clear the min-success-rate
     // gate — it is excluded here to avoid a guaranteed-failing best-effort cell. It still runs the
     // PDF/ebook cohorts, where a text layer exists.
-    matrix.push(markdown_single_file_entry("mineru", IMAGES_COHORT).into_optional());
+    matrix.push(markdown_single_file_entry("mineru", cohort).into_optional());
     // Tika and Unstructured are Tesseract-backed and now run the image OCR cohort too
     // (single-file, plaintext). Best-effort: absence never fails validation.
-    matrix.push(plaintext_single_file_entry("unstructured", IMAGES_COHORT).into_optional());
-    matrix.push(plaintext_single_file_entry("tika", IMAGES_COHORT).into_optional());
+    matrix.push(plaintext_single_file_entry("unstructured", cohort).into_optional());
+    matrix.push(plaintext_single_file_entry("tika", cohort).into_optional());
+    matrix.extend(optional(grid_entries("liteparse", cohort)));
     matrix
 }
 
@@ -685,7 +791,7 @@ fn native_contract() -> CohortContract {
         fixtures: NATIVE_FIXTURES,
         document_stems: NATIVE_DOCUMENT_STEMS,
         document_extensions: NATIVE_DOCUMENT_EXTENSIONS,
-        matrix: native_matrix(),
+        matrix: native_matrix(NATIVE_COHORT),
     }
 }
 
@@ -697,7 +803,7 @@ fn ocr_contract() -> CohortContract {
         fixtures: OCR_FIXTURES,
         document_stems: OCR_DOCUMENT_STEMS,
         document_extensions: OCR_DOCUMENT_EXTENSIONS,
-        matrix: ocr_matrix(),
+        matrix: ocr_matrix(OCR_COHORT),
     }
 }
 
@@ -769,213 +875,48 @@ fn images_contract() -> CohortContract {
         fixtures: IMAGES_FIXTURES,
         document_stems: IMAGES_DOCUMENT_STEMS,
         document_extensions: IMAGES_DOCUMENT_EXTENSIONS,
-        matrix: images_matrix(),
+        matrix: images_matrix(IMAGES_COHORT),
     }
 }
+
+fn native_structured_contract() -> CohortContract {
+    CohortContract {
+        manifest_name: NATIVE_STRUCTURED_MANIFEST_NAME,
+        manifest_blake3: NATIVE_STRUCTURED_MANIFEST_BLAKE3,
+        batch_size: NATIVE_STRUCTURED_BATCH_SIZE,
+        fixtures: NATIVE_STRUCTURED_FIXTURES,
+        document_stems: NATIVE_STRUCTURED_DOCUMENT_STEMS,
+        document_extensions: NATIVE_STRUCTURED_DOCUMENT_EXTENSIONS,
+        matrix: native_matrix(NATIVE_STRUCTURED_COHORT),
+    }
+}
+
+fn ocr_structured_contract() -> CohortContract {
+    CohortContract {
+        manifest_name: OCR_STRUCTURED_MANIFEST_NAME,
+        manifest_blake3: OCR_STRUCTURED_MANIFEST_BLAKE3,
+        batch_size: OCR_STRUCTURED_BATCH_SIZE,
+        fixtures: OCR_STRUCTURED_FIXTURES,
+        document_stems: OCR_STRUCTURED_DOCUMENT_STEMS,
+        document_extensions: OCR_STRUCTURED_DOCUMENT_EXTENSIONS,
+        matrix: ocr_matrix(OCR_STRUCTURED_COHORT),
+    }
+}
+
+fn images_structured_contract() -> CohortContract {
+    CohortContract {
+        manifest_name: IMAGES_STRUCTURED_MANIFEST_NAME,
+        manifest_blake3: IMAGES_STRUCTURED_MANIFEST_BLAKE3,
+        batch_size: IMAGES_STRUCTURED_BATCH_SIZE,
+        fixtures: IMAGES_STRUCTURED_FIXTURES,
+        document_stems: IMAGES_STRUCTURED_DOCUMENT_STEMS,
+        document_extensions: IMAGES_STRUCTURED_DOCUMENT_EXTENSIONS,
+        matrix: images_matrix(IMAGES_STRUCTURED_COHORT),
+    }
+}
+
+mod structured;
+use structured::*;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    /// (cohort, total cells, required (non-optional) cells). The required count is what the raw
-    /// artifact / aggregate validators gate publication on; optional competitor cells are allowed
-    /// but never required for the per-format-family cohorts.
-    const CONTRACT_CELL_COUNTS: [(Cohort, usize, usize); 8] = [
-        (Cohort::Native, 25, 24),
-        (Cohort::Ocr, 39, 36),
-        (Cohort::Office, 11, 4),
-        (Cohort::Markup, 11, 4),
-        (Cohort::Ebook, 6, 4),
-        (Cohort::Email, 6, 4),
-        (Cohort::Data, 11, 4),
-        (Cohort::Images, 23, 16),
-    ];
-
-    #[test]
-    fn contract_cell_counts_are_exact_and_uniquely_keyed() {
-        for (cohort, total, required) in CONTRACT_CELL_COUNTS {
-            let contract = cohort.contract();
-            assert_eq!(contract.matrix.len(), total, "{} total cells", cohort.as_str());
-            assert_eq!(
-                contract.matrix.iter().filter(|entry| !entry.optional).count(),
-                required,
-                "{} required cells",
-                cohort.as_str()
-            );
-            assert_eq!(
-                contract
-                    .matrix
-                    .iter()
-                    .map(|entry| &entry.artifact)
-                    .collect::<HashSet<_>>()
-                    .len(),
-                contract.matrix.len(),
-                "{} artifact names must be unique",
-                cohort.as_str()
-            );
-            assert_eq!(
-                contract
-                    .matrix
-                    .iter()
-                    .map(MatrixEntry::aggregate_key)
-                    .collect::<HashSet<_>>()
-                    .len(),
-                contract.matrix.len(),
-                "{} aggregate keys must be unique",
-                cohort.as_str()
-            );
-        }
-    }
-
-    #[test]
-    fn native_contract_includes_every_pdfium_workflow_cell() {
-        let contract = Cohort::Native.contract();
-        let pdfium_entries: Vec<_> = contract
-            .matrix
-            .iter()
-            .filter(|entry| entry.artifact.starts_with("benchmarks-rust-pdfium-"))
-            .collect();
-
-        assert_eq!(pdfium_entries.len(), 4);
-        assert!(pdfium_entries.iter().all(|entry| !entry.optional));
-        assert_eq!(
-            pdfium_entries
-                .iter()
-                .map(|entry| entry.artifact.as_str())
-                .collect::<HashSet<_>>(),
-            HashSet::from([
-                "benchmarks-rust-pdfium-baseline-markdown-single-file-native-pdf-fast-b8",
-                "benchmarks-rust-pdfium-baseline-markdown-batch-native-pdf-fast-b8",
-                "benchmarks-rust-pdfium-baseline-plaintext-single-file-native-pdf-fast-b8",
-                "benchmarks-rust-pdfium-baseline-plaintext-batch-native-pdf-fast-b8",
-            ])
-        );
-    }
-
-    #[test]
-    fn only_rendered_page_cohorts_run_the_layout_pipeline() {
-        for cohort in Cohort::ALL {
-            let contract = cohort.contract();
-            let has_layout = contract
-                .matrix
-                .iter()
-                .any(|entry| entry.framework.starts_with("xberg-") && entry.framework.ends_with("-layout"));
-            assert_eq!(
-                has_layout,
-                cohort.includes_layout(),
-                "{}: layout-pipeline presence must match includes_layout()",
-                cohort.as_str()
-            );
-            let has_paddle = contract
-                .matrix
-                .iter()
-                .any(|entry| entry.framework.starts_with("xberg-") && entry.framework.ends_with("-paddle"));
-            assert_eq!(
-                has_paddle,
-                cohort.includes_paddle_ocr(),
-                "{}: paddle-pipeline presence must match includes_paddle_ocr()",
-                cohort.as_str()
-            );
-            let has_sceptre = contract
-                .matrix
-                .iter()
-                .any(|entry| entry.framework.contains("-sceptre-ort"));
-            assert_eq!(
-                has_sceptre,
-                cohort.includes_sceptre_ort(),
-                "{}: Sceptre ORT presence must match includes_sceptre_ort()",
-                cohort.as_str()
-            );
-            // The pdfium backend is a separate dimension from the OCR/layout pipeline grid this
-            // formula models: native adds 4 `xberg-*-baseline-pdfium` cells via
-            // `xberg_pdfium_entries`, which `native_contract_includes_every_pdfium_workflow_cell`
-            // covers exactly. Counting them here made native read 12 against a predicted 8. ~keep
-            let xberg_required = contract
-                .matrix
-                .iter()
-                .filter(|entry| entry.framework.starts_with("xberg-") && !entry.framework.ends_with("-pdfium"))
-                .count();
-            // 4 cells (md/plain x single/batch) per enabled pipeline: baseline, +layout,
-            // +baseline-paddle, +layout-paddle (the last only when layout is also present).
-            let mut pipelines: usize = 1;
-            if cohort.includes_layout() {
-                pipelines += 1;
-            }
-            if cohort.includes_paddle_ocr() {
-                pipelines += 1;
-                if cohort.includes_layout() {
-                    pipelines += 1;
-                }
-            }
-            if cohort.includes_sceptre_ort() {
-                pipelines += 3;
-            }
-            assert_eq!(xberg_required, pipelines * 4, "{}: xberg cell count", cohort.as_str());
-        }
-    }
-
-    #[test]
-    fn ocr_pdf_release_contract_includes_ort_variants_but_not_tract() {
-        let contract = Cohort::Ocr.contract();
-        let frameworks: HashSet<&str> = contract.matrix.iter().map(|entry| entry.framework.as_str()).collect();
-        for variant in ["sceptre-ort", "sceptre-ort-layout", "sceptre-ort-autorotate"] {
-            assert!(frameworks.iter().any(|framework| framework.ends_with(variant)));
-        }
-        assert!(!frameworks.iter().any(|framework| framework.contains("sceptre-tract")));
-    }
-
-    #[test]
-    fn image_release_contract_excludes_sceptre_diagnostic_variants() {
-        let contract = Cohort::Images.contract();
-        assert!(contract.matrix.iter().all(|entry| !entry.framework.contains("sceptre")));
-    }
-
-    #[test]
-    fn sceptre_ort_aggregate_keys_preserve_engine_and_variant_identity() {
-        let contract = Cohort::Ocr.contract();
-        let keys: HashSet<String> = contract.matrix.iter().map(MatrixEntry::aggregate_key).collect();
-        for variant in ["sceptre-ort", "sceptre-ort-layout", "sceptre-ort-autorotate"] {
-            assert!(keys.contains(&format!("xberg-markdown-{variant}:single")));
-            assert!(keys.contains(&format!("xberg-plaintext-{variant}:batch")));
-        }
-        assert!(keys.iter().all(|key| !key.contains("sceptre-tract")));
-    }
-
-    #[test]
-    fn mineru_is_single_file_only_wherever_present() {
-        for cohort in Cohort::ALL {
-            let contract = cohort.contract();
-            let mineru_modes: Vec<ExecutionMode> = contract
-                .matrix
-                .iter()
-                .filter(|entry| entry.framework == "mineru")
-                .map(|entry| entry.mode)
-                .collect();
-            assert!(
-                mineru_modes.iter().all(|mode| *mode == ExecutionMode::SingleFile),
-                "{}: mineru must be single-file only",
-                cohort.as_str()
-            );
-        }
-    }
-
-    #[test]
-    fn cohort_parse_round_trips_as_str() {
-        for cohort in Cohort::ALL {
-            assert_eq!(Cohort::parse(cohort.as_str()).unwrap(), cohort);
-        }
-        assert!(Cohort::parse("bogus").is_err());
-    }
-
-    #[test]
-    fn xberg_aggregate_keys_omit_output_format() {
-        let contract = Cohort::Native.contract();
-        let entry = contract
-            .matrix
-            .iter()
-            .find(|entry| entry.framework == "xberg-markdown-baseline")
-            .expect("xberg-markdown-baseline cell present");
-        assert_eq!(entry.aggregate_key(), "xberg-markdown-baseline:single");
-    }
-}
+mod tests;

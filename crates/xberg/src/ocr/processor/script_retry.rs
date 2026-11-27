@@ -1136,8 +1136,20 @@ impl Merged {
                     text.push('\n');
                 }
             }
-            let words: Vec<&str> = line.iter().map(|word| word.text.as_str()).collect();
-            text.push_str(&words.join(" "));
+            for (index, word) in line.iter().enumerate() {
+                if let Some(previous) = index.checked_sub(1).map(|index| &line[index]) {
+                    let gap = (word.left - (previous.left + previous.width)) as f64;
+                    let height = previous.height.max(word.height) as f64;
+                    if !crate::table_core::word_spacing::joins_without_space(
+                        &previous.text,
+                        &word.text,
+                        Some((gap, height)),
+                    ) {
+                        text.push(' ');
+                    }
+                }
+                text.push_str(&word.text);
+            }
             previous_bottom = Some(bottom);
         }
         text
@@ -1928,7 +1940,29 @@ mod tests {
         retry.extend(line(&[("标题", 90.0, 0, 120)], 0, 20));
         let merged = merge_han(first, retry);
         assert_eq!((merged.admitted, merged.added), (1, 1));
-        assert_eq!(merged.text(), "标题\n\n今天天 气");
+        assert_eq!(merged.text(), "标题\n\n今天天气");
+    }
+
+    /// Han words a glyph height or more apart keep their space; adjacent ones and Latin do not change.
+    #[test]
+    fn merged_text_joins_adjacent_han_words_without_a_space() {
+        let first = line(
+            &[("|", 20.0, 0, 120), ("~", 25.0, 140, 160), ("~", 25.0, 400, 80)],
+            1,
+            300,
+        );
+        let retry = line(
+            &[
+                ("今天天", 92.0, 0, 120),
+                ("气", 92.0, 140, 160),
+                ("很好", 92.0, 400, 80),
+            ],
+            1,
+            300,
+        );
+        let merged = merge_han(first, retry);
+        assert_eq!(merged.admitted, 1);
+        assert_eq!(merged.text(), "今天天气 很好");
     }
 
     /// A page whose every line keeps its first read takes no retry-only line (a Japanese page
@@ -1949,7 +1983,7 @@ mod tests {
         han.extend(line(&[("标题", 90.0, 0, 120)], 2, 500));
         let merged = merge_han(marks, han);
         assert_eq!((merged.admitted, merged.added), (1, 1));
-        assert_eq!(merged.text(), "今天天 气\n\n标题");
+        assert_eq!(merged.text(), "今天天气\n\n标题");
     }
 
     /// A page that keeps its first read keeps the first read's confidence metadata: the record
@@ -2001,7 +2035,7 @@ mod tests {
         assert_eq!(forward.tsv(), backward.tsv());
         assert!(forward.text().contains("| Ref 3124"), "{}", forward.text());
         assert!(forward.text().contains("Col B"), "{}", forward.text());
-        assert!(forward.text().ends_with("标题 二"), "{}", forward.text());
+        assert!(forward.text().ends_with("标题二"), "{}", forward.text());
     }
 
     /// Probe: a protected token changed inside (`385.20` read as `385,20`, `Ref` as `Rcf`) is a
@@ -2493,7 +2527,7 @@ mod tests {
         let retry = line(&[("漢字", 95.0, 0, 35), ("漢字", 95.0, 50, 35)], 1, 0);
         let result = merge_han(first.clone(), retry);
         assert_eq!(result.han_supplement(), "漢字");
-        assert_eq!(result.text(), "漢字 漢字\n留存");
+        assert_eq!(result.text(), "漢字漢字\n留存");
         let only_retained = line(&[("漢字", 95.0, 0, 35)], 1, 0);
         assert!(merge_han(first, only_retained).han_supplement().is_empty());
     }

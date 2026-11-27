@@ -61,7 +61,7 @@ fn dominant_error_kind(all_success: bool, failing_kinds: impl Iterator<Item = Er
             ErrorKind::Timeout => 4,
             ErrorKind::HarnessError => 3,
             ErrorKind::ConfigSetupError => 2,
-            ErrorKind::FrameworkError | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap => 1,
+            ErrorKind::FrameworkError | ErrorKind::EmptyContent | ErrorKind::ZeroOverlap | ErrorKind::LayoutFailed => 1,
             ErrorKind::None => 0,
         })
         .unwrap_or(ErrorKind::None)
@@ -341,6 +341,7 @@ fn build_single_benchmark_result(
         ocr_status: representative_result.ocr_status,
         extracted_text: representative_result.extracted_text.clone(),
         system_load: Some(SystemLoad::capture()?),
+        fixture_family: None,
     })
 }
 
@@ -518,6 +519,7 @@ fn build_one_batch_file_result(
         ocr_status: representative_result.ocr_status,
         extracted_text: representative_result.extracted_text.clone(),
         system_load: Some(SystemLoad::capture()?),
+        fixture_family: None,
     })
 }
 

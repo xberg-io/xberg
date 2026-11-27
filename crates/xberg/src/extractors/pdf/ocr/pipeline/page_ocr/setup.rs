@@ -319,6 +319,9 @@ pub(super) async fn prepare<'a>(
             "Reduced OCR batch size to fit available memory"
         );
     }
+    // A batch renders every page before reading any, so pages beyond what recognition admits
+    // would only hold their rasters while they wait. ~keep
+    let batch_size = bound_batch_to_recognition(batch_size, direct_route_recognition_sessions(None, Some(&backend)));
 
     let mut ocr_config_owned = ocr_config_for_page_extraction(ocr_config);
     ocr_config_owned.acceleration = config.acceleration.clone();
@@ -622,7 +625,7 @@ pub(super) async fn prepare<'a>(
     // through `spawn_blocking`, mirroring the boundary already used for the RT-DETR layout
     // engine in `layout_runner::run_layout_for_pdf_pages_async`. ~keep
     #[cfg(feature = "layout-detection")]
-    let tatr_model = if layout_detections.is_some() && pdf_ocr_table_recognition_enabled(config) {
+    let tatr_model = if pdf_ocr_needs_table_model(config, layout_detections) {
         let tatr_acceleration = config.resolved_layout_acceleration().cloned();
         let tatr_thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
         let span = tracing::Span::current();

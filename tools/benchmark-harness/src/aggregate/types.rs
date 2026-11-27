@@ -1,4 +1,4 @@
-//! Schema types for the aggregated benchmark output (v2.11.0).
+//! Schema types for the aggregated benchmark output (v2.13.0).
 //!
 //! Pure data definitions only — see [`super`] for the aggregation logic that populates them.
 
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Schema version for the aggregated output format.
-pub const SCHEMA_VERSION: &str = "2.11.0";
+pub const SCHEMA_VERSION: &str = "2.13.0";
 
 /// Consolidated results using aggregation format v2.8.0.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +44,168 @@ pub struct NewConsolidatedResults {
     /// `#[serde(default)]` so aggregates produced before this field existed still deserialize.
     #[serde(default)]
     pub format_support: FormatSupportMatrix,
+    /// Layout-variant vs baseline-variant deltas on the fixtures where both succeeded, one entry
+    /// per (layout framework, baseline framework, output format, mode, file type) (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
+    #[serde(default)]
+    pub layout_impact: Vec<LayoutImpact>,
+    /// xberg vs competitor deltas on the fixtures where both succeeded, one entry per
+    /// (xberg framework, competitor framework, output format, mode, file type) (v2.12.0+). `#[serde(default)]` so pre-2.12.0 aggregates still deserialize.
+    #[serde(default)]
+    pub head_to_head: Vec<HeadToHead>,
+}
+
+/// Paired comparison of one metric over the fixtures both sides produced a value for.
+///
+/// `baseline` is the reference side (the baseline variant in [`LayoutImpact`], the competitor in
+/// [`HeadToHead`]); `layout` is the compared side (the layout variant, respectively xberg).
+/// `delta_p50` is the median of the per-fixture deltas `layout - baseline`, NOT the difference of
+/// the two medians. `sample_count` is the number of fixtures with a value on both sides; the three
+/// medians are `None` exactly when it is zero, so "not measured" never reads as "no difference".
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PairedDelta {
+    /// Median of the reference side's per-fixture values.
+    pub baseline_p50: Option<f64>,
+    /// Median of the compared side's per-fixture values.
+    pub layout_p50: Option<f64>,
+    /// Median of the per-fixture deltas (`layout - baseline`).
+    pub delta_p50: Option<f64>,
+    /// Fixtures contributing to the three medians.
+    pub sample_count: usize,
+}
+
+/// One fixture's value on both sides of a paired comparison.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FixtureDelta {
+    pub fixture_id: String,
+    /// Reference-side value (see [`PairedDelta`]).
+    pub baseline: f64,
+    /// Compared-side value (see [`PairedDelta`]).
+    pub layout: f64,
+    /// `layout - baseline`.
+    pub delta: f64,
+}
+
+/// Per-fixture values behind the [`PairedDelta`]s of a [`LayoutImpact`], sorted by fixture id.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PairedFixtureDeltas {
+    pub sf1: Vec<FixtureDelta>,
+    pub tf1: Vec<FixtureDelta>,
+    pub reading_order: Vec<FixtureDelta>,
+    pub duration_ms: Vec<FixtureDelta>,
+    pub peak_memory_mb: Vec<FixtureDelta>,
+}
+
+/// Effect of the layout pass: a layout variant against its baseline variant (v2.12.0+), for PDFs
+/// and raster images only.
+///
+/// Variants pair by name, the layout variant's `layout` segment replaced by `baseline`
+/// (`xberg-markdown-layout` with `xberg-markdown-baseline`), or dropped when no such framework
+/// exists (`xberg-markdown-sceptre-ort-layout` with `xberg-markdown-sceptre-ort`). Only fixtures
+/// where both variants carry a quality result are paired: a success, or (v2.13.0+) a zero-overlap
+/// failure at the TF1 of 0 it was scored with, so a fixture that falls from 1.0 to 0.0 shows as a
+/// regression instead of dropping out. Duration and memory are further restricted to
+/// single-file, cold-process measurements (and isolated-process RSS for memory) because batch rows
+/// do not carry per-document timing.
+///
+/// OCR use does not split entries: a fixture pairs whatever OCR each side reported, since a failed
+/// row never reports it and an auto-OCR variant decides per document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutImpact {
+    pub layout_framework: String,
+    pub baseline_framework: String,
+    pub output_format: OutputFormat,
+    pub mode: String,
+    pub file_type: String,
+    /// OCR use reported by every successful row on both sides; `None` when they disagree, any did
+    /// not report it, or none succeeded.
+    pub ocr: Option<bool>,
+    /// Paired fixtures on which the baseline variant reported OCR use.
+    #[serde(default)]
+    pub baseline_ocr_fixture_count: usize,
+    /// Paired fixtures on which the layout variant reported OCR use.
+    #[serde(default)]
+    pub layout_ocr_fixture_count: usize,
+    /// Fixtures where both variants carry a quality result (success or zero overlap).
+    pub paired_fixture_count: usize,
+    /// Structural F1; `None` for plaintext output or when no fixture carries it.
+    pub sf1: Option<PairedDelta>,
+    pub tf1: PairedDelta,
+    /// `None` when no paired fixture carries a reading-order score.
+    pub reading_order: Option<PairedDelta>,
+    pub quality_score: PairedDelta,
+    pub duration_ms: PairedDelta,
+    pub peak_memory_mb: PairedDelta,
+    /// Fixtures whose delta is at least `0.005` in the layout variant's favor, judged per fixture
+    /// on SF1 when both sides carry it, else on `quality_score` (always for plaintext).
+    pub improved_fixture_ids: Vec<String>,
+    /// Fixtures whose delta is at most `-0.005` on the same metric.
+    pub regressed_fixture_ids: Vec<String>,
+    /// Fixtures with an absolute delta below `0.005` on the same metric.
+    pub unchanged_fixture_ids: Vec<String>,
+    /// Paired fixtures with neither SF1 nor `quality_score` on both sides (no ground truth). The
+    /// four id lists partition the paired fixtures.
+    #[serde(default)]
+    pub unscored_fixture_ids: Vec<String>,
+    /// Fixture ids left out of pairing because they name more than one document (a stem repeated
+    /// in the corpus, told apart by file size). Not counted in `paired_fixture_count`.
+    #[serde(default)]
+    pub ambiguous_fixture_ids: Vec<String>,
+    pub per_fixture: PairedFixtureDeltas,
+}
+
+/// xberg against one competitor on the fixtures both carry a quality result for (v2.12.0+): a
+/// success, or (v2.13.0+) a zero-overlap failure at the TF1 of 0 it was scored with.
+///
+/// All [`PairedDelta`]s read with `baseline` = competitor, `layout` = xberg, so a positive
+/// `delta_p50` on a quality metric means xberg scored higher. Duration and memory carry
+/// `sample_count == 0` for batch mode and warm-process rows, as in [`LayoutImpact`]. OCR use does
+/// not split entries, as in [`LayoutImpact`]: xberg auto-OCRing a scan the competitor read without
+/// OCR is still one shared fixture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeadToHead {
+    pub xberg_framework: String,
+    pub competitor_framework: String,
+    pub output_format: OutputFormat,
+    pub mode: String,
+    pub file_type: String,
+    /// OCR use reported by every successful row on both sides; `None` when they disagree, any did
+    /// not report it, or none succeeded.
+    pub ocr: Option<bool>,
+    /// Shared fixtures on which xberg reported OCR use.
+    #[serde(default)]
+    pub xberg_ocr_fixture_count: usize,
+    /// Shared fixtures on which the competitor reported OCR use.
+    #[serde(default)]
+    pub competitor_ocr_fixture_count: usize,
+    /// Fixtures where both frameworks carry a quality result (success or zero overlap).
+    pub shared_fixture_count: usize,
+    /// Fixtures xberg has a quality result for and the competitor does not (absent, or failed
+    /// other than by zero overlap): the first 50 ids in sorted order; `xberg_only_fixture_count`
+    /// is the total.
+    pub xberg_only_fixture_ids: Vec<String>,
+    #[serde(default)]
+    pub xberg_only_fixture_count: usize,
+    /// Fixtures the competitor has a quality result for and xberg does not: the first 50 ids in
+    /// sorted order; `competitor_only_fixture_count` is the total.
+    pub competitor_only_fixture_ids: Vec<String>,
+    #[serde(default)]
+    pub competitor_only_fixture_count: usize,
+    /// Fixture ids left out of the comparison because they name more than one document (see
+    /// [`LayoutImpact::ambiguous_fixture_ids`]): the first 50 in sorted order;
+    /// `ambiguous_fixture_count` is the total.
+    #[serde(default)]
+    pub ambiguous_fixture_ids: Vec<String>,
+    #[serde(default)]
+    pub ambiguous_fixture_count: usize,
+    pub duration_ms: PairedDelta,
+    pub extraction_duration_ms: PairedDelta,
+    pub peak_memory_mb: PairedDelta,
+    pub tf1: PairedDelta,
+    /// Structural F1; `None` for plaintext output or when no shared fixture carries it.
+    pub sf1: Option<PairedDelta>,
+    /// `None` when no shared fixture carries a reading-order score.
+    pub reading_order: Option<PairedDelta>,
+    pub quality_score: PairedDelta,
 }
 
 /// Declared format-support coverage across the run.
@@ -123,6 +285,13 @@ pub struct PerFixtureRow {
     /// Peak RSS above the captured baseline (v2.8.0+).
     #[serde(default)]
     pub peak_memory_delta_bytes: u64,
+    /// How `peak_memory_mb` was measured; see `crate::types::MemoryMethod` (v2.12.0+).
+    #[serde(default)]
+    pub memory_method: crate::types::MemoryMethod,
+    /// Framework-reported peak RSS, diagnostics only; never folded into `peak_memory_mb`
+    /// (v2.12.0+).
+    #[serde(default)]
+    pub self_reported_peak_memory_bytes: Option<u64>,
     /// 50th percentile memory usage in bytes, from this single measurement's own resource
     /// sampler timeline — not a cross-fixture percentile (v2.8.0+).
     #[serde(default)]
@@ -170,6 +339,10 @@ pub struct PerFixtureRow {
     /// (v2.8.0+).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statistics: Option<crate::types::DurationStatistics>,
+    /// Content family declared by the fixture (`metadata.family`); `null` when the document is its
+    /// own family (v2.13.0+).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixture_family: Option<String>,
 }
 
 /// Cross-framework comparison rankings and deltas.
@@ -204,6 +377,14 @@ pub struct ComparisonData {
     /// PDF-only: frameworks ranked by structural F1 / SF1 (highest first) — markdown only
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pdf_sf1_ranking_markdown: Vec<RankedFramework>,
+    /// PDF-only: frameworks ranked by reading-order score (highest first) — markdown only. Report
+    /// only: reading order is not part of `quality_score` (v2.12.0+).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pdf_reading_order_ranking_markdown: Vec<RankedFramework>,
+    /// PDF-only: frameworks ranked by reading-order score (highest first) — plaintext only
+    /// (v2.12.0+).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pdf_reading_order_ranking_plaintext: Vec<RankedFramework>,
     /// Frameworks ranked by median pages/sec (highest first). Only frameworks with at least one
     /// PDF pages/sec observation are included (see `PerformancePercentiles.pages_per_sec`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -324,7 +505,7 @@ pub struct ConsolidationMetadata {
     /// File types the "overall" markdown quality ranking is actually computed over: the
     /// intersection of file types every markdown candidate framework attempted. When this
     /// degenerates to a single type (e.g. `["pdf"]`, because a PDF-only framework like
-    /// liteparse/mineru is in the pool), `quality_ranking_markdown` is NOT a true all-format
+    /// mineru is in the pool), `quality_ranking_markdown` is NOT a true all-format
     /// "overall" ranking — it reflects only these types. Consumers must read it accordingly.
     #[serde(default)]
     pub shared_corpus_markdown: Vec<String>,
@@ -344,7 +525,7 @@ pub struct ConsolidationMetadata {
 
 /// Failure counts split by cause. Framework-fault kinds ([`crate::types::ErrorKind::FrameworkError`],
 /// [`crate::types::ErrorKind::EmptyContent`], [`crate::types::ErrorKind::ZeroOverlap`],
-/// [`crate::types::ErrorKind::Timeout`]) are the framework's own fault — it was handed a supported
+/// [`crate::types::ErrorKind::LayoutFailed`], [`crate::types::ErrorKind::Timeout`]) are the framework's own fault — it was handed a supported
 /// document and failed — and penalize its quality/success rate (see
 /// [`super::failures::is_framework_fault_failure`]). Infrastructure kinds
 /// ([`crate::types::ErrorKind::HarnessError`], [`crate::types::ErrorKind::ConfigSetupError`]) are
@@ -357,6 +538,9 @@ pub struct FailureCounts {
     /// `empty_content` (which means the framework produced no content at all).
     #[serde(default)]
     pub zero_overlap: usize,
+    /// Layout-bearing rows whose layout pass failed or was skipped.
+    #[serde(default)]
+    pub layout_failures: usize,
     pub timeouts: usize,
     /// Sum of the framework-fault kinds above (these penalize the score).
     pub framework_fault_total: usize,
@@ -409,6 +593,11 @@ pub struct FileTypeAggregation {
     pub no_ocr: Option<PerformancePercentiles>,
     /// Results with OCR
     pub with_ocr: Option<PerformancePercentiles>,
+    /// Results whose OCR status was not reported (typically failures). Kept apart from the OCR
+    /// cohorts so an unknown status is never presented as no-OCR, but still ranked so those
+    /// failures cannot dodge the quality penalty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unknown_ocr: Option<PerformancePercentiles>,
 }
 
 /// Performance percentiles for a group of results
@@ -437,6 +626,9 @@ pub struct PerformancePercentiles {
     /// non-empty ground truth — distinct from `empty_content` (v2.10.0+).
     #[serde(default)]
     pub zero_overlap: usize,
+    /// Number of layout-bearing extractions whose layout pass failed or was skipped.
+    #[serde(default)]
+    pub layout_failures: usize,
     /// Unique error messages with occurrence counts
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub error_details: HashMap<String, usize>,
@@ -451,9 +643,22 @@ pub struct PerformancePercentiles {
     /// Extraction duration percentiles (p50, p95, p99) in ms
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extraction_duration: Option<Percentiles>,
-    /// Quality score percentiles (p50, p95, p99) — 0.0 to 1.0
+    /// Quality score percentiles (p50, p95, p99) — 0.0 to 1.0, over successful results only.
+    /// Quality rankings read this block and apply success coverage separately.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<QualityPercentiles>,
+    /// Quality percentiles over successful results plus `zero_overlap` failures, the latter at
+    /// the quality they were scored with (TF1 = 0) (v2.13.0+). A zero-overlap row returned the
+    /// wrong text, which is a quality result: leaving it out of `quality` lets a document that
+    /// falls from 1.0 to 0.0 vanish instead of pulling the distribution down. `None` when no
+    /// result in the group carries a quality score; absent from pre-2.13.0 aggregates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_including_failures: Option<QualityPercentiles>,
+    /// Per-document and family-clustered means over the same results as
+    /// `quality_including_failures` (v2.13.0+). `None` when no result carries a quality score;
+    /// absent from pre-2.13.0 aggregates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_means: Option<QualityMeans>,
     /// Pages-per-second percentiles, derived from `PdfMetadata.page_count` divided by wall-clock
     /// duration. `None` when no result in this group carries a known PDF page count (e.g.
     /// non-PDF file types, or a page count the harness could not detect). For a native batch,
@@ -489,6 +694,10 @@ pub struct PerformancePercentiles {
     /// samples" from "some samples, all excluded."
     #[serde(default)]
     pub throughput_excluded_sample_count: usize,
+    /// Performance samples per `memory_method` (`rusage_max_rss`, `sampled`, `self_reported`) behind
+    /// `memory`, so a bucket mixing measurement methods is visible (v2.12.0+).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub memory_methods: std::collections::BTreeMap<String, usize>,
 }
 
 /// Aggregated system-load contention qualifier for a group of results.
@@ -536,6 +745,37 @@ pub struct QualityPercentiles {
     pub quality_score_p95: f64,
     /// Overall quality score 99th percentile
     pub quality_score_p99: f64,
+    /// Reading-order score 50th percentile over the results that carry one; report-only, not part
+    /// of `quality_score`. `None` when no result carries it (v2.12.0+).
+    #[serde(default)]
+    pub reading_order_p50: Option<f64>,
+    /// Number of results whose `quality.reading_order_score` is present (v2.12.0+).
+    #[serde(default)]
+    pub reading_order_sample_count: usize,
+}
+
+/// Per-document and family-clustered quality means (v2.13.0+), over successful results plus
+/// zero-overlap failures (see [`PerformancePercentiles::quality_including_failures`]).
+///
+/// The corpus holds families of fixtures with the same content: one image in several encodings or
+/// rotations, a page as an image and as a scanned PDF. A per-document mean counts that content once
+/// per copy, so a family of eleven copies outweighs ten distinct documents. The family mean
+/// averages each family first and then the families, so every distinct content counts once. A
+/// result without a `fixture_family` is its own family, so the two means agree on a corpus without
+/// declared families.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QualityMeans {
+    /// Results behind the means.
+    pub document_count: usize,
+    /// Distinct families among them.
+    pub family_count: usize,
+    pub f1_text_mean: f64,
+    pub f1_text_family_mean: f64,
+    pub quality_score_mean: f64,
+    pub quality_score_family_mean: f64,
+    /// `None` when no result carries SF1 (plaintext output, or no markdown ground truth).
+    pub f1_layout_mean: Option<f64>,
+    pub f1_layout_family_mean: Option<f64>,
 }
 
 /// Minimum sample count required to report a `p95` value without fabricating precision the

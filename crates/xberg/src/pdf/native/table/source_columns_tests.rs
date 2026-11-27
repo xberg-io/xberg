@@ -390,7 +390,7 @@ fn should_admit_the_original_table_before_collecting_and_caching_rules() {
     let paths = complete_row_rules();
     let page_rules = PageRules::new(&paths, true);
     let words = numeric_rows();
-    assert!(reconstruct_region_table(&words[..3], PAGE_HEIGHT, 1, false, 0, &page_rules).is_none());
+    assert!(reconstruct_region_table(&words[..3], PAGE_HEIGHT, 1, false, 0, &page_rules).is_err());
     assert!(
         page_rules.cached.get().is_none(),
         "rejected regions must not start source-rule collection"

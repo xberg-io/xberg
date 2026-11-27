@@ -74,11 +74,14 @@ use group_compositing::{FormInvocation, GroupReplay, GroupSidecar};
 mod group_process_text;
 use super::text_rasterizer::TextRun;
 use group_process_text::GroupTextPaint;
+#[path = "opaque_blit.rs"]
+mod opaque_blit;
 #[path = "raster_budget.rs"]
 mod raster_budget;
 pub(super) use raster_budget::PngRenderBudget;
 #[cfg(test)]
 use raster_budget::png_working_bytes_fit;
+pub(super) use raster_budget::straight_rgb8_in_place;
 #[cfg(test)]
 pub(super) use raster_budget::{PNG_FIXED_OVERHEAD, RGBA_AND_PNG_BYTES_PER_PIXEL};
 use raster_budget::{declares_spot_soft_mask, encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
@@ -768,7 +771,7 @@ impl PageRenderer {
         let data = match self.options.format {
             ImageFormat::Png => encode_png(&pixmap)?,
             ImageFormat::Jpeg => self.encode_jpeg(&pixmap)?,
-            ImageFormat::RawRgba8 => pixmap.data().to_vec(),
+            ImageFormat::RawRgba8 => pixmap.take(),
         };
 
         Ok((
@@ -1149,7 +1152,7 @@ impl PageRenderer {
         let mut st = OpLoopState::new(gs_stack, excluded_layers, ext_g_states);
         // Depth 0 carries the caller's clip; `Q` never pops below it.
         if let Some(clip) = entry.and_then(|e| e.clip) {
-            st.clip_stack[0] = Some(clip);
+            st.clip_stack[0] = Some(Arc::new(clip));
         }
         for op in operators {
             if self.image_selection.is_some_and(|(_, include)| include) {
@@ -2322,8 +2325,10 @@ impl PageRenderer {
             }
             None => extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?,
         };
-        let mut reduction = 1;
+        let mut decode = image_budget::JpegDecode::Full;
+        let mut blit = image_budget::Blit::PreResize;
         let mut canvas = 0;
+        let placement = image_budget::Placement::new(transform);
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
             canvas = sidecar
@@ -2331,25 +2336,73 @@ impl PageRenderer {
                 .max(self.knockout_resources.retained_bytes());
             // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
             if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
-                budget.admit_jpeg(&pdf_image, canvas)?;
+                blit = budget.admit_jpeg_at(&pdf_image, canvas, placement)?;
             } else {
-                let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
-                reduction = budget.admit_jpeg_reducing(&pdf_image, canvas, painted)?;
+                let unmasked = mask_obj.is_none() && smask_obj.is_none();
+                let admitted = budget.admit_jpeg_decode(&pdf_image, canvas, placement, unmasked)?;
+                decode = admitted.decode;
+                blit = admitted.blit;
             }
         }
-        let dynamic_image = match pdf_image.data() {
-            ImageData::Jpeg(bytes) if reduction > 1 => match image_budget::decode_reduced_jpeg(bytes, reduction) {
-                Ok(image) => image,
-                Err(error) => {
-                    if let Some(budget) = self.source_image_budget.as_mut() {
-                        budget.refuse_failed_reduction(&pdf_image, canvas);
-                    }
-                    return Err(error);
-                }
-            },
-            _ => pdf_image.to_dynamic_image()?,
+        // Masks read the full-size RGBA raster and a direct draw resamples it, so only an unmasked
+        // pre-resized downscale is resized in the source's own gray or RGB format, widening just the
+        // resized raster to RGBA. The JPEG charges above, made for the RGBA path, bound its peak
+        // (`image_budget::native_downscale_peak_bytes`). ~keep
+        let native = mask_obj.is_none()
+            && smask_obj.is_none()
+            && pdf_image.soft_mask_in_data().is_none()
+            && blit == image_budget::Blit::PreResize;
+        let raw_source = (pdf_image.width(), pdf_image.height());
+        let raw_transform = image_unit_square_transform(transform, raw_source.0, raw_source.1);
+        let resized_raw = native
+            .then(|| native_samples(&pdf_image))
+            .flatten()
+            .and_then(|(samples, components)| {
+                native_downscale(samples, components, raw_source, raw_transform).map(|resized| (resized, components))
+            });
+        if let Some((resized, components)) = resized_raw {
+            drop(pdf_image);
+            let paint = pixmap_paint_for_image_blit(raw_transform, gs.fill_alpha, &gs.blend_mode);
+            blit_native_resized(pixmap, resized, components, raw_transform, paint, clip_mask);
+            return Ok(());
+        }
+        let decoded = match (pdf_image.data(), decode) {
+            (ImageData::Jpeg(bytes), image_budget::JpegDecode::Reduced(denominator)) => {
+                image_budget::decode_reduced_jpeg(bytes, denominator).map(|image| (image, None))
+            }
+            // Only an image without a /Mask or /SMask is decoded in place, and those masks are the
+            // only readers of the source raster below, so an empty one stands in for it. ~keep
+            (ImageData::Jpeg(bytes), image_budget::JpegDecode::InPlace) => {
+                image_budget::decode_jpeg_into_rgba(bytes, (pdf_image.width(), pdf_image.height()))
+                    .map(|rgba| (image::DynamicImage::new_luma8(0, 0), Some(rgba)))
+            }
+            _ => Ok((pdf_image.to_dynamic_image()?, None)),
         };
-        let mut rgba_image = dynamic_image.to_rgba8();
+        let (dynamic_image, rgba_image) = match decoded {
+            Ok(decoded) => decoded,
+            Err(error) => {
+                if let Some(budget) = self.source_image_budget.as_mut() {
+                    budget.refuse_failed_reduction(&pdf_image, canvas, placement);
+                }
+                return Err(error);
+            }
+        };
+        let decoded_source = (dynamic_image.width(), dynamic_image.height());
+        let decoded_transform = image_unit_square_transform(transform, decoded_source.0, decoded_source.1);
+        let resized_decoded = (native && rgba_image.is_none())
+            .then(|| native_decoded_samples(&dynamic_image))
+            .flatten()
+            .and_then(|(samples, components)| {
+                native_downscale(samples, components, decoded_source, decoded_transform)
+                    .map(|resized| (resized, components))
+            });
+        if let Some((resized, components)) = resized_decoded {
+            drop(dynamic_image);
+            let paint = pixmap_paint_for_image_blit(decoded_transform, gs.fill_alpha, &gs.blend_mode);
+            blit_native_resized(pixmap, resized, components, decoded_transform, paint, clip_mask);
+            return Ok(());
+        }
+        let mut rgba_image = rgba_image.unwrap_or_else(|| dynamic_image.to_rgba8());
 
         // A referenced ImageMask uses stencil polarity: default /Decode [0 1]
         // makes sample 0 opaque, while [1 0] reverses it. ~keep
@@ -2626,6 +2679,9 @@ impl PageRenderer {
                 tracing::warn!("Ignoring /SMaskInData: the opacity channel does not match the image size");
             }
         }
+        // Only the mask admissions above read the source raster. The image budget charges the
+        // draw below beside the paint raster alone. ~keep
+        drop(dynamic_image);
 
         // A tiny_skia pixmap holds premultiplied RGBA. `/SMaskInData 2` already supplies colour
         // premultiplied by its opacity; every other decoded image needs the conversion here. ~keep
@@ -2633,50 +2689,9 @@ impl PageRenderer {
             premultiply_rgba(&mut rgba_image);
         }
 
-        let src_w = rgba_image.width();
-        let src_h = rgba_image.height();
-
-        let image_transform = image_unit_square_transform(transform, src_w, src_h);
-        let mut paint = pixmap_paint_for_image_blit(image_transform, gs.fill_alpha, &gs.blend_mode);
-
-        // Fast path: SIMD pre-resize when the transform is a pure scale+translate and
-        // the image is being downscaled.  fast_image_resize (AVX2/SSE4.1/NEON) resizes
-        // to exact output dimensions; we then blit the already-correct pixels at the
-        // right position with a translate-only transform and Nearest quality (no second
-        // resampling pass).  For rotated/sheared transforms or upscaling, fall through
-        // to the tiny-skia bilinear/bicubic path (already selected by the helper above). ~keep
-        let use_fast = image_transform.kx.abs() <= 1e-4
-            && image_transform.ky.abs() <= 1e-4
-            && image_transform.sx > 0.0
-            && image_transform.sy > 0.0
-            && (image_transform.sx < 0.9 || image_transform.sy < 0.9);
-
-        let (blit_w, blit_h, blit_data, blit_transform) = if use_fast {
-            let dst_w = ((image_transform.sx * src_w as f32).round() as u32).max(1);
-            let dst_h = ((image_transform.sy * src_h as f32).round() as u32).max(1);
-            let resized = resize_rgba(rgba_image.as_raw(), src_w, src_h, dst_w, dst_h);
-            if let Some(pixels) = resized {
-                // SIMD pre-resize produced the exact output dimensions —
-                // the subsequent blit is 1:1, so override to Nearest to
-                // skip a second resampling pass. ~keep
-                paint.quality = tiny_skia::FilterQuality::Nearest;
-                let t = Transform::from_translate(image_transform.tx, image_transform.ty);
-                (dst_w, dst_h, pixels, t)
-            } else {
-                // fast_image_resize failed; fall back to tiny_skia
-                // resampling with the helper's chosen quality. ~keep
-                (src_w, src_h, rgba_image.into_raw(), image_transform)
-            }
-        } else {
-            (src_w, src_h, rgba_image.into_raw(), image_transform)
-        };
-
-        if let Some(img_pixmap) =
-            tiny_skia::IntSize::from_wh(blit_w, blit_h).and_then(|size| Pixmap::from_vec(blit_data, size))
-        {
-            pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, blit_transform, clip_mask);
-        }
-
+        let image_transform = image_unit_square_transform(transform, rgba_image.width(), rgba_image.height());
+        let paint = pixmap_paint_for_image_blit(image_transform, gs.fill_alpha, &gs.blend_mode);
+        blit_rgba(pixmap, rgba_image, image_transform, paint, clip_mask, blit);
         Ok(())
     }
 
@@ -7951,6 +7966,165 @@ fn image_unit_square_transform(parent: Transform, src_w: u32, src_h: u32) -> Tra
         .pre_scale(1.0 / src_w as f32, -1.0 / src_h as f32)
 }
 
+/// The size `render_image` pre-resizes a `source` RGBA raster to before blitting it through
+/// `image_transform`, or `None` when it blits the source directly: only an axis-aligned blit that
+/// shrinks either axis below 0.9 is pre-resized. The image budget charges the same decision.
+fn fast_resize_target(image_transform: Transform, (src_w, src_h): (u32, u32)) -> Option<(u32, u32)> {
+    let axis_aligned_downscale = image_transform.kx.abs() <= 1e-4
+        && image_transform.ky.abs() <= 1e-4
+        && image_transform.sx > 0.0
+        && image_transform.sy > 0.0
+        && (image_transform.sx < 0.9 || image_transform.sy < 0.9);
+    axis_aligned_downscale.then(|| {
+        (
+            ((image_transform.sx * src_w as f32).round() as u32).max(1),
+            ((image_transform.sy * src_h as f32).round() as u32).max(1),
+        )
+    })
+}
+
+/// Draw a premultiplied RGBA `image` onto `pixmap` through `image_transform` (from
+/// [`image_unit_square_transform`]) with `paint`, as the image budget admitted it.
+fn blit_rgba(
+    pixmap: &mut Pixmap,
+    image: image::RgbaImage,
+    image_transform: Transform,
+    mut paint: PixmapPaint,
+    clip_mask: Option<&tiny_skia::Mask>,
+    blit: image_budget::Blit,
+) {
+    let (src_w, src_h) = image.dimensions();
+    // Fast path: SIMD pre-resize when the transform is a pure scale+translate and
+    // the image is being downscaled.  fast_image_resize (AVX2/SSE4.1/NEON) resizes
+    // to exact output dimensions; we then blit the already-correct pixels at the
+    // right position with a translate-only transform and Nearest quality (no second
+    // resampling pass).  For rotated/sheared transforms or upscaling, fall through
+    // to the tiny-skia bilinear/bicubic path (already selected by the helper above). ~keep
+    let (blit_w, blit_h, blit_data, blit_transform) = match (fast_resize_target(image_transform, (src_w, src_h)), blit)
+    {
+        (Some((dst_w, dst_h)), image_budget::Blit::PreResize) => {
+            if let Some(pixels) = resize_rgba(&image, src_w, src_h, dst_w, dst_h) {
+                // SIMD pre-resize produced the exact output dimensions —
+                // the subsequent blit is 1:1, so override to Nearest to
+                // skip a second resampling pass. ~keep
+                paint.quality = tiny_skia::FilterQuality::Nearest;
+                let t = Transform::from_translate(image_transform.tx, image_transform.ty);
+                (dst_w, dst_h, pixels, t)
+            } else {
+                // fast_image_resize failed; fall back to tiny_skia
+                // resampling with the helper's chosen quality. ~keep
+                (src_w, src_h, image.into_raw(), image_transform)
+            }
+        }
+        // The budget refused the pre-resize's copies. tiny-skia samples without a resized copy;
+        // its bicubic 4x4 kernel spans +-2 source pixels, the nearest it has to the pre-resize's
+        // tent of +-1/scale (1.1 to 1.25 pixels over the 0.8 to 0.9 scales it is admitted at),
+        // and measured closer to it than bilinear. ~keep
+        (Some(_), image_budget::Blit::Direct) => {
+            paint.quality = tiny_skia::FilterQuality::Bicubic;
+            (src_w, src_h, image.into_raw(), image_transform)
+        }
+        (None, _) => (src_w, src_h, image.into_raw(), image_transform),
+    };
+
+    if let Some(img_pixmap) =
+        tiny_skia::IntSize::from_wh(blit_w, blit_h).and_then(|size| Pixmap::from_vec(blit_data, size))
+    {
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, blit_transform, clip_mask);
+    }
+}
+
+/// The opaque gray (1 byte per pixel) or RGB (3) samples `to_rgba8` would widen `image`'s
+/// `to_dynamic_image` into, borrowed without that copy, or `None` for every other image. It mirrors
+/// `PdfImage::to_dynamic_image`: a 1-bit DeviceGray image takes its own unpacking path, CMYK is
+/// converted, and a buffer longer than the image is cut, so each of those is left to it.
+fn native_samples(image: &crate::extractors::images::PdfImage) -> Option<(&[u8], u8)> {
+    use crate::extractors::images::{ColorSpace, ImageData, PixelFormat};
+
+    let ImageData::Raw { pixels, format } = image.data() else {
+        return None;
+    };
+    if image.bits_per_component() == 1 && *image.color_space() == ColorSpace::DeviceGray {
+        return None;
+    }
+    let components = match format {
+        PixelFormat::Grayscale => 1,
+        PixelFormat::RGB => 3,
+        PixelFormat::CMYK => return None,
+    };
+    let expected = (image.width() as usize)
+        .checked_mul(image.height() as usize)?
+        .checked_mul(usize::from(components))?;
+    (pixels.len() == expected).then_some((pixels.as_slice(), components))
+}
+
+/// The opaque gray or RGB samples of a decoded `image`, as [`native_samples`] for a raster.
+fn native_decoded_samples(image: &image::DynamicImage) -> Option<(&[u8], u8)> {
+    match image {
+        image::DynamicImage::ImageLuma8(gray) => Some((gray.as_raw().as_slice(), 1)),
+        image::DynamicImage::ImageRgb8(rgb) => Some((rgb.as_raw().as_slice(), 3)),
+        _ => None,
+    }
+}
+
+/// Resize opaque `samples` of `components` bytes per pixel and `source` size to the size
+/// [`blit_rgba`] would pre-resize their RGBA widening to, in their own pixel format. `None` when
+/// that blit would not pre-resize, when the target is larger than the source on either axis, or
+/// when the resize fails; the caller then takes the RGBA path. The resized samples, widened by
+/// [`blit_native_resized`], are byte-identical to `blit_rgba`'s pre-resized RGBA (see
+/// `raster_budget::resize_samples`).
+fn native_downscale(
+    samples: &[u8],
+    components: u8,
+    source: (u32, u32),
+    image_transform: Transform,
+) -> Option<((u32, u32), Vec<u8>)> {
+    let target = fast_resize_target(image_transform, source)?;
+    if target.0 > source.0 || target.1 > source.1 {
+        return None;
+    }
+    raster_budget::resize_samples(samples, source, target, components).map(|resized| (target, resized))
+}
+
+/// Widen samples from [`native_downscale`] to opaque RGBA and copy them 1:1 onto `pixmap` as
+/// [`blit_rgba`] draws its pre-resized raster. Opaque RGBA is already premultiplied.
+fn blit_native_resized(
+    pixmap: &mut Pixmap,
+    ((width, height), resized): ((u32, u32), Vec<u8>),
+    components: u8,
+    image_transform: Transform,
+    mut paint: PixmapPaint,
+    clip_mask: Option<&tiny_skia::Mask>,
+) {
+    paint.quality = tiny_skia::FilterQuality::Nearest;
+    let translate = Transform::from_translate(image_transform.tx, image_transform.ty);
+    if opaque_blit::blit_opaque_translated(
+        pixmap,
+        (&resized, components),
+        (width, height),
+        &paint,
+        translate,
+        clip_mask,
+    ) {
+        return;
+    }
+    let rgba = widen_native(resized, components);
+    if let Some(img_pixmap) = tiny_skia::IntSize::from_wh(width, height).and_then(|size| Pixmap::from_vec(rgba, size)) {
+        pixmap.draw_pixmap(0, 0, img_pixmap.as_ref(), &paint, translate, clip_mask);
+    }
+}
+
+/// Widen gray or RGB `samples` of `components` bytes per pixel, in place, to the opaque RGBA
+/// `image::DynamicImage::to_rgba8` makes of them.
+fn widen_native(mut samples: Vec<u8>, components: u8) -> Vec<u8> {
+    let rgba_len = samples.len() / usize::from(components) * 4;
+    // `resize` alone grows by doubling, which leaves an RGB raster with 6 bytes per pixel. ~keep
+    samples.reserve_exact(rgba_len - samples.len());
+    samples.resize(rgba_len, 0);
+    image_budget::widen_to_rgba(&mut samples, usize::from(components));
+    samples
+}
+
 /// The clip a current path made of a single `m` describes. ISO 32000-1 8.5.3.3.1: a
 /// single-point open subpath produces no output, so intersecting the clip with it
 /// leaves nothing. `PathBuilder::finish` rejects a lone move-to, which would read as
@@ -8599,7 +8773,7 @@ fn form_bbox_clip(
 
 fn apply_pending_clip(
     pending_clip: &mut Option<(tiny_skia::Path, tiny_skia::FillRule)>,
-    clip_stack: &mut Vec<Option<tiny_skia::Mask>>,
+    clip_stack: &mut Vec<Option<Arc<tiny_skia::Mask>>>,
     pixmap: &Pixmap,
     base_transform: Transform,
     gs_stack: &GraphicsStateStack,
@@ -8624,7 +8798,7 @@ fn apply_pending_clip(
                 );
                 if let Some(empty) = tiny_skia::Mask::new(pixmap.width(), pixmap.height()) {
                     if let Some(slot) = clip_stack.last_mut() {
-                        *slot = Some(empty);
+                        *slot = Some(Arc::new(empty));
                     }
                 }
                 return;
@@ -8637,23 +8811,19 @@ fn apply_pending_clip(
             return;
         };
         match slot {
-            // Intersect the new clip path into the current scope's mask in
-            // place. tiny_skia::Mask::intersect_path allocates one submask,
+            // Intersect the new clip path into the current scope's mask.
+            // tiny_skia::Mask::intersect_path allocates one submask,
             // rasterizes the path into it, then folds it into `self` via the
-            // library's rounded `(a*b)/255` premultiply — replacing the
-            // previous code path which additionally cloned the current mask
-            // (a full page-sized memcpy) before running an equivalent scalar
-            // multiply loop. The clone was redundant: every `q` already pushes
-            // a cloned mask onto `clip_stack`, so the top-of-stack mask at the
-            // current depth is already this scope's private copy and may be
-            // mutated in place. ~keep
+            // library's rounded `(a*b)/255` premultiply. `q` shares the
+            // parent's mask rather than copying it, so `make_mut` copies it
+            // only here, when a scope that still shares it narrows it. ~keep
             Some(existing_mask) => {
-                existing_mask.intersect_path(&path, fill_rule, true, transform);
+                Arc::make_mut(existing_mask).intersect_path(&path, fill_rule, true, transform);
             }
             None => {
                 let mut new_mask = tiny_skia::Mask::new(pixmap.width(), pixmap.height()).unwrap();
                 new_mask.fill_path(&path, fill_rule, true, transform);
-                *slot = Some(new_mask);
+                *slot = Some(Arc::new(new_mask));
             }
         }
     }
@@ -9741,7 +9911,7 @@ mod tests {
         // with no pending clip. Only the first call should materialize. ~keep
         const K: usize = 100;
         APC_MATERIALIZED.store(0, Ordering::Relaxed);
-        let mut clip_stack: Vec<Option<tiny_skia::Mask>> = vec![None];
+        let mut clip_stack: Vec<Option<Arc<tiny_skia::Mask>>> = vec![None];
         let mut pending: Option<(tiny_skia::Path, FillRule)> = Some((make_clip_path(), FillRule::Winding));
         for _ in 0..K {
             apply_pending_clip(&mut pending, &mut clip_stack, &pixmap, base_transform, &gs_stack);
@@ -9757,7 +9927,7 @@ mod tests {
         // Materialization count must equal N, not K*N. ~keep
         const N: usize = 5;
         APC_MATERIALIZED.store(0, Ordering::Relaxed);
-        let mut clip_stack: Vec<Option<tiny_skia::Mask>> = vec![None];
+        let mut clip_stack: Vec<Option<Arc<tiny_skia::Mask>>> = vec![None];
         for _ in 0..N {
             let mut pending: Option<(tiny_skia::Path, FillRule)> = Some((make_clip_path(), FillRule::Winding));
             for _ in 0..K {
@@ -9770,6 +9940,64 @@ mod tests {
             "{N} W operators each followed by {K} paint ops must materialize \
              exactly {N} times (got {after_n_clips})"
         );
+    }
+
+    #[test]
+    fn save_state_shares_the_clip_until_the_new_level_narrows_it() {
+        use crate::content::GraphicsStateStack;
+        use tiny_skia::{FillRule, PathBuilder, Pixmap, Rect, Transform};
+
+        let _guard = APC_PROBE_LOCK.lock().unwrap();
+
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let excluded = HashSet::new();
+        let mut st = OpLoopState::new(GraphicsStateStack::new(), &excluded, None);
+        let pixmap = Pixmap::new(64, 64).expect("pixmap");
+        let rect_clip = |left: f32| {
+            let mut pb = PathBuilder::new();
+            pb.push_rect(Rect::from_xywh(left, 0.0, 32.0, 32.0).unwrap());
+            Some((pb.finish().unwrap(), FillRule::Winding))
+        };
+        let coverage = |st: &OpLoopState<'_>, level: usize, x: usize| {
+            st.clip_stack[level].as_deref().expect("clip mask").data()[10 * 64 + x]
+        };
+
+        st.pending_clip = rect_clip(0.0);
+        apply_pending_clip(
+            &mut st.pending_clip,
+            &mut st.clip_stack,
+            &pixmap,
+            Transform::identity(),
+            &st.gs_stack,
+        );
+        renderer.op_save_state(&mut st);
+        assert!(
+            Arc::ptr_eq(
+                st.clip_stack[0].as_ref().expect("outer clip"),
+                st.clip_stack[1].as_ref().expect("inner clip"),
+            ),
+            "q must share the page-sized clip mask, not copy it"
+        );
+
+        st.pending_clip = rect_clip(16.0);
+        apply_pending_clip(
+            &mut st.pending_clip,
+            &mut st.clip_stack,
+            &pixmap,
+            Transform::identity(),
+            &st.gs_stack,
+        );
+        assert_eq!(coverage(&st, 1, 5), 0, "the inner level is narrowed to x >= 16");
+        assert_eq!(coverage(&st, 1, 20), 255);
+        assert_eq!(
+            coverage(&st, 0, 5),
+            255,
+            "narrowing the inner level must not touch the outer clip"
+        );
+
+        renderer.op_restore_state(&mut st);
+        assert_eq!(st.clip_stack.len(), 1);
+        assert_eq!(coverage(&st, 0, 5), 255);
     }
 
     /// `type3_font_matrix` returns the explicit `/FontMatrix` when well-formed,
@@ -10158,6 +10386,51 @@ mod tests {
         let cache = IccTransformCache::new();
         let _ = resolve_generic_fill_color(Some(&space), &doc, &[0.0], Some(&cache));
         assert_eq!(cache.lookup_count(), 1);
+    }
+}
+
+/// Allocation probes for `tests/image_budget_peak.rs`: each pairs an operation `render_image` runs
+/// with the bytes the image budget charges for it, so a counting allocator can hold one against the
+/// other.
+#[cfg(feature = "budget-probe")]
+#[doc(hidden)]
+pub mod budget_probe {
+    /// What the image budget charges an in-place decode of `bytes` beyond the caller's encoded
+    /// buffer and canvas, or `None` for a JPEG it would not decode in place.
+    pub fn in_place_decode_bound(bytes: &[u8]) -> Option<u64> {
+        super::image_budget::single_scan_frame(bytes)
+            .then(|| super::image_budget::in_place_decode_bytes(bytes).ok())
+            .flatten()
+    }
+
+    /// Decode `bytes` in place at its `frame` size, as `render_image` does, returning that size.
+    pub fn decode_in_place(bytes: &[u8], frame: (u32, u32)) -> crate::Result<(u32, u32)> {
+        super::image_budget::decode_jpeg_into_rgba(bytes, frame).map(|image| image.dimensions())
+    }
+
+    /// What the image budget charges a pre-resize of a `source` RGBA raster to `target`.
+    pub fn resize_bound(source: (u32, u32), target: (u32, u32)) -> u64 {
+        super::image_budget::resize_working_bytes(source, target)
+    }
+
+    /// Pre-resize the RGBA `pixels` of a `source` raster to `target` as `render_image` does,
+    /// returning the length of the resized raster.
+    pub fn resize(pixels: &[u8], source: (u32, u32), target: (u32, u32)) -> Option<usize> {
+        super::raster_budget::resize_rgba(pixels, source.0, source.1, target.0, target.1).map(|resized| resized.len())
+    }
+
+    /// The peak the image budget models for `render_image`'s native downscale of a `source` raster of
+    /// `components` bytes per pixel to `target`, the source raster included.
+    pub fn native_downscale_bound(source: (u32, u32), target: (u32, u32), components: u8) -> u64 {
+        super::image_budget::native_downscale_peak_bytes(source, target, components)
+    }
+
+    /// Resize `samples` in their own pixel format, free them and widen the result to RGBA, as
+    /// `render_image` does, returning the length of the RGBA raster.
+    pub fn native_downscale(samples: Vec<u8>, source: (u32, u32), target: (u32, u32), components: u8) -> Option<usize> {
+        let resized = super::raster_budget::resize_samples(&samples, source, target, components)?;
+        drop(samples);
+        Some(super::widen_native(resized, components).len())
     }
 }
 

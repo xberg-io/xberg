@@ -7,7 +7,7 @@
 //! BLAKE3 digest and byte length, which the synthetic bytes provide consistently.
 
 use benchmark_harness::aggregate::{FileTypeAggregation, NewConsolidatedResults, RankedFramework};
-use benchmark_harness::bench_matrix::{Cohort, CohortContract};
+use benchmark_harness::bench_matrix::{Cohort, CohortContract, MatrixProfile};
 use benchmark_harness::consolidate::RunProvenanceRecord;
 use benchmark_harness::provenance::{
     CorpusProvenance, FixtureProvenance, FrameworkProvenance, RepositoryProvenance, RunProvenance, TimingProvenance,
@@ -51,6 +51,7 @@ fn zero_metrics() -> PerformanceMetrics {
         p50_memory_bytes: 0,
         p95_memory_bytes: 0,
         p99_memory_bytes: 0,
+        ..Default::default()
     }
 }
 
@@ -98,6 +99,9 @@ fn materialize_fixture_tree(cohort: Cohort, contract: &CohortContract) -> Fixtur
         Cohort::Email => "native-email-fast",
         Cohort::Data => "native-data-fast",
         Cohort::Images => "ocr-images-fast",
+        Cohort::NativeStructured => "native-pdf-structured-v1",
+        Cohort::OcrStructured => "ocr-pdf-structured-v1",
+        Cohort::ImagesStructured => "ocr-images-structured-v2",
     };
     std::fs::copy(repo_path(&format!("cohorts/{cohort_slug}.json")), &cohort_manifest).expect("copy cohort manifest");
     let manifest_blake3 = blake3_hex(&cohort_manifest);
@@ -174,7 +178,11 @@ fn supports_extension(framework: &str, extension: &str) -> bool {
         return true;
     }
     let supported: &[&str] = match framework {
-        "liteparse" => &["pdf"],
+        "liteparse" => &[
+            "pdf", "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg", "doc", "docx", "docm", "dot",
+            "dotm", "dotx", "odt", "ott", "rtf", "pages", "ppt", "pptx", "pptm", "pot", "potm", "potx", "odp", "otp",
+            "key", "xls", "xlsx", "xlsm", "xlsb", "ods", "ots", "csv", "tsv", "numbers",
+        ],
         "pymupdf4llm" => &["pdf", "epub", "fb2", "png", "jpg", "jpeg", "bmp", "tiff", "tif"],
         "docling" => &[
             "pdf", "docx", "pptx", "xlsx", "html", "md", "csv", "png", "jpg", "jpeg", "tiff", "tif", "bmp",
@@ -222,8 +230,8 @@ fn ocr_pdf_contract_eligibility_matches_framework_language_capabilities() {
 
     assert_eq!(
         eligible("liteparse"),
-        3,
-        "default-language LiteParse must exclude German"
+        4,
+        "LiteParse accepts the per-batch German selection through --ocr-language"
     );
     assert_eq!(eligible("docling"), 4, "Docling accepts the per-batch German selection");
     assert_eq!(eligible("xberg-markdown-sceptre-ort"), 4);
@@ -278,6 +286,8 @@ fn build_provenance(
             requested_workers: None,
             effective_workers: None,
             configured_thread_budget: None,
+            tessdata_model: None,
+            xberg_env: None,
             worker_semantics: "test".to_string(),
             effective_warmup_iterations: 0,
             eligible_documents,
@@ -371,6 +381,7 @@ fn build_results(
                 },
                 extracted_text: None,
                 system_load: None,
+                fixture_family: descriptor["metadata"]["family"].as_str().map(str::to_string),
             }
         })
         .collect()
@@ -384,7 +395,12 @@ struct ArtifactScenario {
 }
 
 fn artifact_scenario(cohort: Cohort) -> ArtifactScenario {
-    let contract = cohort.contract();
+    artifact_scenario_for(cohort, MatrixProfile::Full)
+}
+
+/// A conformant artifact tree holding exactly `profile`'s cells, validated as `profile`.
+fn artifact_scenario_for(cohort: Cohort, profile: MatrixProfile) -> ArtifactScenario {
+    let contract = cohort.contract_for(profile);
     let tree = materialize_fixture_tree(cohort, &contract);
     let artifacts_dir = tree.cohort_manifest.parent().expect("root").join("artifacts");
     std::fs::create_dir_all(&artifacts_dir).expect("create artifacts dir");
@@ -406,6 +422,7 @@ fn artifact_scenario(cohort: Cohort) -> ArtifactScenario {
         source_sha: Some(SOURCE_SHA.to_string()),
         run_id: Some(RUN_ID.to_string()),
         iterations: ITERATIONS,
+        profile,
     };
 
     ArtifactScenario {
@@ -584,5 +601,6 @@ fn aggregate_args(cohort: Cohort, aggregated_file: PathBuf) -> ValidateArtifacts
         source_sha: None,
         run_id: None,
         iterations: ITERATIONS,
+        profile: MatrixProfile::Full,
     }
 }

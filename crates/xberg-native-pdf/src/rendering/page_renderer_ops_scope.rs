@@ -49,9 +49,8 @@ impl PageRenderer {
 
     pub(super) fn op_save_state(&mut self, st: &mut OpLoopState<'_>) {
         st.gs_stack.save();
-        // Clone current clip for the new graphics state level
-        // This allows the current level to modify its clip without affecting parents
-        // ~keep
+        // The new level shares the current clip; narrowing it there copies it first, so the
+        // parent's clip is unaffected. ~keep
         let current_clip = st.clip_stack.last().cloned().flatten();
         st.clip_stack.push(current_clip);
         tracing::trace!(

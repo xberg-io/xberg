@@ -1,4 +1,4 @@
-use libheif_sys as lh;
+use crate::lh;
 use std::ptr;
 
 use std::rc::Rc;

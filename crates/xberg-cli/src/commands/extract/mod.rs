@@ -7,7 +7,7 @@
 //! - `timing` - optional per-stage cold-start timing for `--format json`
 //! - `images` - writing extracted images to disk
 //! - `manifest` - batch input manifest parsing and per-file config resolution
-//! - `runtime` - tokio runtime sizing and construction for extraction work
+//! - `runtime` - driving extraction work on the core's shared runtime
 //! - `batch` - the batch extraction command and its result aggregation
 
 use anyhow::{Context, Result};
@@ -30,12 +30,13 @@ mod timing;
 
 pub use batch::batch_command;
 pub use manifest::{BatchInputFormat, load_batch_input_manifest};
-// `RUNTIME_WORKER_STACK_SIZE_BYTES`'s only external reader is `server.rs`, which is
-// `#[cfg(any(feature = "api", feature = "mcp"))]`; under a feature set with neither, this
-// re-export is legitimately unused even though the underlying const in `runtime.rs` is not
-// (it is also read locally there). Keeping the re-export preserves the stable
-// `commands::extract::RUNTIME_WORKER_STACK_SIZE_BYTES` path for builds that do enable api/mcp. ~keep
-#[allow(unused_imports)]
+// `RUNTIME_WORKER_STACK_SIZE_BYTES` is read only by `server.rs` (api/mcp) and the OCR
+// diagnostic tests; the extract commands themselves build no runtime. ~keep
+#[cfg(any(
+    feature = "api",
+    feature = "mcp",
+    all(test, feature = "pdf-surface", any(feature = "pdf-ocr", feature = "ocr"))
+))]
 pub(crate) use runtime::RUNTIME_WORKER_STACK_SIZE_BYTES;
 // `STAGE_TIMING_ENV_VAR` is part of this module's public path for external documentation/tooling
 // (see `crate::output`'s doc comment) but has no in-crate reader outside `timing.rs` itself;

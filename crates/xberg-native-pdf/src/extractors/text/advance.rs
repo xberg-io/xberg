@@ -552,8 +552,9 @@ impl<'doc> TextExtractor<'doc> {
         Ok(())
     }
 
-    /// Insert a space character as a separate span.
-    pub(super) fn insert_space_as_span(&mut self) -> Result<()> {
+    /// Insert a space character as a separate span. `closes_ltr_run` says the run the space follows
+    /// ends in a left-to-right character.
+    pub(super) fn insert_space_as_span(&mut self, closes_ltr_run: bool) -> Result<()> {
         let mcid_scope = self.current_mcid_scope();
         let state = self.state_stack.current();
         let font_size = state.font_size;
@@ -597,12 +598,20 @@ impl<'doc> TextExtractor<'doc> {
         );
 
         let font_name_space = state.font_name.clone().unwrap_or_else(|| "Unknown".to_string());
-        let is_italic_space = state
-            .font_name
-            .as_ref()
-            .and_then(|name| self.fonts.get(name))
-            .map(|font| font.is_italic())
-            .unwrap_or(false);
+        let space_font = state.font_name.as_ref().and_then(|name| self.fonts.get(name));
+        let is_italic_space = space_font.is_some_and(|font| font.is_italic());
+        // After a left-to-right run the space carries the weight of its font, as a glyph run's buffer
+        // does: span merging joins only same-weight spans, so a regular space between two bold words
+        // stays a span of its own, which segment projection drops as blank, and a word gap narrower
+        // than the geometric threshold (a bold heading set with 0.13 em `TJ` gaps) loses its space.
+        // A right-to-left run is drawn in visual order and put in logical order span by span, so a
+        // bold space there stays regular: joined to its run, it would let the merge pass weld the
+        // next word drawn onto it, two words in visual order (`التحقق خطوات`). ~keep
+        let space_weight = if closes_ltr_run && space_font.is_some_and(|font| font.is_bold()) {
+            FontWeight::Bold
+        } else {
+            FontWeight::Normal
+        };
         // Bbox geometry follows the writing axis: a horizontal gap is
         // wide and font-tall; a vertical gap is glyph-em-wide and tall
         // along the writing direction. Downstream layout heuristics
@@ -623,9 +632,9 @@ impl<'doc> TextExtractor<'doc> {
                 width: space_width,
                 height: space_height,
             },
-            font_name: font_name_space,
+            font_name: font_name_space.into(),
             font_size: effective_font_size,
-            font_weight: FontWeight::Normal,
+            font_weight: space_weight,
             color: Color::new(state.fill_color_rgb.0, state.fill_color_rgb.1, state.fill_color_rgb.2),
             mcid: self.current_mcid,
             mcid_scope: Some(mcid_scope),
@@ -663,7 +672,8 @@ impl<'doc> TextExtractor<'doc> {
 
         tracing::trace!(target: LOG_TARGET, "PUSH space span with offset_semantic={}", span.offset_semantic);
 
-        self.push_span(span, state.render_mode);
+        let invisible = super::paints_invisible_text(state);
+        self.push_span(span, state.render_mode, invisible);
 
         // Do NOT advance the text matrix here. The caller drives the
         // matrix forward by the *actual* TJ offset via
@@ -827,6 +837,20 @@ impl<'doc> TextExtractor<'doc> {
         gap >= severe_overlap_pt && gap <= edge_rounding_error(e)
     }
 
+    /// Whether a `Tm` that continues an OCR-layer run (render mode 3) shows the next string at least
+    /// `OCR_LAYER_MIN_WORD_GAP_EM` past the run's last glyph. Such a layer shows each recognised word
+    /// as its own string at the word's box, so the run ends there and the span merge decides the word
+    /// break, as for strings a `Td` apart; a word split into abutting strings stays one run. ~keep
+    pub(super) fn tm_parts_ocr_layer_words(buffer: &TjBuffer, e: f32) -> bool {
+        let start = buffer.start_matrix;
+        if buffer.render_mode != 3 || buffer.wmode != 0 || start.b != 0.0 || start.a <= 0.0 {
+            return false;
+        }
+        let end = buffer.ends_at_continuing_tm().unwrap_or(buffer.accumulated_width);
+        let gap = (Self::text_space_advance(start, 0, e) - end) * buffer.user_h_scale;
+        gap >= super::span_merging::OCR_LAYER_MIN_WORD_GAP_EM * buffer.effective_font_size
+    }
+
     /// Restate the run in the unit of the new horizontal scale `a`, so that the glyphs it holds keep
     /// their user-space width and the glyphs to come are measured in the new unit: the widths scale by
     /// the old `a` over the new one, the user-space scale by the inverse, and the pen reads from `e`
@@ -943,7 +967,7 @@ impl<'doc> TextExtractor<'doc> {
                     width: total_width,
                     height: effective_font_size,
                 },
-                font_name: font_name_buf,
+                font_name: font_name_buf.into(),
                 font_size: effective_font_size,
                 font_weight,
                 color: Color::new(
@@ -994,7 +1018,7 @@ impl<'doc> TextExtractor<'doc> {
                 span.offset_semantic
             );
 
-            self.push_span(span, buffer.render_mode);
+            self.push_span(span, buffer.render_mode, buffer.invisible);
         }
         Ok(())
     }
@@ -1011,6 +1035,11 @@ impl<'doc> TextExtractor<'doc> {
             text
         };
 
+        let drop_regions = if super::paints_invisible_text(self.state_stack.current()) {
+            self.char_drop_regions()
+        } else {
+            None
+        };
         let state = self.state_stack.current();
         let font_size = state.font_size;
         let horizontal_scaling = state.horizontal_scaling;
@@ -1176,7 +1205,7 @@ impl<'doc> TextExtractor<'doc> {
                     let text_char = TextChar {
                         char: unicode_char,
                         bbox: Rect::new(char_origin_x, char_origin_y, char_width_device, height_device_space),
-                        font_name: font.map(|f| f.base_font.clone()).unwrap_or_default(),
+                        font_name: self.glyph_font_name.clone(),
                         font_size: effective_font_size,
                         font_weight,
                         color,
@@ -1200,7 +1229,12 @@ impl<'doc> TextExtractor<'doc> {
                         ]),
                     };
 
-                    if let Some(hold) = self.emit_hold() {
+                    let unpainted_white = drop_regions
+                        .as_ref()
+                        .is_some_and(|painted| !painted.iter().any(|region| region.intersects(&text_char.bbox)));
+                    if let Some(hold) = self.emit_hold()
+                        && !unpainted_white
+                    {
                         super::marked_content::push_held(&mut self.chars, &mut self.char_holds, text_char, hold);
                     }
                 }

@@ -324,6 +324,25 @@ class BuildInputTest(unittest.TestCase):
         assert re.fullmatch(r"\d+\.\d+\.\d+", versions[0])
         assert len({pin.sha256 for pin in self.inputs.pins["libheif"]}) == 1
 
+    def test_a_final_alias_stage_ships_the_packages_of_the_stage_it_names(self) -> None:
+        lines = [
+            "FROM rust:1 AS builder",
+            "RUN apt-get install -y libtesseract-dev",
+            "FROM debian:trixie AS runtime",
+            "RUN apt-get install -y tesseract-ocr libdav1d7",
+            "FROM runtime AS best",
+            "COPY --from=builder /x /y",
+            "FROM runtime AS fast",
+        ]
+        stages = [index for index, line in enumerate(lines) if line.startswith("FROM ")]
+        start, end = notices_sources._shipped_stage(lines, stages)
+        assert (start, end) == (2, 4)
+        assert notices_sources._package_tokens(lines[start + 1 : end]) == ["tesseract-ocr", "libdav1d7"]
+
+    def test_the_debian_images_disclose_their_distribution_packages(self) -> None:
+        providers = {dist.provider for dists in self.inputs.distributions.values() for dist in dists}
+        assert any(provider.startswith("Debian ") for provider in providers), providers
+
     def test_libaom_tracks_both_pinned_profiles(self) -> None:
         assert len(self.inputs.versions("libaom")) >= 2
 

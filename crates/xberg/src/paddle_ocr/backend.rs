@@ -1001,7 +1001,16 @@ impl PaddleOcrBackend {
     ) -> std::result::Result<(), xberg_paddle_ocr::OcrError> {
         let _acceleration_guard = PaddleAccelerationGuard::set(accel);
         crate::ort_discovery::ensure_ort_available();
-        crate::ort_discovery::ort_environment()?;
+        // An unloaded runtime must not become an `ort::Error`: building one makes ort retry
+        // its own library search. ~keep
+        crate::ort_discovery::ort_environment().map_err(|error| match error {
+            crate::ort_discovery::OrtSessionError::Ort(error) => xberg_paddle_ocr::OcrError::Ort(error),
+            #[cfg(ort_dynamic_discovery)]
+            crate::ort_discovery::OrtSessionError::Runtime(runtime) => xberg_paddle_ocr::OcrError::Inference {
+                message: runtime.to_string(),
+                source: Some(Box::new(runtime)),
+            },
+        })?;
 
         let builder_fn = paddle_builder_hook(
             PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()),
@@ -2089,29 +2098,15 @@ impl OcrBackend for PaddleOcrBackend {
     fn probe(&self, config: &OcrConfig) -> crate::doctor::DoctorCheck {
         use crate::doctor::DoctorCheck;
 
-        let effective_config = match crate::core::config::ocr::resolve_paddle_ocr_settings(
-            config.paddle_ocr_settings.as_ref(),
-            config.paddle_ocr_config.as_ref(),
-        ) {
-            Ok(Some(overridden)) => overridden,
-            Ok(None) => (*self.config).clone(),
+        let set = match RequiredModelSet::resolve(&self.config, config) {
+            Ok(set) => set,
             Err(error) => return DoctorCheck::fail("ocr.paddle-ocr", error.to_string()),
         };
-
-        let languages = config.effective_languages();
-        let (paddle_lang, _warnings) = super::select_paddle_language(&languages);
-        let family = language_to_script_family(paddle_lang);
-
-        let manager = match effective_config.checked_cache_dir() {
-            Ok(cache_dir) => ModelManager::new(cache_dir),
-            Err(error) => return DoctorCheck::fail("ocr.paddle-ocr", error.to_string()),
-        };
-        match manager.check_models_cached(
-            &effective_config.model_version,
-            family,
-            &effective_config.model_tier,
-            config.auto_rotate == Some(true),
-        ) {
+        let family = set.family;
+        match set
+            .manager
+            .check_models_cached(&set.version, family, &set.tier, set.include_doc_ori)
+        {
             Ok(artifacts) => {
                 let missing: Vec<&str> = artifacts
                     .iter()
@@ -2142,6 +2137,66 @@ impl Default for PaddleOcrBackend {
     fn default() -> Self {
         Self::with_config(PaddleOcrConfig::default())
             .unwrap_or_else(|e| panic!("Failed to create default PaddleOcrBackend: {}", e))
+    }
+}
+
+/// The model files a read of an `OcrConfig` loads, resolved from the backend's own settings and
+/// the request's overrides the way the runtime resolves them.
+pub(crate) struct RequiredModelSet {
+    pub(crate) manager: ModelManager,
+    pub(crate) version: String,
+    pub(crate) family: &'static str,
+    pub(crate) tier: String,
+    pub(crate) include_doc_ori: bool,
+}
+
+impl RequiredModelSet {
+    /// `base` is the backend's configuration; `config` may override it per request.
+    pub(crate) fn resolve(base: &PaddleOcrConfig, config: &OcrConfig) -> Result<Self> {
+        let effective = crate::core::config::ocr::resolve_paddle_ocr_settings(
+            config.paddle_ocr_settings.as_ref(),
+            config.paddle_ocr_config.as_ref(),
+        )?
+        .unwrap_or_else(|| base.clone());
+        let (paddle_lang, _warnings) = super::select_paddle_language(&config.effective_languages());
+        Ok(Self {
+            manager: ModelManager::new(effective.checked_cache_dir()?),
+            version: effective.model_version,
+            family: language_to_script_family(paddle_lang),
+            tier: effective.model_tier,
+            include_doc_ori: config.auto_rotate == Some(true),
+        })
+    }
+
+    /// Identifies the files on disk: the resolved cache root plus everything that selects them.
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn key(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}",
+            self.manager.cache_dir().display(),
+            self.version,
+            self.family,
+            self.tier,
+            self.include_doc_ori
+        )
+    }
+
+    /// The cached file of every model, or `None` when any is missing. Reads no file contents
+    /// and never downloads.
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn files(&self) -> Option<Vec<std::path::PathBuf>> {
+        self.manager
+            .cached_model_files(&self.version, self.family, &self.tier, self.include_doc_ori)
+            .ok()
+            .flatten()
+    }
+
+    /// Whether every file is cached and matches its pinned checksum. Hashes every file.
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    pub(crate) fn verified(&self) -> bool {
+        self.manager
+            .check_models_cached(&self.version, self.family, &self.tier, self.include_doc_ori)
+            .is_ok_and(|artifacts| artifacts.iter().all(|(_, cached)| *cached))
     }
 }
 
@@ -2476,15 +2531,18 @@ mod tests {
     fn session_options_apply_to_a_builder_for_every_combo() {
         use crate::ort_options::OrtSessionOptions;
 
-        crate::ort_discovery::ensure_ort_available();
+        let Some(environment) =
+            crate::ort_discovery::test_ort_environment("session_options_apply_to_a_builder_for_every_combo")
+        else {
+            return;
+        };
         for (memory_pattern, cpu_arena) in [(true, true), (false, true), (true, false), (false, false)] {
             let options = OrtSessionOptions {
                 memory_pattern,
                 cpu_arena,
                 max_threads: None,
             };
-            let builder = ort::session::Session::builder(crate::ort_discovery::ort_environment().expect("ort env"))
-                .expect("session builder");
+            let builder = ort::session::Session::builder(environment).expect("session builder");
             apply_paddle_session_options(builder, &options).unwrap_or_else(|e| panic!("{options:?}: {e}"));
         }
     }

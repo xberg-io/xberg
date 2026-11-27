@@ -92,6 +92,69 @@ fn image_ocr_positions(doc: &InternalDocument) -> Vec<usize> {
         .collect()
 }
 
+/// The positions among `positions` whose OCR read reaches the result.
+///
+/// A read reaches it through an element that shows the picture (an image element or an OCR
+/// text anchor, which the fold and the renderers read), through an inline `![alt](url)`
+/// placeholder that the replace and append passes pair with the pictures no element shows,
+/// or through the images themselves when the result keeps them. A PDF picture with none of
+/// those leaves with `drop_ocr_only_images`, its read unread: an image-only scan spent half
+/// its extraction reading the stencil masks its page OCR had already read. Other formats
+/// keep every position, because the same pass also reports their metafile text warnings. ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn image_ocr_positions_with_a_reader(
+    doc: &InternalDocument,
+    config: &ExtractionConfig,
+    positions: Vec<usize>,
+) -> Vec<usize> {
+    if doc.source_format != "pdf" || image_ocr_reads_reach_the_result(config) || has_inline_image_placeholder(doc) {
+        return positions;
+    }
+    let unshown = images_without_an_element(doc);
+    positions
+        .into_iter()
+        .filter(|position| unshown.binary_search(position).is_err())
+        .collect()
+}
+
+/// Whether the result carries the embedded images, their elements or a redaction pass that
+/// reads their OCR documents, so every read counts whether or not an element shows it.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn image_ocr_reads_reach_the_result(config: &ExtractionConfig) -> bool {
+    should_retain_images_after_ocr(config)
+        || config.result_format == crate::types::ResultFormat::ElementBased
+        || config.include_document_structure
+        || config.redaction.is_some()
+        || external_redaction_is_scoped()
+}
+
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", feature = "redaction"))]
+fn external_redaction_is_scoped() -> bool {
+    crate::text::redaction::external::external_redaction_is_scoped()
+}
+
+/// Without `redaction` no external redaction request can scope an extraction.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(feature = "redaction")))]
+fn external_redaction_is_scoped() -> bool {
+    false
+}
+
+/// Whether any paragraph or table cell is an inline `![alt](url)` placeholder, which the
+/// replace and append passes pair with the unshown pictures in order.
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn has_inline_image_placeholder(doc: &InternalDocument) -> bool {
+    doc.elements.iter().any(|element| {
+        matches!(element.kind, crate::types::internal::ElementKind::Paragraph)
+            && is_markdown_image_reference(&element.text)
+    }) || doc.tables.iter().any(|table| {
+        table
+            .cells
+            .iter()
+            .flatten()
+            .any(|cell| is_markdown_image_reference(cell))
+    })
+}
+
 /// Whether the OCR read of an image file already gave the document text or a table.
 ///
 /// The picture of an image file is the document, not a picture inside it: the image extractor
@@ -466,19 +529,22 @@ pub(crate) async fn run_pipeline_from_extractor(
     ))]
     placement: Option<crate::extraction::image_ocr::pdf_gap::Placement>,
 ) -> Result<ExtractedDocument> {
-    run_pipeline_impl(
-        doc,
-        config,
-        ProcessorSource::Global,
-        builtin_html_origin,
-        #[cfg(all(
-            feature = "pdf",
-            feature = "ocr",
-            feature = "tokio-runtime",
-            not(target_arch = "wasm32")
-        ))]
-        placement,
-    )
+    // ~keep Boxed in a frame of its own: `instrument` copies this body's future through the poll frame.
+    crate::core::runtime::pin_boxed(|| {
+        run_pipeline_impl(
+            doc,
+            config,
+            ProcessorSource::Global,
+            builtin_html_origin,
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            placement,
+        )
+    })
     .await
 }
 
@@ -628,6 +694,7 @@ async fn run_pipeline_impl(
         } else {
             image_positions
         };
+        let image_positions = image_ocr_positions_with_a_reader(&doc, config, image_positions);
         // Clone only selected images so skipped entries keep their positions and a
         // batch-level OCR failure cannot discard the original extracted images.
         if !image_positions.is_empty() {
@@ -1786,18 +1853,26 @@ fn normalize_nfc(result: &mut ExtractedDocument) {
     #[cfg(feature = "quality")]
     {
         use unicode_normalization::UnicodeNormalization;
-        let unnormalized = std::mem::take(&mut result.content);
-        result.content = unnormalized.nfc().collect();
-        if result.content != unnormalized {
-            remap_entity_spans_after_nfc(result, &unnormalized);
-            if result.formatted_content.is_none() {
-                remap_page_boundaries_after_nfc(result, &unnormalized);
+        // Text that is already NFC is left in place: collecting it again would hold a
+        // second copy of the whole content at peak memory and change nothing. ~keep
+        if !unicode_normalization::is_nfc(&result.content) {
+            let unnormalized = std::mem::take(&mut result.content);
+            result.content = unnormalized.nfc().collect();
+            if result.content != unnormalized {
+                remap_entity_spans_after_nfc(result, &unnormalized);
+                if result.formatted_content.is_none() {
+                    remap_page_boundaries_after_nfc(result, &unnormalized);
+                }
             }
         }
         if let Some(pages) = result.pages.as_mut() {
             for page in pages.iter_mut() {
-                page.content = page.content.nfc().collect();
-                if let Some(native_content) = page.native_content.as_mut() {
+                if !unicode_normalization::is_nfc(&page.content) {
+                    page.content = page.content.nfc().collect();
+                }
+                if let Some(native_content) = page.native_content.as_mut()
+                    && !unicode_normalization::is_nfc(native_content)
+                {
                     *native_content = native_content.nfc().collect();
                 }
             }

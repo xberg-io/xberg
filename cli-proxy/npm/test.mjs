@@ -134,6 +134,40 @@ test(
 );
 
 test(
+  "the launcher sets one malloc magazine on macOS only and keeps a value the user set",
+  { skip: process.platform === "win32" },
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "xberg-launcher-"));
+    try {
+      fs.mkdirSync(path.join(root, "bin"));
+      fs.copyFileSync(path.join(HERE, "package.json"), path.join(root, "package.json"));
+      fs.copyFileSync(path.join(HERE, "bin", "xberg.js"), path.join(root, "bin", "xberg.js"));
+      fs.copyFileSync(path.join(HERE, "install.js"), path.join(root, "install.js"));
+      const [pkg] = bundledPackageNames();
+      assert.ok(pkg, `no bundled package is defined for ${process.platform}-${process.arch}`);
+      const binary = fakePlatformPackage(root, pkg, "xberg");
+      fs.writeFileSync(binary, '#!/bin/sh\nprintf "%s" "${MallocMaxMagazines-<unset>}"\n');
+
+      const launch = (env) =>
+        spawnSync(process.execPath, [path.join(root, "bin", "xberg.js")], { encoding: "utf8", env });
+      const { MallocMaxMagazines: _ignored, ...inherited } = process.env;
+
+      const unset = launch(inherited);
+      assert.equal(unset.status, 0, unset.stderr);
+      assert.equal(unset.stdout, process.platform === "darwin" ? "1" : "<unset>");
+
+      for (const preset of ["4", ""]) {
+        const kept = launch({ ...inherited, MallocMaxMagazines: preset });
+        assert.equal(kept.status, 0, kept.stderr);
+        assert.equal(kept.stdout, preset);
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   "the launcher falls through to the download path when no platform package is installed",
   { skip: process.platform === "win32" },
   () => {

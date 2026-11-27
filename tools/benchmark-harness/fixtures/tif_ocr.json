@@ -4,6 +4,7 @@
 	"file_size": 367848,
 	"expected_frameworks": ["xberg", "docling", "markitdown", "pymupdf4llm", "tika", "unstructured"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "OCR test image with text content (TIF extension)",
 		"category": "image",
 		"size_class": "medium",

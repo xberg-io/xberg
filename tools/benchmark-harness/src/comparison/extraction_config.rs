@@ -224,11 +224,8 @@ fn disable_timed_extraction_caches(config: &mut xberg::ExtractionConfig) {
     config.use_cache = false;
 
     // Only flip `use_cache` on a `tesseract_config` that already exists — an explicit PSM preset
-    // (`build_tesseract_extraction_config`). Never materialize one here: this runs before any
-    // fixture-specific language is known (`build_extraction_config`'s own tail), so a pipeline
-    // that leaves `tesseract_config` implicit must wait for `finalize_timed_ocr_result_cache`,
-    // which runs after `apply_fixture_ocr_language` and can pick the PSM that matches the real
-    // (final) language instead of a placeholder. ~keep
+    // (`build_tesseract_extraction_config`). Never materialize one: see
+    // `finalize_timed_ocr_result_cache`. ~keep
     flip_existing_tesseract_result_caches(config);
 }
 
@@ -261,55 +258,17 @@ pub(super) fn materialize_implicit_ocr_config(config: &mut xberg::ExtractionConf
     }
 }
 
-/// Finishes disabling the timed Tesseract OCR result cache once the fixture's language (if any)
-/// has already been applied via `apply_fixture_ocr_language`. Must run *after* that call, or it
-/// would compute PSM from the wrong (pre-fixture-language) language.
+/// Finishes disabling the timed OCR result cache once the fixture's language (if any) has been
+/// applied via `apply_fixture_ocr_language`.
 ///
-/// Flips `use_cache` on a `tesseract_config` that already exists (an explicit PSM preset) without
-/// touching its `psm`. For a pipeline that leaves `tesseract_config` implicit (auto-PSM),
-/// materializes one with `use_cache = false` and the PSM
-/// `apply_default_whole_image_tesseract_psm` in `crates/xberg/src/extractors/image.rs` would
-/// itself have picked for the config's current (now-final) language — so the result cache is
-/// genuinely disabled without silently regressing to `TesseractConfig::default()`'s PSM 3. ~keep
+/// Sets the request-level `use_cache = false` and flips `use_cache` on a `tesseract_config` that
+/// already exists (an explicit PSM preset) without touching its `psm`. It never materializes a
+/// `tesseract_config` or `backend_options`: in xberg their mere presence switches off
+/// default-route OCR stages, while the request-level flag already disables the OCR result cache
+/// for the whole request, implicit auto-PSM Tesseract included. ~keep
 pub(super) fn finalize_timed_ocr_result_cache(config: &mut xberg::ExtractionConfig) {
-    let Some(ocr) = config.ocr.as_mut() else {
-        return;
-    };
-    let parent_language = ocr.language.clone();
-    if let Some(pipeline) = ocr.pipeline.as_mut() {
-        for stage in &mut pipeline.stages {
-            if stage.backend != "tesseract" {
-                continue;
-            }
-            // A present `stage.language` wins over the parent's, matching xberg's own stage
-            // semantics ("None = use parent OcrConfig.language" — `OcrPipelineStage::language` in
-            // `crates/xberg/src/core/config/ocr.rs`). This is only correct because
-            // `apply_fixture_ocr_language` refreshes `stage.language` too, not just the parent's
-            // — otherwise a stale per-stage override would compute PSM from the wrong language
-            // here. ~keep
-            let languages = stage.language.clone().unwrap_or_else(|| parent_language.clone());
-            materialize_or_disable_tesseract_result_cache(&mut stage.tesseract_config, &languages);
-        }
-    } else if ocr.backend == "tesseract" {
-        materialize_or_disable_tesseract_result_cache(&mut ocr.tesseract_config, &parent_language);
-    }
-}
-
-fn materialize_or_disable_tesseract_result_cache(
-    tesseract_config: &mut Option<xberg::TesseractConfig>,
-    languages: &[String],
-) {
-    match tesseract_config.as_mut() {
-        Some(existing) => existing.use_cache = false,
-        None => {
-            *tesseract_config = Some(xberg::TesseractConfig {
-                language: languages.to_vec(),
-                psm: Some(crate::adapter::xberg_default_tesseract_psm(languages)),
-                use_cache: false,
-                ..Default::default()
-            });
-        }
-    }
+    config.use_cache = false;
+    flip_existing_tesseract_result_caches(config);
 }
 
 /// Build the base config shared by every pipeline before its own overrides are applied.
@@ -636,7 +595,7 @@ pub(super) fn apply_fixture_ocr_language(config: &mut xberg::ExtractionConfig, d
         } else if ocr.backend == "tesseract"
             && let Some(tesseract) = ocr.tesseract_config.as_mut()
         {
-            // The timed benchmark materializes this nested config to disable its cache. ~keep
+            // An explicit preset's nested config must read the fixture language too. ~keep
             tesseract.language = languages;
         }
     }

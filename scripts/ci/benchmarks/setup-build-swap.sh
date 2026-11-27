@@ -26,9 +26,23 @@ fi
 available_kib="$(df -Pk "$runner_temp" | awk 'NR == 2 { print $4 }')"
 swap_kib=$((swap_size_gib * 1024 * 1024))
 reserve_kib=$((8 * 1024 * 1024))
-if [[ ! "$available_kib" =~ ^[0-9]+$ ]] || ((available_kib < swap_kib + reserve_kib)); then
-  echo "insufficient disk for ${swap_size_gib} GiB swap plus 8 GiB build reserve" >&2
+min_swap_gib="${SWAP_MIN_GIB:-$swap_size_gib}"
+if [[ ! "$min_swap_gib" =~ ^[1-9][0-9]*$ ]] || ((min_swap_gib > swap_size_gib)); then
+  echo "SWAP_MIN_GIB must be a positive integer no larger than SWAP_SIZE_GIB, got: $min_swap_gib" >&2
   exit 1
+fi
+if [[ ! "$available_kib" =~ ^[0-9]+$ ]]; then
+  echo "could not read free disk on $runner_temp" >&2
+  exit 1
+fi
+if ((available_kib < swap_kib + reserve_kib)); then
+  fitting_gib=$(((available_kib - reserve_kib) / 1024 / 1024))
+  if ((available_kib < reserve_kib || fitting_gib < min_swap_gib)); then
+    echo "insufficient disk for ${min_swap_gib} GiB swap plus 8 GiB build reserve" >&2
+    exit 1
+  fi
+  echo "only ${fitting_gib} GiB of the requested ${swap_size_gib} GiB swap fits beside the 8 GiB reserve" >&2
+  swap_size_gib="$fitting_gib"
 fi
 
 # ~keep Fat LTO for the all-feature ARM CLI can exceed physical memory and starve the runner

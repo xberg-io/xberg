@@ -62,6 +62,27 @@ swapon --show=NAME --noheadings"
 	[ ! -e "$XBERG_TRACE" ]
 }
 
+@test "benchmark swap setup should shrink to the swap that fits, never below the minimum" {
+	export SWAP_SIZE_GIB=32 SWAP_MIN_GIB=16 AVAILABLE_KIB=$(((8 + 20) * 1024 * 1024 + 512))
+	run bash "$REPOSITORY_ROOT/scripts/ci/benchmarks/setup-build-swap.sh"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'only 20 GiB of the requested 32 GiB swap fits'
+	xberg_assert_output_contains "activated 20 GiB benchmark build swap"
+	rm -f "$XBERG_TRACE"
+	export AVAILABLE_KIB=$(((8 + 15) * 1024 * 1024))
+	run bash "$REPOSITORY_ROOT/scripts/ci/benchmarks/setup-build-swap.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'insufficient disk for 16 GiB swap plus 8 GiB build reserve'
+	[ ! -e "$XBERG_TRACE" ]
+}
+
+@test "benchmark swap setup should reject a minimum above the requested size" {
+	run env SWAP_SIZE_GIB=8 SWAP_MIN_GIB=16 bash "$REPOSITORY_ROOT/scripts/ci/benchmarks/setup-build-swap.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'SWAP_MIN_GIB must be a positive integer no larger than SWAP_SIZE_GIB'
+	[ ! -e "$XBERG_TRACE" ]
+}
+
 @test "benchmark swap setup should reject a false-success activation without the expected swap row" {
 	export SHOW_SWAP=false
 	run bash "$REPOSITORY_ROOT/scripts/ci/benchmarks/setup-build-swap.sh"

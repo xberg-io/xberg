@@ -5384,7 +5384,8 @@ impl FontInfo {
     /// Priority order per PDF Spec ISO 32000-1:2008:
     /// 1. FontWeight field from FontDescriptor (Table 122) - MOST RELIABLE
     /// 2. ForceBold flag (bit 19) from Flags field (Table 123)
-    /// 3. Font name heuristics (fallback for legacy PDFs)
+    /// 3. Font name heuristics (fallback for legacy PDFs): weight words, then TeX
+    ///    fontname shape codes, then a regular style suffix
     /// 4. StemV analysis (stem thickness correlates with weight)
     ///
     /// # Returns
@@ -5442,6 +5443,19 @@ impl FontInfo {
             return FontWeight::Thin;
         }
 
+        // A producer-written StemV is unreliable: one arXiv converter writes 151 for CMR10
+        // (the font program says 69) and 140 for CMBX10, which turned whole papers bold.
+        // A weight the name states outright is the better evidence. ~keep
+        if let Some(weight) = Self::tex_font_name_weight(&name_lower) {
+            return weight;
+        }
+        if Self::names_bold_style_extension(&name_lower) {
+            return FontWeight::Bold;
+        }
+        if Self::names_regular_style(&name_lower) {
+            return FontWeight::Normal;
+        }
+
         // ==================================================================================
         // PRIORITY 4: StemV Analysis (EXPERIMENTAL)
         // ==================================================================================
@@ -5464,6 +5478,89 @@ impl FontInfo {
         }
 
         FontWeight::Normal
+    }
+
+    /// Weight encoded in a TeX font name (Karl Berry's fontname scheme): `cmr10`,
+    /// `cmbx12`, `sfrm1000`, `ecbx1200`, `eufb10`. Only a whole name of family prefix,
+    /// lowercase shape letters and a design size qualifies, so no foundry font matches.
+    /// `name_lower` may carry a subset tag (`ABCDEF+cmr10`).
+    fn tex_font_name_weight(name_lower: &str) -> Option<FontWeight> {
+        let name = name_lower.rsplit('+').next().unwrap_or(name_lower);
+        let letters_end = name.find(|c: char| c.is_ascii_digit())?;
+        let (letters, size) = name.split_at(letters_end);
+        if !size.bytes().all(|b| b.is_ascii_digit()) || !letters.bytes().all(|b| b.is_ascii_lowercase()) {
+            return None;
+        }
+        let bold = if let Some(shape) = letters.strip_prefix("cm") {
+            if shape.is_empty() {
+                return None;
+            }
+            // `cmbr` is CM Bright, a regular face; its bold is `cmbrbx`. ~keep
+            // `dc` is demibold condensed (`cmssdc10`). ~keep
+            (shape.starts_with('b') && !shape.starts_with("br"))
+                || shape.contains("bx")
+                || shape.starts_with("mib")
+                || shape.ends_with("dc")
+        } else if let Some(shape) = ["ec", "tc", "sf"]
+            .iter()
+            .find_map(|family| letters.strip_prefix(family))
+        {
+            if shape.len() != 2 {
+                return None;
+            }
+            // `x` marks bold extended (`sx`, `xc` bold caps), `rb` roman bold. ~keep
+            shape.starts_with('b') || shape.contains('x') || shape.ends_with("rb") || shape == "so"
+        } else if let Some(shape) = letters.strip_prefix("eu") {
+            if shape.len() != 2 {
+                return None;
+            }
+            shape.ends_with('b')
+        } else if matches!(letters, "msam" | "msbm") {
+            false
+        } else {
+            return None;
+        };
+        Some(if bold { FontWeight::Bold } else { FontWeight::Normal })
+    }
+
+    /// Whether the name ends in a bold style extension, as the Advent 3B2 typesetter writes
+    /// its hashed face names: `AdvOT3b30f6db.B` (bold), `.BI` (bold italic), `.I` (italic),
+    /// optionally followed by an encoding variant (`AdvOT8b40f9c2.B+03`). These fonts carry no
+    /// FontWeight, no ForceBold flag and a StemV of 0, so the extension is the only evidence.
+    /// `name_lower` may carry a subset tag (`GLCEJD+advot3b30f6db.b`).
+    fn names_bold_style_extension(name_lower: &str) -> bool {
+        let name = match name_lower.split_once('+') {
+            Some((tag, rest)) if tag.len() == 6 && tag.bytes().all(|b| b.is_ascii_alphabetic()) => rest,
+            _ => name_lower,
+        };
+        let name = match name.rsplit_once('+') {
+            Some((face, variant)) if !variant.is_empty() && variant.bytes().all(|b| b.is_ascii_digit()) => face,
+            _ => name,
+        };
+        name.rsplit_once('.')
+            .is_some_and(|(face, style)| !face.is_empty() && matches!(style, "b" | "bi"))
+    }
+
+    /// Whether a style suffix of the name says regular weight: `Arial-ItalicMT`,
+    /// `SourceSansPro-Regular`, `Times-Roman`, `NimbusRomNo9L-Regu`. Weight words
+    /// (`BoldItalic`) are matched before this runs; an abbreviated weight token
+    /// (`Bookman-Demi-Italic`) leaves the decision to StemV.
+    fn names_regular_style(name_lower: &str) -> bool {
+        const REGULAR_STYLES: [&str; 10] = [
+            "regular", "regu", "roman", "book", "normal", "plain", "italic", "it", "oblique", "obli",
+        ];
+        const WEIGHT_ABBREVIATIONS: [&str; 13] = [
+            "demi", "semi", "bd", "blk", "hv", "medi", "extra", "ultra", "sb", "md", "xb", "eb", "dm",
+        ];
+        let styles: Vec<&str> = name_lower
+            .split(['-', ','])
+            .skip(1)
+            .map(|style| style.strip_suffix("mt").unwrap_or(style))
+            .collect();
+        !styles
+            .iter()
+            .any(|style| WEIGHT_ABBREVIATIONS.iter().any(|weight| style.starts_with(weight)))
+            && styles.iter().any(|style| REGULAR_STYLES.contains(style))
     }
 
     /// Check if this font is bold (convenience method).
@@ -8655,6 +8752,92 @@ mod tests {
         };
         assert_eq!(font_normal.get_font_weight(), FontWeight::Normal);
         assert!(!font_normal.is_bold());
+    }
+
+    fn weight_of(base_font: &str, stem_v: f32) -> FontWeight {
+        make_font(|f| {
+            f.base_font = base_font.to_string();
+            f.stem_v = Some(stem_v);
+        })
+        .get_font_weight()
+    }
+
+    #[test]
+    fn tex_font_name_weight_outranks_an_inflated_stem_v() {
+        assert_eq!(weight_of("HOMXWT+CMR10", 151.0), FontWeight::Normal);
+        assert_eq!(weight_of("KIHRQD+CMTI10", 128.0), FontWeight::Normal);
+        assert_eq!(weight_of("RHNBIM+SFRM0800", 168.0), FontWeight::Normal);
+        assert_eq!(weight_of("QBMQPJ+CMSY10", 141.0), FontWeight::Normal);
+        assert_eq!(weight_of("MSBM10", 111.0), FontWeight::Normal);
+        assert_eq!(weight_of("CMBR10", 140.0), FontWeight::Normal);
+    }
+
+    #[test]
+    fn tex_font_name_weight_marks_bold_shapes_bold_whatever_the_stem_v() {
+        assert_eq!(weight_of("EUOZWH+CMBX12", 109.0), FontWeight::Bold);
+        assert_eq!(weight_of("CMB10", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("CMMIB10", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("CMSSBX10", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFBX1200", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("EUFB10", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("CMBRBX10", 60.0), FontWeight::Bold);
+    }
+
+    #[test]
+    fn tex_font_name_weight_ignores_names_outside_the_scheme() {
+        assert_eq!(weight_of("CMR10X", 151.0), FontWeight::Bold);
+        assert_eq!(weight_of("LMRoman10", 151.0), FontWeight::Bold);
+        assert_eq!(weight_of("Calibri", 186.0), FontWeight::Bold);
+    }
+
+    #[test]
+    fn regular_style_suffix_outranks_an_inflated_stem_v() {
+        assert_eq!(weight_of("Arial-ItalicMT", 129.9), FontWeight::Normal);
+        assert_eq!(weight_of("TimesNewRomanPS-ItalicMT", 141.0), FontWeight::Normal);
+        assert_eq!(weight_of("ABCDEF+SourceSansPro-Regular", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("NimbusRomNo9L-Regu-Slant_167", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("Arial,Italic", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("Arial-BoldItalicMT", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("NimbusRomNo9L-Medi", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Times-Roman", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("Helvetica-Oblique", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("SourceSansPro-It", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("lmroman10-regular", 140.0), FontWeight::Normal);
+    }
+
+    #[test]
+    fn advent_bold_style_extension_marks_a_zero_stem_v_face_bold() {
+        assert_eq!(weight_of("GLCEJD+AdvOT3b30f6db.B", 0.0), FontWeight::Bold);
+        assert_eq!(weight_of("IHEPFJ+AdvOT8b40f9c2.B+03", 0.0), FontWeight::Bold);
+        assert_eq!(weight_of("AdvOT3b30f6db.BI", 0.0), FontWeight::Bold);
+        assert_eq!(weight_of("GLCFJE+AdvOTf0bf83d5.I", 0.0), FontWeight::Normal);
+        assert_eq!(weight_of("GLCEJE+AdvOT46dcae81", 0.0), FontWeight::Normal);
+        assert_eq!(weight_of("GLCFKG+AdvOTa9103878+20", 0.0), FontWeight::Normal);
+        assert_eq!(weight_of(".B", 0.0), FontWeight::Normal);
+    }
+
+    #[test]
+    fn abbreviated_weight_beside_a_regular_style_leaves_weight_to_stem_v() {
+        assert_eq!(weight_of("Bookman-Demi-Italic", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Bd-It", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Blk-Roman", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Sb-It", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-Md-Italic", 140.0), FontWeight::Bold);
+        assert_eq!(weight_of("Foo-XB-Oblique", 140.0), FontWeight::Bold);
+    }
+
+    #[test]
+    fn tex_font_name_weight_reads_ec_and_sans_shape_codes() {
+        assert_eq!(weight_of("ECRM1000", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("TCRM1000", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("SFSS1000", 140.0), FontWeight::Normal);
+        assert_eq!(weight_of("ECBX1200", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFSX1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("ECRB1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFRB1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("ECXC1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("SFXC1000", 60.0), FontWeight::Bold);
+        assert_eq!(weight_of("CMSSDC10", 60.0), FontWeight::Bold);
     }
 
     /// Test CIDToGIDMap Identity mapping

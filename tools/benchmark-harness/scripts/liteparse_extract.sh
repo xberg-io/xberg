@@ -4,6 +4,7 @@ set -euo pipefail
 
 FORMAT="plaintext"
 OCR_FLAG=""
+OCR_LANGUAGE_FLAGS=()
 FILE_PATH=""
 for arg in "$@"; do
   case "$arg" in
@@ -11,10 +12,14 @@ for arg in "$@"; do
     FORMAT="${arg#--format=}"
     ;;
   --ocr)
+    # lit OCRs by default; only --no-ocr turns it off, so OCR on means passing no flag.
     OCR_FLAG=""
     ;;
   --no-ocr)
     OCR_FLAG="--no-ocr"
+    ;;
+  --ocr-language=*)
+    OCR_LANGUAGE_FLAGS=(--ocr-language "${arg#--ocr-language=}")
     ;;
   *)
     FILE_PATH="$arg"
@@ -23,7 +28,7 @@ for arg in "$@"; do
 done
 
 if [ -z "$FILE_PATH" ]; then
-  echo "Usage: liteparse_extract.sh [--format=plaintext|markdown] [--ocr|--no-ocr] <file_path>" >&2
+  echo "Usage: liteparse_extract.sh [--format=plaintext|markdown] [--ocr|--no-ocr] [--ocr-language=<tesseract code>] <file_path>" >&2
   exit 1
 fi
 
@@ -47,14 +52,18 @@ if [ ! -f "$FILE_PATH" ]; then
   exit 1
 fi
 
+# lit defaults to ocria-nano once that model package is pulled; pin Tesseract, the engine
+# family xberg uses by default, so results do not depend on host model state.
+OCR_BACKEND_FLAGS="--ocr-backend tesseract"
+
 START=$(date +%s%N)
 
 if command -v timeout &>/dev/null; then
-  CONTENT=$(timeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet)
+  CONTENT=$(timeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_BACKEND_FLAGS $OCR_FLAG ${OCR_LANGUAGE_FLAGS[@]+"${OCR_LANGUAGE_FLAGS[@]}"} --quiet)
 elif command -v gtimeout &>/dev/null; then
-  CONTENT=$(gtimeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet)
+  CONTENT=$(gtimeout 180s lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_BACKEND_FLAGS $OCR_FLAG ${OCR_LANGUAGE_FLAGS[@]+"${OCR_LANGUAGE_FLAGS[@]}"} --quiet)
 else
-  CONTENT=$(lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_FLAG --quiet)
+  CONTENT=$(lit parse "$FILE_PATH" --format "$LIT_FORMAT" $LIT_EXTRA_FLAGS $OCR_BACKEND_FLAGS $OCR_FLAG ${OCR_LANGUAGE_FLAGS[@]+"${OCR_LANGUAGE_FLAGS[@]}"} --quiet)
 fi
 
 END=$(date +%s%N)

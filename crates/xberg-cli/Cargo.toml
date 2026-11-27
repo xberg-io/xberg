@@ -102,14 +102,17 @@ core-cli = ["url-surface", "xberg/url-ingestion", "xberg/cli"]
 # what lets the `binstall` profile produce a fully static, dylib-free binary. ~keep
 legacy-base = ["formats-no-heic", "analysis", "core-cli", "ocr-surface"]
 ort-bundled = ["legacy-base", "xberg/ort-bundled"]
-# Load ONNX Runtime at runtime (dlopen) instead of static-linking a prebuilt.
-# The x86_64-apple-darwin CLI is built with the normal default features PLUS
-# this, so it keeps full feature parity with the aarch64 CLI: ort-sys
+# Load ONNX Runtime at runtime (dlopen) instead of linking it, so a process that
+# never builds a model session never maps the library. The Linux gnu and macOS
+# release CLIs are built with their normal features PLUS this: ort-sys
 # `disable-linking` (pulled by load-dynamic) short-circuits its build script
-# before the (nonexistent) x86_64-mac prebuilt is ever resolved. ort finds
-# libonnxruntime.dylib relative to the executable, so the release tarball just
-# ships the dylib next to the `xberg` binary — no ORT_DYLIB_PATH needed.
-ort-dynamic = ["legacy-base", "xberg/ort-dynamic"]
+# before any prebuilt is resolved, so feature parity is unchanged. xberg loads
+# the library on first model use from an absolute ORT_DYLIB_PATH, else from
+# beside the executable or, for `<prefix>/bin/xberg`, `<prefix>/lib`, which is
+# where the release archives and images ship Microsoft's pinned runtime; only
+# files owned by root or the user and not writable by other users are loaded
+# (`ort-strict-discovery`, `ort_discovery::resolve_ort_library`). ~keep
+ort-dynamic = ["legacy-base", "xberg/ort-dynamic", "xberg/ort-strict-discovery"]
 
 # Native Intel macOS (x86_64-apple-darwin) platform aggregate. Passthrough to
 # the xberg `macos-intel-target` set (full feature parity, ort loaded
@@ -180,6 +183,10 @@ summarization-llm = ["legacy-base", "xberg/summarization-llm"]
 # exposes every capability included by xberg's corresponding full feature set.
 transcription = ["legacy-base", "xberg/transcription"]
 heic = ["legacy-base", "formats", "xberg/heic"]
+# `heic` with libheif opened on the first HEIF decode instead of linked, so a PDF or Office run
+# never maps libheif, libde265 and libaom (ADR-0019). The Linux gnu and macOS release CLIs add
+# this and ship the libheif closure beside the binary. Unix only. ~keep
+heic-dynamic = ["heic", "xberg/heic-dynamic"]
 # Self-contained static single-file CLI for `cargo binstall xberg-cli`. Every
 # capability here is pure-Rust and statically linkable on musl: document
 # extraction (formats-no-heic), analysis, chunking, tree-sitter, URL ingestion,

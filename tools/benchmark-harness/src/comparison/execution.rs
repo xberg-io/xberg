@@ -122,10 +122,8 @@ async fn extract_live_pipeline(pipeline: Pipeline, doc: &crate::corpus::CorpusDo
     let t = Instant::now();
     let mut config = build_extraction_config(pipeline);
     // Materialize implicit OCR before applying fixture metadata so baseline PDF extraction
-    // keeps force_ocr disabled while its fallback OCR uses the requested language. Finalize
-    // the Tesseract result-cache control (materializing an implicit tesseract_config, if
-    // needed) only after the language is final, so the materialized PSM matches the real
-    // fixture language instead of a pre-language placeholder. ~keep
+    // keeps force_ocr disabled while its fallback OCR uses the requested language, then
+    // finalize the OCR result-cache control on the final config. ~keep
     materialize_implicit_ocr_config(&mut config);
     apply_fixture_ocr_language(&mut config, doc);
     finalize_timed_ocr_result_cache(&mut config);

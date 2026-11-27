@@ -18,7 +18,9 @@ pub(super) struct OpLoopState<'a> {
     pub(super) in_text_object: bool,
     pub(super) current_path: PathBuilder,
     pub(super) pending_clip: Option<(tiny_skia::Path, tiny_skia::FillRule)>,
-    pub(super) clip_stack: Vec<Option<tiny_skia::Mask>>,
+    /// One clip per `q` level. Levels share a page-sized mask until one of them narrows it, which
+    /// copies it first (`Arc::make_mut` in `apply_pending_clip`), so `q` copies no pixels.
+    pub(super) clip_stack: Vec<Option<std::sync::Arc<tiny_skia::Mask>>>,
     /// Text-clip accumulator (ISO 32000-1 §9.3.6 / Table 106, `Tr` modes 4–7).
     /// Text render modes ≥4 add the union of their glyph outlines to a "text
     /// clip path" that is intersected into the current clip at `ET`. We

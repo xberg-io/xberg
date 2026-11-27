@@ -665,3 +665,55 @@ fn test_get_page_rotation_status_inherited_from_pages_node() {
     let doc = PdfDocument::from_bytes(build_pdf_with_rotate_token(Some("90"), true)).unwrap();
     assert_eq!(doc.get_page_rotation_status(0).unwrap(), PageRotation::Valid(90));
 }
+
+/// Every per-page cache filled before authentication is dropped by it, so the
+/// reads after it equal a document authenticated before its first read.
+#[test]
+fn test_authentication_drops_page_caches_filled_before_it() {
+    let pdf_path = "tests/fixtures/encrypted_needs_password.pdf";
+    let reads = |doc: &PdfDocument| {
+        [
+            format!("{:?}", doc.extract_spans(0)),
+            format!("{:?}", doc.extract_chars(0)),
+            format!("{:?}", doc.extract_text(0)),
+            format!(
+                "{:?}",
+                doc.extract_page_text_with_script_geometry(0, ReadingOrder::TopToBottom)
+            ),
+        ]
+    };
+    let doc = PdfDocument::open(pdf_path).expect("open should succeed");
+    doc.begin_page_passes();
+    let before = reads(&doc);
+    drop(doc.search_page_index(0));
+    assert!(doc.authenticate(b"secret").expect("authenticate"));
+    assert!(doc.search_index.lock().unwrap().is_empty());
+
+    let fresh = PdfDocument::open(pdf_path).expect("open should succeed");
+    assert!(fresh.authenticate(b"secret").expect("authenticate"));
+    fresh.begin_page_passes();
+    let expected = reads(&fresh);
+    assert_ne!(
+        before, expected,
+        "the fixture must read differently before authentication"
+    );
+    assert_eq!(reads(&doc), expected);
+}
+
+#[test]
+fn from_bytes_shares_the_callers_buffer_without_copying() {
+    let buffer = bytes::Bytes::from(build_nested_xobject_do_with_orphaned_operands_pdf());
+    let doc = PdfDocument::from_bytes(buffer.clone()).expect("parse pdf");
+
+    assert_eq!(doc.source_bytes.as_ptr(), buffer.as_ptr());
+    assert_eq!(doc.source_bytes.len(), buffer.len());
+}
+
+#[test]
+fn from_bytes_adopts_a_vec_allocation_without_copying() {
+    let vec = build_nested_xobject_do_with_orphaned_operands_pdf();
+    let ptr = vec.as_ptr();
+    let doc = PdfDocument::from_bytes(vec).expect("parse pdf");
+
+    assert_eq!(doc.source_bytes.as_ptr(), ptr);
+}

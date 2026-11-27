@@ -12,14 +12,20 @@ type PendingWrites = Vec<Box<dyn FnOnce() + Send>>;
 pub(super) struct RequestModels {
     digests: Mutex<HashMap<PathBuf, String>>,
     writes: Mutex<Option<PendingWrites>>,
+    result_cache_disabled: bool,
 }
 
-impl Default for RequestModels {
-    fn default() -> Self {
+impl RequestModels {
+    pub(super) fn new(result_cache_disabled: bool) -> Self {
         Self {
             digests: Mutex::default(),
             writes: Mutex::new(Some(Vec::new())),
+            result_cache_disabled,
         }
+    }
+
+    pub(super) fn result_cache_disabled(&self) -> bool {
+        self.result_cache_disabled
     }
 }
 

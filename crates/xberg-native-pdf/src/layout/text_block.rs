@@ -3,6 +3,7 @@
 //! This module defines structures for representing text elements in a PDF document
 //! with their geometric and styling information.
 
+use super::FontName;
 use crate::extractors::text::ArtifactType;
 use crate::geometry::{Point, Rect};
 use crate::structure::McidScope;
@@ -26,7 +27,7 @@ pub struct TextSpan {
     /// Bounding box of the entire span in PDF coordinates (points)
     pub bbox: Rect,
     /// Font name/family
-    pub font_name: String,
+    pub font_name: FontName,
     /// Font size in points
     pub font_size: f32,
     /// Font weight (normal or bold)
@@ -216,7 +217,7 @@ impl Default for TextSpan {
         Self {
             text: String::new(),
             bbox: Rect::default(),
-            font_name: "Helvetica".to_string(),
+            font_name: "Helvetica".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             is_italic: false,
@@ -433,7 +434,7 @@ pub struct TextChar {
     /// Bounding box of the character
     pub bbox: Rect,
     /// Font name/family
-    pub font_name: String,
+    pub font_name: FontName,
     /// Font size in points
     pub font_size: f32,
     /// Font weight (normal or bold)
@@ -542,7 +543,7 @@ impl Default for TextChar {
         Self {
             char: ' ',
             bbox: Rect::default(),
-            font_name: "Helvetica".to_string(),
+            font_name: "Helvetica".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             is_italic: false,
@@ -617,7 +618,7 @@ impl TextChar {
         Self {
             char,
             bbox,
-            font_name,
+            font_name: font_name.into(),
             font_size,
             font_weight: FontWeight::Normal,
             is_italic: false,
@@ -752,7 +753,7 @@ pub struct TextBlock {
     /// Average font size
     pub avg_font_size: f32,
     /// Dominant font name
-    pub dominant_font: String,
+    pub dominant_font: FontName,
     /// Whether the block contains bold text
     pub is_bold: bool,
     /// Whether the block contains italic text

@@ -5,7 +5,6 @@
 use crate::monitoring::ResourceStats;
 use crate::types::{
     BatchCapability, BatchEntryPoint, BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, OutputFormat,
-    PerformanceMetrics,
 };
 use crate::{Error, Result};
 use std::path::Path;
@@ -186,8 +185,9 @@ impl SubprocessAdapter {
             .batch_capability
             .is_some_and(|capability| capability.entry_point == BatchEntryPoint::LiteparseBatchParse)
         {
+            let ocr_language_arg = self.batch_ocr_language_forward_arg(ocr_languages)?;
             return self
-                .execute_liteparse_native_batch(file_paths, timeout, force_ocr, output_format)
+                .execute_liteparse_native_batch(file_paths, timeout, force_ocr, ocr_language_arg, output_format)
                 .await;
         }
 
@@ -365,6 +365,7 @@ impl SubprocessAdapter {
         file_paths: &[&Path],
         timeout: Duration,
         force_ocr: bool,
+        ocr_language_arg: Option<String>,
         output_format: OutputFormat,
     ) -> Result<SubprocessExecution> {
         use std::fs;
@@ -389,6 +390,7 @@ impl SubprocessAdapter {
             output_dir.to_string_lossy().into_owned(),
             format_arg,
             disable_ocr,
+            ocr_language_arg,
         );
 
         let mut cmd = Self::measured_command(self.liteparse_batch_command());
@@ -505,7 +507,7 @@ impl SubprocessAdapter {
             if let Some(message) = crate::adapters::layout_failures::layout_failure_in_item(item) {
                 validation.0 = false;
                 validation.1 = Some(message);
-                validation.2 = ErrorKind::FrameworkError;
+                validation.2 = ErrorKind::LayoutFailed;
             }
         }
     }
@@ -617,20 +619,10 @@ impl SubprocessAdapter {
             duration: shared.batch_makespan,
             extraction_duration: item.extraction_duration,
             subprocess_overhead: shared.batch_subprocess_overhead,
-            metrics: PerformanceMetrics {
-                baseline_memory_bytes: shared.resource_stats.baseline_memory_bytes,
-                peak_memory_bytes: shared.resource_stats.peak_memory_bytes,
-                peak_memory_delta_bytes: shared.resource_stats.peak_memory_delta_bytes,
-                avg_cpu_percent: shared.resource_stats.avg_cpu_percent,
-                cpu_seconds: shared.resource_stats.cpu_seconds,
-                // Every sibling carries the same process sample so each
-                // reporting bucket can recover it; aggregation deduplicates
-                // by `batch_sample_id`. ~keep
-                throughput_bytes_per_sec: shared.batch_throughput,
-                p50_memory_bytes: shared.resource_stats.p50_memory_bytes,
-                p95_memory_bytes: shared.resource_stats.p95_memory_bytes,
-                p99_memory_bytes: shared.resource_stats.p99_memory_bytes,
-            },
+            // Every sibling carries the same process sample so each
+            // reporting bucket can recover it; aggregation deduplicates
+            // by `batch_sample_id`. ~keep
+            metrics: Self::measured_metrics(shared.resource_stats, None, shared.batch_throughput),
             quality: None,
             iterations: vec![],
             statistics: None,
@@ -641,6 +633,7 @@ impl SubprocessAdapter {
             ocr_status: item.ocr_status,
             extracted_text: item.extracted_text,
             system_load: None,
+            fixture_family: None,
         }
     }
 

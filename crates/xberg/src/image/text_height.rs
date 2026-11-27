@@ -5,6 +5,8 @@
 
 /// Largest raster, in pixels, that is scanned. A larger one has no estimate.
 const MAX_SCANNED_PIXELS: usize = 16_000_000;
+// Pixel indices and component heights are stored as u32 to halve the estimator's workspace. ~keep
+const _: () = assert!(MAX_SCANNED_PIXELS <= u32::MAX as usize);
 const GRAY_LEVELS: usize = u8::MAX as usize + 1;
 #[cfg(feature = "ocr")]
 const MIN_USIZE_VECTOR_CAPACITY: u64 = 4;
@@ -66,9 +68,9 @@ pub(crate) fn median_glyph_height(rgb_data: &[u8], width: usize, height: usize) 
     }
     heights.sort_unstable();
     let tall_glyph = percentile(&heights, TALL_GLYPH_PERCENTILE);
-    let letter_bodies: Vec<usize> = heights
+    let letter_bodies: Vec<u32> = heights
         .into_iter()
-        .filter(|&component_height| component_height as f64 >= LETTER_BODY_MIN_FRACTION * tall_glyph)
+        .filter(|&component_height| f64::from(component_height) >= LETTER_BODY_MIN_FRACTION * tall_glyph)
         .collect();
     Some(percentile(&letter_bodies, 0.5))
 }
@@ -82,7 +84,7 @@ pub(crate) fn glyph_workspace_bound(width: usize, height: usize) -> Option<u64> 
     }
     let pixels = pixels as u64;
     let ink = (MAX_INK_FRACTION * pixels as f64).ceil() as u64;
-    // RawVec::grow_amortized doubles usize vectors with minimum capacity4.
+    // RawVec::grow_amortized doubles u32 vectors with minimum capacity4.
     // Each foreground pixel enters the DFS once; a retained component has at
     // least2 pixels. Thus capacities are at most2*ink for DFS and ink for heights.
     // The later filtered-height vectors cannot exceed their combined bound. ~keep
@@ -93,7 +95,7 @@ pub(crate) fn glyph_workspace_bound(width: usize, height: usize) -> Option<u64> 
     let vectors = stack
         .checked_add(heights)?
         .checked_add(ink)?
-        .checked_mul(size_of::<usize>() as u64)?;
+        .checked_mul(size_of::<u32>() as u64)?;
     let components = pixels.checked_add(vectors)?;
     let luminance_and_mask = pixels.checked_mul(2)?;
     components
@@ -102,12 +104,12 @@ pub(crate) fn glyph_workspace_bound(width: usize, height: usize) -> Option<u64> 
 }
 
 /// Linear-interpolated percentile `fraction` (0..=1) of a sorted, non-empty slice.
-fn percentile(sorted: &[usize], fraction: f64) -> f64 {
+fn percentile(sorted: &[u32], fraction: f64) -> f64 {
     let position = fraction * (sorted.len() - 1) as f64;
     let lower = position.floor() as usize;
     let upper = position.ceil() as usize;
     let weight = position - lower as f64;
-    sorted[lower] as f64 * (1.0 - weight) + sorted[upper] as f64 * weight
+    f64::from(sorted[lower]) * (1.0 - weight) + f64::from(sorted[upper]) * weight
 }
 
 /// Otsu's threshold: the grey level that best separates the histogram into two classes.
@@ -148,22 +150,23 @@ fn otsu_threshold(luminance: &[u8]) -> Option<u8> {
 
 /// Heights of the 8-connected foreground components that can be glyphs. Consumes `foreground`:
 /// every visited pixel is cleared.
-fn component_heights(foreground: &mut [bool], width: usize, height: usize) -> Vec<usize> {
+fn component_heights(foreground: &mut [bool], width: usize, height: usize) -> Vec<u32> {
     let max_height = MAX_COMPONENT_HEIGHT_FRACTION * height as f64;
     let max_width = MAX_COMPONENT_WIDTH_FRACTION * width as f64;
     let mut heights = Vec::new();
-    let mut stack = Vec::new();
+    let mut stack: Vec<u32> = Vec::new();
 
     for start in 0..foreground.len() {
         if !foreground[start] {
             continue;
         }
         foreground[start] = false;
-        stack.push(start);
+        stack.push(start as u32);
         let (mut min_x, mut max_x) = (start % width, start % width);
         let (mut min_y, mut max_y) = (start / width, start / width);
 
         while let Some(index) = stack.pop() {
+            let index = index as usize;
             let (x, y) = (index % width, index / width);
             min_x = min_x.min(x);
             max_x = max_x.max(x);
@@ -178,7 +181,7 @@ fn component_heights(foreground: &mut [bool], width: usize, height: usize) -> Ve
             && component_height as f64 <= max_height
             && component_width as f64 <= max_width
         {
-            heights.push(component_height);
+            heights.push(component_height as u32);
         }
     }
     heights
@@ -187,7 +190,7 @@ fn component_heights(foreground: &mut [bool], width: usize, height: usize) -> Ve
 /// Clear and queue the foreground pixels among the eight neighbours of `(x, y)`.
 fn claim_neighbours(
     foreground: &mut [bool],
-    stack: &mut Vec<usize>,
+    stack: &mut Vec<u32>,
     (x, y): (usize, usize),
     (width, height): (usize, usize),
 ) {
@@ -196,7 +199,7 @@ fn claim_neighbours(
             let neighbour = next_y * width + next_x;
             if foreground[neighbour] {
                 foreground[neighbour] = false;
-                stack.push(neighbour);
+                stack.push(neighbour as u32);
             }
         }
     }
@@ -233,11 +236,28 @@ mod tests {
     #[test]
     fn glyph_workspace_includes_old_and_new_vector_allocations_and_skips_oversized_probes() {
         let expected = 100
-            + (40 + 20 + 20) * size_of::<usize>() as u64
+            + (40 + 20 + 20) * size_of::<u32>() as u64
             + (GRAY_LEVELS * size_of::<u64>() + 4 * size_of::<Vec<usize>>()) as u64;
         assert_eq!(glyph_workspace_bound(10, 10), Some(expected));
         assert_eq!(glyph_workspace_bound(MAX_SCANNED_PIXELS + 1, 1), Some(0));
         assert_eq!(glyph_workspace_bound(usize::MAX, 2), None);
+    }
+
+    /// The ocr-images-fast `ndl_meiji_vertical_01.jpg` scan: a 3630x2777 JPEG of 1_020_601 bytes
+    /// with no resolution metadata. Its glyph estimate must fit the default 100 MiB content limit
+    /// beside the retained encoded bytes and decoded RGB raster, as `candidate_dpi` charges them;
+    /// with usize indices the bound was 74.6 MB against 72.6 MB available and extraction failed.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn glyph_workspace_of_a_ten_megapixel_scan_fits_the_default_content_limit() {
+        let (width, height, encoded) = (3630u64, 2777u64, 1_020_601u64);
+        let default_limit = crate::extractors::security::SecurityLimits::default().max_content_size as u64;
+        let available = default_limit - (2 * encoded + 3 * width * height);
+        let peak = glyph_workspace_bound(width as usize, height as usize).unwrap();
+        assert!(
+            peak <= available,
+            "glyph workspace {peak} exceeds the available {available}"
+        );
     }
 
     #[test]

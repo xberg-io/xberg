@@ -1,6 +1,12 @@
 use super::*;
 #[path = "image_budget_tests/guards.rs"]
 mod guards;
+#[path = "image_budget_tests/in_place.rs"]
+mod in_place;
+#[path = "image_budget_tests/native.rs"]
+mod native;
+#[path = "image_budget_tests/resize.rs"]
+mod resize;
 #[path = "image_budget_tests/source.rs"]
 mod source;
 
@@ -8,7 +14,8 @@ const LIMIT: usize = 8 * 1024 * 1024;
 /// Canvas pixels the 32 pt fixture pages are painted over at 72 dpi, far below any reduced scale of
 /// the oversized fixtures.
 const DEVICE: (f32, f32) = (32.0, 32.0);
-/// Refuses the 4096 px fixtures even at 1/8 (about 1.8 MiB of rasters) while admitting the 32 px page.
+/// Refuses the 4096 px fixtures even at 1/8 (3 MiB of component planes, output and coefficient rows)
+/// while admitting the 32 px page.
 const TIGHT: usize = 1024 * 1024;
 const LARGE: u32 = 4096;
 
@@ -129,7 +136,10 @@ fn jpeg_budget_charges_actual_rgb_rgba_canvas_and_encoded_capacity() {
     use crate::extractors::images::{ColorSpace, ImageData, PdfImage};
     let encoded = source::jpeg(32);
     let retained_canvas = 32 * 32 * 4;
-    let required = 32 * 32 * (3 + 4) + retained_canvas + 2 * encoded.len();
+    // Painted at its own size the image is drawn without a pre-resize, and tiny-skia's draw
+    // allocations outweigh the 3072-byte RGB decode they follow. ~keep
+    let draw = image_budget::TINY_SKIA_DRAW_BYTES as usize;
+    let required = 32 * 32 * 4 + draw.max(32 * 32 * 3) + retained_canvas + 2 * encoded.len();
     let image = PdfImage::new(32, 32, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(encoded.clone()));
     assert!(
         image_budget::ImageBudget::new(required)
@@ -524,10 +534,13 @@ fn a_frame_the_decoder_would_scale_differently_is_never_admitted_at_that_scale()
         bytes
     };
     let image = PdfImage::new(1, 4096, ColorSpace::DeviceRGB, 8, ImageData::Jpeg(encoded.clone()));
-    let limit = 20_000;
+    // Admits the 1x512 decode and its 16 KiB draw, but not the 4096-row decode (32 KiB of rasters).
+    let limit = 32_000;
     assert!(image_budget::ImageBudget::new(limit).admit_jpeg(&image, 0).is_err());
     let admit = |device| image_budget::ImageBudget::new(limit).admit_jpeg_reducing(&image, 0, device);
-    assert_eq!(admit((1.0, 100.0)).unwrap(), 8);
+    // Painted 470 px tall, the 512-row decode is blitted without a pre-resize (470 / 512 >= 0.9),
+    // which would otherwise outweigh this limit. ~keep
+    assert_eq!(admit((1.0, 470.0)).unwrap(), 8);
     let mut budget = image_budget::ImageBudget::new(limit);
     assert!(budget.admit_jpeg_reducing(&image, 0, (1.0, 2000.0)).is_err());
     assert!(

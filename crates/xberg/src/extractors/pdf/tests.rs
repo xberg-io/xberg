@@ -650,6 +650,44 @@ fn should_keep_structure_when_native_token_coverage_meets_floor() {
     assert!(matches!(selected.elements[0].kind, ElementKind::Heading { level: 1 }));
 }
 
+fn native_text_with_bullet_glyphs() -> String {
+    (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE)
+        .map(|index| format!("\u{2022} word{index} \u{2011}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn should_keep_structure_when_it_only_drops_bullet_and_dash_glyphs() {
+    let native_text = native_text_with_bullet_glyphs();
+    let words = (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut structured = InternalDocument::new("pdf");
+    structured.push_element(InternalElement::text(ElementKind::Heading { level: 1 }, words, 0));
+
+    let (_, is_structured) = select_native_pdf_document(&native_text, "application/pdf", Some(structured), None);
+
+    assert!(is_structured);
+}
+
+#[test]
+fn should_fall_back_when_words_are_missing_despite_ignored_bullet_glyphs() {
+    let native_text = native_text_with_bullet_glyphs();
+    let words = (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE / 2)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut structured = InternalDocument::new("pdf");
+    structured.push_element(InternalElement::text(ElementKind::Heading { level: 1 }, words, 0));
+
+    let (selected, is_structured) = select_native_pdf_document(&native_text, "application/pdf", Some(structured), None);
+
+    assert!(!is_structured);
+    assert_eq!(selected.elements[0].text, native_text);
+}
+
 #[test]
 fn should_count_table_cells_as_structured_native_text() {
     let native_text = coverage_native_text();
@@ -786,57 +824,6 @@ fn layout_gate_metadata_reports_one_indexed_skipped_pages_and_all_reasons() {
     );
 
     assert_eq!(layout_gate_metadata(None), (None, None));
-}
-
-#[cfg(feature = "pdf")]
-fn catalog(
-    entries: impl IntoIterator<Item = (&'static str, xberg_native_pdf::object::Object)>,
-) -> xberg_native_pdf::object::Object {
-    xberg_native_pdf::object::Object::Dictionary(
-        entries
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value))
-            .collect(),
-    )
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn lopdf_compatibility_pass_skips_pdf_without_relevant_signals() {
-    let catalog = catalog([]);
-
-    assert!(!raw_pdf_needs_lopdf_compatibility_pass(
-        b"%PDF-1.7\nordinary content\n%%EOF",
-    ));
-    assert!(!catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn lopdf_compatibility_pass_keeps_raw_pdf_signals() {
-    let catalog = catalog([]);
-
-    assert!(raw_pdf_needs_lopdf_compatibility_pass(
-        b"%PDF-1.7\ntrailer << /Prev 42 >>",
-    ));
-    assert!(raw_pdf_needs_lopdf_compatibility_pass(
-        b"%PDF-1.7\n<< /Outlines 7 0 R >>",
-    ));
-    assert!(!catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn lopdf_compatibility_pass_keeps_parsed_catalog_outline() {
-    let catalog = catalog([("Outlines", xberg_native_pdf::object::Object::Null)]);
-
-    assert!(catalog_needs_lopdf_compatibility_pass(Some(&catalog)));
-}
-
-#[cfg(feature = "pdf")]
-#[test]
-fn lopdf_compatibility_pass_fails_open_without_catalog() {
-    assert!(catalog_needs_lopdf_compatibility_pass(None));
 }
 
 #[cfg(feature = "pdf")]
@@ -9459,7 +9446,6 @@ mod mixed_pdf_table_model_warning {
 
     const CACHE_ROOT: &str = "XBERG_TABLE_MODEL_WARNING_TEST_HF_CACHE";
     const BACKEND_NAME: &str = "mixed-pdf-table-model-warning-test-backend";
-    const LAYOUT_MODEL_REPO_DIR: &str = "models--xberg-io--layout-models";
     const ROWS: [[&str; 4]; 7] = [
         ["Region", "Q1 revenue", "Q2 revenue", "Change"],
         ["North", "12,400", "13,050", "+5.2%"],
@@ -9622,24 +9608,24 @@ mod mixed_pdf_table_model_warning {
             eprintln!("XBERG_SKIP_LIVE_HF=1, skipping");
             return;
         }
+        // The model comes from the Xberg cache once `xberg cache warm` has run, else from the
+        // Hugging Face cache. The child reads only a private Xberg cache that holds this one
+        // model (`<XBERG_CACHE_DIR>/layout/rtdetr/model.onnx`, where `LayoutModelManager::new(None)`
+        // looks first) and an empty offline Hugging Face cache, so no table model resolves.
         let layout_model = crate::layout::LayoutModelManager::new(None)
             .ensure_rtdetr_model()
             .expect("the layout model must be available");
-        let repo_dir = layout_model
-            .ancestors()
-            .find(|dir| dir.file_name().is_some_and(|name| name == LAYOUT_MODEL_REPO_DIR))
-            .expect("the layout model must sit in the Hugging Face cache layout");
-        let relative = layout_model
-            .strip_prefix(repo_dir.parent().expect("the repository directory has a parent"))
-            .expect("the layout model sits under its repository directory");
         let cache = tempfile::TempDir::new().unwrap();
-        let staged = cache.path().join(relative);
+        let staged = cache.path().join("layout").join("rtdetr").join("model.onnx");
         std::fs::create_dir_all(staged.parent().expect("the staged model has a parent")).unwrap();
         std::fs::copy(&layout_model, &staged).expect("copy the layout model into the private cache");
+        let hf_cache = cache.path().join("huggingface");
+        std::fs::create_dir_all(&hf_cache).unwrap();
 
         crate::utils::test_support::run_child_test(child, CACHE_ROOT, cache.path(), |command| {
             command
-                .env("HF_HUB_CACHE", cache.path())
+                .env("XBERG_CACHE_DIR", cache.path())
+                .env("HF_HUB_CACHE", &hf_cache)
                 .env("HF_HUB_OFFLINE", "1")
                 .env_remove("HUGGINGFACE_HUB_OFFLINE");
         });
@@ -9852,7 +9838,7 @@ mod native_text_stop_tests {
 
     fn extract_native_bytes(content: Vec<u8>, config: ExtractionConfig) -> NativeBlockingOutput {
         extract_native_blocking(
-            content,
+            content.into(),
             config,
             #[cfg(feature = "layout-detection")]
             None,

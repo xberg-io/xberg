@@ -858,7 +858,7 @@ fn test_deduplicate_content_based() {
             artifact_type: None,
             text: "Hello World".to_string(), // >= 5 chars ~keep
             bbox: Rect::new(100.0, 700.0, 60.0, 12.0),
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),
@@ -889,7 +889,7 @@ fn test_deduplicate_content_based() {
             artifact_type: None,
             text: "Hello World".to_string(), // Same text, overlapping position ~keep
             bbox: Rect::new(102.0, 700.0, 60.0, 12.0), // X within 5pt ~keep
-            font_name: "F1".to_string(),
+            font_name: "F1".into(),
             font_size: 12.0,
             font_weight: FontWeight::Normal,
             color: Color::black(),

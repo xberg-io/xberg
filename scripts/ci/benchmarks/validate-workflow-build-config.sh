@@ -51,7 +51,7 @@ require_exact_input() {
 require_exact_cli_build() {
   local job="$1"
   local description="$2"
-  local expected="cargo build --locked --release -p xberg-cli --features all,xberg/sceptre-ocr-tract"
+  local expected="cargo build --locked --release -p xberg-cli --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'"
   local commands
   local command_count
 

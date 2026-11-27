@@ -298,8 +298,12 @@ impl FileStamp {
 }
 
 impl ModelFiles {
-    fn resolve(languages: Vec<String>, directory: Option<&Path>) -> Option<Self> {
-        let env = crate::ocr::processor::validation::TessdataEnv::from_process();
+    fn resolve(
+        languages: Vec<String>,
+        directory: Option<&Path>,
+        model: crate::core::config::TessdataModel,
+    ) -> Option<Self> {
+        let env = crate::ocr::processor::validation::TessdataEnv::from_process().for_model(model);
         let root = crate::ocr::processor::validation::existing_tessdata_dir_for(&languages, directory, &env)?;
         let root = Path::new(&root).canonicalize().ok()?;
         let stamps = Self::stamps(&root, &languages)?;
@@ -366,9 +370,10 @@ async fn revision(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>) -> Optio
     let config = identity.configs.1;
     let languages = config.effective_tesseract_language();
     let directory = config.tessdata_path.clone();
+    let tessdata_model = config.effective_tessdata_model();
     let reuse = Arc::clone(reuse);
     let model = super::super::spawn_pdf_blocking(move || {
-        let Some(files) = ModelFiles::resolve(languages, directory.as_deref()) else {
+        let Some(files) = ModelFiles::resolve(languages, directory.as_deref(), tessdata_model) else {
             return Ok(None);
         };
         Ok(model_revision(&reuse, &files))

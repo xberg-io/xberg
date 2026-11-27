@@ -1060,7 +1060,7 @@ fn infer_bold_heading_level(font_size: f32, body_font_size: f32, text: &str) -> 
 /// - "1 Introduction" or "I. INTRO" or "A. Proofs" → H2 (top-level section)
 /// - "1.1 Details" or "A.1 Sub" → H3 (sub-section)
 /// - "1.1.1 Deep" → H4 (sub-sub-section)
-fn infer_section_level(text: &str) -> u8 {
+pub(super) fn infer_section_level(text: &str) -> u8 {
     let trimmed = text.trim();
 
     let first_char = trimmed.chars().next().unwrap_or(' ');
@@ -1473,7 +1473,7 @@ pub(super) fn starts_with_section_number(text: &str) -> bool {
 }
 
 /// Check if a string is a valid roman numeral (I-XX range, covers most section numbering).
-fn is_valid_roman(s: &str) -> bool {
+pub(super) fn is_valid_roman(s: &str) -> bool {
     matches!(
         s,
         "I" | "II"
@@ -1543,6 +1543,282 @@ pub(super) fn demote_unnumbered_subsections(all_pages: &mut [Vec<PdfParagraph>])
                     all_pages[page_idx][para_idx].heading_level = Some(3);
                 }
             }
+        }
+    }
+}
+
+/// A document numbers its sections when at least this many headings carry a
+/// top-level section number (`1 Introduction`, `2 Data`, `3 Model`). ~keep
+const MIN_TOP_LEVEL_NUMBERED_HEADINGS: usize = 3;
+
+/// Level of a top-level numbered section: H1 is left to the document title. ~keep
+const TOP_LEVEL_SECTION_HEADING_LEVEL: usize = 2;
+
+/// A section-number component has at most three digits (`101. Definitions`, `229.2 Scope`),
+/// so a leading year (`2026 Annual Report`) is not section numbering. Shared by every
+/// section-number reader so they agree on what a number is. ~keep
+pub(super) const MAX_SECTION_NUMBER_COMPONENT_DIGITS: usize = 3;
+
+/// Depth of the section number opening a heading: `2 Data` is 1, `2.1 Data
+/// description` is 2, `A.1 Proof of Theorem 2` is 2. The number must be followed by
+/// whitespace and a word. A bare letter is no section number (`A quick example`).
+fn section_number_depth(text: &str) -> Option<usize> {
+    let text = text.trim();
+    let bytes = text.as_bytes();
+    let letter_led = bytes.first().is_some_and(u8::is_ascii_uppercase)
+        && bytes.get(1) == Some(&b'.')
+        && bytes.get(2).is_some_and(u8::is_ascii_digit);
+    let (mut index, mut depth) = if letter_led { (1, 1) } else { (0, 0) };
+    loop {
+        if depth > 0 {
+            if bytes.get(index) == Some(&b'.') && bytes.get(index + 1).is_some_and(u8::is_ascii_digit) {
+                index += 1;
+            } else {
+                break;
+            }
+        }
+        let digits = bytes[index..].iter().take_while(|byte| byte.is_ascii_digit()).count();
+        if !(1..=MAX_SECTION_NUMBER_COMPONENT_DIGITS).contains(&digits) {
+            return None;
+        }
+        index += digits;
+        depth += 1;
+    }
+    let rest = &text[index..];
+    let rest = rest.strip_prefix('.').unwrap_or(rest);
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    rest.trim_start()
+        .chars()
+        .next()
+        .filter(|character| character.is_alphabetic())
+        .map(|_| depth)
+}
+
+/// Set each numbered heading's level from the depth of its section number, when the
+/// document numbers its sections.
+///
+/// Font tiers do not track numbering: 2310.02163 set `2.1` subsections in the same
+/// tier as `2` sections (both H2), and 1710.02091 put its top-level sections at H1.
+/// A numbered section's depth is its level below the title: depth 1 is H2, `x.y` H3,
+/// `x.y.z` H4. Unnumbered back matter that shared the top-level sections' former
+/// level (`Acknowledgements`, `References` at H1) moves with them. ~keep
+pub(super) fn level_numbered_headings_by_depth(all_pages: &mut [Vec<PdfParagraph>]) {
+    let headings: Vec<(usize, usize, u8, Option<usize>)> = all_pages
+        .iter()
+        .enumerate()
+        .flat_map(|(page_index, page)| {
+            page.iter().enumerate().filter_map(move |(index, paragraph)| {
+                paragraph.heading_level.map(|level| {
+                    (
+                        page_index,
+                        index,
+                        level,
+                        section_number_depth(&paragraph_plain_text(paragraph)),
+                    )
+                })
+            })
+        })
+        .collect();
+
+    let Some(first_top_level) = headings.iter().position(|&(_, _, _, depth)| depth == Some(1)) else {
+        return;
+    };
+    let mut former_top_levels = [0usize; 7];
+    for &(_, _, level, depth) in &headings {
+        if depth == Some(1) {
+            former_top_levels[usize::from(level).min(6)] += 1;
+        }
+    }
+    if former_top_levels.iter().sum::<usize>() < MIN_TOP_LEVEL_NUMBERED_HEADINGS {
+        return;
+    }
+    let former_top_level = (1..former_top_levels.len())
+        .max_by_key(|&level| (former_top_levels[level], std::cmp::Reverse(level)))
+        .unwrap_or(TOP_LEVEL_SECTION_HEADING_LEVEL);
+
+    for (position, &(page_index, index, level, depth)) in headings.iter().enumerate() {
+        let new_level = match depth {
+            Some(depth) => (depth + 1).min(6),
+            None if position > first_top_level
+                && usize::from(level) == former_top_level
+                && former_top_level != TOP_LEVEL_SECTION_HEADING_LEVEL =>
+            {
+                TOP_LEVEL_SECTION_HEADING_LEVEL
+            }
+            None => continue,
+        };
+        all_pages[page_index][index].heading_level = u8::try_from(new_level).ok();
+    }
+}
+
+/// A roman numeral opening an outline heading has at most this many letters (`XVIII.`,
+/// the longest [`is_valid_roman`] reads); a longer capitalised run is a word. ~keep
+const MAX_OUTLINE_MARKER_CHARS: usize = 5;
+
+/// An emphasized outline heading wraps onto at most this many lines: the Federal
+/// Register's three-column pages set `B. Summary of Changes to Budgets and the EPA's
+/// Analysis of the State's Submittal` on three. ~keep
+const MAX_OUTLINE_HEADING_LINES: usize = 3;
+
+/// Deepest markdown heading level. ~keep
+const MAX_OUTLINE_HEADING_LEVEL: u8 = 6;
+
+/// Points below the body size within which an outline heading is still set at body size. ~keep
+const OUTLINE_HEADING_FONT_TOLERANCE: f32 = 0.5;
+
+/// The enumerator of a government or legal outline: roman sections (`IV. Results`) with
+/// lettered subsections (`B. Scope`) beneath them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum OutlineEnumerator {
+    Roman,
+    Letter,
+}
+
+/// The outline enumerator opening `text`: an upper-case roman numeral or a single capital,
+/// closed by `.` or `)` and followed by whitespace and a capitalised word.
+///
+/// A lone `I`, `V` or `X` reads as roman; any other lone capital, `C.` and `D.` included,
+/// as a letter, since a lettered run reaches C long before a roman one reaches 100. ~keep
+pub(super) fn outline_enumerator(text: &str) -> Option<OutlineEnumerator> {
+    let text = text.trim_start();
+    let marker_end = text.find(|character: char| !character.is_ascii_uppercase())?;
+    if marker_end == 0 || marker_end > MAX_OUTLINE_MARKER_CHARS {
+        return None;
+    }
+    let rest = text[marker_end..].strip_prefix(['.', ')'])?;
+    if !rest.starts_with(char::is_whitespace) || !rest.trim_start().starts_with(char::is_uppercase) {
+        return None;
+    }
+    let marker = &text[..marker_end];
+    if marker_end == 1 && !matches!(marker, "I" | "V" | "X") {
+        return Some(OutlineEnumerator::Letter);
+    }
+    is_valid_roman(marker).then_some(OutlineEnumerator::Roman)
+}
+
+/// Whether `text` is nothing but an outline marker (`A.`, `IV)`), which a producer may
+/// set apart from, and in another style than, the title it opens.
+fn is_outline_marker_only(text: &str) -> bool {
+    let text = text.trim();
+    let Some(marker) = text.strip_suffix(['.', ')']) else {
+        return false;
+    };
+    (marker.len() == 1 && marker.bytes().all(|byte| byte.is_ascii_uppercase())) || is_valid_roman(marker)
+}
+
+/// Whether every segment carrying text, leaving out a bare outline marker, satisfies
+/// `is_emphasized`, and at least one does.
+pub(super) fn segments_all_emphasized<'a>(
+    segments: impl IntoIterator<Item = &'a SegmentData>,
+    is_emphasized: impl Fn(&SegmentData) -> bool,
+) -> bool {
+    let mut any = false;
+    for segment in segments {
+        let text = segment.text.trim();
+        if text.is_empty() || is_outline_marker_only(text) {
+            continue;
+        }
+        if !is_emphasized(segment) {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
+/// Whether a list item is an outline heading set entirely in italic or in bold: a short,
+/// unterminated title of at most three lines, at body size or larger, opened by an
+/// outline enumerator.
+fn reads_as_emphasized_outline_heading(para: &PdfParagraph, body_font_size: Option<f32>) -> bool {
+    if !para.is_list_item
+        || para.heading_level.is_some()
+        || para.is_page_furniture
+        || para.is_code_block
+        || para.is_formula
+        || para.lines.len() > MAX_OUTLINE_HEADING_LINES
+        || para.word_count > MAX_HEADING_WORD_COUNT
+        || body_font_size.is_some_and(|body| para.dominant_font_size < body - OUTLINE_HEADING_FONT_TOLERANCE)
+    {
+        return false;
+    }
+    let segments = || para.lines.iter().flat_map(|line| line.segments.iter());
+    if !segments_all_emphasized(segments(), |segment| segment.is_italic)
+        && !segments_all_emphasized(segments(), |segment| segment.is_bold)
+    {
+        return false;
+    }
+    let text = paragraph_plain_text(para);
+    let trimmed = text.trim();
+    outline_enumerator(trimmed).is_some() && !ends_with_sentence_period(trimmed) && !trimmed.ends_with(':')
+}
+
+/// Level a document's roman and lettered outline headings, and promote the emphasized
+/// outline list items among them to headings.
+///
+/// Government and legal documents number sections `I.`, `II.` and subsections `A.`, `B.`
+/// at body size: 2026-13845 sets its roman sections in bold and its lettered subsections
+/// in italic. The list grouper took `A. Standard and Geographic Area Applicable to This
+/// Action` for a list item and the body-size bold pass put every section at H3. A roman
+/// section is a top-level section like `2 Data`, and a lettered heading sits one level
+/// under the numbered section it follows; after an unnumbered top-level heading
+/// (`References`) a lettered heading is an appendix at the top level.
+///
+/// Only a document whose headings number at least three top-level sections, roman or
+/// arabic, has such an outline. ~keep
+pub(super) fn level_outline_enumerated_headings(all_pages: &mut [Vec<PdfParagraph>], body_font_size: Option<f32>) {
+    let top_level = TOP_LEVEL_SECTION_HEADING_LEVEL as u8;
+    let (mut roman_sections, mut numbered_sections) = (0usize, 0usize);
+    for paragraph in all_pages
+        .iter()
+        .flatten()
+        .filter(|paragraph| paragraph.heading_level.is_some() && !paragraph.is_page_furniture)
+    {
+        let text = paragraph_plain_text(paragraph);
+        if outline_enumerator(&text) == Some(OutlineEnumerator::Roman) {
+            roman_sections += 1;
+        } else if section_number_depth(&text) == Some(1) {
+            numbered_sections += 1;
+        }
+    }
+    let roman_outline =
+        roman_sections >= MIN_TOP_LEVEL_NUMBERED_HEADINGS && numbered_sections < MIN_TOP_LEVEL_NUMBERED_HEADINGS;
+    if !roman_outline && numbered_sections < MIN_TOP_LEVEL_NUMBERED_HEADINGS {
+        return;
+    }
+
+    let mut section_level: Option<u8> = None;
+    for paragraph in all_pages.iter_mut().flatten() {
+        if paragraph.is_page_furniture {
+            continue;
+        }
+        let text = paragraph_plain_text(paragraph);
+        let enumerator = outline_enumerator(&text);
+        let promotable = match enumerator {
+            Some(OutlineEnumerator::Letter) => true,
+            Some(OutlineEnumerator::Roman) => roman_outline,
+            None => false,
+        };
+        if promotable && reads_as_emphasized_outline_heading(paragraph, body_font_size) {
+            paragraph.is_list_item = false;
+            paragraph.heading_level = Some(top_level);
+        }
+        let Some(level) = paragraph.heading_level else {
+            continue;
+        };
+        match enumerator {
+            Some(OutlineEnumerator::Roman) if roman_outline => {
+                paragraph.heading_level = Some(top_level);
+                section_level = Some(top_level);
+            }
+            Some(OutlineEnumerator::Letter) if level >= top_level => {
+                paragraph.heading_level =
+                    Some(section_level.map_or(top_level, |section| (section + 1).min(MAX_OUTLINE_HEADING_LEVEL)));
+            }
+            _ if section_number_depth(&text).is_some() => section_level = Some(level),
+            _ if level <= top_level => section_level = None,
+            _ => {}
         }
     }
 }
@@ -1625,8 +1901,8 @@ fn other_paragraphs_font_size(
     }
 }
 
-/// Extract plain text from a paragraph.
-fn paragraph_plain_text(para: &PdfParagraph) -> String {
+/// A paragraph's segments joined by single spaces, ignoring any recorded `text`.
+pub(super) fn paragraph_plain_text(para: &PdfParagraph) -> String {
     para.lines
         .iter()
         .flat_map(|l| l.segments.iter())
@@ -1635,30 +1911,102 @@ fn paragraph_plain_text(para: &PdfParagraph) -> String {
         .join(" ")
 }
 
+/// A body-size bold title wraps in a narrow column: the Federal Register's three-column
+/// pages set `Summary of Major Provisions Within` / `the Rule` and four more titles of
+/// 2026-14578 on two lines, and 2026-13845's `III. Revised Motor Vehicle Emissions` /
+/// `Budgets for the 2008 8-Hour Ozone` / `Standard` on three, which a one-line test never
+/// admitted. [`reads_as_one_title_block`] keeps a multi-line candidate to one column. ~keep
+const MAX_BODY_SIZE_BOLD_HEADING_LINES: usize = 4;
+
+/// Left-edge drift, in multiples of the body font size, within which a second line is the
+/// wrap of the first rather than a label from another column.
+const WRAPPED_TITLE_LEFT_EDGE_EM: f32 = 1.0;
+
+/// Whether a multi-line bold paragraph is one title wrapped in its column: every line
+/// starts under the first and no line has a gutter-wide gap. pdfa_001's form joins bold
+/// column labels from two rows (`Pediatric  intensive Care Newborn  Intermediate Card` /
+/// `Nursery`, and `McAuley Wing` above `Type of Service Provided`), and they were promoted
+/// as headings once two lines were admitted. A single line is unaffected. ~keep
+pub(super) fn reads_as_one_title_block(para: &PdfParagraph, body_font_size: f32) -> bool {
+    let Some(first) = para.lines.first() else {
+        return false;
+    };
+    let left_edge = |line: &super::types::PdfLine| {
+        line.segments
+            .iter()
+            .map(|segment| segment.x)
+            .fold(f32::INFINITY, f32::min)
+    };
+    let has_gutter_gap = para.lines.iter().any(|line| {
+        line.segments
+            .windows(2)
+            .any(|pair| pair[1].x - (pair[0].x + pair[0].width) > body_font_size * SHORT_TITLE_MAX_SEGMENT_GAP_EM)
+    });
+    let first_left = left_edge(first);
+    !has_gutter_gap
+        && para.lines[1..]
+            .iter()
+            .all(|line| (left_edge(line) - first_left).abs() <= body_font_size * WRAPPED_TITLE_LEFT_EDGE_EM)
+}
+
+/// Word cap for a body-size bold title: a wrapped title may run to a heading's length,
+/// a single bold line stays below it, where it is more often a run-in lead.
+/// 2026-13845's `II. Clean Air Act Procedural and Administrative Requirements for SIP
+/// Submittals and Criteria for Approval of Revised Budgets` is sixteen words on four lines.
+fn body_size_bold_title_word_cap(para: &PdfParagraph) -> usize {
+    if para.lines.len() > 1 {
+        MAX_HEADING_WORD_COUNT
+    } else {
+        MAX_BOLD_HEADING_WORD_COUNT
+    }
+}
+
+/// Size drop below the body, as a fraction of the body size, within which a bold line opening
+/// with `§` still titles a section. Regulatory text sets its section headings a point under
+/// the body (2026-14578's `§ 217.91 Effective dates.` is 8pt bold over a 9pt body); `§`
+/// itself is the evidence a smaller bold line needs. ~keep
+const SECTION_SYMBOL_TITLE_SIZE_DROP: f32 = 0.15;
+
+fn is_set_in_body_title_type(para: &PdfParagraph, body_font_size: f32) -> bool {
+    let drop = body_font_size - para.dominant_font_size;
+    drop.abs() <= 0.5
+        || (drop > 0.0
+            && drop <= SECTION_SYMBOL_TITLE_SIZE_DROP * body_font_size
+            && paragraph_plain_text(para).trim_start().starts_with('§'))
+}
+
 pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32) -> bool {
+    body_size_bold_signal_text(para, body_font_size).is_some()
+}
+
+/// The plain text of a body-size bold signal paragraph (see [`is_body_size_bold_signal`]),
+/// or `None` when the paragraph is not one, so callers judging the text further join it once.
+pub(super) fn body_size_bold_signal_text(para: &PdfParagraph, body_font_size: f32) -> Option<String> {
     if para.heading_level.is_some()
         || !para.is_bold
         || para.is_list_item
         || para.is_code_block
         || para.is_formula
         || para.is_page_furniture
-        || para.lines.len() != 1
+        || !(1..=MAX_BODY_SIZE_BOLD_HEADING_LINES).contains(&para.lines.len())
         || !body_font_size.is_finite()
         || body_font_size <= 0.0
-        || (para.dominant_font_size - body_font_size).abs() > 0.5
-        || para.word_count > MAX_BOLD_HEADING_WORD_COUNT
+        || !is_set_in_body_title_type(para, body_font_size)
+        || para.word_count > body_size_bold_title_word_cap(para)
+        || !reads_as_one_title_block(para, body_font_size)
     {
-        return false;
+        return None;
     }
 
     let text = paragraph_plain_text(para);
     let trimmed = text.trim();
-    !trimmed.is_empty()
+    let is_signal = !trimmed.is_empty()
         && (!ends_with_sentence_period(trimmed) || is_section_pattern(trimmed))
         && (!trimmed.ends_with(':') || is_all_caps_text(trimmed))
         && !looks_like_figure_label(trimmed)
         && !looks_like_bare_url(trimmed)
-        && !super::layout_classify::is_separator_text(trimmed)
+        && !super::layout_classify::is_separator_text(trimmed);
+    is_signal.then_some(text)
 }
 
 /// On typography alone a bold body-size line needs at least this many words to read
@@ -1666,10 +2014,14 @@ pub(super) fn is_body_size_bold_signal(para: &PdfParagraph, body_font_size: f32)
 /// run-in lead. See [`is_body_size_bold_heading_candidate`] for the exemption. ~keep
 const MIN_BOLD_HEADING_WORD_COUNT: usize = 3;
 
+#[cfg(test)]
 pub(super) fn is_body_size_bold_heading_candidate(para: &PdfParagraph, body_font_size: f32) -> bool {
-    if !is_body_size_bold_signal(para, body_font_size) {
-        return false;
-    }
+    body_size_bold_signal_text(para, body_font_size)
+        .is_some_and(|text| reads_as_body_size_bold_heading(para, text.trim()))
+}
+
+/// Whether a body-size bold signal paragraph with plain text `trimmed` is a heading candidate.
+pub(super) fn reads_as_body_size_bold_heading(para: &PdfParagraph, trimmed: &str) -> bool {
     // A numbered section heading carries its own evidence and does not need to clear
     // the word-count floor. Requiring three words silently excluded every two-word
     // numbered title -- `3. PRIJZEN`, `1. INTRODUCTION` -- from heading promotion, so
@@ -1678,7 +2030,36 @@ pub(super) fn is_body_size_bold_heading_candidate(para: &PdfParagraph, body_font
     // Measured on GH#1611: `ARTIKEL 1. TOEPASSELIJKHEID` (3 words) was promoted and
     // `1. TOEPASSELIJKHEID` (2 words) was not, at identical font, weight and body
     // size -- the keyword contributed nothing but the third word. See #1611. ~keep
-    para.word_count >= MIN_BOLD_HEADING_WORD_COUNT || is_numbered_section_heading(paragraph_plain_text(para).trim())
+    para.word_count >= MIN_BOLD_HEADING_WORD_COUNT || is_numbered_section_heading(trimmed)
+}
+
+/// A one- or two-word section title must carry a word of at least this many letters:
+/// figure-panel labels (`C)`, `E)`) and initials are bold, body-size lines too. ~keep
+const MIN_SHORT_TITLE_WORD_LETTERS: usize = 3;
+
+/// Bold body-size gap between two segments of one line that reads as a column gutter,
+/// in multiples of the body font size: a bold table header row (`Name    Value`) is
+/// two short words on one line as well. ~keep
+const SHORT_TITLE_MAX_SEGMENT_GAP_EM: f32 = 2.0;
+
+/// Whether a one- or two-word body-size bold signal paragraph, with plain text `trimmed`,
+/// reads as a section title (`Introduction`, `Background`, `Small Numbers`) rather than a
+/// label.
+///
+/// Below [`MIN_BOLD_HEADING_WORD_COUNT`] typography alone cannot tell a title from
+/// emphasis, so callers admit these only where bold body-size lines are the
+/// document's sole heading convention. The text guards reject the label shapes that
+/// convention still contains: `Note:` and `Total: 5` (a colon), `C)` (a panel
+/// label) and `Rauch III,` (a signature); a bold table header row (a gutter-wide gap
+/// between its segments) is no signal at all (see [`reads_as_one_title_block`]).
+pub(super) fn reads_as_short_section_title(para: &PdfParagraph, trimmed: &str) -> bool {
+    (1..MIN_BOLD_HEADING_WORD_COUNT).contains(&para.word_count)
+        && trimmed.chars().next().is_some_and(char::is_uppercase)
+        && !trimmed.contains(':')
+        && !trimmed.ends_with([')', ',', ';', '.'])
+        && trimmed
+            .split_whitespace()
+            .any(|word| word.chars().filter(|c| c.is_alphabetic()).count() >= MIN_SHORT_TITLE_WORD_LETTERS)
 }
 
 /// Preserve peer H2 sections when a sparse document repeats their font tier at
@@ -1845,7 +2226,29 @@ fn looks_like_title_continuation(prev: &PdfParagraph, next: &PdfParagraph) -> bo
     }
     let prev_wc = prev_text.split_whitespace().count();
     let next_wc = next_text.split_whitespace().count();
-    prev_wc <= 4 && next_wc <= 4
+    (prev_wc <= 4 && next_wc <= 4) || wraps_onto_next_line(prev, next, prev_wc + next_wc)
+}
+
+/// Baseline pitch, in multiples of the font size, up to which two stacked title-size
+/// lines are one wrapped title. Display titles are set with loose leading: 1602.03238
+/// wraps its 17pt title at a 1.66 pitch, and its two halves were emitted as two H1s. ~keep
+const WRAPPED_TITLE_MAX_PITCH_EM: f32 = 2.0;
+
+/// Whether `next` is the following physical line of a title that ran out of room:
+/// it sits directly below `prev`, within a line pitch, and the two together stay
+/// heading-sized. Longer first lines are only admitted on this geometric evidence;
+/// lines sharing a baseline or set far apart keep the four-word rule.
+fn wraps_onto_next_line(prev: &PdfParagraph, next: &PdfParagraph, word_count: usize) -> bool {
+    let (Some(prev_baseline), Some(next_baseline)) = (
+        prev.lines.last().and_then(|line| line.baseline_y),
+        next.lines.first().and_then(|line| line.baseline_y),
+    ) else {
+        return false;
+    };
+    let pitch = prev_baseline - next_baseline;
+    word_count <= MAX_HEADING_WORD_COUNT
+        && pitch > 0.0
+        && pitch <= prev.dominant_font_size.max(1.0) * WRAPPED_TITLE_MAX_PITCH_EM
 }
 
 /// Return the effective plain text for a paragraph, preferring `para.text` (the
@@ -1853,7 +2256,7 @@ fn looks_like_title_continuation(prev: &PdfParagraph, next: &PdfParagraph) -> bo
 ///
 /// Mirrors the `get_text` closure in `assembly::push_paragraph_element` so that
 /// classification helpers and rendering always agree on what a paragraph says.
-fn effective_text(para: &PdfParagraph) -> String {
+pub(super) fn effective_text(para: &PdfParagraph) -> String {
     if !para.text.is_empty() {
         para.text.clone()
     } else {
@@ -1864,7 +2267,9 @@ fn effective_text(para: &PdfParagraph) -> String {
 /// True when text looks like a standalone heading rather than a title continuation.
 ///
 /// Matches product model codes ("HR 22", "HR 28/24"), mixed alphanumeric tokens
-/// ("A4", "HR28"), and lines that start with a digit.
+/// ("A4", "HR28"), and lines that start with a digit. A bare number followed by a
+/// lowercase word is mid-phrase rather than an enumerator: medium.pdf wraps its title
+/// as `... hepatitis C virus genotype` / `1 infection`.
 fn looks_like_standalone_heading_text(text: &str) -> bool {
     let trimmed = text.trim();
     let mut words = trimmed.splitn(3, ' ');
@@ -1872,7 +2277,9 @@ fn looks_like_standalone_heading_text(text: &str) -> bool {
     let second = words.next().unwrap_or("");
 
     if first.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        return true;
+        let number_before_lowercase_word =
+            first.chars().all(|c| c.is_ascii_digit()) && second.chars().next().is_some_and(char::is_lowercase);
+        return !number_before_lowercase_word;
     }
     let first_has_alpha = first.chars().any(|c| c.is_ascii_alphabetic());
     let first_has_digit = first.chars().any(|c| c.is_ascii_digit());
@@ -1894,6 +2301,12 @@ fn looks_like_standalone_heading_text(text: &str) -> bool {
 /// "Allrightsreserved" match. The second key is the sorted list of words, so the same words
 /// joined in a different order match: a stamp whose values join as "A B" on some pages and "B A"
 /// on others is one repeated line, not two lines that each fall under the page threshold.
+/// The third key masks digit runs, so a running line that carries a per-page counter
+/// ("45209 Federal Register / Vol. 91", "Frm 00030") still repeats, including against
+/// its pages that print no counter. The fourth drops a `Page N of M` counter from the
+/// masked key, so a running head that the counter joins on some pages and stands apart
+/// from on others is still one line (medium.pdf: `... 2011, 11:124 Page 3 of 7 http://...`
+/// against `... 2011, 11:124 http://...`).
 fn margin_text_keys(normalized: &str) -> Vec<String> {
     let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
     if alphanum_key.is_empty() {
@@ -1906,7 +2319,45 @@ fn margin_text_keys(normalized: &str) -> Vec<String> {
         .collect();
     words.sort_unstable();
     let word_set_key = format!("words|{}", words.join(" "));
-    vec![alphanum_key, word_set_key]
+    let mut keys = vec![alphanum_key, word_set_key];
+    if let Some(masked) = digit_masked_margin_key(normalized) {
+        let without_counter = masked.replace(PAGE_COUNTER_MASK, "");
+        if without_counter != masked {
+            keys.push(without_counter);
+        }
+        keys.push(masked);
+    }
+    keys
+}
+
+/// A `Page N of M` counter inside a line, as [`digit_masked_margin_key`] spells it.
+const PAGE_COUNTER_MASK: &str = "page#of#";
+
+/// Letters a margin line must keep once its digits are masked: rows of figures, bare
+/// page counters and numbered markers carry too few to tell one line from another. ~keep
+const MIN_MASKED_MARGIN_KEY_LETTERS: usize = 8;
+
+/// The margin line's alphanumerics with each interior digit run replaced by `#` and
+/// leading or trailing digit runs dropped, for lines with enough letters to identify
+/// them without their numbers. Dropping the edge runs matches a running head whose page
+/// number sits on alternate sides, or is absent on some pages, against itself.
+fn digit_masked_margin_key(normalized: &str) -> Option<String> {
+    let mut masked = String::new();
+    let mut letters = 0usize;
+    let mut in_digit_run = false;
+    for character in normalized.chars().filter(|c| c.is_alphanumeric()) {
+        if character.is_ascii_digit() {
+            if !in_digit_run {
+                masked.push('#');
+            }
+            in_digit_run = true;
+        } else {
+            masked.push(character);
+            letters += 1;
+            in_digit_run = false;
+        }
+    }
+    (letters >= MIN_MASKED_MARGIN_KEY_LETTERS).then(|| format!("masked|{}", masked.trim_matches('#')))
 }
 
 pub(super) fn reads_vertically(para: &PdfParagraph) -> bool {
@@ -3282,6 +3733,71 @@ mod tests {
         assert_eq!(page[1].text, "Over");
     }
 
+    fn make_h1_at_baseline(font_size: f32, text: &str, baseline: f32) -> PdfParagraph {
+        let mut p = make_h1_with_text(font_size, text);
+        p.lines[0].baseline_y = Some(baseline);
+        for segment in &mut p.lines[0].segments {
+            segment.baseline_y = baseline;
+            segment.y = baseline;
+        }
+        p
+    }
+
+    /// 1602.03238 sets its 17pt title on two lines at a 1.66 line pitch; the first line
+    /// holds seven words, so the four-word rule kept them as two H1s.
+    #[test]
+    fn merge_h1s_joins_a_long_title_wrapped_onto_the_next_line() {
+        let mut page = vec![
+            make_h1_at_baseline(17.2, "Valuation of Variable Annuities with Guaranteed Minimum", 750.0),
+            make_h1_at_baseline(17.2, "Withdrawal Benefit under Stochastic Interest Rate", 721.5),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            1,
+            "a long title wrapped within one line pitch is one heading"
+        );
+        assert!(page[0].text.ends_with("Interest Rate"), "got {:?}", page[0].text);
+    }
+
+    #[test]
+    fn merge_h1s_keeps_long_titles_set_far_apart() {
+        let mut page = vec![
+            make_h1_at_baseline(17.2, "Valuation of Variable Annuities with Guaranteed Minimum", 750.0),
+            make_h1_at_baseline(17.2, "Withdrawal Benefit under Stochastic Interest Rate", 650.0),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            2,
+            "long lines several line pitches apart are separate headings"
+        );
+    }
+
+    /// medium.pdf wraps its 23.9pt title after `genotype`, leaving `1 infection` on the last
+    /// line; the leading digit made it a standalone heading and the title lost its tail.
+    #[test]
+    fn merge_h1s_joins_a_wrapped_title_line_that_opens_with_a_number() {
+        let mut page = vec![
+            make_h1_at_baseline(23.9, "Swedish patients with hepatitis C virus genotype", 600.0),
+            make_h1_at_baseline(23.9, "1 infection", 573.0),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            1,
+            "a number continuing a wrapped title is not a new heading"
+        );
+        assert!(page[0].text.ends_with("genotype 1 infection"), "got {:?}", page[0].text);
+
+        let mut numbered = vec![
+            make_h1_at_baseline(23.9, "Swedish patients with hepatitis C virus genotype", 600.0),
+            make_h1_at_baseline(23.9, "1 Introduction", 573.0),
+        ];
+        merge_consecutive_h1s(&mut numbered);
+        assert_eq!(numbered.len(), 2, "a numbered capitalised heading stays standalone");
+    }
+
     #[test]
     fn test_merge_h1s_terminal_punctuation_not_merged() {
         for suffix in [".", "!", "?", ":"] {
@@ -3570,6 +4086,90 @@ mod tests {
                 "page {i}: neither line is on more than half the pages"
             );
         }
+    }
+
+    /// 2026-14578 prints `NNNNN Federal Register / Vol. 91 ...` atop every page, its page number
+    /// on alternate sides, and a `VerDate ... Frm 000NN` slug at the foot with a per-page frame
+    /// number: no two pages carry the same characters, so exact and word-set keys never repeat.
+    #[test]
+    fn test_cross_page_repeating_text_masks_per_page_counters() {
+        let page_heights = vec![792.0; 6];
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..6)
+            .map(|i| {
+                let folio = 45207 + i;
+                let header = if i % 2 == 0 {
+                    format!("Federal Register / Vol. 91, No. 137 / Rules and Regulations {folio}")
+                } else {
+                    format!("{folio} Federal Register / Vol. 91, No. 137 / Rules and Regulations")
+                };
+                let mut slug = make_margin_body(&format!("VerDate Sep<11>2014 Jkt 268001 Frm {:05} Fmt 4700", 21 + i));
+                slug.block_bbox = Some((50.0, 20.0, 300.0, 30.0));
+                vec![make_margin_body(&header), make_body_center(&format!("Body {i}")), slug]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
+
+        assert!(!pages[0][0].is_page_furniture, "the first running head stays");
+        assert!(!pages[0][2].is_page_furniture, "the first slug stays");
+        for (i, page) in pages.iter().enumerate().skip(1) {
+            assert!(page[0].is_page_furniture, "page {i} running head must be furniture");
+            assert!(page[2].is_page_furniture, "page {i} slug must be furniture");
+            assert!(!page[1].is_page_furniture);
+        }
+    }
+
+    /// medium.pdf's running head takes its `Page N of 7` counter into the same line on some
+    /// pages and leaves it a line of its own on others; neither form alone is on more than
+    /// half the pages.
+    #[test]
+    fn test_cross_page_repeating_text_drops_a_joined_page_counter() {
+        let page_heights = vec![792.0; 7];
+        let head = "Alestig et al. BMC Infectious Diseases 2011, 11:124";
+        let url = "http://www.biomedcentral.com/1471-2334/11/124";
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..7)
+            .map(|i| {
+                let running = if [2, 3, 6].contains(&i) {
+                    format!("{head} Page {} of 7 {url}", i + 1)
+                } else {
+                    format!("{head} {url}")
+                };
+                vec![make_margin_body(&running), make_body_center(&format!("Body {i}"))]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
+
+        assert!(!pages[0][0].is_page_furniture, "the first running head stays");
+        for (i, page) in pages.iter().enumerate().skip(1) {
+            assert!(page[0].is_page_furniture, "page {i} running head must be furniture");
+            assert!(!page[1].is_page_furniture);
+        }
+    }
+
+    /// Masking digits must not merge lines that are mostly numbers: a row of figures or a
+    /// numbered marker in a margin keeps too few letters to identify a running line.
+    #[test]
+    fn test_cross_page_repeating_text_keeps_numeric_margin_rows() {
+        let page_heights = vec![792.0; 6];
+        let mut pages: Vec<Vec<PdfParagraph>> = (0..6)
+            .map(|i| {
+                let mut marker = make_margin_body(&format!("{}. Item {}", i + 1, i + 1));
+                marker.block_bbox = Some((50.0, 20.0, 300.0, 30.0));
+                vec![
+                    make_margin_body(&format!("Total: {} {} {}", 100 + i, 200 + i, 300 + i)),
+                    make_body_center(&format!("Body {i}")),
+                    marker,
+                ]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &page_heights, false, false);
+
+        assert!(
+            pages.iter().flatten().all(|paragraph| !paragraph.is_page_furniture),
+            "rows that differ only in their numbers and carry few letters are content"
+        );
     }
 
     #[test]
@@ -4226,6 +4826,237 @@ mod tests {
             pages[0][0].heading_level,
             Some(1),
             "at the sparsity floor a clearly larger title line must still be promoted"
+        );
+    }
+
+    fn heading_at(text: &str, level: u8) -> PdfParagraph {
+        let mut paragraph = make_text_paragraph(12.0, text, true);
+        paragraph.heading_level = Some(level);
+        paragraph
+    }
+
+    fn heading_levels(pages: &[Vec<PdfParagraph>]) -> Vec<Option<u8>> {
+        pages
+            .iter()
+            .flatten()
+            .map(|paragraph| paragraph.heading_level)
+            .collect()
+    }
+
+    #[test]
+    fn section_number_depth_reads_arabic_and_letter_led_numbering_only() {
+        assert_eq!(section_number_depth("2 Data"), Some(1));
+        assert_eq!(section_number_depth("1. INTRODUCTION"), Some(1));
+        assert_eq!(section_number_depth("2.1 Data description"), Some(2));
+        assert_eq!(section_number_depth("2.1.1 Introduction to RL"), Some(3));
+        assert_eq!(section_number_depth("A.1 Proof of Theorem 2"), Some(2));
+        assert_eq!(section_number_depth("A quick example"), None);
+        assert_eq!(section_number_depth("2026 Annual Report"), None);
+        assert_eq!(section_number_depth("101. Definitions"), Some(1));
+        assert_eq!(section_number_depth("229.2 Scope"), Some(2));
+        assert_eq!(section_number_depth("3.5 = x"), None);
+        assert_eq!(section_number_depth("Introduction"), None);
+    }
+
+    /// 2310.02163 set `2.1` subsections in the `2` sections' tier and 1710.02091 put its
+    /// top-level sections (and its unnumbered back matter) at H1; the reference levels
+    /// follow the numbering depth below the title.
+    #[test]
+    fn numbered_headings_take_their_level_from_section_number_depth() {
+        let mut pages = vec![
+            vec![heading_at("A spatial model for extreme precipitation", 1)],
+            vec![
+                heading_at("1 Introduction", 1),
+                heading_at("2 Data", 1),
+                heading_at("2.1 Data description", 2),
+                heading_at("2.1.1 Station records", 2),
+            ],
+            vec![
+                heading_at("3 Model", 1),
+                make_text_paragraph(12.0, "Ordinary body text stays body text.", false),
+                heading_at("Acknowledgements", 1),
+                heading_at("References", 1),
+            ],
+        ];
+
+        level_numbered_headings_by_depth(&mut pages);
+
+        assert_eq!(
+            heading_levels(&pages),
+            [
+                Some(1),
+                Some(2),
+                Some(2),
+                Some(3),
+                Some(4),
+                Some(2),
+                None,
+                Some(2),
+                Some(2)
+            ]
+        );
+    }
+
+    #[test]
+    fn numbering_depth_needs_three_top_level_numbered_headings() {
+        let mut pages = vec![vec![
+            heading_at("Document title", 1),
+            heading_at("1 Overview", 1),
+            heading_at("2.1 Detail", 2),
+            heading_at("References", 1),
+        ]];
+
+        level_numbered_headings_by_depth(&mut pages);
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(1), Some(1), Some(2), Some(1)],
+            "one top-level numbered heading is no numbering scheme"
+        );
+    }
+
+    #[test]
+    fn numbering_depth_keeps_unnumbered_headings_off_the_former_top_level() {
+        let mut pages = vec![vec![
+            heading_at("Title", 1),
+            heading_at("1 Introduction", 2),
+            heading_at("Related questions", 3),
+            heading_at("2 Method", 2),
+            heading_at("2.1 Setup", 2),
+            heading_at("3 Results", 2),
+            heading_at("References", 1),
+        ]];
+
+        level_numbered_headings_by_depth(&mut pages);
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(1), Some(2), Some(3), Some(2), Some(3), Some(2), Some(1)],
+            "with top-level sections already at H2 only numbered headings move"
+        );
+    }
+
+    fn outline_list_item(text: &str, italic: bool, bold: bool) -> PdfParagraph {
+        let mut paragraph = make_text_paragraph(12.0, text, bold);
+        for segment in paragraph.lines.iter_mut().flat_map(|line| line.segments.iter_mut()) {
+            segment.is_italic = italic;
+        }
+        paragraph.is_list_item = true;
+        paragraph
+    }
+
+    fn body(text: &str) -> PdfParagraph {
+        make_text_paragraph(12.0, text, false)
+    }
+
+    fn list_flags(pages: &[Vec<PdfParagraph>]) -> Vec<bool> {
+        pages.iter().flatten().map(|paragraph| paragraph.is_list_item).collect()
+    }
+
+    #[test]
+    fn outline_enumerator_reads_roman_sections_and_lettered_subsections() {
+        assert_eq!(
+            outline_enumerator("IV. Proposed Action"),
+            Some(OutlineEnumerator::Roman)
+        );
+        assert_eq!(outline_enumerator("I. Background"), Some(OutlineEnumerator::Roman));
+        assert_eq!(outline_enumerator("XVIII) Scope"), Some(OutlineEnumerator::Roman));
+        assert_eq!(outline_enumerator("B. Motor Vehicle"), Some(OutlineEnumerator::Letter));
+        assert_eq!(
+            outline_enumerator("C. Existing Approved Budgets"),
+            Some(OutlineEnumerator::Letter)
+        );
+        assert_eq!(outline_enumerator("B. lower-case remainder"), None);
+        assert_eq!(outline_enumerator("U.S. Government"), None);
+        assert_eq!(outline_enumerator("AGENCY: Environmental Protection Agency"), None);
+        assert_eq!(outline_enumerator("CO2 emissions"), None);
+        assert_eq!(outline_enumerator("1. Introduction"), None);
+    }
+
+    /// 2026-13845: bold body-size roman sections promoted at H3, italic lettered
+    /// subsections left as list items.
+    #[test]
+    fn roman_outline_puts_sections_at_h2_and_promotes_italic_lettered_subsections_to_h3() {
+        let mut pages = vec![
+            vec![
+                heading_at("I. Background", 3),
+                outline_list_item("A. Standard and Geographic Area Applicable to This Action", true, false),
+                body("The EPA approved the budgets in an earlier action."),
+                outline_list_item(
+                    "B. Motor Vehicle Emissions Budgets and Transportation Conformity",
+                    true,
+                    false,
+                ),
+            ],
+            vec![
+                heading_at("II. Clean Air Act Procedural and Administrative Requirements", 3),
+                heading_at("III. Revised Motor Vehicle Emissions Budgets", 3),
+                outline_list_item("A. Review of Revised Budgets", true, false),
+            ],
+        ];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(2), Some(3), None, Some(3), Some(2), Some(2), Some(3)]
+        );
+        assert_eq!(list_flags(&pages), [false; 7]);
+    }
+
+    #[test]
+    fn roman_outline_keeps_upright_and_sentence_lettered_items_as_list_items() {
+        let mut pages = vec![vec![
+            heading_at("I. Background", 3),
+            outline_list_item("A. Standard and Geographic Area", false, false),
+            outline_list_item("B. The applicant files the form.", true, false),
+            heading_at("II. Requirements", 3),
+            heading_at("III. Revised Budgets", 3),
+        ]];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(heading_levels(&pages), [Some(2), None, None, Some(2), Some(2)]);
+        assert_eq!(list_flags(&pages), [false, true, true, false, false]);
+    }
+
+    #[test]
+    fn emphasized_lettered_items_stay_list_items_without_a_numbered_outline() {
+        let mut pages = vec![vec![
+            heading_at("I. Background", 3),
+            outline_list_item("A. Standard and Geographic Area", true, false),
+            heading_at("II. Requirements", 3),
+        ]];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(3), None, Some(3)],
+            "two roman headings are no outline"
+        );
+        assert_eq!(list_flags(&pages), [false, true, false]);
+    }
+
+    /// 1509.07624 and 2305.09790 set appendix titles (`A. Matrix entries`) as bold
+    /// lettered lines after their numbered sections and references.
+    #[test]
+    fn bold_lettered_appendix_after_numbered_sections_is_a_top_level_heading() {
+        let mut pages = vec![vec![
+            heading_at("1 Introduction", 2),
+            heading_at("2 Method", 2),
+            outline_list_item("A. Sampling details", false, true),
+            heading_at("3 Results", 2),
+            heading_at("References", 2),
+            outline_list_item("A. Matrix entries", false, true),
+            outline_list_item("B. Dirac notation", false, true),
+        ]];
+
+        level_outline_enumerated_headings(&mut pages, Some(12.0));
+
+        assert_eq!(
+            heading_levels(&pages),
+            [Some(2), Some(2), Some(3), Some(2), Some(2), Some(2), Some(2)]
         );
     }
 

@@ -15,7 +15,7 @@ fn mock_text_block(text: &str, mcid: u32) -> TextBlock {
         chars: vec![],
         bbox: Rect::new(0.0, 0.0, 100.0, 12.0),
         avg_font_size: 12.0,
-        dominant_font: "Arial".to_string(),
+        dominant_font: "Arial".into(),
         is_italic: false,
         is_bold: false,
         mcid: Some(mcid),

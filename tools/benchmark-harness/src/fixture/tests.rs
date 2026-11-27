@@ -164,6 +164,43 @@ fn fixture_ocr_language_validation_accepts_codes_and_rejects_paths() {
 }
 
 #[test]
+fn fixture_family_validation_accepts_a_name_and_rejects_empty_or_non_string_values() {
+    let make_fixture = |family: serde_json::Value| Fixture {
+        document: PathBuf::from("test.pdf"),
+        file_type: "pdf".to_string(),
+        file_size: 1024,
+        expected_frameworks: vec!["xberg".to_string()],
+        metadata: HashMap::from([("family".to_string(), family)]),
+        ground_truth: None,
+    };
+
+    let named = make_fixture(serde_json::json!("ocr_image"));
+    assert!(named.validate(Path::new("fixture.json")).is_ok());
+    assert_eq!(named.family(), Some("ocr_image"));
+    for invalid in [
+        serde_json::json!(""),
+        serde_json::json!(" ocr_image"),
+        serde_json::json!(3),
+    ] {
+        assert!(make_fixture(invalid).validate(Path::new("fixture.json")).is_err());
+    }
+}
+
+#[test]
+fn fixture_without_a_family_is_its_own_family() {
+    let fixture = Fixture {
+        document: PathBuf::from("test.pdf"),
+        file_type: "pdf".to_string(),
+        file_size: 1024,
+        expected_frameworks: vec![],
+        metadata: HashMap::new(),
+        ground_truth: None,
+    };
+
+    assert_eq!(fixture.family(), None);
+}
+
+#[test]
 fn test_absolute_path_rejected() {
     #[cfg(windows)]
     let absolute_path = PathBuf::from("C:\\absolute\\path\\test.pdf");
@@ -445,6 +482,75 @@ isolated_fixture_test! {
             .collect();
 
         assert!(loaded_names.contains(&"pdf_small".to_string()));
+    }
+}
+
+/// Writes `regular.json` at the root and `regular_nested.json` plus the opt-in `long.json` in a
+/// subdirectory, mirroring `fixtures/pdf/`.
+fn write_opt_in_fixture_tree(root: &Path) -> PathBuf {
+    let nested = root.join("pdf");
+    std::fs::create_dir(&nested).unwrap();
+    let mut opt_in_path = PathBuf::new();
+    for (dir, name, opt_in) in [
+        (root, "regular", false),
+        (nested.as_path(), "regular_nested", false),
+        (nested.as_path(), "long", true),
+    ] {
+        let mut metadata = HashMap::new();
+        if opt_in {
+            metadata.insert("opt_in".to_string(), serde_json::Value::Bool(true));
+        }
+        let fixture = Fixture {
+            document: PathBuf::from(format!("{name}.pdf")),
+            file_type: "pdf".to_string(),
+            file_size: 1024,
+            expected_frameworks: vec![],
+            metadata,
+            ground_truth: None,
+        };
+        let path = dir.join(format!("{name}.json"));
+        std::fs::write(&path, serde_json::to_string(&fixture).unwrap()).unwrap();
+        if opt_in {
+            opt_in_path = path;
+        }
+    }
+    opt_in_path
+}
+
+fn loaded_stems(manager: &FixtureManager) -> Vec<String> {
+    manager
+        .fixtures()
+        .iter()
+        .map(|(path, _)| path.file_stem().unwrap().to_string_lossy().into_owned())
+        .collect()
+}
+
+isolated_fixture_test! {
+    fn directory_scan_skips_opt_in_fixtures_unless_named [None] {
+        let temp_dir = TempDir::new().unwrap();
+        let opt_in_path = write_opt_in_fixture_tree(temp_dir.path());
+
+        let mut scanned = FixtureManager::new();
+        scanned.load_fixtures_from_dir(temp_dir.path()).unwrap();
+        let mut stems = loaded_stems(&scanned);
+        stems.sort();
+        assert_eq!(stems, ["regular", "regular_nested"]);
+
+        let mut explicit = FixtureManager::new();
+        explicit.load_fixture(&opt_in_path).unwrap();
+        assert_eq!(loaded_stems(&explicit), ["long"]);
+        assert!(explicit.fixtures()[0].1.is_opt_in());
+    }
+}
+
+isolated_fixture_test! {
+    fn profiling_filter_can_name_an_opt_in_fixture [Some("long")] {
+        let temp_dir = TempDir::new().unwrap();
+        write_opt_in_fixture_tree(temp_dir.path());
+
+        let mut manager = FixtureManager::new();
+        manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
+        assert_eq!(loaded_stems(&manager), ["long"]);
     }
 }
 

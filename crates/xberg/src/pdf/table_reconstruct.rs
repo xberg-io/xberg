@@ -31,6 +31,7 @@ const SHORT_WIDE_MIN_COLUMNS: usize = 6;
 const SHORT_WIDE_MAX_EMPTY_CELL_PERCENT: usize = 35;
 const LARGE_TABLE_MIN_COLUMNS: usize = 6;
 const DEFAULT_MIN_DATA_ROW_DIGIT_CELLS: usize = 3;
+const MAX_MERGED_HEADER_ROWS: usize = 2;
 const REPEATED_DATA_ROW_COUNT: usize = 3;
 const ROW_SHAPE_MIN_OVERLAP_PERCENT: usize = 80;
 const DENSE_SCALAR_MIN_DATA_ROWS: usize = 20;
@@ -51,7 +52,7 @@ const NUMERIC_COLUMN_MIN_NUMERIC_PERCENT: usize = 60;
 #[cfg(feature = "pdf")]
 use super::hierarchy::SegmentData;
 #[cfg(feature = "pdf")]
-use super::structure::lines::segments_are_touching;
+use super::structure::lines::{leading_opener_touches, segments_are_touching, trailing_marker_touches};
 
 /// Convert a PDF `SegmentData` to an `HocrWord` for table reconstruction, adding
 /// `advance_offset`/`top_offset` to the segment's upright-frame position before
@@ -67,7 +68,7 @@ use super::structure::lines::segments_are_touching;
 /// columns along the wrong axes. [`SegmentData::upright_origin`] rotates the
 /// origin back into the segment's own reading frame (identity for the
 /// unrotated case, matching the plain x/y this replaced) so the row/column
-/// clustering downstream in `native::table::cluster_words_into_vertical_regions`
+/// clustering downstream in `native::table::cluster_words_into_vertical_regions_with_rules`
 /// operates on the table's actual advance/cross axes instead of the page's.
 ///
 /// Standalone calls (no sibling segments) always pass `(0.0, 0.0)` offsets: a
@@ -322,12 +323,12 @@ fn merge_touching_segment_boundaries(
             per_segment_words[boundary].last(),
             per_segment_words[boundary + 1].first(),
         ) {
-            (Some(prev_word), Some(next_word)) => segments_are_touching(
-                &segments[boundary],
-                &prev_word.text,
-                &segments[boundary + 1],
-                &next_word.text,
-            ),
+            (Some(prev_word), Some(next_word)) => {
+                let (prev_seg, next_seg) = (&segments[boundary], &segments[boundary + 1]);
+                segments_are_touching(prev_seg, &prev_word.text, next_seg, &next_word.text)
+                    || trailing_marker_touches(prev_seg, &prev_word.text, next_seg, &next_word.text)
+                    || leading_opener_touches(prev_seg, &prev_word.text, next_seg, &next_word.text)
+            }
             _ => false,
         };
         if !is_touching {
@@ -669,13 +670,13 @@ fn post_process_table_inner(
     };
     let mut data_rows = table[data_start..].to_vec();
 
-    if header_rows.len() > 2 {
+    if header_rows.len() > MAX_MERGED_HEADER_ROWS {
         // Keep the established two-row header cap, but do not discard an
         // unusually long prefix inferred by `find_data_start`. Earlier rows
         // are still table content; demote them to data in their original
         // order while retaining the two rows closest to the detected data
         // boundary as the header. ~keep
-        let surplus_header_rows = header_rows.len() - 2;
+        let surplus_header_rows = header_rows.len() - MAX_MERGED_HEADER_ROWS;
         let mut demoted_rows: Vec<Vec<String>> = header_rows.drain(..surplus_header_rows).collect();
         demoted_rows.append(&mut data_rows);
         data_rows = demoted_rows;
@@ -1202,6 +1203,41 @@ fn post_process_table_inner(
         }
     }
 
+    // Two or more columns that each wrap their own sentences down the rows are side-by-side
+    // prose columns, not a table: a wrapped table cell continues in one column while the
+    // others hold values (nougat_005 page 1 read its SUMMARY and INDICATORS columns as a
+    // 16-row table, row by row). ~keep
+    if !definition_grid && !has_recurring_numeric_tracks(&processed) {
+        let wrapping_columns = (0..processed[0].len())
+            .filter(|&column| column_wrap_count(&processed[1..], column) >= MIN_COLUMN_WRAPS_FOR_PROSE)
+            .count();
+        if wrapping_columns >= 2 {
+            tracing::debug!(
+                target: "xberg::table_reconstruct",
+                reason = "parallel_column_wraps",
+                wrapping_columns,
+                rows = processed.len(),
+                cols = processed[0].len(),
+                "post_process_table_inner: rejected table"
+            );
+            return None;
+        }
+        if let Some(row) = processed
+            .windows(2)
+            .position(|pair| line_returns_to_row_start(&pair[0], &pair[1]))
+        {
+            tracing::debug!(
+                target: "xberg::table_reconstruct",
+                reason = "prose_line_returns_to_row_start",
+                row,
+                rows = processed.len(),
+                cols = processed[0].len(),
+                "post_process_table_inner: rejected table"
+            );
+            return None;
+        }
+    }
+
     {
         let num_cols = processed[0].len();
         let num_data_rows = processed.len() - 1;
@@ -1352,6 +1388,10 @@ fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
         .iter()
         .position(|row| digit_cell_count(row) >= DEFAULT_MIN_DATA_ROW_DIGIT_CELLS)
         .unwrap_or(0);
+    if first_numeric_row > MAX_MERGED_HEADER_ROWS && starts_with_complete_label_row(table) {
+        return 1;
+    }
+    let first_numeric_row = earliest_data_row_before(table, first_numeric_row);
     if !layout_guided
         && first_numeric_row > 0
         && table.get(first_numeric_row).is_some_and(|row| {
@@ -1382,6 +1422,55 @@ fn find_data_start(table: &[Vec<String>], layout_guided: bool) -> usize {
                 || looks_like_multiline_numeric_header(&table[first_numeric_row], &table[first_numeric_row + 1..start])
         })
         .unwrap_or(first_numeric_row)
+}
+
+/// In a table of three columns or fewer, `DEFAULT_MIN_DATA_ROW_DIGIT_CELLS` is met only where the
+/// label itself carries a digit (`06/03/24, cost $10,172,087) | 5,237 | 1,557,536`), so the first
+/// such row can sit deep in the body. `post_process_table_inner` keeps the two rows above it as
+/// the header and demotes the rest below that header, moving later body rows above earlier ones.
+/// A row above it with digits in all but one of its digit columns (at least two) is already data,
+/// so the data starts at the first such row. A prefix of at most two rows is never demoted and
+/// stays as inferred, which keeps year and unit header rows above their data. ~keep
+fn earliest_data_row_before(table: &[Vec<String>], first_numeric_row: usize) -> usize {
+    if first_numeric_row <= MAX_MERGED_HEADER_ROWS {
+        return first_numeric_row;
+    }
+    let Some(anchor) = table.get(first_numeric_row) else {
+        return first_numeric_row;
+    };
+    let digit_columns: Vec<usize> = anchor
+        .iter()
+        .enumerate()
+        .filter(|(_, cell)| cell_has_digit(cell))
+        .map(|(column, _)| column)
+        .collect();
+    let required = digit_columns.len().saturating_sub(1).max(2);
+    table[..first_numeric_row]
+        .iter()
+        .position(|row| {
+            digit_columns
+                .iter()
+                .filter(|&&column| row.get(column).is_some_and(|cell| cell_has_digit(cell)))
+                .count()
+                >= required
+        })
+        .unwrap_or(first_numeric_row)
+}
+
+/// Whether the first row labels every column and holds no digit, as a column header row does.
+///
+/// When the first row with enough digit cells sits deeper than the header can reach, the rows in
+/// between are body rows (section labels, wrapped descriptions), not more header rows: a
+/// complete label row above them is the whole header (the `Security | Shares | Value` row of
+/// pb_fqr-retail-blackrock-global-allocation-fund-inc_page8). ~keep
+fn starts_with_complete_label_row(table: &[Vec<String>]) -> bool {
+    table.first().is_some_and(|row| {
+        !row.is_empty() && row.iter().all(|cell| !cell.trim().is_empty()) && digit_cell_count(row) == 0
+    })
+}
+
+fn cell_has_digit(cell: &str) -> bool {
+    cell.chars().any(|character| character.is_ascii_digit())
 }
 
 fn looks_like_multiline_numeric_header(header: &[String], continuation_rows: &[Vec<String>]) -> bool {
@@ -2134,10 +2223,83 @@ pub(crate) fn is_well_formed_borderless_table(
     if !well_formed {
         return false;
     }
-    if !short_grid_has_positive_table_evidence(grid) {
+    if !short_grid_has_positive_table_evidence(grid) && !rules_every_row(grid, horizontal_rules) {
+        return false;
+    }
+    if looks_like_numbered_reference_list(grid) || looks_like_bulleted_list(grid) {
         return false;
     }
     ruled || straddled_boundary_ratio(region, column_positions) < MAX_STRADDLED_BOUNDARY_RATIO
+}
+
+/// Fewest rows a candidate must open with a bullet before it reads as a list.
+const BULLETED_LIST_MIN_ROWS: usize = 3;
+
+/// A bulleted list whose items wrap or carry a trailing qualifier: every row opens with a
+/// bullet or a dash and a word, and no cell holds a figure. 3562713 set a nested list of
+/// association types (`– has_many`, `– has_one :through`) with the qualifiers aligned in a
+/// second column, and it was admitted as a table. A table that indents its row labels with
+/// dashes still reports figures, which keeps it a table. ~keep
+fn looks_like_bulleted_list(grid: &[Vec<String>]) -> bool {
+    let rows: Vec<&Vec<String>> = grid
+        .iter()
+        .filter(|row| row.iter().any(|cell| !cell.trim().is_empty()))
+        .collect();
+    rows.len() >= BULLETED_LIST_MIN_ROWS
+        && rows.iter().all(|row| {
+            row.iter()
+                .map(|cell| cell.trim())
+                .find(|cell| !cell.is_empty())
+                .is_some_and(opens_bulleted_item)
+        })
+        && !rows
+            .iter()
+            .flat_map(|row| row.iter())
+            .any(|cell| cell.chars().any(|character| character.is_ascii_digit()))
+}
+
+fn opens_bulleted_item(cell: &str) -> bool {
+    let mut chars = cell.chars();
+    let marker = chars.next();
+    let is_marker = marker.is_some_and(|character| {
+        crate::pdf::structure::is_bullet_glyph(character) || matches!(character, '-' | '\u{2013}' | '\u{2014}')
+    });
+    is_marker
+        && chars.next().is_some_and(char::is_whitespace)
+        && chars.as_str().trim_start().starts_with(char::is_alphabetic)
+}
+
+/// Fewest rows, and smallest percentage of rows, that open a numbered bibliography entry
+/// before a candidate reads as a reference list. A two-column bibliography's entries wrap
+/// and contain years, volumes and pages, which the prose statistics read as table cells;
+/// on the benchmark corpus such lists were admitted as tables (1001.1811 p6, 1401.4991 p4)
+/// while no genuine table had a cell opening an entry. ~keep
+const REFERENCE_LIST_MIN_ENTRY_ROWS: usize = 3;
+const REFERENCE_LIST_MIN_ENTRY_ROW_PERCENT: usize = 25;
+
+fn looks_like_numbered_reference_list(grid: &[Vec<String>]) -> bool {
+    let entries = grid
+        .iter()
+        .filter(|row| row.iter().any(|cell| opens_numbered_reference(cell)))
+        .count();
+    entries >= REFERENCE_LIST_MIN_ENTRY_ROWS
+        && entries.saturating_mul(100) >= grid.len().saturating_mul(REFERENCE_LIST_MIN_ENTRY_ROW_PERCENT)
+}
+
+/// `[12] A. Author, ...`: a bracketed entry number followed by entry text. A bare `[12]`
+/// is a citation in a table's reference column, not an entry, and does not count.
+fn opens_numbered_reference(cell: &str) -> bool {
+    let Some(rest) = cell.trim_start().strip_prefix('[') else {
+        return false;
+    };
+    let Some((number, text)) = rest.split_once(']') else {
+        return false;
+    };
+    (1..=3).contains(&number.len())
+        && number.bytes().all(|byte| byte.is_ascii_digit())
+        && text.starts_with(char::is_whitespace)
+        && text.trim_start().starts_with(char::is_alphabetic)
+        && text.split_whitespace().nth(1).is_some()
 }
 
 /// Rows a candidate must have before [`post_process_table_inner`]'s prose tests
@@ -2171,6 +2333,15 @@ fn short_grid_has_positive_table_evidence(grid: &[Vec<String>]) -> bool {
     grid.len() >= MIN_ROWS_FOR_PROSE_FLOW_TESTS
         || is_predominantly_numeric_short_grid(grid)
         || has_label_like_header_row(grid)
+}
+
+/// Whether the candidate's own rules outnumber its rows, so at least one rule falls between
+/// every pair of rows as well as above and below them. Region rule counts are credited to the
+/// nearest candidate only, so a rule drawn for another table cannot supply them; a box around a
+/// short prose block carries two rules whatever its row count and is not enough. pdfa_001's
+/// form table (a header band over two rows of boxed fields) has five against three rows.
+fn rules_every_row(grid: &[Vec<String>], horizontal_rules: usize) -> bool {
+    horizontal_rules > grid.len()
 }
 
 /// Whether every column of the grid carries a short header label of its own.
@@ -2407,6 +2578,51 @@ fn is_dense_numeric_grid(grid: &[Vec<String>]) -> bool {
 
 /// Recurring numeric tracks are positive table evidence strong enough to
 /// distinguish wrapped row labels from prose flowing across inferred cells. ~keep
+/// Wrapped sentences a column must show before it counts as running prose.
+const MIN_COLUMN_WRAPS_FOR_PROSE: usize = 2;
+/// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label.
+const MIN_WRAPPED_LINE_WORDS: usize = 3;
+
+/// How many times `column` continues a sentence from one data row into the next: a cell of at
+/// least [`MIN_WRAPPED_LINE_WORDS`] words that ends without sentence or clause punctuation,
+/// followed by a cell that starts lowercase.
+fn column_wrap_count(data_rows: &[Vec<String>], column: usize) -> usize {
+    data_rows
+        .windows(2)
+        .filter(|pair| {
+            let above = pair[0].get(column).map_or("", |cell| cell.trim());
+            let below = pair[1].get(column).map_or("", |cell| cell.trim());
+            above.split_whitespace().count() >= MIN_WRAPPED_LINE_WORDS
+                && !above.ends_with(['.', '?', '!', ':', ';'])
+                && below.chars().next().is_some_and(char::is_lowercase)
+        })
+        .count()
+}
+
+/// Words the cell a line breaks out of needs before the break reads as running prose.
+const MIN_RETURNING_LINE_WORDS: usize = 6;
+
+/// Whether `below` carries on the prose line `above` breaks off, back at the start of the row.
+///
+/// A wrapped table cell continues under itself. A prose line instead returns to the left margin:
+/// `above`'s last cell ends mid-sentence in lowercase, `below` starts lowercase in an earlier
+/// column, and nothing in `below` sits under the cell it continues (nougat_005 page 3 split
+/// "... data for the purpos" / "es of monitoring ..." into a two-column table). ~keep
+fn line_returns_to_row_start(above: &[String], below: &[String]) -> bool {
+    let Some(last) = above.iter().rposition(|cell| !cell.trim().is_empty()) else {
+        return false;
+    };
+    let Some(first) = below.iter().position(|cell| !cell.trim().is_empty()) else {
+        return false;
+    };
+    let broken = above[last].trim();
+    first < last
+        && below.iter().skip(last).all(|cell| cell.trim().is_empty())
+        && broken.split_whitespace().count() >= MIN_RETURNING_LINE_WORDS
+        && broken.ends_with(char::is_lowercase)
+        && below[first].trim().starts_with(char::is_lowercase)
+}
+
 fn has_recurring_numeric_tracks(grid: &[Vec<String>]) -> bool {
     let Some(width) = grid.first().map(Vec::len) else {
         return false;
@@ -2626,6 +2842,105 @@ pub(crate) fn looks_like_code_listing(table_cells: &[Vec<String>]) -> bool {
         .count();
     (brace_count as f64) / (non_empty.len() as f64) >= CODE_BRACE_CELL_FRACTION
         || looks_like_declaration_grid(table_cells)
+        || looks_like_line_numbered_listing(table_cells)
+}
+
+/// Fewest rows a line-numbered listing must open with consecutive line numbers.
+const LINE_NUMBERED_LISTING_MIN_ROWS: usize = 3;
+
+/// A code listing printed with line numbers: its gutter reads as a first column of
+/// consecutive integers, and its indentation as further columns, so 3562713 (a Ruby gem's
+/// README) emitted three listings as tables. A genuine table may number its rows too, so
+/// the rows must also read as code: at least half carry a code token, and one a token no
+/// prose or figure carries (`::`, `=>`, a `:symbol`, a `snake_case` name, `def`, a comment).
+fn looks_like_line_numbered_listing(table_cells: &[Vec<String>]) -> bool {
+    let rows: Vec<(u32, String)> = table_cells
+        .iter()
+        .filter_map(|row| {
+            let text = row
+                .iter()
+                .map(|cell| cell.trim())
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let (number, rest) = text.split_once(' ').unwrap_or((text.as_str(), ""));
+            let number = number.parse::<u32>().ok()?;
+            Some((number, rest.to_string()))
+        })
+        .collect();
+    let numbered_rows = table_cells
+        .iter()
+        .filter(|row| row.iter().any(|cell| !cell.trim().is_empty()))
+        .count();
+    if rows.len() < LINE_NUMBERED_LISTING_MIN_ROWS
+        || rows.len() != numbered_rows
+        || rows.windows(2).any(|pair| pair[0].0.checked_add(1) != Some(pair[1].0))
+    {
+        return false;
+    }
+    let code_rows = rows.iter().filter(|(_, code)| has_code_token(code, false)).count();
+    code_rows * 2 >= rows.len() && rows.iter().any(|(_, code)| has_code_token(code, true))
+}
+
+/// Whether `text` carries a programming-language token. `strong_only` keeps to tokens that
+/// do not occur in prose, in a figure or in a parameter or link table: path and pair
+/// operators (a `//` comment, not a URL's `://`), a `:symbol`, `def`, and a `snake_case`
+/// identifier used as code: beside a keyword, or carrying a call, assignment or member
+/// access. A bare `snake_case` key heads a parameter table's rows, and a `#` is a numero
+/// sign as often as a comment, so neither is strong on its own.
+fn has_code_token(text: &str, strong_only: bool) -> bool {
+    const STRONG_OPERATORS: [&str; 3] = ["::", "=>", "->"];
+    const WEAK_KEYWORDS: [&str; 7] = ["end", "do", "class", "return", "import", "self", "nil"];
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let has_keyword = words.iter().any(|word| WEAK_KEYWORDS.contains(word));
+    let strong = STRONG_OPERATORS.iter().any(|operator| text.contains(operator))
+        || has_line_comment_slashes(text)
+        || words.iter().enumerate().any(|(index, word)| {
+            *word == "def"
+                || word
+                    .strip_prefix(':')
+                    .and_then(|rest| rest.chars().next())
+                    .is_some_and(char::is_alphabetic)
+                || (is_snake_case_word(word)
+                    && (has_keyword
+                        || word.contains(['(', '=', ';'])
+                        || is_member_access(word)
+                        || words.get(index + 1).is_some_and(|next| next.starts_with('='))))
+        });
+    strong
+        || (!strong_only
+            && (has_keyword
+                || text.contains(['=', '<', '>', '(', ';'])
+                || words.iter().any(|word| word.starts_with('#') || is_member_access(word))))
+}
+
+/// A `//` that is not the `://` of a URL scheme.
+fn has_line_comment_slashes(text: &str) -> bool {
+    text.match_indices("//").any(|(index, _)| !text[..index].ends_with(':'))
+}
+
+/// A word of two or more `_`-joined alphabetic-led parts, outside a path or URL.
+fn is_snake_case_word(word: &str) -> bool {
+    !word.contains('/')
+        && word
+            .split('_')
+            .filter(|part| part.chars().next().is_some_and(char::is_alphabetic))
+            .count()
+            >= 2
+}
+
+/// `receiver.member`: dot-joined identifiers, none empty, outside a path or URL. An
+/// abbreviation such as `e.g.` ends in an empty part and does not count.
+fn is_member_access(word: &str) -> bool {
+    let word = word.trim_end_matches([',', ';']);
+    !word.contains('/')
+        && word.contains('.')
+        && word.split('.').all(|part| {
+            part.chars().next().is_some_and(char::is_alphabetic)
+                && part
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || matches!(c, '_' | '(' | ')'))
+        })
 }
 
 fn looks_like_declaration_grid(table_cells: &[Vec<String>]) -> bool {
@@ -3191,6 +3506,63 @@ mod tests {
         assert_eq!(texts, vec!["100", "5"]);
     }
 
+    /// A BlackRock schedule of investments prints `01/15/38(c)` with the footnote marker in a
+    /// 4.66pt run raised over the 8pt date, and `SE,` with the comma as its own run. Both reached
+    /// the cell as two words and rendered `01/15/38 (c)` and `SE ,`.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn a_touching_trailing_marker_joins_the_word_before_it() {
+        let date = make_seg("5.53%, 01/15/38", 340.0, 500.0, 72.65, 8.0);
+        let marker = make_seg("(c)", 412.65, 501.9, 4.46, 4.664);
+        let words = segments_to_words(&[date, marker], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["5.53%,", "01/15/38(c)"]);
+
+        let name = make_seg("Argenx SE", 309.0, 500.0, 31.36, 8.0);
+        let comma = make_seg(",", 340.36, 500.0, 1.82, 8.0);
+        let words = segments_to_words(&[name, comma], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["Argenx", "SE,"]);
+    }
+
+    /// The marker join must not reach digits: a touching `(1,234)` or a word-spaced `(c)` stays
+    /// its own word.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn a_digit_run_or_a_spaced_marker_is_not_joined_as_a_trailing_marker() {
+        let label = make_seg("Total", 100.0, 500.0, 20.0, 8.0);
+        let amount = make_seg("(1,234)", 120.0, 500.0, 25.0, 8.0);
+        let words = segments_to_words(&[label, amount], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["Total", "(1,234)"]);
+
+        let date = make_seg("01/15/38", 100.0, 500.0, 30.0, 8.0);
+        let marker = make_seg("(c)", 132.0, 500.0, 4.5, 4.664);
+        let words = segments_to_words(&[date, marker], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["01/15/38", "(c)"]);
+    }
+
+    /// embedded_images_tables.pdf prints the header `resistance (Ω)` with `Ω` from a symbol
+    /// font: `(` ends 0.026pt before `Ω` starts and `)` starts 0.006pt after it ends. Both
+    /// brackets touch the symbol, so the cell is `(Ω)`; a spaced `(` stays apart.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn brackets_touching_a_symbol_from_another_font_join_it() {
+        let label = make_seg("resistance (", 309.43, 500.0, 36.43, 6.5);
+        let ohm = make_seg("\u{3a9}", 345.88, 500.0, 5.04, 6.5);
+        let close = make_seg(")", 350.93, 500.0, 2.41, 6.5);
+        let words = segments_to_words(&[label, ohm, close], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["resistance", "(\u{3a9})"]);
+
+        let label = make_seg("resistance (", 309.43, 500.0, 36.43, 6.5);
+        let ohm = make_seg("\u{3a9}", 348.0, 500.0, 5.04, 6.5);
+        let words = segments_to_words(&[label, ohm], 800.0);
+        let texts: Vec<&str> = words.iter().map(|word| word.text.as_str()).collect();
+        assert_eq!(texts, vec!["resistance", "(", "\u{3a9}"]);
+    }
+
     #[test]
     fn test_post_process_rejects_prose_as_table() {
         let table = vec![
@@ -3443,7 +3815,7 @@ mod tests {
     }
 
     #[test]
-    fn issue_1558_surplus_inferred_header_rows_are_demoted_not_dropped() {
+    fn issue_1558_parts_rows_keep_source_order_when_a_later_row_has_more_digits() {
         let table: Vec<Vec<String>> = (1..=18)
             .map(|row| {
                 vec![
@@ -3459,29 +3831,100 @@ mod tests {
             })
             .collect();
 
-        assert_eq!(find_data_start(&table, true), 6);
+        // Rows 1-6 already carry digits in two of row 7's three digit columns, so they are
+        // data, not a six-row header to be merged and demoted out of order.
+        assert_eq!(find_data_start(&table, true), 0);
         let processed = post_process_table(table, true, false).expect("dense parts table should remain valid");
 
-        // Six inferred header rows become one merged header plus four demoted
-        // data rows. No source row may disappear.
-        assert_eq!(processed.len(), 17);
-        let flattened = processed.iter().flatten().cloned().collect::<Vec<_>>().join(" ");
-        for row in 1..=18 {
-            let article = format!("8000{row:02}");
-            assert_eq!(
-                flattened.matches(&article).count(),
-                1,
-                "{article} must survive exactly once"
+        assert_eq!(processed.len(), 18);
+        for (index, row) in processed.iter().enumerate() {
+            let article = format!("8000{:02}", index + 1);
+            assert!(
+                row.iter().any(|cell| cell.contains(&article)),
+                "row {index} must hold {article}: {row:?}"
             );
         }
-        assert!(
-            processed[0]
-                .iter()
-                .any(|cell| cell.contains("800005") && cell.contains("800006"))
-        );
-        assert!(processed[1].iter().any(|cell| cell.contains("800001")));
-        assert!(processed[4].iter().any(|cell| cell.contains("800004")));
-        assert!(processed[5].iter().any(|cell| cell.contains("800007")));
+    }
+
+    #[test]
+    fn issue_1558_surplus_text_header_rows_are_demoted_not_dropped() {
+        let mut table: Vec<Vec<String>> = ["Catalogue", "Fasteners", "Screws and bolts", "Stainless steel"]
+            .iter()
+            .map(|title| vec![(*title).to_string(), String::new(), String::new(), String::new()])
+            .collect();
+        table.extend((1..=12).map(|row| {
+            vec![
+                format!("{row} 8000{row:02}"),
+                "Fastening screw".into(),
+                format!("{row},10"),
+                format!("package of {}", row * 10),
+            ]
+        }));
+
+        assert_eq!(find_data_start(&table, true), 4);
+        let processed = post_process_table(table, true, false).expect("dense parts table should remain valid");
+
+        // Four text header rows become one merged header plus two demoted data rows.
+        assert_eq!(processed.len(), 15);
+        assert!(processed[0][0].contains("Screws and bolts") && processed[0][0].contains("Stainless steel"));
+        assert_eq!(processed[1][0], "Catalogue");
+        assert_eq!(processed[2][0], "Fasteners");
+        assert!(processed[3][0].contains("800001"));
+    }
+
+    #[test]
+    fn narrow_holdings_table_starts_data_before_a_label_with_digits() {
+        let table: Vec<Vec<String>> = [
+            ["Kazakhstan - 0.0%(c)", "", ""],
+            ["Halyk Savings Bank of Kazakhstan", "", ""],
+            ["JSC, GDR", "28,078", "$ 697,332"],
+            ["Kaspi.KZ JSC, ADR", "13,193", "1,040,928"],
+            ["", "", "1,738,260"],
+            ["NXP Semiconductors NV", "107,259", "22,928,757"],
+            ["Teya Services Ltd., Series C, (Acquired", "", ""],
+            ["06/03/24, cost $10,172,087)(d)(f)(j)", "5,237", "1,557,536"],
+            ["Wolters Kluwer NV", "38,856", "6,052,172"],
+        ]
+        .iter()
+        .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+        .collect();
+
+        assert_eq!(find_data_start(&table, true), 2);
+        assert_eq!(find_data_start(&table, false), 2);
+    }
+
+    #[test]
+    fn complete_label_row_is_the_whole_header_above_section_rows() {
+        let table: Vec<Vec<String>> = [
+            ["Security", "Shares", "Value"],
+            ["Kazakhstan - 0.0%(c)", "", ""],
+            ["Halyk Savings Bank of Kazakhstan", "", ""],
+            ["JSC, GDR", "28,078", "$ 697,332"],
+            ["Teya Services Ltd., Series C, (Acquired", "", ""],
+            ["06/03/24, cost $10,172,087)(d)(f)(j)", "5,237", "1,557,536"],
+        ]
+        .iter()
+        .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+        .collect();
+
+        assert_eq!(find_data_start(&table, true), 1);
+        assert_eq!(find_data_start(&table, false), 1);
+    }
+
+    #[test]
+    fn label_digit_row_without_earlier_data_rows_keeps_its_header_prefix() {
+        let table: Vec<Vec<String>> = [
+            ["Schedule of rates", "", ""],
+            ["Effective 2025", "", ""],
+            ["Class", "Rate", "Limit"],
+            ["Plan 1", "1.25", "100"],
+            ["Plan 2", "1.50", "200"],
+        ]
+        .iter()
+        .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+        .collect();
+
+        assert_eq!(find_data_start(&table, true), 3);
     }
 
     #[test]
@@ -3877,6 +4320,55 @@ mod tests {
         );
     }
 
+    fn row(cells: &[&str]) -> Vec<String> {
+        cells.iter().map(|cell| (*cell).to_string()).collect()
+    }
+
+    /// nougat_005 pages 3 and 5: a commitment paragraph's line broke mid-word and its next line
+    /// returned to an earlier column, leaving the broken cell's column empty.
+    #[test]
+    fn a_prose_line_returning_to_an_earlier_column_reads_as_prose() {
+        let broken = row(&[
+            "Your organisation is committed to:",
+            "Ensuring that rigorous processes are implemented to collect data for the purpos",
+        ]);
+        let returned = row(&["es of monitoring the performance of the closed loop collaboration.", ""]);
+        assert!(line_returns_to_row_start(&broken, &returned));
+
+        let broken = row(&[
+            "",
+            "Your organisation",
+            "is committed to: Investigating opportunities to divert more than 50% of solid waste generated at f",
+        ]);
+        let returned = row(&[
+            "",
+            "acilities (factories, warehouses, offices, retail stores etc.) from landfill.",
+            "",
+        ]);
+        assert!(line_returns_to_row_start(&broken, &returned));
+    }
+
+    #[test]
+    fn a_table_row_after_a_long_unpunctuated_cell_is_not_a_returning_line() {
+        let described = row(&["timeout", "maximum number of seconds the client waits for a reply"]);
+        assert!(!line_returns_to_row_start(
+            &described,
+            &row(&["retries", "how often a failed request is sent again"])
+        ));
+        assert!(!line_returns_to_row_start(
+            &described,
+            &row(&["", "before the request is abandoned"])
+        ));
+        assert!(!line_returns_to_row_start(
+            &row(&["Operating expenses for the year ended", "1,234"]),
+            &row(&["excluding depreciation", ""])
+        ));
+        assert!(!line_returns_to_row_start(
+            &row(&["Note", "short wrapped label"]),
+            &row(&["continued", ""])
+        ));
+    }
+
     #[test]
     fn test_row_continuation_accepts_table_with_sentence_endings() {
         let table = vec![
@@ -3956,6 +4448,52 @@ mod tests {
             post_process_table(table, true, false).is_none(),
             "three incidental numeric tracks in five of eight prose rows must not bypass prose-flow rejection"
         );
+    }
+
+    #[test]
+    fn side_by_side_prose_columns_that_each_wrap_are_not_a_table() {
+        let rows: [[&str; 2]; 10] = [
+            ["SUMMARY", "INDICATORS"],
+            [
+                "For the 2021 APCO Annual Report, Myer Holdings Limited",
+                "This Annual Report shows the organisation's performance",
+            ],
+            [
+                "has achieved Level 3 (Advanced) for the core criteria. All se",
+                "against the APCO Packaging Sustainability Framework.",
+            ],
+            ["ven core criteria were answered and six out of six recommended", ""],
+            ["criteria were answered.", "CORE: All core criteria."],
+            ["", "TOTAL: Sum of all core and answered recommended"],
+            ["", "criteria."],
+            ["", "LEADERSHIP: All criteria that defines leadership on"],
+            ["", "packaging sustainability."],
+            ["", "OPERATIONS: All criteria related to business operations."],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        // Two columns, as the OCR grid of that page is after its empty tracks merge away.
+        assert!(post_process_table_inner(table, 2, false, None, false).is_none());
+    }
+
+    #[test]
+    fn a_wrapped_description_beside_a_value_column_stays_a_table() {
+        let rows: [[&str; 3]; 7] = [
+            ["Item", "Description", "Amount"],
+            ["Freight", "Carriage of the goods from the port", "1,200"],
+            ["", "to the warehouse in two loads", ""],
+            ["Storage", "Bonded storage for the first month", "640"],
+            ["", "at the agreed daily rate", ""],
+            ["Insurance", "Cover for the declared value.", "310"],
+            ["Handling", "Loading and unloading.", "95"],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert!(post_process_table_inner(table, 2, false, None, false).is_some());
     }
 
     #[test]
@@ -4962,6 +5500,76 @@ mod tests {
         let cleaned = post_process_table(grid, true, false).expect("declaration grid should survive table cleanup");
 
         assert!(looks_like_code_listing(&cleaned));
+    }
+
+    /// 3562713: Ruby listings printed with a line-number gutter were emitted as tables.
+    #[test]
+    fn line_numbered_listing_is_rejected_as_code() {
+        let ruby = grid_of(&[
+            &["1", "class Post < ActiveRecord::Base", ""],
+            &["2", "", "amoeba do"],
+            &["3", "", "set :state_tracker => \"open_for_editing\""],
+            &["4", "", "end"],
+            &["5", "end", ""],
+        ]);
+        assert!(looks_like_code_listing(&ruby));
+        let fused = grid_of(&[
+            &["19", "author.amoeba_dup"],
+            &["20", ""],
+            &["21", "author.save # this will pass validation"],
+        ]);
+        assert!(looks_like_code_listing(&fused));
+    }
+
+    #[test]
+    fn numbered_rows_of_a_genuine_table_are_not_code() {
+        let ranked = grid_of(&[
+            &["1", "Water (fresh)", "0", "32"],
+            &["2", "Water (salt)", "-2", "28"],
+            &["3", "Body temperature", "37", "98.6"],
+        ]);
+        assert!(
+            !looks_like_code_listing(&ranked),
+            "a rank column with figures is a table"
+        );
+        let gapped = grid_of(&[&["1", "def first", ""], &["3", "def third", ""], &["4", "end", ""]]);
+        assert!(!looks_like_code_listing(&gapped), "line numbers count up one at a time");
+    }
+
+    #[test]
+    fn numbered_link_table_is_not_code() {
+        let links = grid_of(&[
+            &["1", "https://example.com/docs?page_size=10"],
+            &["2", "https://api.example.org/v2/items?page_size=20"],
+            &["3", "http://cdn.example.net/assets?page_size=50"],
+        ]);
+        assert!(
+            !looks_like_code_listing(&links),
+            "a URL's :// is not a // comment, nor a query key a code identifier"
+        );
+    }
+
+    #[test]
+    fn numbered_parameter_table_is_not_code() {
+        let parameters = grid_of(&[
+            &["1", "max_retries", "3"],
+            &["2", "connect_timeout", "30 (seconds)"],
+            &["3", "log_level", "info"],
+        ]);
+        assert!(
+            !looks_like_code_listing(&parameters),
+            "a bare snake_case key is a parameter name, not code"
+        );
+    }
+
+    #[test]
+    fn row_number_at_u32_max_does_not_overflow() {
+        let wrapped = grid_of(&[
+            &["4294967295", "author.amoeba_dup"],
+            &["0", "author.save # done"],
+            &["1", "end"],
+        ]);
+        assert!(!looks_like_code_listing(&wrapped), "u32::MAX is not followed by 0");
     }
 
     #[test]
@@ -6388,6 +6996,97 @@ mod tests {
             is_well_formed_borderless_table(&grid, &region, &columns, 0),
             "numeric value cells are the positive evidence the short-region gate asks for"
         );
+    }
+
+    fn grid_of(rows: &[&[&str]]) -> Vec<Vec<String>> {
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn numbered_reference_list_is_not_well_formed_even_when_ruled() {
+        let entries: [[&str; 2]; 6] = [
+            [
+                "[1] Bartelmann M., Doran M., 2006, A&A, 454, 27",
+                "[4] Eke V., Cole S., 1996, MNRAS, 282, 263",
+            ],
+            ["Wetterich C., 2005, A&A, 454, 27", "Frenk C. S., 1996, MNRAS, 282, 263"],
+            [
+                "[2] Basilakos S., 2003, ApJ, 590, 636",
+                "[5] Kirkman D., 2003, ApJS, 149, 1",
+            ],
+            ["Polarski D., 2008, PRD, 77, 1", "Tytler D., 2003, ApJS, 149, 1"],
+            [
+                "[3] Carroll S. M., 2001, LRR, 4, 1",
+                "[6] Linder E. V., 2005, PRD, 72, 4",
+            ],
+            [
+                "Press W. H., 1992, ARA&A, 30, 499",
+                "Turner E. L., 1992, ARA&A, 30, 499",
+            ],
+        ];
+        let region = gh1760_clean_two_column_region(entries.len());
+        let columns = vec![0u32, 200];
+        let with_markers: Vec<&[&str]> = entries.iter().map(|row| &row[..]).collect();
+        let without_markers: Vec<Vec<String>> = entries
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|cell| cell.split_once("] ").map_or(*cell, |(_, text)| text).to_string())
+                    .collect()
+            })
+            .collect();
+
+        assert!(
+            is_well_formed_borderless_table(&without_markers, &region, &columns, 0),
+            "precondition: the same cells without entry numbers pass every other test"
+        );
+        for rules in [0, MIN_HORIZONTAL_RULES_FOR_ADMISSION] {
+            assert!(
+                !is_well_formed_borderless_table(&grid_of(&with_markers), &region, &columns, rules),
+                "rows opening `[n] Author` entries are a bibliography, not a table (rules={rules})"
+            );
+        }
+    }
+
+    /// 3562713: a nested list of association types with its qualifiers aligned in a
+    /// second column was admitted as a table.
+    #[test]
+    fn bulleted_list_with_aligned_qualifiers_is_not_a_table() {
+        let list = grid_of(&[
+            &["\u{2013} has_many", ""],
+            &["\u{2013} has_one", ":through"],
+            &["\u{2013} has_many", ":through"],
+            &["\u{2013} has_and_belongs_to_many", ""],
+        ]);
+        assert!(looks_like_bulleted_list(&list));
+        let region = gh1760_clean_two_column_region(list.len());
+        assert!(!is_well_formed_borderless_table(&list, &region, &[0, 200], 0));
+
+        let indented_ledger = grid_of(&[
+            &["\u{2013} Interest income", "1,250"],
+            &["\u{2013} Fee income", "420"],
+            &["\u{2013} Other income", "35"],
+        ]);
+        assert!(
+            !looks_like_bulleted_list(&indented_ledger),
+            "dash-indented row labels with figures are a table"
+        );
+    }
+
+    #[test]
+    fn bare_citation_column_does_not_read_as_a_reference_list() {
+        let region = gh1760_clean_two_column_region(4);
+        let columns = vec![0u32, 200];
+        let grid = grid_of(&[
+            &["Method", "Ref.", "Accuracy"],
+            &["ResNet", "[12]", "76.1"],
+            &["ViT", "[7]", "81.8"],
+            &["Swin", "[21]", "83.3"],
+        ]);
+
+        assert!(is_well_formed_borderless_table(&grid, &region, &columns, 0));
     }
 
     #[test]

@@ -321,7 +321,7 @@ fn reference_projection() -> (Vec<SegmentData>, AHashSet<SegmentKey>) {
         hex::encode(Sha256::digest(&bytes)),
         "1508aa9a0e12e8aad8bbc594a99ded16ce7517518e2689fc6002e59263c3c005"
     );
-    let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
+    let doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
     let tables = crate::pdf::native::table::extract_ruled_tables(&doc, &mut Default::default())
         .unwrap()
         .tables;
@@ -336,7 +336,7 @@ fn reference_projection() -> (Vec<SegmentData>, AHashSet<SegmentKey>) {
         .collect();
     assert_eq!(sources.len(), 1, "Native cell membership was retained");
     let (pages, _) = crate::pdf::native::hierarchy::script_evidence::extract_all_segment_carriers(
-        &mut doc,
+        &doc,
         crate::pdf::native::hierarchy::ArtifactRetention::default(),
     )
     .unwrap();

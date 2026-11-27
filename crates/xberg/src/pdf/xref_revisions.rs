@@ -30,15 +30,15 @@
 //! chain from the final xref backwards to build a sorted list of historical offsets
 //! (excluding the current/latest xref that represents the live state).
 //!
-//! For `/Info` metadata we use the already-loaded `lopdf::Document`, which merges
-//! all objects across revisions, so author and date are resolved from the current
-//! object graph.
+//! For `/Info` metadata we read the document's current object graph, so author
+//! and date are resolved from the latest revision.
 //!
 //! # No-revision case
 //!
 //! Single-save PDFs (no `/Prev` in the trailer) return `None`. Only PDFs with at
 //! least one prior xref section return `Some(Vec<DocumentRevision>)`.
 
+use crate::pdf::object_graph::{self, ObjectGraph};
 use crate::types::revisions::{DocumentRevision, RevisionDelta, RevisionKind};
 
 /// Maximum number of revisions to emit. Guards against pathological inputs with
@@ -160,28 +160,20 @@ fn extract_prev_from_trailer(slice: &[u8]) -> Option<usize> {
     parse_decimal_value(trimmed)
 }
 
-/// Extract `/Info` metadata from a `lopdf::Document`.
+/// Extract `/Info` metadata from the document's object graph.
 ///
 /// Returns `(author, timestamp)` where `timestamp` is the `/ModDate` field
 /// (preferred) or `/CreationDate` if `/ModDate` is absent.
-///
-/// Uses `lopdf` directly (already a dependency for bookmarks extraction) so we
-/// share the loaded document rather than re-parsing.
-fn extract_lopdf_info_metadata(document: &lopdf::Document) -> (Option<String>, Option<String>) {
+fn extract_info_metadata<G: ObjectGraph>(document: &G) -> (Option<String>, Option<String>) {
     use lopdf::Object;
 
-    let info_id = match document
-        .trailer
-        .get(b"Info")
-        .ok()
-        .and_then(|obj| obj.as_reference().ok())
-    {
+    let info_id = match document.trailer_entry(b"Info").and_then(|obj| obj.as_reference().ok()) {
         Some(id) => id,
         None => return (None, None),
     };
 
-    let info_dict = match document.get_object(info_id) {
-        Ok(Object::Dictionary(dict)) => dict,
+    let info_dict = match object_graph::get_object(document, info_id) {
+        Some(Object::Dictionary(dict)) => dict,
         _ => return (None, None),
     };
 
@@ -362,22 +354,25 @@ fn parse_decimal_after(content: &[u8], after: usize) -> Option<usize> {
 /// # Fields populated
 ///
 /// - `revision_id`: `"xref-offset-{N}"` (byte offset of the historical xref).
-/// - `author`: from `/Info/Author` via the already-loaded `lopdf::Document`.
+/// - `author`: from `/Info/Author` in the document's object graph.
 /// - `timestamp`: from `/Info/ModDate` or `/Info/CreationDate`, ISO-8601 when parseable.
 /// - `kind`: [`RevisionKind::Insertion`] as placeholder (PDF revisions carry no typed
 ///   change classification; [`RevisionKind`] is not `#[non_exhaustive]` so we cannot
 ///   add `Snapshot` without a breaking change).
 /// - `anchor`: `None` — whole-file revisions have no paragraph-level anchor.
 /// - `delta`: [`RevisionDelta::default()`] — per-revision content extraction deferred.
-pub(crate) fn extract_pdf_xref_revisions(content: &[u8], document: &lopdf::Document) -> Option<Vec<DocumentRevision>> {
-    let final_offset = document.xref_start;
+pub(crate) fn extract_pdf_xref_revisions<G: ObjectGraph>(
+    content: &[u8],
+    document: &G,
+) -> Option<Vec<DocumentRevision>> {
+    let final_offset = document.xref_start();
     let historical_offsets = collect_prev_chain(content, final_offset);
 
     if historical_offsets.is_empty() {
         return None;
     }
 
-    let (author, timestamp) = extract_lopdf_info_metadata(document);
+    let (author, timestamp) = extract_info_metadata(document);
 
     let revisions: Vec<DocumentRevision> = historical_offsets
         .into_iter()

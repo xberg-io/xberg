@@ -8,6 +8,12 @@ on:
         required: false
         default: "900"
         type: string
+      profile:
+        description: "full: every release cell, then publish. smoke: setup plus one cell per benchmark job type, validated and aggregated, never published"
+        required: false
+        default: full
+        type: choice
+        options: [full, smoke]
 
 env:
   ITERATIONS: "3"
@@ -28,7 +34,7 @@ env:
 
 concurrency:
   group: benchmarks-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -101,7 +107,12 @@ jobs:
       - name: Validate benchmark scripts
         run: mise run benchmark:validate:scripts
 
+      # Three fat-LTO all-feature links run in this job (harness, instrumented CLI, CLI); a run with
+      # no swap was OOM-killed (exit 143). Take 32 GiB when the disk allows, never less than 16. ~keep
       - name: Provision swap for fat-LTO release links
+        env:
+          SWAP_SIZE_GIB: "32"
+          SWAP_MIN_GIB: "16"
         run: mise run benchmark:setup:swap
 
       - name: Cache benchmark harness
@@ -109,8 +120,33 @@ jobs:
         with:
           build-profile: release
 
+      # Same cargo arguments as the build below, or the symbol names differ (ADR-0020). Neither
+      # passes --target, so the instrumentation also reaches build scripts; their profiles land
+      # in the build directory, which training ignores. ~keep
+      - name: Generate the linker order file
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR="$RUNNER_TEMP/order-file-target" python3 scripts/ci/rust/order_file.py generate \
+            --work-dir "$RUNNER_TEMP/order-file" --out "$RUNNER_TEMP/xberg.order" \
+            -- --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'
+          rm -rf "$RUNNER_TEMP/order-file-target"
+
+      # `ort-dynamic` matches the released CLI: ONNX Runtime is not linked and loads on first
+      # model use, from the ORT_DYLIB_PATH each benchmark job's setup-onnx-runtime exports.
+      # `heic-dynamic` does the same for libheif (ADR-0019), found at /usr/local/lib where
+      # install-system-deps puts it. The --config override drops libheif-sys's link request as
+      # publish.yaml's cli-binaries job does; it stays on this command line so the harness and the
+      # validate-gt `cargo run` keep linking libheif. ~keep
       - name: Build xberg-cli (release, all features + Sceptre tract diagnostic)
-        run: cargo build --locked --release -p xberg-cli --features all,xberg/sceptre-ocr-tract
+        env:
+          XBERG_ORDER_FILE: ${{ runner.temp }}/xberg.order
+          XBERG_LINK_MAP: ${{ runner.temp }}/xberg.map
+        run: cargo build --locked --release -p xberg-cli --features all,ort-dynamic,heic-dynamic,xberg/sceptre-ocr-tract --config 'target.aarch64-unknown-linux-gnu.heif.rustc-link-lib=[]'
+
+      - name: Verify the linker applied the order file
+        run: >-
+          python3 scripts/ci/rust/order_file.py verify-map
+          --order-file "$RUNNER_TEMP/xberg.order" --map "$RUNNER_TEMP/xberg.map"
 
       # Bench cohorts span pdf/office/markup/ebook/email/data/images across the
       # xberg + 6 competitor jobs -- no glob subset is safe here. ~keep
@@ -141,7 +177,10 @@ jobs:
           --fixtures tools/benchmark-harness/fixtures --strict
 
       - name: Validate workflow matrix against harness contracts
-        run: scripts/ci/benchmarks/validate-workflow-matrix.py
+        run: |
+          set -euo pipefail
+          scripts/ci/benchmarks/validate-workflow-matrix.py --profile full
+          scripts/ci/benchmarks/validate-workflow-matrix.py --profile smoke
 
       - name: Package reference corpus cache
         run: tar -C test_documents -cf corpus-cache.tar .corpus-cache/pdf .corpus-cache/ground_truth
@@ -249,7 +288,7 @@ jobs:
           --test fixture_validation --test aggregate_schema
 
   prefetch-tika:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.profile != 'smoke'
     name: Prefetch Apache Tika
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
@@ -300,6 +339,8 @@ jobs:
           - sceptre-ort
           - sceptre-ort-layout
           - sceptre-ort-autorotate
+          - auto-ocr
+          - auto-ocr-paddle
         output_format: [markdown, plaintext]
         mode: [single-file, batch]
         cohort:
@@ -311,12 +352,18 @@ jobs:
           - native-email-fast
           - native-data-fast
           - ocr-images-fast
+        # One value per run; `exclude` entries keyed on `profile: smoke` trim a smoke run to the
+        # cells in bench_matrix's SMOKE_ARTIFACTS (validate-workflow-matrix.py --profile smoke). ~keep
+        profile: ["${{ inputs.profile || 'full' }}"]
         # The layout pipeline only benefits rendered-page formats (PDF, images); for the other
         # families a layout run would merely duplicate baseline, so drop those cells.
         # The PaddleOCR-engine variants (baseline-paddle, layout-paddle) force OCR, so they run ONLY
         # on the OCR cohorts (ocr-pdf-fast-b4, ocr-images-fast); drop them from every non-OCR cohort.
         # Sceptre ORT remains a release comparison for OCR PDFs. Its image coverage runs against the
         # bounded structured-image diagnostic cohort below, outside the published release contract.
+        # Layout pipelines run markdown only (plain output discards layout structure). The auto-OCR
+        # variants leave force_ocr unset and run only on the OCR PDF cohort (image fixtures are OCR'd
+        # regardless, so an image cell would duplicate the baseline); they are optional cells.
         # NOTE: keep this block a clean list of `- {...}` entries — the validate-workflow-matrix.py
         # exclude parser stops at the first non-entry line, so do not intersperse comments here.
         exclude:
@@ -358,6 +405,39 @@ jobs:
           - { pipeline: sceptre-ort-autorotate, cohort: native-email-fast }
           - { pipeline: sceptre-ort-autorotate, cohort: native-data-fast }
           - { pipeline: sceptre-ort-autorotate, cohort: ocr-images-fast }
+          - { pipeline: layout, output_format: plaintext }
+          - { pipeline: layout-paddle, output_format: plaintext }
+          - { pipeline: sceptre-ort-layout, output_format: plaintext }
+          - { pipeline: auto-ocr, cohort: native-pdf-fast-b8 }
+          - { pipeline: auto-ocr, cohort: native-office-fast }
+          - { pipeline: auto-ocr, cohort: native-markup-fast }
+          - { pipeline: auto-ocr, cohort: native-ebook-fast }
+          - { pipeline: auto-ocr, cohort: native-email-fast }
+          - { pipeline: auto-ocr, cohort: native-data-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-pdf-fast-b8 }
+          - { pipeline: auto-ocr-paddle, cohort: native-office-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-markup-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-ebook-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-email-fast }
+          - { pipeline: auto-ocr-paddle, cohort: native-data-fast }
+          - { pipeline: auto-ocr, cohort: ocr-images-fast }
+          - { pipeline: auto-ocr-paddle, cohort: ocr-images-fast }
+          - { profile: smoke, pipeline: layout }
+          - { profile: smoke, pipeline: baseline-paddle }
+          - { profile: smoke, pipeline: layout-paddle }
+          - { profile: smoke, pipeline: sceptre-ort }
+          - { profile: smoke, pipeline: sceptre-ort-layout }
+          - { profile: smoke, pipeline: sceptre-ort-autorotate }
+          - { profile: smoke, pipeline: auto-ocr }
+          - { profile: smoke, pipeline: auto-ocr-paddle }
+          - { profile: smoke, output_format: plaintext }
+          - { profile: smoke, cohort: native-office-fast }
+          - { profile: smoke, cohort: native-markup-fast }
+          - { profile: smoke, cohort: native-ebook-fast }
+          - { profile: smoke, cohort: native-email-fast }
+          - { profile: smoke, cohort: native-data-fast }
+          - { profile: smoke, mode: batch, cohort: ocr-pdf-fast-b4 }
+          - { profile: smoke, mode: batch, cohort: ocr-images-fast }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -442,6 +522,52 @@ jobs:
         if: contains(matrix.pipeline, 'paddle')
         uses: ./.github/actions/setup-paddle-ocr-models
 
+      # ~keep The default Tesseract image route re-reads an unreliable photo with PaddleOCR only
+      # when the default PaddleOCR models (pp-ocrv6 det, rec and dict, textline classifier) are
+      # already cached (`OcrConfig::image_paddle_fallback`); it never downloads them itself. One
+      # PaddleOCR extraction fetches exactly the set the fallback probes. The key hashes the pinned
+      # model list (model_manager.rs) and the default version and tier (config.rs).
+      # Layout legs never take the fallback (layout detection makes a request ineligible).
+      - name: Cache default PaddleOCR models (image fallback)
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface/hub
+          key: paddle-ocr-v6-default-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crates/xberg/src/paddle_ocr/model_manager.rs', 'crates/xberg/src/paddle_ocr/config.rs') }}
+      - name: Pre-warm default PaddleOCR models (image fallback)
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if ./target/release/xberg extract test_documents/images/test_hello_world.png \
+              --ocr true --force-ocr true --ocr-backend paddle-ocr --ocr-language eng \
+              --no-cache true --format json >/dev/null; then
+              exit 0
+            fi
+            echo "::warning::PaddleOCR model pre-warm attempt $attempt failed" >&2
+            sleep $((attempt * 20))
+          done
+          echo "::error::PaddleOCR models could not be fetched for the image fallback" >&2
+          exit 1
+
+      # ~keep Runs before the benchmark: a missing model, a changed gate or a build without
+      # PaddleOCR would let every image row silently keep Tesseract's read. cord_receipt_02 is an
+      # ocr-images-fast photo the fallback must replace; failing here leaves this cell without
+      # results, so validate-artifacts blocks publication instead of publishing a zero-fire run.
+      - name: Assert the PaddleOCR image fallback fires
+        if: matrix.cohort == 'ocr-images-fast' && matrix.pipeline == 'baseline'
+        run: |
+          set -euo pipefail
+          result="$(./target/release/xberg extract test_documents/images/cord_receipt_02.jpg \
+            --ocr-language eng --no-cache true --format json)"
+          page_backend="$(jq -r '.result.pages[0].ocr_confidence.backend // "none"' <<<"$result")"
+          fallback_backend="$(jq -r '.result.metadata.ocr_fallback_backend // "none"' <<<"$result")"
+          if [ "$page_backend" != "paddle-ocr" ] && [ "$fallback_backend" != "paddle-ocr" ]; then
+            echo "::error::PaddleOCR image fallback did not fire on cord_receipt_02.jpg (pages[0].ocr_confidence.backend: $page_backend, metadata.ocr_fallback_backend: $fallback_backend)" >&2
+            exit 1
+          fi
+          echo "PaddleOCR image fallback fired (pages[0].ocr_confidence.backend: $page_backend, metadata.ocr_fallback_backend: $fallback_backend)"
+
       - name: Pre-warm Sceptre ORT models
         if: contains(matrix.pipeline, 'sceptre-ort')
         env:
@@ -500,7 +626,7 @@ jobs:
   # Pdfium is part of the native cohort's pinned release contract, so the `bench-` prefix keeps
   # these required cells visible to the workflow/contract validator and aggregation gate. ~keep
   bench-pdfium:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.profile != 'smoke'
     name: pdfium-benchmark (baseline, ${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
@@ -589,7 +715,7 @@ jobs:
           retention-days: 30
 
   sceptre-structured-diagnostic:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.profile != 'smoke'
     name: sceptre structured-image diagnostic (${{ matrix.pipeline }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
@@ -707,6 +833,17 @@ jobs:
           - native-markup-fast
           - native-data-fast
           - ocr-images-fast
+        # One value per run; `exclude` entries keyed on `profile: smoke` trim a smoke run to the
+        # cells in bench_matrix's SMOKE_ARTIFACTS (validate-workflow-matrix.py --profile smoke). ~keep
+        profile: ["${{ inputs.profile || 'full' }}"]
+        exclude:
+          - { profile: smoke, mode: batch }
+          - { profile: smoke, output_format: plaintext }
+          - { profile: smoke, cohort: ocr-pdf-fast-b4 }
+          - { profile: smoke, cohort: native-office-fast }
+          - { profile: smoke, cohort: native-markup-fast }
+          - { profile: smoke, cohort: native-data-fast }
+          - { profile: smoke, cohort: ocr-images-fast }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -777,21 +914,23 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.EasyOCR
-          key: docling-easyocr-en-ko-ja-v1-${{ runner.os }}-${{ runner.arch }}
+          key: docling-easyocr-en-ko-ja-v2-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Prefetch EasyOCR language models (en, ko, ja)
+      - name: Prefetch EasyOCR language models (en, latin, ko, ja)
         if: steps.easyocr-cache.outputs.cache-hit != 'true'
         env:
           UV_NO_SYNC: "1"
         run: |
           set -euo pipefail
-          # Docling's default OCR engine is EasyOCR; the image OCR cohort forwards
-          # Korean/Japanese, so prefetch those recognition models (plus the shared
-          # detection model) into ~/.EasyOCR to keep the download out of the timed run.
+          # Docling's default OCR engine is EasyOCR. docling_extract.py maps `eng` to ["en"]
+          # (english_g2) and leaves unmapped languages such as `deu` on Docling's default
+          # ["fr", "de", "es", "en"] (latin_g2); the image cohort forwards Korean/Japanese.
+          # Prefetch each recognition model (plus the shared detection model) into ~/.EasyOCR
+          # to keep the download out of the timed run.
           uv run --no-sync python - <<'PY'
           import easyocr
 
-          for langs in (["en", "ko"], ["ja", "en"]):
+          for langs in (["en"], ["fr", "de", "es", "en"], ["en", "ko"], ["ja", "en"]):
               easyocr.Reader(langs, gpu=False, verbose=False)
           PY
 
@@ -818,7 +957,7 @@ jobs:
     name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
+      ${{ github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -920,7 +1059,7 @@ jobs:
     name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
+      ${{ github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1034,7 +1173,7 @@ jobs:
     name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust, prefetch-tika]
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && needs.prefetch-tika.result == 'success' && !cancelled()) }}
+      ${{ github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (needs.setup.result == 'success' && needs.prefetch-tika.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
@@ -1129,7 +1268,7 @@ jobs:
     name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust]
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && !cancelled()) }}
+      ${{ github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (needs.setup.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1243,7 +1382,7 @@ jobs:
     # repo (scripts + fixtures), not the built harness, so it runs concurrently
     # with the FFI/harness build from the first stage instead of waiting for it.
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (!cancelled()) }}
+      ${{ github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (!cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1367,7 +1506,7 @@ jobs:
     name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, ${{ matrix.cohort }})
     needs: [setup, bench-rust, prefetch-mineru-models]
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (needs.setup.result == 'success' && needs.prefetch-mineru-models.result == 'success' && !cancelled()) }}
+      ${{ github.ref == 'refs/heads/main' && inputs.profile != 'smoke' && (needs.setup.result == 'success' && needs.prefetch-mineru-models.result == 'success' && !cancelled()) }}
     runs-on: ubuntu-24.04-arm
     env:
       MISE_ENV: ci
@@ -1537,7 +1676,19 @@ jobs:
       matrix:
         mode: [single-file, batch]
         output_format: [markdown, plaintext]
-        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4]
+        # lit converts office, csv and tsv through LibreOffice (installed below) and rasterizes
+        # images itself. Markup, ebook and email hold no format lit accepts. ~keep
+        cohort: [native-pdf-fast-b8, ocr-pdf-fast-b4, native-office-fast, native-data-fast, ocr-images-fast]
+        # One value per run; `exclude` entries keyed on `profile: smoke` trim a smoke run to the
+        # cells in bench_matrix's SMOKE_ARTIFACTS (validate-workflow-matrix.py --profile smoke). ~keep
+        profile: ["${{ inputs.profile || 'full' }}"]
+        exclude:
+          - { profile: smoke, mode: batch }
+          - { profile: smoke, output_format: plaintext }
+          - { profile: smoke, cohort: ocr-pdf-fast-b4 }
+          - { profile: smoke, cohort: native-office-fast }
+          - { profile: smoke, cohort: native-data-fast }
+          - { profile: smoke, cohort: ocr-images-fast }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1583,15 +1734,48 @@ jobs:
           cache-key-prefix: benchmarks-liteparse
           use-sccache: "true"
 
-      - name: Install system tesseract (liteparse default feature)
+      # The harness declares liteparse's office formats only when a LibreOffice binary is
+      # discoverable, as lit needs one to convert them. ~keep
+      - name: Install system tesseract (liteparse default feature) and LibreOffice
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libtesseract-dev libleptonica-dev
+          sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc libreoffice-impress
+          command -v soffice
 
       - name: Install liteparse CLI (lit)
         run: |
-          cargo install liteparse --version 2.21.0 --locked
+          cargo install liteparse --version 2.21.2 --locked
           lit --version
+
+      # lit links the system libtesseract, so its OCR results depend on the apt Tesseract build;
+      # record which one in the run log and the job summary. ~keep
+      - name: Log liteparse OCR provenance
+        run: |
+          set -euo pipefail
+          lit_path="$(command -v lit)"
+          tesseract_version="$(tesseract --version 2>&1)"
+          linked="$(ldd "$lit_path" | grep -E 'lib(tesseract|leptonica|lept)' || echo "no dynamic libtesseract/leptonica link")"
+          printf 'lit: %s (%s)\n%s\nlinked:\n%s\n' "$(lit --version)" "$lit_path" "$tesseract_version" "$linked"
+          {
+            echo "### liteparse OCR provenance"
+            echo '```'
+            echo "lit: $(lit --version) ($lit_path)"
+            echo "$tesseract_version"
+            echo "linked:"
+            echo "$linked"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      # lit downloads tessdata for a language on first use; fetch every language the OCR cohorts
+      # declare before the timed run, so no download is measured as extraction time. ~keep
+      - name: Pre-warm liteparse OCR languages
+        run: |
+          set -euo pipefail
+          for language in eng deu jpn_vert; do
+            lit parse test_documents/pdf/non_searchable.pdf --format text --ocr-backend tesseract \
+              --ocr-language "$language" --quiet > /dev/null
+          done
 
       - name: Run benchmark
         env:
@@ -1630,12 +1814,23 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
-    # MinerU prefetch is a HARD gate: if it fails, do not publish a partial
+    # MinerU prefetch is a HARD gate for a full run: if it fails, do not publish a partial
     # baseline -- skip aggregation so the whole run fails. Other frameworks stay
-    # soft (always() tolerates their failures); only prefetch is mandatory.
+    # soft (always() tolerates their failures); only prefetch is mandatory. A smoke run
+    # skips MinerU entirely and never publishes.
     if: >-
-      ${{ github.ref == 'refs/heads/main' && (always() && !cancelled() && needs.prefetch-mineru-models.result == 'success') }}
+      ${{ github.ref == 'refs/heads/main' && (always() && !cancelled() && (needs.prefetch-mineru-models.result == 'success' || inputs.profile == 'smoke')) }}
+    env:
+      MATRIX_PROFILE: ${{ inputs.profile || 'full' }}
+      # The cohorts this profile produces cells for (bench_matrix's contract_for). ~keep
+      PROFILE_COHORTS: ${{ inputs.profile == 'smoke' && 'native ocr images' || 'native ocr office markup ebook email data images' }}
     steps:
+      - name: Require the setup job
+        if: needs.setup.result != 'success'
+        run: |
+          echo "::error::setup job result is '${{ needs.setup.result }}': the benchmark harness was never built, so results cannot be validated or aggregated"
+          exit 1
+
       - name: Create GitHub App token (if credentials available)
         id: app-token
         # Optional: BOT_APP_ID/BOT_APP_PRIVATE_KEY may be unset (e.g. forked runs), and the
@@ -1744,7 +1939,7 @@ jobs:
         if: always()
         run: |
           set -uo pipefail
-          for cohort in native ocr office markup ebook email data images; do
+          for cohort in $PROFILE_COHORTS; do
             root="benchmark-artifacts/${cohort}"
             echo "=== ${cohort} artifacts (${root}) ==="
             if [ ! -d "$root" ]; then
@@ -1773,7 +1968,7 @@ jobs:
             [data]=native-data-fast
             [images]=ocr-images-fast
           )
-          for clicohort in native ocr office markup ebook email data images; do
+          for clicohort in $PROFILE_COHORTS; do
             base="${COHORT_BASENAME[$clicohort]}"
             # mkdir so a cohort whose required producer emitted nothing yields the validator's
             # "missing artifacts" contract error rather than an opaque read_dir failure.
@@ -1786,14 +1981,15 @@ jobs:
               --fixtures-root tools/benchmark-harness/fixtures \
               --source-sha '${{ needs.setup.outputs.source-sha }}' \
               --run-id '${{ github.run_id }}' \
-              --iterations '${{ env.ITERATIONS }}'
+              --iterations '${{ env.ITERATIONS }}' \
+              --profile "$MATRIX_PROFILE"
           done
 
       - name: Consolidate results (all cohorts)
         if: ${{ always() && steps.validate-artifacts.outcome == 'success' }}
         run: |
           set -euo pipefail
-          for clicohort in native ocr office markup ebook email data images; do
+          for clicohort in $PROFILE_COHORTS; do
             INPUTS=$(find "benchmark-artifacts/$clicohort" -mindepth 1 -maxdepth 1 -type d | sort | paste -sd, -)
             ./target/release/benchmark-harness consolidate \
               --inputs "$INPUTS" \
@@ -1805,19 +2001,20 @@ jobs:
         if: ${{ always() && steps.validate-artifacts.outcome == 'success' }}
         run: |
           set -euo pipefail
-          for clicohort in native ocr office markup ebook email data images; do
+          for clicohort in $PROFILE_COHORTS; do
             # Pass --fixtures-root explicitly (as the raw-artifact step above does): without it the
             # binary falls back to a compile-time env!("CARGO_MANIFEST_DIR") path baked on the
             # bench-rust build runner (/home/runner/_work/...), which does not exist on this runner.
             ./target/release/benchmark-harness validate-artifacts \
               --cohort "$clicohort" \
               --fixtures-root tools/benchmark-harness/fixtures \
-              --aggregated-file "consolidated-output/$clicohort/aggregated.json"
+              --aggregated-file "consolidated-output/$clicohort/aggregated.json" \
+              --profile "$MATRIX_PROFILE"
           done
 
       - name: Prepare cohort release assets
         id: prepare-release-assets
-        if: ${{ always() && steps.validate-aggregates.outcome == 'success' }}
+        if: ${{ always() && steps.validate-aggregates.outcome == 'success' && inputs.profile != 'smoke' }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -1829,7 +2026,7 @@ jobs:
           # straight from the pinned bench_matrix contract via `cohort-contract`, so the release
           # metadata can never drift from the validator (no hand-copied hashes/counts here).
           index_cohorts='{}'
-          for clicohort in native ocr office markup ebook email data images; do
+          for clicohort in $PROFILE_COHORTS; do
             cp "consolidated-output/$clicohort/aggregated.json" "release-assets/benchmarks-$clicohort-aggregated.json"
             contract="$(./target/release/benchmark-harness cohort-contract --cohort "$clicohort")"
             jq -n \
@@ -1861,6 +2058,7 @@ jobs:
       - name: Log aggregation gate status
         if: always()
         run: |
+          echo "profile=$MATRIX_PROFILE"
           echo "=== Upstream job results ==="
           echo "setup=${{ needs.setup.result }}"
           echo "bench-rust=${{ needs.bench-rust.result }}"
@@ -1878,15 +2076,13 @@ jobs:
           echo "prepare-release-assets=${{ steps.prepare-release-assets.outcome }}"
 
       - name: Create GitHub Release with benchmark results
-        # Publication gates on the required producer jobs (setup + bench-rust; xberg is required in
-        # every cohort) AND on validate-artifacts, which enforces the full contract. The validator
-        # is the real gate for competitors: the PDF cohorts' competitor cells (docling, liteparse,
-        # tika, markitdown, unstructured, pymupdf4llm) are REQUIRED, so a missing one fails
-        # validate-artifacts and blocks the release even though we dropped the per-competitor
-        # `needs.*.result` gates. Only the competitor cells on the heterogeneous family cohorts are
-        # best-effort (optional in the contract): a framework that cannot read one member format of
-        # a family fails its own job without blocking the baseline, and its partial results still
-        # flow into the aggregate as non-gating data.
+        # Publication gates on setup and on validate-artifacts, which enforces the full contract:
+        # every required cell (all xberg pipelines except auto-ocr, and the PDF cohorts' docling,
+        # liteparse, tika, markitdown, unstructured and pymupdf4llm cells) must be present with no
+        # failed document, or the release is blocked. No producer job's `needs.*.result` is a gate,
+        # bench-rust's included: it also runs the optional auto-ocr legs, so its result would let a
+        # best-effort cell block publication. Optional cells' partial results still flow into the
+        # aggregate as non-gating data.
         if: >-
           ${{
             always() &&
@@ -1894,7 +2090,7 @@ jobs:
             steps.validate-aggregates.outcome == 'success' &&
             steps.prepare-release-assets.outcome == 'success' &&
             needs.setup.result == 'success' &&
-            needs.bench-rust.result == 'success'
+            inputs.profile != 'smoke'
           }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}

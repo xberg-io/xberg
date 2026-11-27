@@ -373,6 +373,44 @@ fn unavailable_table_model_without_table_hints_does_not_warn() {
     }
 }
 
+/// Counts availability probes made by [`COUNTING_TABLE_MODELS`]; only `table_model_is_not_probed_without_table_pages`
+/// uses it, so parallel tests cannot disturb the count.
+#[cfg(feature = "layout-detection")]
+static TABLE_MODEL_PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(feature = "layout-detection")]
+const COUNTING_TABLE_MODELS: TableModelLoaders = TableModelLoaders {
+    available: |_, _, _| {
+        TABLE_MODEL_PROBES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        false
+    },
+    ..NO_TABLE_MODELS
+};
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn table_model_is_not_probed_without_table_pages() {
+    use crate::core::config::layout::TableModel;
+    use std::sync::atomic::Ordering;
+
+    let before = TABLE_MODEL_PROBES.load(Ordering::SeqCst);
+    let without_tables = table_hint_document_with(TableModel::Tatr, LayoutHintClass::Text, COUNTING_TABLE_MODELS, true);
+    assert_eq!(
+        TABLE_MODEL_PROBES.load(Ordering::SeqCst),
+        before,
+        "no Table hint, so the table model must not be loaded"
+    );
+    assert!(table_warnings(&without_tables).is_empty());
+
+    let with_tables = table_hint_document_with(TableModel::Tatr, LayoutHintClass::Table, COUNTING_TABLE_MODELS, true);
+    assert_eq!(
+        TABLE_MODEL_PROBES.load(Ordering::SeqCst),
+        before + 1,
+        "Table hints must still probe the table model once"
+    );
+    assert_eq!(table_warnings(&with_tables).len(), 1);
+}
+
 #[cfg(feature = "layout-detection")]
 #[test]
 fn should_warn_and_keep_structure_when_the_table_model_fails_to_load_after_the_preflight() {
@@ -4102,6 +4140,56 @@ fn numbered_heading_wrapping_once_still_splits_from_body_after_the_twice_wrapped
     );
 }
 
+fn italic_column_seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
+    SegmentData {
+        is_italic: true,
+        ..column_seg(text, x, width, baseline_y)
+    }
+}
+
+/// 2026-13845's lettered subsections are italic at the body's size, weight and pitch, so
+/// only the change to upright type separates `B. Motor Vehicle Emissions Budgets and
+/// Transportation Conformity` from the body beneath it.
+#[test]
+fn italic_lettered_heading_splits_from_the_upright_body_beneath_it() {
+    let paragraphs = blocks_to_paragraphs(
+        vec![
+            italic_column_seg("B. Motor Vehicle Emissions Budgets and", 306.0, 160.0, 500.0),
+            italic_column_seg("Transportation Conformity", 306.0, 110.0, 489.0),
+            column_seg("Under the CAA, States are required to submit, at", 318.0, 160.0, 478.0),
+            column_seg("various times, control strategy SIP revisions and", 306.0, 172.0, 467.0),
+        ],
+        &[],
+        &[],
+    );
+
+    assert_eq!(paragraphs.len(), 2, "heading and body must be separate: {paragraphs:?}");
+    assert_eq!(
+        paragraph_segment_text(&paragraphs[0]),
+        "B. Motor Vehicle Emissions Budgets and Transportation Conformity"
+    );
+    assert_eq!(
+        paragraph_segment_text(&paragraphs[1]),
+        "Under the CAA, States are required to submit, at various times, control strategy SIP revisions and"
+    );
+}
+
+/// An italic lettered item that ends in a full stop is a sentence, not a heading, and keeps
+/// the upright line that continues it.
+#[test]
+fn italic_lettered_sentence_keeps_its_upright_continuation() {
+    let paragraphs = blocks_to_paragraphs(
+        vec![
+            italic_column_seg("A. The applicant files the form.", 306.0, 160.0, 500.0),
+            column_seg("The agency then reviews the submission", 306.0, 160.0, 489.0),
+        ],
+        &[],
+        &[],
+    );
+
+    assert_eq!(paragraphs.len(), 1, "the item stays one element: {paragraphs:?}");
+}
+
 /// GH#1740 control, the reproducer's page 4: the same three-line heading as
 /// above, set in BOLD rather than italic. `bold_change` already separates the
 /// heading from the body regardless of this fix; the point of this control is
@@ -4567,6 +4655,82 @@ fn a_short_piece_of_one_cell_is_carried_by_that_cell() {
             "0001".to_string()
         ],
         "a run that cuts through a cell's word is not that cell's text, and neither is one no cell holds"
+    );
+}
+
+/// TeX prints `8.63%` as three touching runs, `8` (CMR) `.` (CMMI) `63%` (CMR), while the grid
+/// holds the cell whole. The digits were emitted again as prose (`8 63%`) beside the table.
+#[test]
+fn should_suppress_a_number_printed_as_touching_integer_point_and_fraction_runs() {
+    let coverage = vec![TableCoverage::from_rows(
+        crate::types::BoundingBox {
+            x0: 30.0,
+            y0: 300.0,
+            x1: 560.0,
+            y1: 400.0,
+        },
+        [
+            vec!["ESG Indifference", "8.63%", "0.77"],
+            vec!["Sustain (N)", "9.52%", "0.78"],
+        ],
+    )];
+    let segments = vec![
+        column_seg("8", 175.0, 5.5, 380.0),
+        column_seg(".", 180.5, 3.0, 380.0),
+        column_seg("63%", 183.5, 20.0, 380.0),
+        column_seg("0.77", 221.0, 19.0, 380.0),
+        column_seg("8", 400.0, 5.5, 360.0),
+        column_seg("9", 175.0, 5.5, 350.0),
+        column_seg(".", 185.5, 3.0, 350.0),
+        column_seg("52%", 188.5, 20.0, 350.0),
+    ];
+
+    let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+        .into_iter()
+        .map(|seg| seg.text)
+        .collect();
+
+    assert_eq!(
+        kept,
+        vec!["8".to_string(), "9".to_string(), "52%".to_string()],
+        "a touching split number is carried as a whole; a lone or gapped piece of a cell number is not"
+    );
+}
+
+/// tiny.pdf: the `Te` kerning pair splits `Body Temperature` into `Body T` and `emperature`,
+/// `e` starting 1.2pt before `T` ends. The long piece matched its row, but `Body T` ends in a
+/// letter that is no cell word and was emitted again as prose after the table.
+#[test]
+fn should_suppress_a_cell_word_split_by_a_kerning_pair() {
+    let coverage = vec![TableCoverage::from_rows(
+        crate::types::BoundingBox {
+            x0: 72.5,
+            y0: 537.5,
+            x1: 540.5,
+            y1: 632.5,
+        },
+        [
+            vec!["Name", "Celsius", "Fahrenheit"],
+            vec!["Body Temperature", "37", "98.6"],
+        ],
+    )];
+    let segments = vec![
+        column_seg("Body T", 77.25, 34.83, 545.0),
+        column_seg("emperature", 110.85, 56.2, 545.0),
+        column_seg("37", 233.25, 12.2, 545.0),
+        column_seg("Body T", 77.25, 34.83, 600.0),
+        column_seg("ail", 130.0, 15.0, 600.0),
+    ];
+
+    let kept: Vec<String> = filter_segments_by_table_bboxes(segments, &coverage)
+        .into_iter()
+        .map(|seg| seg.text)
+        .collect();
+
+    assert_eq!(
+        kept,
+        vec!["Body T".to_string(), "ail".to_string()],
+        "a kerning-split cell word is carried as a whole; a piece with a word gap after it is not"
     );
 }
 
@@ -5847,6 +6011,30 @@ fn a_two_word_numbered_heading_is_a_bold_heading_candidate() {
     );
 }
 
+/// 2026-14578 sets `§ 217.91 Effective dates.` in 8pt bold over its 9pt body. The section
+/// symbol admits a bold title a little under the body size; without it, or further under,
+/// a smaller bold line stays a label.
+#[test]
+fn a_section_symbol_title_set_under_the_body_is_a_bold_heading_candidate() {
+    let set_at = |text: &str, size: f32| {
+        let mut paragraph = body_size_paragraph_with_bbox(text, true, None, (45.0, 700.0, 145.0, 708.0));
+        paragraph.dominant_font_size = size;
+        paragraph
+    };
+    assert!(is_body_size_bold_heading_candidate(
+        &set_at("§ 217.91 Effective dates.", 10.5),
+        12.0
+    ));
+    assert!(!is_body_size_bold_heading_candidate(
+        &set_at("Effective dates of this rule", 10.5),
+        12.0
+    ));
+    assert!(!is_body_size_bold_heading_candidate(
+        &set_at("§ 217.91 Effective dates.", 9.0),
+        12.0
+    ));
+}
+
 /// The floor this exempts is still load-bearing for everything else: a short bold
 /// fragment with no numbering is emphasis or a label, not a heading.
 #[test]
@@ -5856,6 +6044,33 @@ fn a_two_word_unnumbered_bold_fragment_is_not_a_heading_candidate() {
         !is_body_size_bold_heading_candidate(&fragment, 12.0),
         "an unnumbered two-word bold fragment must stay below the heading floor"
     );
+}
+
+/// 2026-14578: a 10pt running-head tier sits under the heading ratio, so it is the
+/// first non-heading entry of the descending map, yet the 9pt cluster carries the body.
+#[test]
+fn body_cluster_font_size_picks_the_non_heading_cluster_carrying_the_most_text() {
+    let heading_map = vec![(10.1, None), (8.9, None), (6.2, None)];
+    let pages = vec![vec![
+        seg_heuristic("Federal Register / Vol. 91, No. 137", 10.0, 760.0),
+        seg_heuristic(&"ordinary body text ".repeat(40), 9.0, 700.0),
+        seg_heuristic("Legal Authority for the Action", 9.0, 650.0),
+        seg_heuristic("1 A footnote.", 6.0, 40.0),
+    ]];
+    assert_eq!(body_cluster_font_size(&heading_map, &pages), Some(8.9));
+
+    let heading_heavy_map = vec![(14.0, Some(1)), (9.0, None)];
+    let heading_heavy = vec![vec![
+        seg_heuristic(&"Display title ".repeat(50), 14.0, 700.0),
+        seg_heuristic("short body", 9.0, 650.0),
+    ]];
+    assert_eq!(
+        body_cluster_font_size(&heading_heavy_map, &heading_heavy),
+        Some(9.0),
+        "a heading cluster is never the body, however much text it carries"
+    );
+
+    assert_eq!(body_cluster_font_size(&heading_map, &[]), None);
 }
 
 fn heading_page(heading: &str, heading_size: f32, body: &str) -> Vec<SegmentData> {
@@ -6276,6 +6491,119 @@ fn outline_recovery_ignores_singleton_bad_calibration_anchor() {
     assert_eq!(pages[0][1].heading_level, Some(3));
 }
 
+fn bold_line(text: &str, font_size: f32) -> PdfLine {
+    let mut segment = seg(text, 0.0, 100.0);
+    segment.font_size = font_size;
+    segment.is_bold = true;
+    let mut bold = line(vec![segment]);
+    bold.dominant_font_size = font_size;
+    bold.is_bold = true;
+    bold
+}
+
+/// 231425210: the continuation merge joined the bold section title `Android` with the bold
+/// sub-section title stacked under it, and the joined text matched no outline entry.
+#[test]
+fn outline_recovery_splits_a_title_stacked_over_its_first_subsection() {
+    let stacked = para(vec![
+        bold_line("Android", 12.0),
+        bold_line("General \u{2011} Blogs, Papers, How To\u{2019}s", 10.9),
+    ]);
+    let tools = para(vec![bold_line("Tools", 10.9), bold_line("Static Analysis", 10.9)]);
+    let mut prose = para(vec![
+        line(vec![seg("Tools", 0.0, 40.0)]),
+        line(vec![seg("are listed below.", 0.0, 90.0)]),
+    ]);
+    prose.word_count = 4;
+    let mut pages = vec![vec![stacked, tools, prose]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("Android", 0, 1),
+        PdfOutlineEntry::test_entry("General - Blogs, Papers, How To\u{2019}s", 1, 1),
+        PdfOutlineEntry::test_entry("Tools", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    let summary: Vec<(String, Option<u8>)> = pages[0]
+        .iter()
+        .map(|paragraph| (paragraph_text_raw(paragraph), paragraph.heading_level))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            ("Android".to_string(), Some(2)),
+            ("General \u{2011} Blogs, Papers, How To\u{2019}s".to_string(), Some(3)),
+            ("Tools".to_string(), Some(3)),
+            ("Static Analysis".to_string(), None),
+            ("Tools are listed below.".to_string(), None),
+        ],
+        "a stacked bold title splits off at its line boundary; a prose line in the body style is not cut"
+    );
+}
+
+fn sized_line(text: &str, font_size: f32) -> PdfLine {
+    let mut segment = seg(text, 0.0, 100.0);
+    segment.font_size = font_size;
+    let mut sized = line(vec![segment]);
+    sized.dominant_font_size = font_size;
+    sized
+}
+
+/// medium.pdf: a two-column page welded each column into one paragraph, so the bold `Methods`
+/// and the smaller sans sub-section titles under it sat inside body text, after a full stop,
+/// and no outline entry matched a paragraph. A title that only repeats a word of the body,
+/// or follows an unfinished sentence, stays in place.
+#[test]
+fn outline_recovery_splits_titles_out_of_a_welded_column() {
+    let column = para(vec![
+        sized_line("The outcome of treatment was related to IL28B variation.", 9.76),
+        bold_line("Methods", 10.26),
+        sized_line("Samples", 9.17),
+        sized_line("Pre-treatment serum samples from patients who were", 9.76),
+        sized_line("treated were investigated in this study as", 9.76),
+        sized_line("Statistical analysis", 9.17),
+        sized_line("of the cohort was planned. Each sample was", 9.76),
+        sized_line("sequenced in both directions.", 9.76),
+        sized_line("Statistical analysis", 9.17),
+        sized_line("Statistical significance was evaluated by Fisher's exact test.", 9.76),
+    ]);
+    let mut pages = vec![vec![column]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("Methods", 0, 1),
+        PdfOutlineEntry::test_entry("Samples", 1, 1),
+        PdfOutlineEntry::test_entry("Statistical analysis", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    let summary: Vec<(String, Option<u8>)> = pages[0]
+        .iter()
+        .map(|paragraph| (paragraph_text_raw(paragraph), paragraph.heading_level))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            (
+                "The outcome of treatment was related to IL28B variation.".to_string(),
+                None
+            ),
+            ("Methods".to_string(), Some(2)),
+            ("Samples".to_string(), Some(3)),
+            (
+                "Pre-treatment serum samples from patients who were treated were investigated in this study as \
+Statistical analysis of the cohort was planned. Each sample was sequenced in both directions."
+                    .to_string(),
+                None
+            ),
+            ("Statistical analysis".to_string(), Some(3)),
+            (
+                "Statistical significance was evaluated by Fisher's exact test.".to_string(),
+                None
+            ),
+        ]
+    );
+}
+
 #[test]
 fn outline_recovery_rejects_ambiguous_titles() {
     let mut pages = vec![vec![
@@ -6292,6 +6620,62 @@ fn outline_recovery_rejects_ambiguous_titles() {
     recover_headings_from_outline(&mut pages, &entries);
 
     assert!(pages[0].iter().all(|paragraph| paragraph.heading_level.is_none()));
+}
+
+/// A page holding two consecutive sub-sections repeats their titles (`Description`,
+/// `Potential Impact`). Requiring a title to be unique on its page left every such
+/// repeat as plain text while its single-occurrence siblings became headings.
+#[test]
+fn outline_recovery_matches_titles_repeated_on_a_page_as_often_as_the_outline() {
+    let mut pages = vec![vec![
+        outline_heading("1. Creating a new policy version", 2),
+        outline_para("Description"),
+        outline_para("Potential Impact"),
+        outline_heading("2. Setting the default policy version", 2),
+        outline_para("Description"),
+        outline_para("Potential Impact"),
+    ]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("1. Creating a new policy version", 0, 1),
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Potential Impact", 1, 1),
+        PdfOutlineEntry::test_entry("2. Setting the default policy version", 0, 1),
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Potential Impact", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    let levels: Vec<_> = pages[0].iter().map(|paragraph| paragraph.heading_level).collect();
+    assert_eq!(
+        levels,
+        [Some(2), Some(3), Some(3), Some(2), Some(3), Some(3)],
+        "each repeat of an outlined sub-section title must become a heading"
+    );
+}
+
+#[test]
+fn outline_recovery_rejects_repeated_titles_with_mismatched_counts_or_depths() {
+    let mut pages = vec![vec![
+        outline_para("Description"),
+        outline_para("Description"),
+        outline_para("Description"),
+        outline_para("Overview"),
+        outline_para("Overview"),
+    ]];
+    let entries = vec![
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Description", 1, 1),
+        PdfOutlineEntry::test_entry("Overview", 0, 1),
+        PdfOutlineEntry::test_entry("Overview", 1, 1),
+    ];
+
+    recover_headings_from_outline(&mut pages, &entries);
+
+    assert!(
+        pages[0].iter().all(|paragraph| paragraph.heading_level.is_none()),
+        "a count mismatch leaves the pairing unknown and mixed depths leave the level unknown"
+    );
 }
 
 #[test]
@@ -6694,6 +7078,32 @@ fn test_heuristic_path_dehyphenates_wrapped_word() {
 }
 
 #[test]
+fn test_heuristic_path_dehyphenates_a_word_wrapped_at_a_unicode_hyphen() {
+    for hyphen in ['\u{2010}', '\u{2011}'] {
+        let output = process_heuristic_segments(vec![
+            heuristic_segment(&format!("Reliable soft{hyphen}"), 700.0, 490.0, false),
+            heuristic_segment("ware handles load", 680.0, 200.0, false),
+        ]);
+
+        assert_eq!(output.len(), 1);
+        assert_eq!(paragraph_text(&output[0]), "Reliable software handles load");
+    }
+}
+
+/// The rejoin strips the trailing word by characters; counting its UTF-8 bytes instead
+/// also ate the space before an accented word and welded it to its neighbour.
+#[test]
+fn test_heuristic_path_dehyphenates_a_non_ascii_word_without_eating_the_space_before_it() {
+    let output = process_heuristic_segments(vec![
+        heuristic_segment("Le petit dé-", 700.0, 490.0, false),
+        heuristic_segment("jeuner est servi", 680.0, 200.0, false),
+    ]);
+
+    assert_eq!(output.len(), 1);
+    assert_eq!(paragraph_text(&output[0]), "Le petit déjeuner est servi");
+}
+
+#[test]
 fn test_heuristic_path_preserves_compound_and_code_hyphens() {
     let compound = process_heuristic_segments(vec![
         heuristic_segment("A cost-", 700.0, 490.0, false),
@@ -6918,7 +7328,7 @@ fn test_hyphen_only_fallback() {
     let mut trailing = seg("some soft-", 0.0, 0.0);
     trailing.baseline_y = 20.0;
     let mut p = para(vec![line(vec![trailing]), line(vec![seg("ware is great", 0.0, 0.0)])]);
-    dehyphenate_hyphen_only(&mut p, &HyphenWitnesses::default());
+    dehyphenate_line_breaks(&mut p, &HyphenWitnesses::default(), None);
     assert_eq!(p.lines[0].segments[0].text, "some software");
     assert_eq!(p.lines[1].segments[0].text, "is great");
 }
@@ -6988,8 +7398,81 @@ fn test_hyphen_only_uppercase_not_joined() {
         line(vec![seg("some well-", 0.0, 0.0)]),
         line(vec![seg("Known thing", 0.0, 0.0)]),
     ]);
-    dehyphenate_hyphen_only(&mut p, &HyphenWitnesses::default());
+    dehyphenate_line_breaks(&mut p, &HyphenWitnesses::default(), None);
     assert_eq!(p.lines[0].segments[0].text, "some well-");
+}
+
+#[test]
+fn wrap_classifier_welds_keeps_or_declines_by_one_policy() {
+    let witnesses: HyphenWitnesses = [("price".to_string(), "determining".to_string())].into_iter().collect();
+    for (left, right, expected) in [
+        ("some soft-", "ware is great", WrapHyphen::Weld),
+        ("mem\u{2011}", "ory", WrapHyphen::Weld),
+        ("approxi\u{00ad}", "mately", WrapHyphen::Weld),
+        ("COVID-", "related cases", WrapHyphen::KeepHyphen),
+        ("a well-", "known result", WrapHyphen::KeepHyphen),
+        ("a price-", "determining step", WrapHyphen::KeepHyphen),
+        ("pre-", "and post-processing", WrapHyphen::NotApplicable),
+        ("first-", "or second-order", WrapHyphen::NotApplicable),
+        ("item a-", "label", WrapHyphen::KeepHyphen),
+        ("a k-", "dimensional space", WrapHyphen::KeepHyphen),
+        ("the 24-", "hour requirement", WrapHyphen::KeepHyphen),
+        ("an (m − n)-", "dimensional sphere", WrapHyphen::KeepHyphen),
+        ("HISTORICAL INTER-", "ACTIONS WITH", WrapHyphen::KeepHyphen),
+        ("work on MU\u{2011}", "NIT.", WrapHyphen::KeepHyphen),
+        ("BOTH PRE-", "AND POST-PROCESSING", WrapHyphen::NotApplicable),
+        ("pages 12-", "14", WrapHyphen::NotApplicable),
+        ("a k\u{00ad}", "th", WrapHyphen::NotApplicable),
+        ("value 3\u{00ad}", "year", WrapHyphen::NotApplicable),
+        ("if less than zero, enter -0-", "line 28", WrapHyphen::NotApplicable),
+        ("some text--", "more words", WrapHyphen::NotApplicable),
+        ("co-", "Worker", WrapHyphen::NotApplicable),
+        ("some \u{4E00}\u{4E01}-", "text", WrapHyphen::NotApplicable),
+        ("a pause \u{2014}", "then", WrapHyphen::NotApplicable),
+    ] {
+        assert_eq!(classify_wrap(left, right, &witnesses), expected, "{left:?} + {right:?}");
+    }
+}
+
+#[test]
+fn markdown_dehyphenation_keeps_a_suspended_hyphen_and_an_uppercase_stem_hyphen() {
+    for (trailing, leading, expected) in [
+        ("both pre-", "and post-processing", "both pre- and post-processing"),
+        ("many COVID-", "related cases", "many COVID-related cases"),
+        ("The 24-", "hour requirement", "The 24-hour requirement"),
+        ("HISTORICAL INTER-", "ACTIONS WITH", "HISTORICAL INTER-ACTIONS WITH"),
+    ] {
+        let mut p = para(vec![
+            line(vec![full_line_seg(trailing)]),
+            line(vec![seg(leading, 10.0, 200.0)]),
+        ]);
+        dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+        assert_eq!(paragraph_text(&p), expected);
+    }
+}
+
+#[test]
+fn dehyphenation_leaves_a_double_hyphen_line_end_intact() {
+    for has_positions in [true, false] {
+        let mut paragraphs = vec![para(vec![
+            line(vec![full_line_seg("some text--")]),
+            line(vec![seg("more words here", 10.0, 200.0)]),
+        ])];
+        dehyphenate_paragraphs(&mut paragraphs, has_positions, &HyphenWitnesses::default());
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, "some text--");
+        assert_eq!(paragraphs[0].lines[1].segments[0].text, "more words here");
+    }
+}
+
+#[test]
+fn dehyphenation_consumes_the_leading_word_after_leading_whitespace() {
+    let mut p = para(vec![
+        line(vec![full_line_seg("some soft-")]),
+        line(vec![seg("  ware is great", 10.0, 200.0)]),
+    ]);
+    dehyphenate_paragraph_lines(&mut p, &HyphenWitnesses::default());
+    assert_eq!(p.lines[0].segments[0].text, "some software");
+    assert_eq!(p.lines[1].segments[0].text, "is great");
 }
 
 #[test]
@@ -7026,6 +7509,22 @@ fn collect_hyphen_witnesses_finds_a_mid_run_compound() {
         witnesses.contains(&("price".to_string(), "determining".to_string())),
         "a mid-run hyphen must witness its own compound: got {witnesses:?}"
     );
+}
+
+/// A producer that writes every hyphen as U+2010/U+2011 witnesses its compounds with
+/// those characters; an ASCII-only scan would let a wrapped `cross‑` / `account` weld.
+#[test]
+fn collect_hyphen_witnesses_finds_a_unicode_hyphen_compound() {
+    let pages = vec![vec![seg(
+        "allow cross\u{2011}account and long\u{2010}lived roles",
+        0.0,
+        0.0,
+    )]];
+
+    let witnesses = collect_hyphen_witnesses(&pages);
+
+    assert!(witnesses.contains(&("cross".to_string(), "account".to_string())));
+    assert!(witnesses.contains(&("long".to_string(), "lived".to_string())));
 }
 
 /// The load-bearing negative for #1543: a hyphen at the END of a segment's text is,
@@ -8100,6 +8599,219 @@ fn test_finalize_paragraph_suppresses_heading_for_lowercase_start_fragment() {
     );
 }
 
+/// 1710.02091: a 20.7pt display title over a 12pt body opens with the article `A`, which the
+/// continuation-word guard read as a stranded fragment, so the title became prose.
+#[test]
+fn finalize_paragraph_keeps_a_display_title_that_opens_with_an_article() {
+    let heading_map = vec![(18.9, Some(1)), (12.0, None), (6.5, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let title = seg_at(
+        "A Bayesian spatial hierarchical model for extreme",
+        100.0,
+        700.0,
+        20.7,
+        false,
+    );
+    let para = finalize_paragraph(&[&title], &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, Some(1));
+
+    let lowercase = seg_at("precipitation in Great Britain", 100.0, 666.0, 20.7, false);
+    let para = finalize_paragraph(&[&lowercase], &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, None, "a lowercase opener is still a fragment");
+
+    let heading_tier = seg_at("The results of the hierarchical model", 100.0, 600.0, 15.0, false);
+    let heading_tier_map = vec![(15.0, Some(2)), (12.0, None)];
+    let heading_tier_gaps = crate::pdf::structure::classify::precompute_gap_info(&heading_tier_map);
+    let para = finalize_paragraph(&[&heading_tier], &heading_tier_map, &heading_tier_gaps).expect("paragraph");
+    assert_eq!(
+        para.heading_level, None,
+        "below display scale a capitalized article opener keeps the fragment guard"
+    );
+}
+
+/// 2026-13845 sets its five-digit page numbers in 11pt bold and its table titles at 10pt over
+/// a 9pt body; both clustered as heading tiers and were emitted as H1s.
+#[test]
+fn finalize_paragraph_does_not_make_a_folio_or_a_table_title_a_heading() {
+    let heading_map = vec![(11.0, Some(1)), (10.0, Some(2)), (9.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let mut folio = seg_at("42399", 536.0, 760.0, 11.0, false);
+    folio.is_bold = true;
+    let table_title = seg_at(
+        "TABLE 1\u{2014}SAN JOAQUIN VALLEY REVISED BUDGETS",
+        45.0,
+        500.0,
+        10.0,
+        false,
+    );
+    let section = seg_at("Background and Legal Authority", 45.0, 400.0, 10.0, false);
+    let level = |segment: &SegmentData| {
+        finalize_paragraph(&[segment], &heading_map, &gap_info)
+            .expect("paragraph")
+            .heading_level
+    };
+    assert_eq!(level(&folio), None, "a run of digits names no section");
+    assert_eq!(level(&table_title), None, "a table title is a caption");
+    assert_eq!(level(&section), Some(2), "a title in the same tier is still a heading");
+    for caption in [
+        "Figure 3: Revised budgets",
+        "Table 2. Results",
+        "Exhibit 4 \u{2013} Map",
+        "Plate 7",
+    ] {
+        assert_eq!(level(&seg_at(caption, 45.0, 300.0, 10.0, false)), None, "{caption:?}");
+    }
+    let exhibit = seg_at("Exhibit 10.1 Material Contracts", 45.0, 300.0, 10.0, false);
+    assert_eq!(
+        level(&exhibit),
+        Some(2),
+        "a label whose number runs straight into a title names a section"
+    );
+}
+
+/// 2212.11694 sets each word of its 14pt bold title as its own run on one baseline; the
+/// bold-title test counted runs, not visual lines, and the title stayed bold prose.
+#[test]
+fn finalize_paragraph_promotes_a_bold_title_set_one_run_per_word() {
+    let heading_map = vec![(20.0, Some(1)), (10.0, None), (6.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let words: Vec<SegmentData> = ["Timestamp-Supervised", "Action", "Segmentation", "from", "Clustering"]
+        .iter()
+        .enumerate()
+        .map(|(index, word)| {
+            let mut segment = seg_at(word, 60.0 + 90.0 * index as f32, 700.0, 14.3, false);
+            segment.width = 80.0;
+            segment.is_bold = true;
+            segment
+        })
+        .collect();
+    let refs: Vec<&SegmentData> = words.iter().collect();
+    let para = finalize_paragraph(&refs, &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, Some(2));
+}
+
+/// A bold heading whose section number and title are separate segments on one
+/// baseline, as LaTeX emits `\section` titles, over a 10pt body.
+fn finalize_bold_numbered_heading(number: &str, title: &str, font_size: f32) -> PdfParagraph {
+    let heading_map = vec![(10.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let mut marker = seg_at(number, 72.0, 700.0, font_size, false);
+    marker.width = 14.0;
+    marker.is_bold = true;
+    let mut body = seg_at(title, 90.0, 700.0, font_size, false);
+    body.width = 80.0;
+    body.is_bold = true;
+    finalize_paragraph(&[&marker, &body], &heading_map, &gap_info).expect("paragraph")
+}
+
+#[test]
+fn bold_single_level_section_number_above_body_size_is_a_heading_not_a_list_item() {
+    let para = finalize_bold_numbered_heading("1.", "Introduction", 12.0);
+    assert_eq!(para.heading_level, Some(2));
+    assert!(
+        !para.is_list_item,
+        "a numbered section title must not render as an ordered list item"
+    );
+}
+
+#[test]
+fn bold_multi_level_section_number_just_above_body_size_is_a_subsection_heading() {
+    let para = finalize_bold_numbered_heading("3.1.", "Overview", 11.0);
+    assert_eq!(para.heading_level, Some(3));
+}
+
+#[test]
+fn bold_single_level_number_below_the_bold_font_gate_stays_a_list_item() {
+    let para = finalize_bold_numbered_heading("1.", "Preheat the oven", 11.0);
+    assert_eq!(para.heading_level, None);
+    assert!(para.is_list_item);
+}
+
+#[test]
+fn bold_multi_level_section_number_at_body_size_is_not_promoted_per_paragraph() {
+    let para = finalize_bold_numbered_heading("3.1.", "Overview", 10.0);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn bold_three_level_section_number_is_a_fourth_level_heading() {
+    let para = finalize_bold_numbered_heading("3.1.2", "Details", 11.0);
+    assert_eq!(para.heading_level, Some(4));
+}
+
+#[test]
+fn bold_numbered_step_ending_in_a_period_stays_a_list_item() {
+    let para = finalize_bold_numbered_heading("1.", "Preheat the oven.", 12.0);
+    assert_eq!(para.heading_level, None);
+    assert!(para.is_list_item);
+}
+
+#[test]
+fn bold_single_level_roman_number_just_above_body_size_is_not_a_heading() {
+    let para = finalize_bold_numbered_heading("II.", "METHODS", 10.8);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn roman_number_followed_by_a_lowercase_title_is_not_a_heading() {
+    let para = finalize_bold_numbered_heading("II.", "methods", 12.0);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn dotted_date_just_above_body_size_is_not_a_subsection_heading() {
+    let para = finalize_bold_numbered_heading("12.03.24", "Minutes", 11.0);
+    assert_eq!(para.heading_level, None);
+}
+
+#[test]
+fn section_shaped_numbers_exclude_years_and_dates() {
+    for number in ["1.", "3.1.", "3.1.2", "12)", "II."] {
+        assert!(is_section_shaped_number(number), "{number} is a section number");
+    }
+    for number in ["2024", "12.03.2024", "12.03.24", "1.05"] {
+        assert!(!is_section_shaped_number(number), "{number} is not a section number");
+    }
+}
+
+#[test]
+fn adjacent_bold_numbered_entries_stay_an_ordered_list() {
+    let mut paragraphs = vec![
+        finalize_bold_numbered_heading("1.", "Plan", 12.0),
+        finalize_bold_numbered_heading("2.", "Build", 12.0),
+    ];
+    keep_adjacent_numbered_entries_as_list(&mut paragraphs);
+    for paragraph in &paragraphs {
+        assert_eq!(paragraph.heading_level, None);
+        assert!(paragraph.is_list_item);
+    }
+}
+
+#[test]
+fn numbered_heading_followed_by_body_text_stays_a_heading() {
+    let body_segment = seg_at("Body text of the introduction.", 72.0, 680.0, 10.0, false);
+    let body = finalize_paragraph(
+        &[&body_segment],
+        &[(10.0, None)],
+        &crate::pdf::structure::classify::precompute_gap_info(&[(10.0, None)]),
+    )
+    .expect("paragraph");
+    let mut paragraphs = vec![finalize_bold_numbered_heading("1.", "Introduction", 12.0), body];
+    keep_adjacent_numbered_entries_as_list(&mut paragraphs);
+    assert_eq!(paragraphs[0].heading_level, Some(2));
+}
+
+#[test]
+fn non_bold_numbered_line_above_body_size_stays_a_list_item() {
+    let heading_map = vec![(10.0, None)];
+    let gap_info = crate::pdf::structure::classify::precompute_gap_info(&heading_map);
+    let marker = seg_at("1.", 72.0, 700.0, 12.0, false);
+    let body = seg_at("Introduction", 90.0, 700.0, 12.0, false);
+    let para = finalize_paragraph(&[&marker, &body], &heading_map, &gap_info).expect("paragraph");
+    assert_eq!(para.heading_level, None);
+    assert!(para.is_list_item);
+}
+
 /// Paragraph carrying real geometry, for the page-number validation tests.
 /// `y` is a PDF-space bottom coordinate on a 792pt page.
 fn positioned_para(text: &str, x: f32, y: f32) -> PdfParagraph {
@@ -8163,6 +8875,26 @@ fn should_delete_a_consistent_running_footer_page_number() {
         pages.iter().all(|page| page[1].is_page_furniture),
         "an incrementing footer number in a fixed slot on every page is furniture"
     );
+}
+
+/// 2026-14578 is paginated through its Federal Register volume: a five-digit folio heads every
+/// other page, and four digits left `45215` in the text, where the renderer joined it to the
+/// bold section title below.
+#[test]
+fn should_delete_five_digit_volume_folios_on_alternate_pages() {
+    let mut pages: Vec<Vec<PdfParagraph>> = (0..10)
+        .map(|page_index| {
+            let mut page = vec![positioned_para("Some ordinary body sentence.", 90.0, 400.0)];
+            if page_index % 2 == 0 {
+                page.push(positioned_para(&(45207 + page_index).to_string(), 536.0, 750.0));
+            }
+            page
+        })
+        .collect();
+    let page_heights = letter_page_heights(pages.len());
+    mark_validated_page_numbers(&mut pages, &page_heights, false, false);
+    assert!(pages.iter().step_by(2).all(|page| page[1].is_page_furniture));
+    assert!(pages.iter().all(|page| !page[0].is_page_furniture));
 }
 
 #[test]
@@ -8447,6 +9179,361 @@ fn should_promote_repeated_untagged_body_size_bold_sections_document_wide() {
             "the existing one-word body-size ambiguity guard must remain intact"
         );
     }
+}
+
+fn headingless_section(title: &str, body: &str) -> Vec<PdfParagraph> {
+    vec![
+        body_size_paragraph_with_bbox(title, true, None, (72.0, 700.0, 272.0, 712.0)),
+        body_size_paragraph_with_bbox(body, false, None, (72.0, 600.0, 472.0, 690.0)),
+    ]
+}
+
+/// 1004.1028 and 2026-14578 set every section title in bold at body size and have no
+/// other heading; one- and two-word titles (`Introduction`, `Small Numbers`) were
+/// below the three-word floor, so neither document emitted a single heading.
+#[test]
+fn should_promote_short_body_size_titles_to_h2_in_a_headingless_document() {
+    let mut pages: Vec<_> = ["Introduction", "Results", "Discussion", "Small Numbers"]
+        .into_iter()
+        .map(|title| headingless_section(title, &format!("The {title} section opens with ordinary body text.")))
+        .collect();
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    for page in &pages {
+        assert_eq!(
+            page[0].heading_level,
+            Some(2),
+            "{:?} is a section title of a document with no other heading",
+            paragraph_text_raw(&page[0])
+        );
+        assert_eq!(page[1].heading_level, None);
+    }
+}
+
+/// 2026-14578: the body under `Summary of Request` runs on from the foot of the first column
+/// into the top of the second, so its block spans the page's height and overlapped the
+/// title's own row; the same-row guard read the title as a run-in label.
+#[test]
+fn should_promote_a_title_whose_body_runs_on_into_the_next_column() {
+    let section = |title: &str| {
+        let mut heading = body_size_paragraph_with_bbox(title, true, None, (45.0, 540.0, 200.0, 552.0));
+        heading.lines[0].segments[0].baseline_y = 540.0;
+        let mut body = body_size_paragraph_with_bbox(
+            "On October 31 NMFS received a request from TPWD for a rulemaking",
+            false,
+            None,
+            (45.0, 525.0, 400.0, 712.0),
+        );
+        body.lines[0].segments[0].x = 54.0;
+        body.lines[0].segments[0].baseline_y = 525.0;
+        let mut next_column = body.lines[0].clone();
+        next_column.segments[0].text = "and associated five-year letter of authorization.".to_string();
+        next_column.segments[0].x = 222.0;
+        next_column.segments[0].baseline_y = 700.0;
+        body.lines.push(next_column);
+        vec![heading, body]
+    };
+    let mut pages: Vec<_> = [
+        "Summary of Request",
+        "Description of the Activity",
+        "Comments and Responses",
+    ]
+    .into_iter()
+    .map(section)
+    .collect();
+    let mut run_in = body_size_paragraph_with_bbox("Bold Run In Label", true, None, (45.0, 400.0, 150.0, 412.0));
+    run_in.lines[0].segments[0].baseline_y = 400.0;
+    let mut same_row_body = body_size_paragraph_with_bbox(
+        "continues on the same row as the label and then wraps below it",
+        false,
+        None,
+        (45.0, 380.0, 400.0, 412.0),
+    );
+    same_row_body.lines[0].segments[0].x = 160.0;
+    same_row_body.lines[0].segments[0].baseline_y = 400.0;
+    pages.push(vec![run_in, same_row_body]);
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    for page in &pages[..3] {
+        assert_eq!(page[0].heading_level, Some(2), "{:?}", paragraph_text_raw(&page[0]));
+    }
+    assert_eq!(
+        pages[3][0].heading_level, None,
+        "a label whose body's first line shares its row is still a run-in label"
+    );
+}
+
+/// 2026-14578 sets five section titles on two lines of its narrow columns
+/// (`Summary of Major Provisions Within` / `the Rule`); a one-line test never admitted them.
+#[test]
+fn should_promote_a_body_size_bold_title_wrapped_onto_two_lines() {
+    let wrapped = |first: &str, second: &str| {
+        let mut heading = body_size_paragraph_with_bbox(first, true, None, (72.0, 688.0, 272.0, 712.0));
+        let mut tail = heading.lines[0].clone();
+        tail.segments[0].text = second.to_string();
+        heading.lines.push(tail);
+        heading.text = format!("{first} {second}");
+        heading.word_count = heading.text.split_whitespace().count();
+        vec![
+            heading,
+            body_size_paragraph_with_bbox(
+                "The following is a summary of the major provisions of this rule.",
+                false,
+                None,
+                (72.0, 600.0, 472.0, 680.0),
+            ),
+        ]
+    };
+    let mut pages = vec![
+        wrapped("Summary of Major Provisions Within", "the Rule"),
+        wrapped("Negligible Impact Analysis and", "Determination"),
+        wrapped("Unmitigable Adverse Impact Analysis", "and Determination"),
+    ];
+    let mut five_lines = wrapped("A bold block set", "over five lines");
+    for text in ["runs past", "a wrapped", "title's length"] {
+        let mut more = five_lines[0].lines[0].clone();
+        more.segments[0].text = text.to_string();
+        five_lines[0].lines.push(more);
+    }
+    pages.push(five_lines);
+    // pdfa_001: bold form labels from two rows of a grid join into one paragraph.
+    let mut shifted_rows = wrapped("Building Name McAuley Wing", "Type of Service Provided");
+    shifted_rows[0].lines[0].segments[0].x = 405.0;
+    shifted_rows[0].lines[1].segments[0].x = 81.0;
+    pages.push(shifted_rows);
+    let mut column_labels = wrapped("Pediatric Care", "Nursery Unit");
+    let mut beside = column_labels[0].lines[0].segments[0].clone();
+    beside.text = "intensive Care Newborn".to_string();
+    beside.x = column_labels[0].lines[0].segments[0].x + 200.0;
+    column_labels[0].lines[0].segments.push(beside);
+    pages.push(column_labels);
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    for page in &pages[..3] {
+        assert_eq!(page[0].heading_level, Some(2), "{:?}", paragraph_text_raw(&page[0]));
+    }
+    assert_eq!(
+        pages[3][0].heading_level, None,
+        "five bold lines are a block, not a title"
+    );
+    assert_eq!(
+        (pages[4][0].heading_level, pages[5][0].heading_level),
+        (None, None),
+        "two bold rows that start apart or hold a column gutter are form labels, not a wrapped title"
+    );
+}
+
+/// A bold 12pt paragraph whose lines sit one 13.2pt pitch apart from `top_baseline` down.
+fn bold_title_paragraph(lines: &[&str], left: f32, top_baseline: f32) -> PdfParagraph {
+    let mut paragraph = body_size_paragraph(lines[0], true, None);
+    let template = paragraph.lines[0].clone();
+    paragraph.lines = lines
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let baseline = top_baseline - 13.2 * index as f32;
+            let mut line = template.clone();
+            line.baseline_y = Some(baseline);
+            line.segments[0].text = (*text).to_string();
+            line.segments[0].x = left;
+            line.segments[0].baseline_y = baseline;
+            line.segments[0].y = baseline;
+            line
+        })
+        .collect();
+    paragraph.text.clear();
+    paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
+    let bottom = top_baseline - 13.2 * (lines.len() - 1) as f32;
+    paragraph.block_bbox = Some((left, bottom, left + 160.0, top_baseline + 12.0));
+    paragraph
+}
+
+fn body_below(left: f32, top_baseline: f32) -> PdfParagraph {
+    let mut body = bold_title_paragraph(
+        &["For the reasons discussed above, the EPA is proposing to approve the revised budgets."],
+        left,
+        top_baseline,
+    );
+    body.is_bold = false;
+    body
+}
+
+/// Joining two adjacent bold paragraphs is part of promoting them: a pair that does not
+/// become a heading keeps its own paragraphs.
+#[test]
+fn should_keep_adjacent_bold_paragraphs_apart_when_their_join_is_not_promoted() {
+    let wrapped_pair = || {
+        vec![
+            bold_title_paragraph(&["Negligible Impact Analysis and"], 45.0, 700.0),
+            bold_title_paragraph(&["Determination"], 45.0, 686.8),
+        ]
+    };
+    let with_body = || {
+        let mut page = wrapped_pair();
+        page.push(body_below(54.0, 660.0));
+        page
+    };
+
+    let mut too_few_signals = vec![with_body()];
+    promote_repeated_body_size_bold_headings(&mut too_few_signals, Some(12.0));
+    assert_eq!(too_few_signals[0].len(), 3, "nothing is promoted, so nothing is joined");
+    assert!(
+        too_few_signals[0]
+            .iter()
+            .all(|paragraph| paragraph.heading_level.is_none())
+    );
+
+    let mut pages = vec![with_body(), with_body(), with_body(), wrapped_pair()];
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+    for page in &pages[..3] {
+        assert_eq!(page.len(), 2, "a promoted wrapped title is joined");
+        assert_eq!(
+            paragraph_text_raw(&page[0]),
+            "Negligible Impact Analysis and Determination"
+        );
+        assert!(page[0].heading_level.is_some());
+    }
+    assert_eq!(pages[3].len(), 2, "a pair with no body to open stays two paragraphs");
+    assert!(pages[3].iter().all(|paragraph| paragraph.heading_level.is_none()));
+}
+
+/// 2026-13845 sets its roman-numbered section titles in bold at body size and wraps them over
+/// up to four lines of a narrow column. The line grouper ends a paragraph after the numbered
+/// line, so `IV. Proposed Action and Request for` was promoted alone with `Public Comment`
+/// left as bold prose, and the three-line `III.` title was refused for its line count.
+#[test]
+fn should_promote_a_bold_title_wrapped_over_several_lines_with_its_full_text() {
+    let mut pages = vec![
+        vec![
+            bold_title_paragraph(&["II. Clean Air Act Procedural and"], 45.0, 700.0),
+            bold_title_paragraph(
+                &[
+                    "Administrative Requirements for SIP",
+                    "Submittals and Criteria for Approval of",
+                    "Revised Budgets",
+                ],
+                45.0,
+                686.8,
+            ),
+            body_below(54.0, 640.0),
+        ],
+        vec![
+            bold_title_paragraph(
+                &[
+                    "III. Revised Motor Vehicle Emissions",
+                    "Budgets for the 2008 8-Hour Ozone",
+                    "Standard",
+                ],
+                399.0,
+                700.0,
+            ),
+            body_below(408.0, 650.0),
+        ],
+        vec![
+            bold_title_paragraph(&["IV. Proposed Action and Request for"], 399.0, 700.0),
+            bold_title_paragraph(&["Public Comment"], 399.0, 686.8),
+            body_below(408.0, 660.0),
+        ],
+        vec![
+            bold_title_paragraph(&["Summary of Request."], 45.0, 700.0),
+            bold_title_paragraph(&["Bold label below it:"], 45.0, 686.8),
+            body_below(54.0, 660.0),
+        ],
+    ];
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    let headings: Vec<String> = pages
+        .iter()
+        .flatten()
+        .filter(|paragraph| paragraph.heading_level.is_some())
+        .map(paragraph_text_raw)
+        .collect();
+    assert_eq!(
+        headings,
+        [
+            "II. Clean Air Act Procedural and Administrative Requirements for SIP Submittals and Criteria for \
+             Approval of Revised Budgets",
+            "III. Revised Motor Vehicle Emissions Budgets for the 2008 8-Hour Ozone Standard",
+            "IV. Proposed Action and Request for Public Comment",
+        ],
+        "each wrapped title is one heading carrying all of its lines"
+    );
+    assert_eq!(
+        pages[3].len(),
+        3,
+        "a terminated bold line does not absorb the bold line below it"
+    );
+}
+
+#[test]
+fn should_keep_short_bold_labels_as_text_in_a_headingless_document() {
+    let mut pages: Vec<_> = ["Introduction", "Results", "Discussion"]
+        .into_iter()
+        .map(|title| headingless_section(title, &format!("The {title} section opens with ordinary body text.")))
+        .collect();
+    for label in ["Note:", "Total: 5", "C)", "Rauch III,"] {
+        pages.push(headingless_section(
+            label,
+            "Ordinary body text follows the bold label here.",
+        ));
+    }
+    let mut header_row = body_size_paragraph_with_bbox("Name Value", true, None, (72.0, 700.0, 340.0, 712.0));
+    let mut value_cell = header_row.lines[0].segments[0].clone();
+    header_row.lines[0].segments[0].text = "Name".to_string();
+    header_row.lines[0].segments[0].x = 72.0;
+    header_row.lines[0].segments[0].width = 30.0;
+    value_cell.text = "Value".to_string();
+    value_cell.x = 300.0;
+    value_cell.width = 32.0;
+    header_row.lines[0].segments.push(value_cell);
+    pages.push(vec![
+        header_row,
+        body_size_paragraph_with_bbox("Alice Smith 42 Engineering", false, None, (72.0, 600.0, 472.0, 690.0)),
+    ]);
+    for _ in 0..3 {
+        pages.push(headingless_section(
+            "Federal Register",
+            "Rules and regulations continue in ordinary body text.",
+        ));
+    }
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    assert!(pages[..3].iter().all(|page| page[0].heading_level == Some(2)));
+    for page in &pages[3..] {
+        assert_eq!(
+            page[0].heading_level,
+            None,
+            "{:?} is a label, a table header row or a running label, not a section title",
+            paragraph_text_raw(&page[0])
+        );
+    }
+}
+
+#[test]
+fn should_not_promote_short_body_size_titles_beside_another_heading_system() {
+    let mut pages = vec![vec![body_size_paragraph_with_bbox(
+        "Existing document title",
+        true,
+        Some(1),
+        (72.0, 740.0, 272.0, 752.0),
+    )]];
+    pages.extend(
+        ["Introduction", "Results", "Discussion", "Conclusions"]
+            .into_iter()
+            .map(|title| headingless_section(title, &format!("The {title} section opens with ordinary body text."))),
+    );
+
+    promote_repeated_body_size_bold_headings(&mut pages, Some(12.0));
+
+    assert!(
+        pages[1..].iter().all(|page| page[0].heading_level.is_none()),
+        "where another heading system exists a short bold line stays a label"
+    );
 }
 
 #[test]

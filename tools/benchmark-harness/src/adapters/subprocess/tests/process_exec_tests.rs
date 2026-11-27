@@ -2,7 +2,7 @@
 //! bookkeeping, RSS measurability, and stderr-tail surfacing.
 
 use crate::Error;
-use crate::types::OutputFormat;
+use crate::types::{MemoryMethod, OutputFormat};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -70,7 +70,7 @@ async fn measured_command_timer_excludes_pre_spawn_staging() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn measured_ultrashort_command_is_not_measurable_from_blocked_shell_rss() {
+async fn measured_ultrashort_command_is_measured_by_rusage_without_samples() {
     let mut cmd = SubprocessAdapter::measured_command("sh");
     cmd.args(["-c", "printf ok"])
         .stdout(Stdio::piped())
@@ -88,14 +88,131 @@ async fn measured_ultrashort_command_is_not_measurable_from_blocked_shell_rss() 
     .unwrap();
 
     assert!(
-        matches!(&outcome.error, Some(Error::Benchmark(message)) if message.contains("target sample")),
-        "ultrashort command must fail RSS measurability: {:?}",
+        outcome.error.is_none(),
+        "rusage makes a sub-interval command measurable: {:?}",
         outcome.error
     );
-    assert!(outcome.output.unwrap().status.success());
+    let output = outcome.output.unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"ok");
     assert!(outcome.resource_stats.baseline_memory_bytes > 0);
-    assert_eq!(outcome.resource_stats.peak_memory_bytes, 0);
     assert_eq!(outcome.resource_stats.sample_count, 0);
+    assert!(outcome.resource_stats.peak_memory_bytes > 0);
+    assert_eq!(outcome.resource_stats.memory_method, MemoryMethod::RusageMaxRss);
+}
+
+/// Shaped like the liteparse wrapper: the measured shell forks a short-lived child that
+/// allocates 64 MiB and exits long before the sampler's first sample. The sampler records
+/// nothing (the old method would have reported no or a tiny peak); rusage still sees the
+/// child's peak because the shell reaped it.
+#[cfg(unix)]
+#[tokio::test]
+async fn rusage_captures_short_lived_grandchild_peak_the_sampler_misses() {
+    const SIXTY_MIB: u64 = 60 * 1024 * 1024;
+    let mut cmd = SubprocessAdapter::measured_command("sh");
+    cmd.args(["-c", "python3 -c 'b = b\"x\" * (64 << 20)'; printf done"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    SubprocessAdapter::configure_measured_stdin(&mut cmd);
+    SubprocessAdapter::configure_child_process(&mut cmd);
+    let sample_interval = Duration::from_secs(5);
+
+    let outcome = SubprocessAdapter::execute_measured_command(
+        &mut cmd,
+        Duration::from_secs(30),
+        "short-lived allocator",
+        sample_interval,
+    )
+    .await
+    .unwrap();
+
+    assert!(outcome.error.is_none(), "unexpected error: {:?}", outcome.error);
+    let output = outcome.output.unwrap();
+    assert!(
+        output.status.success(),
+        "python3 child failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"done");
+    assert!(outcome.duration < sample_interval);
+    assert_eq!(
+        outcome.resource_stats.sample_count, 0,
+        "the sampler must not have observed the child"
+    );
+    assert_eq!(outcome.resource_stats.memory_method, MemoryMethod::RusageMaxRss);
+    assert!(
+        outcome.resource_stats.peak_memory_bytes >= SIXTY_MIB,
+        "peak {} bytes is below the child's 64 MiB allocation",
+        outcome.resource_stats.peak_memory_bytes
+    );
+    assert_eq!(
+        outcome.resource_stats.peak_memory_delta_bytes,
+        outcome
+            .resource_stats
+            .peak_memory_bytes
+            .saturating_sub(outcome.resource_stats.baseline_memory_bytes)
+    );
+}
+
+/// Output larger than a pipe buffer must be drained while the child is reaped, or the child
+/// blocks on write and the reap never returns.
+#[cfg(unix)]
+#[tokio::test]
+async fn rusage_path_drains_output_larger_than_a_pipe_buffer() {
+    const OUTPUT_BYTES: usize = 1_000_000;
+    let mut cmd = SubprocessAdapter::measured_command("sh");
+    cmd.args(["-c", "head -c 1000000 /dev/zero; head -c 1000000 /dev/zero 1>&2"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    SubprocessAdapter::configure_measured_stdin(&mut cmd);
+    SubprocessAdapter::configure_child_process(&mut cmd);
+
+    let outcome = SubprocessAdapter::execute_measured_command(
+        &mut cmd,
+        Duration::from_secs(10),
+        "large output",
+        Duration::from_millis(10),
+    )
+    .await
+    .unwrap();
+
+    assert!(outcome.error.is_none(), "unexpected error: {:?}", outcome.error);
+    let output = outcome.output.unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout.len(), OUTPUT_BYTES);
+    assert_eq!(output.stderr.len(), OUTPUT_BYTES);
+}
+
+#[cfg(unix)]
+#[test]
+fn ru_maxrss_is_normalised_to_bytes_per_platform() {
+    let expected = if cfg!(target_vendor = "apple") {
+        2048
+    } else {
+        2048 * 1024
+    };
+    assert_eq!(SubprocessAdapter::ru_maxrss_to_bytes(2048), expected);
+    assert_eq!(SubprocessAdapter::ru_maxrss_to_bytes(0), 0);
+    assert_eq!(SubprocessAdapter::ru_maxrss_to_bytes(-1), 0);
+}
+
+#[test]
+fn self_reported_peak_is_recorded_but_never_replaces_the_measured_peak() {
+    let resource_stats = crate::monitoring::ResourceStats {
+        baseline_memory_bytes: 1_000,
+        peak_memory_bytes: 50_000,
+        peak_memory_delta_bytes: 49_000,
+        memory_method: MemoryMethod::RusageMaxRss,
+        ..Default::default()
+    };
+
+    let metrics = SubprocessAdapter::measured_metrics(&resource_stats, Some(90_000), 12.5);
+
+    assert_eq!(metrics.peak_memory_bytes, 50_000);
+    assert_eq!(metrics.peak_memory_delta_bytes, 49_000);
+    assert_eq!(metrics.memory_method, MemoryMethod::RusageMaxRss);
+    assert_eq!(metrics.self_reported_peak_memory_bytes, Some(90_000));
+    assert_eq!(metrics.throughput_bytes_per_sec, 12.5);
 }
 
 #[cfg(unix)]

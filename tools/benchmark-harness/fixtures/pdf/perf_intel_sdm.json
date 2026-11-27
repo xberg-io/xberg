@@ -1,0 +1,13 @@
+{
+  "document": "../../../../test_documents/pdf/intel_64_and_ia_32_architectures_software_developer_s_manual_combined_volumes_1_4_june_2021_325462_sdm_vol_1_2abcd_3abcd.pdf",
+  "file_type": "pdf",
+  "file_size": 52916900,
+  "expected_frameworks": ["xberg", "liteparse", "docling"],
+  "metadata": {
+    "description": "Intel 64 and IA-32 SDM combined volumes (June 2021): 4778-page encrypted (no user password) technical manual, dense tables",
+    "category": "pdf-long-performance",
+    "size_class": "large",
+    "pages": 4778,
+    "opt_in": true
+  }
+}

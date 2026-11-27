@@ -1,5 +1,5 @@
+use crate::lh;
 use four_cc::FourCC;
-use libheif_sys as lh;
 
 pub type ColorProfileType = FourCC;
 
@@ -134,10 +134,11 @@ impl ColorProfile for ColorProfileNCLX {
 
 #[allow(unsafe_code)]
 impl ColorProfileNCLX {
+    /// `None` when libheif cannot allocate the profile or cannot be loaded (`dynamic` feature).
     pub fn new() -> Option<Self> {
         // SAFETY: The allocator takes no caller pointers; it returns an owned profile, and a null result
         // becomes `None` rather than a wrapper.
-        let inner = unsafe { lh::heif_nclx_color_profile_alloc() };
+        let inner = unsafe { lh::heif_nclx_color_profile_alloc() }.ok()?;
         (!inner.is_null()).then_some(Self { inner })
     }
 

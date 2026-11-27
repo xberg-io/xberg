@@ -1495,6 +1495,23 @@ impl TesseractAPI {
         Ok(())
     }
 
+    /// Whether `utf8_character` is a unichar of the engine's character set.
+    ///
+    /// The legacy engine's ambiguity tables add n-grams such as `rn` to that set, so this also
+    /// reports whether an engine loaded them.
+    #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+    pub fn is_valid_character(&self, utf8_character: &str) -> Result<bool> {
+        let utf8_character = CString::new(utf8_character).map_err(|_| TesseractError::NullByteInString)?;
+        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
+        // SAFETY: `utf8_character` keeps its NUL-terminated buffer for the call, which only reads
+        // the engine's character set under the held handle lock.
+        match unsafe { shim::xberg_tess_is_valid_character(*handle, utf8_character.as_ptr()) } {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(TesseractError::OcrError),
+        }
+    }
+
     /// Checks if a word is valid.
     ///
     /// # Arguments
@@ -2834,6 +2851,7 @@ mod shim {
         pub(super) fn xberg_tess_get_hocr_text(handle: *mut c_void, page: c_int) -> *mut c_char;
         pub(super) fn xberg_tess_get_utf8_text(handle: *mut c_void) -> *mut c_char;
         pub(super) fn xberg_tess_clear(handle: *mut c_void) -> c_int;
+        pub(super) fn xberg_tess_is_valid_character(handle: *mut c_void, utf8_character: *const c_char) -> c_int;
         pub(super) fn xberg_tess_detect_orientation_script(
             handle: *mut c_void,
             orient_deg: *mut c_int,

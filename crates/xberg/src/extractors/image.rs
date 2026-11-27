@@ -102,6 +102,17 @@ const SPARSE_IMAGE_OCR_MAX_LOW_CONFIDENCE_RATIO: f64 = 0.30;
 ))]
 const SPARSE_IMAGE_OCR_CONFIDENCE_PERCENTILE: f64 = 0.10;
 
+/// Fewest usable words whose confidence distribution can vouch for a sparse read. Raw Tesseract
+/// reads of garbage pass the distribution gate with one to four words (ocr_test_rotated_90 psm 11:
+/// `NZ` at 0.66, `=` `=.` at 0.94; cord_receipt_02 psm 3 best: three words at 0.34-0.55;
+/// ocr_test_rotated_270 psm 11 best: four symbols at 0.83-0.96), while every genuine sparse page in
+/// the corpus reads at least fifteen words. ~keep
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
+const SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS: usize = 5;
+
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
 const LAYOUT_REGION_TESSERACT_PSM: i32 = 6;
 
@@ -1367,9 +1378,25 @@ fn should_retry_sparse_image_ocr(
     config: &crate::core::config::OcrConfig,
     result: &crate::types::ExtractedDocument,
 ) -> bool {
+    let word_count = usable_word_confidences(result).len();
     is_implicit_horizontal_tesseract(config)
-        && usable_word_confidences(result).len() <= SPARSE_IMAGE_OCR_WORD_LIMIT
-        && !has_robust_word_confidence_distribution(result)
+        && word_count <= SPARSE_IMAGE_OCR_WORD_LIMIT
+        && (word_count < SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS || !has_robust_word_confidence_distribution(result))
+}
+
+/// A retry that ran only because the primary read too few words to judge must add words to win:
+/// a confident short label read twice is kept as first read. ~keep
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
+))]
+fn should_select_sparse_fallback(
+    primary: &crate::types::ExtractedDocument,
+    fallback: &crate::types::ExtractedDocument,
+) -> bool {
+    has_robust_word_confidence_distribution(fallback)
+        && (!has_robust_word_confidence_distribution(primary)
+            || usable_word_confidences(fallback).len() > usable_word_confidences(primary).len())
 }
 
 #[cfg(all(
@@ -1394,10 +1421,22 @@ fn tesseract_table_page_text(
     use crate::core::config::OutputFormat;
     use crate::types::internal::ElementKind;
 
-    // The standalone builder always keeps an empty source-image reference. ~keep
-    let ([.., image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+    // The standalone builder always keeps an empty source-image reference: the last element when
+    // the table sits among the paragraphs, the one before the table when the table comes last. ~keep
+    let [table] = doc.tables.as_slice() else {
         return None;
     };
+    let mut table_elements = doc
+        .elements
+        .iter()
+        .filter(|element| matches!(element.kind, ElementKind::Table { .. }));
+    let (Some(element), None) = (table_elements.next(), table_elements.next()) else {
+        return None;
+    };
+    let image = doc
+        .elements
+        .iter()
+        .rfind(|element| !matches!(element.kind, ElementKind::Table { .. }))?;
     // TIFF without page tracking can share the standalone page transcript across frames. ~keep
     if !matches!(image.kind, ElementKind::Image { image_index: 0 })
         || !image.text.is_empty()
@@ -2572,6 +2611,13 @@ mod image_ocr_budget;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_color_threshold.rs"]
 mod image_color_threshold;
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "image_paddle_fallback.rs"]
+mod image_paddle_fallback;
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+pub(crate) use image_paddle_fallback::{
+    model_request as paddle_fallback_model_request, model_state as paddle_fallback_model_state,
+};
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
@@ -2772,7 +2818,7 @@ async fn process_whole_image_ocr(
         )
         .await;
     }
-    if !has_robust_word_confidence_distribution(&fallback) {
+    if !should_select_sparse_fallback(&primary, &fallback) {
         return Ok(apply_rtl_capture_public_policy(original_config, primary));
     }
     let mut selected = fallback;
@@ -2960,6 +3006,10 @@ async fn recognize_cached_image_tables(
     let has_table_region = detections
         .iter()
         .any(|detection| detection.class_name == crate::layout::LayoutClass::Table);
+    // TATR reads only `Table` regions, so without one the outcome is empty and loading the model is wasted.
+    if !has_table_region {
+        return (crate::ocr::layout_assembly::RecognizedTablesOutcome::default(), None);
+    }
     let recognized = tokio::task::spawn_blocking(move || {
         let mut model = crate::layout::take_or_create_tatr(acceleration.as_ref(), thread_budget)?;
         Some(crate::ocr::layout_assembly::recognize_page_tables_with_fallback(
@@ -3121,7 +3171,12 @@ fn single_block_table_config(
     if mime_type.to_lowercase().contains("tiff") {
         return None;
     }
-    let mut ocr = config.ocr.clone().unwrap_or_default();
+    // A Tesseract re-read must not replace the PaddleOCR read the first pass selected. ~keep
+    #[cfg(all(paddle_ocr, feature = "pdf"))]
+    if image_paddle_fallback::read_by_paddle(first) {
+        return None;
+    }
+    let mut ocr = config.ocr_or_default().into_owned();
     if !is_implicit_horizontal_tesseract(&ocr)
         || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
         || ocr.pipeline.is_some()
@@ -3309,14 +3364,8 @@ impl ImageExtractor {
         #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
         let _ = recover_tall;
 
-        let default_ocr_config;
-        let ocr_config = match config.ocr.as_ref() {
-            Some(c) => c,
-            None => {
-                default_ocr_config = crate::core::config::OcrConfig::default();
-                &default_ocr_config
-            }
-        };
+        let default_ocr_config = config.ocr_or_default();
+        let ocr_config: &crate::core::config::OcrConfig = &default_ocr_config;
 
         // `vlm_fallback` and explicit multi-stage pipelines were only honoured by the
         // PDF extractor, so a bare image upload always used a single backend and never
@@ -3337,7 +3386,7 @@ impl ImageExtractor {
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let (standalone_tesseract, table_tesseract, psm6_tesseract);
         #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-        let builtin_paddle;
+        let (builtin_paddle, fallback_paddle);
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
@@ -3346,6 +3395,8 @@ impl ImageExtractor {
             #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
             {
                 builtin_paddle = backend.name() == "paddle-ocr" && registry.has_builtin_paddle();
+                fallback_paddle =
+                    image_paddle_fallback::backend(&registry, &backend, (config, ocr_config), content, mime_type);
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
@@ -3473,6 +3524,9 @@ impl ImageExtractor {
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let ocr_result = image_color_threshold::retry(
             standalone_tesseract.as_deref(),
+            #[cfg(all(paddle_ocr, feature = "pdf"))]
+            std::sync::Arc::clone(&ocr_bytes),
+            #[cfg(not(all(paddle_ocr, feature = "pdf")))]
             ocr_bytes,
             mime_type,
             (ocr_config, &ocr_config_with_format),
@@ -3480,6 +3534,19 @@ impl ImageExtractor {
             ocr_result,
         )
         .await?;
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let (ocr_result, paddle_read) = image_paddle_fallback::retry(
+            fallback_paddle,
+            ocr_bytes,
+            (ocr_config, &ocr_config_with_format),
+            config.cancel_token.as_ref(),
+            ocr_result,
+        )
+        .await?;
+        // Tall-strip recovery and photo-title recovery re-read with Tesseract. ~keep
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let (recover_tall, title_source) =
+            image_paddle_fallback::tesseract_recoveries(paddle_read.as_ref(), recover_tall, title_source);
         #[cfg(target_arch = "wasm32")]
         let ocr_result = backend.process_image(ocr_input, &ocr_config_with_format).await?;
         let ocr_result = {
@@ -3577,12 +3644,17 @@ impl ImageExtractor {
         // `ocr_confidence: None` rather than repeating a figure that was never measured for
         // them (#1568). Gated on `pdf` because the shared builder lives in that module.
         #[cfg(all(feature = "ocr", feature = "pdf"))]
-        let whole_image_ocr_confidence = crate::extractors::pdf::ocr::page_ocr_confidence(
-            backend.confidence_semantics(),
-            crate::extractors::pdf::ocr::mean_text_conf_of(&ocr_metadata.additional),
-            crate::extractors::pdf::ocr::word_count_of(&ocr_metadata.additional).unwrap_or(0),
-            backend.name(),
-        );
+        let whole_image_ocr_confidence = {
+            // The PaddleOCR fallback's read reports its own backend and confidence scale. ~keep
+            #[cfg(all(paddle_ocr, not(target_arch = "wasm32")))]
+            let backend = paddle_read.as_ref().unwrap_or(&backend);
+            crate::extractors::pdf::ocr::page_ocr_confidence(
+                backend.confidence_semantics(),
+                crate::extractors::pdf::ocr::mean_text_conf_of(&ocr_metadata.additional),
+                crate::extractors::pdf::ocr::word_count_of(&ocr_metadata.additional).unwrap_or(0),
+                backend.name(),
+            )
+        };
         #[cfg(all(feature = "ocr", not(feature = "pdf")))]
         let whole_image_ocr_confidence: Option<crate::types::page::PageOcrConfidence> = None;
 
@@ -3616,16 +3688,27 @@ impl ImageExtractor {
             // exactly the duplication being fixed. Once any table was detected, trust
             // the (possibly empty) filtered element list instead of that fallback. ~keep
             let use_hocr_headings = ocr_extraction_result.page_contents.is_none();
+            let (ocr_tables, place_tables) = standalone_tables_for_placement(
+                ocr_tables,
+                use_hocr_headings && !has_public_ocr_structure,
+                &ocr_metadata,
+                ocr_internal_document.as_ref(),
+            );
             let hocr_has_content_or_tables =
                 |internal_doc: &InternalDocument| !internal_doc.elements.is_empty() || !ocr_tables.is_empty();
-            let mut doc = match &ocr_internal_document {
-                Some(internal_doc) if has_public_ocr_structure => {
-                    build_image_ocr_document(Some(internal_doc.clone()), &ocr_extraction_result.content)
-                }
+            let (mut doc, placed_tables) = match &ocr_internal_document {
+                Some(internal_doc) if has_public_ocr_structure => (
+                    build_image_ocr_document(Some(internal_doc.clone()), &ocr_extraction_result.content),
+                    0,
+                ),
                 Some(internal_doc) if use_hocr_headings && hocr_has_content_or_tables(internal_doc) => {
-                    build_image_internal_document_from_hocr_elements(&internal_doc.elements)
+                    let placeable: &[crate::types::Table] = if place_tables { &ocr_tables } else { &[] };
+                    build_image_internal_document_from_hocr_elements(&internal_doc.elements, placeable)
                 }
-                _ => build_image_internal_document(Some(&ocr_extraction_result.content), None),
+                _ => (
+                    build_image_internal_document(Some(&ocr_extraction_result.content), None),
+                    0,
+                ),
             };
             doc.metadata = ocr_metadata;
             doc.formulas = ocr_formulas;
@@ -3648,7 +3731,11 @@ impl ImageExtractor {
 
             let page_tables: Vec<std::sync::Arc<crate::types::Table>> = ocr_tables
                 .into_iter()
-                .map(|table| {
+                .enumerate()
+                .map(|(position, table)| {
+                    if position < placed_tables {
+                        return std::sync::Arc::new(table);
+                    }
                     let bbox = table.bounding_box;
                     let table_index = doc.push_table(table.clone());
                     let mut element = crate::types::internal::InternalElement::text(
@@ -3686,7 +3773,7 @@ impl ImageExtractor {
                     })
                 };
                 #[cfg(all(paddle_ocr, feature = "pdf", not(target_arch = "wasm32")))]
-                let table_text = if builtin_paddle && !has_public_ocr_structure {
+                let table_text = if (builtin_paddle || paddle_read.is_some()) && !has_public_ocr_structure {
                     table_text.or_else(|| paddle_table_page_text(raw, &doc, &config.output_format, mime_type))
                 } else {
                     table_text
@@ -4095,6 +4182,76 @@ fn standalone_image_element_font_size(element: &crate::types::internal::Internal
         .ok()
 }
 
+/// The top edge of a standalone-image OCR table (raster pixels, top-left origin).
+#[cfg(feature = "ocr")]
+fn table_top(table: &crate::types::Table) -> Option<f64> {
+    table.bounding_box.map(|bbox| bbox.y0).filter(|top| top.is_finite())
+}
+
+/// Tables top to bottom; a table without a usable box keeps its place after every boxed one.
+#[cfg(feature = "ocr")]
+fn tables_in_reading_order(mut tables: Vec<crate::types::Table>) -> Vec<crate::types::Table> {
+    tables.sort_by(|left, right| {
+        table_top(left)
+            .unwrap_or(f64::INFINITY)
+            .total_cmp(&table_top(right).unwrap_or(f64::INFINITY))
+    });
+    tables
+}
+
+/// The tables of a standalone image and whether to place them among its paragraphs: only for an
+/// hOCR-built document whose boxes are in the raster frame. Placed tables come sorted, so
+/// `doc.tables` and the page's tables share the placement order.
+#[cfg(feature = "ocr")]
+fn standalone_tables_for_placement(
+    tables: Vec<crate::types::Table>,
+    hocr_document: bool,
+    metadata: &crate::types::Metadata,
+    source: Option<&InternalDocument>,
+) -> (Vec<crate::types::Table>, bool) {
+    let place = hocr_document && source.is_some_and(|source| ocr_kept_the_raster_frame(metadata, &source.elements));
+    if place {
+        (tables_in_reading_order(tables), true)
+    } else {
+        (tables, false)
+    }
+}
+
+/// Whether the OCR boxes are in the source raster's frame: the page was not recognized turned
+/// (auto-rotation, an undone backend rotation, a recorded orientation) and no element carries a
+/// rotation. Table placement compares boxes, so it runs only in that frame.
+#[cfg(feature = "ocr")]
+fn ocr_kept_the_raster_frame(
+    metadata: &crate::types::Metadata,
+    elements: &[crate::types::internal::InternalElement],
+) -> bool {
+    use crate::ocr_metadata_keys::{
+        OCR_AUTO_ROTATED_METADATA_KEY, OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY,
+    };
+    let flag = |key: &str| {
+        metadata
+            .additional
+            .get(key)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    };
+    let turned = metadata
+        .additional
+        .get(OCR_ORIENTATION_DEGREES_METADATA_KEY)
+        .and_then(serde_json::Value::as_i64)
+        .is_some_and(|degrees| degrees.rem_euclid(360) != 0);
+    let upright = |degrees: f64| degrees.rem_euclid(360.0) < f64::EPSILON;
+    !flag(OCR_AUTO_ROTATED_METADATA_KEY)
+        && !flag(OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY)
+        && !turned
+        && elements.iter().all(|element| {
+            element
+                .ocr_rotation
+                .as_ref()
+                .is_none_or(|rotation| upright(rotation.angle_degrees))
+        })
+}
+
 /// Build an `InternalDocument` from hOCR-derived paragraph elements.
 ///
 /// Promotes large-font, short, single-line paragraphs to real `Heading`
@@ -4103,10 +4260,17 @@ fn standalone_image_element_font_size(element: &crate::types::internal::Internal
 /// renderer, so it either leaks markdown syntax into `Plain` output or gets
 /// escaped to `\#\#` by the markdown renderer. Always pushes the image
 /// itself as an `Image` node, matching `build_image_internal_document`.
+///
+/// A table goes before the first paragraph that starts below the table's top edge, the rule PDF
+/// assembly places tables by (`vertical_insertion_slot`). Tables are placed in their given order
+/// (the caller passes them in [`tables_in_reading_order`]), so the document's table order is
+/// theirs; the returned count is the leading tables placed. The caller appends the rest after the
+/// image node, as every table was before.
 #[cfg(feature = "ocr")]
 fn build_image_internal_document_from_hocr_elements(
     elements: &[crate::types::internal::InternalElement],
-) -> InternalDocument {
+    tables: &[crate::types::Table],
+) -> (InternalDocument, usize) {
     use crate::types::internal::ElementKind;
 
     let mut font_sizes: Vec<f64> = elements.iter().filter_map(standalone_image_element_font_size).collect();
@@ -4118,9 +4282,19 @@ fn build_image_internal_document_from_hocr_elements(
     };
 
     let mut builder = InternalDocumentBuilder::new("image");
+    let mut placed = 0;
     for element in elements {
         if matches!(element.kind, ElementKind::PageBreak) || element.text.is_empty() {
             continue;
+        }
+        if let Some(top) = element.bbox.map(|bbox| bbox.y0).filter(|top| top.is_finite()) {
+            while let Some(table) = tables
+                .get(placed)
+                .filter(|&table| table_top(table).is_some_and(|y| y < top))
+            {
+                builder.push_table(table.clone(), None, table.bounding_box);
+                placed += 1;
+            }
         }
         let is_heading = median_font_size.is_some_and(|median| {
             standalone_image_element_font_size(element).is_some_and(|size| {
@@ -4136,7 +4310,7 @@ fn build_image_internal_document_from_hocr_elements(
         }
     }
     push_image_placeholder(&mut builder);
-    builder.build()
+    (builder.build(), placed)
 }
 
 /// Push a placeholder `Image` element carrying no binary data.
@@ -5595,7 +5769,7 @@ mod tests {
             hocr_text_element_with_font_size("Body text at normal size.", Some(12.0)),
         ];
 
-        let doc = build_image_internal_document_from_hocr_elements(&elements);
+        let (doc, _) = build_image_internal_document_from_hocr_elements(&elements, &[]);
         let plain = crate::rendering::render_plain(&doc);
 
         assert!(
@@ -5626,7 +5800,7 @@ mod tests {
             hocr_text_element_with_font_size("More body text at normal size.", Some(12.0)),
         ];
 
-        let doc = build_image_internal_document_from_hocr_elements(&elements);
+        let (doc, _) = build_image_internal_document_from_hocr_elements(&elements, &[]);
         let markdown = crate::rendering::render_markdown(&doc);
 
         assert!(
@@ -5637,6 +5811,217 @@ mod tests {
             !markdown.contains(r"\#"),
             "markdown output must not escape the heading marker: {markdown:?}"
         );
+    }
+
+    #[cfg(feature = "ocr")]
+    fn rows(top: f64, bottom: f64) -> crate::types::extraction::BoundingBox {
+        crate::types::extraction::BoundingBox {
+            x0: 0.0,
+            y0: top,
+            x1: 1000.0,
+            y1: bottom,
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    fn hocr_paragraph_at(text: &str, top: f64) -> crate::types::internal::InternalElement {
+        let mut element = hocr_text_element_with_font_size(text, None);
+        element.bbox = Some(rows(top, top + 30.0));
+        element
+    }
+
+    #[cfg(feature = "ocr")]
+    fn table_at(label: &str, bbox: Option<crate::types::extraction::BoundingBox>) -> crate::types::Table {
+        crate::types::Table {
+            cells: vec![
+                vec![label.to_string(), "1".to_string()],
+                vec!["Widget".to_string(), "2".to_string()],
+            ],
+            markdown: format!("| {label} | 1 |\n| --- | --- |\n| Widget | 2 |"),
+            bounding_box: bbox,
+            ..Default::default()
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    fn element_sequence(doc: &InternalDocument) -> Vec<String> {
+        use crate::types::internal::ElementKind;
+        doc.elements
+            .iter()
+            .map(|element| match element.kind {
+                ElementKind::Table { table_index } => format!("table {table_index}"),
+                ElementKind::Image { .. } => "image".to_string(),
+                _ => element.text.clone(),
+            })
+            .collect()
+    }
+
+    /// complex_document.png: the table region starts under the title, and the summary lines sit
+    /// below it; appending the table after every paragraph read it after the summary.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn standalone_image_table_precedes_the_first_paragraph_below_its_top() {
+        let elements = vec![
+            hocr_paragraph_at("Sales Report 2024", 50.0),
+            hocr_paragraph_at("Summary:", 1000.0),
+            hocr_paragraph_at("Prepared by: John Doe", 1100.0),
+        ];
+        let tables = vec![table_at("Q1 Product", Some(rows(111.0, 958.0)))];
+
+        let (doc, placed) = build_image_internal_document_from_hocr_elements(&elements, &tables);
+
+        assert_eq!(placed, 1);
+        assert_eq!(
+            element_sequence(&doc),
+            [
+                "Sales Report 2024",
+                "table 0",
+                "Summary:",
+                "Prepared by: John Doe",
+                "image"
+            ]
+        );
+        let markdown = crate::rendering::render_markdown(&doc);
+        let table = markdown.find("| Q1 Product").expect("the table is rendered");
+        assert!(
+            table < markdown.find("Summary:").expect("the summary is rendered"),
+            "{markdown}"
+        );
+        assert!(
+            markdown.find("Sales Report 2024").expect("the title is rendered") < table,
+            "{markdown}"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn standalone_image_tables_below_every_paragraph_or_without_a_box_are_left_to_the_caller() {
+        let elements = vec![hocr_paragraph_at("Intro", 10.0), hocr_paragraph_at("Body", 60.0)];
+        for table in [table_at("Low", Some(rows(200.0, 300.0))), table_at("Unplaced", None)] {
+            let (doc, placed) = build_image_internal_document_from_hocr_elements(&elements, &[table]);
+            assert_eq!(placed, 0);
+            assert!(doc.tables.is_empty());
+            assert_eq!(element_sequence(&doc), ["Intro", "Body", "image"]);
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn standalone_image_tables_are_placed_top_to_bottom_whatever_their_detection_order() {
+        let elements = vec![
+            hocr_paragraph_at("Top", 50.0),
+            hocr_paragraph_at("Middle", 500.0),
+            hocr_paragraph_at("Bottom", 1000.0),
+        ];
+        let detected = vec![
+            table_at("Unboxed", None),
+            table_at("Lower", Some(rows(900.0, 950.0))),
+            table_at("Upper", Some(rows(100.0, 200.0))),
+        ];
+        let tables = tables_in_reading_order(detected);
+        let labels = |tables: &[crate::types::Table]| tables.iter().map(|t| t.cells[0][0].clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&tables), ["Upper", "Lower", "Unboxed"]);
+
+        let (doc, placed) = build_image_internal_document_from_hocr_elements(&elements, &tables);
+
+        assert_eq!(placed, 2);
+        assert_eq!(
+            element_sequence(&doc),
+            ["Top", "table 0", "Middle", "table 1", "Bottom", "image"]
+        );
+        assert_eq!(labels(&doc.tables), labels(&tables[..placed]));
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn standalone_image_tables_are_placed_only_in_the_raster_frame() {
+        let elements = vec![hocr_paragraph_at("Title", 10.0), hocr_paragraph_at("Summary", 500.0)];
+        assert!(ocr_kept_the_raster_frame(&Default::default(), &elements));
+
+        for (key, value) in [
+            (
+                crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY,
+                serde_json::json!(true),
+            ),
+            (
+                crate::ocr_metadata_keys::OCR_BACKEND_ROTATION_UNDONE_METADATA_KEY,
+                serde_json::json!(true),
+            ),
+            (
+                crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY,
+                serde_json::json!(90),
+            ),
+        ] {
+            let mut metadata = crate::types::Metadata::default();
+            metadata.additional.insert(std::borrow::Cow::Borrowed(key), value);
+            assert!(!ocr_kept_the_raster_frame(&metadata, &elements), "{key}");
+        }
+        let mut level = crate::types::Metadata::default();
+        level.additional.insert(
+            std::borrow::Cow::Borrowed(crate::ocr_metadata_keys::OCR_ORIENTATION_DEGREES_METADATA_KEY),
+            serde_json::json!(0),
+        );
+        assert!(ocr_kept_the_raster_frame(&level, &elements));
+
+        let mut rotated = elements.clone();
+        rotated[1].ocr_rotation = Some(crate::types::OcrRotation {
+            angle_degrees: 180.0,
+            confidence: None,
+        });
+        assert!(!ocr_kept_the_raster_frame(&Default::default(), &rotated));
+    }
+
+    /// The image extractor's PaddleOCR fallback: a first read built from PaddleOCR is never
+    /// replaced by the PSM 6 Tesseract table re-read.
+    #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    #[test]
+    fn a_paddle_first_read_is_not_read_again_as_one_block() {
+        let config = ExtractionConfig::default();
+        let first = image_table_reread::sample_table_document();
+        assert!(single_block_table_config(&config, "image/jpeg", &first).is_some());
+
+        let mut paddle_first = image_table_reread::sample_table_document();
+        image_paddle_fallback::mark_read_by_paddle(&mut paddle_first);
+        assert!(single_block_table_config(&config, "image/jpeg", &paddle_first).is_none());
+    }
+
+    /// The plain page text of a sparse table still renders once the table sits among the
+    /// paragraphs instead of after the source-image reference.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn sparse_table_page_text_accepts_a_table_placed_among_paragraphs() {
+        let source = InternalDocument {
+            elements: vec![
+                hocr_paragraph_at("Title words", 0.0),
+                hocr_paragraph_at("Footer text", 300.0),
+            ],
+            ..Default::default()
+        };
+        let table = table_at("Gadget", Some(rows(100.0, 200.0)));
+        let (mut doc, placed) = build_image_internal_document_from_hocr_elements(&source.elements, &[table]);
+        assert_eq!(placed, 1);
+        assert_eq!(
+            element_sequence(&doc),
+            ["Title words", "table 0", "Footer text", "image"]
+        );
+        doc.metadata.additional.insert(
+            std::borrow::Cow::Borrowed("psm"),
+            serde_json::Value::String(WHOLE_IMAGE_TESSERACT_PSM.to_string()),
+        );
+        let raw = "Title words\n\nGadget 1\nWidget 2\n\nFooter text";
+
+        let text = tesseract_table_page_text(
+            raw,
+            &doc,
+            &source,
+            &crate::core::config::OutputFormat::Plain,
+            "image/png",
+            WHOLE_IMAGE_TESSERACT_PSM,
+        )
+        .expect("the sparse table page text renders");
+
+        assert!(text.starts_with("Title words"), "{text:?}");
+        assert!(text.ends_with("Footer text"), "{text:?}");
     }
 
     #[cfg(all(
@@ -5699,9 +6084,73 @@ mod tests {
         #[test]
         fn should_not_retry_sparse_primary_with_robust_word_confidences() {
             let config = crate::core::config::OcrConfig::default();
-            let result = result_with_word_confidences(&[0.90, 0.95]);
+            let result = result_with_word_confidences(&[0.90, 0.95, 0.90, 0.95, 0.90]);
 
             assert!(!should_retry_sparse_image_ocr(&config, &result));
+        }
+
+        /// ocr_test_rotated_90.png with tessdata_best: psm 11 read only `NZ` at 0.66, which passed the
+        /// distribution gate as its own mean and tenth percentile, so the 15-word retry never ran. ~keep
+        #[test]
+        fn should_retry_confident_primary_with_too_few_words_to_judge() {
+            let config = crate::core::config::OcrConfig::default();
+            let cases: [(&str, Vec<f64>, bool); 4] = [
+                ("one word at 0.66", vec![0.66], true),
+                (
+                    "four confident words",
+                    vec![0.95; SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS - 1],
+                    true,
+                ),
+                (
+                    "five confident words",
+                    vec![0.95; SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS],
+                    false,
+                ),
+                (
+                    "five words, all low",
+                    vec![0.10; SPARSE_IMAGE_OCR_MIN_JUDGEABLE_WORDS],
+                    true,
+                ),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    should_retry_sparse_image_ocr(&config, &result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_select_fallback_only_when_it_adds_words_to_a_confident_short_primary() {
+            let primary = result_with_word_confidences(&[0.66]);
+            let cases: [(&str, Vec<f64>, bool); 4] = [
+                ("fifteen confident words", vec![0.94; 15], true),
+                ("one confident word", vec![0.95], false),
+                ("two confident words", vec![0.95, 0.95], true),
+                ("fifteen low words", vec![0.10; 15], false),
+            ];
+            for (name, confidences, expected) in cases {
+                assert_eq!(
+                    should_select_sparse_fallback(&primary, &result_with_word_confidences(&confidences)),
+                    expected,
+                    "{name}"
+                );
+            }
+        }
+
+        #[test]
+        fn should_select_robust_fallback_over_a_low_confidence_primary_of_any_length() {
+            let primary = result_with_word_confidences(&[0.10, 0.10, 0.10]);
+
+            assert!(should_select_sparse_fallback(
+                &primary,
+                &result_with_word_confidences(&[0.95])
+            ));
+            assert!(!should_select_sparse_fallback(
+                &primary,
+                &result_with_word_confidences(&[0.10])
+            ));
         }
 
         #[test]

@@ -16,18 +16,16 @@ impl PdfDocument {
         ix * iy
     }
 
-    #[allow(clippy::type_complexity)]
-    fn accumulate_text_signals(
-        &self,
-        page: usize,
+    /// Non-artifact glyph count and the share of the page box `(x0, y0, x1, y1)` their span
+    /// boxes cover, clamped to `0.0..=1.0`.
+    fn text_glyphs_and_area(
+        spans: &[crate::layout::TextSpan],
         (px0, py0, px1, py1): (f32, f32, f32, f32),
         page_area: f32,
-    ) -> (usize, f32, f32, f32, f32, String) {
-        let spans = self.extract_spans(page).unwrap_or_default();
-        let mut text = String::new();
+    ) -> (usize, f32) {
         let mut glyphs = 0usize;
         let mut text_area = 0.0f32;
-        for s in &spans {
+        for s in spans {
             if s.artifact_type.is_some() {
                 continue;
             }
@@ -36,11 +34,97 @@ impl PdfDocument {
                 continue;
             }
             glyphs += n;
-            text.push_str(&s.text);
-            text.push(' ');
             text_area += Self::rect_isect_area(&s.bbox, px0, py0, px1, py1);
         }
-        let text_area_ratio = (text_area / page_area).clamp(0.0, 1.0);
+        (glyphs, (text_area / page_area).clamp(0.0, 1.0))
+    }
+
+    /// The page box `(x0, y0, x1, y1)` and the rotation-aware page area the signals are
+    /// measured against.
+    fn page_signal_geometry(&self, page: usize) -> Result<((f32, f32, f32, f32), f32)> {
+        let (llx, lly, urx, ury) = self.get_page_media_box(page)?;
+        let rot = self.get_page_rotation(page).unwrap_or(0);
+        let (mut pw, mut ph) = ((urx - llx).abs(), (ury - lly).abs());
+        if rot % 180 != 0 {
+            std::mem::swap(&mut pw, &mut ph);
+        }
+        let page_area = (pw * ph).max(1.0);
+        let bbox = (llx.min(urx), lly.min(ury), llx.max(urx), lly.max(ury));
+        Ok((bbox, page_area))
+    }
+
+    /// Dominant raster codec of `images`, ignoring images under the 8x8 px size floor that
+    /// [`Self::classify_page`] applies: CCITT if any image is CCITT, else the first image's
+    /// class (DCT or other), else [`ImageCodecClass::None`].
+    pub fn image_codec_class(images: &[crate::extractors::images::PdfImageHandle<'_>]) -> ImageCodecClass {
+        let size_floor = ImageExtractFilter::default();
+        let mut codec = ImageCodecClass::None;
+        for im in images {
+            if i64::from(im.width) < size_floor.min_width || i64::from(im.height) < size_floor.min_height {
+                continue;
+            }
+            let has_ccitt = im
+                .filter_chain
+                .iter()
+                .any(|f| matches!(f, crate::extractors::images::PdfFilter::CCITTFaxDecode));
+            let has_dct = im
+                .filter_chain
+                .iter()
+                .any(|f| matches!(f, crate::extractors::images::PdfFilter::DCTDecode));
+            let c = if has_ccitt {
+                ImageCodecClass::Ccitt
+            } else if has_dct {
+                ImageCodecClass::Dct
+            } else {
+                ImageCodecClass::Other
+            };
+            codec = match (codec, c) {
+                (ImageCodecClass::None, x) => x,
+                (_, ImageCodecClass::Ccitt) => ImageCodecClass::Ccitt,
+                (cur, _) => cur,
+            };
+        }
+        codec
+    }
+
+    /// The [`PageSignals`] fields raster scan grading reads, each computed exactly as
+    /// [`Self::classify_page`] computes it, without the word clustering, path extraction, image
+    /// enumeration and text-quality gate that only the page-kind decision needs.
+    ///
+    /// Fails as `classify_page` does: on an encrypted-unauthenticated document and on a page
+    /// whose media box cannot be read.
+    pub fn scan_text_signals(&self, page: usize) -> Result<crate::extractors::auto::ScanTextSignals> {
+        if !self.is_authenticated() {
+            return Err(Error::EncryptedPdf);
+        }
+        let (bbox, page_area) = self.page_signal_geometry(page)?;
+        let spans = self.extract_spans(page).unwrap_or_default();
+        let (text_glyph_count, text_area_ratio) = Self::text_glyphs_and_area(&spans, bbox, page_area);
+        Ok(crate::extractors::auto::ScanTextSignals {
+            text_glyph_count,
+            text_area_ratio,
+            invisible_text_ratio: self.compute_invisible_text_ratio(page),
+            producer_prior: self.classify_producer_prior(),
+        })
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn accumulate_text_signals(
+        &self,
+        page: usize,
+        (px0, py0, px1, py1): (f32, f32, f32, f32),
+        page_area: f32,
+    ) -> (usize, f32, f32, f32, f32, String) {
+        let spans = self.extract_spans(page).unwrap_or_default();
+        let (glyphs, text_area_ratio) = Self::text_glyphs_and_area(&spans, (px0, py0, px1, py1), page_area);
+        let mut text = String::new();
+        for s in &spans {
+            if s.artifact_type.is_some() || s.text.is_empty() {
+                continue;
+            }
+            text.push_str(&s.text);
+            text.push(' ');
+        }
         let chars: Vec<char> = text.chars().collect();
         let total = chars.len().max(1);
         let bad = chars
@@ -98,35 +182,14 @@ impl PdfDocument {
         let images = self.page_image_handles(page).unwrap_or_default();
         let size_floor = ImageExtractFilter::default();
         let mut img_area = 0.0f32;
-        let mut codec = ImageCodecClass::None;
         for im in &images {
             if i64::from(im.width) < size_floor.min_width || i64::from(im.height) < size_floor.min_height {
                 continue;
             }
             img_area += Self::rect_isect_area(&im.bbox, px0, py0, px1, py1);
-            let has_ccitt = im
-                .filter_chain
-                .iter()
-                .any(|f| matches!(f, crate::extractors::images::PdfFilter::CCITTFaxDecode));
-            let has_dct = im
-                .filter_chain
-                .iter()
-                .any(|f| matches!(f, crate::extractors::images::PdfFilter::DCTDecode));
-            let c = if has_ccitt {
-                ImageCodecClass::Ccitt
-            } else if has_dct {
-                ImageCodecClass::Dct
-            } else {
-                ImageCodecClass::Other
-            };
-            codec = match (codec, c) {
-                (ImageCodecClass::None, x) => x,
-                (_, ImageCodecClass::Ccitt) => ImageCodecClass::Ccitt,
-                (cur, _) => cur,
-            };
         }
         let image_area_ratio = (img_area / page_area).clamp(0.0, 1.0);
-        (image_area_ratio, codec, images.len())
+        (image_area_ratio, Self::image_codec_class(&images), images.len())
     }
 
     fn compute_invisible_text_ratio(&self, page: usize) -> f32 {
@@ -233,14 +296,7 @@ impl PdfDocument {
     /// quality-gate verdict (research §3a) computed from the *same*
     /// single span extraction (no double work). Pure inspection.
     fn gather_page_signals(&self, page: usize) -> Result<(PageSignals, Option<ReasonCode>)> {
-        let (llx, lly, urx, ury) = self.get_page_media_box(page)?;
-        let rot = self.get_page_rotation(page).unwrap_or(0);
-        let (mut pw, mut ph) = ((urx - llx).abs(), (ury - lly).abs());
-        if rot % 180 != 0 {
-            std::mem::swap(&mut pw, &mut ph);
-        }
-        let page_area = (pw * ph).max(1.0);
-        let bbox = (llx.min(urx), lly.min(ury), llx.max(urx), lly.max(ury));
+        let (bbox, page_area) = self.page_signal_geometry(page)?;
 
         let (glyphs, text_area_ratio, garbled_ratio, fragmented_word_ratio, consecutive_repeat_ratio, word_text) =
             self.accumulate_text_signals(page, bbox, page_area);

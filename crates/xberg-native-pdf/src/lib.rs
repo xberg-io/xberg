@@ -97,9 +97,10 @@ pub const LOG_TARGET_ROOT: &str = module_path!();
 // A weak stub redirecting to plain memcmp satisfies the reference on older glibc;
 // glibc 2.35's own definition wins when available. global_asm! works with both
 // GNU ld and lld, unlike --defsym which lld rejects for PLT-resolved symbols. ~keep
-// The single audited exception to the crate-level `deny(unsafe_code)` above:
-// `global_asm!` is unsafe by definition. It emits no Rust code -- only a weak ELF
-// alias -- so it cannot violate any Rust invariant.
+// One of two audited exceptions to the crate-level `deny(unsafe_code)` above (the other is
+// `release_memory::macos`, one FFI call to the system allocator): `global_asm!` is unsafe by
+// definition. It emits no Rust code -- only a weak ELF alias -- so it cannot violate any Rust
+// invariant.
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[allow(unsafe_code)]
 mod memcmpeq_shim {
@@ -114,6 +115,10 @@ mod memcmpeq_shim {
 }
 
 pub mod error;
+
+// Public only for the xberg crate, which calls it between extraction phases. ~keep
+#[doc(hidden)]
+pub mod release_memory;
 
 pub(crate) mod cache;
 

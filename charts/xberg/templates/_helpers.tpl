@@ -60,8 +60,30 @@ ServiceAccount name.
 {{- end }}
 
 {{/*
+Container image tag. ocr.tesseractModelSet=best with ocr.tesseractModelSource=image selects the
+tessdata_best twin of the chosen tag: "" -> <appVersion>-best, latest -> latest-best,
+core -> core-best, <version>-core -> <version>-core-best. A tag already ending in -best is kept.
+*/}}
+{{- define "xberg.imageTag" -}}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion }}
+{{- if and (eq .Values.ocr.tesseractModelSet "best") (eq .Values.ocr.tesseractModelSource "image") (not (hasSuffix "-best" $tag)) }}
+{{- $tag = printf "%s-best" $tag }}
+{{- end }}
+{{- $tag }}
+{{- end }}
+
+{{/*
 Container image reference.
 */}}
 {{- define "xberg.image" -}}
-{{- printf "%s/%s:%s" .Values.image.registry .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) }}
+{{- printf "%s/%s:%s" .Values.image.registry .Values.image.repository (include "xberg.imageTag" .) }}
+{{- end }}
+
+{{/*
+Reject values that cannot work together.
+*/}}
+{{- define "xberg.validate" -}}
+{{- if and (eq .Values.ocr.tesseractModelSet "best") .Values.xberg.tessdataPrefix }}
+{{- fail "xberg.tessdataPrefix must be empty with ocr.tesseractModelSet=best: TESSDATA_PREFIX is used as given for every model set, so it would replace the best models" }}
+{{- end }}
 {{- end }}

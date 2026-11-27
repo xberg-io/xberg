@@ -25,8 +25,8 @@ use ahash::AHashMap;
 use super::document_structure::{ContentLayer, TextAnnotation};
 use super::extraction::BoundingBox;
 use super::internal::{
-    ElementKind, InternalDocument, InternalElement, InternalElementId, Relationship, RelationshipKind,
-    RelationshipTarget,
+    ElementKind, InternalDocument, InternalElement, InternalElementId, RECORD_GROUP_LABEL, Relationship,
+    RelationshipKind, RelationshipTarget,
 };
 use super::metadata::Metadata;
 use super::ocr_elements::{OcrBoundingGeometry, OcrConfidence, OcrElementLevel, OcrRotation};
@@ -540,6 +540,13 @@ impl InternalDocumentBuilder {
     pub fn push_group_start(&mut self, label: Option<&str>, page: Option<u32>) {
         let attrs = label.map(|l| single_attr("label", l));
         self.push_container_start_with_attrs(ElementKind::GroupStart, page, attrs);
+    }
+
+    /// Start a record: one entry of a repeated collection, such as a JSON array item.
+    /// Markdown separates consecutive records with a thematic break; close it with
+    /// [`Self::push_group_end`].
+    pub(crate) fn push_record_start(&mut self) {
+        self.push_group_start(Some(RECORD_GROUP_LABEL), None);
     }
 
     /// Push a `GroupEnd` marker and decrement depth.

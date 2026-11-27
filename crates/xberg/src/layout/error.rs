@@ -30,3 +30,16 @@ pub enum LayoutError {
     #[error("Model download failed: {0}")]
     ModelDownload(String),
 }
+
+#[cfg(feature = "layout-detection")]
+impl LayoutError {
+    /// A runtime that could not be loaded becomes `Inference`: it carries no `ort::Error`, and
+    /// building one would make ort retry its own library search. ~keep
+    pub(crate) fn from_ort_session(error: crate::ort_discovery::OrtSessionError) -> Self {
+        match error {
+            crate::ort_discovery::OrtSessionError::Ort(error) => Self::Ort(error),
+            #[cfg(ort_dynamic_discovery)]
+            unavailable @ crate::ort_discovery::OrtSessionError::Runtime(_) => Self::Inference(unavailable.to_string()),
+        }
+    }
+}

@@ -607,9 +607,21 @@ pub(crate) fn build_session_with(
     commit: impl FnOnce(&mut ort::session::builder::SessionBuilder) -> ort::Result<ort::session::Session>,
 ) -> crate::Result<ort::session::Session> {
     let thread_budget = intra_thread_count(options);
+    // Resolved before any ort call: an unloaded runtime must not become an `ort::Error`, whose
+    // construction makes ort retry its own library search. The message names every path
+    // searched, so it is kept rather than replaced by the generic install hint. ~keep
+    let environment = crate::ort_discovery::ort_environment().map_err(|e| match e {
+        #[cfg(ort_dynamic_discovery)]
+        crate::ort_discovery::OrtSessionError::Runtime(_) => {
+            crate::XbergError::MissingDependency(format!("ONNX Runtime - {e}"))
+        }
+        crate::ort_discovery::OrtSessionError::Ort(_) => {
+            ort_missing_or(err, format!("Failed to create ONNX session: {e}"))
+        }
+    })?;
 
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let mut builder = ort::session::Session::builder(crate::ort_discovery::ort_environment()?)?;
+        let mut builder = ort::session::Session::builder(environment)?;
         builder = builder
             .with_optimization_level(ort::session::builder::GraphOptimizationLevel::All)
             .map_err(|e| ort::Error::new(e.message()))?;
@@ -944,6 +956,9 @@ mod tests {
 
     #[test]
     fn session_builds_and_runs_for_every_option_combo() {
+        if crate::ort_discovery::test_ort_environment("session_builds_and_runs_for_every_option_combo").is_none() {
+            return;
+        }
         for (mp, arena, threads) in [
             (true, true, None),
             (false, false, Some(1)),
@@ -963,7 +978,10 @@ mod tests {
 
     #[test]
     fn build_session_rejects_garbage_model_without_panicking() {
-        crate::ort_discovery::ensure_ort_available();
+        if crate::ort_discovery::test_ort_environment("build_session_rejects_garbage_model_without_panicking").is_none()
+        {
+            return;
+        }
         let r = build_session_with(&OrtSessionOptions::default(), Some(&cpu_accel()), embed_err, |b| {
             b.commit_from_memory(b"definitely not onnx")
         });
@@ -973,7 +991,11 @@ mod tests {
     #[cfg(not(feature = "cuda"))]
     #[test]
     fn unavailable_provider_errors_before_memory_options_are_applied() {
-        crate::ort_discovery::ensure_ort_available();
+        if crate::ort_discovery::test_ort_environment("unavailable_provider_errors_before_memory_options_are_applied")
+            .is_none()
+        {
+            return;
+        }
         let accel = AccelerationConfig {
             provider: ExecutionProviderType::Cuda,
             device_id: 0,

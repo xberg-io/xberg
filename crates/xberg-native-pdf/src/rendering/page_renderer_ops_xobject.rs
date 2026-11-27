@@ -19,7 +19,7 @@ impl PageRenderer {
         if st.excluded_layer_depth == 0 {
             let gs_clone = st.gs_stack.current().clone();
             let transform = combine_transforms(base_transform, &gs_clone.ctm);
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             tracing::trace!("Do: rendering XObject '{}'", name);
             let (is_form, group_boundary) = self.xobject_kind(name, resources, doc).unwrap_or_default();
             let _image_workspace = if is_form {
@@ -93,7 +93,7 @@ impl PageRenderer {
         if st.excluded_layer_depth == 0 {
             let gs_clone = st.gs_stack.current().clone();
             let transform = combine_transforms(base_transform, &gs_clone.ctm);
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             let expanded = crate::extractors::images::expand_inline_image_dict(dict.clone());
             let is_image_mask = expanded
                 .get("ImageMask")
@@ -153,7 +153,7 @@ impl PageRenderer {
             let mut gs_clone = st.gs_stack.current().clone();
             self.seed_shading_spot_inks(&mut gs_clone, name, resources, doc);
             let transform = combine_transforms(base_transform, &gs_clone.ctm);
-            let clip = st.clip_stack.last().and_then(|c| c.as_ref());
+            let clip = st.clip_stack.last().and_then(|c| c.as_deref());
             // §11.4.7 + §11.7.4 + §11.4 cycle: shading is
             // a fill-side paint, so the snapshot/apply
             // cadence mirrors the path-Fill arm. The

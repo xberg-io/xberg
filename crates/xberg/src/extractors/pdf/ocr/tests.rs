@@ -4449,8 +4449,8 @@ pub(super) mod tests {
         let _unregister = Unregister;
 
         // Pin the free-memory figure the batch width is computed from. Letter pages cost about
-        // 21 MB each here, and the route reserves the document plus 512 MB, so a runner with
-        // less than roughly 700 MB free would size the batch below the budget and fail this on
+        // 29 MB each here, and the route reserves the document plus 512 MB, so a runner with
+        // less than roughly 750 MB free would size the batch below the budget and fail this on
         // its host size rather than on the behaviour under test. 8 GB is far above the bound,
         // so the width is decided by the thread budget, which is the thing being asserted.
         let _memory = PinnedAvailableMemory::set(8 * 1024 * 1024 * 1024);
@@ -4480,6 +4480,322 @@ pub(super) mod tests {
             observed, BUDGET,
             "expected {BUDGET} pages in flight at once for a {BUDGET}-thread budget over {PAGES} pages, \
              saw {observed}; a width of 4 means the batch is sized by max_content_size again"
+        );
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn batch_width_follows_the_recognition_sessions_that_read_it() {
+        assert_eq!(
+            bound_batch_to_recognition(8, None),
+            8,
+            "no admission limit keeps the width"
+        );
+        assert_eq!(bound_batch_to_recognition(8, Some(1)), 1);
+        assert_eq!(bound_batch_to_recognition(8, Some(3)), 3);
+        assert_eq!(
+            bound_batch_to_recognition(8, Some(0)),
+            1,
+            "a zero session count still reads one page per batch"
+        );
+        assert_eq!(
+            bound_batch_to_recognition(2, Some(8)),
+            2,
+            "more sessions than pages must not widen a batch memory or the thread budget narrowed"
+        );
+    }
+
+    /// The renderer's RGBA bitmap is resident beside the decoded RGB raster, the encoder's RGB
+    /// clone and the PNG buffer: 4 + 3 + 3 + 4 bytes a pixel plus the encoder's fixed buffer.
+    /// Leaving the RGBA bitmap out read 87 MB for a 300 DPI A4 scan whose render wave measured
+    /// about 115 MB a page.
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
+    fn page_working_set_counts_the_rgba_render_bitmap() {
+        let images_config = crate::core::config::ImageExtractionConfig {
+            target_dpi: 300,
+            auto_adjust_dpi: false,
+            min_dpi: 72,
+            max_dpi: 300,
+            ..Default::default()
+        };
+        // Letter at 300 DPI is 2550x3300.
+        let pixels: usize = 2550 * 3300;
+
+        assert_eq!(
+            ocr_page_working_set_bytes(612.0, 792.0, Some(&images_config)),
+            pixels * (4 + 3 + 3 + 4) + 256 * 1024
+        );
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    struct PinnedRecognitionSessions;
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    impl PinnedRecognitionSessions {
+        fn set(sessions: usize) -> Self {
+            assert_ne!(sessions, 0, "zero means 'not pinned', so it cannot be pinned");
+            TEST_RECOGNITION_SESSIONS.store(sessions, std::sync::atomic::Ordering::SeqCst);
+            Self
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    impl Drop for PinnedRecognitionSessions {
+        fn drop(&mut self) {
+            TEST_RECOGNITION_SESSIONS.store(0, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Reads every page it is handed at once and answers with the width of the raster it read,
+    /// so a test can tell which page's raster each read came from.
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    struct RasterWidthProbeBackend {
+        name: &'static str,
+        in_flight: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        peak: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    impl crate::plugins::Plugin for RasterWidthProbeBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for RasterWidthProbeBackend {
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            use std::sync::atomic::Ordering;
+
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(now, Ordering::SeqCst);
+            let width = image::load_from_memory(image_bytes).map_or(0, |image| image.width());
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            self.in_flight.fetch_sub(1, Ordering::SeqCst);
+            Ok(crate::types::ExtractedDocument {
+                // Long enough to bypass the short-text raster probe, which drops a short read.
+                content: format!(
+                    "Successful OCR page text repeated enough times to bypass the short-text raster probe. \
+                     Successful OCR page text repeated enough times to bypass the short-text raster probe. \
+                     Successful OCR page text repeated enough times to bypass the short-text raster probe. \
+                     {width}"
+                ),
+                ..Default::default()
+            })
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[test]
+    #[serial_test::serial]
+    fn recognition_sessions_bound_only_the_direct_route() {
+        let probe: std::sync::Arc<dyn crate::plugins::OcrBackend> = std::sync::Arc::new(RasterWidthProbeBackend {
+            name: "recognition-session-gate-probe-backend",
+            in_flight: Default::default(),
+            peak: Default::default(),
+            calls: Default::default(),
+        });
+        let pipeline = crate::core::config::OcrPipelineConfig {
+            stages: Vec::new(),
+            quality_thresholds: Default::default(),
+        };
+
+        assert_eq!(
+            direct_route_recognition_sessions(None, Some(&probe)),
+            None,
+            "a custom backend has no admission limit, so its batch keeps the thread budget's width"
+        );
+        assert_eq!(direct_route_recognition_sessions(None, None), None);
+
+        let _pin = PinnedRecognitionSessions::set(2);
+        assert_eq!(direct_route_recognition_sessions(None, Some(&probe)), Some(2));
+        assert_eq!(
+            direct_route_recognition_sessions(Some(&pipeline), Some(&probe)),
+            None,
+            "the pipeline route reads through its stages' backends, so no one admission limit bounds it"
+        );
+    }
+
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[test]
+    #[serial_test::serial]
+    fn builtin_tesseract_batch_follows_the_process_recognition_limit() {
+        crate::plugins::ensure_ocr_backends_initialized();
+        let tesseract = crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .get("tesseract")
+            .expect("the built-in Tesseract backend must be registered");
+
+        assert_eq!(
+            direct_route_recognition_sessions(None, Some(&tesseract)),
+            Some(crate::core::config::concurrency::recognition_concurrency())
+        );
+    }
+
+    /// A batch renders all of its pages before any is read and keeps every raster until the
+    /// batch's last read finishes, so the reads in flight at once are the rasters the route holds
+    /// at once. With recognition admitting two pages, an eight-page batch rendered six pages only
+    /// to wait. The unbounded run is the control: the same probe must see the full thread budget
+    /// there, or the bound assertion would pass on a route that never went wide. Both widths must
+    /// return the same text, per-page reads, warnings and failures, and each page must carry the
+    /// read of its own raster.
+    #[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn mixed_ocr_holds_no_more_rasters_than_recognition_reads() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        const BACKEND: &str = "mixed-ocr-recognition-width-probe-backend";
+        const PAGES: usize = 16;
+        const BUDGET: usize = 8;
+        const SESSIONS: usize = 2;
+
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
+        crate::plugins::register_ocr_backend(Arc::new(RasterWidthProbeBackend {
+            name: BACKEND,
+            in_flight: Arc::clone(&in_flight),
+            peak: Arc::clone(&peak),
+            calls: Arc::clone(&calls),
+        }))
+        .expect("registering the recognition-width probe backend must succeed");
+        struct Unregister;
+        impl Drop for Unregister {
+            fn drop(&mut self) {
+                let _ = crate::plugins::unregister_ocr_backend(BACKEND);
+            }
+        }
+        let _unregister = Unregister;
+        let _memory = PinnedAvailableMemory::set(8 * 1024 * 1024 * 1024);
+
+        // Every page is 8pt wider than the one before, so each renders to a distinct width.
+        let media_boxes: Vec<(u32, u32)> = (0..PAGES as u32).map(|page| (200 + 8 * page, 200)).collect();
+        let pdf = build_minimal_pdf_with_media_boxes(&media_boxes);
+        let ocr_pages: Vec<u32> = (1..=PAGES as u32).collect();
+        // Forced pages with a native boundary each, as in
+        // `mixed_ocr_keeps_successful_pages_when_one_backend_call_fails`: the route then keeps
+        // every page's read in the per-page map instead of judging it against the native text.
+        let native_pages: Vec<String> = ocr_pages.iter().map(|page| format!("native page {page}")).collect();
+        let native_text = native_pages.join("\n");
+        let mut offset = 0;
+        let boundaries: Vec<crate::types::PageBoundary> = native_pages
+            .iter()
+            .enumerate()
+            .map(|(index, text)| {
+                let boundary = crate::types::PageBoundary {
+                    byte_start: offset,
+                    byte_end: offset + text.len(),
+                    page_number: (index + 1) as u32,
+                };
+                offset = boundary.byte_end + usize::from(index + 1 < native_pages.len());
+                boundary
+            })
+            .collect();
+        let mut config = ExtractionConfig {
+            force_ocr_pages: Some(ocr_pages.clone()),
+            ..Default::default()
+        };
+        config.ocr = Some(crate::core::config::OcrConfig {
+            backend: BACKEND.to_string(),
+            ..Default::default()
+        });
+        config.concurrency = Some(crate::core::config::ConcurrencyConfig {
+            max_threads: Some(BUDGET),
+            max_concurrent_ocr: None,
+        });
+
+        let bounded = {
+            let _sessions = PinnedRecognitionSessions::set(SESSIONS);
+            extract_mixed_ocr_native(&native_text, &boundaries, &ocr_pages, &pdf, &config, None)
+                .await
+                .expect("the bounded per-page OCR route must complete")
+        };
+        let bounded_peak = peak.swap(0, Ordering::SeqCst);
+        let bounded_calls = calls.swap(0, Ordering::SeqCst);
+
+        let unbounded = extract_mixed_ocr_native(&native_text, &boundaries, &ocr_pages, &pdf, &config, None)
+            .await
+            .expect("the unbounded per-page OCR route must complete");
+        let unbounded_peak = peak.load(Ordering::SeqCst);
+        let unbounded_calls = calls.load(Ordering::SeqCst);
+
+        assert_eq!(
+            unbounded_peak, BUDGET,
+            "control: without a recognition bound the probe must see the {BUDGET}-page batch"
+        );
+        assert_eq!(
+            bounded_peak, SESSIONS,
+            "with {SESSIONS} recognition sessions the route must hold {SESSIONS} rasters at once, saw {bounded_peak}"
+        );
+        assert_eq!(
+            (bounded_calls, unbounded_calls),
+            (PAGES, PAGES),
+            "every page is read once"
+        );
+
+        assert_eq!(
+            bounded.0, unbounded.0,
+            "the combined text must not depend on batch width"
+        );
+        let sorted = |reads: &ahash::AHashMap<u32, String>| -> std::collections::BTreeMap<u32, String> {
+            reads.iter().map(|(page, text)| (*page, text.clone())).collect()
+        };
+        assert_eq!(sorted(&bounded.1), sorted(&unbounded.1));
+        assert_eq!(format!("{:?}", bounded.8), format!("{:?}", unbounded.8), "warnings");
+        assert_eq!(
+            format!("{:?}", bounded.9),
+            format!("{:?}", unbounded.9),
+            "page failures"
+        );
+
+        let widths: Vec<u32> = sorted(&bounded.1)
+            .into_iter()
+            .map(|(page, text)| {
+                text.rsplit(' ')
+                    .next()
+                    .and_then(|width| width.trim().parse().ok())
+                    .unwrap_or_else(|| panic!("page {page} must carry its raster width, got {text:?}"))
+            })
+            .collect();
+        assert_eq!(widths.len(), PAGES, "every page must have a read: {widths:?}");
+        assert!(
+            widths.windows(2).all(|pair| pair[0] < pair[1]),
+            "each page must carry the read of its own raster, in page order: {widths:?}"
         );
     }
 
@@ -6818,6 +7134,46 @@ Name: ___
         assert!(tatr_unavailable_warning(&config(TableModel::Disabled), Some(&table_pages), false).is_none());
         assert!(tatr_unavailable_warning(&config(TableModel::Tatr), Some(&pages(LayoutClass::Text)), false).is_none());
         assert!(tatr_unavailable_warning(&config(TableModel::Tatr), None, false).is_none());
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn force_ocr_route_loads_the_table_model_only_for_table_regions() {
+        use crate::core::config::layout::{LayoutDetectionConfig, TableModel};
+        use crate::layout::{BBox, DetectionResult, LayoutClass, LayoutDetection};
+
+        let pages = |classes: &[LayoutClass]| {
+            vec![DetectionResult {
+                page_width: 100,
+                page_height: 100,
+                detections: classes
+                    .iter()
+                    .map(|class| LayoutDetection::new(*class, 0.9, BBox::new(0.0, 0.0, 50.0, 50.0)))
+                    .collect(),
+            }]
+        };
+        let config = |table_model| ExtractionConfig {
+            layout: Some(LayoutDetectionConfig {
+                table_model,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert!(pdf_ocr_needs_table_model(
+            &config(TableModel::Tatr),
+            Some(&pages(&[LayoutClass::Text, LayoutClass::Table]))
+        ));
+        assert!(!pdf_ocr_needs_table_model(
+            &config(TableModel::Tatr),
+            Some(&pages(&[LayoutClass::Text, LayoutClass::Picture]))
+        ));
+        assert!(!pdf_ocr_needs_table_model(&config(TableModel::Tatr), Some(&pages(&[]))));
+        assert!(!pdf_ocr_needs_table_model(&config(TableModel::Tatr), None));
+        assert!(!pdf_ocr_needs_table_model(
+            &config(TableModel::Disabled),
+            Some(&pages(&[LayoutClass::Table]))
+        ));
     }
 
     /// GH#1813: the force-OCR PDF route gated TATR on `layout_detections.is_some()` alone, so a
@@ -9350,6 +9706,119 @@ Name: ___
         };
 
         assert!(heuristically_restructured_ocr_pages(&pages, &[1000.0, 1000.0], &[], &config).is_some());
+    }
+
+    /// Four OCR pages, each a large-font title and two body paragraphs; pages 2 to 4 end in a
+    /// "Page N of 4" folio in the bottom margin, so no running footer spans every page.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    fn folio_footed_ocr_pages() -> Vec<Vec<crate::pdf::structure::types::PdfParagraph>> {
+        const PAGES: [(&str, &str, &str); 4] = [
+            (
+                "ANNUAL REPORT OVERVIEW",
+                "This report summarises the packaging commitments the organisation made this year.",
+                "Each commitment is scored against a published framework of five performance levels.",
+            ),
+            (
+                "REPORTING FRAMEWORK",
+                "The framework groups thirteen criteria into leadership, outcomes and operations.",
+                "Members answer every core criterion and as many recommended criteria as they can.",
+            ),
+            (
+                "OUR COMMITMENTS",
+                "The action plan below is a public commitment to improving packaging sustainability.",
+                "Members are encouraged to keep an internal plan with the steps behind each target.",
+            ),
+            (
+                "SIGN OFF",
+                "The chief financial officer approved this report on behalf of the whole organisation.",
+                "Questions about the report can be sent to the covenant office by email or by phone.",
+            ),
+        ];
+        PAGES
+            .iter()
+            .enumerate()
+            .map(|(index, (title, first, second))| {
+                let mut doc = crate::types::internal::InternalDocument::new("test");
+                doc.push_element(ocr_font_block(title, "28", 10.0, 50.0));
+                doc.push_element(ocr_font_block(first, "11", 60.0, 90.0));
+                doc.push_element(ocr_font_block(second, "11", 100.0, 130.0));
+                if index > 0 {
+                    doc.push_element(ocr_font_block(&format!("Page {} of 4", index + 1), "11", 955.0, 975.0));
+                }
+                crate::pdf::structure::adapters::ocr_doc_to_paragraphs(
+                    &doc,
+                    1000,
+                    crate::pdf::structure::adapters::OcrFontSizeScale::uniform(1.0),
+                )
+            })
+            .collect()
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    fn segment_structure_text(pages: &[Vec<crate::pdf::structure::types::PdfParagraph>], ocr_text: bool) -> String {
+        let doc = crate::pdf::structure::extract_document_structure_from_segments(
+            crate::pdf::structure::adapters::segments_from_ocr_pages(pages),
+            crate::pdf::structure::SegmentStructureConfig {
+                k_clusters: crate::core::config::HierarchyConfig::default().k_clusters,
+                tables: &[],
+                outline_entries: &[],
+                strip_repeating_text: false,
+                include_headers: false,
+                include_footers: false,
+                include_footnotes: false,
+                include_watermarks: false,
+                used_structure_tree: false,
+                ocr_text,
+                image_positions: &[],
+                images: None,
+                inject_placeholders: false,
+                layout_hints: None,
+                allow_single_column: true,
+                cancel_token: None,
+                #[cfg(feature = "layout-detection")]
+                layout_images: None,
+                #[cfg(feature = "layout-detection")]
+                layout_results: None,
+                #[cfg(feature = "layout-detection")]
+                table_model: crate::core::config::layout::TableModel::default(),
+                #[cfg(feature = "layout-detection")]
+                table_overlap_preference: crate::core::config::layout::TableOverlapPreference::default(),
+                #[cfg(feature = "layout-detection")]
+                acceleration: None,
+                #[cfg(feature = "layout-detection")]
+                session_thread_budget: 0,
+            },
+        )
+        .expect("segment structure pass");
+        crate::rendering::render_plain(&doc)
+    }
+
+    /// nougat_005: the segment pass deleted the scan's "Page N of 5" folios as validated page
+    /// numbers, and the retention gate, which needs every OCR character back, then discarded the
+    /// pass and all 22 headings it found. OCR text keeps its page numbers, so the headings stay.
+    /// The native control proves the folios sit where page-number validation deletes them.
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn heuristically_restructured_ocr_pages_keeps_folios_and_the_headings_found() {
+        let pages = folio_footed_ocr_pages();
+        assert!(!segment_structure_text(&pages, false).contains("Page 2 of 4"));
+        assert!(segment_structure_text(&pages, true).contains("Page 2 of 4"));
+
+        let config = ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Markdown,
+            ..ExtractionConfig::default()
+        };
+        let doc = heuristically_restructured_ocr_pages(&pages, &[1000.0; 4], &[], &config)
+            .expect("the retention gate must accept a pass that kept every folio");
+
+        assert!(crate::rendering::render_plain(&doc).contains("Page 2 of 4"));
+        assert!(
+            doc.elements
+                .iter()
+                .any(|element| matches!(element.kind, crate::types::internal::ElementKind::Heading { .. })),
+            "expected a Heading element, got kinds: {:?}",
+            doc.elements.iter().map(|e| &e.kind).collect::<Vec<_>>()
+        );
     }
 
     /// Pins a content-loss defect surfaced while A/B-testing hybrid OCR on scanned documents: the VLM

@@ -69,11 +69,13 @@ fn liteparse_batch_provenance_hashes_normalized_semantic_arguments() {
         "--num-workers".to_string(),
         "4".to_string(),
         "--quiet".to_string(),
+        "--ocr-backend".to_string(),
+        "tesseract".to_string(),
         "--no-ocr".to_string(),
     ];
 
     assert_eq!(
-        adapter.liteparse_batch_args("<input-dir>", "<output-dir>", "<output-format>", true),
+        adapter.liteparse_batch_args("<input-dir>", "<output-dir>", "<output-format>", true, None),
         expected_args
     );
     assert_eq!(
@@ -82,6 +84,44 @@ fn liteparse_batch_provenance_hashes_normalized_semantic_arguments() {
             &command,
             &expected_args
         ))
+    );
+}
+
+#[test]
+fn liteparse_forwards_one_ocr_language_per_native_batch() {
+    let adapter = SubprocessAdapter::with_batch_capability(
+        "liteparse",
+        "bash",
+        vec!["liteparse_extract.sh".to_string(), "--ocr".to_string()],
+        vec![],
+        vec!["pdf".to_string()],
+        BatchCapability {
+            entry_point: BatchEntryPoint::LiteparseBatchParse,
+            timing_scope: crate::types::BatchTimingScope::ColdEndToEndSubprocess,
+            per_item_timing: false,
+        },
+    )
+    .with_ocr_language_arg("--ocr-language")
+    .with_ocr_language_policy(crate::adapter::declared_ocr_language_policy("liteparse"));
+
+    assert!(adapter.supports_fixture("pdf", None, Some("eng")));
+    assert!(adapter.supports_fixture("pdf", None, Some("deu")));
+    assert_eq!(
+        adapter.ocr_language_forward_arg(Some("eng")).as_deref(),
+        Some("--ocr-language=eng")
+    );
+    let english = [Some("eng".to_string()), Some("eng".to_string())];
+    let language = adapter
+        .batch_ocr_language_forward_arg(&english)
+        .expect("one language per batch");
+    assert_eq!(language.as_deref(), Some("--ocr-language=eng"));
+    let args = adapter.liteparse_batch_args("<input-dir>", "<output-dir>", "markdown", false, language);
+    assert_eq!(args.last().map(String::as_str), Some("--ocr-language=eng"));
+    assert!(
+        adapter
+            .batch_ocr_language_forward_arg(&[Some("eng".to_string()), Some("deu".to_string())])
+            .is_err(),
+        "a native batch must not mix OCR languages"
     );
 }
 

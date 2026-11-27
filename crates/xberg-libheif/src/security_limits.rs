@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use libheif_sys as lh;
+use crate::lh;
 
 /// Security limits.
 ///
@@ -12,10 +12,15 @@ pub struct SecurityLimits {
 
 #[allow(unsafe_code)]
 impl Default for SecurityLimits {
+    /// # Panics
+    ///
+    /// When libheif cannot be loaded (`dynamic` feature); create a context first, which reports
+    /// why.
     #[allow(unsafe_code)]
     fn default() -> Self {
         // SAFETY: This takes no Rust pointers and returns libheif's immutable global limits.
-        let inner_ptr = unsafe { lh::heif_get_global_security_limits() };
+        let inner_ptr = unsafe { lh::heif_get_global_security_limits() }
+            .unwrap_or_else(|error| panic!("libheif cannot be loaded: {}", error.message));
         if inner_ptr.is_null() {
             panic!("heif_get_global_security_limits returned the null pointer");
         }

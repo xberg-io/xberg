@@ -132,6 +132,7 @@ impl Fixture {
 
         Self::validate_file_type_matches_document(fixture_path, &self.file_type, &self.document)?;
         Self::validate_ocr_language_metadata(fixture_path, &self.metadata)?;
+        Self::validate_family_metadata(fixture_path, &self.metadata)?;
 
         if let Some(gt) = &self.ground_truth {
             Self::validate_ground_truth_block(fixture_path, gt)?;
@@ -167,6 +168,24 @@ impl Fixture {
             });
         }
         Ok(())
+    }
+
+    /// Validate the optional `metadata.family`: when present, a non-empty string without
+    /// surrounding whitespace.
+    fn validate_family_metadata(fixture_path: &Path, metadata: &HashMap<String, serde_json::Value>) -> Result<()> {
+        let Some(family) = metadata.get("family") else {
+            return Ok(());
+        };
+        if family
+            .as_str()
+            .is_some_and(|family| !family.is_empty() && family.trim() == family)
+        {
+            return Ok(());
+        }
+        Err(Error::InvalidFixture {
+            path: fixture_path.to_path_buf(),
+            reason: "metadata.family must be a non-empty string without surrounding whitespace".to_string(),
+        })
     }
 
     /// Validate a fixture's `ground_truth` block: relative-path shape of every referenced
@@ -381,6 +400,23 @@ impl Fixture {
     pub fn ocr_language(&self) -> Option<&str> {
         self.metadata.get("ocr_language").and_then(|value| value.as_str())
     }
+
+    /// The fixture's content family (`metadata.family`): fixtures that render the same source
+    /// content (one image in several encodings, rotations, or a scan of the same page) share one,
+    /// so aggregates can weight the content once instead of once per copy. `None` when the
+    /// fixture is its own family.
+    pub fn family(&self) -> Option<&str> {
+        self.metadata.get("family").and_then(|value| value.as_str())
+    }
+
+    /// Whether `metadata.opt_in` keeps this fixture out of directory scans. An opt-in fixture
+    /// runs only when named explicitly: by a cohort manifest or by `PROFILING_FIXTURES`.
+    pub fn is_opt_in(&self) -> bool {
+        self.metadata
+            .get("opt_in")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    }
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -458,7 +494,8 @@ impl FixtureManager {
     /// Load all fixtures from a directory (recursively)
     ///
     /// If the `PROFILING_FIXTURES` environment variable is set, only fixtures matching
-    /// the specified names (comma-separated) will be loaded. Otherwise, all fixtures are loaded.
+    /// the specified names (comma-separated) will be loaded. Otherwise, every fixture except the
+    /// opt-in ones ([`Fixture::is_opt_in`]) is loaded; opt-in fixtures are still validated.
     pub fn load_fixtures_from_dir(&mut self, dir: impl AsRef<Path>) -> Result<()> {
         self.load_fixtures_from_dir_internal(dir, true)
     }
@@ -478,7 +515,9 @@ impl FixtureManager {
         if apply_filter {
             self.load_with_profiling_filter(all_fixtures, total_fixtures, &mut failed_fixtures);
         } else {
-            self.load_all(all_fixtures, &mut failed_fixtures);
+            // Subdirectory collection keeps opt-in fixtures so `PROFILING_FIXTURES` can still name
+            // them; only the top-level scan drops them. ~keep
+            self.load_all(all_fixtures, &mut failed_fixtures, false);
         }
 
         Self::fail_on_any_failure(total_fixtures, failed_fixtures)
@@ -517,7 +556,7 @@ impl FixtureManager {
         failed_fixtures: &mut Vec<(PathBuf, String)>,
     ) {
         let Some(profiling_set) = Self::get_profiling_fixtures() else {
-            self.load_all(all_fixtures, failed_fixtures);
+            self.load_all(all_fixtures, failed_fixtures, true);
             return;
         };
 
@@ -554,19 +593,37 @@ impl FixtureManager {
                 Loading all {} fixtures.",
                 total_fixtures
             );
-            self.load_all(all_fixtures, failed_fixtures);
+            self.load_all(all_fixtures, failed_fixtures, true);
         }
     }
 
     /// Load every fixture in `fixture_paths`, recording failures instead of aborting the scan.
-    fn load_all(&mut self, fixture_paths: Vec<PathBuf>, failed_fixtures: &mut Vec<(PathBuf, String)>) {
+    /// With `skip_opt_in`, opt-in fixtures are validated but not kept.
+    fn load_all(
+        &mut self,
+        fixture_paths: Vec<PathBuf>,
+        failed_fixtures: &mut Vec<(PathBuf, String)>,
+        skip_opt_in: bool,
+    ) {
+        let mut skipped = Vec::new();
         for fixture_path in fixture_paths {
             match self.load_fixture(&fixture_path) {
-                Ok(()) => {}
+                Ok(()) => {
+                    if skip_opt_in && self.fixtures.last().is_some_and(|(_, fixture)| fixture.is_opt_in()) {
+                        self.fixtures.pop();
+                        skipped.push(fixture_path);
+                    }
+                }
                 Err(e) => {
                     failed_fixtures.push((fixture_path.clone(), e.to_string()));
                 }
             }
+        }
+        if !skipped.is_empty() {
+            eprintln!(
+                "Skipped {} opt-in fixture(s); name them with --cohort or PROFILING_FIXTURES to run them",
+                skipped.len()
+            );
         }
     }
 

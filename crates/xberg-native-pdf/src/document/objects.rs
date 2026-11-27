@@ -73,25 +73,67 @@ fn stream_end(input: &[u8]) -> Option<&[u8]> {
     keyword_boundary(tail).then_some(tail)
 }
 
+/// Where the payload ends of the stream whose `stream` keyword closes `line`, a line ending at
+/// `line_end`, when the dictionary at `object_start` declares a direct /Length that lands on
+/// `endstream`. `None` for any other shape, which leaves the object to the line scan.
+fn declared_stream_payload_end(source: &[u8], object_start: usize, line: &[u8], line_end: usize) -> Option<usize> {
+    let keyword_line = line.trim_ascii_end();
+    if !keyword_line.ends_with(b"stream") || keyword_line.ends_with(b"endstream") {
+        return None;
+    }
+    let (payload, dict) = crate::parser::parse_stream_header(source.get(object_start..)?)?;
+    let payload_start = source.len() - payload.len();
+    if payload_start != line_end {
+        return None;
+    }
+    let length = stream_length(&dict)?;
+    let payload_end = payload_start.checked_add(length)?;
+    (payload_end <= source.len() && crate::parser::declared_stream_end_at(payload, length)).then_some(payload_end)
+}
+
 fn keyword_boundary(input: &[u8]) -> bool {
     input
         .first()
         .is_some_and(|byte| matches!(byte, 0 | 9 | 10 | 12 | 13 | 32 | b'<' | b'[' | b'%'))
 }
 
-/// A read-only view holds a cache hit without deep-copying it. A miss keeps
-/// the existing owned parse result and does not allocate a second shared object.
+/// A read-only view holds a cache hit without deep-copying it. A miss that
+/// filled the cache shares the cached allocation instead of copying it; a miss
+/// the cache did not take keeps the owned parse result.
+#[derive(Debug)]
 pub(super) enum LoadedObject {
     Cached(Arc<Object>),
+    /// Parsed by this read and handed to the cache alongside this handle.
+    Fresh(Arc<Object>),
     Owned(Object),
+}
+
+impl LoadedObject {
+    /// The object by value, copied only when the cache still shares it.
+    pub(super) fn into_object(self) -> Object {
+        match self {
+            Self::Cached(object) | Self::Fresh(object) => {
+                Arc::try_unwrap(object).unwrap_or_else(|shared| Object::clone(&shared))
+            }
+            Self::Owned(object) => object,
+        }
+    }
 }
 
 impl AsRef<Object> for LoadedObject {
     fn as_ref(&self) -> &Object {
         match self {
-            Self::Cached(object) => object.as_ref(),
+            Self::Cached(object) | Self::Fresh(object) => object.as_ref(),
             Self::Owned(object) => object,
         }
+    }
+}
+
+impl std::ops::Deref for LoadedObject {
+    type Target = Object;
+
+    fn deref(&self) -> &Object {
+        self.as_ref()
     }
 }
 
@@ -112,7 +154,9 @@ impl PdfDocument {
         let Some((offset, bytes)) = self.proof_object_span(reference, max_bytes) else {
             return Ok(None);
         };
-        let object = self.read_uncompressed_object(reference, offset, true, false)?;
+        let object = self
+            .read_uncompressed_object(reference, offset, true, false)?
+            .into_object();
         Ok(Some((object, bytes)))
     }
 
@@ -155,10 +199,7 @@ impl PdfDocument {
         {
             return None;
         }
-        let tail = self
-            .source_bytes
-            .as_slice()
-            .get(usize::try_from(entry.offset).ok()?..)?;
+        let tail = self.source_bytes.get(usize::try_from(entry.offset).ok()?..)?;
         Some((entry.offset, tail))
     }
 
@@ -184,7 +225,7 @@ impl PdfDocument {
                         tail,
                         Object::Stream {
                             dict,
-                            data: bytes::Bytes::copy_from_slice(data),
+                            data: crate::parser::shared_or_copied(Some(&self.source_bytes), data),
                         },
                     )
                 } else {
@@ -646,7 +687,7 @@ impl PdfDocument {
                 self.cached_object_clone_count.fetch_add(1, Ordering::Relaxed);
                 Object::clone(&object)
             }
-            LoadedObject::Owned(object) => object,
+            fresh @ (LoadedObject::Fresh(_) | LoadedObject::Owned(_)) => fresh.into_object(),
         })
     }
 
@@ -662,7 +703,7 @@ impl PdfDocument {
     /// Like [`Self::load_object`] but shares a cached object instead of deep-copying it.
     pub(crate) fn load_object_shared(&self, obj_ref: ObjectRef) -> Result<Arc<Object>> {
         self.load_object_for_read(obj_ref).map(|loaded| match loaded {
-            LoadedObject::Cached(object) => object,
+            LoadedObject::Cached(object) | LoadedObject::Fresh(object) => object,
             LoadedObject::Owned(object) => Arc::new(object),
         })
     }
@@ -717,8 +758,10 @@ impl PdfDocument {
                 // Object not in xref table - try scanning the file as fallback
                 // This handles PDFs with incomplete/corrupted xref tables ~keep
                 self.recovery
-                    .xref_misses
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                        xref_misses: 1,
+                        ..Default::default()
+                    });
                 let available: Vec<u32> = self.xref.entries.keys().copied().take(20).collect();
                 tracing::trace!(target: LOG_TARGET,
                     "Object {} not in xref table. Total entries: {}. First 20 objects: {:?}",
@@ -730,8 +773,10 @@ impl PdfDocument {
                 match self.scan_for_object(obj_ref) {
                     Ok(offset) => {
                         self.recovery
-                            .file_scan_recoveries
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                                file_scan_recoveries: 1,
+                                ..Default::default()
+                            });
                         tracing::trace!(target: LOG_TARGET,
                             "Successfully found object {} via file scan at offset {}",
                             obj_ref.id,
@@ -750,14 +795,16 @@ impl PdfDocument {
                             s.borrow_mut().remove(&obj_ref);
                         });
 
-                        return result.map(LoadedObject::Owned);
+                        return result;
                     }
                     Err(_) => {
                         // PDF Spec §7.3.10: missing object reference "shall be treated as null"
                         // ~keep
                         self.recovery
-                            .objects_treated_as_null
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                                objects_treated_as_null: 1,
+                                ..Default::default()
+                            });
                         tracing::trace!(target: LOG_TARGET,
                             "Object {} gen {} not found (xref + file scan failed), treating as Null per §7.3.10",
                             obj_ref.id,
@@ -846,7 +893,7 @@ impl PdfDocument {
                 RESOLVING_STACK.with(|s| {
                     s.borrow_mut().remove(&obj_ref);
                 });
-                return result.map(LoadedObject::Owned);
+                return result;
             }
 
             // Recovery path 2 — the object may be compressed inside a
@@ -888,6 +935,7 @@ impl PdfDocument {
                 // entry.generation = index within stream ~keep
                 tracing::trace!(target: LOG_TARGET, "  → Compressed object in stream {}, index {}", entry_offset, entry_gen);
                 self.load_compressed_object(obj_ref, entry_offset as u32, entry_gen)
+                    .map(LoadedObject::Owned)
             }
             XRefEntryType::Uncompressed => {
                 tracing::trace!(target: LOG_TARGET, "  → Uncompressed object at offset {}", entry_offset);
@@ -901,7 +949,7 @@ impl PdfDocument {
                     obj_ref.id
                 );
                 self.object_cache.lock_or_recover().insert(obj_ref, Object::Null);
-                Ok(Object::Null)
+                Ok(LoadedObject::Owned(Object::Null))
             }
         };
 
@@ -910,7 +958,7 @@ impl PdfDocument {
             s.borrow_mut().remove(&obj_ref);
         });
 
-        result.map(LoadedObject::Owned)
+        result
     }
 
     /// Resolve references within an object recursively.
@@ -1066,7 +1114,7 @@ impl PdfDocument {
     }
 
     /// Load an uncompressed object (Type 1 xref entry).
-    fn load_uncompressed_object(&self, obj_ref: ObjectRef, offset: u64) -> Result<Object> {
+    fn load_uncompressed_object(&self, obj_ref: ObjectRef, offset: u64) -> Result<LoadedObject> {
         self.load_uncompressed_object_impl(obj_ref, offset, false)
     }
 
@@ -1148,7 +1196,7 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         offset: u64,
         already_corrected: bool,
-    ) -> Result<Object> {
+    ) -> Result<LoadedObject> {
         self.read_uncompressed_object(obj_ref, offset, already_corrected, true)
     }
 
@@ -1158,7 +1206,7 @@ impl PdfDocument {
         offset: u64,
         already_corrected: bool,
         cache: bool,
-    ) -> Result<Object> {
+    ) -> Result<LoadedObject> {
         // The header and the body are read through ONE cursor, private to this
         // call, over the document's own bytes. The body read continues from where
         // the header read stopped, so the two must not be separable: a cursor any
@@ -1174,7 +1222,7 @@ impl PdfDocument {
         // legitimate header line while still bounding the pathological case.
         // ~keep
         const MAX_HEADER_LINE_BYTES: u64 = 64 * 1024; // 64 KB safety limit per header line ~keep
-        let mut cursor = Cursor::new(self.source_bytes.as_slice());
+        let mut cursor = Cursor::new(&self.source_bytes[..]);
         let (header_bytes, full_header) = {
             let reader = &mut cursor;
             reader.seek(SeekFrom::Start(offset))?;
@@ -1319,8 +1367,10 @@ impl PdfDocument {
                 && scan_offset != offset
             {
                 self.recovery
-                    .file_scan_recoveries
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .charge(&crate::extractors::recovery_tally::RecoverySnapshot {
+                        file_scan_recoveries: 1,
+                        ..Default::default()
+                    });
                 tracing::warn!(target: LOG_TARGET,
                     operation = "load_uncompressed_object",
                     error_code = "object_reference_mismatch",
@@ -1356,7 +1406,17 @@ impl PdfDocument {
 
         // Check if there's content after "obj" on the same line
         // Some PDFs have "N G obj\n<<..." while others have "N G obj<<..." on one line ~keep
-        let mut data = Vec::new();
+        // The object text is a contiguous range of the document's own bytes, so it
+        // is sliced rather than copied; the parser slices stream payloads out of it
+        // the same way. ~keep
+        let body_start = usize::try_from(cursor.position())
+            .unwrap_or(usize::MAX)
+            .min(self.source_bytes.len());
+        let first_line_end = usize::try_from(offset)
+            .ok()
+            .and_then(|start| start.checked_add(header_bytes.len()));
+        let mut data_start = body_start;
+        let mut prefix: Vec<u8> = Vec::new();
 
         if let Some(obj_keyword_pos) = header_bytes.windows(3).position(|w| w == b"obj") {
             let after_obj_pos = obj_keyword_pos + 3;
@@ -1373,7 +1433,14 @@ impl PdfDocument {
             // If there's a newline, skip it (normal case: "N G obj\n")
             // If there's content (like "<<"), include it (malformed case: "N G obj<<...") ~keep
             if content_start < header_bytes.len() && header_bytes[content_start] != b'\n' {
-                data.extend_from_slice(&header_bytes[content_start..]);
+                // Contiguous with the body unless continuation header lines were read in between.
+                match usize::try_from(offset)
+                    .ok()
+                    .and_then(|start| start.checked_add(content_start))
+                {
+                    Some(remainder_start) if first_line_end == Some(body_start) => data_start = remainder_start,
+                    _ => prefix.extend_from_slice(&header_bytes[content_start..]),
+                }
                 tracing::trace!(target: LOG_TARGET,
                     "Object {} has content after 'obj' on header line ({} bytes)",
                     obj_ref.id,
@@ -1382,54 +1449,80 @@ impl PdfDocument {
             }
         }
 
-        // Body, read from the same cursor the header left positioned.
+        // Body, scanned from where the header left off.
         // Use byte limit instead of line count — large uncompressed streams can have
         // hundreds of thousands of short lines (e.g., vector path drawing commands). ~keep
         const MAX_BYTES: usize = 100 * 1024 * 1024; // 100 MB safety limit ~keep
 
-        {
-            let reader = &mut cursor;
-            loop {
-                let mut chunk = Vec::new();
-                let bytes_read = reader.read_until(b'\n', &mut chunk)?;
+        let source: &[u8] = &self.source_bytes;
+        let mut data_end = body_start;
+        let mut line_start = body_start;
+        let mut payload_skipped = false;
+        loop {
+            let line_end = source[line_start..]
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .map_or(source.len(), |newline| line_start + newline + 1);
+            let bytes_read = line_end - line_start;
+            let data_len = prefix.len() + (data_end - data_start);
 
-                if data.len() > MAX_BYTES {
-                    tracing::warn!(target: LOG_TARGET,
-                        "Object {} exceeded maximum byte limit ({} bytes), truncating",
-                        obj_ref.id,
-                        MAX_BYTES
-                    );
-                    break;
-                }
+            if data_len > MAX_BYTES {
+                tracing::warn!(target: LOG_TARGET,
+                    "Object {} exceeded maximum byte limit ({} bytes), truncating",
+                    obj_ref.id,
+                    MAX_BYTES
+                );
+                break;
+            }
 
-                if bytes_read == 0 {
-                    let msg = format!(
-                        "Unexpected EOF while reading object {} (no endobj found after {} bytes)",
-                        obj_ref.id,
-                        data.len()
-                    );
-                    tracing::warn!(target: LOG_TARGET, "{}", msg);
-                    // structured-warnings sink. ~keep
-                    self.push_structured_warning(crate::extractors::warnings::Warning {
-                        category: crate::extractors::warnings::WarningCategory::EofPremature,
-                        page: None,
-                        message: msg,
-                        spec_section: Some("7.5"),
-                    });
-                    // Don't fail - try to parse what we have ~keep
-                    break;
-                }
+            if bytes_read == 0 {
+                let msg = format!(
+                    "Unexpected EOF while reading object {} (no endobj found after {} bytes)",
+                    obj_ref.id, data_len
+                );
+                tracing::warn!(target: LOG_TARGET, "{}", msg);
+                // structured-warnings sink. ~keep
+                self.push_structured_warning(crate::extractors::warnings::Warning {
+                    category: crate::extractors::warnings::WarningCategory::EofPremature,
+                    page: None,
+                    message: msg,
+                    spec_section: Some("7.5"),
+                });
+                // Don't fail - try to parse what we have ~keep
+                break;
+            }
 
-                if chunk.contains(&b'e')
-                    && let Some(endobj_pos) = find_substring(&chunk, b"endobj")
-                {
-                    data.extend_from_slice(&chunk[..endobj_pos]);
-                    break;
-                }
+            let chunk = &source[line_start..line_end];
+            if chunk.contains(&b'e')
+                && let Some(endobj_pos) = find_substring(chunk, b"endobj")
+            {
+                data_end = line_start + endobj_pos;
+                break;
+            }
 
-                data.extend_from_slice(&chunk);
+            data_end = line_end;
+            line_start = line_end;
+
+            // A stream whose direct /Length lands on `endstream` is stepped over rather than
+            // scanned: scanning it pages in every payload byte, an image nothing decodes
+            // included. The scan would stop early only on an `endobj` inside the payload. ~keep
+            if !payload_skipped
+                && prefix.is_empty()
+                && let Some(payload_end) = declared_stream_payload_end(source, data_start, chunk, line_end)
+                && payload_end - data_start <= MAX_BYTES
+            {
+                payload_skipped = true;
+                data_end = payload_end;
+                line_start = payload_end;
             }
         }
+
+        let data: bytes::Bytes = if prefix.is_empty() {
+            self.source_bytes.slice(data_start..data_end)
+        } else {
+            prefix.extend_from_slice(&source[body_start..data_end]);
+            bytes::Bytes::from(prefix)
+        };
 
         tracing::trace!(target: LOG_TARGET,
             "About to parse object {} gen {} ({} bytes)",
@@ -1439,7 +1532,7 @@ impl PdfDocument {
         );
 
         let _warnings = self.warning_scope();
-        let mut obj = match parse_object(&data) {
+        let mut obj = match crate::parser::parse_object_shared(&data, &self.source_bytes) {
             Ok((_, parsed_obj)) => parsed_obj,
             Err(e) => {
                 let error_kind = match &e {
@@ -1473,10 +1566,14 @@ impl PdfDocument {
         }
 
         if cache {
-            self.object_cache.lock_or_recover().insert(obj_ref, obj.clone());
+            let shared = Arc::new(obj);
+            self.object_cache
+                .lock_or_recover()
+                .insert_shared(obj_ref, Arc::clone(&shared));
+            return Ok(LoadedObject::Fresh(shared));
         }
 
-        Ok(obj)
+        Ok(LoadedObject::Owned(obj))
     }
 
     /// Load a compressed object from an object stream (Type 2 xref entry).

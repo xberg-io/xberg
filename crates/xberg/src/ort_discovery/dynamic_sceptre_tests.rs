@@ -2,39 +2,13 @@ use std::error::Error;
 use std::path::Path;
 use std::process::Command;
 
-use super::preload_ort_runtime_from;
+use super::library::SearchPolicy;
+use super::{OrtRuntimeError, preload_ort_runtime_from};
 
 const CHILD_TEST: &str = "XBERG_DISCOVERY_TEST_CHILD";
 const MISSING_LIBRARY: &str = "xberg-qualification-missing-runtime";
 const CHILD_RUNTIME: &str = "XBERG_DISCOVERY_TEST_CHILD_RUNTIME";
 const EXPLICIT_RUNTIME: &str = "ORT_DYLIB_PATH";
-
-#[test]
-fn valid_explicit_path_takes_precedence_over_an_invalid_candidate() {
-    let test = "valid_explicit_path_takes_precedence_over_an_invalid_candidate";
-    if std::env::var(CHILD_TEST).as_deref() == Ok(test) {
-        let temp = tempfile::tempdir().unwrap();
-        let explicit = temp.path().join("explicit");
-        let candidate = temp.path().join("candidate");
-        std::fs::write(&explicit, []).unwrap();
-        std::fs::write(&candidate, []).unwrap();
-
-        preload_ort_runtime_from(Some(&explicit), std::iter::once(candidate.as_path()))
-            .expect("leave resolution of an existing explicit library to ORT");
-        return;
-    }
-
-    assert_single_test_passes(&mut child_process(test));
-}
-
-#[test]
-fn missing_candidate_leaves_bare_name_to_the_loader() {
-    let temp = tempfile::tempdir().unwrap();
-    let missing = temp.path().join("not-installed");
-
-    preload_ort_runtime_from(Some(Path::new("onnxruntime-name")), std::iter::once(missing.as_path()))
-        .expect("continue with the loader's normal search");
-}
 
 #[test]
 #[ignore = "requires ORT_DYLIB_PATH to name a verified native ONNX Runtime library"]
@@ -45,12 +19,14 @@ fn discovered_runtime_loads_without_overwriting_the_environment() {
         assert_eq!(before.as_deref(), Some(std::ffi::OsStr::new(MISSING_LIBRARY)));
         let runtime = std::env::var_os(CHILD_RUNTIME).expect("validated parent runtime");
         let temp = tempfile::tempdir().unwrap();
-        let first = temp.path().join("missing");
-        let last = temp.path().join("broken-library");
-        std::fs::write(&last, []).unwrap();
-        let candidates = [first.as_path(), Path::new(&runtime), last.as_path()];
-        preload_ort_runtime_from(Some(Path::new(MISSING_LIBRARY)), candidates.into_iter())
-            .expect("locate and preload the first existing runtime");
+        let missing = temp.path().join("missing");
+        let broken = temp.path().join("broken-library");
+        std::fs::write(&broken, []).unwrap();
+        // The broken library before the real one proves the search moves past a failed load.
+        let candidates = [missing.as_path(), broken.as_path(), Path::new(&runtime)];
+        let loaded = preload_ort_runtime_from(None, None, &candidates, SearchPolicy::Strict)
+            .expect("load the first runtime that loads");
+        assert_eq!(loaded, std::fs::canonicalize(&runtime).unwrap());
         sceptre::ort_environment().expect("start the shared environment with the discovered runtime");
         assert_eq!(std::env::var_os(EXPLICIT_RUNTIME), before);
         return;
@@ -64,6 +40,32 @@ fn discovered_runtime_loads_without_overwriting_the_environment() {
     assert_single_test_passes(&mut child);
 }
 
+#[cfg(unix)]
+#[test]
+#[ignore = "requires ORT_DYLIB_PATH to name a verified native ONNX Runtime library"]
+fn library_consumers_fall_back_to_the_platform_library_search_path() {
+    let test = "library_consumers_fall_back_to_the_platform_library_search_path";
+    if std::env::var(CHILD_TEST).as_deref() == Ok(test) {
+        let name = super::library::ORT_LIBRARY_NAMES[0];
+        let loaded = preload_ort_runtime_from(None, None, &[], SearchPolicy::LoaderFallback)
+            .expect("the platform loader finds the runtime on its search path");
+        assert_eq!(loaded, Path::new(name));
+        sceptre::ort_environment().expect("start the shared environment with the runtime the loader found");
+        return;
+    }
+
+    let runtime = std::env::var_os(EXPLICIT_RUNTIME).expect("set ORT_DYLIB_PATH to a verified native runtime");
+    assert!(Path::new(&runtime).is_absolute() && Path::new(&runtime).is_file());
+    let search_path = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(&runtime, search_path.path().join(super::library::ORT_LIBRARY_NAMES[0])).unwrap();
+    let mut child = child_process(test);
+    child.arg("--ignored");
+    for variable in ["LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"] {
+        child.env(variable, search_path.path());
+    }
+    assert_single_test_passes(&mut child);
+}
+
 #[test]
 fn broken_candidate_reports_a_typed_error_before_ort_initialization() {
     let test = "broken_candidate_reports_a_typed_error_before_ort_initialization";
@@ -71,16 +73,49 @@ fn broken_candidate_reports_a_typed_error_before_ort_initialization() {
         let temp = tempfile::tempdir().unwrap();
         let broken = temp.path().join("broken-library");
         std::fs::write(&broken, []).unwrap();
-        let explicit = std::env::var(EXPLICIT_RUNTIME).expect("child explicit library");
-        assert_eq!(explicit, MISSING_LIBRARY);
-        let error = preload_ort_runtime_from(Some(Path::new(&explicit)), std::iter::once(broken.as_path()))
+        let broken = std::fs::canonicalize(&broken).unwrap();
+        let error = preload_ort_runtime_from(None, None, &[broken.as_path()], SearchPolicy::Strict)
             .expect_err("a broken library must produce a typed loader error");
-        let contextual = crate::XbergError::ocr_with_source("Could not preload the discovered ONNX Runtime", error);
+        assert!(
+            matches!(&error, OrtRuntimeError::Load { path, .. } if path == &broken),
+            "{error}"
+        );
+        let contextual = crate::XbergError::ocr_with_source("Could not load ONNX Runtime", error);
+        let runtime_error = contextual
+            .source()
+            .and_then(|cause| cause.downcast_ref::<OrtRuntimeError>())
+            .expect("the runtime error is the OCR error's source");
         assert!(matches!(
-            contextual.source().and_then(|cause| cause.downcast_ref::<ort::LoadDynamicError>()),
+            runtime_error.source().and_then(|cause| cause.downcast_ref::<ort::LoadDynamicError>()),
             Some(ort::LoadDynamicError::Dlopen { path, .. }) if path == &broken
         ));
         assert_eq!(std::env::var(EXPLICIT_RUNTIME).as_deref(), Ok(MISSING_LIBRARY));
+        return;
+    }
+
+    assert_single_test_passes(&mut child_process(test));
+}
+
+#[test]
+fn missing_explicit_library_fails_instead_of_loading_a_discovered_one() {
+    let test = "missing_explicit_library_fails_instead_of_loading_a_discovered_one";
+    if std::env::var(CHILD_TEST).as_deref() == Ok(test) {
+        let temp = tempfile::tempdir().unwrap();
+        let explicit = temp.path().join("missing-explicit");
+        let discovered = temp.path().join("discovered");
+        std::fs::write(&discovered, []).unwrap();
+        let error = preload_ort_runtime_from(
+            Some(explicit.as_os_str()),
+            None,
+            &[discovered.as_path()],
+            SearchPolicy::LoaderFallback,
+        )
+        .expect_err("a missing explicit library must not fall back");
+        assert!(
+            matches!(&error, OrtRuntimeError::Load { path, .. } if path == &explicit),
+            "{error}"
+        );
+        assert!(error.to_string().contains(&explicit.display().to_string()), "{error}");
         return;
     }
 

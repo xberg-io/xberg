@@ -922,7 +922,7 @@ fn test_split_boundary_merges_with_space() {
                 width: 10.0,
                 height: 12.0,
             },
-            font_name: "Arial".to_string(),
+            font_name: "Arial".into(),
             sequence: 0,
             split_boundary_before: false,
             ..TextSpan::default()
@@ -935,7 +935,7 @@ fn test_split_boundary_merges_with_space() {
                 width: 25.0,
                 height: 12.0,
             },
-            font_name: "Arial".to_string(),
+            font_name: "Arial".into(),
             sequence: 1,
             split_boundary_before: true,
             ..TextSpan::default()

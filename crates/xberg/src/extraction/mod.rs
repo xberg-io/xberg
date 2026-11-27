@@ -20,7 +20,8 @@ pub(crate) mod grid_flatten;
     feature = "layout-detection",
     feature = "layout-tract",
     feature = "auto-rotate",
-    feature = "auto-rotate-tract"
+    feature = "auto-rotate-tract",
+    feature = "captioning-onnx"
 ))]
 pub(crate) mod image_decode;
 pub mod image_kind;

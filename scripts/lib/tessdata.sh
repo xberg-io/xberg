@@ -122,6 +122,8 @@ ensure_tessdata() {
   ensure_valid_traineddata "$dest" "osd" "https://github.com/tesseract-ocr/tessdata_fast/raw/main/osd.traineddata"
 }
 
+# ~keep Provisions tessdata_fast and exports TESSDATA_PREFIX, which xberg uses as given for every
+# model set: a run measuring tessdata_model "best" must not source this, or it reads fast packs.
 setup_tessdata() {
   local platform="${RUNNER_OS:-$(uname -s)}"
 

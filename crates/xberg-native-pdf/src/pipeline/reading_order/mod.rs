@@ -14,6 +14,7 @@ pub mod article_thread;
 pub mod detectors;
 pub mod geometric;
 pub mod simple;
+pub mod stream_columns;
 pub mod structure_tree;
 pub mod tategaki;
 pub mod xycut;
@@ -26,6 +27,7 @@ pub use detectors::{
 };
 pub use geometric::GeometricStrategy;
 pub use simple::SimpleStrategy;
+pub use stream_columns::order_by_stream_columns;
 pub use structure_tree::StructureTreeStrategy;
 pub use tategaki::TategakiStrategy;
 pub use xycut::XYCutStrategy;

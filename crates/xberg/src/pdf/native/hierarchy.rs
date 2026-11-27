@@ -14,11 +14,20 @@ use super::NativeDocument;
 // Inline-script rejoining measures baselines and character origins in raw page
 // coordinates, so it needs the strict page-axis predicate, not the
 // rotation-agnostic writing-mode one.
-use super::span_geometry::{has_same_rotation, is_horizontal_ltr, upright_advance_extent, upright_cross_extent};
+use super::span_geometry::{
+    has_same_rotation, is_horizontal_ltr, is_unrotated, upright_advance_extent, upright_cross_extent,
+};
 use crate::pdf::error::Result;
 use crate::pdf::hierarchy::SegmentData;
 
+mod reading_order_memo;
+mod repeated_header_columns;
 pub(crate) mod script_evidence;
+mod stacked_header_band;
+#[cfg(test)]
+mod test_spans;
+
+pub(crate) use reading_order_memo::ReadingOrderMemoScope;
 
 const COLUMN_BRIDGE_FRACTION: f32 = 0.6;
 const MIN_COLUMN_GUTTER_PTS: f32 = 8.0;
@@ -396,7 +405,45 @@ fn shares_row_grid(grid: &[f32], other: &[f32]) -> bool {
 
 /// Reorder a page's spans into reading order for the element-based extraction path,
 /// reading a two-up sheet (`two_up_gutter`) as its left page, then its right page.
-fn reorder_page_reading_order(
+///
+/// Inside a [`ReadingOrderMemoScope`] an input identical to one already ordered for this page is
+/// served the stored order instead of being ordered again.
+pub(super) fn reorder_page_reading_order(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    page_width: f32,
+    page_height: f32,
+    page_index: usize,
+) {
+    reading_order_memo::reorder(spans, page_width, page_height, page_index, |spans| {
+        compute_page_reading_order(spans, page_width, page_height, page_index);
+    });
+}
+
+/// Reorder a page's spans into the order its text flows, for the plain-text assembly: a page
+/// set as two copies of one table side by side under a repeated header row
+/// (`repeated_header_columns`) reads its left half, then its right half; every other page takes
+/// `reorder_page_reading_order`.
+///
+/// The structure and table passes keep `reorder_page_reading_order`: the table detector reads
+/// the halves' rows side by side as one holdings table, and fed the halves one after the other
+/// it found none (blackrock page 4 lost its table). ~keep
+pub(super) fn reorder_text_flow_reading_order(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    page_width: f32,
+    page_height: f32,
+    page_index: usize,
+) {
+    if two_up_gutter(spans, page_width, page_height).is_none()
+        && repeated_header_columns::read_repeated_header_halves(spans)
+    {
+        stacked_header_band::read_stacked_header_bands(spans);
+        preserve_inline_prose_symbol_order(spans);
+        return;
+    }
+    reorder_page_reading_order(spans, page_width, page_height, page_index);
+}
+
+fn compute_page_reading_order(
     spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
     page_width: f32,
     page_height: f32,
@@ -404,9 +451,11 @@ fn reorder_page_reading_order(
 ) {
     let Some(gutter_x) = two_up_gutter(spans, page_width, page_height) else {
         reorder_single_page_reading_order(spans, page_width, page_height, page_index);
+        stacked_header_band::read_stacked_header_bands(spans);
         preserve_inline_prose_symbol_order(spans);
         return;
     };
+    tracing::debug!(target: "xberg::pdf::column_split", page = page_index, gutter_x, "two-up page split at its gutter");
     let (mut left, mut right): (Vec<_>, Vec<_>) = spans
         .drain(..)
         .partition(|span| span.bbox.x + span.bbox.width * 0.5 < gutter_x);
@@ -416,13 +465,21 @@ fn reorder_page_reading_order(
     reorder_single_page_reading_order(&mut right, page_width - gutter_x, page_height, page_index);
     spans.extend(left);
     spans.extend(right);
+    stacked_header_band::read_stacked_header_bands(spans);
     preserve_inline_prose_symbol_order(spans);
 }
 
 /// Reorder one page's spans into reading order for the element-based
 /// extraction path (GH#1397).
 ///
-/// Applies the guarded sparse-column repair unconditionally, then attempts
+/// A page of three or more prose columns whose content stream already reads
+/// them column by column keeps that stream order
+/// (`xberg_native_pdf::pipeline::reading_order::order_by_stream_columns`):
+/// the gutter repairs below model one gutter, and XY-Cut finds no page-wide
+/// horizontal valley once a heading spans only some of the columns, so such a
+/// page used to fall back to row order and interleave its columns.
+///
+/// Otherwise applies the guarded sparse-column repair unconditionally, then attempts
 /// the dense two-column band-split repair
 /// (`super::text::reorder_dense_two_column_page`). That repair carries its
 /// own conservative gates (minimum content width, per-line gutter agreement,
@@ -446,11 +503,61 @@ fn reorder_single_page_reading_order(
     page_height: f32,
     page_index: usize,
 ) {
-    super::text::reorder_sparse_two_column_page(spans, page_width);
+    if xberg_native_pdf::pipeline::reading_order::order_by_stream_columns(spans) {
+        tracing::debug!(target: "xberg::pdf::column_split", page = page_index, "page kept its stream column order");
+        return;
+    }
+    let margin_runs = take_rotated_margin_runs(spans);
+    reorder_upright_columns(spans, page_width, page_height, page_index);
+    spans.extend(margin_runs);
+}
+
+fn reorder_upright_columns(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+    page_width: f32,
+    page_height: f32,
+    page_index: usize,
+) {
+    if super::text::reorder_sparse_two_column_page(spans, page_width) {
+        tracing::debug!(target: "xberg::pdf::column_split", page = page_index, "sparse two-column page reordered");
+    }
     if super::text::reorder_dense_two_column_page(spans, page_width) {
         return;
     }
     apply_xy_cut_if_column_aware(spans, page_width, page_height, page_index);
+}
+
+/// Remove and return the rotated runs that stand wholly beside the page's upright text, in
+/// their current order, when upright text makes up most of the page.
+///
+/// The column passes measure `bbox`, which a rotated run flattens onto its own axis, so an
+/// arXiv identifier stamped up the left margin reads as a line hundreds of points wide that
+/// crosses the gutter. It became a band boundary and split the columns into two stories
+/// (2001.09113 and 2305.09790 page 1 read the top of the right column before the foot of the
+/// left). Such a run is not part of either column, so it is read after them; its page-space
+/// box (`page_bbox`) decides that it lies outside the upright text. ~keep
+fn take_rotated_margin_runs(
+    spans: &mut Vec<xberg_native_pdf::layout::TextSpan>,
+) -> Vec<xberg_native_pdf::layout::TextSpan> {
+    let inked = |span: &&xberg_native_pdf::layout::TextSpan| !span.text.trim().is_empty();
+    let upright: Vec<_> = spans.iter().filter(inked).filter(|span| is_unrotated(span)).collect();
+    let rotated_count = spans.iter().filter(inked).filter(|span| !is_unrotated(span)).count();
+    if rotated_count == 0 || upright.len() <= rotated_count {
+        return Vec::new();
+    }
+    let Some((upright_left, upright_right)) = content_bounds(&upright) else {
+        return Vec::new();
+    };
+    let is_margin_run = |span: &xberg_native_pdf::layout::TextSpan| {
+        let page_box = span.page_bbox();
+        !is_unrotated(span) && (page_box.right() <= upright_left || page_box.left() >= upright_right)
+    };
+    if !spans.iter().any(is_margin_run) {
+        return Vec::new();
+    }
+    let (margin_runs, rest): (Vec<_>, Vec<_>) = std::mem::take(spans).into_iter().partition(is_margin_run);
+    *spans = rest;
+    margin_runs
 }
 
 /// Run xberg_native_pdf's `ColumnAware` XY-Cut pass when `select_reading_order`
@@ -481,7 +588,15 @@ fn apply_xy_cut_if_column_aware(
         context = context.with_column_gutter(gutter_x);
     }
     match XYCutStrategy::new().apply(spans.clone(), &context) {
-        Ok(ordered) => *spans = ordered.into_iter().map(|item| item.span).collect(),
+        Ok(ordered) => {
+            tracing::debug!(
+                target: "xberg::pdf::column_split",
+                page = page_index,
+                gutter_x = ?context.column_gutter,
+                "column-aware XY-cut ordered the page"
+            );
+            *spans = ordered.into_iter().map(|item| item.span).collect();
+        }
         Err(error) => tracing::debug!(
             page = page_index,
             "xberg_native_pdf column-aware hierarchy ordering failed; retaining top-to-bottom order: {error}"
@@ -1008,7 +1123,7 @@ pub(crate) fn extract_segments_from_page(
 /// When `mcid_roles` is non-empty, spans with matching MCIDs receive pre-assigned
 /// heading levels from the PDF structure tree.
 fn extract_segments_from_page_inner(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     page_index: usize,
     mcid_roles: &HashMap<u32, Option<u8>>,
     artifacts: ArtifactRetention,
@@ -1019,26 +1134,28 @@ fn extract_segments_from_page_inner(
 }
 
 fn extract_final_spans_from_page(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     page_index: usize,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
-    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None, None)
+    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None, None, None)
 }
 
 fn extract_final_spans_from_page_with_primes(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     page_index: usize,
     script_geometry: ScriptGeometry,
     prime_witnesses: Option<&mut Vec<script_evidence::LiteralPrimeWitness>>,
     cmsy_witnesses: Option<&mut Vec<xberg_native_pdf::layout::TextSpan>>,
+    math: Option<super::math_latex::Delimiters>,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
+    // Only the spans and the page size are read below, so the per-character list is not built. ~keep
     let extracted = if script_geometry == ScriptGeometry::Preserve {
         doc.doc
-            .extract_page_text_with_cmsy_capture(page_index, reading_order, cmsy_witnesses)
+            .extract_page_spans_with_cmsy_capture(page_index, reading_order, cmsy_witnesses)
     } else {
-        doc.doc.extract_page_text_with_options(page_index, reading_order)
+        doc.doc.extract_page_spans_with_options(page_index, reading_order)
     };
     let mut page_text_data = match extracted {
         Ok(data) => data,
@@ -1072,7 +1189,11 @@ fn extract_final_spans_from_page_with_primes(
         }
         xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut page_text_data.spans);
     }
-    Ok(rejoin_inline_scripts_inner(page_text_data.spans, script_geometry))
+    // Formulas are rebuilt before script rejoining folds their scripts into base text. ~keep
+    let spans = math
+        .and_then(|delimiters| super::math_latex::rewrite_math_spans_with(&page_text_data.spans, delimiters))
+        .unwrap_or(page_text_data.spans);
+    Ok(rejoin_inline_scripts_inner(spans, script_geometry))
 }
 
 fn project_final_spans(
@@ -1267,70 +1388,94 @@ fn dedupe_redrawn_segments(segments: Vec<SegmentData>) -> Vec<SegmentData> {
 /// Returns `(segments, used_structure_tree)`. When `used_structure_tree` is true,
 /// the caller should skip font-size clustering and use the pre-assigned roles.
 fn extract_segments_with_structure_tree(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
+    skip_page: &(impl Fn(usize) -> bool + Sync),
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    extract_pages_with_structure_tree(
-        doc,
-        artifacts,
-        script_geometry,
-        extract_segments_from_page_inner,
-        |segments| {
-            segments
-                .iter()
-                .filter(|segment| segment.assigned_role.is_some())
-                .count()
-        },
-    )
+    let Some(page_roles) = structure_tree_page_roles(doc)? else {
+        return Ok((Vec::new(), false));
+    };
+    let pages = read_pages(page_roles.len(), |page_idx| {
+        if skip_page(page_idx) {
+            return Ok(Vec::new());
+        }
+        extract_segments_from_page_inner(doc, page_idx, &page_roles[page_idx], artifacts, script_geometry)
+    })?;
+    log_structure_tree_roles(&pages, |segments| {
+        segments
+            .iter()
+            .filter(|segment| segment.assigned_role.is_some())
+            .count()
+    });
+    Ok((pages, true))
 }
 
-fn extract_pages_with_structure_tree<T>(
-    doc: &mut NativeDocument,
-    artifacts: ArtifactRetention,
-    script_geometry: ScriptGeometry,
-    extract_page: impl Fn(
-        &mut NativeDocument,
-        usize,
-        &HashMap<u32, Option<u8>>,
-        ArtifactRetention,
-        ScriptGeometry,
-    ) -> Result<T>,
-    count_roles: impl Fn(&T) -> usize,
-) -> Result<(Vec<T>, bool)> {
+/// `read` of every page in `0..count`, in index order, run across the thread budget.
+///
+/// A page read here only reads the document: its caches sit behind locks and answer as an
+/// uncached read would, and its recovery counts are sums. Each read uses the calling thread's
+/// reading-order memo, also a cache. So the pages equal those of a page-by-page loop, and the
+/// first failed page by index fails the whole read, as it would have stopped that loop.
+pub(super) fn read_pages<T: Send>(count: usize, read: impl Fn(usize) -> Result<T> + Sync + Send) -> Result<Vec<T>> {
+    // rayon's work-stealing pool needs OS threads; wasm32 has none. ~keep
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        let memo = reading_order_memo::ReadingOrderMemoShare::of_current_thread();
+        let pages: Vec<Result<T>> = (0..count)
+            .into_par_iter()
+            .map(|page| {
+                let _memo = memo.enter();
+                read(page)
+            })
+            .collect();
+        pages.into_iter().collect()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        (0..count).map(read).collect()
+    }
+}
+
+/// One map per page from a marked-content ID to its heading level (`None`: not a heading).
+type PageHeadingRoles = Vec<HashMap<u32, Option<u8>>>;
+
+/// Each page's MCID heading roles from a reliable structure tree, or `None` when the document
+/// has no structure tree its headings can be read from.
+pub(super) fn structure_tree_page_roles(doc: &NativeDocument) -> Result<Option<PageHeadingRoles>> {
     let Some(all_page_content) = reliable_heading_content(doc) else {
-        return Ok((Vec::new(), false));
+        return Ok(None);
     };
 
     let page_count = doc.doc.page_count().map_err(|e| {
         crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
     })?;
 
-    let mut all_pages: Vec<T> = Vec::with_capacity(page_count);
-    let mut total_role_assigned = 0usize;
-
-    for page_idx in 0..page_count {
-        let mcid_roles: HashMap<u32, Option<u8>> = all_page_content
-            .get(&(page_idx as u32))
-            .map(|contents| {
-                contents
-                    .iter()
-                    .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
-                    .collect()
+    Ok(Some(
+        (0..page_count)
+            .map(|page_idx| {
+                all_page_content
+                    .get(&(page_idx as u32))
+                    .map(|contents| {
+                        contents
+                            .iter()
+                            .filter_map(|c| c.mcid.map(|mcid| (mcid, c.parsed_type.heading_level())))
+                            .collect()
+                    })
+                    .unwrap_or_default()
             })
-            .unwrap_or_default();
+            .collect(),
+    ))
+}
 
-        let segments = extract_page(doc, page_idx, &mcid_roles, artifacts, script_geometry)?;
-        total_role_assigned += count_roles(&segments);
-        all_pages.push(segments);
-    }
-
+pub(super) fn log_structure_tree_roles<T>(pages: &[T], count_roles: impl Fn(&T) -> usize) {
+    let total_role_assigned: usize = pages.iter().map(count_roles).sum();
     tracing::debug!(
-        page_count,
+        page_count = pages.len(),
         total_role_assigned,
         "xberg_native_pdf: structure tree heading detection complete"
     );
-    Ok((all_pages, true))
 }
 
 fn reliable_heading_content(
@@ -1406,24 +1551,28 @@ pub(crate) fn extract_all_segments(
     doc: &mut NativeDocument,
     artifacts: ArtifactRetention,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Preserve)
+    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Preserve, &|_: usize| false)
 }
 
 // Heuristic tables have plain cell strings, not annotation carriers. Preserve
 // their existing script flattening until table annotations are implemented. ~keep
+/// Pages for which `skip_page` (0-based) holds get an empty segment list without
+/// being read, so the result still has one slot per page.
 pub(crate) fn extract_all_segments_for_tables(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     artifacts: ArtifactRetention,
+    skip_page: impl Fn(usize) -> bool + Sync,
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Flatten)
+    extract_all_segments_inner(doc, artifacts, ScriptGeometry::Flatten, &skip_page)
 }
 
 fn extract_all_segments_inner(
-    doc: &mut NativeDocument,
+    doc: &NativeDocument,
     artifacts: ArtifactRetention,
     script_geometry: ScriptGeometry,
+    skip_page: &(impl Fn(usize) -> bool + Sync),
 ) -> Result<(Vec<Vec<SegmentData>>, bool)> {
-    let (tree_segments, used_tree) = extract_segments_with_structure_tree(doc, artifacts, script_geometry)?;
+    let (tree_segments, used_tree) = extract_segments_with_structure_tree(doc, artifacts, script_geometry, skip_page)?;
     if used_tree && !tree_segments.is_empty() {
         return Ok((tree_segments, true));
     }
@@ -1432,12 +1581,13 @@ fn extract_all_segments_inner(
         crate::pdf::error::PdfError::TextExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}"))
     })?;
 
-    let mut all_pages: Vec<Vec<SegmentData>> = Vec::with_capacity(page_count);
-
-    for page_idx in 0..page_count {
-        let segments = extract_segments_from_page_inner(doc, page_idx, &HashMap::new(), artifacts, script_geometry)?;
-        all_pages.push(segments);
-    }
+    let no_roles = HashMap::new();
+    let all_pages = read_pages(page_count, |page_idx| {
+        if skip_page(page_idx) {
+            return Ok(Vec::new());
+        }
+        extract_segments_from_page_inner(doc, page_idx, &no_roles, artifacts, script_geometry)
+    })?;
 
     Ok((all_pages, false))
 }
@@ -2031,6 +2181,33 @@ mod tests {
         );
     }
 
+    /// 2001.09113 page 1: an arXiv identifier runs up the left margin, its flattened `bbox` a
+    /// 300pt line across the gutter between the seventh and eighth rows. The columns read whole
+    /// and the stamp follows them.
+    #[test]
+    fn rotated_margin_stamp_does_not_split_the_columns() {
+        let mut spans = dense_two_column_spans_narrow_gutter();
+        let expected: Vec<String> = {
+            let mut control = spans.clone();
+            super::reorder_page_reading_order(&mut control, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+            control.into_iter().map(|span| span.text).collect()
+        };
+        let stamp = "arXiv:2001.09113v1 [cs.RO] 24 Jan 2020";
+        spans.push(TextSpan {
+            text: stamp.to_string(),
+            bbox: Rect::new(30.0, 816.0 - 6.5 * 14.0, 300.0, 10.0),
+            font_size: 10.0,
+            rotation_degrees: 90.0,
+            ..TextSpan::default()
+        });
+
+        super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+
+        let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        let expected: Vec<&str> = expected.iter().map(String::as_str).chain([stamp]).collect();
+        assert_eq!(texts, expected);
+    }
+
     /// Regression guard for GH#1397: a genuine single-column page (numbered
     /// lines beside monospace code, from `single_column_code_gutter_uses_top_to_bottom`
     /// above) must come out of `reorder_page_reading_order` byte-identical to
@@ -2067,6 +2244,65 @@ mod tests {
             original.iter().map(String::as_str).collect::<Vec<_>>(),
             "a single-column page must not be reordered by either the dense repair or XY-Cut"
         );
+    }
+
+    /// A three-column page whose stream is written in reading order (2026-14578), with a
+    /// heading spanning columns two and three, handed over in row order. The 13pt gutters sit
+    /// under XY-Cut's 15pt `min_valley_width`, and the dense repair splits at one gutter only.
+    /// `first_column_ending(row)` ends each first-column line. Returns the spans and the
+    /// expected reading order.
+    fn three_column_stream_page(first_column_ending: fn(usize) -> &'static str) -> (Vec<TextSpan>, Vec<String>) {
+        const LEFTS: [f32; 3] = [60.0, 233.0, 406.0];
+        const WIDTH: f32 = 160.0;
+        const LEADING: f32 = 14.0;
+        const TOP_Y: f32 = 720.0;
+        let line = |label: &str, column: usize, row: usize, ending: &str| {
+            let text = format!("{label} column line {row} reads on{ending}");
+            text_span(&text, LEFTS[column], TOP_Y - row as f32 * LEADING, WIDTH)
+        };
+        let mut reading_order: Vec<TextSpan> = (0..10)
+            .map(|row| line("First", 0, row, first_column_ending(row)))
+            .collect();
+        reading_order.push(text_span(
+            "Heading Spanning The Second And Third Columns",
+            LEFTS[1],
+            TOP_Y,
+            LEFTS[2] + WIDTH - LEFTS[1],
+        ));
+        reading_order.extend((2..10).map(|row| line("Second", 1, row, "")));
+        reading_order.extend((2..10).map(|row| line("Third", 2, row, "")));
+        let expected: Vec<String> = reading_order.iter().map(|span| span.text.clone()).collect();
+        let spans: Vec<TextSpan> = reading_order
+            .into_iter()
+            .enumerate()
+            .map(|(sequence, span)| TextSpan { sequence, ..span })
+            .collect();
+        (super::test_spans::rows(spans), expected)
+    }
+
+    #[test]
+    fn element_path_reads_a_three_column_stream_column_by_column() {
+        let (mut spans, expected) = three_column_stream_page(|_| "");
+
+        super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+
+        let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        assert_eq!(texts, expected.iter().map(String::as_str).collect::<Vec<_>>());
+    }
+
+    /// First-column lines ending in a colon on five consecutive rows, each beside a
+    /// second-column line on its baseline within the key/value value track: every input
+    /// `reorder_ltr_key_value_rows` needs except a value bracketing its label. The row pass that
+    /// follows the column order in the hierarchy path must leave the accepted order intact.
+    #[test]
+    fn key_value_row_pass_keeps_an_accepted_three_column_order() {
+        let (mut spans, expected) = three_column_stream_page(|row| if (3..=7).contains(&row) { ":" } else { "" });
+
+        super::reorder_page_reading_order(&mut spans, GH1397_PAGE_WIDTH, GH1397_PAGE_HEIGHT, 0);
+        xberg_native_pdf::document::reorder_ltr_key_value_rows(&mut spans);
+
+        let texts: Vec<&str> = spans.iter().map(|span| span.text.as_str()).collect();
+        assert_eq!(texts, expected.iter().map(String::as_str).collect::<Vec<_>>());
     }
 
     #[test]
@@ -2222,14 +2458,7 @@ mod tests {
                 9.9,
             ));
         }
-        spans.sort_by(|left, right| {
-            right
-                .bbox
-                .y
-                .total_cmp(&left.bbox.y)
-                .then(left.bbox.x.total_cmp(&right.bbox.x))
-        });
-        spans
+        super::test_spans::rows(spans)
     }
 
     /// Four rows of a landscape table whose middle corridor is uncrossed and 100pt wide;
@@ -2567,11 +2796,8 @@ mod tests {
 
     fn positioned_span(text: &str, x: f32, y: f32, width: f32, font_size: f32, char_x_offsets: Vec<f32>) -> TextSpan {
         TextSpan {
-            text: text.to_string(),
-            bbox: Rect::new(x, y, width, font_size),
-            font_size,
             char_x_offsets,
-            ..TextSpan::default()
+            ..super::test_spans::span(text, x, y, width, font_size)
         }
     }
 
@@ -2782,7 +3008,7 @@ mod tests {
     #[test]
     fn should_normalize_hierarchy_metadata_to_the_base() {
         let mut base = positioned_span("H SO", 100.0, 200.0, 20.0, 10.0, vec![100.0, 105.0, 110.0, 115.0]);
-        base.font_name = "BaseFont".to_string();
+        base.font_name = "BaseFont".into();
         base.font_weight = xberg_native_pdf::layout::text_block::FontWeight::Bold;
         base.is_italic = true;
         base.is_monospace = true;

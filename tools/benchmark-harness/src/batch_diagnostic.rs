@@ -178,7 +178,7 @@ pub(crate) fn resolve_extraction_config(config: &BatchDiagnosticConfig) -> Resul
     };
 
     extraction_config.use_cache = false;
-    disable_ocr_result_caches(&mut extraction_config, &config.inputs)?;
+    refresh_explicit_tesseract_caches(&mut extraction_config);
     if let Some(max_concurrent_extractions) = config.max_concurrent_extractions {
         extraction_config.max_concurrent_extractions = Some(max_concurrent_extractions);
     }
@@ -202,80 +202,27 @@ pub(crate) fn resolve_extraction_config(config: &BatchDiagnosticConfig) -> Resul
     Ok(extraction_config)
 }
 
-fn disable_ocr_result_caches(config: &mut ExtractionConfig, inputs: &[PathBuf]) -> Result<()> {
-    if config.disable_ocr || config.ocr.as_ref().is_some_and(|ocr| !ocr.enabled) {
-        return Ok(());
+/// Keeps an explicit `tesseract_config` (a preset the caller wrote) consistent with the disabled
+/// cache. Nothing is materialized for implicit OCR: in xberg the mere presence of
+/// `ocr.tesseract_config` or `ocr.backend_options` switches off default-route OCR stages, and the
+/// request-level `use_cache: false` set above already disables the OCR result cache for the whole
+/// request, implicit image, scanned-page and inline-image OCR included. ~keep
+fn refresh_explicit_tesseract_caches(config: &mut ExtractionConfig) {
+    let Some(ocr) = config.ocr.as_mut() else {
+        return;
+    };
+    if let Some(tesseract) = ocr.tesseract_config.as_mut() {
+        tesseract.use_cache = false;
     }
-
-    if config.ocr.is_none() && !config.force_ocr && config.force_ocr_pages.as_ref().is_none_or(Vec::is_empty) {
-        reject_implicit_ocr_caches(config, inputs)?;
-        return Ok(());
-    }
-    let ocr = config.ocr.get_or_insert_with(xberg::OcrConfig::default);
-    // Flip `use_cache` on a `tesseract_config` that is already present (an explicit PSM preset)
-    // without touching its `psm`. For a Tesseract backend/stage that leaves `tesseract_config`
-    // implicit, materialize one instead of leaving the cache enabled: by this point `ocr.language`
-    // (or a stage's own language override) is already final — this diagnostic tool has no
-    // fixture-language step run afterward — so the PSM `apply_default_whole_image_tesseract_psm`
-    // in `crates/xberg/src/extractors/image.rs` would itself have picked can be computed
-    // directly, keeping the result cache genuinely disabled without regressing to PSM 3. ~keep
-    let parent_language = ocr.language.clone();
     if let Some(pipeline) = ocr.pipeline.as_mut() {
-        for stage in &mut pipeline.stages {
-            if stage.backend != "tesseract" {
-                continue;
-            }
-            let languages = stage.language.clone().unwrap_or_else(|| parent_language.clone());
-            materialize_or_disable_tesseract_result_cache(&mut stage.tesseract_config, &languages);
-        }
-    } else if ocr.backend == "tesseract" {
-        materialize_or_disable_tesseract_result_cache(&mut ocr.tesseract_config, &parent_language);
-    }
-    Ok(())
-}
-
-fn materialize_or_disable_tesseract_result_cache(
-    tesseract_config: &mut Option<xberg::TesseractConfig>,
-    languages: &[String],
-) {
-    match tesseract_config.as_mut() {
-        Some(existing) => existing.use_cache = false,
-        None => {
-            *tesseract_config = Some(xberg::TesseractConfig {
-                language: languages.to_vec(),
-                psm: Some(crate::adapter::xberg_default_tesseract_psm(languages)),
-                use_cache: false,
-                ..Default::default()
-            });
+        for tesseract in pipeline
+            .stages
+            .iter_mut()
+            .filter_map(|stage| stage.tesseract_config.as_mut())
+        {
+            tesseract.use_cache = false;
         }
     }
-}
-
-fn reject_implicit_ocr_caches(config: &ExtractionConfig, inputs: &[PathBuf]) -> Result<()> {
-    if matches!(config.ocr_strategy, xberg::OcrStrategy::ScannedPages { .. }) {
-        return Err(implicit_ocr_config_error("scanned-page OCR"));
-    }
-    if config
-        .pdf_options
-        .as_ref()
-        .is_some_and(|options| options.ocr_inline_images)
-    {
-        return Err(implicit_ocr_config_error("PDF inline-image OCR"));
-    }
-    for input in inputs {
-        let mime = xberg::detect_mime_type(input.to_string_lossy().into_owned(), true)
-            .map_err(|error| Error::Config(format!("failed to detect input type for {}: {error}", input.display())))?;
-        if mime.starts_with("image/") {
-            return Err(implicit_ocr_config_error("image OCR"));
-        }
-    }
-    Ok(())
-}
-
-fn implicit_ocr_config_error(path: &str) -> Error {
-    Error::Config(format!(
-        "{path} uses an implicit OCR configuration whose backend cache cannot be disabled safely; provide an explicit `ocr` configuration"
-    ))
 }
 
 fn parse_extraction_config_json(raw: &str) -> Result<ExtractionConfig> {
@@ -598,36 +545,25 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_rejects_implicit_image_ocr_cache() {
-        let mut config = diagnostic_config(None);
-        config.inputs = vec![fixture_path("images/ocr_image.jpg")];
+    fn diagnostic_accepts_implicit_ocr_without_materializing_ocr_fields() {
+        for raw in [
+            None,
+            Some(r#"{"ocr_strategy":{"mode":"scanned_pages","min_confidence":0.5}}"#),
+            Some(r#"{"pdf_options":{"ocr_inline_images":true}}"#),
+        ] {
+            let mut config = diagnostic_config(raw);
+            config.inputs = vec![fixture_path("images/ocr_image.jpg")];
+            let extraction = resolve_extraction_config(&config).unwrap();
 
-        assert!(matches!(
-            resolve_extraction_config(&config),
-            Err(Error::Config(message)) if message.contains("explicit `ocr`")
-        ));
-    }
-
-    #[test]
-    fn diagnostic_rejects_implicit_scanned_page_ocr_cache() {
-        let config = diagnostic_config(Some(
-            r#"{"ocr_strategy":{"mode":"scanned_pages","min_confidence":0.5}}"#,
-        ));
-
-        assert!(matches!(
-            resolve_extraction_config(&config),
-            Err(Error::Config(message)) if message.contains("scanned-page OCR")
-        ));
-    }
-
-    #[test]
-    fn diagnostic_rejects_implicit_inline_image_ocr_cache() {
-        let config = diagnostic_config(Some(r#"{"pdf_options":{"ocr_inline_images":true}}"#));
-
-        assert!(matches!(
-            resolve_extraction_config(&config),
-            Err(Error::Config(message)) if message.contains("inline-image OCR")
-        ));
+            assert!(
+                !extraction.use_cache,
+                "request-level use_cache=false keeps implicit OCR cold"
+            );
+            assert!(
+                extraction.ocr.is_none(),
+                "implicit OCR must stay on xberg's default route"
+            );
+        }
     }
 
     #[test]
@@ -642,24 +578,20 @@ mod tests {
     }
 
     #[test]
-    fn config_json_enables_forced_tesseract_ocr_and_materializes_matching_psm() {
+    fn config_json_enables_forced_tesseract_ocr_without_materializing_tesseract_config() {
         let config = diagnostic_config(Some(
             r#"{"output_format":"markdown","ocr":{"enabled":true,"backend":"tesseract","language":["eng"]},"force_ocr":true}"#,
         ));
         let extraction = resolve_extraction_config(&config).unwrap();
 
         assert!(extraction.force_ocr);
+        assert!(!extraction.use_cache);
         let ocr = extraction.ocr.unwrap();
         assert_eq!(ocr.backend, "tesseract");
-        // An implicit `tesseract_config` must be materialized so its result cache is genuinely
-        // disabled, with PSM matching xberg's own auto-selection for "eng" (non-vertical) instead
-        // of the pinned PSM 3 default.
-        let tesseract = ocr
-            .tesseract_config
-            .expect("disable_ocr_result_caches must materialize a tesseract_config");
-        assert!(!tesseract.use_cache);
-        assert_eq!(tesseract.psm, Some(crate::adapter::XBERG_WHOLE_IMAGE_TESSERACT_PSM));
-        assert_eq!(tesseract.language, ["eng"]);
+        assert!(
+            ocr.tesseract_config.is_none() && ocr.backend_options.is_none(),
+            "either field would switch xberg off its default OCR route"
+        );
     }
 
     #[test]
@@ -679,25 +611,18 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_disables_cache_and_materializes_psm_for_implicit_tesseract_stages() {
+    fn diagnostic_refreshes_explicit_stage_caches_and_leaves_implicit_stages_alone() {
         let config = diagnostic_config(Some(
             r#"{"ocr":{"pipeline":{"stages":[{"backend":"tesseract","priority":100,"language":["jpn_vert"]},{"backend":"tesseract","priority":50,"tesseract_config":{"use_cache":true,"psm":6}}]}}}"#,
         ));
         let extraction = resolve_extraction_config(&config).unwrap();
+        assert!(!extraction.use_cache);
         let stages = extraction.ocr.unwrap().pipeline.unwrap().stages;
 
-        let implicit = stages[0]
-            .tesseract_config
-            .as_ref()
-            .expect("an implicit stage must be materialized so its result cache is genuinely disabled");
-        assert!(!implicit.use_cache);
-        assert_eq!(
-            implicit.psm,
-            Some(crate::adapter::XBERG_VERTICAL_BLOCK_TESSERACT_PSM),
-            "a vertical-language stage must materialize PSM 5, not the default PSM 3"
+        assert!(
+            stages[0].tesseract_config.is_none(),
+            "an implicit stage keeps xberg's automatic PSM and default route"
         );
-        assert_eq!(implicit.language, ["jpn_vert"]);
-
         let explicit = stages[1].tesseract_config.as_ref().unwrap();
         assert!(!explicit.use_cache);
         assert_eq!(

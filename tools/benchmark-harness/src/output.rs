@@ -127,6 +127,9 @@ pub struct FrameworkExtensionStats {
     /// non-empty ground truth — distinct from `empty_content`.
     #[serde(default)]
     pub zero_overlap: usize,
+    /// Number of layout-bearing extractions whose layout pass failed or was skipped.
+    #[serde(default)]
+    pub layout_failures: usize,
     /// Unique framework error messages with occurrence counts
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub error_details: HashMap<String, usize>,
@@ -245,6 +248,7 @@ struct ErrorCounts {
     timeouts: usize,
     empty_content: usize,
     zero_overlap: usize,
+    layout_failures: usize,
 }
 
 impl ErrorCounts {
@@ -257,6 +261,7 @@ impl ErrorCounts {
             timeouts: count_of(ErrorKind::Timeout),
             empty_content: count_of(ErrorKind::EmptyContent),
             zero_overlap: count_of(ErrorKind::ZeroOverlap),
+            layout_failures: count_of(ErrorKind::LayoutFailed),
         }
     }
 }
@@ -396,8 +401,12 @@ fn calculate_framework_stats(results: &[&BenchmarkResult]) -> FrameworkExtension
 
     // Match aggregate/CLI semantics: only successful rows and framework-accountable failures
     // participate in the rate; harness and setup failures remain visible in their counters. ~keep
-    let accountable =
-        successful + errors.framework_errors + errors.timeouts + errors.empty_content + errors.zero_overlap;
+    let accountable = successful
+        + errors.framework_errors
+        + errors.timeouts
+        + errors.empty_content
+        + errors.zero_overlap
+        + errors.layout_failures;
     let success_rate = if accountable > 0 {
         successful as f64 / accountable as f64
     } else {
@@ -425,6 +434,7 @@ fn calculate_framework_stats(results: &[&BenchmarkResult]) -> FrameworkExtension
         timeouts: errors.timeouts,
         empty_content: errors.empty_content,
         zero_overlap: errors.zero_overlap,
+        layout_failures: errors.layout_failures,
         error_details,
         success_rate,
         avg_duration_ms: timing.avg_duration_ms,

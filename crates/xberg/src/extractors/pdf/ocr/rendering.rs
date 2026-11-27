@@ -284,13 +284,27 @@ pub(super) fn clone_rgb_for_png_encode(
     image: &image::DynamicImage,
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> crate::Result<image::RgbImage> {
+    rgb_for_png_encode(image, security_limits).map(std::borrow::Cow::into_owned)
+}
+
+/// The RGB8 pixels to PNG-encode for `image`, borrowed when it already holds RGB8.
+///
+/// The budget check charges the RGB copy either way, so a page is admitted or refused exactly as
+/// [`clone_rgb_for_png_encode`] decides. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn rgb_for_png_encode<'a>(
+    image: &'a image::DynamicImage,
+    security_limits: &crate::extractors::security::SecurityLimits,
+) -> crate::Result<std::borrow::Cow<'a, image::RgbImage>> {
     crate::extraction::image_decode::validate_dynamic_image_additional_live_bytes(
         image,
         security_limits,
         3 + OCR_PNG_ENCODE_BYTES_PER_PIXEL,
         OCR_PNG_ENCODE_FIXED_BYTES,
     )?;
-    Ok(image.to_rgb8())
+    Ok(image
+        .as_rgb8()
+        .map_or_else(|| std::borrow::Cow::Owned(image.to_rgb8()), std::borrow::Cow::Borrowed))
 }
 /// Whether the rendered page raster carries essentially no ink.
 ///
@@ -1137,7 +1151,9 @@ pub(super) fn render_one_selected_page(
     #[cfg(test)]
     record_render_thread();
     let mut exceeded = false;
-    let (rendered, dpi) = crate::pdf::render::render_pdf_ocr_page_with_budget_evidence(
+    // The page's RGB8 pixels straight from the canvas: the PNG this used to encode was decoded
+    // right back to RGB8, and the bridge yields those exact pixels under the same budget. ~keep
+    let (rendered, dpi) = crate::pdf::render::render_pdf_ocr_rgb8_page_with_budget_evidence(
         doc,
         idx,
         images_config,
@@ -1152,19 +1168,32 @@ pub(super) fn render_one_selected_page(
             source: Some(render_error_source(error, exceeded)),
         }
     })?;
-    let (data, _, _) = crate::pdf::render::normalize_rendered_page_for_ocr_with_security_limits(
-        rendered.data,
-        rendered.width,
-        rendered.height,
-        rotation,
-        security_limits,
-    )?;
-    let img = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(&data, security_limits)
-        .map_err(|e| crate::XbergError::Parsing {
-            message: format!("Failed to decode rendered page {}: {}", idx + 1, e),
-            source: None,
-        })?;
-    Ok(((idx, image::DynamicImage::ImageRgb8(img)), dpi))
+    Ok(((idx, upright_rgb8_page(rendered, rotation, security_limits, idx)?), dpi))
+}
+
+/// The rendered page as an upright RGB8 image: `xberg_native_pdf` has applied `/Rotate`, so the
+/// inverse quarter turn is applied once, admitted beside the rendered raster it copies.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn upright_rgb8_page(
+    rendered: xberg_native_pdf::rendering::Rgb8Raster,
+    rotation: u32,
+    security_limits: &crate::extractors::security::SecurityLimits,
+    idx: usize,
+) -> crate::Result<image::DynamicImage> {
+    let (width, height) = (rendered.width, rendered.height);
+    let img = image::RgbImage::from_raw(width, height, rendered.data).ok_or_else(|| crate::XbergError::Parsing {
+        message: format!("Rendered page {} does not hold {width}x{height} RGB pixels", idx + 1),
+        source: None,
+    })?;
+    let correction = crate::pdf::render::ocr_page_correction_degrees(rotation);
+    if correction != 0 {
+        let live = u64::try_from(img.as_raw().len()).unwrap_or(u64::MAX);
+        crate::extraction::image_decode::validate_image_live_bytes(width, height, live, live, security_limits)?;
+    }
+    Ok(crate::pdf::render::rotate_dynamic_image(
+        image::DynamicImage::ImageRgb8(img),
+        correction,
+    ))
 }
 
 /// Render every page in `page_indices`, in parallel across the configured thread budget.

@@ -505,6 +505,18 @@ $XBERG_CACHE_DIR/
   ocr/                    # OCR result cache
   embeddings/             # Chunk embedding cache
   extractions/            # Full extraction cache
+  ort-optimized/          # Saved ONNX Runtime graphs for CPU layout models
+```
+
+### XBERG_ORT_OPTIMIZED_CACHE
+
+**Type**: `Boolean` (`0`, `false`, `off` or `no` disables, case-insensitive)
+**Default**: Enabled
+
+Reuse ONNX Runtime's optimised graph for CPU-only layout and inference sessions across processes, so a cold start skips graph optimisation. The graph is saved under `$XBERG_CACHE_DIR/ort-optimized/` only for a model verified against its pinned SHA-256 in the same process, and its own SHA-256 is checked before every load. The directory must be owned by the current user and not writable by group or others; otherwise the cache is skipped with a warning. GPU and CoreML sessions never use it.
+
+```bash title="Disable the Saved-Graph Cache"
+export XBERG_ORT_OPTIMIZED_CACHE=0
 ```
 
 ### XBERG_CI_DEBUG
@@ -920,7 +932,16 @@ export ORT_DYLIB_PATH=/opt/homebrew/lib/libonnxruntime.dylib
 set ORT_DYLIB_PATH=C:\path\to\onnxruntime.dll
 ```
 
-When not set, Xberg auto-discovers system-installed ONNX Runtime on common paths. If no system library is found, the bundled CPU-only version is used.
+Builds that link ONNX Runtime (the language packages other than Intel macOS, `cargo install xberg-cli`, the Windows CLI) use the linked CPU runtime when this is not set.
+
+Builds that load ONNX Runtime dynamically (the Linux glibc and macOS CLI release archives, the `core`/`full` Docker images and the Intel macOS packages) load it the first time a model runs, never at startup, from the first of:
+
+1. `ORT_DYLIB_PATH`, when set and non-empty. A path that does not load is an error; Xberg does not fall back to another library. The CLI and Docker images require an absolute path.
+2. `libonnxruntime.so` (or `libonnxruntime.so.1`) / `libonnxruntime.dylib` / `onnxruntime.dll` in the directory of the `xberg` executable (the CLI) or of the native library that holds Xberg (the Intel macOS packages), symlinks resolved, then in `<prefix>/lib` when that directory is `<prefix>/bin`.
+3. The system locations `/usr/lib`, `/usr/local/lib`, `/usr/lib/{x86_64,aarch64}-linux-gnu` (Linux), `/opt/homebrew/lib`, `/usr/local/lib` (macOS), `C:\Program Files\onnxruntime\bin`, `C:\Windows\System32` (Windows).
+4. The Intel macOS packages only: the dynamic loader's own search for `libonnxruntime.dylib` (`DYLD_LIBRARY_PATH`, `DYLD_FALLBACK_LIBRARY_PATH`, rpaths).
+
+A file found in steps 2 and 3 is loaded only if it and its directory are owned by root or the current user and are not writable by other users (group write is accepted only through your own private group, as umask 002 systems create files); a file that fails this check, or does not load, is skipped. If nothing loads, the model operation fails with an error listing every path searched and every file skipped. The CLI and Docker images never consult the current directory or the dynamic loader's search path.
 
 ### XBERG_ORT_EP
 
@@ -992,6 +1013,26 @@ building from source to link pdfium statically instead of loading it at run time
 
 See [Pdfium PDF backend](/getting-started/installation/#pdfium-pdf-backend) for the full
 setup and the platforms it is unavailable on.
+
+## HEIF Library Configuration
+
+### XBERG_LIBHEIF_PATH
+
+**Type**: `String` (absolute file path)
+**Default**: Not set (the library shipped beside `xberg`, then the system locations)
+
+Absolute path of the libheif shared library the Linux glibc and macOS CLI release archives open on the first HEIF / HEIC / AVIF decode. Other builds link libheif and ignore this variable.
+
+```bash title="Use Another libheif"
+export XBERG_LIBHEIF_PATH=/opt/homebrew/lib/libheif.1.dylib
+```
+
+When set and non-empty it is the only library tried: a relative path is refused, and a path that does not load is an error rather than a fallback. When not set, the CLI loads the first of:
+
+1. `libheif.1.dylib` / `libheif.dylib` (macOS) or `libheif.so.1` / `libheif.so` (Linux) in the directory of the `xberg` executable (symlinks resolved), then in `<prefix>/lib` when that directory is `<prefix>/bin`.
+2. The system locations `/opt/homebrew/lib`, `/usr/local/lib` (macOS) or `/usr/lib/{x86_64,aarch64}-linux-gnu`, `/usr/lib64`, `/usr/lib`, `/usr/local/lib` (Linux).
+
+A discovered file is opened only if it and its directory are owned by root or the current user and are not writable by other users (group write is accepted only through your own private group, as umask 002 systems create files); a file that fails this check, does not load or lacks a libheif function is skipped. If nothing loads, HEIF decoding fails with a missing-dependency error listing every path searched; other formats are unaffected. The current directory and the dynamic loader's search path are never consulted.
 
 ## See Also
 

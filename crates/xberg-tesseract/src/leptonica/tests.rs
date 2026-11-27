@@ -371,6 +371,69 @@ fn global_otsu_threshold_produces_binary_and_preserves_resolution() {
     assert_eq!(binary.get_resolution().unwrap(), (TEST_X_RESOLUTION, TEST_Y_RESOLUTION));
 }
 
+fn leptonica_full_tile_otsu(gray: &Pix) -> Pix {
+    gray.otsu_threshold_with_options(
+        gray.width().max(Pix::MINIMUM_OTSU_TILE_DIMENSION),
+        gray.height().max(Pix::MINIMUM_OTSU_TILE_DIMENSION),
+        0,
+        0,
+        Pix::STANDARD_OTSU_SCORE_FRACTION,
+    )
+    .expect("leptonica otsu")
+}
+
+fn two_level_gray(width: u32, height: u32, ink: impl Fn(u32, u32) -> u8) -> Pix {
+    let mut data = Vec::with_capacity((width * height) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            data.push(ink(x, y));
+        }
+    }
+    Pix::from_grayscale_bytes(&data, width, height).expect("gray pix")
+}
+
+#[test]
+fn global_otsu_matches_leptonica_full_tile_otsu_bit_for_bit() {
+    for (width, height) in [(96, 64), (97, 61), (13, 7), (4, 4), (101, 3)] {
+        let gray = gray_fixture(width, height);
+        let expected = leptonica_full_tile_otsu(&gray);
+        let actual = gray.otsu_threshold().expect("global otsu");
+        assert_eq!(
+            actual.binary_bytes().unwrap(),
+            expected.binary_bytes().unwrap(),
+            "{width}x{height}"
+        );
+        assert_eq!(actual.get_resolution().unwrap(), expected.get_resolution().unwrap());
+        let skewed = two_level_gray(width, height, |x, y| [12, 40, 200, 230][((x * 7 + y * 3) % 4) as usize]);
+        assert_eq!(
+            skewed.otsu_threshold().unwrap().binary_bytes().unwrap(),
+            leptonica_full_tile_otsu(&skewed).binary_bytes().unwrap(),
+            "skewed {width}x{height}"
+        );
+    }
+}
+
+#[test]
+fn global_otsu_saturates_bin_counts_past_two_to_the_twenty_four_like_leptonica() {
+    let side = 4400;
+    let value = |x: u32, y: u32| match (x % 97, y % 89) {
+        (0..=2, _) => 0,
+        (_, 0..=1) => 90,
+        (_, 2..=4) => 170,
+        _ => 255,
+    };
+    let paper = (0..side)
+        .flat_map(|y| (0..side).map(move |x| (x, y)))
+        .filter(|&(x, y)| value(x, y) == 255)
+        .count();
+    assert!(paper > 1 << 24, "the paper bin must pass the f32 exact-count limit");
+    let gray = two_level_gray(side, side, value);
+    assert_eq!(
+        gray.otsu_threshold().unwrap().binary_bytes().unwrap(),
+        leptonica_full_tile_otsu(&gray).binary_bytes().unwrap()
+    );
+}
+
 #[test]
 fn adaptive_otsu_threshold_produces_binary_and_preserves_resolution() {
     let gray = gray_fixture(96, 64);
@@ -468,4 +531,67 @@ fn test_mean_gray_value_light_vs_dark() {
 
     assert!(light_mean > 200.0, "light_mean was {light_mean}");
     assert!(dark_mean < 40.0, "dark_mean was {dark_mean}");
+}
+
+fn coloured_rgb(width: u32, height: u32) -> Vec<u8> {
+    let mut state = 0x9e37_79b9_u32;
+    (0..width * height * 3)
+        .map(|_| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (state >> 24) as u8
+        })
+        .collect()
+}
+
+fn assert_gray_matches_full_page_conversion(rgb: &[u8], width: u32, height: u32) {
+    let expected = Pix::from_raw_rgb(rgb, width, height)
+        .expect("from_raw_rgb failed")
+        .to_grayscale()
+        .expect("to_grayscale failed");
+    let banded = Pix::gray_from_raw_rgb(rgb, width, height).expect("gray_from_raw_rgb failed");
+    assert_eq!(
+        (banded.width(), banded.height(), banded.depth()),
+        (expected.width(), expected.height(), expected.depth()),
+        "{width}x{height}"
+    );
+    assert_eq!(banded.depth(), 8);
+    assert_eq!(
+        banded.get_resolution().unwrap(),
+        expected.get_resolution().unwrap(),
+        "{width}x{height}"
+    );
+    assert_eq!(
+        banded.grayscale_bytes().unwrap(),
+        expected.grayscale_bytes().unwrap(),
+        "{width}x{height}"
+    );
+}
+
+#[test]
+fn gray_from_raw_rgb_equals_the_full_page_conversion_across_band_edges() {
+    let band = Pix::GRAY_CONVERSION_STRIP_ROWS as u32;
+    for width in [1, 3, 37, 64, 129] {
+        for height in [1, band - 1, band, band + 1, 3 * band + 5] {
+            assert_gray_matches_full_page_conversion(&coloured_rgb(width, height), width, height);
+        }
+    }
+}
+
+#[test]
+fn gray_from_raw_rgb_equals_the_full_page_conversion_for_every_red_green_pair() {
+    let mut rgb = Vec::with_capacity(256 * 256 * 3);
+    for green in 0..=255u8 {
+        for red in 0..=255u8 {
+            rgb.extend([red, green, red ^ green]);
+        }
+    }
+    assert_gray_matches_full_page_conversion(&rgb, 256, 256);
+}
+
+#[test]
+fn gray_from_raw_rgb_rejects_what_from_raw_rgb_rejects() {
+    for (data, width, height) in [(vec![0u8; 10], 4, 4), (Vec::new(), 0, 4), (Vec::new(), 4, 0)] {
+        let err = Pix::gray_from_raw_rgb(&data, width, height).unwrap_err();
+        assert!(matches!(err, TesseractError::InvalidImageData), "{width}x{height}");
+    }
 }

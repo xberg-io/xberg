@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::path::Path;
 use std::ptr;
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::decoder::get_decoding_options_ptr;
 use crate::utils::path_to_cstring;
@@ -28,10 +28,10 @@ impl LibHeif {
     #[allow(unsafe_code)]
     pub fn new() -> Self {
         let mut init_params = lh::heif_init_params { version: 0 };
+        // Without the library there is nothing to initialise and the call fails; Drop then skips
+        // deinit, and the methods that need libheif report why it is unavailable. ~keep
         // SAFETY: The local version-zero parameter block stays live through initialization.
-        unsafe {
-            lh::heif_init(&mut init_params as _);
-        }
+        let _ = unsafe { lh::heif_init(&mut init_params as _) };
         Self(())
     }
 
@@ -44,7 +44,7 @@ impl LibHeif {
     pub fn new_checked() -> Result<Self> {
         let mut init_params = lh::heif_init_params { version: 0 };
         // SAFETY: The local version-zero parameter block stays live through initialization.
-        let error = unsafe { lh::heif_init(&mut init_params as _) };
+        let error = unsafe { lh::heif_init(&mut init_params as _) }?;
         HeifError::from_heif_error(error)?;
         Ok(Self(()))
     }
@@ -54,11 +54,11 @@ impl LibHeif {
 impl Drop for LibHeif {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
+        // The load outcome is cached, so without the library this fails as `heif_init` did in
+        // `new`, and nothing is deinitialised. ~keep
         // SAFETY: Deinitialization balances a successful initialization.
         // new_checked enforces success before constructing a guard; new ignores the result.
-        unsafe {
-            lh::heif_deinit();
-        }
+        let _ = unsafe { lh::heif_deinit() };
     }
 }
 
@@ -74,11 +74,14 @@ impl Default for LibHeif {
 impl LibHeif {
     /// Version of linked `libheif` as an array of numbers in format:
     ///
-    /// `[<major>, <minor>, <maintenance>]`
+    /// `[<major>, <minor>, <maintenance>]`, or all zeros when libheif cannot be loaded
+    /// (`dynamic` feature).
     #[allow(unsafe_code)]
     pub fn version(&self) -> [u8; 3] {
         // SAFETY: The version query takes no pointers and returns a value.
-        let version: u32 = unsafe { lh::heif_get_version_number() };
+        let Ok(version) = (unsafe { lh::heif_get_version_number() }) else {
+            return [0; 3];
+        };
         let parts = version.to_be_bytes();
         [parts[0], parts[1], parts[2]]
     }
@@ -98,7 +101,7 @@ impl LibHeif {
         // SAFETY: The directory CString and count out slot live for the call. Passing
         // null with zero capacity requests no plugin-info output array.
         let err =
-            unsafe { lh::heif_load_plugins(dir_path.as_ptr(), ptr::null_mut() as _, &mut plugins_loaded as _, 0) };
+            unsafe { lh::heif_load_plugins(dir_path.as_ptr(), ptr::null_mut() as _, &mut plugins_loaded as _, 0) }?;
         HeifError::from_heif_error(err)?;
         Ok(plugins_loaded as usize)
     }
@@ -115,6 +118,7 @@ impl LibHeif {
         color_space: ColorSpace,
         decoding_options: Option<DecodingOptions>,
     ) -> Result<Image> {
+        crate::ensure_libheif()?;
         let mut c_image: *mut lh::heif_image = ptr::null_mut();
         // SAFETY: The image handle and optional decoding settings outlive the call,
         // and c_image is a writable slot for the owned native result.
@@ -135,7 +139,7 @@ impl LibHeif {
     /// You can filter the decoders by compression format.
     ///
     /// The returned list of decoders is sorted by their priority
-    /// (which is a plugin property).
+    /// (which is a plugin property). It is empty when libheif cannot be loaded.
     #[allow(unsafe_code)]
     pub fn decoder_descriptors(
         &self,
@@ -149,8 +153,11 @@ impl LibHeif {
         // SAFETY: The Vec has capacity for max_count pointers, which fits in a C int.
         // Libheif returns the number of entries it initialized, bounded by max_count.
         unsafe {
-            let count =
-                lh::heif_get_decoder_descriptors(format_filter as _, descriptors_ptr.as_mut_ptr(), max_count as _);
+            let Ok(count) =
+                lh::heif_get_decoder_descriptors(format_filter as _, descriptors_ptr.as_mut_ptr(), max_count as _)
+            else {
+                return Vec::new();
+            };
             descriptors_ptr.set_len(count as usize);
         }
 
@@ -166,7 +173,7 @@ impl LibHeif {
     /// You can filter the encoders by compression format and name.
     ///
     /// The returned list of encoders is sorted by their priority
-    /// (which is a plugin property).
+    /// (which is a plugin property). It is empty when libheif cannot be loaded.
     ///
     /// Note: to get the actual encoder from the descriptors returned here,
     /// use [`LibHeif::encoder`] method.
@@ -186,12 +193,14 @@ impl LibHeif {
         // SAFETY: The Vec has capacity for the supplied count, and a present CString
         // stays live while libheif compares the filter to plugin IDs.
         unsafe {
-            let count = lh::heif_get_encoder_descriptors(
+            let Ok(count) = lh::heif_get_encoder_descriptors(
                 format_filter as _,
                 name_filter_ptr,
                 descriptors_ptr.as_mut_ptr(),
                 max_count as _,
-            );
+            ) else {
+                return Vec::new();
+            };
             descriptors_ptr.set_len(count as usize);
         }
 
@@ -207,6 +216,7 @@ impl LibHeif {
     /// encode images from a descriptor.
     #[allow(unsafe_code)]
     pub fn encoder(&self, descriptor: EncoderDescriptor) -> Result<Encoder<'_>> {
+        crate::ensure_libheif()?;
         let mut c_encoder: *mut lh::heif_encoder = ptr::null_mut();
         // SAFETY: Libheif accepts a null context for this registry operation. The
         // descriptor is borrowed and c_encoder is a writable out slot.
@@ -225,7 +235,8 @@ impl LibHeif {
         let mut c_encoder: *mut lh::heif_encoder = ptr::null_mut();
         // SAFETY: Libheif accepts a null context for this registry operation and
         // can initialize the caller-owned out slot.
-        let err = unsafe { lh::heif_context_get_encoder_for_format(ptr::null_mut() as _, format as _, &mut c_encoder) };
+        let err =
+            unsafe { lh::heif_context_get_encoder_for_format(ptr::null_mut() as _, format as _, &mut c_encoder) }?;
         HeifError::from_heif_error(err)?;
         // SAFETY: Success returns a fresh encoder allocation. Encoder owns it if construction succeeds.
         let encoder = Encoder::new(unsafe { &mut *c_encoder })?;

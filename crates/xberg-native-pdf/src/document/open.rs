@@ -6,6 +6,14 @@
 
 use super::*;
 
+/// Pages of extracted characters kept by `page_chars_cache`. Each reader of a
+/// page's characters (span postprocessing, the table decimal stamp, ruled-cell
+/// repair, decimal-power evidence) reads them while the pass is still on that
+/// page, and the passes sweep the document one after another, so an entry is
+/// next wanted a whole sweep later. Two entries cover the current page and the
+/// one a reader looks back to; each entry holds every glyph of a page. ~keep
+pub(crate) const PAGE_CHARS_CACHE_ENTRIES: usize = 2;
+
 impl PdfDocument {
     /// Open a PDF document from in-memory bytes.
     ///
@@ -13,11 +21,20 @@ impl PdfDocument {
     /// the PDF data is already fully loaded in memory. This parses the PDF by
     /// wrapping the bytes in a memory reader and delegating to internal parsers.
     ///
+    /// `data` is anything convertible into [`bytes::Bytes`]: a `Vec<u8>` is
+    /// adopted without copying and a `Bytes` shares the caller's buffer, so the
+    /// document never holds a second copy of the file.
+    ///
     /// # Errors
     ///
     /// Returns an error if the PDF data is invalid, unsupported, or cannot be parsed.
+    pub fn from_bytes(data: impl Into<bytes::Bytes>) -> Result<Self> {
+        let data = data.into();
+        Self::from_shared_bytes(data)
+    }
+
     #[tracing::instrument(name = "pdf.from_bytes", skip_all, fields(bytes = data.len()))]
-    pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
+    fn from_shared_bytes(data: bytes::Bytes) -> Result<Self> {
         let warning_sink = crate::extractors::warnings::WarningSink::new();
         let _warnings = warning_sink.enter();
         match Self::open_from_bytes_inner(data, warning_sink) {
@@ -82,7 +99,10 @@ impl PdfDocument {
     /// Parse `data` into a document. The reader built here lives only for the
     /// header, xref and trailer parse; the finished document keeps the bytes and
     /// reads them by offset instead. ~keep
-    fn open_from_bytes_inner(data: Vec<u8>, warning_sink: crate::extractors::warnings::WarningSink) -> Result<Self> {
+    fn open_from_bytes_inner(
+        data: bytes::Bytes,
+        warning_sink: crate::extractors::warnings::WarningSink,
+    ) -> Result<Self> {
         let mut reader = PdfReader::Memory(BufReader::new(Cursor::new(data)));
         // Parse header with lenient mode by default (handle PDFs with binary prefixes) ~keep
         let (major, minor, header_offset) = parse_header(&mut reader, true)?;
@@ -258,18 +278,19 @@ impl PdfDocument {
     }
 
     fn build_document(
-        parsed: (Vec<u8>, (u8, u8), CrossRefTable, Object),
+        parsed: (bytes::Bytes, (u8, u8), CrossRefTable, Object),
         recovery: (u64, bool, Option<HashMap<u32, u64>>),
         warning_sink: crate::extractors::warnings::WarningSink,
     ) -> Self {
         let (source_bytes, version, xref, trailer) = parsed;
         let (header_offset, xref_reconstructed, prepopulated_scan) = recovery;
+        let object_cache = BoundedObjectCache::sharing(DEFAULT_OBJECT_CACHE_MAX_BYTES, &source_bytes);
         Self {
             source_bytes,
             version,
             xref,
             trailer,
-            object_cache: Mutex::new(BoundedObjectCache::new(DEFAULT_OBJECT_CACHE_MAX_BYTES)),
+            object_cache: Mutex::new(object_cache),
             object_recovery_epoch: AtomicUsize::new(0),
             object_stream_cache: Mutex::new(BoundedObjectStreamCache::new(DEFAULT_OBJECT_STREAM_CACHE_MAX_BYTES)),
             object_stream_telemetry_seen: Mutex::new(BoundedRecoveryTelemetry::new(
@@ -300,6 +321,7 @@ impl PdfDocument {
             structure_content_cache: Mutex::new(None),
             actualtext_index_cache: Mutex::new(None),
             mc_actualtext_mcids: Mutex::new(HashMap::new()),
+            script_baselines: Mutex::new(HashMap::new()),
             table_elements_cache: Mutex::new(None),
             page_cache: Mutex::new(HashMap::new()),
             page_cache_populated: AtomicBool::new(false),
@@ -315,9 +337,14 @@ impl PdfDocument {
             erase_regions: Mutex::new(HashMap::new()),
             page_content_cache: Mutex::new(BoundedEntryCache::new(64)),
             page_spans_cache: Mutex::new(BoundedEntryCache::new(8)),
+            raw_page_spans_cache: Mutex::new(None),
+            paired_geometry_pages: AtomicUsize::new(0),
+            painted_regions_cache: Mutex::new(None),
+            keep_white_text: AtomicBool::new(false),
+            dropped_white_text: Mutex::new(HashMap::new()),
             small_painted_text: std::sync::OnceLock::new(),
             search_index: Mutex::new(HashMap::new()),
-            page_chars_cache: Mutex::new(BoundedEntryCache::new(8)),
+            page_chars_cache: Mutex::new(BoundedEntryCache::new(PAGE_CHARS_CACHE_ENTRIES)),
             running_artifact_signatures: Mutex::new(None),
             article_threads_cache: Mutex::new(None),
             output_intent_cmyk_profile_cache: Mutex::new(None),
@@ -696,6 +723,18 @@ impl PdfDocument {
             // cache path (it is resolved independently), so clearing
             // is always safe. ~keep
             self.object_cache.lock_or_recover().clear();
+            // Every per-page result read before authentication came from
+            // undecrypted streams or an empty encrypted-page read. ~keep
+            if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
+                cache.clear();
+            }
+            if let Some(cache) = self.painted_regions_cache.lock_or_recover().as_mut() {
+                cache.clear();
+            }
+            self.page_content_cache.lock_or_recover().clear();
+            self.page_spans_cache.lock_or_recover().clear();
+            self.page_chars_cache.lock_or_recover().clear();
+            self.search_index.lock_or_recover().clear();
             tracing::debug!(target: LOG_TARGET,
                 "authenticate(): object cache cleared after successful authentication \
                      to force re-decryption of any pre-auth cached objects"

@@ -101,6 +101,21 @@ fn luma_decode_rejects_peak_when_rgba_source_alone_fits() {
     assert!(error.to_string().contains("live image-processing bytes"));
 }
 
+#[cfg(feature = "captioning-onnx")]
+#[test]
+fn pixel_capped_rgb_decode_admits_a_non_square_image_within_the_pixel_cap() {
+    let image = decode_standard_rgb8_within_pixels(&grayscale_png(40, 10), 400).expect("400 pixels fit a 400 cap");
+    assert_eq!(image.dimensions(), (40, 10));
+    assert_eq!(image.get_pixel(0, 0).0, [127, 127, 127]);
+}
+
+#[cfg(feature = "captioning-onnx")]
+#[test]
+fn pixel_capped_rgb_decode_refuses_an_image_over_the_pixel_cap() {
+    let error = decode_standard_rgb8_within_pixels(&grayscale_png(40, 10), 399).expect_err("400 pixels exceed 399");
+    assert!(matches!(error, XbergError::Validation { .. }));
+}
+
 fn budget_of(max_content_size: usize) -> ImageDecodeBudget {
     ImageDecodeBudget::from_security_limits(&SecurityLimits {
         max_content_size,
@@ -600,9 +615,8 @@ fn approved_decoder_guard(relative: &str, function: &str, path: &str) -> Option<
         ("extraction/image_decode.rs", "decode", _) => Some("image_decode_limits"),
         ("extraction/image_decode.rs", "decode_standard_image", _)
         | ("extraction/image_decode.rs", "decode_standard_rgb8", _)
-        | ("extraction/image_decode.rs", "decode_standard_luma8_with_security_limits", _) => {
-            Some("probe_standard_image")
-        }
+        | ("extraction/image_decode.rs", "decode_standard_luma8_with_security_limits", _)
+        | ("extraction/image_decode.rs", "decode_standard_rgb8_within_pixels", _) => Some("probe_standard_image"),
         ("extraction/image_decode.rs", "standard_image_is_single_frame", _) => Some("header-only"),
         ("extraction/image.rs", "decode_jp2_to_rgb_with_security_limits", "hayro_jpeg2000::Image::new")
         | ("extraction/image.rs", "decode_jbig2_to_gray_with_security_limits", "hayro_jbig2::File::new") => {

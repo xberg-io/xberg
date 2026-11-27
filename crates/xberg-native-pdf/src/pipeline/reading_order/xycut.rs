@@ -292,6 +292,12 @@ const MIN_LABEL_VALUE_ROWS: usize = 3;
 // cut is prose running across the gutter, not column content. Matches the minimum column
 // width a cut must leave on each side. ~keep
 const MIN_STRADDLING_INK_PTS: f32 = 60.0;
+// A within-line gap at least this fraction of the line's widest gap is another cell boundary,
+// not word spacing inside a column line.
+const TABLE_ROW_GAP_RATIO: f32 = 0.5;
+// Gaps beyond the widest that make a line a table row: three comparable gaps are four cells,
+// more than the two column lines a narrow gutter separates.
+const TABLE_ROW_MIN_EXTRA_GAPS: usize = 2;
 
 /// Group `indices` into visual lines: anchored (not chained) on `y`, top to bottom, and
 /// further split on `x` wherever consecutive items are more than `MAX_INTRA_LINE_GAP_EM`
@@ -386,6 +392,22 @@ fn script_fills_gap(
             && span.bbox.right() <= gap.1 + SCRIPT_GAP_SLACK_PTS
             && (gap.1 - gap.0) - span.bbox.width <= font_size * SCRIPT_GAP_REMAINDER_EM
     })
+}
+
+/// Whether a run's text is a table number: at least one digit, and otherwise only signs,
+/// separators, a percent sign or the parentheses of a negative amount.
+fn is_numeric_cell_run<'a>(texts: impl Iterator<Item = &'a str>) -> bool {
+    let mut has_digit = false;
+    for character in texts.flat_map(str::chars) {
+        if character.is_ascii_digit() {
+            has_digit = true;
+        } else if !(character.is_whitespace()
+            || matches!(character, '.' | ',' | '+' | '-' | '\u{2212}' | '%' | '(' | ')'))
+        {
+            return false;
+        }
+    }
+    has_digit
 }
 
 const MIN_STEPPED_PROSE_LINES: usize = 4;
@@ -1662,6 +1684,8 @@ impl XYCutStrategy {
         // midpoint X. ~keep
         const MIN_GAP_PT: f32 = 6.0;
         let mut gap_positions: Vec<f32> = Vec::new();
+        // Midpoints of the gap-bearing lines that are table rows rather than two column lines.
+        let mut table_row_gaps: Vec<f32> = Vec::new();
         for line_spans in lines.values() {
             if line_spans.len() < 2 {
                 continue;
@@ -1679,6 +1703,14 @@ impl XYCutStrategy {
             }
             if largest_gap >= MIN_GAP_PT {
                 gap_positions.push(largest_mid);
+                let comparable_gaps = sorted
+                    .windows(2)
+                    .map(|w| w[1].0 - w[0].1)
+                    .filter(|&gap| gap >= MIN_GAP_PT && gap >= largest_gap * TABLE_ROW_GAP_RATIO)
+                    .count();
+                if comparable_gaps > TABLE_ROW_MIN_EXTRA_GAPS {
+                    table_row_gaps.push(largest_mid);
+                }
             }
         }
 
@@ -1734,6 +1766,19 @@ impl XYCutStrategy {
             return None;
         }
         if best_size * 5 < lines.len() {
+            return None;
+        }
+
+        // A two-column line has one gap the width of the gutter; a table row has a gap at
+        // every cell boundary, several of them as wide as the widest. When table rows carry
+        // the cluster, the "gutter" is a column boundary of a table set in a single-column
+        // body (1509.07624 page 37), and cutting there reads the table's columns and every
+        // prose line around it as two halves. ~keep
+        let table_rows_in_cluster = table_row_gaps
+            .iter()
+            .filter(|&&mid| (mid - best_center).abs() <= CLUSTER_RADIUS_PT)
+            .count();
+        if table_rows_in_cluster * 2 >= best_size {
             return None;
         }
 
@@ -2241,6 +2286,10 @@ impl XYCutStrategy {
             return None;
         }
 
+        if self.cuts_numeric_table_rows(all_spans, indices, split_x) {
+            return None;
+        }
+
         Some((left, right))
     }
 
@@ -2306,6 +2355,46 @@ impl XYCutStrategy {
         paired_rows >= MIN_LABEL_VALUE_ROWS
             && short_rows * 5 >= paired_rows * 3
             && paired_rows * 2 >= left_lines.min(right_lines)
+    }
+
+    /// True when the cut at `split_x` would run between the cells of a numeric table's rows:
+    /// at least `MIN_LABEL_VALUE_ROWS` rows have a number just right of the cut and, on the
+    /// same baseline just left of it, another number or a short label, and such rows are most
+    /// of the rows the cut separates. `cuts_label_value_rows` leaves exact-baseline rows alone
+    /// because two prose columns share baselines; a prose line is neither a number nor short,
+    /// so it never counts here. Cutting would read a table column by column (1602.03238 page
+    /// 24 read the first value column before the second), so the caller falls back to a row
+    /// cut. ~keep
+    fn cuts_numeric_table_rows(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> bool {
+        let lines = group_indices_into_lines(all_spans, indices);
+        let run = |line: &[usize]| -> (f32, f32, f32, f32, bool) {
+            let (left, right, y, font) = line.iter().fold((f32::MAX, f32::MIN, f32::MIN, 0.0f32), |acc, &i| {
+                let span = &all_spans[i];
+                (
+                    acc.0.min(span.bbox.left()),
+                    acc.1.max(span.bbox.right()),
+                    acc.2.max(span.bbox.y),
+                    acc.3.max(span.font_size),
+                )
+            });
+            let numeric = is_numeric_cell_run(line.iter().map(|&i| all_spans[i].text.as_str()));
+            (left, right, y, font, numeric)
+        };
+        let mut paired_rows = 0usize;
+        let mut numeric_rows = 0usize;
+        for pair in lines.windows(2) {
+            let (left_min, left_max, left_y, left_font, left_numeric) = run(&pair[0]);
+            let (right_min, _, right_y, _, right_numeric) = run(&pair[1]);
+            if left_max > split_x || right_min < split_x || (left_y - right_y).abs() > XYCUT_LINE_Y_TOLERANCE_PTS {
+                continue;
+            }
+            paired_rows += 1;
+            let left_is_cell = left_numeric || left_max - left_min < LABEL_RUN_MAX_EM * left_font;
+            if right_numeric && left_is_cell {
+                numeric_rows += 1;
+            }
+        }
+        numeric_rows >= MIN_LABEL_VALUE_ROWS && numeric_rows * 5 >= paired_rows * 3
     }
 
     /// Fallback column split: find the deepest trough between the two
@@ -2816,7 +2905,7 @@ mod tests {
             text: text.to_string(),
             bbox: Rect::new(x, y, width, height),
             font_size,
-            font_name: "Arial".to_string(),
+            font_name: "Arial".into(),
             font_weight: FontWeight::Normal,
             is_italic: false,
             is_monospace: false,
@@ -5635,6 +5724,45 @@ mod tests {
         assert_eq!(reading_order(&spans), expected);
     }
 
+    /// 1509.07624 page 37: a six-column table above full-width prose in one column. Every
+    /// table row's widest gap is the one before the `Real` column, at one X, so the twelve
+    /// rows form the narrow-gutter cluster while the prose lines bear no gap at all. The rows
+    /// have a gap at every cell boundary, so the cluster is a table's column boundary, not a
+    /// gutter: cutting there read the labels with the prose and the value columns after it.
+    #[test]
+    fn narrow_gutter_branch_declines_a_table_column_boundary_in_a_single_column_body() {
+        let cells: [(&str, f32, f32); 6] = [
+            ("1", 168.7, 5.0),
+            ("centre", 188.2, 26.3),
+            ("0", 228.9, 5.0),
+            ("10", 248.4, 10.0),
+            ("-0.0227049145535", 279.7, 75.9),
+            ("0.951481194735", 375.0, 67.5),
+        ];
+        let mut spans = Vec::new();
+        for row in 0..12 {
+            let y = 700.0 - row as f32 * 19.0;
+            for (text, x, width) in cells {
+                spans.push(make_span_text(x, y, width, 10.0, text, 10.0));
+            }
+        }
+        for line in 0..12 {
+            spans.push(make_span_text(
+                133.8,
+                450.0 - line as f32 * 12.0,
+                343.7,
+                10.0,
+                "with s and g as given, the solutions become increasingly oscillatory as kappa grows",
+                10.0,
+            ));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(kind, RegionKind::Prose);
+        assert_eq!(strategy.detect_narrow_gutter_prose(&spans, &indices, kind), None);
+    }
+
     #[test]
     fn prose_corridors_should_require_at_least_six_points_of_whitespace() {
         let strategy = XYCutStrategy::new();
@@ -5697,6 +5825,40 @@ mod tests {
         assert!(
             cut_of(&spans).is_none(),
             "label and value cells must not become two columns"
+        );
+    }
+
+    /// 1602.03238 page 24: a fee column and two price columns under their headers, every row
+    /// on one baseline. The empty corridor between the price columns is a valid valley, but
+    /// the cut separates a number from the number beside it on every row, so it is refused
+    /// and the table reads row by row.
+    #[test]
+    fn a_numeric_table_on_exact_baselines_is_not_cut_between_its_value_columns() {
+        let mut spans = vec![
+            make_span_text(223.6, 654.6, 5.9, 9.0, "α", 9.0),
+            make_span_text(245.4, 652.5, 74.1, 9.0, "GHQC (ρ = −0.3)", 9.0),
+            make_span_text(331.6, 652.5, 66.8, 9.0, "GHQC (ρ = 0.3)", 9.0),
+        ];
+        let rows = [
+            ("0", "1.08348", "1.10173"),
+            ("25", "1.06651", "1.08367"),
+            ("50", "1.05107", "1.06707"),
+            ("75", "1.03719", "1.05184"),
+            ("100", "1.02484", "1.03804"),
+            ("125", "1.01389", "1.02558"),
+            ("150", "1.00408", "1.01446"),
+            ("175", "0.995356", "1.00463"),
+            ("200", "0.987673", "0.996057"),
+        ];
+        for (i, (fee, negative, positive)) in rows.into_iter().enumerate() {
+            let y = 634.8 - i as f32 * 14.25;
+            spans.push(make_span_text(222.0, y, 9.2, 9.0, fee, 9.0));
+            spans.push(make_span_text(267.4, y, 29.9, 9.0, negative, 9.0));
+            spans.push(make_span_text(349.9, y, 29.9, 9.0, positive, 9.0));
+        }
+        assert!(
+            cut_of(&spans).is_none(),
+            "the value columns of a numeric table must not become two columns"
         );
     }
 

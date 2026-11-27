@@ -73,11 +73,7 @@ fn unsupported_ocr_options(ocr: &OcrConfig) -> Option<&'static str> {
     {
         return Some("OCR preprocessing, element, pipeline or rotation options are set");
     }
-    if !ocr.backend_options.as_ref().is_none_or(|options| {
-        options
-            .as_object()
-            .is_some_and(|fields| fields.keys().all(|key| key == "use_cache"))
-    }) {
+    if ocr.has_tuning_backend_options() {
         return Some("custom OCR backend options are set");
     }
     None
@@ -111,6 +107,7 @@ fn annotation_only_options(pdf: &PdfConfig) -> bool {
             backend: PdfBackend::Native,
             extract_vector_geometry: false,
             plan_regions: None,
+            keep_white_text: false,
         }
     )
 }

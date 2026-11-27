@@ -119,7 +119,7 @@ impl From<TextSpan> for TextContent {
             text: span.text,
             bbox: span.bbox,
             font: FontSpec {
-                name: span.font_name,
+                name: span.font_name.into(),
                 size: span.font_size,
             },
             style: TextStyle {
@@ -145,7 +145,7 @@ impl From<TextContent> for TextSpan {
             provenance: None,
             text: content.text,
             bbox: content.bbox,
-            font_name: content.font.name,
+            font_name: content.font.name.into(),
             font_size: content.font.size,
             font_weight: content.style.weight,
             is_italic: content.style.italic,
@@ -322,7 +322,7 @@ mod tests {
             artifact_type: None,
             text: "Test".to_string(),
             bbox: Rect::new(10.0, 20.0, 40.0, 12.0),
-            font_name: "Times".to_string(),
+            font_name: "Times".into(),
             font_size: 12.0,
             font_weight: FontWeight::Bold,
             is_italic: false,

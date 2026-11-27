@@ -290,9 +290,18 @@ pub(super) fn aggregate_metrics(iterations: &[IterationResult]) -> PerformanceMe
 
     let p99_memory_bytes = (iterations.iter().map(|i| i.metrics.p99_memory_bytes).sum::<u64>() as f64 / count) as u64;
 
+    let memory_method = iterations[0].metrics.memory_method;
+
+    let self_reported_peak_memory_bytes = iterations
+        .iter()
+        .filter_map(|i| i.metrics.self_reported_peak_memory_bytes)
+        .max();
+
     PerformanceMetrics {
         baseline_memory_bytes,
         peak_memory_bytes,
+        memory_method,
+        self_reported_peak_memory_bytes,
         peak_memory_delta_bytes,
         avg_cpu_percent,
         cpu_seconds,

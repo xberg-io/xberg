@@ -32,15 +32,22 @@ runtime_images = []
 for dockerfile in sorted((root / "docker").glob("Dockerfile.*")):
     copies = []
     workdir = PurePosixPath("/")
+    # A stage built FROM an earlier stage starts with that stage's files and working directory.
+    stages = {}
     for line in dockerfile.read_text().splitlines():
         if not line.startswith(("FROM ", "WORKDIR ", "COPY ")):
             continue
         tokens = shlex.split(line, comments=True)
         if tokens[0] == "FROM":
-            copies = []
-            workdir = PurePosixPath("/")
+            parent = stages.get(tokens[1])
+            copies = list(parent["copies"]) if parent else []
+            workdir = parent["workdir"] if parent else PurePosixPath("/")
+            stage = {"copies": copies, "workdir": workdir}
+            if len(tokens) == 4 and tokens[2].upper() == "AS":
+                stages[tokens[3]] = stage
         elif tokens[0] == "WORKDIR":
             workdir /= tokens[1]
+            stage["workdir"] = workdir
         else:
             copies.append((tokens[1:-1], workdir / tokens[-1]))
     if not any(destination == PurePosixPath("/usr/local/bin/xberg") for _, destination in copies):

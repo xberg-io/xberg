@@ -553,8 +553,51 @@ pub(crate) fn validate_layout_inference_peak(
     )
 }
 
+/// Most pages one RT-DETR CPU inference call receives, whatever the memory budget would admit.
+///
+/// RT-DETR on the CPU execution provider costs about 21 G instructions per image at batch 2
+/// against about 5.1 G at batch 1 (M4 Pro, 6-page PDF: 132 G instructions at batch 2, 37 G at
+/// batch 1, identical output and peak footprint). ORT appears to keep its fast convolution path
+/// only for a single image. Other models and accelerators were not measured and keep the
+/// memory-derived capacity.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-pub(crate) fn layout_inference_batch_capacity(
+pub(crate) const LAYOUT_INFERENCE_MAX_BATCH: usize = 1;
+
+/// How many pages one inference call may take for this engine's model and execution provider.
+/// The provider resolves as the session builder resolves it: the `XBERG_ORT_EP` override, then the
+/// config, with RT-DETR's `Auto` on macOS meaning CPU. `Auto` elsewhere is CPU unless this build
+/// can register CUDA, so a CUDA build is left uncapped.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+impl LayoutEngine {
+    pub(crate) fn inference_batch_cap(&self) -> usize {
+        let is_rtdetr = matches!(
+            self.config.backend,
+            ModelBackend::RtDetr
+                | ModelBackend::Custom {
+                    variant: CustomModelVariant::RtDetr,
+                    ..
+                }
+        );
+        use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+        let provider = crate::ort_discovery::execution_provider_override().unwrap_or_else(|| {
+            crate::layout::models::rtdetr::effective_acceleration(self.config.acceleration.as_ref()).map_or(
+                ExecutionProviderType::Auto,
+                |AccelerationConfig { provider, .. }| provider,
+            )
+        });
+        let on_cpu = provider == ExecutionProviderType::Cpu
+            || (provider == ExecutionProviderType::Auto && !crate::ort_discovery::auto_may_register_gpu());
+        if is_rtdetr && on_cpu {
+            LAYOUT_INFERENCE_MAX_BATCH
+        } else {
+            usize::MAX
+        }
+    }
+}
+
+/// Pages that fit the memory budget in one inference call, before any throughput cap.
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
+pub(crate) fn layout_inference_memory_capacity(
     width: u32,
     height: u32,
     current_live_bytes: u64,
@@ -614,12 +657,75 @@ mod layout_peak_tests {
         let limits = crate::extractors::security::SecurityLimits::default();
 
         let capacity =
-            layout_inference_batch_capacity(PAGE_WIDTH, PAGE_HEIGHT, current_live_bytes, PAGE_COUNT, &limits)
+            layout_inference_memory_capacity(PAGE_WIDTH, PAGE_HEIGHT, current_live_bytes, PAGE_COUNT, &limits)
                 .expect("default limits must support at least one inference page");
 
         assert_eq!(capacity, 2);
         validate_layout_inference_peak(PAGE_WIDTH, PAGE_HEIGHT, current_live_bytes, capacity, &limits)
             .expect("the selected subbatch must fit default limits");
+    }
+
+    #[test]
+    fn only_rtdetr_on_cpu_is_capped() {
+        use crate::core::config::acceleration::{AccelerationConfig, ExecutionProviderType};
+        let accel = |provider| Some(AccelerationConfig { provider, device_id: 0 });
+        let cap = |backend, acceleration| {
+            let engine = LayoutEngine {
+                model: Box::new(NeverCalledModel),
+                config: LayoutEngineConfig {
+                    backend,
+                    acceleration,
+                    ..LayoutEngineConfig::default()
+                },
+                thread_budget: 1,
+            };
+            engine.inference_batch_cap()
+        };
+        let custom = |variant| ModelBackend::Custom {
+            path: PathBuf::from("m.onnx"),
+            variant,
+        };
+
+        assert_eq!(cap(ModelBackend::RtDetr, accel(ExecutionProviderType::Cpu)), 1);
+        assert_eq!(
+            cap(custom(CustomModelVariant::RtDetr), accel(ExecutionProviderType::Cpu)),
+            1
+        );
+        assert_eq!(
+            cap(ModelBackend::RtDetr, accel(ExecutionProviderType::Cuda)),
+            usize::MAX
+        );
+        assert_eq!(
+            cap(ModelBackend::PpDocLayoutV3, accel(ExecutionProviderType::Cpu)),
+            usize::MAX
+        );
+        assert_eq!(
+            cap(
+                custom(CustomModelVariant::YoloDocLayNet),
+                accel(ExecutionProviderType::Cpu)
+            ),
+            usize::MAX
+        );
+    }
+
+    struct NeverCalledModel;
+
+    impl LayoutModel for NeverCalledModel {
+        fn detect(&mut self, _img: &RgbImage) -> Result<Vec<crate::layout::types::LayoutDetection>, LayoutError> {
+            unreachable!("the cap test never runs inference")
+        }
+
+        fn detect_with_threshold(
+            &mut self,
+            _img: &RgbImage,
+            _threshold: f32,
+        ) -> Result<Vec<crate::layout::types::LayoutDetection>, LayoutError> {
+            unreachable!("the cap test never runs inference")
+        }
+
+        fn name(&self) -> &str {
+            "never-called"
+        }
     }
 
     /// Ties the workspace estimate to the things it estimates, so the three

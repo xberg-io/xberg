@@ -226,6 +226,22 @@ fn form_extraction_reports_incomplete_decode_and_parse() {
     );
 }
 
+/// The page scan stops at the first incomplete Form paint and returns its error, not one a
+/// later paint would raise.
+#[test]
+fn page_path_scan_returns_the_first_incomplete_form_error() {
+    use super::super::paths::FormPathBudget;
+    let content = "0 0 10 10 re f";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length {} >>\nstream\n{content}\nendstream",
+        content.len()
+    );
+    let error = page_with_xobject("/X1 Do /X1 Do", &form)
+        .extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 1))
+        .unwrap_err();
+    assert!(error.to_string().contains("incomplete Form path parse"), "{error}");
+}
+
 #[test]
 fn form_path_budget_allows_trailing_text_at_exact_fit() {
     use super::super::paths::FormPathBudget;
@@ -345,6 +361,29 @@ fn page_local_path_count(doc: &PdfDocument) -> usize {
 const IMAGE_X1: &str = "<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray \
                         /BitsPerComponent 8 /Length 4 >>\nstream\nabcd\nendstream";
 const FORM_X1: &str = "<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Length 12 >>\nstream\n0 0 1 1 re f\nendstream";
+
+#[test]
+fn page_paths_keep_state_across_nested_saves_clips_and_a_form() {
+    let paint = "1 0 0 rg 0 0 1 1 re f q 0 0 1 RG 0 0 m 1 1 l S Q 0 0 2 2 re W n /X1 Do";
+    let paths = page_with_xobject(paint, FORM_X1).extract_paths(0).unwrap();
+    let red = crate::layout::Color::new(1.0, 0.0, 0.0);
+    let blue = crate::layout::Color::new(0.0, 0.0, 1.0);
+
+    let fills: Vec<_> = paths.iter().filter(|p| p.has_fill()).collect();
+    assert_eq!(fills.len(), 2, "page rectangle and the form's rectangle");
+    assert!(fills.iter().all(|p| p.fill_color == Some(red)));
+    assert_eq!(fills[0].bbox.x, 300.0);
+    assert_eq!(fills[0].bbox.width, 20.0);
+
+    let strokes: Vec<_> = paths.iter().filter(|p| p.has_stroke()).collect();
+    assert_eq!(strokes.len(), 2, "the saved-state line and the trailing curve");
+    assert_eq!(
+        strokes[0].stroke_color,
+        Some(blue),
+        "colour set inside q is scoped to it"
+    );
+    assert_ne!(strokes[1].stroke_color, Some(blue), "Q restores the stroke colour");
+}
 
 #[test]
 fn bounded_page_local_paths_read_past_an_image_xobject() {

@@ -1,0 +1,2718 @@
+{
+  "schema_version": "2.11.0",
+  "by_framework_mode": {
+    "xberg-markdown-baseline:single": {
+      "framework": "xberg-markdown-baseline",
+      "output_format": "markdown",
+      "mode": "single",
+      "timing_regime": "cold_process",
+      "cold_start": {
+        "sample_count": 1,
+        "p50_ms": 22.937414999999998,
+        "p95_ms": 22.937414999999998,
+        "p99_ms": 22.937414999999998
+      },
+      "overall_performance": {
+        "successful_sample_count": 6,
+        "performance_sample_count": 18,
+        "total_sample_count": 6,
+        "framework_errors": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "timeouts": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "throughput": {
+          "p50": 0.5813263197506567,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 0.35521809676639815
+        },
+        "memory": {
+          "p50": 36.253696,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 44.63395169778098
+        },
+        "duration": {
+          "p50": 12.201771,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 189.90359248836518
+        },
+        "success_rate_percent": 100.0,
+        "extraction_duration": {
+          "p50": 5.031178,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 187.7294364115135
+        },
+        "quality": {
+          "f1_text_p50": 0.8917824074074074,
+          "f1_text_p95": 0.985178727114211,
+          "f1_text_p99": 0.9884335948852078,
+          "f1_numeric_p50": 0.8080808080808082,
+          "f1_numeric_p95": 1.0,
+          "f1_numeric_p99": 1.0,
+          "f1_layout_p50": null,
+          "f1_layout_p95": null,
+          "f1_layout_p99": null,
+          "quality_score_p50": 0.8684027777777777,
+          "quality_score_p95": 0.9799961251574154,
+          "quality_score_p99": 0.9908379347089025
+        },
+        "cpu_seconds": {
+          "p50": 0.007408902126312026,
+          "p95": null,
+          "p99": null,
+          "sample_count": 3,
+          "std_dev": 0.00016733267905712394
+        },
+        "batch_size": 1,
+        "system_load": {
+          "load_per_core_p50": 0.1375,
+          "load_per_core_p95": 0.1375,
+          "contended_sample_count": 0,
+          "total_sample_count": 6
+        },
+        "throughput_excluded_sample_count": 0
+      },
+      "by_file_type": {
+        "eml": {
+          "file_type": "eml",
+          "no_ocr": {
+            "successful_sample_count": 3,
+            "performance_sample_count": 9,
+            "total_sample_count": 3,
+            "framework_errors": 0,
+            "harness_errors": 0,
+            "config_setup_errors": 0,
+            "timeouts": 0,
+            "empty_content": 0,
+            "zero_overlap": 0,
+            "throughput": {
+              "p50": 0.062147270460115416,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.29339594999766694
+            },
+            "memory": {
+              "p50": 35.979264,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.7465908087942148
+            },
+            "duration": {
+              "p50": 12.230365,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.690801048058661
+            },
+            "success_rate_percent": 100.0,
+            "extraction_duration": {
+              "p50": 5.033378,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.33954347992709255
+            },
+            "quality": {
+              "f1_text_p50": 0.972972972972973,
+              "f1_text_p95": 0.9876198779424586,
+              "f1_text_p99": 0.9889218250508574,
+              "f1_numeric_p50": 0.888888888888889,
+              "f1_numeric_p95": 0.9888888888888889,
+              "f1_numeric_p99": 0.9977777777777778,
+              "f1_layout_p50": null,
+              "f1_layout_p95": null,
+              "f1_layout_p99": null,
+              "quality_score_p50": 0.9393393393393394,
+              "quality_score_p95": 0.9881274823210306,
+              "quality_score_p99": 0.9924642061416254
+            },
+            "cpu_seconds": {
+              "p50": 0.0,
+              "p95": null,
+              "p99": null,
+              "sample_count": 0,
+              "std_dev": 0.0
+            },
+            "batch_size": 1,
+            "system_load": {
+              "load_per_core_p50": 0.1375,
+              "load_per_core_p95": 0.1375,
+              "contended_sample_count": 0,
+              "total_sample_count": 3
+            },
+            "throughput_excluded_sample_count": 0
+          },
+          "with_ocr": null
+        },
+        "msg": {
+          "file_type": "msg",
+          "no_ocr": {
+            "successful_sample_count": 3,
+            "performance_sample_count": 9,
+            "total_sample_count": 3,
+            "framework_errors": 0,
+            "harness_errors": 0,
+            "config_setup_errors": 0,
+            "timeouts": 0,
+            "empty_content": 0,
+            "zero_overlap": 0,
+            "throughput": {
+              "p50": 0.7183616336784837,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.1943151036840926
+            },
+            "memory": {
+              "p50": 36.397056,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 58.20260172801851
+            },
+            "duration": {
+              "p50": 12.118621,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 247.69705470805667
+            },
+            "success_rate_percent": 100.0,
+            "extraction_duration": {
+              "p50": 4.9941569999999995,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 244.76468193493267
+            },
+            "quality": {
+              "f1_text_p50": 0.8148148148148148,
+              "f1_text_p95": 0.9533564814814814,
+              "f1_text_p99": 0.9656712962962963,
+              "f1_numeric_p50": 0.6666666666666666,
+              "f1_numeric_p95": 0.9666666666666667,
+              "f1_numeric_p99": 0.9933333333333333,
+              "f1_layout_p50": null,
+              "f1_layout_p95": null,
+              "f1_layout_p99": null,
+              "quality_score_p50": 0.8479166666666667,
+              "quality_score_p95": 0.8847916666666665,
+              "quality_score_p99": 0.8880694444444444
+            },
+            "cpu_seconds": {
+              "p50": 0.007408902126312026,
+              "p95": null,
+              "p99": null,
+              "sample_count": 3,
+              "std_dev": 0.00016733267905712394
+            },
+            "batch_size": 1,
+            "system_load": {
+              "load_per_core_p50": 0.1375,
+              "load_per_core_p95": 0.1375,
+              "contended_sample_count": 0,
+              "total_sample_count": 3
+            },
+            "throughput_excluded_sample_count": 0
+          },
+          "with_ocr": null
+        }
+      }
+    },
+    "unstructured:plaintext:single": {
+      "framework": "unstructured",
+      "output_format": "plaintext",
+      "mode": "single",
+      "timing_regime": "cold_process",
+      "cold_start": {
+        "sample_count": 1,
+        "p50_ms": 7590.712855,
+        "p95_ms": 7590.712855,
+        "p99_ms": 7590.712855
+      },
+      "overall_performance": {
+        "successful_sample_count": 5,
+        "performance_sample_count": 15,
+        "total_sample_count": 6,
+        "framework_errors": 1,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "timeouts": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "error_details": {
+          "Benchmark error: Subprocess failed with exit status: 1\nstderr: \u001b[0;93m2026-10-09 04:38:33.307635593 [W:onnxruntime:Default, device_discovery.cc:146 GetPciBusId] Skipping pci_bus_id for PCI path at \"/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171\" because filename \"5620e0c7-8062-4dce-aeb7-520c7ef76171\" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+\u001b[m\nError extracting with Unstructured: The fast strategy is not available for image files.\n": 1
+        },
+        "throughput": {
+          "p50": 0.002344401208219303,
+          "p95": null,
+          "p99": null,
+          "sample_count": 15,
+          "std_dev": 0.0015216442829933446
+        },
+        "memory": {
+          "p50": 774.10304,
+          "p95": null,
+          "p99": null,
+          "sample_count": 15,
+          "std_dev": 2.28800399311912
+        },
+        "duration": {
+          "p50": 3092.5069750000002,
+          "p95": null,
+          "p99": null,
+          "sample_count": 15,
+          "std_dev": 100.91179998173986
+        },
+        "success_rate_percent": 83.33333333333334,
+        "extraction_duration": {
+          "p50": 2232.021855,
+          "p95": null,
+          "p99": null,
+          "sample_count": 15,
+          "std_dev": 92.74550438237264
+        },
+        "quality": {
+          "f1_text_p50": 0.7142857142857143,
+          "f1_text_p95": 0.8548175633889921,
+          "f1_text_p99": 0.8788423005565863,
+          "f1_numeric_p50": 0.0,
+          "f1_numeric_p95": 0.564705882352941,
+          "f1_numeric_p99": 0.6776470588235293,
+          "f1_layout_p50": null,
+          "f1_layout_p95": null,
+          "f1_layout_p99": null,
+          "quality_score_p50": 0.42857142857142855,
+          "quality_score_p95": 0.7387728909745715,
+          "quality_score_p99": 0.7983642038633635
+        },
+        "cpu_seconds": {
+          "p50": 0.03644966775824896,
+          "p95": null,
+          "p99": null,
+          "sample_count": 15,
+          "std_dev": 0.0011651649640119638
+        },
+        "batch_size": 1,
+        "system_load": {
+          "load_per_core_p50": 0.605,
+          "load_per_core_p95": 0.673125,
+          "contended_sample_count": 0,
+          "total_sample_count": 6
+        },
+        "throughput_excluded_sample_count": 0
+      },
+      "by_file_type": {
+        "msg": {
+          "file_type": "msg",
+          "no_ocr": {
+            "successful_sample_count": 2,
+            "performance_sample_count": 6,
+            "total_sample_count": 2,
+            "framework_errors": 0,
+            "harness_errors": 0,
+            "config_setup_errors": 0,
+            "timeouts": 0,
+            "empty_content": 0,
+            "zero_overlap": 0,
+            "throughput": {
+              "p50": 0.0033527856398941165,
+              "p95": null,
+              "p99": null,
+              "sample_count": 6,
+              "std_dev": 0.0005510743874455023
+            },
+            "memory": {
+              "p50": 772.108288,
+              "p95": null,
+              "p99": null,
+              "sample_count": 6,
+              "std_dev": 0.8583653150370688
+            },
+            "duration": {
+              "p50": 3067.8237205,
+              "p95": null,
+              "p99": null,
+              "sample_count": 6,
+              "std_dev": 21.729604386640734
+            },
+            "success_rate_percent": 100.0,
+            "extraction_duration": {
+              "p50": 2221.6531175,
+              "p95": null,
+              "p99": null,
+              "sample_count": 6,
+              "std_dev": 9.242364170133637
+            },
+            "quality": {
+              "f1_text_p50": 0.4923469387755102,
+              "f1_text_p95": 0.7104591836734695,
+              "f1_text_p99": 0.7298469387755102,
+              "f1_numeric_p50": 0.0,
+              "f1_numeric_p95": 0.0,
+              "f1_numeric_p99": 0.0,
+              "f1_layout_p50": null,
+              "f1_layout_p95": null,
+              "f1_layout_p99": null,
+              "quality_score_p50": 0.2954081632653061,
+              "quality_score_p95": 0.4262755102040816,
+              "quality_score_p99": 0.4379081632653061
+            },
+            "cpu_seconds": {
+              "p50": 0.035997168034250196,
+              "p95": null,
+              "p99": null,
+              "sample_count": 6,
+              "std_dev": 0.0007192868524981054
+            },
+            "batch_size": 1,
+            "system_load": {
+              "load_per_core_p50": 0.585,
+              "load_per_core_p95": 0.59175,
+              "contended_sample_count": 0,
+              "total_sample_count": 2
+            },
+            "throughput_excluded_sample_count": 0
+          },
+          "with_ocr": null
+        },
+        "eml": {
+          "file_type": "eml",
+          "no_ocr": {
+            "successful_sample_count": 3,
+            "performance_sample_count": 9,
+            "total_sample_count": 3,
+            "framework_errors": 0,
+            "harness_errors": 0,
+            "config_setup_errors": 0,
+            "timeouts": 0,
+            "empty_content": 0,
+            "zero_overlap": 0,
+            "throughput": {
+              "p50": 0.0002451330791728885,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.0010799724521963682
+            },
+            "memory": {
+              "p50": 776.474624,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 1.6799939833119693
+            },
+            "duration": {
+              "p50": 3112.595014,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 110.57212816104531
+            },
+            "success_rate_percent": 100.0,
+            "extraction_duration": {
+              "p50": 2245.567887,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 106.80955684968514
+            },
+            "quality": {
+              "f1_text_p50": 0.7142857142857143,
+              "f1_text_p95": 0.8677922077922078,
+              "f1_text_p99": 0.8814372294372295,
+              "f1_numeric_p50": 0.0,
+              "f1_numeric_p95": 0.6352941176470587,
+              "f1_numeric_p99": 0.6917647058823528,
+              "f1_layout_p50": null,
+              "f1_layout_p95": null,
+              "f1_layout_p99": null,
+              "quality_score_p50": 0.42857142857142855,
+              "quality_score_p95": 0.7747929717341482,
+              "quality_score_p99": 0.8055682200152788
+            },
+            "cpu_seconds": {
+              "p50": 0.036790652045507584,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.0011605400989611761
+            },
+            "batch_size": 1,
+            "system_load": {
+              "load_per_core_p50": 0.6525,
+              "load_per_core_p95": 0.67725,
+              "contended_sample_count": 0,
+              "total_sample_count": 3
+            },
+            "throughput_excluded_sample_count": 0
+          },
+          "with_ocr": null
+        }
+      }
+    },
+    "tika:plaintext:single": {
+      "framework": "tika",
+      "output_format": "plaintext",
+      "mode": "single",
+      "timing_regime": "cold_process",
+      "cold_start": {
+        "sample_count": 1,
+        "p50_ms": 913.50992,
+        "p95_ms": 913.50992,
+        "p99_ms": 913.50992
+      },
+      "overall_performance": {
+        "successful_sample_count": 6,
+        "performance_sample_count": 18,
+        "total_sample_count": 6,
+        "framework_errors": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "timeouts": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "throughput": {
+          "p50": 0.00810557504503857,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 0.10287311001865684
+        },
+        "memory": {
+          "p50": 133.904384,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 2.9716164915019894
+        },
+        "duration": {
+          "p50": 976.3631405,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 39.21632450020687
+        },
+        "success_rate_percent": 100.0,
+        "extraction_duration": {
+          "p50": 943.5215,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 37.244596175303556
+        },
+        "quality": {
+          "f1_text_p50": 0.6648351648351648,
+          "f1_text_p95": 0.9076527991782228,
+          "f1_text_p99": 0.9137339496661531,
+          "f1_numeric_p50": 0.0,
+          "f1_numeric_p95": 0.9264705882352942,
+          "f1_numeric_p99": 0.9852941176470589,
+          "f1_layout_p50": null,
+          "f1_layout_p95": null,
+          "f1_layout_p99": null,
+          "quality_score_p50": 0.488861985472155,
+          "quality_score_p95": 0.7627243018419488,
+          "quality_score_p99": 0.803154486036839
+        },
+        "cpu_seconds": {
+          "p50": 0.018317221405250043,
+          "p95": null,
+          "p99": null,
+          "sample_count": 18,
+          "std_dev": 0.007891402909286492
+        },
+        "batch_size": 1,
+        "system_load": {
+          "load_per_core_p50": 0.33,
+          "load_per_core_p95": 0.343125,
+          "contended_sample_count": 0,
+          "total_sample_count": 6
+        },
+        "throughput_excluded_sample_count": 0
+      },
+      "by_file_type": {
+        "msg": {
+          "file_type": "msg",
+          "no_ocr": {
+            "successful_sample_count": 3,
+            "performance_sample_count": 9,
+            "total_sample_count": 3,
+            "framework_errors": 0,
+            "harness_errors": 0,
+            "config_setup_errors": 0,
+            "timeouts": 0,
+            "empty_content": 0,
+            "zero_overlap": 0,
+            "throughput": {
+              "p50": 0.012054065941464744,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.131764319141374
+            },
+            "memory": {
+              "p50": 134.344704,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 3.517761461357937
+            },
+            "duration": {
+              "p50": 986.697194,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 25.239616049465717
+            },
+            "success_rate_percent": 100.0,
+            "extraction_duration": {
+              "p50": 953.572,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 24.709652935531967
+            },
+            "quality": {
+              "f1_text_p50": 0.6153846153846153,
+              "f1_text_p95": 0.8852672750977835,
+              "f1_text_p99": 0.9092568448500652,
+              "f1_numeric_p50": 0.0,
+              "f1_numeric_p95": 0.8999999999999999,
+              "f1_numeric_p99": 0.98,
+              "f1_layout_p50": null,
+              "f1_layout_p95": null,
+              "f1_layout_p99": null,
+              "quality_score_p50": 0.5491525423728814,
+              "quality_score_p95": 0.6049152542372882,
+              "quality_score_p99": 0.6098719397363466
+            },
+            "cpu_seconds": {
+              "p50": 0.01897574969053859,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.01008590954824903
+            },
+            "batch_size": 1,
+            "system_load": {
+              "load_per_core_p50": 0.3375,
+              "load_per_core_p95": 0.34424999999999994,
+              "contended_sample_count": 0,
+              "total_sample_count": 3
+            },
+            "throughput_excluded_sample_count": 0
+          },
+          "with_ocr": null
+        },
+        "eml": {
+          "file_type": "eml",
+          "no_ocr": {
+            "successful_sample_count": 3,
+            "performance_sample_count": 9,
+            "total_sample_count": 3,
+            "framework_errors": 0,
+            "harness_errors": 0,
+            "config_setup_errors": 0,
+            "timeouts": 0,
+            "empty_content": 0,
+            "zero_overlap": 0,
+            "throughput": {
+              "p50": 0.0007852212550502115,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.003503128960974184
+            },
+            "memory": {
+              "p50": 133.271552,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 1.5731770058923598
+            },
+            "duration": {
+              "p50": 971.700645,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 49.256706012189646
+            },
+            "success_rate_percent": 100.0,
+            "extraction_duration": {
+              "p50": 939.4050000000001,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 46.00114538912166
+            },
+            "quality": {
+              "f1_text_p50": 0.7142857142857143,
+              "f1_text_p95": 0.8677922077922078,
+              "f1_text_p99": 0.8814372294372295,
+              "f1_numeric_p50": 0.0,
+              "f1_numeric_p95": 0.6352941176470587,
+              "f1_numeric_p99": 0.6917647058823528,
+              "f1_layout_p50": null,
+              "f1_layout_p95": null,
+              "f1_layout_p99": null,
+              "quality_score_p50": 0.42857142857142855,
+              "quality_score_p95": 0.7747929717341482,
+              "quality_score_p99": 0.8055682200152788
+            },
+            "cpu_seconds": {
+              "p50": 0.01817991031792368,
+              "p95": null,
+              "p99": null,
+              "sample_count": 9,
+              "std_dev": 0.0015403964124589132
+            },
+            "batch_size": 1,
+            "system_load": {
+              "load_per_core_p50": 0.295,
+              "load_per_core_p95": 0.3265,
+              "contended_sample_count": 0,
+              "total_sample_count": 3
+            },
+            "throughput_excluded_sample_count": 0
+          },
+          "with_ocr": null
+        }
+      }
+    }
+  },
+  "disk_sizes": {
+    "unstructured": {
+      "size_bytes": 1357000000,
+      "package_bytes": 300000000,
+      "system_deps_bytes": 840000000,
+      "model_bytes": 217000000,
+      "method": "known_size",
+      "description": "Unstructured document processing"
+    },
+    "xberg-plaintext-baseline": {
+      "size_bytes": 114152200,
+      "package_bytes": 114152200,
+      "system_deps_bytes": 0,
+      "method": "binary_size",
+      "description": "Native Rust core binary"
+    },
+    "xberg-markdown-baseline": {
+      "size_bytes": 114152200,
+      "package_bytes": 114152200,
+      "system_deps_bytes": 0,
+      "method": "binary_size",
+      "description": "Native Rust core binary"
+    },
+    "tika": {
+      "size_bytes": 272000000,
+      "package_bytes": 57000000,
+      "system_deps_bytes": 215000000,
+      "method": "known_size",
+      "description": "Apache Tika content analysis"
+    }
+  },
+  "comparison": {
+    "throughput_ranking": [
+      {
+        "framework_mode": "xberg-markdown-baseline:batch",
+        "rank": 1,
+        "value": 0.6038952702825784,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-markdown-baseline:single",
+        "rank": 1,
+        "value": 0.5813263197506567,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:batch",
+        "rank": 1,
+        "value": 0.5902404628124972,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:single",
+        "rank": 1,
+        "value": 0.577861334183039,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "tika:plaintext:single",
+        "rank": 2,
+        "value": 0.00810557504503857,
+        "relative": 0.014026851366509859,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "unstructured:plaintext:single",
+        "rank": 3,
+        "value": 0.002344401208219303,
+        "relative": 0.004057030760733869,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      }
+    ],
+    "memory_ranking": [
+      {
+        "framework_mode": "xberg-markdown-baseline:batch",
+        "rank": 1,
+        "value": 165.1712,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-markdown-baseline:single",
+        "rank": 1,
+        "value": 36.253696,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:batch",
+        "rank": 1,
+        "value": 164.94592,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:single",
+        "rank": 1,
+        "value": 35.72736,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "tika:plaintext:single",
+        "rank": 2,
+        "value": 133.904384,
+        "relative": 3.747950702206936,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "unstructured:plaintext:single",
+        "rank": 3,
+        "value": 774.10304,
+        "relative": 21.66695328174262,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      }
+    ],
+    "quality_ranking_markdown": [
+      {
+        "framework_mode": "xberg-markdown-baseline:batch",
+        "rank": 1,
+        "value": 0.8936280030030032,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-markdown-baseline:single",
+        "rank": 2,
+        "value": 0.8936280030030032,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "single"
+      }
+    ],
+    "quality_ranking_plaintext": [
+      {
+        "framework_mode": "xberg-plaintext-baseline:batch",
+        "rank": 1,
+        "value": 0.8936280030030032,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:single",
+        "rank": 2,
+        "value": 0.8936280030030032,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "tika:plaintext:single",
+        "rank": 3,
+        "value": 0.488861985472155,
+        "relative": 0.5470531181088246,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "unstructured:plaintext:single",
+        "rank": 4,
+        "value": 0.37530612244897954,
+        "relative": 0.4199802615716803,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      }
+    ],
+    "cpu_seconds_ranking": [
+      {
+        "framework_mode": "xberg-markdown-baseline:batch",
+        "rank": 1,
+        "value": 0.007109076209785406,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-markdown-baseline:single",
+        "rank": 1,
+        "value": 0.007408902126312026,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "markdown",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:batch",
+        "rank": 1,
+        "value": 0.0075980573693057414,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "batch"
+      },
+      {
+        "framework_mode": "xberg-plaintext-baseline:single",
+        "rank": 1,
+        "value": 0.007754571430094074,
+        "relative": 1.0,
+        "optional": false,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "tika:plaintext:single",
+        "rank": 2,
+        "value": 0.018317221405250043,
+        "relative": 2.362119115205291,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      },
+      {
+        "framework_mode": "unstructured:plaintext:single",
+        "rank": 3,
+        "value": 0.03644966775824896,
+        "relative": 4.7004103433485005,
+        "optional": true,
+        "output_format": "plaintext",
+        "mode": "single"
+      }
+    ],
+    "deltas_vs_baseline": {
+      "tika:plaintext:single": {
+        "throughput_delta_mbs": -0.5697557591380004,
+        "throughput_delta_percent": -98.59731486334901,
+        "memory_delta_mb": 98.17702399999999,
+        "memory_delta_percent": 274.7950702206936
+      },
+      "unstructured:plaintext:single": {
+        "throughput_delta_mbs": -0.5755169329748197,
+        "throughput_delta_percent": -99.5942969239266,
+        "memory_delta_mb": 738.37568,
+        "memory_delta_percent": 2066.695328174262
+      }
+    }
+  },
+  "per_fixture_results": [
+    {
+      "framework": "xberg-markdown-baseline",
+      "output_format": "markdown",
+      "execution_mode": "single",
+      "timing_regime": "cold_process",
+      "ocr": false,
+      "fixture_id": "plain_text_only",
+      "file_type": "eml",
+      "duration_ms": 12.583803,
+      "peak_memory_mb": 35.688448,
+      "f1_text": 0.972972972972973,
+      "f1_layout": null,
+      "f1_numeric": 0.888888888888889,
+      "quality_score": 0.9393393393393394,
+      "correct": false,
+      "success": true,
+      "error_kind": null,
+      "file_size": 317,
+      "throughput_bytes_per_sec": 25370.61089971366,
+      "avg_cpu_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "baseline_memory_bytes": 1585152,
+      "peak_memory_delta_bytes": 34107392,
+      "p50_memory_bytes": 35631104,
+      "p95_memory_bytes": 35631104,
+      "p99_memory_bytes": 35631104,
+      "extraction_duration_ms": 4.450616999999999,
+      "subprocess_overhead_ms": 8.133186,
+      "cold_start_duration_ms": 22.937414999999998,
+      "quality": {
+        "f1_score_text": 0.972972972972973,
+        "f1_score_numeric": 0.888888888888889,
+        "quality_score": 0.9393393393393394,
+        "extra_tokens": [
+          ["simple123example.com", 1],
+          ["messageid", 1]
+        ],
+        "correct": false,
+        "reading_order_score": 1.0
+      },
+      "framework_capabilities": {
+        "timing_regime": "cold_process",
+        "resource_measurement_scope": "isolated_process",
+        "supported_extensions": [
+          "7z",
+          "adoc",
+          "asciidoc",
+          "avcs",
+          "avif",
+          "bib",
+          "bmp",
+          "commonmark",
+          "csv",
+          "db",
+          "dbf",
+          "dbk",
+          "dj",
+          "djot",
+          "doc",
+          "docbook",
+          "docbook4",
+          "docbook5",
+          "docm",
+          "doctags",
+          "docx",
+          "dot",
+          "dotm",
+          "dotx",
+          "eml",
+          "enw",
+          "epub",
+          "fb2",
+          "fodg",
+          "geojson",
+          "gif",
+          "gpkg",
+          "gpkx",
+          "gz",
+          "heic",
+          "heics",
+          "heif",
+          "heifs",
+          "hif",
+          "htm",
+          "html",
+          "hwp",
+          "hwpx",
+          "ipynb",
+          "j2c",
+          "j2k",
+          "jats",
+          "jb2",
+          "jbig2",
+          "jp2",
+          "jpc",
+          "jpeg",
+          "jpg",
+          "jpg2",
+          "json",
+          "jsonl",
+          "key",
+          "kml",
+          "latex",
+          "m1v",
+          "m2v",
+          "m4a",
+          "m4v",
+          "markdown",
+          "md",
+          "mdx",
+          "mp3",
+          "mp4",
+          "mp4v",
+          "mpe",
+          "mpeg",
+          "mpg",
+          "mpg4",
+          "mpga",
+          "msg",
+          "nbib",
+          "ndjson",
+          "numbers",
+          "nxml",
+          "odp",
+          "ods",
+          "odt",
+          "opml",
+          "org",
+          "pages",
+          "pbm",
+          "pdf",
+          "pgm",
+          "png",
+          "pnm",
+          "pot",
+          "potm",
+          "potx",
+          "ppm",
+          "pps",
+          "ppsx",
+          "ppt",
+          "pptm",
+          "pptx",
+          "pst",
+          "qmd",
+          "ris",
+          "rmd",
+          "rst",
+          "rtf",
+          "sqlite",
+          "sqlite3",
+          "svg",
+          "tar",
+          "tex",
+          "tgz",
+          "tif",
+          "tiff",
+          "toml",
+          "tsv",
+          "txt",
+          "typ",
+          "typst",
+          "vtt",
+          "wav",
+          "webm",
+          "webp",
+          "wp",
+          "wp5",
+          "wp6",
+          "wpd",
+          "xht",
+          "xhtml",
+          "xla",
+          "xlam",
+          "xls",
+          "xlsb",
+          "xlsm",
+          "xlsx",
+          "xlt",
+          "xltm",
+          "xltx",
+          "xml",
+          "yaml",
+          "yml",
+          "zip"
+        ],
+        "ocr_support": true,
+        "batch_support": false,
+        "batch_performance_sample": true,
+        "async_support": false,
+        "supported_output_formats": [],
+        "version": "",
+        "installation_size": {
+          "size_bytes": 114152200,
+          "package_bytes": 114152200,
+          "system_deps_bytes": 0,
+          "method": "binary_size",
+          "description": "Native Rust core binary"
+        }
+      },
+      "system_load": {
+        "load_avg_1m": 0.55,
+        "load_avg_5m": 0.33,
+        "load_avg_15m": 0.17,
+        "logical_cores": 4,
+        "physical_cores": 4
+      },
+      "iterations": [
+        {
+          "iteration": 1,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 14116616
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 4445489
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 9671127
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 35688448,
+            "peak_memory_delta_bytes": 34107392,
+            "avg_cpu_percent": 0.0,
+            "cpu_seconds": 0.0,
+            "throughput_bytes_per_sec": 22455.80668908186,
+            "p50_memory_bytes": 35688448,
+            "p95_memory_bytes": 35688448,
+            "p99_memory_bytes": 35688448
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 2,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 11689273
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 4446913
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 7242360
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1585152,
+            "peak_memory_bytes": 35602432,
+            "peak_memory_delta_bytes": 34017280,
+            "avg_cpu_percent": 0.0,
+            "cpu_seconds": 0.0,
+            "throughput_bytes_per_sec": 27118.88070370159,
+            "p50_memory_bytes": 35602432,
+            "p95_memory_bytes": 35602432,
+            "p99_memory_bytes": 35602432
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 3,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 11945520
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 4459448
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 7486072
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 35602432,
+            "peak_memory_delta_bytes": 34021376,
+            "avg_cpu_percent": 0.0,
+            "cpu_seconds": 0.0,
+            "throughput_bytes_per_sec": 26537.14530635753,
+            "p50_memory_bytes": 35602432,
+            "p95_memory_bytes": 35602432,
+            "p99_memory_bytes": 35602432
+          },
+          "batch_performance_sample": true
+        }
+      ],
+      "statistics": {
+        "mean": {
+          "secs": 0,
+          "nanos": 12583803
+        },
+        "median": {
+          "secs": 0,
+          "nanos": 11945520
+        },
+        "std_dev_ms": 1.3336237853978912,
+        "min": {
+          "secs": 0,
+          "nanos": 11689273
+        },
+        "max": {
+          "secs": 0,
+          "nanos": 14116616
+        },
+        "p95": {
+          "secs": 0,
+          "nanos": 13899506
+        },
+        "p99": {
+          "secs": 0,
+          "nanos": 14073194
+        },
+        "sample_count": 3
+      }
+    },
+    {
+      "framework": "xberg-markdown-baseline",
+      "output_format": "markdown",
+      "execution_mode": "single",
+      "timing_regime": "cold_process",
+      "ocr": false,
+      "fixture_id": "simple_msg",
+      "file_type": "msg",
+      "duration_ms": 12.167401,
+      "peak_memory_mb": 36.438016,
+      "f1_text": 0.8148148148148148,
+      "f1_layout": null,
+      "f1_numeric": 1.0,
+      "quality_score": 0.8888888888888888,
+      "correct": false,
+      "success": true,
+      "error_kind": null,
+      "file_size": 8704,
+      "throughput_bytes_per_sec": 715466.0312484829,
+      "avg_cpu_percent": 0.0,
+      "cpu_seconds": 0.0,
+      "baseline_memory_bytes": 1585152,
+      "peak_memory_delta_bytes": 34856960,
+      "p50_memory_bytes": 36407978,
+      "p95_memory_bytes": 36407978,
+      "p99_memory_bytes": 36407978,
+      "extraction_duration_ms": 4.9639940000000005,
+      "subprocess_overhead_ms": 7.203407,
+      "quality": {
+        "f1_score_text": 0.8148148148148148,
+        "f1_score_numeric": 1.0,
+        "quality_score": 0.8888888888888888,
+        "missing_tokens": [["peterpanneverland.com", 1]],
+        "extra_tokens": [
+          ["a", 1],
+          ["message", 1],
+          ["this", 1],
+          ["is", 1]
+        ],
+        "correct": false
+      },
+      "framework_capabilities": {
+        "timing_regime": "cold_process",
+        "resource_measurement_scope": "isolated_process",
+        "supported_extensions": [
+          "7z",
+          "adoc",
+          "asciidoc",
+          "avcs",
+          "avif",
+          "bib",
+          "bmp",
+          "commonmark",
+          "csv",
+          "db",
+          "dbf",
+          "dbk",
+          "dj",
+          "djot",
+          "doc",
+          "docbook",
+          "docbook4",
+          "docbook5",
+          "docm",
+          "doctags",
+          "docx",
+          "dot",
+          "dotm",
+          "dotx",
+          "eml",
+          "enw",
+          "epub",
+          "fb2",
+          "fodg",
+          "geojson",
+          "gif",
+          "gpkg",
+          "gpkx",
+          "gz",
+          "heic",
+          "heics",
+          "heif",
+          "heifs",
+          "hif",
+          "htm",
+          "html",
+          "hwp",
+          "hwpx",
+          "ipynb",
+          "j2c",
+          "j2k",
+          "jats",
+          "jb2",
+          "jbig2",
+          "jp2",
+          "jpc",
+          "jpeg",
+          "jpg",
+          "jpg2",
+          "json",
+          "jsonl",
+          "key",
+          "kml",
+          "latex",
+          "m1v",
+          "m2v",
+          "m4a",
+          "m4v",
+          "markdown",
+          "md",
+          "mdx",
+          "mp3",
+          "mp4",
+          "mp4v",
+          "mpe",
+          "mpeg",
+          "mpg",
+          "mpg4",
+          "mpga",
+          "msg",
+          "nbib",
+          "ndjson",
+          "numbers",
+          "nxml",
+          "odp",
+          "ods",
+          "odt",
+          "opml",
+          "org",
+          "pages",
+          "pbm",
+          "pdf",
+          "pgm",
+          "png",
+          "pnm",
+          "pot",
+          "potm",
+          "potx",
+          "ppm",
+          "pps",
+          "ppsx",
+          "ppt",
+          "pptm",
+          "pptx",
+          "pst",
+          "qmd",
+          "ris",
+          "rmd",
+          "rst",
+          "rtf",
+          "sqlite",
+          "sqlite3",
+          "svg",
+          "tar",
+          "tex",
+          "tgz",
+          "tif",
+          "tiff",
+          "toml",
+          "tsv",
+          "txt",
+          "typ",
+          "typst",
+          "vtt",
+          "wav",
+          "webm",
+          "webp",
+          "wp",
+          "wp5",
+          "wp6",
+          "wpd",
+          "xht",
+          "xhtml",
+          "xla",
+          "xlam",
+          "xls",
+          "xlsb",
+          "xlsm",
+          "xlsx",
+          "xlt",
+          "xltm",
+          "xltx",
+          "xml",
+          "yaml",
+          "yml",
+          "zip"
+        ],
+        "ocr_support": true,
+        "batch_support": false,
+        "batch_performance_sample": true,
+        "async_support": false,
+        "supported_output_formats": [],
+        "version": "",
+        "installation_size": {
+          "size_bytes": 114152200,
+          "package_bytes": 114152200,
+          "system_deps_bytes": 0,
+          "method": "binary_size",
+          "description": "Native Rust core binary"
+        }
+      },
+      "system_load": {
+        "load_avg_1m": 0.55,
+        "load_avg_5m": 0.33,
+        "load_avg_15m": 0.17,
+        "logical_cores": 4,
+        "physical_cores": 4
+      },
+      "iterations": [
+        {
+          "iteration": 1,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 12116460
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 4957535
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 7158925
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 36438016,
+            "peak_memory_delta_bytes": 34856960,
+            "avg_cpu_percent": 0.0,
+            "cpu_seconds": 0.0,
+            "throughput_bytes_per_sec": 718361.6336784837,
+            "p50_memory_bytes": 36438016,
+            "p95_memory_bytes": 36438016,
+            "p99_memory_bytes": 36438016
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 2,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 12374515
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 5062361
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 7312154
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1585152,
+            "peak_memory_bytes": 36397056,
+            "peak_memory_delta_bytes": 34811904,
+            "avg_cpu_percent": 0.0,
+            "cpu_seconds": 0.0,
+            "throughput_bytes_per_sec": 703381.1022088542,
+            "p50_memory_bytes": 36397056,
+            "p95_memory_bytes": 36397056,
+            "p99_memory_bytes": 36397056
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 3,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 12011227
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 4872085
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 7139142
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1585152,
+            "peak_memory_bytes": 36388864,
+            "peak_memory_delta_bytes": 34803712,
+            "avg_cpu_percent": 0.0,
+            "cpu_seconds": 0.0,
+            "throughput_bytes_per_sec": 724655.3578581106,
+            "p50_memory_bytes": 36388864,
+            "p95_memory_bytes": 36388864,
+            "p99_memory_bytes": 36388864
+          },
+          "batch_performance_sample": true
+        }
+      ],
+      "statistics": {
+        "mean": {
+          "secs": 0,
+          "nanos": 12167401
+        },
+        "median": {
+          "secs": 0,
+          "nanos": 12116460
+        },
+        "std_dev_ms": 0.18692446703503926,
+        "min": {
+          "secs": 0,
+          "nanos": 12011227
+        },
+        "max": {
+          "secs": 0,
+          "nanos": 12374515
+        },
+        "p95": {
+          "secs": 0,
+          "nanos": 12348710
+        },
+        "p99": {
+          "secs": 0,
+          "nanos": 12369354
+        },
+        "sample_count": 3
+      }
+    },
+    {
+      "framework": "tika",
+      "output_format": "plaintext",
+      "execution_mode": "single",
+      "timing_regime": "cold_process",
+      "ocr": false,
+      "fixture_id": "plain_text_only",
+      "file_type": "eml",
+      "duration_ms": 913.952255,
+      "peak_memory_mb": 136.966144,
+      "f1_text": 0.7142857142857143,
+      "f1_layout": null,
+      "f1_numeric": 0.0,
+      "quality_score": 0.42857142857142855,
+      "correct": false,
+      "success": true,
+      "error_kind": null,
+      "file_size": 317,
+      "throughput_bytes_per_sec": 347.0761162521549,
+      "avg_cpu_percent": 0.46404291283393323,
+      "cpu_seconds": 0.01684511891864943,
+      "baseline_memory_bytes": 1581056,
+      "peak_memory_delta_bytes": 135385088,
+      "p50_memory_bytes": 96692906,
+      "p95_memory_bytes": 124379136,
+      "p99_memory_bytes": 128312661,
+      "extraction_duration_ms": 882.946,
+      "subprocess_overhead_ms": 31.006255,
+      "cold_start_duration_ms": 913.50992,
+      "quality": {
+        "f1_score_text": 0.7142857142857143,
+        "f1_score_numeric": 0.0,
+        "quality_score": 0.42857142857142855,
+        "missing_tokens": [
+          ["to", 1],
+          ["subject", 1],
+          ["120000", 1],
+          ["simple", 1],
+          ["mon", 1],
+          ["2024", 1],
+          ["1", 1],
+          ["0", 1],
+          ["email", 1],
+          ["date", 1],
+          ["text", 1],
+          ["recipientexample.com", 1],
+          ["from", 1],
+          ["testexample.com", 1],
+          ["plain", 1],
+          ["jan", 1]
+        ],
+        "correct": false,
+        "reading_order_score": 1.0
+      },
+      "framework_capabilities": {
+        "timing_regime": "cold_process",
+        "resource_measurement_scope": "isolated_process",
+        "supported_extensions": [
+          "pdf",
+          "docx",
+          "doc",
+          "pptx",
+          "ppt",
+          "ppsx",
+          "pptm",
+          "xlsx",
+          "xls",
+          "xlsm",
+          "xlsb",
+          "odt",
+          "ods",
+          "rtf",
+          "epub",
+          "html",
+          "htm",
+          "xml",
+          "svg",
+          "md",
+          "txt",
+          "csv",
+          "tsv",
+          "json",
+          "yaml",
+          "yml",
+          "toml",
+          "eml",
+          "msg",
+          "tex",
+          "latex",
+          "bib",
+          "rst",
+          "org",
+          "ipynb",
+          "png",
+          "jpg",
+          "jpeg",
+          "gif",
+          "bmp",
+          "tiff",
+          "tif",
+          "webp",
+          "jp2",
+          "zip",
+          "tar",
+          "gz",
+          "7z",
+          "wpd",
+          "wp"
+        ],
+        "ocr_support": true,
+        "batch_support": false,
+        "batch_performance_sample": true,
+        "async_support": false,
+        "supported_output_formats": [],
+        "version": "",
+        "installation_size": {
+          "size_bytes": 272000000,
+          "package_bytes": 57000000,
+          "system_deps_bytes": 215000000,
+          "method": "known_size",
+          "description": "Apache Tika content analysis"
+        }
+      },
+      "system_load": {
+        "load_avg_1m": 1.1,
+        "load_avg_5m": 0.47,
+        "load_avg_15m": 0.19,
+        "logical_cores": 4,
+        "physical_cores": 4
+      },
+      "iterations": [
+        {
+          "iteration": 1,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 886225556
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 856728000
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 29497556
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 136966144,
+            "peak_memory_delta_bytes": 135385088,
+            "avg_cpu_percent": 0.46939366585358455,
+            "cpu_seconds": 0.016574274653943736,
+            "throughput_bytes_per_sec": 357.6967487044574,
+            "p50_memory_bytes": 96428032,
+            "p95_memory_bytes": 124444672,
+            "p99_memory_bytes": 128372736
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 2,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 943929185
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 911883000
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 32046185
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1560576,
+            "peak_memory_bytes": 133427200,
+            "peak_memory_delta_bytes": 131866624,
+            "avg_cpu_percent": 0.4570490266857458,
+            "cpu_seconds": 0.017109733266322924,
+            "throughput_bytes_per_sec": 335.8302773528504,
+            "p50_memory_bytes": 96047104,
+            "p95_memory_bytes": 124555264,
+            "p99_memory_bytes": 128724992
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 3,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 911702025
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 880227000
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 31475025
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1568768,
+            "peak_memory_bytes": 134672384,
+            "peak_memory_delta_bytes": 133103616,
+            "avg_cpu_percent": 0.46568604596246954,
+            "cpu_seconds": 0.016851348835681634,
+            "throughput_bytes_per_sec": 347.7013226991571,
+            "p50_memory_bytes": 97603584,
+            "p95_memory_bytes": 124137472,
+            "p99_memory_bytes": 127840256
+          },
+          "batch_performance_sample": true
+        }
+      ],
+      "statistics": {
+        "mean": {
+          "secs": 0,
+          "nanos": 913952255
+        },
+        "median": {
+          "secs": 0,
+          "nanos": 911702025
+        },
+        "std_dev_ms": 28.917552668875693,
+        "min": {
+          "secs": 0,
+          "nanos": 886225556
+        },
+        "max": {
+          "secs": 0,
+          "nanos": 943929185
+        },
+        "p95": {
+          "secs": 0,
+          "nanos": 940706469
+        },
+        "p99": {
+          "secs": 0,
+          "nanos": 943284642
+        },
+        "sample_count": 3
+      }
+    },
+    {
+      "framework": "tika",
+      "output_format": "plaintext",
+      "execution_mode": "single",
+      "timing_regime": "cold_process",
+      "ocr": false,
+      "fixture_id": "simple_msg",
+      "file_type": "msg",
+      "duration_ms": 984.104792,
+      "peak_memory_mb": 134.20544,
+      "f1_text": 0.6153846153846153,
+      "f1_layout": null,
+      "f1_numeric": 0.0,
+      "quality_score": 0.3692307692307692,
+      "correct": false,
+      "success": true,
+      "error_kind": null,
+      "file_size": 8704,
+      "throughput_bytes_per_sec": 8850.684346884535,
+      "avg_cpu_percent": 0.47241794019993266,
+      "cpu_seconds": 0.018605835357944817,
+      "baseline_memory_bytes": 1581056,
+      "peak_memory_delta_bytes": 132624384,
+      "p50_memory_bytes": 99382613,
+      "p95_memory_bytes": 128999424,
+      "p99_memory_bytes": 132833280,
+      "extraction_duration_ms": 949.914333,
+      "subprocess_overhead_ms": 34.190459,
+      "quality": {
+        "f1_score_text": 0.6153846153846153,
+        "f1_score_numeric": 0.0,
+        "quality_score": 0.3692307692307692,
+        "missing_tokens": [
+          ["date", 1],
+          ["peterpanneverland.com", 1],
+          ["20161203t1808540000", 1],
+          ["subject", 1]
+        ],
+        "extra_tokens": [
+          ["recipients", 1],
+          ["a", 1],
+          ["message", 1],
+          ["this", 1],
+          ["is", 1],
+          ["crocodileneverland.com", 1]
+        ],
+        "correct": false
+      },
+      "framework_capabilities": {
+        "timing_regime": "cold_process",
+        "resource_measurement_scope": "isolated_process",
+        "supported_extensions": [
+          "pdf",
+          "docx",
+          "doc",
+          "pptx",
+          "ppt",
+          "ppsx",
+          "pptm",
+          "xlsx",
+          "xls",
+          "xlsm",
+          "xlsb",
+          "odt",
+          "ods",
+          "rtf",
+          "epub",
+          "html",
+          "htm",
+          "xml",
+          "svg",
+          "md",
+          "txt",
+          "csv",
+          "tsv",
+          "json",
+          "yaml",
+          "yml",
+          "toml",
+          "eml",
+          "msg",
+          "tex",
+          "latex",
+          "bib",
+          "rst",
+          "org",
+          "ipynb",
+          "png",
+          "jpg",
+          "jpeg",
+          "gif",
+          "bmp",
+          "tiff",
+          "tif",
+          "webp",
+          "jp2",
+          "zip",
+          "tar",
+          "gz",
+          "7z",
+          "wpd",
+          "wp"
+        ],
+        "ocr_support": true,
+        "batch_support": false,
+        "batch_performance_sample": true,
+        "async_support": false,
+        "supported_output_formats": [],
+        "version": "",
+        "installation_size": {
+          "size_bytes": 272000000,
+          "package_bytes": 57000000,
+          "system_deps_bytes": 215000000,
+          "method": "known_size",
+          "description": "Apache Tika content analysis"
+        }
+      },
+      "system_load": {
+        "load_avg_1m": 1.32,
+        "load_avg_5m": 0.53,
+        "load_avg_15m": 0.21,
+        "logical_cores": 4,
+        "physical_cores": 4
+      },
+      "iterations": [
+        {
+          "iteration": 1,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 959225160
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 926330000
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 32895160
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 133648384,
+            "peak_memory_delta_bytes": 132067328,
+            "avg_cpu_percent": 0.47354170251597233,
+            "cpu_seconds": 0.018161755444700847,
+            "throughput_bytes_per_sec": 9073.990511258065,
+            "p50_memory_bytes": 98869248,
+            "p95_memory_bytes": 129073152,
+            "p99_memory_bytes": 132915200
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 2,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 0,
+            "nanos": 973064944
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 938954000
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 34110944
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 132939776,
+            "peak_memory_delta_bytes": 131358720,
+            "avg_cpu_percent": 0.4736499035742323,
+            "cpu_seconds": 0.01837205139760863,
+            "throughput_bytes_per_sec": 8944.932251099573,
+            "p50_memory_bytes": 99233792,
+            "p95_memory_bytes": 128630784,
+            "p99_memory_bytes": 132145152
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 3,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 1,
+            "nanos": 20024272
+          },
+          "extraction_duration": {
+            "secs": 0,
+            "nanos": 984459000
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 35565272
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 134205440,
+            "peak_memory_delta_bytes": 132624384,
+            "avg_cpu_percent": 0.4700622145095934,
+            "cpu_seconds": 0.019283699231524978,
+            "throughput_bytes_per_sec": 8533.130278295966,
+            "p50_memory_bytes": 100044800,
+            "p95_memory_bytes": 129294336,
+            "p99_memory_bytes": 133439488
+          },
+          "batch_performance_sample": true
+        }
+      ],
+      "statistics": {
+        "mean": {
+          "secs": 0,
+          "nanos": 984104792
+        },
+        "median": {
+          "secs": 0,
+          "nanos": 973064944
+        },
+        "std_dev_ms": 31.867564825296242,
+        "min": {
+          "secs": 0,
+          "nanos": 959225160
+        },
+        "max": {
+          "secs": 1,
+          "nanos": 20024272
+        },
+        "p95": {
+          "secs": 1,
+          "nanos": 15328339
+        },
+        "p99": {
+          "secs": 1,
+          "nanos": 19085085
+        },
+        "sample_count": 3
+      }
+    },
+    {
+      "framework": "unstructured",
+      "output_format": "plaintext",
+      "execution_mode": "single",
+      "timing_regime": "cold_process",
+      "ocr": false,
+      "fixture_id": "simple_msg",
+      "file_type": "msg",
+      "duration_ms": 3068.1748,
+      "peak_memory_mb": 773.312512,
+      "f1_text": 0.25,
+      "f1_layout": null,
+      "f1_numeric": 0.0,
+      "quality_score": 0.15,
+      "correct": false,
+      "success": true,
+      "error_kind": null,
+      "file_size": 8704,
+      "throughput_bytes_per_sec": 2837.0933435018446,
+      "avg_cpu_percent": 0.29227052050190677,
+      "cpu_seconds": 0.03591262161876903,
+      "baseline_memory_bytes": 1581056,
+      "peak_memory_delta_bytes": 771731456,
+      "p50_memory_bytes": 598813354,
+      "p95_memory_bytes": 715680426,
+      "p99_memory_bytes": 715680426,
+      "extraction_duration_ms": 2218.780731,
+      "subprocess_overhead_ms": 849.3940690000001,
+      "quality": {
+        "f1_score_text": 0.25,
+        "f1_score_numeric": 0.0,
+        "quality_score": 0.15,
+        "missing_tokens": [
+          ["subject", 2],
+          ["peterpanneverland.com", 2],
+          ["20161203t1808540000", 1],
+          ["the", 1],
+          ["to", 1],
+          ["crocodileneverland.com", 1],
+          ["date", 1],
+          ["from", 1]
+        ],
+        "extra_tokens": [
+          ["a", 1],
+          ["message", 1]
+        ],
+        "correct": false
+      },
+      "framework_capabilities": {
+        "timing_regime": "cold_process",
+        "resource_measurement_scope": "isolated_process",
+        "supported_extensions": [
+          "pdf",
+          "docx",
+          "doc",
+          "pptx",
+          "ppt",
+          "xlsx",
+          "xls",
+          "odt",
+          "rtf",
+          "epub",
+          "html",
+          "htm",
+          "xml",
+          "md",
+          "rst",
+          "org",
+          "txt",
+          "csv",
+          "tsv",
+          "eml",
+          "msg",
+          "png",
+          "jpg",
+          "jpeg",
+          "tiff",
+          "tif",
+          "bmp"
+        ],
+        "ocr_support": true,
+        "batch_support": false,
+        "batch_performance_sample": true,
+        "async_support": false,
+        "supported_output_formats": [],
+        "version": "",
+        "installation_size": {
+          "size_bytes": 1357000000,
+          "package_bytes": 300000000,
+          "system_deps_bytes": 840000000,
+          "model_bytes": 217000000,
+          "method": "known_size",
+          "description": "Unstructured document processing"
+        }
+      },
+      "system_load": {
+        "load_avg_1m": 2.37,
+        "load_avg_5m": 1.16,
+        "load_avg_15m": 0.46,
+        "logical_cores": 4,
+        "physical_cores": 4
+      },
+      "iterations": [
+        {
+          "iteration": 1,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 3,
+            "nanos": 68042199
+          },
+          "extraction_duration": {
+            "secs": 2,
+            "nanos": 217743953
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 850298246
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 771051520,
+            "peak_memory_delta_bytes": 769470464,
+            "avg_cpu_percent": 0.2946012789308607,
+            "cpu_seconds": 0.03644966775824896,
+            "throughput_bytes_per_sec": 2836.9883578645,
+            "p50_memory_bytes": 597458944,
+            "p95_memory_bytes": 715689984,
+            "p99_memory_bytes": 715689984
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 2,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 3,
+            "nanos": 34584265
+          },
+          "extraction_duration": {
+            "secs": 2,
+            "nanos": 207431124
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 827153141
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 773312512,
+            "peak_memory_delta_bytes": 771731456,
+            "avg_cpu_percent": 0.2897719905510791,
+            "cpu_seconds": 0.03481204654697358,
+            "throughput_bytes_per_sec": 2868.2676900389188,
+            "p50_memory_bytes": 599404544,
+            "p95_memory_bytes": 715722752,
+            "p99_memory_bytes": 715722752
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 3,
+          "success": true,
+          "error_kind": "none",
+          "duration": {
+            "secs": 3,
+            "nanos": 101897936
+          },
+          "extraction_duration": {
+            "secs": 2,
+            "nanos": 231167117
+          },
+          "subprocess_overhead": {
+            "secs": 0,
+            "nanos": 870730819
+          },
+          "metrics": {
+            "baseline_memory_bytes": 1564672,
+            "peak_memory_bytes": 772038656,
+            "peak_memory_delta_bytes": 770473984,
+            "avg_cpu_percent": 0.29243829202378047,
+            "cpu_seconds": 0.03647615055108454,
+            "throughput_bytes_per_sec": 2806.023982602115,
+            "p50_memory_bytes": 599576576,
+            "p95_memory_bytes": 715628544,
+            "p99_memory_bytes": 715628544
+          },
+          "batch_performance_sample": true
+        }
+      ],
+      "statistics": {
+        "mean": {
+          "secs": 3,
+          "nanos": 68174800
+        },
+        "median": {
+          "secs": 3,
+          "nanos": 68042199
+        },
+        "std_dev_ms": 33.65703140716598,
+        "min": {
+          "secs": 3,
+          "nanos": 34584265
+        },
+        "max": {
+          "secs": 3,
+          "nanos": 101897936
+        },
+        "p95": {
+          "secs": 3,
+          "nanos": 98512362
+        },
+        "p99": {
+          "secs": 3,
+          "nanos": 101220821
+        },
+        "sample_count": 3
+      }
+    },
+    {
+      "framework": "unstructured",
+      "output_format": "plaintext",
+      "execution_mode": "single",
+      "timing_regime": "cold_process",
+      "ocr": null,
+      "fixture_id": "msg_with_attachments_alt",
+      "file_type": "msg",
+      "duration_ms": 4198.705031,
+      "peak_memory_mb": 988.717056,
+      "f1_text": null,
+      "f1_layout": null,
+      "f1_numeric": null,
+      "quality_score": null,
+      "correct": null,
+      "success": false,
+      "error_kind": "FrameworkError",
+      "file_size": 272896,
+      "throughput_bytes_per_sec": 0.0,
+      "avg_cpu_percent": 0.6547138887464922,
+      "cpu_seconds": 0.1102300859699239,
+      "baseline_memory_bytes": 1581056,
+      "peak_memory_delta_bytes": 987148288,
+      "p50_memory_bytes": 656849578,
+      "p95_memory_bytes": 927229269,
+      "p99_memory_bytes": 927446357,
+      "error_message": "Benchmark error: Subprocess failed with exit status: 1\nstderr: \u001b[0;93m2026-10-09 04:38:33.307635593 [W:onnxruntime:Default, device_discovery.cc:146 GetPciBusId] Skipping pci_bus_id for PCI path at \"/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171\" because filename \"5620e0c7-8062-4dce-aeb7-520c7ef76171\" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+\u001b[m\nError extracting with Unstructured: The fast strategy is not available for image files.\n",
+      "framework_capabilities": {
+        "timing_regime": "cold_process",
+        "resource_measurement_scope": "isolated_process",
+        "supported_extensions": [
+          "pdf",
+          "docx",
+          "doc",
+          "pptx",
+          "ppt",
+          "xlsx",
+          "xls",
+          "odt",
+          "rtf",
+          "epub",
+          "html",
+          "htm",
+          "xml",
+          "md",
+          "rst",
+          "org",
+          "txt",
+          "csv",
+          "tsv",
+          "eml",
+          "msg",
+          "png",
+          "jpg",
+          "jpeg",
+          "tiff",
+          "tif",
+          "bmp"
+        ],
+        "ocr_support": true,
+        "batch_support": false,
+        "batch_performance_sample": true,
+        "async_support": false,
+        "supported_output_formats": [],
+        "version": "",
+        "installation_size": {
+          "size_bytes": 1357000000,
+          "package_bytes": 300000000,
+          "system_deps_bytes": 840000000,
+          "model_bytes": 217000000,
+          "method": "known_size",
+          "description": "Unstructured document processing"
+        }
+      },
+      "system_load": {
+        "load_avg_1m": 2.36,
+        "load_avg_5m": 1.28,
+        "load_avg_15m": 0.52,
+        "logical_cores": 4,
+        "physical_cores": 4
+      },
+      "iterations": [
+        {
+          "iteration": 1,
+          "success": false,
+          "error_kind": "framework_error",
+          "duration": {
+            "secs": 4,
+            "nanos": 167683603
+          },
+          "extraction_duration": null,
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 988700672,
+            "peak_memory_delta_bytes": 987119616,
+            "avg_cpu_percent": 0.6762413402672823,
+            "cpu_seconds": 0.11316880176961595,
+            "throughput_bytes_per_sec": 0.0,
+            "p50_memory_bytes": 654012416,
+            "p95_memory_bytes": 927219712,
+            "p99_memory_bytes": 927432704
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 2,
+          "success": false,
+          "error_kind": "framework_error",
+          "duration": {
+            "secs": 4,
+            "nanos": 203215088
+          },
+          "extraction_duration": null,
+          "metrics": {
+            "baseline_memory_bytes": 1581056,
+            "peak_memory_bytes": 986365952,
+            "peak_memory_delta_bytes": 984784896,
+            "avg_cpu_percent": 0.6456785259922895,
+            "cpu_seconds": 0.10893740696898391,
+            "throughput_bytes_per_sec": 0.0,
+            "p50_memory_bytes": 658526208,
+            "p95_memory_bytes": 927117312,
+            "p99_memory_bytes": 927326208
+          },
+          "batch_performance_sample": true
+        },
+        {
+          "iteration": 3,
+          "success": false,
+          "error_kind": "framework_error",
+          "duration": {
+            "secs": 4,
+            "nanos": 225216401
+          },
+          "extraction_duration": null,
+          "metrics": {
+            "baseline_memory_bytes": 1568768,
+            "peak_memory_bytes": 988717056,
+            "peak_memory_delta_bytes": 987148288,
+            "avg_cpu_percent": 0.6422217999799045,
+            "cpu_seconds": 0.10858404917117179,
+            "throughput_bytes_per_sec": 0.0,
+            "p50_memory_bytes": 658010112,
+            "p95_memory_bytes": 927350784,
+            "p99_memory_bytes": 927580160
+          },
+          "batch_performance_sample": true
+        }
+      ],
+      "statistics": {
+        "mean": {
+          "secs": 4,
+          "nanos": 198705031
+        },
+        "median": {
+          "secs": 4,
+          "nanos": 203215088
+        },
+        "std_dev_ms": 29.030349193381138,
+        "min": {
+          "secs": 4,
+          "nanos": 167683603
+        },
+        "max": {
+          "secs": 4,
+          "nanos": 225216401
+        },
+        "p95": {
+          "secs": 4,
+          "nanos": 223016270
+        },
+        "p99": {
+          "secs": 4,
+          "nanos": 224776375
+        },
+        "sample_count": 3
+      }
+    }
+  ],
+  "metadata": {
+    "total_results": 36,
+    "framework_count": 3,
+    "file_type_count": 2,
+    "shared_corpus_markdown": ["eml", "msg"],
+    "shared_corpus_plaintext": ["eml", "msg"],
+    "timestamp": "2026-10-09T05:51:27.119860767+00:00"
+  },
+  "run_provenance": [
+    {
+      "source_dir": "xberg-markdown-baseline-markdown-single-file",
+      "provenance": {
+        "schema_version": 3,
+        "harness_version": "1.3.7",
+        "repository": {
+          "commit": "bca0e2c12ba0ad90c045e31db814876487b2b56b",
+          "dirty": false
+        },
+        "corpus": {
+          "cohort": "native-email-fast-v1",
+          "cohort_manifest_blake3": "0bcedb2e4daae6314e05a2ff0c788028707caf12713f176f10f0cc471966f080",
+          "ordered_fixtures": [
+            {
+              "fixture": "eml_simple.json",
+              "fixture_blake3": "cb9b818b5cc5408506d1d74e3eafc99777237f44574b7820d44b071a4220cdec",
+              "document_blake3": "bdf958465618306b77109f624c2fdbde62e29c0c2e4768660f6adae75da23ad0",
+              "document_bytes": 317
+            },
+            {
+              "fixture": "eml_multipart.json",
+              "fixture_blake3": "c9007eb2591de44e17049eff785e6b8e0cd08792b2e34c8826af790cc88daf1f",
+              "document_blake3": "c172e0b49f6125ec1d739d0e9a01eae23fe08ce0ed631eedc18f4d26aee3a2ef",
+              "document_bytes": 763
+            },
+            {
+              "fixture": "eml/email-no-html-content-1.json",
+              "fixture_blake3": "e84446af989ab31a6c03570c4d32154c2ba3c23bd2233a36498abda0ad943e01",
+              "document_blake3": "ec110f7430e9cc8de2a43bc8c3c042834776085668d126dfd872284840fcac00",
+              "document_bytes": 7721
+            },
+            {
+              "fixture": "msg_simple.json",
+              "fixture_blake3": "d860c2a0e83961362cab5377b32f35258c4fda2bdcd1e8590080f98001df68a0",
+              "document_blake3": "1713328f49a254505be344cf03785ae02e7ebdf96c1007956bb44a028165550d",
+              "document_bytes": 8704
+            },
+            {
+              "fixture": "msg/fake-email.json",
+              "fixture_blake3": "e22134d722460742b8e189360f91c01d9c907d442aa1f4947ebb04eb6b197957",
+              "document_blake3": "13ca52005858fc8f98e72c6085c691b750ab8bdeb562aaa47b65c8cb1b328021",
+              "document_bytes": 11776
+            },
+            {
+              "fixture": "msg_attachments.json",
+              "fixture_blake3": "fad5dbe9b6d3720ae3857b349c2a91ea5ae13cc61939e49e68a1c0253bc87ad4",
+              "document_blake3": "2d97a0539e823ce582e6557e932e3cea754a0f890f7195112cd0ad985d336a83",
+              "document_bytes": 272896
+            }
+          ]
+        },
+        "frameworks": [
+          {
+            "name": "xberg-markdown-baseline",
+            "timing_regime": "cold_process",
+            "resource_measurement_scope": "isolated_process",
+            "version": "xberg 1.3.7",
+            "executable": {
+              "name": "xberg",
+              "blake3": "c622cb91cbcd739f520fd539ccb34aeff083d7dd3399220cab42c2185bbc6ec7",
+              "invocation_blake3": "e0edf61696784fc1b38d3a39fcd2e65a9e4cff3c5730525d3c8d15fbdac71583",
+              "build_id": "bca0e2c12ba0ad90c045e31db814876487b2b56b"
+            },
+            "models": [],
+            "batch_capability": null,
+            "requested_workers": 1,
+            "effective_workers": 1,
+            "configured_thread_budget": 4,
+            "worker_semantics": "sequential single-file execution",
+            "effective_warmup_iterations": 1,
+            "eligible_documents": 6,
+            "batch_partitions": null,
+            "ocr_language_policy": "any_per_document"
+          }
+        ],
+        "timing": {
+          "mode": "SingleFile",
+          "warmup_iterations": 1,
+          "benchmark_iterations": 3,
+          "timeout_ms": 900000,
+          "output_format": "markdown"
+        },
+        "fixed_batch_size": null,
+        "coverage": {
+          "min_success_rate": 1.0,
+          "frameworks": [
+            {
+              "framework": "xberg-markdown-baseline",
+              "successful": 6,
+              "framework_failures": 0,
+              "infrastructure_failures": 0,
+              "success_rate": 1.0
+            }
+          ],
+          "passed": true,
+          "failing_frameworks": []
+        }
+      }
+    }
+  ],
+  "failure_summary": {
+    "total": {
+      "framework_errors": 1,
+      "empty_content": 0,
+      "zero_overlap": 0,
+      "timeouts": 0,
+      "framework_fault_total": 1,
+      "harness_errors": 0,
+      "config_setup_errors": 0,
+      "infra_total": 0
+    },
+    "by_framework_mode": {
+      "tika:plaintext:single": {
+        "framework_errors": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      },
+      "unstructured:plaintext:single": {
+        "framework_errors": 1,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 1,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      },
+      "xberg-markdown-baseline:batch": {
+        "framework_errors": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      },
+      "xberg-markdown-baseline:single": {
+        "framework_errors": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      },
+      "xberg-plaintext-baseline:batch": {
+        "framework_errors": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      },
+      "xberg-plaintext-baseline:single": {
+        "framework_errors": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      }
+    },
+    "by_file_type": {
+      "eml": {
+        "framework_errors": 0,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 0,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      },
+      "msg": {
+        "framework_errors": 1,
+        "empty_content": 0,
+        "zero_overlap": 0,
+        "timeouts": 0,
+        "framework_fault_total": 1,
+        "harness_errors": 0,
+        "config_setup_errors": 0,
+        "infra_total": 0
+      }
+    }
+  },
+  "format_support": {
+    "file_types": ["eml", "msg"],
+    "unsupported": {}
+  }
+}

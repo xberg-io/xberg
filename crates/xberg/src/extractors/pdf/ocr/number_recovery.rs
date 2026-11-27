@@ -404,7 +404,7 @@ fn eligible(config: &ExtractionConfig, index: usize) -> bool {
                 .eq(["eng"])
                 && ocr.tesseract_config.is_none()
                 && ocr.element_config.is_none()
-                && ocr.backend_options.is_none()
+                && !ocr.has_tuning_backend_options()
                 && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
         })
 }
@@ -414,7 +414,7 @@ fn model_directory(config: &ExtractionConfig) -> Option<String> {
     let directory = existing_tessdata_dir_for(
         &ocr.effective_tesseract_language(),
         ocr.tessdata_path.as_deref(),
-        &TessdataEnv::from_process(),
+        &TessdataEnv::from_process().for_model(config.effective_tessdata_model()),
     )?;
     // An auxiliary model must accompany the selected primary model; never search or download it. ~keep
     std::path::Path::new(&directory)

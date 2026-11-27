@@ -1,21 +1,21 @@
 //! Tests for `main.rs`'s CLI dispatch and the `run` command's coverage-gate accounting.
 
 use super::tracing_filter;
-use crate::cli::{Cli, Commands};
+use crate::cli::{Cli, CliTessdataModel, Commands};
 use crate::commands::cohort_contract::cohort_contract_summary;
 use crate::commands::parse_pipeline_names;
 use crate::commands::pipeline_benchmark::parse_sort_metric;
 use crate::commands::run::{
-    XBERG_RUN_PIPELINES, compute_framework_coverage, normalize_run_frameworks, parse_model_provenance,
-    parse_pdf_backends, selected_frameworks_use_tesseract, should_register_xberg_pipeline,
-    validate_framework_result_cardinality, write_run_artifacts_and_check_gate,
+    compute_framework_coverage, normalize_run_frameworks, parse_model_provenance, parse_pdf_backends,
+    selected_frameworks_use_tesseract, should_register_xberg_pipeline, validate_framework_result_cardinality,
+    write_run_artifacts_and_check_gate, XBERG_RUN_PIPELINES,
 };
 use benchmark_harness::provenance::{
     CorpusProvenance, FrameworkProvenance, RepositoryProvenance, RunProvenance, TimingProvenance,
 };
 use benchmark_harness::types::{ErrorKind, FrameworkCapabilities, OcrStatus, PerformanceMetrics};
 use benchmark_harness::{BenchmarkMode, BenchmarkResult, OutputFormat, XbergPdfBackend};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 #[test]
 fn tracing_filter_keeps_status_events_visible_by_default() {
@@ -161,6 +161,46 @@ fn run_cli_accepts_exact_cohort_and_model_identity() {
 }
 
 #[test]
+fn run_cli_defaults_tessdata_model_to_fast() {
+    let cli = Cli::try_parse_from(["benchmark-harness", "run", "--fixtures", "fixtures"]).unwrap();
+
+    let Commands::Run(crate::commands::run::RunArgs { tessdata_model, .. }) = cli.command else {
+        panic!("expected run command");
+    };
+    assert_eq!(tessdata_model, CliTessdataModel::Fast);
+    assert_eq!(xberg::TessdataModel::from(tessdata_model), xberg::TessdataModel::Fast);
+}
+
+#[test]
+fn run_cli_accepts_best_tessdata_model() {
+    let cli = Cli::try_parse_from([
+        "benchmark-harness",
+        "run",
+        "--fixtures",
+        "fixtures",
+        "--tessdata-model",
+        "best",
+    ])
+    .unwrap();
+
+    let Commands::Run(crate::commands::run::RunArgs { tessdata_model, .. }) = cli.command else {
+        panic!("expected run command");
+    };
+    assert_eq!(xberg::TessdataModel::from(tessdata_model), xberg::TessdataModel::Best);
+    assert!(
+        Cli::try_parse_from([
+            "benchmark-harness",
+            "run",
+            "--fixtures",
+            "fixtures",
+            "--tessdata-model",
+            "medium",
+        ])
+        .is_err()
+    );
+}
+
+#[test]
 fn run_cli_accepts_pdf_backends_flag() {
     let cli = Cli::try_parse_from([
         "benchmark-harness",
@@ -187,6 +227,25 @@ fn parse_pdf_backends_rejects_unknown_and_duplicate_values() {
     assert!(parse_pdf_backends(&["pdf_oxide".to_string()]).is_err());
     assert!(parse_pdf_backends(&["native".to_string(), "native".to_string()]).is_err());
     assert_eq!(parse_pdf_backends(&[]).unwrap(), Vec::<XbergPdfBackend>::new());
+}
+
+#[test]
+fn run_output_format_help_lists_only_values_the_parser_accepts() {
+    let command = Cli::command();
+    let run = command.find_subcommand("run").expect("run subcommand");
+    let help = run
+        .get_arguments()
+        .find(|arg| arg.get_id() == "output_format")
+        .and_then(|arg| arg.get_help())
+        .expect("output-format help")
+        .to_string();
+
+    assert!(!help.contains("both"), "help advertises an unsupported value: {help}");
+    for value in ["markdown", "plaintext"] {
+        assert!(help.contains(value), "help should list {value}: {help}");
+        assert!(value.parse::<OutputFormat>().is_ok());
+    }
+    assert!("both".parse::<OutputFormat>().is_err());
 }
 
 #[test]
@@ -261,19 +320,17 @@ fn pipeline_benchmark_accepts_exact_cohort_and_rejects_ambiguous_filters() {
     ));
 
     for conflicting_filter in ["--doc", "--group"] {
-        assert!(
-            Cli::try_parse_from([
-                "benchmark-harness",
-                "pipeline-benchmark",
-                "--fixtures",
-                "fixtures",
-                "--cohort",
-                "cohort.json",
-                conflicting_filter,
-                "sample",
-            ])
-            .is_err()
-        );
+        assert!(Cli::try_parse_from([
+            "benchmark-harness",
+            "pipeline-benchmark",
+            "--fixtures",
+            "fixtures",
+            "--cohort",
+            "cohort.json",
+            conflicting_filter,
+            "sample",
+        ])
+        .is_err());
     }
 }
 
@@ -289,15 +346,18 @@ fn pipeline_benchmark_rejects_unknown_sort_metric() {
 
 #[test]
 fn cohort_contract_summary_includes_exact_matrix_cells() {
-    let summary = cohort_contract_summary(benchmark_harness::bench_matrix::Cohort::Native);
+    let summary = cohort_contract_summary(
+        benchmark_harness::bench_matrix::Cohort::Native,
+        benchmark_harness::bench_matrix::MatrixProfile::Full,
+    );
     let matrix = summary["matrix"].as_array().expect("matrix array");
 
-    // 8 xberg (baseline/layout x md/plain x single/batch) + 4 xberg pdfium + 4 docling
-    // + 4 liteparse + markitdown + unstructured + tika + pymupdf4llm + 1 optional mineru.
-    // The pdfium cells were added to `native_matrix` without updating these totals, and the
-    // benchmark CI job filters to `cohort::tests::`, so nothing ran this. ~keep
-    assert_eq!(matrix.len(), 25);
-    assert_eq!(summary["expected_matrix_keys"], 24);
+    // 6 xberg (baseline md/plain + layout md, single/batch; plain layout is not benchmarked)
+    // + 4 xberg pdfium + 4 docling + 4 liteparse + markitdown + unstructured + tika
+    // + pymupdf4llm + 1 optional mineru. The benchmark CI job filters to `cohort::tests::`,
+    // so this test does not run there. ~keep
+    assert_eq!(matrix.len(), 23);
+    assert_eq!(summary["expected_matrix_keys"], 22);
     assert_eq!(summary["optional_matrix_keys"], 1);
     assert_eq!(
         matrix[0]["artifact"],
@@ -305,6 +365,32 @@ fn cohort_contract_summary_includes_exact_matrix_cells() {
     );
     assert_eq!(matrix[0]["mode"], "single-file");
     assert_eq!(matrix[0]["optional"], false);
+}
+
+#[test]
+fn smoke_cohort_contract_summary_lists_only_the_smoke_cells() {
+    let summary = cohort_contract_summary(
+        benchmark_harness::bench_matrix::Cohort::Native,
+        benchmark_harness::bench_matrix::MatrixProfile::Smoke,
+    );
+    let artifacts: Vec<&str> = summary["matrix"]
+        .as_array()
+        .expect("matrix array")
+        .iter()
+        .map(|cell| cell["artifact"].as_str().expect("artifact"))
+        .collect();
+
+    assert_eq!(
+        artifacts,
+        [
+            "benchmarks-rust-baseline-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-rust-baseline-markdown-batch-native-pdf-fast-b8",
+            "benchmarks-docling-markdown-single-file-native-pdf-fast-b8",
+            "benchmarks-liteparse-markdown-single-file-native-pdf-fast-b8",
+        ]
+    );
+    assert_eq!(summary["expected_matrix_keys"], 4);
+    assert_eq!(summary["optional_matrix_keys"], 0);
 }
 
 #[test]
@@ -405,6 +491,8 @@ fn sample_provenance() -> RunProvenance {
             requested_workers: None,
             effective_workers: None,
             configured_thread_budget: None,
+            tessdata_model: None,
+            xberg_env: None,
             worker_semantics: "test".to_string(),
             effective_warmup_iterations: 0,
             eligible_documents: 1,
@@ -446,6 +534,7 @@ fn sample_result(framework: &str, success: bool, error_kind: ErrorKind) -> Bench
             p50_memory_bytes: 0,
             p95_memory_bytes: 0,
             p99_memory_bytes: 0,
+            ..Default::default()
         },
         quality: None,
         iterations: vec![],
@@ -457,6 +546,7 @@ fn sample_result(framework: &str, success: bool, error_kind: ErrorKind) -> Bench
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 

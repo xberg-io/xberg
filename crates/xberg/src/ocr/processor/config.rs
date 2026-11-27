@@ -7,7 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
-const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 19;
+const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 21;
 
 /// Compute a deterministic hash of the OCR configuration.
 ///
@@ -139,6 +139,12 @@ fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, re
     }
     hasher.update(&[config.known_full_page_scan as u8]);
     hash_bytes(hasher, resolved_tessdata_path.as_bytes());
+    // ~keep The resolved directory already differs per model set for xberg's own caches; a
+    // non-fast set is hashed too so the key never depends on how a directory was chosen. Fast
+    // adds nothing, so entries written before model sets existed stay valid.
+    if config.tessdata_model != crate::core::config::TessdataModel::Fast {
+        hash_bytes(hasher, config.tessdata_model.as_str().as_bytes());
+    }
     hasher.update(&config.page_number.to_le_bytes());
 }
 
@@ -321,6 +327,50 @@ mod tests {
         );
     }
 
+    #[test]
+    fn should_distinguish_cache_keys_by_tessdata_model() {
+        use crate::core::config::TessdataModel;
+
+        let config_for = |tessdata_model| TesseractConfig {
+            tessdata_model,
+            ..create_test_config()
+        };
+
+        assert_ne!(
+            hash_config(&config_for(TessdataModel::Fast), TEST_TESSDATA_PATH),
+            hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
+            "the model set is part of the key even when one directory serves both"
+        );
+        assert_eq!(
+            hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
+            hash_config(&config_for(TessdataModel::Best), TEST_TESSDATA_PATH),
+            "the same set and directory must keep sharing an entry"
+        );
+    }
+
+    /// The fast set adds nothing to the key, so OCR cache entries written before model sets
+    /// existed keep matching: the source-context bytes equal the pre-change sequence.
+    #[test]
+    fn fast_tessdata_model_leaves_the_source_context_hash_unchanged() {
+        let config = TesseractConfig {
+            source_dpi: Some(150.0),
+            page_number: 3,
+            ..create_test_config()
+        };
+        let mut actual = blake3::Hasher::new();
+        hash_source_context(&mut actual, &config, TEST_TESSDATA_PATH);
+
+        let mut before_model_sets = blake3::Hasher::new();
+        before_model_sets.update(&[config.auto_rotate as u8]);
+        before_model_sets.update(&[1]);
+        before_model_sets.update(&150.0_f64.to_bits().to_le_bytes());
+        before_model_sets.update(&[config.known_full_page_scan as u8]);
+        hash_bytes(&mut before_model_sets, TEST_TESSDATA_PATH.as_bytes());
+        before_model_sets.update(&3_u32.to_le_bytes());
+
+        assert_eq!(actual.finalize(), before_model_sets.finalize());
+    }
+
     /// Negative control for the fix above: the resolved-directory hashing must not become so
     /// specific that two calls resolving to the SAME directory stop sharing a cache entry. An
     /// over-eager fix (e.g. hashing a directory listing, an inode, or a timestamp instead of the
@@ -406,10 +456,10 @@ mod tests {
 
         // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
         // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Version 19 joins witnessed discretionary line-end
-        // hyphens in the text of full-page PDF scans.
+        // silently reusing entries computed the old way. Version 21 reads page-like rasters and known
+        // full-page scans with the best model as contrast-enhanced grayscale instead of Otsu.
         assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 19,
+            TESSERACT_RESULT_SCHEMA_VERSION, 21,
             "a bump must be deliberate: state here which change made an old entry wrong"
         );
         assert_ne!(

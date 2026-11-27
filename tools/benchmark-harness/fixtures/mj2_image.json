@@ -4,6 +4,7 @@
 	"file_size": 77298,
 	"expected_frameworks": ["xberg"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "Motion JPEG 2000 image with text for OCR testing (MJ2 extension)",
 		"category": "image",
 		"size_class": "medium",

@@ -2077,18 +2077,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `ort-dynamic` keeps ONNX Runtime out of the link: the CLI loads the pinned runtime
+        # shipped beside it on first model use, so text-only runs never map it. The Windows
+        # archives still link onnxruntime.dll; their closure gates require that import.
+        # `heic-dynamic` does the same for libheif and its codecs on the Unix legs (ADR-0019).
+        # `order_file` lays out the code a training run touches contiguously (ADR-0020); the thin-LTO
+        # aarch64 gnu leg renames promoted local functions per module, so its names would not match. ~keep
         include:
-          - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - {
+              os: ubuntu-24.04,
+              target: x86_64-unknown-linux-gnu,
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic",
+              order_file: true,
+            }
+          - {
+              os: ubuntu-24.04-arm,
+              target: aarch64-unknown-linux-gnu,
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic",
+            }
           - {
               os: macos-26,
               target: aarch64-apple-darwin,
-              extra_cargo_args: "--features mcp,mcp-http,api,heic,candle-metal",
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic,candle-metal",
+              order_file: true,
             }
           - {
               os: macos-26-intel,
               target: x86_64-apple-darwin,
-              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
+              extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic,heic-dynamic",
+              order_file: true,
             }
           - { os: windows-2022, target: x86_64-pc-windows-msvc }
           # Second Windows x64 archive without `heic`. The default Windows build links the vcpkg
@@ -2156,6 +2173,45 @@ jobs:
             echo "VCPKGRS_DYNAMIC=1"
           } >>"$GITHUB_ENV"
 
+      # `heic-dynamic` calls libheif only through dlopen'd wrappers, but `libheif-sys` still asks
+      # cargo to link it, which on macOS records an LC_LOAD_DYLIB that dyld maps at every start.
+      # A build-script override for its `links = "heif"` key replaces that request with nothing.
+      # It lives in the runner's cargo home, outside the checkout, so no tracked file changes. ~keep
+      - name: Keep libheif out of the CLI link (heic-dynamic)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          config="${CARGO_HOME:-$HOME/.cargo}/config.toml"
+          mkdir -p "$(dirname "$config")"
+          printf '\n[target.%s.heif]\nrustc-link-lib = []\n' "$TARGET" >>"$config"
+          cat "$config"
+
+      # ADR-0020. Symbol names match only if this build shares every input of cargo's -C metadata
+      # with the release build below: profile (so the same LTO override), features and --target.
+      # RUSTFLAGS is not one of them, which is where the instrumentation goes. Its own target dir
+      # keeps the instrumented artifacts out of the rust cache and is removed afterwards. ~keep
+      - name: Generate the linker order file
+        if: matrix.order_file
+        shell: bash
+        env:
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && 'thin' || 'fat' }}
+          TARGET: ${{ matrix.target }}
+          EXTRA_CARGO_ARGS: ${{ matrix.extra_cargo_args }}
+        run: |
+          set -euo pipefail
+          read -r -a cargo_args <<<"$EXTRA_CARGO_ARGS"
+          CARGO_TARGET_DIR="$RUNNER_TEMP/order-file-target" python3 scripts/ci/rust/order_file.py generate \
+            --work-dir "$RUNNER_TEMP/order-file" --target "$TARGET" --out "$RUNNER_TEMP/xberg.order" \
+            -- "${cargo_args[@]}"
+          rm -rf "$RUNNER_TEMP/order-file-target"
+          {
+            echo "XBERG_ORDER_FILE=$RUNNER_TEMP/xberg.order"
+            echo "XBERG_LINK_MAP=$RUNNER_TEMP/xberg.map"
+          } >>"$GITHUB_ENV"
+
       # The v1.4.0 aarch64-gnu leg died with exit 143 ("runner received a shutdown signal"). The log
       # shows no output after the last `Compiling` line, then the runner kill. Thin LTO bounds the single-module memory peak, like the other
       # ARM64 legs and the musl CLI profile; every other target keeps fat LTO. ~keep
@@ -2173,26 +2229,42 @@ jobs:
           # features in `cargo_features`, which the license gate below also audits. ~keep
           extra-cargo-args: ${{ matrix.cargo_features && format('--features {0}', matrix.cargo_features) || matrix.extra_cargo_args || '--features mcp,mcp-http,api,heic' }}
 
-      # Stage ONNX Runtime for Intel macOS after the build so the ort-dynamic
-      # compile is unaffected; this exports ORT_DYLIB_PATH for the vendor step.
-      # pyke ships no x86_64-apple-darwin build, so the macOS setup script pins
-      # Microsoft's last x86_64 release (1.23.2, self-contained). ~keep
-      - name: Setup ONNX Runtime (Intel macOS)
-        if: matrix.target == 'x86_64-apple-darwin'
+      # A name mismatch or an ignored order file still links; the link map is the only proof. ~keep
+      - name: Verify the linker applied the order file
+        if: matrix.order_file
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/rust/order_file.py verify-map \
+            --order-file "${XBERG_ORDER_FILE:?}" --map "${XBERG_LINK_MAP:?}"
+
+      # Stage Microsoft's digest-pinned ONNX Runtime after the build so the ort-dynamic
+      # compile is unaffected. Linux re-verifies the archive digest even on a cache hit.
+      # Microsoft ships no x86_64 macOS build after 1.23.2, so Intel macOS pins that
+      # last self-contained release. ~keep
+      - name: Setup ONNX Runtime (ort-dynamic CLI)
+        if: runner.os != 'Windows'
         uses: ./.github/actions/setup-onnx-runtime
         with:
-          ort-version: "1.23.2"
-          arch-id: x64
+          ort-version: ${{ matrix.target == 'x86_64-apple-darwin' && '1.23.2' || '1.24.2' }}
+          arch-id: ${{ startsWith(matrix.target, 'x86_64-') && 'x64' || 'arm64' }}
           dest-dir: crates/xberg-cli
+          verify-linux-archive: "true"
 
-      - name: Vendor ONNX Runtime dylib (Intel macOS)
-        if: matrix.target == 'x86_64-apple-darwin'
+      # Ship the unversioned name the runtime resolver looks for beside the binary. The
+      # archive and NuGet layouts both point it at the versioned library. ~keep
+      - name: Select ONNX Runtime library to ship
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euxo pipefail
-          # Bundle the dylib the setup step staged next to the binary.
-          test -f "$ORT_DYLIB_PATH"
-          echo "ORT_VENDOR_LIB=$ORT_DYLIB_PATH" >> "$GITHUB_ENV"
+          case "$RUNNER_OS" in
+            Linux) lib="${ORT_LIB_LOCATION:?}/libonnxruntime.so" ;;
+            macOS) lib="${ORT_LIB_LOCATION:?}/libonnxruntime.dylib" ;;
+            *) echo "::error::no ONNX Runtime library name for $RUNNER_OS"; exit 1 ;;
+          esac
+          test -f "$lib"
+          echo "ORT_VENDOR_LIB=$lib" >> "$GITHUB_ENV"
 
       # Retries of older source tags must use closure and gate tools from this
       # workflow revision, on every runner: the release checkout can predate them. ~keep
@@ -2305,39 +2377,81 @@ jobs:
             pwsh -NoProfile -File "$CLOSURE_TOOLS/verify-windows-dll-closure.ps1" -Artifact "${STAGE}.zip" -NativeGlob "xberg.exe" -ArtifactKind raw -RequireCrtNotices
           else
             cp "$BINARY_PATH" "$STAGE/xberg"
-            # Intel macOS: bundle libonnxruntime.dylib next to the binary; ort
-            # resolves the default dylib name relative to the executable. The
-            # official build links only system frameworks, so the one file is
-            # the whole closure.
-            if [[ "$TARGET" == "x86_64-apple-darwin" && -n "${ORT_VENDOR_LIB:-}" ]]; then
-              cp "$ORT_VENDOR_LIB" "$STAGE/libonnxruntime.dylib"
+            # The ort-dynamic CLI loads ONNX Runtime from beside the executable on first
+            # model use (ort_discovery::resolve_ort_library). Prove the binary does not
+            # link it, so text-only extraction never maps the library at startup. ~keep
+            if [[ "$TARGET" == *-apple-darwin ]]; then
+              linked="$(otool -L "$STAGE/xberg")"
+            else
+              linked="$(readelf -d "$STAGE/xberg")"
+            fi
+            if grep -qi onnxruntime <<<"$linked"; then
+              echo "::error::xberg links ONNX Runtime at load time; the ort-dynamic build must not"
+              echo "$linked"
+              exit 1
+            fi
+            if [[ "$TARGET" == *-apple-darwin ]]; then
+              cp -L "${ORT_VENDOR_LIB:?}" "$STAGE/libonnxruntime.dylib"
               chmod u+w "$STAGE/libonnxruntime.dylib"
-              install_name_tool -id "@loader_path/libonnxruntime.dylib" "$STAGE/libonnxruntime.dylib"
+              if [[ "$TARGET" == "x86_64-apple-darwin" ]]; then
+                install_name_tool -id "@loader_path/libonnxruntime.dylib" "$STAGE/libonnxruntime.dylib"
+                codesign --force -s - "$STAGE/libonnxruntime.dylib" || true
+              fi
+              # Microsoft's runtime links only system frameworks, so the one file is the
+              # whole closure; arm64 kills a dlopen of an unsigned library. ~keep
               deps="$(otool -L "$STAGE/libonnxruntime.dylib" | tail -n +3 | awk '{print $1}' \
                 | grep -E '^(/opt/homebrew|/usr/local)/' || true)"
               if [[ -n "$deps" ]]; then
                 echo "::error::vendored ONNX Runtime links non-system libraries:"; echo "$deps"; exit 1
               fi
-              codesign --force -s - "$STAGE/libonnxruntime.dylib" || true
+              if ! codesign --verify --strict "$STAGE/libonnxruntime.dylib"; then
+                codesign --force -s - "$STAGE/libonnxruntime.dylib"
+                codesign --verify --strict "$STAGE/libonnxruntime.dylib"
+              fi
             fi
-            # macOS CLI builds enable the formats feature, which dynamically
-            # links libheif. Bundle its complete non-system dylib closure next to
-            # the binary and rewrite load commands to @loader_path so the tarball
-            # is self-contained rather than carrying an absolute Homebrew libheif
-            # path that is absent on users' machines (xberg-io/xberg#1357). The
-            # dlopen'd ONNX Runtime dylib (Intel, handled above) is not a link-time
-            # dependency, so this closure walk does not disturb it.
+            if [[ "$TARGET" == *-unknown-linux-gnu ]]; then
+              cp -L "${ORT_VENDOR_LIB:?}" "$STAGE/libonnxruntime.so"
+              missing="$(ldd "$STAGE/libonnxruntime.so" | grep -F 'not found' || true)"
+              if [[ -n "$missing" ]]; then
+                echo "::error::vendored ONNX Runtime has unresolved dependencies:"; echo "$missing"; exit 1
+              fi
+            fi
+            # heic-dynamic opens libheif on the first HEIF decode, from beside the executable
+            # (ADR-0019), so the binary must not link it and the closure walk below no longer
+            # reaches it. Ship the library pkg-config resolves, the one libheif-sys built against,
+            # and vendor its codec closure beside it. ~keep
+            if grep -qi libheif <<<"$linked"; then
+              echo "::error::xberg links libheif at load time; the heic-dynamic build must not"
+              echo "$linked"
+              exit 1
+            fi
+            heif_libdir="$(pkg-config --variable=libdir libheif)"
+            if [[ "$TARGET" == *-apple-darwin ]]; then
+              cp -L "$heif_libdir/libheif.1.dylib" "$STAGE/libheif.1.dylib"
+              chmod u+w "$STAGE/libheif.1.dylib"
+              bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/libheif.1.dylib"
+            else
+              cp -L "$heif_libdir/libheif.so.1" "$STAGE/libheif.so.1"
+              chmod u+w "$STAGE/libheif.so.1"
+              bash scripts/ci/vendor-native-closure.sh "$STAGE/libheif.so.1"
+            fi
+            # Bundle any remaining non-system dylib imports of the binary next to it
+            # and rewrite their load commands to @loader_path so the tarball is
+            # self-contained rather than carrying an absolute Homebrew path that is
+            # absent on users' machines (xberg-io/xberg#1357). The dlopen'd ONNX
+            # Runtime and libheif are not link-time dependencies, so this closure
+            # walk does not disturb them.
             if [[ "$TARGET" == *-apple-darwin ]]; then
               bash scripts/ci/vendor-native-closure-macos.sh "$STAGE/xberg"
               "$STAGE/xberg" --version
             fi
-            # Linux CLI builds enable the formats feature, which dynamically
-            # links libheif. Ship its complete non-system dependency closure.
+            # Ship the complete non-system dependency closure of the Linux binary.
             if [[ "$TARGET" == *-unknown-linux-gnu ]]; then
               bash scripts/ci/vendor-native-closure.sh "$STAGE/xberg"
-              compgen -G "$STAGE/libheif.so*" >/dev/null
               env -u LD_LIBRARY_PATH "$STAGE/xberg" --version
             fi
+            bash scripts/ci/smoke-cli-heif.sh "$STAGE"
+            bash scripts/ci/smoke-cli-ort.sh "$STAGE"
             tar -czf "${STAGE}.tar.gz" "$STAGE"
           fi
 

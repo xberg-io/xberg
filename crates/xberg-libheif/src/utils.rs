@@ -2,7 +2,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 
-use libheif_sys as lh;
+use crate::lh;
 
 use crate::{FileTypeResult, HeifError, HeifErrorCode, HeifErrorSubCode, Result};
 
@@ -59,11 +59,16 @@ pub(crate) fn get_non_null_ptr<T>(ptr: *mut T) -> Result<std::ptr::NonNull<T>> {
 
 /// Check a file type by it first bytes.
 /// Input data should be at least 12 bytes.
+///
+/// Returns [`FileTypeResult::No`] when libheif cannot be loaded (`dynamic` feature): nothing can
+/// be read then.
 #[allow(unsafe_code)]
 pub fn check_file_type(data: &[u8]) -> FileTypeResult {
     // SAFETY: `data` is a live slice and libheif bounds its reads with the length passed beside the
     // pointer: it returns before reading anything below 8 bytes and reads the brand only at 12
     // or more.
-    let res = unsafe { lh::heif_check_filetype(data.as_ptr(), data.len() as _) };
-    FileTypeResult::n(res).unwrap_or(FileTypeResult::No)
+    match unsafe { lh::heif_check_filetype(data.as_ptr(), data.len() as _) } {
+        Ok(res) => FileTypeResult::n(res).unwrap_or(FileTypeResult::No),
+        Err(_) => FileTypeResult::No,
+    }
 }

@@ -1072,3 +1072,74 @@ fn a_form_chain_that_doubles_at_each_level_stops_the_walk_without_a_verdict() {
     let doc = raster_page_with_forms("/Fp Do /Ft Do /F0 Do", &forms);
     assert_eq!(glyph_share_over_full_page_picture(&doc, 0), None);
 }
+
+/// A one-page PDF, 200x200, painting a 150x150 image (56% coverage, over the scoring floor) and
+/// then `text_ops`.
+fn image_and_text_page(text_ops: &str) -> Vec<u8> {
+    fn stream(dict: &str, data: &[u8]) -> Vec<u8> {
+        let mut body = format!("<<{dict} /Length {}>>\nstream\n", data.len()).into_bytes();
+        body.extend_from_slice(data);
+        body.extend_from_slice(b"\nendstream");
+        body
+    }
+    let content = format!("q 150 0 0 150 25 25 cm /Im0 Do Q {text_ops}");
+    let pixels: Vec<u8> = (0..150 * 150 * 3).map(|i| (i % 251) as u8).collect();
+    let bodies = [
+        b"<</Type /Catalog /Pages 2 0 R>>".to_vec(),
+        b"<</Type /Pages /Kids [3 0 R] /Count 1>>".to_vec(),
+        b"<</Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources \
+           <</XObject <</Im0 5 0 R>> /Font <</F1 <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>>>>>>>"
+            .to_vec(),
+        stream("", content.as_bytes()),
+        stream(
+            "/Type /XObject /Subtype /Image /Width 150 /Height 150 /ColorSpace /DeviceRGB /BitsPerComponent 8",
+            &pixels,
+        ),
+    ];
+    let mut buf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, body) in bodies.iter().enumerate() {
+        offsets.push(buf.len());
+        buf.extend_from_slice(format!("{} 0 obj\n", index + 1).as_bytes());
+        buf.extend_from_slice(body);
+        buf.extend_from_slice(b"\nendobj\n");
+    }
+    let xref_offset = buf.len();
+    let total_objs = bodies.len() + 1;
+    buf.extend_from_slice(format!("xref\n0 {total_objs}\n0000000000 65535 f \n").as_bytes());
+    for off in &offsets {
+        buf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    buf.extend_from_slice(format!("trailer\n<</Size {total_objs} /Root 1 0 R>>\n").as_bytes());
+    buf.extend_from_slice(format!("startxref\n{xref_offset}\n%%EOF\n").as_bytes());
+    buf
+}
+
+/// `page_signals` reads the text layer through `scan_text_signals` and the codec from its own
+/// image handles; what it reports must equal what it built from `classify_page` before.
+#[test]
+fn page_signals_equal_the_signals_classify_page_reports() {
+    for text_ops in [
+        "BT /F1 12 Tf 20 185 Td (A running header over a scanned sheet) Tj ET",
+        "BT 3 Tr /F1 12 Tf 20 100 Td (An invisible OCR sidecar line of text) Tj ET",
+        "",
+    ] {
+        let doc = PdfDocument::from_bytes(image_and_text_page(text_ops)).expect("fixture must open");
+        let classified = doc.classify_page(0).expect("classify_page must succeed").signals;
+        let coverage = page_raster_geometry(&doc, 0).expect("the page has an image").coverage;
+        let expected = PageScanSignals {
+            image_coverage: coverage,
+            invisible_text_ratio: classified.invisible_text_ratio,
+            glyph_count: classified.text_glyph_count,
+            text_area_ratio: classified.text_area_ratio,
+            codec: classified.codec,
+            producer_prior: classified.producer_prior,
+        };
+
+        let signals = page_signals(&doc, 0);
+
+        assert_eq!(signals, Some(expected), "{text_ops:?}");
+        assert!(coverage >= IMAGE_COVERAGE_MIN, "fixture must reach the text-layer read");
+        assert_eq!(classified.codec, ImageCodecClass::Other);
+    }
+}

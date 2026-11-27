@@ -311,6 +311,45 @@ fn test_elements_and_document_nodes_agree_on_heading_level() {
     );
 }
 
+/// The record marker is internal; a public group keeps only a source label.
+#[test]
+fn test_record_groups_reach_document_structure_without_the_record_label() {
+    let mut builder = crate::types::internal_builder::InternalDocumentBuilder::new("json");
+    builder.push_record_start();
+    builder.push_paragraph("first", vec![], None, None);
+    builder.push_group_end();
+    builder.push_record_start();
+    builder.push_paragraph("second", vec![], None, None);
+    builder.push_group_end();
+    builder.push_group_start(Some("aside"), None);
+    builder.push_paragraph("third", vec![], None, None);
+    builder.push_group_end();
+    let mut doc = builder.build();
+
+    resolve_relationships(&mut doc);
+    let ds = derive_document_structure_inner(&mut doc);
+    assert!(ds.validate().is_ok(), "validation: {:?}", ds.validate());
+
+    let groups: Vec<(Option<&str>, Option<&std::collections::HashMap<String, String>>)> = ds
+        .body_roots()
+        .map(|(_, node)| match &node.content {
+            NodeContent::Group { label, .. } => (label.as_deref(), node.attributes.as_ref()),
+            other => panic!("expected a group, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(groups.len(), 3);
+    assert_eq!(groups[0], (None, None));
+    assert_eq!(groups[1], (None, None));
+    assert_eq!(groups[2].0, Some("aside"));
+    assert!(
+        ds.nodes.iter().all(|node| node
+            .attributes
+            .as_ref()
+            .is_none_or(|a| !a.values().any(|v| v == "xberg:record"))),
+        "no node carries the record marker"
+    );
+}
+
 #[test]
 fn test_group_end_closes_layout_group_beneath_heading() {
     let mut doc = make_doc("pdf");

@@ -22,8 +22,9 @@ run_exact sceptre-ocr-ort,ort-dynamic \
   ort_discovery::runtime_route_tests::standalone_sceptre_preloads_before_reading_the_image
 run_exact auto-rotate,ort-dynamic \
   ort_discovery::runtime_route_tests::environment_preloads_for_consumers_without_sceptre
-for test in valid_explicit_path_takes_precedence_over_an_invalid_candidate \
-  missing_candidate_leaves_bare_name_to_the_loader discovered_runtime_loads_without_overwriting_the_environment \
+for test in missing_explicit_library_fails_instead_of_loading_a_discovered_one \
+  library_consumers_fall_back_to_the_platform_library_search_path \
+  discovered_runtime_loads_without_overwriting_the_environment \
   broken_candidate_reports_a_typed_error_before_ort_initialization; do
   run_exact sceptre-ocr-ort,ort-dynamic "ort_discovery::dynamic_sceptre_tests::$test"
 done

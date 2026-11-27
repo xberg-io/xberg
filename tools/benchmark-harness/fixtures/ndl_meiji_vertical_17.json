@@ -1,0 +1,20 @@
+{
+  "document": "../../../test_documents/images/ndl_meiji_vertical_17.jpg",
+  "file_type": "jpg",
+  "file_size": 5031850,
+  "expected_frameworks": ["xberg"],
+  "metadata": {
+    "description": "NDL Meiji-era vertical Japanese page",
+    "category": "image-ocr-realgt",
+    "dataset": "ndl-pdm-ocr",
+    "requires_ocr": true,
+    "languages": ["ja"],
+    "ocr_language": "jpn_vert",
+    "text_orientation": "vertical"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/jpg/ndl_meiji_vertical_17.txt",
+    "markdown_file": "../../../test_documents/ground_truth/jpg/ndl_meiji_vertical_17.md",
+    "source": "manual"
+  }
+}

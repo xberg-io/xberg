@@ -12,6 +12,7 @@
     "unstructured"
   ],
   "metadata": {
+    "family": "complex_document",
     "description": "Complex table image - 28KB PNG with detailed table structure",
     "category": "image-table",
     "size_class": "small",
