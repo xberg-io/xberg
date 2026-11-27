@@ -2581,21 +2581,36 @@ const MIN_COLUMN_WRAPS_FOR_PROSE: usize = 2;
 /// Words a cell needs before its unpunctuated end reads as a wrapped line, not a label: the shortest
 /// wrapped line on the nougat_005 pages is three words.
 const MIN_WRAPPED_LINE_WORDS: usize = 3;
-/// Longest parenthesised tail, in characters, that reads as a unit or qualifier closing an item
-/// (`(m 2 )`, `(acre-ft/yr)`) rather than a citation or an aside.
-const MAX_UNIT_TAIL_CHARS: usize = 14;
+/// Longest bracketed tail, in characters, that reads as a unit or qualifier closing an item. Anchors:
+/// `(acre-ft/yr)` (11) and `(thousands of dollars)` (21) are units; `(see Fig. 2)` and `(Smith et al.)`
+/// are asides and are told apart by shape below, not by length.
+const MAX_UNIT_TAIL_CHARS: usize = 24;
+/// Most words in a unit tail: `(US dollars, millions)` is two, `(thousands of dollars)` three.
+const MAX_UNIT_TAIL_WORDS: usize = 4;
 
-/// Whether `cell` ends in a short parenthesised unit such as `square meter (m 2 )`: a finished
-/// item, not a line cut mid-sentence. A citation (`[12]`, `(2020)`) or a longer aside is not.
+/// Whether `cell` ends in a short bracketed unit such as `square meter (m 2 )`, `[kPa]` or `(%)`: a
+/// finished item, not a line cut mid-sentence. A citation (`[12]`, `(2020)`, `(Smith, 2020)`) or an
+/// aside (`(see Fig. 2)`, `(Smith et al.)`) is not: it has no letters, a year, a full stop or a
+/// pointer word, and the sentence runs on.
 fn ends_with_unit_tail(cell: &str) -> bool {
-    let Some(inner) = cell
-        .strip_suffix(')')
-        .and_then(|head| head.rsplit_once('('))
-        .map(|(_, tail)| tail)
-    else {
+    let Some(inner) = [(')', '('), (']', '[')].into_iter().find_map(|(close, open)| {
+        cell.strip_suffix(close)
+            .and_then(|head| head.rsplit_once(open))
+            .map(|(_, tail)| tail)
+    }) else {
         return false;
     };
-    inner.chars().count() <= MAX_UNIT_TAIL_CHARS && !inner.contains(',') && inner.chars().any(|c| c.is_alphabetic())
+    let has_year = inner
+        .as_bytes()
+        .windows(4)
+        .any(|window| window.iter().all(u8::is_ascii_digit));
+    let pointer = ["see ", "cf ", "e.g", "i.e"].iter().any(|word| inner.starts_with(word));
+    inner.chars().count() <= MAX_UNIT_TAIL_CHARS
+        && inner.split_whitespace().count() <= MAX_UNIT_TAIL_WORDS
+        && inner.chars().any(|c| c.is_alphabetic() || c == '%')
+        && !inner.contains('.')
+        && !has_year
+        && !pointer
 }
 
 /// The row transitions at which `column` continues a sentence from one data row into the next: a
@@ -2619,29 +2634,22 @@ fn column_wrap_rows(data_rows: &[Vec<String>], column: usize) -> Vec<usize> {
 
 /// How many columns wrap their own sentences down the rows, independently of one another.
 ///
-/// A wrapped record puts the continuation of each long cell on one row and leaves its key column
-/// empty there, so the wraps of one column fall on transitions another column wraps at, beside a
-/// blank cell. Prose columns run on separate lines, each wrapping at rows the others do not, or
-/// wrap together with text in every column: such a transition counts for each column that wraps.
+/// A wrapped record continues each long cell on the next line and stops there, and the cells of one
+/// record do so on the same transition: two or more columns wrap at a transition and none of them
+/// wraps again at the next. Prose columns run on across consecutive lines, so their wraps chain, or
+/// fall on rows the other columns do not wrap at. A transition shared by columns that all stop after
+/// one continuation line counts for none of them. Trade-off: two aligned prose columns whose
+/// paragraphs are all exactly two lines long read as a table.
 fn independent_wrapping_columns(data_rows: &[Vec<String>], columns: usize) -> usize {
     let all_wraps: Vec<Vec<usize>> = (0..columns).map(|column| column_wrap_rows(data_rows, column)).collect();
-    let record_wrap = |row: usize, column: usize| {
-        let shared = all_wraps
-            .iter()
-            .enumerate()
-            .any(|(other, rows)| other != column && rows.contains(&row));
-        shared
-            && data_rows.get(row + 1).is_some_and(|below| {
-                (0..columns).any(|key| {
-                    !all_wraps[key].contains(&row) && below.get(key).is_none_or(|cell| cell.trim().is_empty())
-                })
-            })
+    let record_wrap = |row: usize| {
+        let sharers: Vec<&Vec<usize>> = all_wraps.iter().filter(|rows| rows.contains(&row)).collect();
+        sharers.len() >= 2 && sharers.iter().all(|rows| !rows.contains(&(row + 1)))
     };
     all_wraps
         .iter()
-        .enumerate()
-        .filter(|(_, rows)| rows.len() >= MIN_COLUMN_WRAPS_FOR_PROSE)
-        .filter(|(column, rows)| rows.iter().any(|&row| !record_wrap(row, *column)))
+        .filter(|rows| rows.len() >= MIN_COLUMN_WRAPS_FOR_PROSE)
+        .filter(|rows| rows.iter().any(|&row| !record_wrap(row)))
         .count()
 }
 
@@ -4665,7 +4673,59 @@ mod tests {
             .iter()
             .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
             .collect();
-        assert_eq!(independent_wrapping_columns(&table, 2), 2);
+        assert_eq!(column_wrap_rows(&table, 0), vec![0, 2]);
+        assert_eq!(column_wrap_rows(&table, 1), vec![0, 2]);
+    }
+
+    #[test]
+    fn unit_tails_are_told_from_citations_and_asides() {
+        for unit in [
+            "square meter (m 2 )",
+            "pressure [kPa]",
+            "flow [m3/s]",
+            "income (thousands of dollars)",
+            "income (US dollars, millions)",
+            "share (%)",
+        ] {
+            assert!(ends_with_unit_tail(unit), "{unit}");
+        }
+        for aside in [
+            "as shown in [12]",
+            "measured in (2020)",
+            "as reported (Smith, 2020)",
+            "discussed above (see Fig. 2)",
+            "reported earlier (Smith et al.)",
+            "ends without a bracket",
+        ] {
+            assert!(!ends_with_unit_tail(aside), "{aside}");
+        }
+    }
+
+    /// An all-text record table: every cell of a record wraps onto one more line, in lock step.
+    #[test]
+    fn an_all_text_record_table_with_every_cell_wrapping_stays_a_table() {
+        let rows: [[&str; 3]; 7] = [
+            ["Term", "Definition", "Remarks"],
+            [
+                "Freight",
+                "Carriage of the goods from the port",
+                "Charged per container unless the",
+            ],
+            ["", "to the warehouse in two loads", "carrier agrees a flat rate"],
+            [
+                "Storage",
+                "Bonded storage for the first month",
+                "Billed daily after the first week",
+            ],
+            ["", "at the agreed rate", "at a reduced weekend rate"],
+            ["Insurance", "Cover for the declared value.", "Optional."],
+            ["Handling", "Loading and unloading.", "Included."],
+        ];
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        assert_eq!(independent_wrapping_columns(&table[1..], 3), 0);
     }
 
     #[test]
