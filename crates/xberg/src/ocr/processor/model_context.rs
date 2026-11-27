@@ -458,6 +458,19 @@ fn model_read_error(path: &std::path::Path, error: impl std::fmt::Display) -> Oc
     ))
 }
 
+/// Make the file at `path` unreadable while it stays a regular file, or return false (the caller
+/// skips) where that cannot be arranged: off Unix, or for a user whose reads ignore permissions.
+#[cfg(test)]
+pub(super) fn make_unreadable(path: &std::path::Path) -> bool {
+    #[cfg(unix)]
+    std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+    let unreadable = cfg!(unix) && std::fs::File::open(path).is_err();
+    if !unreadable {
+        eprintln!("SKIP: cannot make {} unreadable", path.display());
+    }
+    unreadable
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -608,10 +621,12 @@ mod tests {
         cacheability::scope(async {
             let root = tempfile::tempdir().unwrap();
             let directory = root.path().to_str().unwrap().to_owned();
-            for name in ["eng", "osd", "chi_sim"] {
+            for name in ["eng", "osd", "chi_sim", "khm"] {
                 std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
             }
-            std::fs::create_dir(root.path().join("khm.traineddata")).unwrap();
+            if !make_unreadable(&root.path().join("khm.traineddata")) {
+                return;
+            }
             script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
                 let config = TesseractConfig {
                     psm: 3,
@@ -702,10 +717,9 @@ mod tests {
             for name in ["eng", "osd", "khm"] {
                 std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
             }
-            if fail_at_selection {
-                std::fs::create_dir(&han).unwrap();
-            } else {
-                std::fs::write(&han, b"Han revision one").unwrap();
+            std::fs::write(&han, b"Han revision one").unwrap();
+            if fail_at_selection && !make_unreadable(&han) {
+                return;
             }
             script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
                 let config = TesseractConfig {
