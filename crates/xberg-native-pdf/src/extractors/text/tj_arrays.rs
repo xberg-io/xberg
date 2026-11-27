@@ -274,7 +274,10 @@ impl<'doc> TextExtractor<'doc> {
         // Copy state data to avoid holding reference while borrowing self mutably ~keep
         let font_size = self.state_stack.current().font_size;
         let horizontal_scaling = self.state_stack.current().horizontal_scaling / 100.0;
-        let font_name = self.state_stack.current().font_name.clone();
+        // Only Primary detection reads the character array, so only it pays to fill it. ~keep
+        let font_name = (self.word_boundary_mode == WordBoundaryMode::Primary)
+            .then(|| self.state_stack.current().font_name.clone())
+            .flatten();
         let char_space = self.state_stack.current().char_space;
         let word_space = self.state_stack.current().word_space;
 
@@ -317,7 +320,8 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// Track per-character info for one `TJ` show-string element and append
-    /// it to the accumulating buffer. Split out of
+    /// it to the accumulating buffer. `font_name` is the font to track
+    /// characters in, or `None` to track none. Split out of
     /// [`Self::process_tj_array_tiebreaker`] to keep it short. ~keep
     fn process_tj_string_element(
         &mut self,

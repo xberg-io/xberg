@@ -107,6 +107,15 @@ fn primary_nonempty_fallback_uses_the_same_postrecord_lead_classification() {
 }
 
 #[test]
+fn tiebreaker_tracks_no_characters_for_primary_detection() {
+    let mut extractor = adaptive_extractor(WordBoundaryMode::Tiebreaker, "-0.1 -0.1 (x)");
+    assert!(extractor.tj_character_array.is_empty());
+    finish_lead(&mut extractor, -0.5);
+    assert!(extractor.tj_character_array.is_empty());
+    assert!(extractor.spans.iter().any(|span| span.text == "def"));
+}
+
+#[test]
 fn primary_detected_boundaries_do_not_preview_an_offset_that_will_not_be_recorded() {
     let mut extractor = adaptive_extractor(WordBoundaryMode::Primary, "-0.1 -0.1 (x y)");
     let history = extractor.tj_offset_history.clone();
