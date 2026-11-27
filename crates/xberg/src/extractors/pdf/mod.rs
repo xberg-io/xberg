@@ -723,8 +723,35 @@ fn normalized_pdf_tokens(text: &str) -> impl Iterator<Item = String> + '_ {
         .filter(|word| word.chars().any(char::is_alphanumeric))
 }
 
+/// `text` without its `$..$` and `$$..$$` math. The native text and the structured elements each
+/// rebuild a formula from its glyphs and write different TeX, so its tokens never match across the
+/// two; a page of formulas would otherwise read as text the structure dropped. A lone `$` opens no
+/// math, so a price keeps its words.
+fn without_math_spans(text: &str) -> String {
+    let mut kept = String::with_capacity(text.len());
+    let mut remaining = text;
+    while let Some(start) = remaining.find('$') {
+        kept.push_str(&remaining[..start]);
+        let after = &remaining[start..];
+        let delimiter = if after.starts_with("$$") { "$$" } else { "$" };
+        let body = &after[delimiter.len()..];
+        match body.find(delimiter) {
+            Some(end) => {
+                kept.push(' ');
+                remaining = &body[end + delimiter.len()..];
+            }
+            None => {
+                kept.push_str(after);
+                return kept;
+            }
+        }
+    }
+    kept.push_str(remaining);
+    kept
+}
+
 fn structured_native_token_coverage(document: &InternalDocument, native_text: &str) -> Option<f64> {
-    let native_tokens = normalized_pdf_tokens(native_text).collect::<Vec<_>>();
+    let native_tokens = normalized_pdf_tokens(&without_math_spans(native_text)).collect::<Vec<_>>();
     if native_tokens.len() < MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE {
         return None;
     }

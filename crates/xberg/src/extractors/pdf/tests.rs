@@ -688,6 +688,54 @@ fn should_fall_back_when_words_are_missing_despite_ignored_bullet_glyphs() {
     assert_eq!(selected.elements[0].text, native_text);
 }
 
+fn words_text(count: usize) -> String {
+    (0..count)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A page of equations: the native text writes each as `$$..$$` TeX the structure rebuilt another way.
+#[test]
+fn should_keep_structure_when_native_text_only_adds_its_own_math_tokens() {
+    let words = words_text(MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE);
+    let equations = (0..MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE)
+        .map(|index| format!("$$({index}x+1)(x-{index})(x^{{2}}+3)$$"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let native_text = format!("{words} {equations}");
+    let mut structured = InternalDocument::new("pdf");
+    structured.push_element(InternalElement::text(ElementKind::Paragraph, words, 0));
+
+    let (_, is_structured) = select_native_pdf_document(&native_text, "application/pdf", Some(structured), None);
+
+    assert!(is_structured);
+}
+
+/// The same page with prose words missing from the structure still falls back to the native text.
+#[test]
+fn should_fall_back_when_prose_is_missing_beside_native_math() {
+    let words = words_text(MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE);
+    let native_text = format!("{words} $$x^{{2}}+1$$");
+    let mut structured = InternalDocument::new("pdf");
+    structured.push_element(InternalElement::text(
+        ElementKind::Paragraph,
+        words_text(MIN_NATIVE_TOKENS_FOR_STRUCTURE_COVERAGE / 2),
+        0,
+    ));
+
+    let (_, is_structured) = select_native_pdf_document(&native_text, "application/pdf", Some(structured), None);
+
+    assert!(!is_structured);
+}
+
+/// A lone `$` (a price) opens no math: the words after it still count.
+#[test]
+fn should_count_words_after_an_unpaired_dollar() {
+    assert_eq!(without_math_spans("cost $5 and more"), "cost $5 and more");
+    assert_eq!(without_math_spans("a $x^{2}$ b $$y$$ c"), "a   b   c");
+}
+
 #[test]
 fn should_count_table_cells_as_structured_native_text() {
     let native_text = coverage_native_text();
