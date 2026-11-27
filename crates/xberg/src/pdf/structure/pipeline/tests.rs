@@ -8532,6 +8532,15 @@ fn test_blocks_to_paragraphs_separates_rotated_body_from_upright_footer() {
 }
 
 #[test]
+fn assign_ascii_lowercase_replaces_the_previous_contents() {
+    let mut buffer = String::from("a longer earlier word");
+    for text in ["Relief", "CAFÉ", "", "ǅ-Mixed"] {
+        assign_ascii_lowercase(&mut buffer, text);
+        assert_eq!(buffer, text.to_ascii_lowercase(), "{text:?}");
+    }
+}
+
+#[test]
 fn trim_owned_matches_str_trim() {
     for text in [
         "plain",

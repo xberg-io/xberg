@@ -8806,6 +8806,7 @@ fn collect_hyphen_witnesses(all_page_segments: &[Vec<SegmentData>]) -> HyphenWit
 /// token. A hyphen that ends its token (a wrap hyphen before a break) has no right-hand
 /// letters and so never witnesses itself.
 pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesses) {
+    let mut pair = (String::new(), String::new());
     for word in text.split_whitespace() {
         let mut parts = word.split(is_word_hyphen);
         let Some(mut left) = parts.next() else {
@@ -8817,7 +8818,11 @@ pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesse
             if left_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
                 && right_run.chars().count() >= MIN_HYPHEN_WITNESS_WORD_LEN
             {
-                witnesses.insert((left_run.to_ascii_lowercase(), right_run.to_ascii_lowercase()));
+                assign_ascii_lowercase(&mut pair.0, left_run);
+                assign_ascii_lowercase(&mut pair.1, right_run);
+                if !witnesses.contains(&pair) {
+                    witnesses.insert(pair.clone());
+                }
             }
             left = right;
         }
@@ -8840,32 +8845,43 @@ pub(crate) fn record_hyphen_witnesses(text: &str, witnesses: &mut HyphenWitnesse
 /// [`collect_hyphen_witnesses`]. ~keep
 fn collect_word_witnesses(all_page_segments: &[Vec<SegmentData>]) -> WordWitnesses {
     let mut witnesses = WordWitnesses::default();
+    let mut lowercase = String::new();
     for segment in all_page_segments.iter().flatten() {
-        let cores: Vec<&str> = segment
+        let mut cores = segment
             .text
             .split_whitespace()
             .map(|token| token.trim_matches(|c: char| !c.is_alphabetic()))
-            .collect();
-        for index in 0..cores.len() {
-            let core = cores[index];
+            .peekable();
+        let mut previous: Option<&str> = None;
+        while let Some(core) = cores.next() {
+            let preceding = previous.replace(core);
             if core.chars().count() < MIN_LIGATURE_WITNESS_WORD_LEN {
                 continue;
             }
             let is_left_of_candidate = core.ends_with('f')
                 && cores
-                    .get(index + 1)
+                    .peek()
                     .and_then(|next| next.chars().next())
                     .is_some_and(|c| matches!(c, 'i' | 'l' | 'f'));
-            let is_right_of_candidate = index > 0
-                && cores[index - 1].ends_with('f')
+            let is_right_of_candidate = preceding.is_some_and(|before| before.ends_with('f'))
                 && core.chars().next().is_some_and(|c| matches!(c, 'i' | 'l' | 'f'));
             if is_left_of_candidate || is_right_of_candidate {
                 continue;
             }
-            witnesses.insert(core.to_ascii_lowercase());
+            assign_ascii_lowercase(&mut lowercase, core);
+            if !witnesses.contains(lowercase.as_str()) {
+                witnesses.insert(lowercase.clone());
+            }
         }
     }
     witnesses
+}
+
+/// Overwrite `buffer` with `text.to_ascii_lowercase()`, keeping its allocation.
+fn assign_ascii_lowercase(buffer: &mut String, text: &str) {
+    buffer.clear();
+    buffer.push_str(text);
+    buffer.make_ascii_lowercase();
 }
 
 /// A hyphen that can end a wrapped line: ASCII `-`, U+2010 HYPHEN and U+2011
