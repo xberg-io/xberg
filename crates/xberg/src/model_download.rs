@@ -1272,9 +1272,16 @@ pub(crate) fn verify_sha256(path: &Path, expected: &str, label: &str) -> Result<
         && file
             .metadata()
             .is_ok_and(|metadata| VerifiedStamp::of(&metadata).as_ref() == Some(&stamp))
-        && stamp.reusable()
     {
-        remember_verified(path, stamp, hash_hex);
+        let reusable = stamp.reusable();
+        remember_verified(
+            path,
+            Verified {
+                stamp,
+                sha256: hash_hex,
+                reusable,
+            },
+        );
     }
 
     tracing::debug!(label, "Checksum verified");
@@ -1340,13 +1347,24 @@ const VERIFIED_STAMP_SETTLE: Duration = Duration::from_secs(2);
 #[cfg(model_download)]
 const MAX_VERIFIED_FILES: usize = 256;
 
-/// The stamp and lowercase hex SHA-256 of each file [`verify_sha256`] hashed successfully, by
-/// path. In memory only, for the reason [`pinned_file`]'s record is: whoever can write the
-/// cache could write a record on disk, so every process hashes a model once before using it.
+/// A file [`verify_sha256`] hashed successfully and that did not change while it was hashed.
 #[cfg(model_download)]
-static VERIFIED_FILES: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<PathBuf, (VerifiedStamp, String)>>,
-> = std::sync::LazyLock::new(Default::default);
+#[derive(Debug)]
+struct Verified {
+    stamp: VerifiedStamp,
+    /// Lowercase hex SHA-256 of the hashed contents.
+    sha256: String,
+    /// Whether a repeat check may skip the hash, judged when the file was hashed. A record that
+    /// may not is still the stamp a [`VerifiedSnapshot`] compares against.
+    reusable: bool,
+}
+
+/// The last successful check of each file [`verify_sha256`] hashed, by path. In memory only,
+/// for the reason [`pinned_file`]'s record is: whoever can write the cache could write a record
+/// on disk, so every process hashes a model once before using it.
+#[cfg(model_download)]
+static VERIFIED_FILES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<PathBuf, Verified>>> =
+    std::sync::LazyLock::new(Default::default);
 
 #[cfg(model_download)]
 fn verified_earlier(path: &Path, metadata: &std::fs::Metadata, expected: &str) -> bool {
@@ -1357,26 +1375,68 @@ fn verified_earlier(path: &Path, metadata: &std::fs::Metadata, expected: &str) -
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(path)
-        .is_some_and(|(seen, sha256)| *seen == stamp && sha256 == expected)
+        .is_some_and(|seen| seen.reusable && seen.stamp == stamp && seen.sha256 == expected)
 }
 
 #[cfg(model_download)]
-fn remember_verified(path: &Path, stamp: VerifiedStamp, sha256: String) {
+fn remember_verified(path: &Path, verified: Verified) {
     let mut files = VERIFIED_FILES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    insert_verified(&mut files, path, stamp, sha256);
+    insert_verified(&mut files, path, verified);
 }
 
 #[cfg(model_download)]
-fn insert_verified(
-    files: &mut std::collections::HashMap<PathBuf, (VerifiedStamp, String)>,
-    path: &Path,
-    stamp: VerifiedStamp,
-    sha256: String,
-) {
+fn insert_verified(files: &mut std::collections::HashMap<PathBuf, Verified>, path: &Path, verified: Verified) {
     if files.len() >= MAX_VERIFIED_FILES && !files.contains_key(path) {
         files.clear();
     }
-    files.insert(path.to_path_buf(), (stamp, sha256));
+    files.insert(path.to_path_buf(), verified);
+}
+
+/// A model file a loader is about to open by path, stamped as [`verify_sha256`] last verified
+/// it, so the caller can confirm once the load is done that the loader read verified bytes.
+///
+/// The stamp recorded at verification exposes a change at any point since: on Unix through the
+/// device, inode and change time, elsewhere through size and modification time only, which a
+/// same-size rewrite restoring the modification time keeps. A file with no record (never
+/// verified, or forgotten when the memo was cleared) is stamped as it is now, which covers the
+/// load alone.
+#[cfg(model_download)]
+#[cfg_attr(not(paddle_ocr), allow(dead_code))]
+pub(crate) struct VerifiedSnapshot {
+    path: PathBuf,
+    stamp: Option<VerifiedStamp>,
+}
+
+#[cfg(model_download)]
+#[cfg_attr(not(paddle_ocr), allow(dead_code))]
+impl VerifiedSnapshot {
+    pub(crate) fn take(path: &Path) -> Self {
+        let recorded = VERIFIED_FILES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(path)
+            .map(|verified| verified.stamp.clone());
+        let stamp = recorded.or_else(|| current_stamp(path));
+        Self {
+            path: path.to_path_buf(),
+            stamp,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Whether the file still has the stamp taken; `false` when it could not be read either time.
+    pub(crate) fn unchanged_since_verified(&self) -> bool {
+        self.stamp.is_some() && current_stamp(&self.path) == self.stamp
+    }
+}
+
+#[cfg(model_download)]
+#[cfg_attr(not(paddle_ocr), allow(dead_code))]
+fn current_stamp(path: &Path) -> Option<VerifiedStamp> {
+    VerifiedStamp::of(&std::fs::metadata(path).ok()?)
 }
 
 /// Device, inode, size and nanosecond modification and change times of a file. A write,
@@ -1689,24 +1749,114 @@ mod verified_memo_tests {
         let path = dir.path().join("model.onnx");
         write_aged(&path, b"weights", HOUR);
         let stamp = VerifiedStamp::of(&std::fs::metadata(&path).unwrap()).unwrap();
+        let verified = |stamp| Verified {
+            stamp,
+            sha256: sha256(b"weights"),
+            reusable: true,
+        };
         let mut files = std::collections::HashMap::new();
         for index in 0..MAX_VERIFIED_FILES {
             let other = dir.path().join(format!("{index}.onnx"));
-            insert_verified(&mut files, &other, stamp.clone(), sha256(b"weights"));
+            insert_verified(&mut files, &other, verified(stamp.clone()));
         }
         assert_eq!(files.len(), MAX_VERIFIED_FILES);
 
-        insert_verified(
-            &mut files,
-            &dir.path().join("0.onnx"),
-            stamp.clone(),
-            sha256(b"weights"),
-        );
+        insert_verified(&mut files, &dir.path().join("0.onnx"), verified(stamp.clone()));
         assert_eq!(files.len(), MAX_VERIFIED_FILES, "a remembered file is updated in place");
 
-        insert_verified(&mut files, &path, stamp, sha256(b"weights"));
+        insert_verified(&mut files, &path, verified(stamp));
         assert_eq!(files.len(), 1);
         assert!(files.contains_key(&path));
+    }
+
+    #[test]
+    fn a_verified_file_left_alone_passes_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+
+        assert!(VerifiedSnapshot::take(&path).unchanged_since_verified());
+    }
+
+    #[test]
+    fn a_just_downloaded_file_left_alone_passes_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        std::fs::write(&path, b"weights").unwrap();
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+
+        assert!(VerifiedSnapshot::take(&path).unchanged_since_verified());
+    }
+
+    #[test]
+    fn a_file_changed_between_verification_and_load_fails_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+
+        write_aged(&path, b"other weights", HOUR);
+        let snapshot = VerifiedSnapshot::take(&path);
+
+        assert!(!snapshot.unchanged_since_verified());
+    }
+
+    #[test]
+    fn a_file_changed_during_the_load_fails_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+        let snapshot = VerifiedSnapshot::take(&path);
+
+        write_aged(&path, b"other weights", HOUR);
+
+        assert!(!snapshot.unchanged_since_verified());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_renamed_over_the_path_during_the_load_fails_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"verified weights", HOUR);
+        let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+        verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
+        let snapshot = VerifiedSnapshot::take(&path);
+
+        let sibling = dir.path().join("model.onnx.partial");
+        std::fs::write(&sibling, b"tampered weights").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&sibling)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        std::fs::rename(&sibling, &path).unwrap();
+
+        assert!(!snapshot.unchanged_since_verified());
+    }
+
+    #[test]
+    fn an_unrecorded_file_is_checked_from_when_its_load_began() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+        let snapshot = VerifiedSnapshot::take(&path);
+        assert!(snapshot.unchanged_since_verified());
+
+        write_aged(&path, b"other weights", HOUR);
+
+        assert!(!snapshot.unchanged_since_verified());
+    }
+
+    #[test]
+    fn a_missing_file_fails_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+
+        assert!(!VerifiedSnapshot::take(&path).unchanged_since_verified());
     }
 
     #[cfg(not(unix))]

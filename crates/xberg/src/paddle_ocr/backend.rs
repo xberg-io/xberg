@@ -113,6 +113,7 @@ fn session_options_pool_suffix(options: &crate::ort_options::OrtSessionOptions) 
 
 use crate::Result;
 use crate::core::config::OcrConfig;
+use crate::model_download::VerifiedSnapshot;
 use crate::ocr::conversion::{detailed_text_block_to_elements, elements_to_hocr_words};
 use crate::ocr::table::drop_document_elements_claimed_by_tables;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
@@ -372,6 +373,20 @@ struct EngineModels<'a> {
     det_model: &'a Path,
     cls_model: Option<&'a Path>,
     rec: &'a ResolvedRecModel,
+}
+
+/// Fails when a model file an engine just loaded is not the one whose checksum was verified.
+fn confirm_models_unchanged(loaded: &[VerifiedSnapshot]) -> Result<()> {
+    match loaded.iter().find(|model| !model.unchanged_since_verified()) {
+        Some(model) => Err(crate::XbergError::Ocr {
+            message: format!(
+                "PaddleOCR model {} changed while it was loaded: it no longer holds the verified contents",
+                model.path().display()
+            ),
+            source: None,
+        }),
+        None => Ok(()),
+    }
 }
 
 /// The engine a read uses: its pool key and the models it loads, both decided by the read's
@@ -975,6 +990,16 @@ impl PaddleOcrBackend {
         let det_model_path = Self::find_onnx_model(models.det_model)?;
         let cls_model_path = models.cls_model.map(Self::find_onnx_model).transpose()?;
         let rec_model_path = Self::find_onnx_model(&resolved.model_dir)?;
+        let loading: Vec<VerifiedSnapshot> = [
+            Some(det_model_path.as_path()),
+            cls_model_path.as_deref(),
+            Some(rec_model_path.as_path()),
+            Some(resolved.dict_file.as_path()),
+        ]
+        .into_iter()
+        .flatten()
+        .map(VerifiedSnapshot::take)
+        .collect();
         let det_model_path = det_model_path.to_str().ok_or_else(|| crate::XbergError::Ocr {
             message: "Invalid detection model path".to_string(),
             source: None,
@@ -1044,6 +1069,9 @@ impl PaddleOcrBackend {
                 });
             }
         }
+
+        // The engines open the model files by path, after the checksum was verified.
+        confirm_models_unchanged(&loading)?;
 
         tracing::info!(family, model_key = %resolved.model_key, "PaddleOCR engine initialized successfully");
         Ok(Arc::new(ocr_engine))
@@ -2740,6 +2768,26 @@ mod tests {
         assert_eq!(classified.pool_key, "v6/small/latin/cpu/ort/cls");
         assert_eq!(classified_models.cls_model, Some(Path::new("cls/model.onnx")));
         assert_eq!(classified_models.det_model, Path::new("det/model.onnx"));
+    }
+
+    #[test]
+    fn a_model_changed_after_verification_fails_engine_initialization() {
+        let dir = tempfile::tempdir().unwrap();
+        let det = dir.path().join("det.onnx");
+        let rec = dir.path().join("rec.onnx");
+        for (path, payload) in [(&det, b"det weights".as_slice()), (&rec, b"rec weights".as_slice())] {
+            std::fs::write(path, payload).unwrap();
+            let sha256 = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(payload));
+            crate::model_download::verify_sha256(path, &sha256, "model").unwrap();
+        }
+        let loading = || [VerifiedSnapshot::take(&det), VerifiedSnapshot::take(&rec)];
+        confirm_models_unchanged(&loading()).expect("unchanged models pass");
+
+        std::fs::write(&rec, b"tampered rec weights").unwrap();
+
+        let error = confirm_models_unchanged(&loading()).unwrap_err().to_string();
+        assert!(error.contains("changed while it was loaded"), "{error}");
+        assert!(error.contains("rec.onnx"), "{error}");
     }
 
     #[cfg(feature = "paddle-ocr-ort")]
