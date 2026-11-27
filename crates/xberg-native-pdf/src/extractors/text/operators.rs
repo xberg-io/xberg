@@ -626,7 +626,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
                 if state.fill_color_space != "DeviceRGB" {
-                    state.fill_color_space = "DeviceRGB".to_string();
+                    state.fill_color_space.clear();
+                    state.fill_color_space.push_str("DeviceRGB");
                 }
                 state.fill_color_rgb = (r, g, b);
             }
@@ -639,7 +640,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
                 if state.fill_color_space != "DeviceGray" {
-                    state.fill_color_space = "DeviceGray".to_string();
+                    state.fill_color_space.clear();
+                    state.fill_color_space.push_str("DeviceGray");
                 }
                 state.fill_color_rgb = (gray, gray, gray);
             }
@@ -651,7 +653,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.inside_excluded_ink = false;
                 let state = self.state_stack.current_mut();
                 if state.fill_color_space != "DeviceCMYK" {
-                    state.fill_color_space = "DeviceCMYK".to_string();
+                    state.fill_color_space.clear();
+                    state.fill_color_space.push_str("DeviceCMYK");
                 }
                 state.fill_color_cmyk = Some((c, m, y, k));
                 state.fill_color_rgb = cmyk_to_rgb(c, m, y, k);
