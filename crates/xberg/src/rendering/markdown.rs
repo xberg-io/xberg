@@ -133,7 +133,7 @@ pub(crate) fn render_markdown_observed(
     let mut nodes = tag_budget.as_deref().is_some_and(|budget| *budget > 0).then(Vec::new);
     lower_standard_inline_html(root, &arena, &mut nodes, tag_budget.as_deref_mut());
     if !doc.escape_markdown {
-        keep_text_tildes_unescaped(root, &arena);
+        keep_text_script_markers_unescaped(root, &arena);
     }
     keep_emphasis_asterisks(root, &arena);
 
@@ -223,20 +223,27 @@ fn keep_emphasis_asterisks<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
     }
 }
 
-/// ~keep Only constant tildes bypass escaping; code literals and every other text byte stay on their own AST paths.
-fn keep_text_tildes_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+/// ~keep Only the constant `~` and `^` script markers bypass escaping; code literals and every other text byte stay
+/// on their own AST paths. comrak 1.2 escapes `^` in Text while its superscript extension is on.
+fn keep_text_script_markers_unescaped<'a>(root: &'a AstNode<'a>, arena: &'a Arena<'a>) {
+    const MARKERS: [char; 2] = ['~', '^'];
     for node in root.descendants().collect::<Vec<_>>() {
         let text = match &node.data.borrow().value {
-            NodeValue::Text(text) if text.contains('~') => text.clone(),
+            NodeValue::Text(text) if text.contains(MARKERS) => text.clone(),
             _ => continue,
         };
-        for (index, part) in text.split('~').enumerate() {
-            if index > 0 {
-                node.insert_before(arena.alloc(AstNode::from(NodeValue::Raw("~".into()))));
+        let mut rest = &*text;
+        while !rest.is_empty() {
+            let end = rest.find(MARKERS).map_or(rest.len(), |i| i + 1);
+            let (chunk, tail) = rest.split_at(end);
+            let (plain, marker) = chunk.split_at(chunk.len() - usize::from(chunk.ends_with(MARKERS)));
+            if !plain.is_empty() {
+                node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(plain.to_string().into()))));
             }
-            if !part.is_empty() {
-                node.insert_before(arena.alloc(AstNode::from(NodeValue::Text(part.to_string().into()))));
+            if !marker.is_empty() {
+                node.insert_before(arena.alloc(AstNode::from(NodeValue::Raw(marker.into()))));
             }
+            rest = tail;
         }
         node.detach();
     }
@@ -495,6 +502,24 @@ mod tests {
     }
 
     #[test]
+    fn should_keep_issue_2275_table_carets_when_escaping_disabled() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_table_from_cells(&[vec!["Value".into()], vec!["10^9^/l".into()]], None, None);
+        let mut doc = builder.build();
+        doc.escape_markdown = false;
+        assert_eq!(render_markdown(&doc), "| Value |\n| --- |\n| 10^9^/l |\n");
+    }
+
+    #[test]
+    fn should_escape_issue_2275_literal_carets_by_default() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_table_from_cells(&[vec!["Value".into()], vec!["10^9^/l".into()]], None, None);
+        let doc = builder.build();
+        assert!(doc.escape_markdown);
+        assert_eq!(render_markdown(&doc), "| Value |\n| --- |\n| 10\\^9\\^/l |\n");
+    }
+
+    #[test]
     fn should_keep_issue_2275_prose_tildes_when_escaping_disabled() {
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_paragraph("H~2~O and ~literal~", vec![], None, None);
@@ -511,7 +536,7 @@ mod tests {
         doc.escape_markdown = false;
         let arena = Arena::new();
         let root = build_comrak_ast(&doc, &arena);
-        keep_text_tildes_unescaped(root, &arena);
+        keep_text_script_markers_unescaped(root, &arena);
         let mut raw_tokens = 0;
         for node in root.descendants() {
             match &node.data.borrow().value {

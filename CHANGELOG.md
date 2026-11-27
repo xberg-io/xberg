@@ -83,6 +83,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `chrono` with `jiff` for timestamps in `xberg`, `xberg-native-pdf` and `xberg-pdfium-render`, and drop calamine's `dates` feature and rmcp's default `chrono` feature. `PdfPageAnnotationCommon::set_creation_date` and `set_modification_date` in `xberg-pdfium-render` now take `jiff::Timestamp`. `chrono` remains only through `nom-exif` and `hf-hub` (RUSTSEC-2026-0543).
 - Upgrade `crawlberg` to 1.13.5 and `liter-llm` to 2.7.6, and `rmcp` to 3.12.
 
+### Fixed
+
+- Markdown tables from DOCX files no longer backslash-escape the `^` of superscript runs (`10^9^`) when `escape_markdown` is off, matching the subscript `~`. comrak 1.2 started escaping `^` in text.
+
 ## [1.5.4] - 2026-11-25
 
 ### Added
