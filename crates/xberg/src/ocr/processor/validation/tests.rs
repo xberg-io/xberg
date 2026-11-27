@@ -337,6 +337,39 @@ fn test_best_explicit_directory_warning_fires_once_per_directory() {
 }
 
 #[test]
+fn test_an_explicit_best_directory_is_checked_pack_by_pack_and_stays_usable() {
+    let explicit = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    let directory = explicit.path().to_str().unwrap();
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let fast = [("deu", fast_pack.as_str(), 4), ("eng", fast_pack.as_str(), 4)];
+    let best = [("deu", best_pack.as_str(), 5), ("eng", best_pack.as_str(), 5)];
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let languages = ["eng".to_string(), "deu".to_string(), "custom".to_string()];
+    std::fs::write(explicit.path().join("eng.traineddata"), b"best!").unwrap();
+    std::fs::write(explicit.path().join("deu.traineddata"), b"fast").unwrap();
+    std::fs::write(explicit.path().join("custom.traineddata"), b"user trained").unwrap();
+
+    assert_eq!(packs_verified_fast(directory, &languages, &pins), ["deu"]);
+    assert_eq!(
+        pins.verified_model(explicit.path(), &languages[..1]),
+        Some(TessdataModel::Best)
+    );
+    assert_eq!(pins.verified_model(explicit.path(), &languages), None);
+    let resolved = resolve_tessdata_path_with(
+        &languages,
+        Some(explicit.path()),
+        &cache_env(cache.path(), TessdataModel::Best),
+        &offline(&NO_SYSTEM, &pins),
+    )
+    .unwrap();
+    assert_eq!(resolved, directory, "an explicit directory is used whatever it holds");
+}
+
+#[test]
 fn test_fast_request_still_resolves_the_flat_cache() {
     let cache = tempfile::tempdir().unwrap();
     let flat = cache.path().join("tessdata");

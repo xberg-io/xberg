@@ -203,7 +203,7 @@ fn resolve_tessdata_path_with(
             if xberg_owned(Path::new(&dir)) {
                 adopt_shared_packs(Path::new(&dir), tessdata_env.model, &sources, provision.pins);
             }
-            log_resolved(&dir, override_path, tessdata_env);
+            log_resolved(&dir, languages, override_path, tessdata_env, provision.pins);
             return Ok(dir);
         }
     }
@@ -232,7 +232,7 @@ fn resolve_tessdata_path_with(
         .ok_or_else(|| OcrError::TesseractInitializationFailed("Tessdata path is not valid UTF-8".to_string()))?;
 
     if all_languages_exist(dest_str, languages)? {
-        log_resolved(dest_str, override_path, tessdata_env);
+        log_resolved(dest_str, languages, override_path, tessdata_env, provision.pins);
         Ok(dest_str.to_string())
     } else {
         Err(OcrError::TesseractInitializationFailed(format!(
@@ -325,7 +325,13 @@ fn adopt_shared_packs(directory: &Path, model: TessdataModel, sources: &[PathBuf
 #[cfg(target_arch = "wasm32")]
 fn adopt_shared_packs(_directory: &Path, _model: TessdataModel, _sources: &[PathBuf], _pins: &PinTables<'_>) {}
 
-fn log_resolved(directory: &str, override_path: Option<&Path>, tessdata_env: &TessdataEnv) {
+fn log_resolved(
+    directory: &str,
+    languages: &[String],
+    override_path: Option<&Path>,
+    tessdata_env: &TessdataEnv,
+    pins: &PinTables<'_>,
+) {
     let explicit = override_path.and_then(Path::to_str) == Some(directory)
         || tessdata_env.tessdata_prefix.as_deref() == Some(directory);
     tracing::debug!(
@@ -334,16 +340,72 @@ fn log_resolved(directory: &str, override_path: Option<&Path>, tessdata_env: &Te
         model_applies = !explicit,
         "Resolved tessdata directory"
     );
-    if explicit && tessdata_env.model == TessdataModel::Best && first_best_warning_for(directory) {
+    if explicit && tessdata_env.model == TessdataModel::Best {
+        warn_unverified_best(directory, languages, pins);
+    }
+}
+
+/// Warn that a `best` request is served from an explicit directory whose models are not verified
+/// `tessdata_best`, once per directory and finding: naming the languages when their packs are
+/// verified `tessdata_fast`, and with the general notice when a pack is no pinned one (a
+/// user-trained model stays usable). Silent when every requested pack is verified `best`.
+#[cfg(not(target_arch = "wasm32"))]
+fn warn_unverified_best(directory: &str, languages: &[String], pins: &PinTables<'_>) {
+    if pins.verified_model(Path::new(directory), languages) == Some(TessdataModel::Best) {
+        return;
+    }
+    let fast = packs_verified_fast(directory, languages, pins);
+    if fast.is_empty() {
+        if first_best_warning_for(directory) {
+            warn_explicit_directory_used_as_given(directory);
+        }
+        return;
+    }
+    let languages = fast.join("+");
+    if first_best_warning_for(&format!("{directory}\0{languages}")) {
         tracing::warn!(
             directory,
-            "tessdata_model 'best' was requested, but this explicit tessdata directory \
-             (tessdata_path or TESSDATA_PREFIX) is used as given, whichever model set it holds"
+            languages = %languages,
+            "tessdata_model 'best' was requested, but this explicit tessdata directory (tessdata_path or \
+             TESSDATA_PREFIX) holds tessdata_fast models for these languages, and they are used as given. For \
+             tessdata_best, unset the directory so xberg downloads verified models (`xberg cache warm \
+             --tessdata-model best` fetches them ahead of time), or replace the files with tessdata_best ones"
         );
     }
 }
 
-/// Whether `directory` has not yet had the explicit-directory warning in this process.
+/// WASM has no pins to verify a pack against.
+#[cfg(target_arch = "wasm32")]
+fn warn_unverified_best(directory: &str, _languages: &[String], _pins: &PinTables<'_>) {
+    if first_best_warning_for(directory) {
+        warn_explicit_directory_used_as_given(directory);
+    }
+}
+
+fn warn_explicit_directory_used_as_given(directory: &str) {
+    tracing::warn!(
+        directory,
+        "tessdata_model 'best' was requested, but this explicit tessdata directory \
+         (tessdata_path or TESSDATA_PREFIX) is used as given, whichever model set it holds"
+    );
+}
+
+/// The requested languages whose pack in `directory` is verified to be the pinned
+/// `tessdata_fast` one.
+#[cfg(not(target_arch = "wasm32"))]
+fn packs_verified_fast<'a>(directory: &str, languages: &'a [String], pins: &PinTables<'_>) -> Vec<&'a str> {
+    languages
+        .iter()
+        .map(String::as_str)
+        .filter(|lang| {
+            let pack = Path::new(directory).join(format!("{lang}.traineddata"));
+            pins.classify(lang, &pack) == crate::ocr::tessdata_download::VerifiedSet::Fast
+        })
+        .collect()
+}
+
+/// Whether `key` (a directory, or a directory and finding) has not yet had its explicit-directory
+/// warning in this process.
 fn first_best_warning_for(directory: &str) -> bool {
     static WARNED: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
         std::sync::LazyLock::new(Default::default);
