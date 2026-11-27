@@ -2,13 +2,7 @@ Central compact schemes for third derivatives 11
 
 In Figure 4, the changes in the relative modified wavenumber factor, denoted as R~ω~<sup>′′′</sup>, versus wavenumbers for TDCCS-TE and TDCCS-LS are shown. In comparison to TDCCS-TE, TDCCS-LS notably expands the range of wavenumbers while maintaining the same order of truncation error. The eighth-order tridiagonal TDCCS-LS even exhibits comparable accuracy to the tenth-order pentadiagonal TDCCS-TE. The bandwidth resolving efficiency [10] is a quantitative indicator of spectral resolution. The resolving efficiency of the FD scheme, with a specified error tolerance, is defined as ω~f~ e = , π where ω~f~ is the shortest well-resolved wave component satisfying
 
-′′′
-
-ω (ω) − ω<sup>3</sup> ≤ ϵ ,~t~
-
-3
-
-ω and ϵ~t~ represents the error tolerance threshold. This threshold remains constant when comparing various compact FD schemes. Tables (5) and (6) present the values of the bandwidth resolving efficiency (e) for various compact finite difference (FD) schemes, with error tolerances set at ϵ~t~ = 0.001 and ϵ~t~ = 0.0001, respectively. Tables (5) and (6) highlight that TDCCS exhibits the highest resolving efficiency, effectively capturing a broader range of wavenumbers under the same error tolerance. Specifically, for ϵ~t~ = 0.001, the resolving efficiency of an eighth-order TDCNCS is 0.5018, while that of TDCCS-TE and TDCCS-LS is 0.7828 and 0.9998, respectively. Similarly, for ϵ~t~ = 0.0001, the resolving efficiency of an eighth-order TDCNCS is
+ω<sup>′′′</sup>(ω) − $ω3 ≤ ϵ ,t ω3$ and ϵ~t~ represents the error tolerance threshold. This threshold remains constant when comparing various compact FD schemes. Tables (5) and (6) present the values of the bandwidth resolving efficiency (e) for various compact finite difference (FD) schemes, with error tolerances set at ϵ~t~ = 0.001 and ϵ~t~ = 0.0001, respectively. Tables (5) and (6) highlight that TDCCS exhibits the highest resolving efficiency, effectively capturing a broader range of wavenumbers under the same error tolerance. Specifically, for ϵ~t~ = 0.001, the resolving efficiency of an eighth-order TDCNCS is 0.5018, while that of TDCCS-TE and TDCCS-LS is 0.7828 and 0.9998, respectively. Similarly, for ϵ~t~ = 0.0001, the resolving efficiency of an eighth-order TDCNCS is
 
 0.3855, whereas that of TDCCS-TE and TDCCS-LS is 0.5376 and 0.9998, respectively. Additionally, when compared to other potential combinations such as TDCCS-TE-1, TDCCS-TE-2, and TDCCS-TE-3, TDCCS-
 

@@ -1,4 +1,4 @@
-2πnb . a Then sin ϕ = √ and cos ϕ = √ Substituting these, we get: y = g which may be written
+2πnb . a Then sin ϕ = √ and cos ϕ = √ Substituting these, we get: $y = g$ which may be written
 
 which is the solution desired.
 
@@ -11,7 +11,7 @@ which is the solution desired.
 - sin 2 πnt − sin ϕ
 - cos 2 πnt √ , a 2 + 4 π 2 n 2 b 2
 
-sin(2πnt − ϕ) y = g√ , a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup>
+$sin(2πnt − ϕ) y = g√$ , a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup>
 
 This is indeed none other than the equation of an alternating electric current, where g represents the amplitude of the electromotive force, n the frequency, a the resistance, b the coefficient of self-induction of
 

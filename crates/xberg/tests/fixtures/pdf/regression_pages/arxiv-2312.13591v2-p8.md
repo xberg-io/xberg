@@ -1,30 +1,28 @@
 8
 
-(∗) ∗ (′,∗) ∗ (∗) (′,∗)
+(∗) (′,∗) (∗) (′,∗)
 
 ¯<sup>∗</sup> ¯<sup>∗</sup>
 
-TABLE V. The mass spectra and selected decay channels of the molecular pentaquarks in Σ K , Ξ K and Σ K , Ξ K systems.
+TABLE V. The mass spectra and selected decay channels of the molecular pentaquarks in Σ K<sup>∗</sup>, Ξ K<sup>∗</sup> and Σ K , Ξ K systems. The notations are the same as those in Table IV.
 
-The notations are the same as those in Table IV.
+I(J<sup>P</sup>) Systems [th.] E~B~/E~V~ Decay channels
 
-I(J<sup>P</sup> ) Systems [th.] E~B~/E~V~ Decay channels
+**Ä ä** −
 
-**Ä ä**
+† (∗) 1 1 .1
 
-1 1 − +0.1 † (∗)
-
-3345.4 D~s~ N, Λ~c~K −1.8
+3345.4<sup>+0</sup> D~s~ N, Λ~c~K −1.8
 
 2 V
 
-**Ä**<sup>2</sup> **ä**
+**Ä**<sup>2</sup> **ä** −
 
-1 3 − +0.6 † ∗ ∗
+† 1 3 .6
 
-3344.8 D~s~N, Λ~c~K
+3344.8<sup>+0</sup> D~s~ <sup>∗</sup>N, Λ K<sup>∗</sup> −2.5 c
 
-2 ∗ −2.5 V
+2 ∗ V
 
 **Ä**<sup>2</sup> **ä**
 
@@ -36,41 +34,41 @@ I(J<sup>P</sup> ) Systems [th.] E~B~/E~V~ Decay channels
 
 2
 
-**Ä**<sup>2</sup> **ä**
+**Ä**<sup>2</sup> **ä** −
 
-3 3 −
+3 3
 
 − −
 
-2 2
+2
 
-**Ä ä**
+**Ä**<sup>2</sup> **ä** −
 
-1 1 − +0.6 † (∗)
+† (∗) 1 1 .6
 
-3409.5 D~s~ N, Λ~c~K −1.2
-
-2 V
-
-**Ä**<sup>2</sup> **ä**
-
-1 3 − +0.3 † ∗ ∗
-
-3409.2 D~s~N, Λ~c~K −1.0
+3409.5<sup>+0</sup> D~s~ N, Λ~c~K −1.2
 
 2 V
 
+**Ä**<sup>2</sup> **ä** −
+
+† 1 3 .3
+
+3409.2<sup>+0</sup> D~s~ <sup>∗</sup>N, Λ K<sup>∗</sup> −1.0 c
+
+2 V
+
+**Ä**<sup>2</sup> **ä** −
+
+† (∗) 1 5 .7 (∗)
+
+3409.0<sup>+0</sup> D~s~ N, Λ~c~K −3.6
+
+2 ∗ V
+
 **Ä**<sup>2</sup> **ä**
 
-1 5 − +0.7 † (∗) (∗)
-
-3409.0 D~s~ N, Λ~c~K
-
-2 ∗ ∗ −3.6 V
-
-**Ä**<sup>2</sup> **ä**
-
-Σ~c~K [3410.1]
+Σ K<sup>∗</sup> ~c~ [3410.1]
 
 3 1 −
 
@@ -78,37 +76,31 @@ I(J<sup>P</sup> ) Systems [th.] E~B~/E~V~ Decay channels
 
 2
 
-**Ä**<sup>2</sup> **ä**
+**Ä**<sup>2</sup> **ä** −
 
-3 3 −
+3 3
 
 − −
 
 2
 
-**Ä**<sup>2</sup> **ä**
+**Ä**<sup>2</sup> **ä** −
 
-3 5 −
+3 5
 
 − −
 
-2 2
+2**Ä**<sup>2</sup> **ä** − 1 .3 (∗)
 
-**Ä ä**
+$$
+0 3359.7+1 Ds Λ, Λcϕ(η), ΞcKπ −6.6 V Ä2 ä −
+$$
 
-1 − +1.3 (∗)
+† 3 .7
 
-0 3359.7 D~s~ Λ, Λ~c~ϕ(η), Ξ~c~Kπ −6.6
-
-V
-
-**Ä**<sup>2</sup> **ä**
-
-3 − +3.7 † ∗
-
-0 3356.0 D~s~Λ, Λ~c~ϕ, Ξ~c~Kπ ∗ −7.6
-
-V
+$$
+0 3356.0+3 D∗ sΛ, Λcϕ, ΞcKπ ∗ −7.6 V
+$$
 
 **Ä**<sup>2</sup> **ä**
 
@@ -116,29 +108,23 @@ V
 
 1 −
 
-1 − −
+1 − − **Ä**<sup>2</sup> **ä** −
 
-**Ä**<sup>2</sup> **ä**
+3
 
-3 −
+1 − − **Ä**<sup>2</sup> **ä** −
 
-1 − − 2
+1 .8 (∗)
 
-**Ä ä**
+$$
+0 3466.1+2 Ds Λ, Λcϕ(η), ΞcK −5.3 V Ä2 ä −
+$$
 
-1 − +2.8 (∗)
+3 .8
 
-0 3466.1 D~s~ Λ, Λ~c~ϕ(η), Ξ~c~K −5.3
-
-V
-
-**Ä**<sup>2</sup> **ä**
-
-3 − +1.8 ∗
-
-0 3467.5 D~s~Λ, Λ~c~ϕ, Ξ~c~Kπ ′ ∗ −3.1
-
-V
+$$
+0 3467.5+1 D∗ sΛ, Λcϕ, ΞcKπ ′ ∗ −3.1 V
+$$
 
 **Ä**<sup>2</sup> **ä**
 
@@ -146,55 +132,43 @@ V
 
 1 −
 
-1 − −
+1 − − **Ä**<sup>2</sup> **ä** −
+
+3
+
+1 − − **Ä**<sup>2</sup> **ä** −
+
+1 .3 (∗)
+
+$$
+0 3535.8+1 Ds Λ, Λcϕ(η), ΞcK −5.5 V Ä2 ä −
+$$
+
+3 .7
+
+$$
+0 3534.9+1 D∗ sΛ, Λcϕ, ΞcKπ −3.6 V Ä2 ä −
+$$
+
+5 .3 (∗)
+
+$$
+0 3532.7+3 Ds Λ, Λcϕ(η), ΞcK ∗ −7.1 V
+$$
 
 **Ä**<sup>2</sup> **ä**
 
-3 −
-
-1 − − 2
-
-**Ä ä**
-
-1 − +1.3 (∗)
-
-0 3535.8 D~s~ Λ, Λ~c~ϕ(η), Ξ~c~K −5.5
-
-V
-
-**Ä**<sup>2</sup> **ä**
-
-3 − +1.7 ∗
-
-0 3534.9 D~s~Λ, Λ~c~ϕ, Ξ~c~Kπ −3.6
-
-V
-
-**Ä**<sup>2</sup> **ä**
-
-5 − +3.3 (∗)
-
-0 ∗ ∗ 3532.7 D~s~ Λ, Λ~c~ϕ(η), Ξ~c~K −7.1
-
-V
-
-**Ä**<sup>2</sup> **ä**
-
-Ξ~c~K [3537.1]
+Ξ K<sup>∗</sup> ~c~ [3537.1]
 
 1 −
 
-1 − −
+1 − − **Ä**<sup>2</sup> **ä** −
 
-**Ä**<sup>2</sup> **ä**
+3
 
-3 −
+1 − − **Ä**<sup>2</sup> **ä** −
 
-1 − −
-
-**Ä**<sup>2</sup> **ä**
-
-5 −
+5
 
 1 − − 2
 
@@ -208,9 +182,9 @@ al. predicted the existence of isospin- bound states in the ~2~ ¯ ¯ ¯ coupled
 
 Yalikun et al. obtained three bound states with isospin2 in the ¯<sup>(</sup>∗) ΣD systems through the OBE model [117], and they pro-
 
-0 −
+0
 
-posed to search for these states in the process B~s~ → nD ¯ ~s~ p. Additionally, Yan et al. obtained a similar spectrum for the ¯<sup>(</sup>∗) ΣD systems based on the light-meson exchange saturation model [118]. Moreover, pentaquark systems with the quark configuration
+posed to search for these states in the process B~s~ → nD ¯ ~s~ <sup>−</sup>p. Additionally, Yan et al. obtained a similar spectrum for the ¯<sup>(</sup>∗) ΣD systems based on the light-meson exchange saturation model [118]. Moreover, pentaquark systems with the quark configuration
 
 (∗)
 
@@ -218,67 +192,61 @@ cssqq¯, such as the ΞD , have been extensively studied in recent years to unde
 
 c c c c
 
-Systems E~B~/E~V~ Decay channels − −
-
-∗ ∗
-
-¯ [3342.4, 3345.0] D Λ(Σ), Ξ~c~ρ(ω), Ξ~c~π, Λ (Σ )~c c~ Kπ ¯<sup>∗</sup> V Σ~c~K
+Systems E~B~/E~V~ Decay channels − − ¯ [3342.4, 3345.0] D<sup>∗</sup>Λ(Σ), Ξ ρ(ω), Ξ<sup>∗</sup> c ~c~π, Λ (Σ )~c c~ Kπ ¯<sup>∗</sup> V Σ~c~K
 
 † (∗)
 
-¯ [3337.0, 3345.5] D Σ, Ξ~c~π, Ξ~c~ρ, Σ~c~Kπ B − − − − − −
+$$
+¯ [3337.0, 3345.5] D Σ, Ξcπ, Ξcρ, ΣcKπ B − − − − − −
+$$
 
 (∗) (∗)
 
-¯ [3408.6, 3408.8] D Λ(Σ), Ξ~c~ρ(ω), Ξ~c~ π, Λ (Σ )~c c~ K
-
-∗ B
-
-¯<sup>∗</sup> Σ~c~K
+¯ [3408.6, 3408.8] D Λ(Σ), Ξ~c~ρ(ω), Ξ~c~ π, Λ (Σ )~c c~ K ¯<sup>∗</sup> B Σ<sup>∗</sup> ~c~K
 
 (∗)
 
-¯ [3390.0, 3409.9] D Σ, Ξ~c~π, Ξ~c~ρ, Σ~c~K B
-
-∗ ∗
-
-¯ [3161.7, 3406.2] D Σ, Ξ~c~π, Ξ~c~ρ, Σ~c~Kπ V − − − −
-
-∗ −
-
-¯ [3361.0, 3361.1] D Ξ, Ξ~c~Kπ, Ω~c~π<sup>+</sup>π π<sup>0</sup> ¯<sup>∗</sup> V Ξ~c~K
+¯ [3390.0, 3409.9] D Σ, Ξ~c~π, Ξ~c~ρ, Σ~c~K B ¯ [3161.7, 3406.2] D<sup>∗</sup>Σ, Ξ<sup>∗</sup> ~c~π, Ξ~c~ρ, Σ~c~Kπ V − − − − ¯ [3361.0, 3361.1] D<sup>∗</sup>Ξ, Ξ Kπ, Ω π<sup>+</sup>π<sup>−</sup>π<sup>0</sup> c c ¯<sup>∗</sup> V Ξ~c~K
 
 † (∗)
 
-¯ [3351.9, 3361.1] D Ξ, Ξ~c~Kπ, Ω~c~ππ V − −
+$$
+¯ [3351.9, 3361.1] D Ξ, ΞcKπ, Ωcππ V − −
+$$
 
-(∗) −
+(∗)
 
-¯ [3460.9, 3466.4] D Ξ, Ξ~c~K, Ω~c~π<sup>+</sup>π π<sup>0</sup> V − −
+$$
+¯ [3460.9, 3466.4] D Ξ, Ξ K, Ω π+π−π0 c c V − −
+$$
 
 ′
 
 ¯<sup>∗</sup> Ξ~c~K − −
 
-♯ ∗
+♯
 
-¯ [∼ 3134.1] D Ξ, Ξ~c~Kπ, Ω~c~ππ V − − − −
+$$
+¯ [∼ 3134.1] D∗Ξ, ΞcKπ, Ωcππ V − − − −
+$$
 
 † (∗)
 
-¯ [3536.5, 3536.8] D Ξ, Ξ~c~K, Ω~c~ω
-
-∗ B
-
-¯<sup>∗</sup> Ξ~c~K
+$$
+¯ [3536.5, 3536.8] D Ξ, ΞcK, Ωcω ¯∗ B Ξ∗ cK
+$$
 
 (∗)
 
-¯ [3514.2, 3537.1] D Ξ, Ξ~c~K, Ω~c~π V
+$$
+¯ [3514.2, 3537.1] D Ξ, ΞcK, Ωcπ V
+$$
 
-♯ ∗ ∗
+♯
 
-¯ [∼ 3473.8] D Ξ, Ξ~c~Kπ, Ω~c~π, Ω~c~ρ V − −
+$$
+¯ [∼ 3473.8] D∗Ξ, Ξ Kπ, Ω∗ c cπ, Ωcρ V − −
+$$
 
 models [110, 118, 124], QCD sum rule [125], and chiral quark model [126], have been employed to investigate the properties of these systems. In Table VII and Fig. 4, we present the mass spectra and se-
 

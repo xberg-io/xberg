@@ -2,9 +2,7 @@
 
 **822** , 136693 (2021), arXiv:2108.12730 [hep-ph].
 
-N
-
-- [93] C.-W. Shen, Y.-h. Lin, and U.-G. Meißner, P~cc~ states in a unitarized coupled-channel approach, Eur. Phys. J. C
+- [93] C.-W. Shen, Y.-h. Lin, and U.-G. Meißner, P~cc~ <sup>N</sup> states in a unitarized coupled-channel approach, Eur. Phys. J. C
 
 **83** , 70 (2023), arXiv:2208.10865 [hep-ph].
 
@@ -57,9 +55,7 @@ taquarks from Λ~c~K /Σ~c~K interactions, Phys. Rev. D **108** , 054011 (2023),
 
 **96** , 114030 (2017), arXiv:1711.09579 [hep-ph].
 
-∗
-
-- [106] T. Asanuma, Y. Yamaguchi, and M. Harada, Analysis of DD
+- [106] T. Asanuma, Y. Yamaguchi, and M. Harada, Analysis of DD<sup>∗</sup>
 
 (∗)
 
@@ -77,17 +73,11 @@ taquarks from Λ~c~K /Σ~c~K interactions, Phys. Rev. D **108** , 054011 (2023),
 
 **100** , 056004 (2019), arXiv:1905.07858 [hep-ph].
 
-- [110] M.-Z. Liu, T.-W. Wu, J.-J. Xie, M. Pavon Valderrama, and
+- [110] M.-Z. Liu, T.-W. Wu, J.-J. Xie, M. Pavon Valderrama, and L.-S. Geng, DΞ and D<sup>∗</sup>Ξ molecular states from one boson exchange, Phys. Rev. D
 
-∗
+**98** , 014014 (2018), arXiv:1805.08384 [hep-ph].
 
-L.-S. Geng, DΞ and D Ξ molecular states from one boson exchange, Phys. Rev. D **98** , 014014 (2018), arXiv:1805.08384 [hep-ph].
-
-- [111] F.-L. Wang, R. Chen, Z.-W. Liu, and X. Liu, Possible triple-
-
-∗
-
-charm molecular pentaquarks from Ξ~cc~D~1~ /Ξ~cc~D~2~ interac-
+- [111] F.-L. Wang, R. Chen, Z.-W. Liu, and X. Liu, Possible triple-charm molecular pentaquarks from Ξ D~1~ /Ξ D~2~ <sup>∗</sup> cc cc interac-
 
 16 tions, Phys. Rev. D **99** , 054021 (2019), arXiv:1901.01542 [hep-ph].
 
@@ -113,14 +103,13 @@ charm molecular pentaquarks from Ξ~cc~D~1~ /Ξ~cc~D~2~ interac-
 **105** , 094026 (2022), arXiv:2112.06426 [hep-ph].
 
 - [118] M.-J. Yan, F.-Z. Peng, and M. Pavon Valderrama, Molecular charmed baryons and pentaquarks from light-meson exchange saturation, (2023), arXiv:2304.14855 [hep-ph].
+- [119] R. Aaij et al. (LHCb), Observation of five new narrow Ω<sup>0</sup> ~c~ states decaying to Ξ<sup>+</sup>K<sup>−</sup>, Phys. Rev. Lett.
 
-0
+**118** , 182001
 
-- [119] R. Aaij et al. (LHCb), Observation of five new narrow Ω~c~
+c
 
-\+ −
-
-states decaying to Ξ~c~ K , Phys. Rev. Lett. **118** , 182001 (2017), arXiv:1703.04639 [hep-ex].
+(2017), arXiv:1703.04639 [hep-ex].
 
 - [120] G. Montana,˜ A. Feijoo, and A. Ramos, A meson-baryon molecular interpretation for some Ω~c~ excited states, Eur. Phys.
 - J. A **54** , 64 (2018), arXiv:1709.08737 [hep-ph].

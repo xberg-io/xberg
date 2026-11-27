@@ -34,7 +34,9 @@
 
 **one.**
 
-**2 ∞**
+$$
+2 ∞
+$$
 
 **→ z, is bounded by Results from theorems 1 and 2, will quantify the maximum actuator degradation in thrust (T), elevator (δ**~**e**~**), and leading-edge flap (δ**~**lef**~**).**
 
@@ -42,7 +44,9 @@
 
 **p**
 
-ω<sup>**∗**</sup>
+$$
+ω∗
+$$
 
 **(rad/s) kx → x**~**F**~ **k**<sup>**∗**</sup> **1/ κ**<sup>**∗**</sup> **c i ∞ i**
 

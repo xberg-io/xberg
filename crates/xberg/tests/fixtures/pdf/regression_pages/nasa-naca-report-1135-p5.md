@@ -37,7 +37,7 @@ Additional useful variables are defined as follows: Combination of equations (32
 
 3" *Pt P* _,'
 
-**=**
+$$=$$
 
 3" *Pt*
 
@@ -65,7 +65,7 @@ it **can** be shown that if *T* is in degrees Rankine *T ,* _--1 *V*
 
 \!
 
-*M-=--* (30)
+$M-=-- (30)$
 
 *V* 2 _--1
 
@@ -73,7 +73,7 @@ it **can** be shown that if *T* is in degrees Rankine *T ,* _--1 *V*
 
 I
 
-*p V* 2 1 _--_={1--"/2 -1 *M**2[(.V_)--I]}* v-t [isenperf] (39) (31 a) *q* -_ *o V* -_ In small-disturbance theory, where it is assumed that [therm perf] (31b) (V--V.)\<\<V,, these equations take on the simplified form
+*p V* 2 1 _--_={1--"/2 -1 *M**2[(.V_)--I]}* v-t [isenperf] (39) (31 a) *q* -_ *o V* -_ In small-disturbance theory, where it is assumed that [therm perf] $(31b) (V--V.)<\<V$,, these equations take on the simplified form
 
 INTEGRATED
 
@@ -105,7 +105,7 @@ w-
 
 \-r 7
 
-The three reference speeds *at, a,,* and *V,,* are related by .P={I+ 3"-1 *M* _) _'-_ */ M_\\-i "*
+The three reference speeds *at, a,,* and *V,,* are related by $.P={I+$ 3"-1 *M* _) _'-_ */ M_\\-i "*
 
 **[isen, perf]**
 

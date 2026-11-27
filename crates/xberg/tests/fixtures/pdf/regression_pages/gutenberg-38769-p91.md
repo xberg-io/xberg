@@ -1,6 +1,6 @@
 [II : 33] FUNCTIONS OF REAL VARIABLES 75
 
-made up of a number of thin parallel rigid rods of length l, such as P Q, the ends of the rods being fastened to two circular rods of radius a. Now let us take a third circular rod of the same radius and place it round the surface of the cylinder at a distance h from one of the first two rods (see Fig. 18a, where P q = h). Unfasten the end Q of the rod P Q and turn P Q
+made up of a number of thin parallel rigid rods of length l, such as P Q, the ends of the rods being fastened to two circular rods of radius a. Now let us take a third circular rod of the same radius and place it round the surface of the cylinder at a distance h from one of the first two rods (see Fig. 18a, where $P q = h)$. Unfasten the end Q of the rod P Q and turn P Q
 
 ′
 

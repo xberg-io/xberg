@@ -20,23 +20,25 @@ x<sup>2</sup> − 49 x + 7
 
 13. ÷ . (a + b)<sup>2</sup> − c<sup>2</sup> (a + b) − c
 
-x<sup>2</sup> + 2x + 1 x + 1
+$$
+x2 + 2x + 1 x + 1
+$$
 
 14. ÷ . x<sup>2</sup> − 25 x<sup>2</sup> + 5x
 
-a<sup>2</sup> + 3a + 2 a<sup>2</sup> + 7a + 12
+$$
+a2 + 3a + 2 a2 + 7a + 12
+$$
 
 15. × . a<sup>2</sup> + 5a + 6 a<sup>2</sup> + 9a + 20
 
 y<sup>2</sup> − y − 30 y<sup>2</sup> − y − 2 y<sup>2</sup> + 6y
 
-16. × × .
+16. × × . y<sup>2</sup> − 36 y<sup>2</sup> + 3y − 10 y<sup>2</sup> + y
 
-2
-
-y<sup>2</sup> − 36 y<sup>2</sup> + 3y − 10 y + y
-
-x<sup>2</sup> − 2x + 1 x<sup>2</sup> + 2xy + y<sup>2</sup> x<sup>2</sup> − 1
+$$
+x2 − 2x + 1 x2 + 2xy + y2 x2 − 1
+$$
 
 17. × ÷ . x<sup>2</sup> − y<sup>2</sup> x − 1 x<sup>2</sup> − xy
 

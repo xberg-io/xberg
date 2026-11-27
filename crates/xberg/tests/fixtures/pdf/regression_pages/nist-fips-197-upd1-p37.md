@@ -8,7 +8,9 @@ This appendix shows the development of the key schedule for each key size. Note 
 
 Key = 2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c for Nk = 4, which results in
 
-w~0~ = 2b7e1516 w~1~ = 28aed2a6 w~2~ = abf71588 w~3~ = 09cf4f3c
+$$
+w0 = 2b7e1516 w1 = 28aed2a6 w2 = abf71588 w3 = 09cf4f3c
+$$
 
 w[i] = i After After After XOR temp Rcon[i/Nk] w[i−Nk] temp⊕
 

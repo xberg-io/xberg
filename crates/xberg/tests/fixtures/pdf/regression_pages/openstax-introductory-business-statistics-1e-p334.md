@@ -8,9 +8,9 @@
 
 a. If *X* = average distance in feet for 49 fly balls, then *X* \~ _______(_______,_______)
 
-b. What is the probability that the 49 balls traveled an average of less than 240 feet? Sketch the graph. Scale the – horizontal axis for *X* . Shade the region corresponding to the probability. Find the probability. c.
+b. What is the probability that the 49 balls traveled an average of less than 240 feet? Sketch the graph. Scale the – horizontal axis for *X* . Shade the region corresponding to the probability. Find the probability.
 
-Find the 80<sup>th</sup> percentile of the distribution of the average of 49 fly balls.
+c. Find the 80<sup>th</sup> percentile of the distribution of the average of 49 fly balls.
 
 51. According to the Internal Revenue Service, the average length of time for an individual to complete (keep records for, learn, prepare, copy, assemble, and send) IRS Form 1040 is 10.53 hours (without any attached schedules). The distribution is unknown. Let us assume that the standard deviation is two hours. Suppose we randomly sample 36 taxpayers.
 
@@ -28,9 +28,9 @@ e. Would you be surprised if one taxpayer finished his or her Form 1040 in more 
 
 a. *X* \~ _____(_____,_____)
 
-b. Find the probability that the runner will average between 142 and 146 minutes in these 49 marathons. c.
+b. Find the probability that the runner will average between 142 and 146 minutes in these 49 marathons.
 
-Find the 80<sup>th</sup> percentile for the average of these 49 marathons.
+c. Find the 80<sup>th</sup> percentile for the average of these 49 marathons.
 
 d. Find the median of the average running times.
 

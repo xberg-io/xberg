@@ -1,8 +1,8 @@
 Chapter 6 | The Normal Distribution 281
 
-*x* – *µ* 17 – 5 *z* = = = 2 *σ* 6 This means that *x* = 17 is **two standard deviations** (2*σ* ) above or to the right of the mean *μ* = 5. *x* – *µ* 1 – 5 Now suppose *x* = 1. Then: *z* = = = –0.67 (rounded to two decimal places) *σ* 6
+*x* – *µ* 17 – 5 *z* = = = 2 *σ* 6 This means that $x = 17$ is **two standard deviations** (2*σ* ) above or to the right of the mean $μ = 5. x$ – *µ* 1 – 5 Now suppose $x = 1$. Then: *z* = = = –0.67 (rounded to two decimal places) *σ* 6
 
-**This means that** ***x*** **= 1 is 0.67 standard deviations (–0.67*****σ*** **) below or to the left of the mean** ***μ*** **= 5.**
+**This means that** $x = 1$ is 0.67 standard deviations (–0.67***σ*** **) below or to the left of the mean** $μ = 5$.
 
 **The Empirical Rule**
 

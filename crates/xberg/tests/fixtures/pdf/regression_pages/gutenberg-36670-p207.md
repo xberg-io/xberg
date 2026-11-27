@@ -16,22 +16,18 @@ Hence, the geometrical mean of any two numbers is the square root of their produ
 
 If l denote the last term, a the first term, n the number of terms, r the common ratio, and s the sum of the n terms, then
 
-2 3 n−1
+2 3 −1
 
+$$
 s = a + ar + ar + ar +
+$$
 
-- \+ ar .
+- \+ ar n .
 
-2 3 n−1 n
+2 3 −1
 
 Multiply by r , rs = ar + ar + ar +
 
-- \+ ar + ar .
+- \+ ar n + ar n .
 
-Therefore, by subtracting the first equation from the second,
-
-rs − s = ar<sup>n</sup> − a,
-
-or (r − 1)s = a(r<sup>n</sup> − 1).
-
-a(r<sup>n</sup> − 1) ∴ s = . Formula (3) r − 1
+Therefore, by subtracting the first equation from the second, rs − s = ar<sup>n</sup> − a, or (r − 1)s = a(r<sup>n</sup> − 1). a(r<sup>n</sup> − 1) ∴ s = . Formula (3) r − 1

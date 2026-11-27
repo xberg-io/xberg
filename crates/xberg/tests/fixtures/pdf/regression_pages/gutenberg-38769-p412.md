@@ -2,11 +2,15 @@
 
 396
 
-So far as divergence for s \< 1 is concerned, this result might have beenP derived at once from comparison with (1/n), which we already know to be divergent. It is however interesting to see how the Integral Test may be applied to theP series (1/n), when the preceding analysis fails. In this case Z
+So far as divergence for $s < 1$ is concerned, this result might have beenP derived at once from comparison with (1/n), which we already know to be divergent. It is however interesting to see how the Integral Test may be applied to theP series (1/n), when the preceding analysis fails. In this case Z
 
+$$
 ξ
+$$
 
+$$
 dx Φ(ξ) = , x
+$$
 
 1
 
@@ -19,7 +23,7 @@ dx Φ(ξ) = , x
 
 r
 
-But by putting x = 2 u we obtain Z r+1 Z 2
+But by putting $x = 2 u$ we obtain Z r+1 Z 2
 
 2
 
@@ -35,33 +39,35 @@ u Z
 
 2
 
-du and so Φ(ξ) \> n , which shows that Φ(ξ) → ∞ as ξ → ∞. u
+du and so Φ(ξ) \> n , which shows that Φ(ξ) → ∞ as $ξ → ∞. u$
 
 1
 
 Examples LXXI. 1. Prove by an argument similar to that used above, Z
 
+$$
 ξ
+$$
 
-dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity x<sup>s</sup>
+dx and without integration, that Φ(ξ) = , where $s < 1$, tends to infinity x<sup>s</sup>
 
 1
 
 with ξ. P P P
 
-−2 −3/2 −11/10
+2 3/2 11/10
 
-2. The series n , n , n are convergent, and their sumsP P
+2. The series n<sup>−</sup> , n<sup>−</sup> , n<sup>−</sup> are convergent, and their sumsP P
 
-−1/2 −10/11
+1/2 10/11
 
-are not greater than 2, 3, 11 respectively. The series n , n are divergent. P
+are not greater than 2, 3, 11 respectively. The series n<sup>−</sup> , n<sup>−</sup> are divergent. P
 
 3. The series n<sup>s</sup>/(n<sup>t</sup> + a), where a \> 0, is convergent or divergent ac-P
 
 s−t
 
-cording as t \> 1 + s or t ≦ 1 + s. [Compare with n .]
+cording as $t > 1 + s$ or t ≦ 1 + s. [Compare with n .]
 
 4. Discuss the convergence or divergence of the series
 

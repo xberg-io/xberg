@@ -1,4 +1,4 @@
-For example, if *n = 20* , *M = Q = 3* , and ε *= 01011001001010101101* , then partition the stream
+For example, if $n = 20$ , $M = Q = 3$ , and $ε = 01011001001010101101$ , then partition the stream
 
  *n* 
 
@@ -10,13 +10,13 @@ into *N =*~~  *= 2* matrices of cardinality *M* · *Q* (3·3 = 9). Note th
 
 - (2) Determine the binary rank ( *R*~~) of each matrix, where  = 1,..., *N* . The method for determining the rank is described in Appendix A.
 
-For the example in this section, the rank of the first matrix is 2 ( *R*~*1*~ *= 2* ), and the rank of the second matrix is 3 ( *R*~*2*~ *= 3* ).
+For the example in this section, the rank of the first matrix is $2 ( R1 = 2$ ), and the rank of the second matrix is $3 ( R2 = 3$ ).
 
 - (3) Let *F*~*M*~ = the number of matrices with *R*~~= *M* (full rank),
 
 *F*~*M-1*~ = the number of matrices with *R*~~= *M-1* (full rank - 1), *N – F*~*M*~ *- F*~*M-1*~ = the number of matrices remaining.
 
-For the example in this section, *F*~*M*~ *= F*~*3*~ *= 1* ( *R*~*2*~ has the full rank of 3 *), F*~*M-1*~ *= F*~*2*~ *= 1* ( *R*~*1*~ has rank 2), and no matrix has any lower rank.
+For the example in this section, *F*~*M*~ *= $F*~*3*~ *= 1* ( *R*~*2*~$ has the full rank of 3 *), F*~*M-1*~ *= F*~*2*~ *= 1* ( *R*~*1*~ has rank 2), and no matrix has any lower rank.
 
 - (4) Compute
 
@@ -42,9 +42,9 @@ For the example in this section,
 
 0.2888· 2 0.5776 · 2 0.1336 · 2
 
-2 −χ ( *obs* ) / 2
+2 ( *obs* ) / 2
 
-- (5) Compute *P* − *value* = *e* . Since there are 3 classes in the example, the *P-value* for the
+- (5) Compute *P* − *value* = *e*<sup>−χ</sup> . Since there are 3 classes in the example, the *P-value* for the
 
 2
 

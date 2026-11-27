@@ -4,13 +4,11 @@
 
 Exercises IV. (p. 50.)
 
-(1) 17 + 24x; 24. x<sup>2</sup> + 2ax − a 2a(a + 1)
+$$
+(1) 17 + 24x; 24. x2 + 2ax − a 2a(a + 1)
+$$
 
-- (2) ; .
-
-3
-
-(x + a)<sup>2</sup> (x + a)
+- (2) ; . (x + a)<sup>2</sup> (x + a)<sup>3</sup>
 
 x<sup>2</sup> x<sup>3</sup> x<sup>2</sup> (3) 1 + x + + ; 1 + x + . 1 × 2 1 × 2 × 3 1 × 2 (4) (Exercises III.):
 

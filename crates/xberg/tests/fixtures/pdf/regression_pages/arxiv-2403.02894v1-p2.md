@@ -18,9 +18,13 @@ Algorithm I: DIFNet's pipeline
 
 *N*
 
-*s t* 2πβ *ft* + sin π *ft*
+$$
+s t 2πβ ft + sin π ft
+$$
 
-( )<sup>=</sup>
+$$
+( )=
+$$
 
 exp(<sup>*j*</sup>
 
@@ -40,9 +44,11 @@ wbi
 
 *N*
 
-sm *n* =1
+sm $n =1$
 
- (4) *J* sin ππ *f t* + 2 *mf t*
+$$
+ (4) J sin ππ f t + 2 mf t
+$$
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
@@ -52,7 +58,7 @@ sm *n* =1
 
 #### ∑∑~*nm*~ ~=1 =−∞~
 
-\++ *J* cos ππ *f t* 2 *mf t*
+$$++ J cos ππ f t 2 mf t$$
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
@@ -60,19 +66,25 @@ sm *n* =1
 
 
 
-*mk* +2 *k* ∞
+$$
+mk +2 k ∞
+$$
 
 ( <sup>−</sup>1)
 
 β~*n*~ Where, *J*
 
-( <sup>β</sup> )<sup>=</sup>
+$$
+( β )=
+$$
 
 *s A* exp + *jf* 2πτ (1) . According to
 
 ##### (<sup>τ</sup>)<sup>=</sup> (<sup>*jf*</sup> 2πτ )
 
-2 *mn*∑
+$$
+2 mn ∑
+$$
 
 
 
@@ -80,7 +92,7 @@ nbi
 
 ## ∑ n
 
-*c n k* =0 *n* =1
+$c n k =0 n =1$
 
 *kmk* \!( +
 
@@ -92,7 +104,9 @@ Where, *f*~*c*~ is the carrier frequency, *A*~*n*~ is the amplitude, *f*~*n*~ is
 
 Formulas (1), (2), (4) can be uniformly expressed as: *s B* exp *f* + *jk* πτ (2)
 
-(<sup>τ</sup> )<sup>=</sup>
+$$
+(τ )=
+$$
 
 # (<sup>*j*</sup> 2πτ )
 
@@ -100,9 +114,11 @@ wbi~cm~
 
 ## ∑ n
 
-*cn n* =1 *N* 2
+*cn $n* =1 *N* 2$
 
-*s D* exp ππ *ft* + *j k t* (5)
+$$
+s D exp ππ ft + j k t (5)
+$$
 
 ( <sup>*t*</sup>)<sup>=</sup>
 
@@ -116,7 +132,9 @@ wbi~cm~
 
 Where, *B*~*n*~ is the amplitude, and *k*~*n*~ is the chirp rate.
 
-*n* =1
+$$
+n =1
+$$
 
 Where, *D*~*n*~ is the amplitude, *k*~*RFI*~is the tuning rate. When *k* The sinusoidal modulation interference can be represented ~*RFI*~ as: is small, RFI is a narrowband interference, and when *k*~*RFI*~ is
 
@@ -134,6 +152,6 @@ wbi~sm~
 
 ## ∑ n
 
-*c n n n* =1
+$c n n n =1$
 
 By conducting time-frequency analysis on equation (5), it Where, *C*~*n*~ is the amplitude, β is the modulation coefficient ~*n*~ can be found that: and *f*~*n*~ is the modulation frequency. According to the Bessel *fk*~*RFI*~ = ⋅ *t* (6) formula, sinusoidally modulated broadband interference can From formula (6), it can be seen that the signal holds global be expressed as: characteristics on the time-frequency map, which inspires us to propose a Transformer network. Moreover, from the interference model in Equation (5), it can be seen that the

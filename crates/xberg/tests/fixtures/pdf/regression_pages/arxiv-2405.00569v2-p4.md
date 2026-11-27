@@ -1,18 +1,6 @@
 4 Lavanya V Salian, Samala Rathan, Debojyoti Ghosh
 
-We have extended the expression (2.3) to achieve up to tenth-order accuracy, denoted as the third derivative cell-node compact scheme (TDCNCS). The general form is given by (2.4) f~j~+2 − 2f~j~+1 + 2f~j~−1 − f~j~−2 f~j~+3 − 3f~j~+1 + 3f~j~−1 − f~j~−3
-
-′′′ ′′′ ′′′ ′′′ ′′′
-
-βf~j~−2 + αf~j~−1 + f~j~ + αf~j~+1 + βf~j~+2 = a + b 2h<sup>3</sup> 8h<sup>3</sup> f~j~+4 − 4f~j~+1 + 4f~j~−1 − f~j~−4 + c . 20h<sup>3</sup> The third derivative cell-centered compact scheme (TDCCCS) is given by (2.5) f
-
-3 − 3f 1 + 3f 1 − f 3 f 5 − 5f 1 + 5f 1 − f 5 j+ j+ j− j− j+ j+ j− j− ′′′ ′′′ ′′′ ′′′ ′′′ 2 2 2 2 2 2 2 2
-
-βf~j~−2 + αf~j~−1 + f~j~ + αf~j~+1 + βf~j~+2 = a + b h<sup>3</sup> 5h<sup>3</sup> f 7 − 7f 1 + 7f 1 − f~j~
-
-7 j+ j+ j− − 2 2 ~2 2~
-
-\+ c . 14h<sup>3</sup>
+We have extended the expression (2.3) to achieve up to tenth-order accuracy, denoted as the third derivative cell-node compact scheme (TDCNCS). The general form is given by (2.4) f~j~+2 − 2f~j~+1 + 2f~j~−1 − f~j~−2 f~j~+3 − 3f~j~+1 + 3f~j~−1 − f~j~−3 βf<sup>′′′</sup> ~j~−2 + αf<sup>′′′</sup> ~j~−1 + f~j~ <sup>′′′</sup> + αf<sup>′′′</sup> ~j~+1 + βf<sup>′′′</sup> ~j~+2 = a + b 2h<sup>3</sup> 8h<sup>3</sup> f~j~+4 − 4f~j~+1 + 4f~j~−1 − f~j~−4 + c . 20h<sup>3</sup> The third derivative cell-centered compact scheme (TDCCCS) is given by (2.5) f~j~+<sup>3</sup> − 3f~j~+<sup>1</sup> + 3f~j~−<sup>1</sup> − f~j~−<sup>3</sup> f~j~+<sup>5</sup> − 5f~j~+<sup>1</sup> + 5f~j~−<sup>1</sup> − f~j~−<sup>5</sup> 2 2 2 2 2 2 2 2 βf<sup>′′′</sup> ~j~−2 + αf<sup>′′′</sup> ~j~−1 + f~j~ <sup>′′′</sup> + αf<sup>′′′</sup> ~j~+1 + βf<sup>′′′</sup> ~j~+2 = a + b h<sup>3</sup> 5h<sup>3</sup> f~j~+<sup>7</sup> − 7f~j~+<sup>1</sup> + 7f~j~−<sup>1</sup> − f~j~−<sup>7</sup> 2 2 2 2 + c . 14h<sup>3</sup>
 
 | Scheme | Table 1. The coefficients of TDCNCS schemes. a | b | c | α | β | Order |
 | --- | --- | --- | --- | --- | --- | --- |

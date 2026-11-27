@@ -6,7 +6,9 @@
 
 31. Show that if 2y = ax−(b/x), where a and b are positive, then y increases steadily from −∞ to ∞ as x increases from 0 to ∞. Hence show that Z Z ∞
 
+$$
 ∞
+$$
 
 b 1
 
@@ -14,27 +16,37 @@ b 1
 
 f ax + dx = 2 x a
 
+$$
 0 −∞
+$$
 
 Z
 
+$$
 ∞
+$$
 
-2 ( ) p y f{ y<sup>2</sup> + ab} 1 + p dy y<sup>2</sup> + ab p = f{ y<sup>2</sup> + ab} dy. a
+2 ( ) p y f{ y<sup>2</sup> + ab} 1 + p dy y<sup>2</sup> + ab $p = f{ y2$ + ab} dy. a
 
 0
 
 32. Show that if 2y = ax+(b/x), where a and b are positive, then two values √ of x correspond to any value of y greater than ab. Denoting the greater of√ these by x~1~ and the less by x~2~, show that, as y increases from ab towards ∞, p p x~1~ increases from b/a towards ∞, and x~2~ decreases from b/a to 0. Hence show that ( ) Z Z ∞
 
+$$
 ∞
+$$
 
-1 y √ f(y) dx~1~ = f(y) p + 1 dy, √ a
+$$
+1 y √ f(y) dx1 = f(y) p + 1 dy, √ a
+$$
 
 b/a ab
 
 y<sup>2</sup> − ab √ ( ) Z Z b/a
 
+$$
 ∞
+$$
 
 1 y f(y) dx~2~ = f(y) p − 1 dy, √
 

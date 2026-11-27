@@ -16,9 +16,9 @@ To investigate the accuracy of objective function gradients computed with the pr
 
 Text, Section "Accuracy of gradient computation") are respectively equal to 1.9 10<sup>−4</sup> and
 
-numerically 0 for the Blasi et al., 2016 model, 2.8 10<sup>−11</sup> and 1.6 10<sup>−17</sup> for the Zheng et al.,
+numerically 0 for the Blasi et al., 2016 model, 2.8 10<sup>−11</sup>and 1.6 10<sup>−17</sup>for the Zheng et al.,
 
-2012 model, 3.1 10<sup>−2</sup> and 3.04 10<sup>−20</sup> for the Fro¨hlich et al., 2018 model. Therefore, we conclude that the new approach gives accurate results.
+2012 model, 3.1 10<sup>−2</sup> and 3.04 10<sup>−20</sup>for the Fro¨hlich et al., 2018 model. Therefore, we conclude that the new approach gives accurate results.
 
 | Table 1. Overview of the models and optimization problems considered in this study. Problem | n θ | nx | \# data points | Equilibration type | Reference |
 | --- | --- | --- | --- | --- | --- |

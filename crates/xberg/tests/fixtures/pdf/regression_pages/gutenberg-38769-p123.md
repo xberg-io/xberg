@@ -1,6 +1,6 @@
 [III : 46] COMPLEX NUMBERS 107
 
-and cot ω = cot A + cot B + cot C.
+and $cot ω = cot A + cot B + cot C$.
 
 [To prove (iii) we observe that if A, B, C are the vertices, and P any point z, then the condition that AP should be perpendicular to BC is (Ex. 9) that (z − α)/(β − γ) should be purely imaginary, or that **R** (z − α) **R** (β − γ) + **I** (z − α) **I** (β − γ) = 0.
 
@@ -8,9 +8,9 @@ This equation, and the two similar equations obtained by permuting α, β, γ cy
 
 ?
 
-Then γ − β = a, α − γ = −b Cis(−C), β − α = −c Cis B.
+Then $γ − β = a, α − γ = −b$ Cis(−C), $β − α = −c$ Cis B.
 
-We have to determine z and ω from the equations (z − α)(β~0~ − α~0~) (z − β)(γ~0~ − β~0~) (z − γ)(α~0~ − γ~0~) = = = Cis 2ω, (z~0~ − α~0~)(β − α) (z~0~ − β~0~)(γ − β) (z~0~ − γ~0~)(α − γ) where z~0~, α~0~, β~0~, γ~0~ denote the conjugates of z, α, β, γ. Adding the numerators and denominators of the three equal fractions, and using the equation i cot ω = (1 + Cis 2ω)/(1 − Cis 2ω),
+We have to determine z and ω from the equations (z − α)(β~0~ − α~0~) (z − β)(γ~0~ − β~0~) (z − γ)(α~0~ − γ~0~) = = = Cis 2ω, (z~0~ − α~0~)(β − α) (z~0~ − β~0~)(γ − β) (z~0~ − γ~0~)(α − γ) where z~0~, α~0~, β~0~, γ~0~ denote the conjugates of z, α, β, γ. Adding the numerators and denominators of the three equal fractions, and using the equation $i cot ω = (1$ + Cis 2ω)/(1 − Cis 2ω),
 
 | we find that ( β − γ )( β | − γ ) + ( γ − α )( γ | − α ) + ( α − β )( α | − β ) |
 | --- | --- | --- | --- |
