@@ -6709,7 +6709,8 @@ fn covers_and_carries_with(seg: &SegmentData, table: &TableCoverage, row_holds: 
     }
     #[cfg(test)]
     CARRY_CHECKS.with(|checks| checks.set(checks.get() + 1));
-    table.carries_with(seg_text, row_holds)
+    // A formula's text is its TeX, which no cell spells; the grid carries the glyphs it was built from.
+    crate::pdf::native::math_latex::sentinels::contains_sentinel(seg_text) || table.carries_with(seg_text, row_holds)
 }
 
 #[cfg(test)]

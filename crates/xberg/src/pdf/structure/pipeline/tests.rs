@@ -2528,6 +2528,19 @@ fn a_segment_that_only_a_later_table_carries_is_suppressed() {
     );
 }
 
+/// A formula the math pass rebuilt from glyphs inside a table spells its TeX, not the cell words, but
+/// the table carries the same glyphs: the formula is not printed again after the table.
+#[test]
+fn a_native_formula_segment_inside_a_table_is_suppressed() {
+    use crate::pdf::native::math_latex::sentinels::{INLINE_CLOSE, INLINE_OPEN};
+    let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["Number", "log ϵ"]])).expect("box");
+    let formula = printed_at(&format!("{INLINE_OPEN}\\log_{{\\epsilon}}{INLINE_CLOSE}"), 10.0, 10.0);
+    let outside = printed_at(&format!("{INLINE_OPEN}x{INLINE_CLOSE}"), 500.0, 500.0);
+    let filtered = filter_segments_by_table_bboxes(vec![formula, outside], &[covering]);
+    assert_eq!(filtered.len(), 1, "only the formula under the table is carried");
+    assert!(filtered[0].text.contains('x'));
+}
+
 /// Tables that the document build emits for one page of text and the given native tables.
 fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>) -> usize {
     let document = build_document_structure(
