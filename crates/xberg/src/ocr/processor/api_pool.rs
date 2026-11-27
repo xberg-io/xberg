@@ -79,15 +79,17 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
     {
         let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         loop {
-            if let Some(index) = state.idle.iter().position(|(idle_key, _)| idle_key == &key) {
-                let value = state.idle.swap_remove(index).1;
+            // `idle` is ordered by release, oldest first, and both removals below keep it so:
+            // a match takes the most recently released handle and an eviction the least. ~keep
+            if let Some(index) = state.idle.iter().rposition(|(idle_key, _)| idle_key == &key) {
+                let value = state.idle.remove(index).1;
                 state.checked_out += 1;
                 return Ok(ResourceLease::new(Arc::clone(self), key, value));
             }
 
             let total = state.checked_out + state.idle.len();
             if total < self.capacity || !state.idle.is_empty() {
-                let stale = if total == self.capacity { state.idle.pop() } else { None };
+                let stale = (total == self.capacity).then(|| state.idle.remove(0));
                 state.checked_out += 1;
                 drop(state);
                 drop(stale);
@@ -839,6 +841,57 @@ mod tests {
             .checkout::<(), _>("eng", || panic!("English handle should be idle"))
             .unwrap();
         assert_eq!(*english, 1);
+    }
+
+    #[test]
+    fn a_full_pool_evicts_the_least_recently_released_idle_handle() {
+        let pool = ResourcePool::new(2);
+        drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
+        drop(pool.checkout::<(), _>("deu", || Ok(2)).unwrap());
+        assert_eq!(pool.counts(), (0, 2));
+
+        let french = pool.checkout::<(), _>("fra", || Ok(3)).unwrap();
+        assert_eq!(pool.counts(), (1, 1));
+        let german = pool
+            .checkout::<(), _>("deu", || panic!("the newer German handle should have stayed idle"))
+            .unwrap();
+        assert_eq!((*french, *german), (3, 2));
+        drop(german);
+        drop(french);
+
+        let english = pool.checkout::<(), _>("eng", || Ok(4)).unwrap();
+        assert_eq!(*english, 4, "the older English handle should have been evicted");
+    }
+
+    #[test]
+    fn reusing_an_idle_handle_makes_it_the_most_recently_released() {
+        let pool = ResourcePool::new(2);
+        drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
+        drop(pool.checkout::<(), _>("deu", || Ok(2)).unwrap());
+        drop(
+            pool.checkout::<(), _>("eng", || panic!("English handle should be idle"))
+                .unwrap(),
+        );
+
+        let french = pool.checkout::<(), _>("fra", || Ok(3)).unwrap();
+        let english = pool
+            .checkout::<(), _>("eng", || panic!("the reused English handle should have stayed idle"))
+            .unwrap();
+        assert_eq!((*french, *english), (3, 1));
+    }
+
+    #[test]
+    fn a_matching_checkout_takes_the_most_recently_released_handle() {
+        let pool = ResourcePool::new(2);
+        let first = pool.checkout::<(), _>("eng", || Ok(1)).unwrap();
+        let second = pool.checkout::<(), _>("eng", || Ok(2)).unwrap();
+        drop(first);
+        drop(second);
+
+        let reused = pool
+            .checkout::<(), _>("eng", || panic!("an English handle should be idle"))
+            .unwrap();
+        assert_eq!(*reused, 2);
     }
 
     #[test]
