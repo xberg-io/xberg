@@ -5,13 +5,14 @@
 
 use std::path::{Path, PathBuf};
 
-#[cfg(paddle_ocr)]
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs;
 
-#[cfg(paddle_ocr)]
 use super::error::OcrError;
 #[cfg(paddle_ocr)]
-use super::tessdata_download::{ensure_language_pack, pinned_packs, pinned_source_url};
+use super::tessdata_download::pinned_source_url;
+#[cfg(not(target_arch = "wasm32"))]
+use super::tessdata_download::{ensure_language_pack, pinned_packs};
 use crate::core::config::TessdataModel;
 
 /// Manages tessdata file downloading, caching, and manifest generation.
@@ -20,25 +21,20 @@ use crate::core::config::TessdataModel;
 pub struct TessdataManager {
     cache_dir: PathBuf,
     model: TessdataModel,
-    #[cfg(paddle_ocr)]
+    #[cfg(not(target_arch = "wasm32"))]
     adopt_from: Vec<PathBuf>,
 }
 
-/// The local directories a manager writing into `set_dir` may copy verified packs from.
-#[cfg(paddle_ocr)]
+/// The local directories a manager writing into `set_dir` may copy verified packs from: those
+/// OCR resolution adopts from when `set_dir` is a `<root>/<model>` set directory, none otherwise.
+#[cfg(not(target_arch = "wasm32"))]
 fn adoption_sources(set_dir: &Path, model: TessdataModel) -> Vec<PathBuf> {
-    let Some(flat) = set_dir
-        .parent()
-        .filter(|_| set_dir.file_name().is_some_and(|name| name == model.as_str()))
-    else {
-        return Vec::new();
-    };
-    let mut sources = Vec::new();
-    if model == TessdataModel::Best {
-        sources.push(flat.join(TessdataModel::Fast.as_str()));
+    match set_dir.parent() {
+        Some(flat) if set_dir.file_name().is_some_and(|name| name == model.as_str()) => {
+            super::processor::validation::adoption_sources_beside(flat, model)
+        }
+        _ => Vec::new(),
     }
-    sources.push(flat.to_path_buf());
-    sources
 }
 
 impl TessdataManager {
@@ -56,14 +52,16 @@ impl TessdataManager {
     /// where OCR resolution looks for it.
     ///
     /// When `cache_dir` is such a `<root>/tessdata/<model>` directory, a missing pack is first
-    /// copied, after its SHA-256 is checked against the pin, from the flat `<root>/tessdata`
-    /// older releases filled and, for `best`, from `<root>/tessdata/fast` (`osd` and `equ` are
-    /// the same bytes in both sets), before it is downloaded.
+    /// copied, after its SHA-256 is checked against the pin, from the directories OCR resolution
+    /// adopts from: the flat `<root>/tessdata` older releases filled, `<root>/tessdata/fast`
+    /// (`osd` and `equ` are the same bytes in both sets) and, unless
+    /// `XBERG_TESSDATA_SYSTEM_PATHS` turns them off, the built-in `best` directory (for `best`)
+    /// and the system tessdata directories. Only then is it downloaded.
     pub fn for_model(cache_dir: Option<PathBuf>, model: TessdataModel) -> Self {
         let cache_dir =
             cache_dir.unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("tessdata").join(model.as_str()));
         Self {
-            #[cfg(paddle_ocr)]
+            #[cfg(not(target_arch = "wasm32"))]
             adopt_from: adoption_sources(&cache_dir, model),
             cache_dir,
             model,
@@ -124,32 +122,27 @@ impl TessdataManager {
             .collect()
     }
 
-    /// Downloads every pinned traineddata file of this manager's model set.
-    ///
-    /// Skips files that already exist. Returns the count of newly downloaded files.
-    ///
-    /// When the `paddle-ocr` feature is not enabled, no download URLs are available
-    /// and this method always returns `Ok(0)`.
-    #[cfg(not(paddle_ocr))]
-    pub fn ensure_all_languages(&self) -> Result<usize, crate::error::XbergError> {
-        Ok(0)
+    /// WebAssembly cannot download tessdata, so this is an error there rather than a count of
+    /// zero, which would read as "already cached".
+    #[cfg(target_arch = "wasm32")]
+    pub fn ensure_all_languages(&self) -> Result<usize, OcrError> {
+        self.ensure_languages(&[])
     }
 
-    /// Downloads the pinned traineddata files of `languages` for this manager's model set.
-    ///
-    /// When the `paddle-ocr` feature is not enabled, no download URLs are available
-    /// and this method always returns `Ok(0)`.
-    #[cfg(not(paddle_ocr))]
-    pub fn ensure_languages(&self, _languages: &[&str]) -> Result<usize, crate::error::XbergError> {
-        Ok(0)
+    /// WebAssembly cannot download tessdata, so this is an error there rather than a count of
+    /// zero, which would read as "already cached".
+    #[cfg(target_arch = "wasm32")]
+    pub fn ensure_languages(&self, _languages: &[&str]) -> Result<usize, OcrError> {
+        Err(OcrError::TesseractInitializationFailed(format!(
+            "tessdata_{} cannot be downloaded on WebAssembly; supply the models through OcrConfig::tessdata_bytes",
+            self.model
+        )))
     }
 
     /// Downloads every pinned traineddata file of this manager's model set.
     ///
     /// Skips files that already exist. Returns the count of newly downloaded files.
-    ///
-    /// Requires the `paddle-ocr` feature for HTTP download support (ureq).
-    #[cfg(paddle_ocr)]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn ensure_all_languages(&self) -> Result<usize, OcrError> {
         let languages: Vec<&str> = pinned_packs(self.model).iter().map(|&(lang, _, _)| lang).collect();
         self.ensure_languages(&languages)
@@ -157,11 +150,11 @@ impl TessdataManager {
 
     /// Downloads the pinned traineddata files of `languages` for this manager's model set.
     ///
-    /// Skips files that already exist and copies verified ones from the flat cache (see
+    /// Skips files that already exist and copies verified ones from local directories (see
     /// [`Self::for_model`]). Entries are trimmed and empty ones ignored; every language is checked
     /// against the pins before anything is written, and one with no pinned pack is an error.
     /// Returns the count of newly published files.
-    #[cfg(paddle_ocr)]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn ensure_languages(&self, languages: &[&str]) -> Result<usize, OcrError> {
         let languages: Vec<&str> = languages
             .iter()
@@ -331,7 +324,6 @@ mod tests {
         assert!(!fast.is_language_cached("deu"), "a directory is not a pack");
     }
 
-    #[cfg(paddle_ocr)]
     #[test]
     fn test_ensure_all_languages_with_existing_files() {
         let temp_dir = TempDir::new().unwrap();
@@ -346,19 +338,23 @@ mod tests {
         assert_eq!(downloaded, 0);
     }
 
-    #[cfg(paddle_ocr)]
     #[test]
-    fn a_set_directory_adopts_from_the_flat_cache_and_best_also_from_fast() {
+    fn a_set_directory_adopts_from_the_directories_resolution_adopts_from() {
         let root = Path::new("/cache/tessdata");
 
-        assert_eq!(
-            TessdataManager::for_model(Some(root.join("fast")), TessdataModel::Fast).adopt_from,
-            [root.to_path_buf()]
-        );
-        assert_eq!(
-            TessdataManager::for_model(Some(root.join("best")), TessdataModel::Best).adopt_from,
-            [root.join("fast"), root.to_path_buf()]
-        );
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let manager = TessdataManager::for_model(Some(root.join(model.as_str())), model);
+            assert_eq!(
+                manager.adopt_from,
+                crate::ocr::processor::validation::adoption_sources_beside(root, model),
+                "{model}"
+            );
+            assert_eq!(
+                manager.adopt_from[..2],
+                [root.to_path_buf(), root.join("fast")],
+                "{model}"
+            );
+        }
         assert!(
             TessdataManager::for_model(Some(PathBuf::from("/elsewhere")), TessdataModel::Best)
                 .adopt_from
@@ -366,7 +362,6 @@ mod tests {
         );
     }
 
-    #[cfg(paddle_ocr)]
     #[test]
     fn ensure_languages_rejects_a_language_with_no_pin() {
         let temp_dir = TempDir::new().unwrap();

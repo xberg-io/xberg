@@ -277,7 +277,6 @@ fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> 
 }
 
 /// The pinned language packs of `model`, sorted by language code.
-#[cfg(any(paddle_ocr, test))]
 pub(crate) fn pinned_packs(model: TessdataModel) -> &'static [PinnedPack] {
     PINNED.packs(model)
 }

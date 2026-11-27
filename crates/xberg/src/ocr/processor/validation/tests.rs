@@ -233,7 +233,7 @@ fn test_fast_search_dirs_never_hold_the_built_in_best_directory() {
 #[test]
 fn test_adoption_sources_per_model() {
     let base = Path::new("/given/cache");
-    let sources = |model, system_paths| adoption_sources(base, &given_env(model, system_paths), &GIVEN_SYSTEM);
+    let sources = |model, system_paths| adoption_sources(&base.join("tessdata"), model, system_paths, &GIVEN_SYSTEM);
 
     assert_eq!(
         sources(TessdataModel::Best, true),
@@ -255,6 +255,11 @@ fn test_adoption_sources_per_model() {
     assert_eq!(
         sources(TessdataModel::Fast, false),
         [base.join("tessdata"), base.join("tessdata").join("fast")]
+    );
+    assert_eq!(
+        adoption_sources_beside(&base.join("tessdata"), TessdataModel::Best)[..2],
+        [base.join("tessdata"), base.join("tessdata").join("fast")],
+        "cache warm adopts from the same directories as the resolver"
     );
 }
 

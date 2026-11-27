@@ -449,10 +449,10 @@ pub struct WarmOptions {
     #[cfg(any(feature = "captioning-onnx", feature = "classification-onnx"))]
     pub onnx: super::onnx_candidates::StageSelection,
     /// Tesseract model sets to warm; empty means the default set.
-    #[cfg(feature = "paddle-ocr")]
+    #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
     pub tessdata_models: Vec<xberg::TessdataModel>,
     /// Tesseract languages to warm; empty means every pinned language.
-    #[cfg(feature = "paddle-ocr")]
+    #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
     pub tessdata_languages: Vec<String>,
 }
 
@@ -610,7 +610,21 @@ fn warm_layout_detection(
 
 /// Download (or confirm already cached) the Tesseract language data files of each requested
 /// model set into `<cache>/tessdata/<model>`, the directory OCR resolves that set from.
-#[cfg(feature = "paddle-ocr")]
+///
+/// Needs only native Tesseract OCR (`ocr`, which `paddle-ocr` implies), in a build that has the
+/// `warm` command at all.
+#[cfg(all(
+    any(feature = "ocr", feature = "paddle-ocr"),
+    any(
+        feature = "embeddings",
+        feature = "layout-detection",
+        feature = "paddle-ocr",
+        feature = "tree-sitter",
+        feature = "ner-onnx",
+        feature = "classification-onnx",
+        feature = "captioning-onnx"
+    )
+))]
 fn warm_tessdata(
     cache_base: &Path,
     options: &WarmOptions,
@@ -773,6 +787,7 @@ fn warm_model_families(
     hf_cache_dir: &Option<PathBuf>,
     downloaded: &mut Vec<String>,
     #[cfg(any(
+        feature = "ocr",
         feature = "paddle-ocr",
         feature = "layout-detection",
         feature = "tree-sitter",
@@ -798,7 +813,7 @@ fn warm_model_families(
         already_cached,
     )?;
 
-    #[cfg(feature = "paddle-ocr")]
+    #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
     warm_tessdata(cache_base, options, downloaded, already_cached)?;
 
     #[cfg(feature = "embeddings")]
@@ -879,6 +894,7 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
 
     let mut downloaded: Vec<String> = Vec::new();
     #[cfg(any(
+        feature = "ocr",
         feature = "paddle-ocr",
         feature = "layout-detection",
         feature = "tree-sitter",
@@ -886,6 +902,7 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
     ))]
     let mut already_cached: Vec<String> = Vec::new();
     #[cfg(not(any(
+        feature = "ocr",
         feature = "paddle-ocr",
         feature = "layout-detection",
         feature = "tree-sitter",
@@ -909,6 +926,7 @@ pub fn warm_command(cache_dir: Option<PathBuf>, format: WireFormat, options: War
         &hf_cache_dir,
         &mut downloaded,
         #[cfg(any(
+            feature = "ocr",
             feature = "paddle-ocr",
             feature = "layout-detection",
             feature = "tree-sitter",

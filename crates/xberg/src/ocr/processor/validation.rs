@@ -196,7 +196,7 @@ fn resolve_tessdata_path_with(
     let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
     let managed = model_cache_dir(&cache_base, tessdata_env.model);
     let flat = cache_base.join("tessdata");
-    let sources = adoption_sources(&cache_base, tessdata_env, provision.system);
+    let sources = adoption_sources(&flat, tessdata_env.model, tessdata_env.system_paths, provision.system);
     let xberg_owned =
         |dir: &Path| dir == managed.as_path() || (tessdata_env.model == TessdataModel::Fast && dir == flat);
 
@@ -311,21 +311,36 @@ fn any_language_exists(directory: &Path, languages: &[String]) -> bool {
 }
 
 /// Local directories a missing pack of the requested set may be copied from after its pin is
-/// verified: the flat cache and the `fast` cache (for `best` too, since `osd` and `equ` are the
-/// same bytes in both sets; a directory is never its own source), then the built-in `best`
-/// directory and the system paths.
-fn adoption_sources(cache_base: &Path, tessdata_env: &TessdataEnv, system: &SystemTessdataDirs<'_>) -> Vec<PathBuf> {
-    let mut sources = vec![
-        cache_base.join("tessdata"),
-        model_cache_dir(cache_base, TessdataModel::Fast),
-    ];
-    if tessdata_env.system_paths {
-        if tessdata_env.model == TessdataModel::Best {
+/// verified: the flat cache `flat` and the `fast` cache beside it (for `best` too, since `osd`
+/// and `equ` are the same bytes in both sets; a directory is never its own source), then the
+/// built-in `best` directory and the system paths.
+fn adoption_sources(
+    flat: &Path,
+    model: TessdataModel,
+    system_paths: bool,
+    system: &SystemTessdataDirs<'_>,
+) -> Vec<PathBuf> {
+    let mut sources = vec![flat.to_path_buf(), flat.join(TessdataModel::Fast.as_str())];
+    if system_paths {
+        if model == TessdataModel::Best {
             sources.extend(system.best.iter().map(PathBuf::from));
         }
         sources.extend(system.fast.iter().map(PathBuf::from));
     }
     sources
+}
+
+/// [`adoption_sources`] for a caller that fills a set directory outside the resolver (`cache
+/// warm`): the same list for the cache whose flat tessdata directory is `flat`, with the system
+/// directories unless `XBERG_TESSDATA_SYSTEM_PATHS` turns them off.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn adoption_sources_beside(flat: &Path, model: TessdataModel) -> Vec<PathBuf> {
+    adoption_sources(
+        flat,
+        model,
+        TessdataEnv::from_process().system_paths,
+        &SYSTEM_TESSDATA_DIRS,
+    )
 }
 
 /// The size and modification time of each candidate source file, to tell whether a failed
