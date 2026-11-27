@@ -21,6 +21,22 @@ fn preserve_source_space(text: &mut String, preceded_by_space: bool) {
     }
 }
 
+/// Rearrange `items` so that position `k` holds the item that was at `order[k]`.
+/// `order` must hold every index of `items` exactly once.
+fn gather_in_place<T>(items: &mut [T], mut order: Vec<usize>) {
+    for start in 0..order.len() {
+        let mut current = start;
+        loop {
+            let source = std::mem::replace(&mut order[current], current);
+            if source == start || source == current {
+                break;
+            }
+            items.swap(current, source);
+            current = source;
+        }
+    }
+}
+
 impl PdfDocument {
     /// Promote labels in rowspan-sparse columns so they sort at the top
     /// of their data-row block instead of landing mid-group.
@@ -169,8 +185,7 @@ impl PdfDocument {
             crate::utils::row_band_then_x(row_baseline[a], spans[a].bbox.x, row_baseline[b], spans[b].bbox.x)
                 .then_with(|| crate::utils::safe_float_cmp(spans[b].bbox.y, spans[a].bbox.y))
         });
-        let reordered: Vec<crate::layout::TextSpan> = order.into_iter().map(|i| spans[i].clone()).collect();
-        spans.clone_from_slice(&reordered);
+        gather_in_place(spans, order);
     }
 
     pub(crate) fn reorder_rowspan_labels(spans: &mut Vec<crate::layout::TextSpan>) {
@@ -419,8 +434,7 @@ impl PdfDocument {
             crate::utils::row_band_then_x(ya, spans[a].bbox.x, yb, spans[b].bbox.x)
                 .then_with(|| crate::utils::safe_float_cmp(spans[b].bbox.y, spans[a].bbox.y))
         });
-        let reordered: Vec<crate::layout::TextSpan> = order.into_iter().map(|i| spans[i].clone()).collect();
-        *spans = reordered;
+        gather_in_place(spans, order);
     }
 
     /// Extract tables from a page.
@@ -995,6 +1009,50 @@ mod source_space_tests {
         preserve_source_space(&mut text, true);
 
         assert_eq!(text, " fragment");
+    }
+}
+
+#[cfg(test)]
+mod gather_tests {
+    use super::gather_in_place;
+
+    fn gathered(order: &[usize]) -> Vec<String> {
+        let mut items: Vec<String> = (0..order.len()).map(|index| format!("item{index}")).collect();
+        let expected: Vec<String> = order.iter().map(|&index| items[index].clone()).collect();
+        gather_in_place(&mut items, order.to_vec());
+        assert_eq!(items, expected);
+        items
+    }
+
+    #[test]
+    fn identity_order_leaves_items_in_place() {
+        assert_eq!(gathered(&[0, 1, 2, 3]), ["item0", "item1", "item2", "item3"]);
+    }
+
+    #[test]
+    fn reversed_order_reverses_items() {
+        assert_eq!(gathered(&[3, 2, 1, 0]), ["item3", "item2", "item1", "item0"]);
+        assert_eq!(gathered(&[2, 1, 0]), ["item2", "item1", "item0"]);
+    }
+
+    #[test]
+    fn three_cycle_moves_each_item_once() {
+        assert_eq!(gathered(&[1, 2, 0]), ["item1", "item2", "item0"]);
+        assert_eq!(gathered(&[2, 0, 1]), ["item2", "item0", "item1"]);
+    }
+
+    #[test]
+    fn disjoint_cycles_and_fixed_points_are_gathered_independently() {
+        assert_eq!(
+            gathered(&[4, 1, 3, 2, 0, 6, 5]),
+            ["item4", "item1", "item3", "item2", "item0", "item6", "item5"]
+        );
+    }
+
+    #[test]
+    fn empty_and_single_item_orders_are_noops() {
+        assert!(gathered(&[]).is_empty());
+        assert_eq!(gathered(&[0]), ["item0"]);
     }
 }
 
