@@ -376,6 +376,18 @@ repository state, ordered fixture/document digests, framework executable identit
 timing configuration, worker semantics, and the actual Xberg thread budget reported by the
 adapter. It deliberately stores no local absolute paths.
 
+Xberg rows run the CLI the way its shipped npm, PyPI and plugin launchers start it (ADR 0022): on
+macOS the harness sets `MallocMaxMagazines=1` for every xberg process it spawns (single-file,
+batch, auto-OCR, and the steady-state adapter's cold CLI probe) unless the harness's own
+environment already defines the variable, even as an empty string, in which case the child
+inherits that value. Competitor processes never receive it, and Linux and Windows runs are
+unchanged. Provenance records what was injected per framework as
+`frameworks[].xberg_env`, e.g. `{"MallocMaxMagazines": "1"}`, and omits the field when nothing
+was. In-process steady-state rows cannot get the setting, because libmalloc reads it when the
+process starts, and record no `xberg_env`; their memory and timing therefore reflect the default
+allocator configuration, not the launchers'. To measure a launcher-equivalent in-process run, set
+`MallocMaxMagazines=1` in the environment that starts the harness.
+
 The remote comparative workflow publishes eight independently validated cohorts. The pinned matrix
 contract contains these cell counts:
 

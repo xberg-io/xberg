@@ -135,6 +135,9 @@ impl FrameworkAdapter for SubprocessAdapter {
     fn configured_tessdata_model(&self) -> Option<xberg::TessdataModel> {
         (self.is_xberg() && self.tessdata_model != xberg::TessdataModel::Fast).then_some(self.tessdata_model)
     }
+    fn injected_xberg_env(&self) -> Vec<(String, String)> {
+        self.launcher_env.clone()
+    }
     fn configured_thread_budget(&self) -> Option<usize> {
         if !self.is_xberg() {
             return None;

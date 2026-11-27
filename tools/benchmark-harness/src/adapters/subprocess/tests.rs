@@ -7,6 +7,7 @@ mod batch_exec_tests;
 mod builders;
 mod docling_version;
 mod error_kind;
+mod launcher_env;
 mod layout_failure_rejection;
 mod liteparse_staging_tests;
 mod ocr_args_tests;
