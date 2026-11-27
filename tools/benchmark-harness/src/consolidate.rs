@@ -220,6 +220,7 @@ mod tests {
             extracted_text: None,
             system_load: None,
             output_format: OutputFormat::Markdown,
+            fixture_family: None,
         }
     }
 

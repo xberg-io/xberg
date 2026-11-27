@@ -129,6 +129,7 @@ impl SubprocessAdapter {
             ocr_status: OcrStatus::Unknown,
             extracted_text: None,
             system_load: None,
+            fixture_family: None,
         }
     }
 
@@ -426,6 +427,7 @@ impl SubprocessAdapter {
             ocr_status,
             extracted_text,
             system_load: None,
+            fixture_family: None,
         })
     }
 }

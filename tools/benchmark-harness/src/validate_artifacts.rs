@@ -168,6 +168,7 @@ struct FixtureQualityExpectation {
     has_quality_ground_truth: bool,
     has_structural_ground_truth: bool,
     ocr_language: Option<String>,
+    family: Option<String>,
 }
 
 fn fixture_quality_expectations(
@@ -188,6 +189,7 @@ fn fixture_quality_expectations(
                     .as_ref()
                     .is_some_and(|ground_truth| ground_truth.markdown_file.is_some()),
                 ocr_language: descriptor.ocr_language().map(str::to_string),
+                family: descriptor.family().map(str::to_string),
             })
         })
         .collect()

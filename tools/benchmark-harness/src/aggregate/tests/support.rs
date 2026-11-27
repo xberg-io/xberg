@@ -50,6 +50,7 @@ pub(super) fn create_test_result(
         output_format: OutputFormat::Markdown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 

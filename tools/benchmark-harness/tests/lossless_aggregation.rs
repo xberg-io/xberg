@@ -111,6 +111,7 @@ fn successful_result() -> BenchmarkResult {
             logical_cores: 8,
             physical_cores: 4,
         }),
+        fixture_family: None,
     }
 }
 

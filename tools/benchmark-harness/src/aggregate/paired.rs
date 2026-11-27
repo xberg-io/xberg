@@ -2,9 +2,12 @@
 //! ([`LayoutImpact`]) and xberg vs competitor ([`HeadToHead`]).
 //!
 //! Rows pair by fixture inside one `(output_format, mode, file_type)` bucket and only on fixtures
-//! where both sides succeeded. OCR use is a property of each row, not part of the bucket: a failed
-//! row never reports it (`ocr: None`), and an auto-OCR variant reports it per document, so keying
-//! on it would split one fixture's rows apart. Every delta is the median of per-fixture deltas,
+//! where both sides carry a quality result: a success, or a zero-overlap failure, which returned
+//! the wrong text and pairs at the TF1 of 0 it was scored with. Dropping zero-overlap rows would
+//! hide the worst regressions, a fixture that scores 1.0 on one side and 0.0 on the other. OCR use
+//! is a property of each row, not part of the bucket: a failed row never reports it
+//! (`ocr: None`), and an auto-OCR variant reports it per document, so keying on it would split one
+//! fixture's rows apart. Every delta is the median of per-fixture deltas,
 //! never the difference of two medians, so a fixture present on one side cannot skew the other.
 
 use super::types::{FixtureDelta, HeadToHead, LayoutImpact, PairedDelta, PairedFixtureDeltas, PerFixtureRow};
@@ -74,6 +77,20 @@ fn ambiguous_fixtures(rows: &[PerFixtureRow]) -> BTreeSet<(&str, &str)> {
         .collect()
 }
 
+/// `error_kind` of a zero-overlap row, as `PerFixtureRow` spells it (`ErrorKind`'s `Debug` name).
+const ZERO_OVERLAP_ERROR_KIND: &str = "ZeroOverlap";
+
+/// Whether the row carries a quality result that pairs: a success, or a zero-overlap failure.
+/// Mirrors `crate::types::has_quality_result` for the serialized row.
+fn has_quality_result(row: &PerFixtureRow) -> bool {
+    row.success || row.error_kind.as_deref() == Some(ZERO_OVERLAP_ERROR_KIND)
+}
+
+/// Preference among repeated rows for one fixture: success, then zero overlap, then any failure.
+fn pairing_rank(row: &PerFixtureRow) -> u8 {
+    u8::from(row.success) + u8::from(has_quality_result(row))
+}
+
 fn index_rows(rows: &[PerFixtureRow]) -> (RowIndex<'_>, AmbiguousIndex<'_>) {
     let ambiguous_fixture_set = ambiguous_fixtures(rows);
     let mut index: RowIndex<'_> = BTreeMap::new();
@@ -99,9 +116,10 @@ fn index_rows(rows: &[PerFixtureRow]) -> (RowIndex<'_>, AmbiguousIndex<'_>) {
             continue;
         }
         let slot = bucket.entry(row.fixture_id.as_str());
-        // Repeated rows for one fixture (re-runs) keep the first success, else the first row.
+        // Repeated rows for one fixture (re-runs) keep the first success, else the first
+        // zero-overlap row, else the first row.
         slot.and_modify(|existing| {
-            if !existing.success && row.success {
+            if pairing_rank(row) > pairing_rank(existing) {
                 *existing = row;
             }
         })
@@ -215,15 +233,16 @@ fn summarize_optional(deltas: &[FixtureDelta]) -> Option<PairedDelta> {
     (!deltas.is_empty()).then(|| summarize(deltas))
 }
 
-/// Fixtures present in both maps where both rows succeeded, as `(a, b)` rows sorted by fixture id.
-fn succeeded_pairs<'a>(
+/// Fixtures present in both maps where both rows carry a quality result (see
+/// [`has_quality_result`]), as `(a, b)` rows sorted by fixture id.
+fn scored_pairs<'a>(
     a: &BTreeMap<&'a str, &'a PerFixtureRow>,
     b: &BTreeMap<&'a str, &'a PerFixtureRow>,
 ) -> Vec<(&'a PerFixtureRow, &'a PerFixtureRow)> {
     a.iter()
         .filter_map(|(id, row_a)| {
             let row_b = b.get(id)?;
-            (row_a.success && row_b.success).then_some((*row_a, *row_b))
+            (has_quality_result(row_a) && has_quality_result(row_b)).then_some((*row_a, *row_b))
         })
         .collect()
 }
@@ -246,8 +265,11 @@ fn ocr_used_counts(pairs: &[(&PerFixtureRow, &PerFixtureRow)]) -> (usize, usize)
     )
 }
 
-fn succeeded_ids<'a>(rows: &BTreeMap<&'a str, &'a PerFixtureRow>) -> BTreeSet<&'a str> {
-    rows.iter().filter(|(_, row)| row.success).map(|(id, _)| *id).collect()
+fn scored_ids<'a>(rows: &BTreeMap<&'a str, &'a PerFixtureRow>) -> BTreeSet<&'a str> {
+    rows.iter()
+        .filter(|(_, row)| has_quality_result(row))
+        .map(|(id, _)| *id)
+        .collect()
 }
 
 /// Name of the baseline variant a layout variant is compared against, if one is present.
@@ -353,7 +375,7 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
                 continue;
             };
             let layout_rows = &layout_buckets[key];
-            let pairs = succeeded_pairs(baseline_rows, layout_rows);
+            let pairs = scored_pairs(baseline_rows, layout_rows);
             let (baseline_ocr_fixture_count, layout_ocr_fixture_count) = ocr_used_counts(&pairs);
 
             let sf1 = fixture_deltas(&pairs, sf1_of);
@@ -403,8 +425,8 @@ pub(super) fn build_layout_impact(rows: &[PerFixtureRow]) -> Vec<LayoutImpact> {
 }
 
 /// One [`HeadToHead`] per (xberg framework, competitor framework, output format, mode, file type)
-/// in which the two share at least one fixture id. Medians cover fixtures both
-/// succeeded on; the `*_only_fixture_ids` lists name fixtures only one side succeeded on.
+/// in which the two share at least one fixture id. Medians cover fixtures both have a quality
+/// result for; the `*_only_fixture_ids` lists name fixtures only one side has one for.
 pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
     let (index, ambiguous) = index_rows(rows);
     let mut out = Vec::new();
@@ -419,9 +441,9 @@ pub(super) fn build_head_to_head(rows: &[PerFixtureRow]) -> Vec<HeadToHead> {
                 if !xberg_rows.keys().any(|id| competitor_rows.contains_key(id)) {
                     continue;
                 }
-                let pairs = succeeded_pairs(competitor_rows, xberg_rows);
+                let pairs = scored_pairs(competitor_rows, xberg_rows);
                 let (competitor_ocr_fixture_count, xberg_ocr_fixture_count) = ocr_used_counts(&pairs);
-                let (xberg_ok, competitor_ok) = (succeeded_ids(xberg_rows), succeeded_ids(competitor_rows));
+                let (xberg_ok, competitor_ok) = (scored_ids(xberg_rows), scored_ids(competitor_rows));
                 let (xberg_only_fixture_ids, xberg_only_fixture_count) =
                     capped_ids(xberg_ok.difference(&competitor_ok).copied().collect());
                 let (competitor_only_fixture_ids, competitor_only_fixture_count) =

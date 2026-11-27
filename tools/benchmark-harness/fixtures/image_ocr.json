@@ -4,6 +4,7 @@
 	"file_size": 73717,
 	"expected_frameworks": ["xberg", "docling", "markitdown", "mineru", "pymupdf4llm", "tika", "unstructured"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "Image requiring OCR - Hello World test image",
 		"category": "ocr"
 	},

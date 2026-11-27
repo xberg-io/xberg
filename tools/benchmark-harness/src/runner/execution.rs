@@ -341,6 +341,7 @@ fn build_single_benchmark_result(
         ocr_status: representative_result.ocr_status,
         extracted_text: representative_result.extracted_text.clone(),
         system_load: Some(SystemLoad::capture()?),
+        fixture_family: None,
     })
 }
 
@@ -518,6 +519,7 @@ fn build_one_batch_file_result(
         ocr_status: representative_result.ocr_status,
         extracted_text: representative_result.extracted_text.clone(),
         system_load: Some(SystemLoad::capture()?),
+        fixture_family: None,
     })
 }
 

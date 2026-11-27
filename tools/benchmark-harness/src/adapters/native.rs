@@ -128,6 +128,7 @@ fn single_failure_result(context: SingleResultContext<'_>, error: &Error, timed_
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -174,6 +175,7 @@ fn single_success_result(
         ocr_status,
         extracted_text: Some(extraction_result.content),
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -381,6 +383,7 @@ fn batch_failure_result(
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 
@@ -445,6 +448,7 @@ fn batch_success_result(
         ocr_status: determine_ocr_status(extraction_result, config),
         extracted_text: Some(extraction_result.content.clone()),
         system_load: None,
+        fixture_family: None,
     }
 }
 

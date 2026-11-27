@@ -16,6 +16,7 @@
 		"unstructured"
 	],
 	"metadata": {
+		"family": "ocr_test",
 		"description": "Rotated OCR test PDF - 92KB scanned document with rotation to test OCR engine handling of page orientation",
 		"category": "pdf-ocr",
 		"size_class": "small",

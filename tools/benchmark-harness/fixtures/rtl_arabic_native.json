@@ -16,6 +16,7 @@
     "unstructured"
   ],
   "metadata": {
+    "family": "rtl_arabic",
     "description": "Authored one-page Arabic right-to-left PDF with headings, prose, a numbered list, a table, punctuation, numbers, and embedded left-to-right identifiers",
     "category": "pdf-generated",
     "size_class": "small",

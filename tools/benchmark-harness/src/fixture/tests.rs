@@ -164,6 +164,43 @@ fn fixture_ocr_language_validation_accepts_codes_and_rejects_paths() {
 }
 
 #[test]
+fn fixture_family_validation_accepts_a_name_and_rejects_empty_or_non_string_values() {
+    let make_fixture = |family: serde_json::Value| Fixture {
+        document: PathBuf::from("test.pdf"),
+        file_type: "pdf".to_string(),
+        file_size: 1024,
+        expected_frameworks: vec!["xberg".to_string()],
+        metadata: HashMap::from([("family".to_string(), family)]),
+        ground_truth: None,
+    };
+
+    let named = make_fixture(serde_json::json!("ocr_image"));
+    assert!(named.validate(Path::new("fixture.json")).is_ok());
+    assert_eq!(named.family(), Some("ocr_image"));
+    for invalid in [
+        serde_json::json!(""),
+        serde_json::json!(" ocr_image"),
+        serde_json::json!(3),
+    ] {
+        assert!(make_fixture(invalid).validate(Path::new("fixture.json")).is_err());
+    }
+}
+
+#[test]
+fn fixture_without_a_family_is_its_own_family() {
+    let fixture = Fixture {
+        document: PathBuf::from("test.pdf"),
+        file_type: "pdf".to_string(),
+        file_size: 1024,
+        expected_frameworks: vec![],
+        metadata: HashMap::new(),
+        ground_truth: None,
+    };
+
+    assert_eq!(fixture.family(), None);
+}
+
+#[test]
 fn test_absolute_path_rejected() {
     #[cfg(windows)]
     let absolute_path = PathBuf::from("C:\\absolute\\path\\test.pdf");

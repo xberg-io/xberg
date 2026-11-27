@@ -368,6 +368,12 @@ pub struct BenchmarkResult {
     /// field or were constructed outside a measurement path.
     #[serde(default)]
     pub system_load: Option<crate::system_load::SystemLoad>,
+
+    /// Content family of the fixture this result came from (`metadata.family`): fixtures that
+    /// render the same source content share one. `None` when the fixture declares none, in which
+    /// case the document is its own family. Absent from results that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixture_family: Option<String>,
 }
 
 impl BenchmarkResult {
@@ -401,6 +407,16 @@ impl BenchmarkResult {
 /// looking slower than it actually is relative to a framework (like xberg) that rarely produces
 /// zero-overlap output.
 pub(crate) fn is_timing_eligible(result: &BenchmarkResult) -> bool {
+    result.success || result.error_kind == ErrorKind::ZeroOverlap
+}
+
+/// Whether a result carries a quality score that quality comparisons must count.
+///
+/// A [`ErrorKind::ZeroOverlap`] result stays a failure for success-rate accounting, but its
+/// output was scored against the ground truth (TF1 = 0): it is the worst quality result, not a
+/// missing one. Dropping it from a mean or a per-document pairing hides exactly the regressions
+/// where one configuration scores 1.0 and another returns the wrong text.
+pub(crate) fn has_quality_result(result: &BenchmarkResult) -> bool {
     result.success || result.error_kind == ErrorKind::ZeroOverlap
 }
 

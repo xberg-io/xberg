@@ -546,6 +546,7 @@ fn sample_result(framework: &str, success: bool, error_kind: ErrorKind) -> Bench
         ocr_status: OcrStatus::Unknown,
         extracted_text: None,
         system_load: None,
+        fixture_family: None,
     }
 }
 

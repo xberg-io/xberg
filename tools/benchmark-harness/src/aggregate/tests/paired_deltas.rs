@@ -672,3 +672,59 @@ fn reading_order_ranking_is_coverage_adjusted() {
     let entry = &aggregated.comparison.pdf_reading_order_ranking_markdown[0];
     assert!((entry.value - 0.4).abs() < EPS, "got {}", entry.value);
 }
+
+/// A zero-overlap failure as the runner reclassifies it: the output was scored (TF1 = 0) and the
+/// row then flipped to a failure, keeping its quality and its reported OCR status.
+fn zero_overlap(framework: &str, fixture: &str) -> BenchmarkResult {
+    let mut result = scored(framework, fixture, 0.0, Some(0.0), 0.0);
+    result.success = false;
+    result.error_kind = ErrorKind::ZeroOverlap;
+    result.error_message = Some("extraction produced no ground-truth token overlap".to_string());
+    result
+}
+
+#[test]
+fn layout_impact_pairs_a_zero_overlap_layout_row_as_a_regression() {
+    let aggregated = aggregate_new_format(&[
+        scored(BASELINE, "a", 1.0, Some(1.0), 1.0),
+        scored(BASELINE, "b", 0.5, Some(0.5), 0.5),
+        zero_overlap(LAYOUT, "a"),
+        scored(LAYOUT, "b", 0.5, Some(0.5), 0.5),
+    ]);
+
+    let impact = &aggregated.layout_impact[0];
+    assert_eq!(impact.paired_fixture_count, 2);
+    assert_eq!(ids(&impact.regressed_fixture_ids), ["a"]);
+    assert_eq!(ids(&impact.unchanged_fixture_ids), ["b"]);
+    assert_eq!(impact.tf1.sample_count, 2);
+    let tf1_a = impact
+        .per_fixture
+        .tf1
+        .iter()
+        .find(|delta| delta.fixture_id == "a")
+        .expect("the zero-overlap fixture pairs");
+    assert_eq!((tf1_a.baseline, tf1_a.layout, tf1_a.delta), (1.0, 0.0, -1.0));
+}
+
+#[test]
+fn head_to_head_pairs_a_zero_overlap_competitor_row_at_tf1_zero() {
+    let aggregated = aggregate_new_format(&[
+        scored(BASELINE, "a", 0.9, Some(0.8), 0.9),
+        zero_overlap("liteparse", "a"),
+    ]);
+
+    let h2h = &aggregated.head_to_head[0];
+    assert_eq!(h2h.shared_fixture_count, 1);
+    assert_eq!(h2h.xberg_only_fixture_count, 0);
+    assert_eq!(h2h.competitor_only_fixture_count, 0);
+    assert_eq!(h2h.tf1.baseline_p50, Some(0.0));
+    assert!((p50(h2h.tf1.delta_p50) - 0.9).abs() < EPS);
+}
+
+#[test]
+fn paired_sections_still_leave_out_a_framework_error_row() {
+    let aggregated = aggregate_new_format(&[scored(BASELINE, "a", 1.0, Some(1.0), 1.0), failed(LAYOUT, "a")]);
+
+    assert_eq!(aggregated.layout_impact[0].paired_fixture_count, 0);
+    assert_eq!(aggregated.layout_impact[0].tf1.sample_count, 0);
+}

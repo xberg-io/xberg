@@ -100,6 +100,10 @@ split ownership have been verified; do not use either model's predictions as tru
 Token-level bag-of-words F1 between extracted text and ground truth.
 
 - Tokenization: lowercase, split on whitespace, keep alphanumeric tokens plus `.` and `,`
+- CJK (Han, Hiragana, Katakana, Hangul) runs become character bigrams. Spaces and tabs between
+  two CJK characters are removed from ground truth and output alike before splitting, so an OCR
+  engine that emits a space after every glyph scores the same as one that does not; line breaks
+  stay bigram boundaries, and spacing next to Latin text or digits is unchanged
 - Separate numeric-token F1 for number-heavy documents (financial, scientific)
 - Combined score: `quality_score = 0.6 * f1_text + 0.4 * f1_numeric`
 
@@ -146,6 +150,17 @@ Fixtures are JSON files organized by format directory under `fixtures/`:
 
 `metadata.opt_in: true` keeps a fixture out of directory scans (`-f fixtures/` without `--cohort`); it runs only
 when a cohort manifest or `PROFILING_FIXTURES` names it. The long performance-only PDFs use it.
+
+`metadata.family` names the content a fixture shares with others: one image in several encodings
+(`ocr_image`: gif, jp2, jpg, mj2, pbm, pgm, pnm, ppm, tif, tiff, webp; `invoice_image`: jpg, jpm),
+rotations and PDF renderings of one page (`ocr_test`, `complex_document`), one text as native PDF,
+rendered PNG and scan (`rtl_arabic`, `rtl_hebrew`), and the five NDL Meiji pages
+(`ndl_meiji_vertical`): different pages, but one dataset, era and script, so they are clustered
+rather than counted as five independent documents. Results and aggregate rows carry it as `fixture_family`, and
+each aggregate group reports a family-clustered mean next to the per-document mean (`quality_means`,
+see [SCHEMA.md](SCHEMA.md)), so eleven copies of one image weigh as one document rather than eleven. A
+fixture without a family is its own. Give a new fixture the family of any existing fixture that
+renders the same content.
 
 ### Ground Truth Coverage
 
@@ -365,6 +380,13 @@ the configured batch size. Sharding cannot be combined with exact cohorts or fix
 failures (`FrameworkError`, `Timeout`, `EmptyContent`, and `ZeroOverlap`). Unsupported fixtures are filtered before
 execution. Infrastructure failures are reported separately and do not enter this rate; a framework
 with no accountable results still fails validation.
+
+A `ZeroOverlap` row is a failure for this rate but still a quality result: its output was scored
+(TF1 = 0). The aggregate's `quality_including_failures` percentiles, the `layout_impact` and
+`head_to_head` pairings and the gap report count it at that score, so a document that scores 1.0
+under one configuration and 0.0 under another shows as a regression instead of disappearing. The
+`quality` percentiles and quality rankings stay success-only, because rankings already apply
+success coverage (see [SCHEMA.md](SCHEMA.md)).
 
 `--max-concurrent` and `--xberg-max-threads` can be varied independently for Xberg.
 An explicit thread budget applies to both single-file and native batch invocations.

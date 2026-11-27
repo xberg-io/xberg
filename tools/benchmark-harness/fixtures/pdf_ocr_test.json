@@ -4,6 +4,7 @@
 	"file_size": 93549,
 	"expected_frameworks": ["xberg", "xberg-python", "xberg-node", "xberg-wasm", "xberg-ruby"],
 	"metadata": {
+		"family": "ocr_test",
 		"requires_ocr": true
 	},
 	"ground_truth": {

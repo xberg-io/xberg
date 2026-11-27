@@ -4,6 +4,7 @@
 	"file_size": 45831,
 	"expected_frameworks": ["xberg"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "Portable Bitmap (black/white) with text for OCR",
 		"category": "image"
 	},

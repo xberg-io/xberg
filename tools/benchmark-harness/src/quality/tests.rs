@@ -138,8 +138,8 @@ fn should_treat_a_line_break_between_cjk_characters_as_a_bigram_boundary() {
     // `wrapped == continuous` — that "decorative OCR line wrap" bridging is exactly the D2
     // defect: it let a single CJK accumulator span the whole document, silently absorbing
     // reordered/reassembled line breaks along with genuine mid-word OCR wraps. A CJK
-    // bigram must never cross a whitespace/line break, full stop; this fixture's wrapped
-    // form now tokenizes to fewer, shorter runs than the continuous form. ~keep
+    // bigram must never cross a line break, full stop; this fixture's wrapped form now
+    // tokenizes to fewer, shorter runs than the continuous form. ~keep
     let continuous = tokenize("日本語の文書");
     let wrapped = tokenize("日本\n語の\n文書");
 
@@ -156,6 +156,63 @@ fn should_treat_a_line_break_between_cjk_characters_as_a_bigram_boundary() {
 fn should_ignore_decorative_punctuation_between_cjk_characters() {
     assert_eq!(tokenize("日本,語"), tokenize("日本語"));
     assert_eq!(tokenize("日本。語"), tokenize("日本語"));
+}
+
+#[test]
+fn should_tokenize_cjk_text_identically_with_or_without_spaces_between_characters() {
+    let spaced = "日 本 語 の 文 書";
+    let unspaced = "日本語の文書";
+
+    assert_eq!(tokenize(spaced), tokenize(unspaced));
+    assert_eq!(tokenize(spaced), vec!["日本", "本語", "語の", "の文", "文書"]);
+}
+
+#[test]
+fn should_score_spaced_cjk_output_equal_to_unspaced_output_on_either_side() {
+    let spaced = "元 来 日 本 語 は 漢 文 に 倣 い 、 文 字 を 上 か ら 下 へ";
+    let unspaced = "元来日本語は漢文に倣い、文字を上から下へ";
+
+    assert_eq!(compute_quality(spaced, unspaced).f1_score_text, 1.0);
+    assert_eq!(compute_quality(unspaced, spaced).f1_score_text, 1.0);
+    assert_eq!(
+        compute_quality(spaced, unspaced).quality_score,
+        compute_quality(unspaced, unspaced).quality_score
+    );
+}
+
+#[test]
+fn should_remove_tab_no_break_and_ideographic_spaces_between_cjk_characters() {
+    assert_eq!(tokenize("日\t本\u{00a0}語\u{3000}の"), tokenize("日本語の"));
+}
+
+#[test]
+fn should_keep_a_line_break_between_spaced_cjk_characters_as_a_bigram_boundary() {
+    assert_eq!(tokenize("日 本\n語 の"), vec!["日本", "語の"]);
+    assert_eq!(tokenize("日 本 \n 語 の"), vec!["日本", "語の"]);
+}
+
+#[test]
+fn should_remove_spaces_between_hangul_syllables() {
+    assert_eq!(tokenize("대한 민국"), tokenize("대한민국"));
+    assert_eq!(tokenize("대한 민국"), vec!["대한", "한민", "민국"]);
+}
+
+#[test]
+fn should_keep_spaces_between_latin_words() {
+    assert_eq!(
+        tokenize("alpha beta  gamma\tdelta"),
+        vec!["alpha", "beta", "gamma", "delta"]
+    );
+    assert_eq!(compute_quality("alpha beta", "alphabeta").f1_score_text, 0.0);
+}
+
+#[test]
+fn should_keep_spaces_between_cjk_and_latin_or_digits() {
+    assert_eq!(
+        tokenize("東 京 Tokyo 大 阪 2024 年"),
+        vec!["東京", "tokyo", "大阪", "2024", "年"]
+    );
+    assert_eq!(tokenize("東京 Tokyo"), vec!["東京", "tokyo"]);
 }
 
 #[test]

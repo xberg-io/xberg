@@ -4,6 +4,7 @@
 	"file_size": 74502,
 	"expected_frameworks": ["xberg", "docling", "tika"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "WebP image with text for OCR testing",
 		"category": "image"
 	},

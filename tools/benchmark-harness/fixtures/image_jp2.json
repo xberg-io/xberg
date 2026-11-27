@@ -4,6 +4,7 @@
 	"file_size": 77298,
 	"expected_frameworks": ["xberg", "tika"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "JPEG 2000 image with text for OCR testing",
 		"category": "image",
 		"requires_ocr": true

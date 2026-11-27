@@ -634,3 +634,19 @@ fn rejects_aggregate_row_when_not_an_object() {
     std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap()).unwrap();
     assert!(validate(&aggregate_args(Cohort::Native, path)).is_err());
 }
+
+#[test]
+fn rejects_aggregate_row_whose_fixture_family_differs_from_the_fixture() {
+    let contract = Cohort::Ocr.contract();
+    let mut aggregate = build_aggregate(&contract, Cohort::Ocr);
+    let row = aggregate
+        .per_fixture_results
+        .iter_mut()
+        .find(|row| row.fixture_id == "ocr_test")
+        .expect("the OCR cohort runs ocr_test.pdf");
+    assert_eq!(row.fixture_family.as_deref(), Some("ocr_test"));
+    row.fixture_family = None;
+    let (_root, path) = write_aggregate(&aggregate);
+
+    assert_err_contains(validate(&aggregate_args(Cohort::Ocr, path)), "declared family");
+}

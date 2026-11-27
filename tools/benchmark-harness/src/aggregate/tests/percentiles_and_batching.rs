@@ -408,6 +408,7 @@ fn test_ocr_unknown_is_not_mislabeled() {
         extracted_text: None,
         system_load: None,
         output_format: OutputFormat::Markdown,
+        fixture_family: None,
     }];
 
     let aggregated = aggregate_new_format(&results);
@@ -457,6 +458,7 @@ fn test_failed_results_excluded_from_percentiles() {
             extracted_text: None,
             system_load: None,
             output_format: OutputFormat::Markdown,
+            fixture_family: None,
         },
         BenchmarkResult {
             framework: "test-framework".to_string(),
@@ -491,6 +493,7 @@ fn test_failed_results_excluded_from_percentiles() {
             extracted_text: None,
             system_load: None,
             output_format: OutputFormat::Markdown,
+            fixture_family: None,
         },
     ];
 

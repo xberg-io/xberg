@@ -4,6 +4,7 @@
 	"file_size": 363096,
 	"expected_frameworks": ["xberg"],
 	"metadata": {
+		"family": "ocr_image",
 		"description": "Portable Anymap with text for OCR",
 		"category": "image"
 	},

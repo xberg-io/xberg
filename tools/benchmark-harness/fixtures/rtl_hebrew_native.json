@@ -16,6 +16,7 @@
     "unstructured"
   ],
   "metadata": {
+    "family": "rtl_hebrew",
     "description": "Authored one-page Hebrew right-to-left PDF with headings, prose, a numbered list, a table, punctuation, numbers, and embedded left-to-right identifiers",
     "category": "pdf-generated",
     "size_class": "small",

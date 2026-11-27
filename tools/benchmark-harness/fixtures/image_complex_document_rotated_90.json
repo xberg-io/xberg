@@ -3,6 +3,9 @@
 	"file_type": "png",
 	"file_size": 37863,
 	"expected_frameworks": [],
+	"metadata": {
+		"family": "complex_document"
+	},
 	"ground_truth": {
 		"text_file": "../../../test_documents/ground_truth/images/complex_document_rotated_90.txt",
 		"source": "vision"

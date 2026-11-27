@@ -132,6 +132,7 @@ impl Fixture {
 
         Self::validate_file_type_matches_document(fixture_path, &self.file_type, &self.document)?;
         Self::validate_ocr_language_metadata(fixture_path, &self.metadata)?;
+        Self::validate_family_metadata(fixture_path, &self.metadata)?;
 
         if let Some(gt) = &self.ground_truth {
             Self::validate_ground_truth_block(fixture_path, gt)?;
@@ -167,6 +168,24 @@ impl Fixture {
             });
         }
         Ok(())
+    }
+
+    /// Validate the optional `metadata.family`: when present, a non-empty string without
+    /// surrounding whitespace.
+    fn validate_family_metadata(fixture_path: &Path, metadata: &HashMap<String, serde_json::Value>) -> Result<()> {
+        let Some(family) = metadata.get("family") else {
+            return Ok(());
+        };
+        if family
+            .as_str()
+            .is_some_and(|family| !family.is_empty() && family.trim() == family)
+        {
+            return Ok(());
+        }
+        Err(Error::InvalidFixture {
+            path: fixture_path.to_path_buf(),
+            reason: "metadata.family must be a non-empty string without surrounding whitespace".to_string(),
+        })
     }
 
     /// Validate a fixture's `ground_truth` block: relative-path shape of every referenced
@@ -380,6 +399,14 @@ impl Fixture {
     /// Return the fixture-specific OCR language code, if configured.
     pub fn ocr_language(&self) -> Option<&str> {
         self.metadata.get("ocr_language").and_then(|value| value.as_str())
+    }
+
+    /// The fixture's content family (`metadata.family`): fixtures that render the same source
+    /// content (one image in several encodings, rotations, or a scan of the same page) share one,
+    /// so aggregates can weight the content once instead of once per copy. `None` when the
+    /// fixture is its own family.
+    pub fn family(&self) -> Option<&str> {
+        self.metadata.get("family").and_then(|value| value.as_str())
     }
 
     /// Whether `metadata.opt_in` keeps this fixture out of directory scans. An opt-in fixture

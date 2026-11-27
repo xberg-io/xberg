@@ -633,6 +633,7 @@ impl SubprocessAdapter {
             ocr_status: item.ocr_status,
             extracted_text: item.extracted_text,
             system_load: None,
+            fixture_family: None,
         }
     }
 

@@ -85,7 +85,27 @@ fn apply_quality_scoring(
     }
 }
 
+/// Copy each fixture's declared content family onto the results for its document.
+fn apply_fixture_families(results: &mut [BenchmarkResult], families: &HashMap<PathBuf, String>) {
+    for result in results {
+        result.fixture_family = families.get(&result.file_path).cloned();
+    }
+}
+
 impl BenchmarkRunner {
+    /// Declared `metadata.family` per resolved document path, the key results carry.
+    fn fixture_families(&self) -> HashMap<PathBuf, String> {
+        self.fixtures
+            .fixtures()
+            .iter()
+            .filter_map(|(fixture_path, fixture)| {
+                let family = fixture.family()?;
+                let fixture_dir = fixture_path.parent().unwrap_or_else(|| Path::new("."));
+                Some((fixture.resolve_document_path(fixture_dir), family.to_string()))
+            })
+            .collect()
+    }
+
     fn validate_fixture_cohort(&self, use_batch: bool) -> Result<()> {
         let ocr_required_count = self
             .fixtures
@@ -464,6 +484,8 @@ impl BenchmarkRunner {
         } else {
             self.run_single_mode(&frameworks).await?
         };
+
+        apply_fixture_families(&mut results, &self.fixture_families());
 
         if let Some((ground_truth_map, markdown_gt_map)) = quality_ground_truth {
             apply_quality_scoring(&mut results, &ground_truth_map, &markdown_gt_map, self.output_format);
