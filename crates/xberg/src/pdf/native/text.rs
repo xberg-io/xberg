@@ -880,7 +880,6 @@ fn find_inline_fragment_anchor(
         .filter_map(|candidate_index| {
             let candidate = &spans[candidate_index];
             if !is_ltr_writing_mode(candidate)
-                || has_rtl_or_bidi_content(&candidate.text)
                 || !has_same_rotation(candidate, span)
                 || !spans_overlap_on_cross_axis(candidate, span)
             {
@@ -889,7 +888,9 @@ fn find_inline_fragment_anchor(
             let (_, candidate_end) = upright_advance_extent(candidate);
             let gap = span_start - candidate_end;
             let tolerance = candidate.font_size.max(span.font_size) * INLINE_FRAGMENT_GAP_RATIO;
-            (gap >= -tolerance && gap <= tolerance).then_some((candidate_index, gap.abs()))
+            // The text scan runs last: most candidates fail the geometric tests first. ~keep
+            (gap >= -tolerance && gap <= tolerance && !has_rtl_or_bidi_content(&candidate.text))
+                .then_some((candidate_index, gap.abs()))
         })
         .min_by(|(_, first_gap), (_, second_gap)| first_gap.total_cmp(second_gap))
         .map(|(candidate_index, _)| candidate_index)
