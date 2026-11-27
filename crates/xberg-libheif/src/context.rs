@@ -117,10 +117,9 @@ impl<'a> HeifContext<'a> {
     /// The lifetime is chosen by the caller: the context is invariant over it, and a
     /// reader or input slice later installed must outlive it.
     pub fn new() -> Result<HeifContext<'a>> {
-        crate::ensure_libheif()?;
         // SAFETY: Allocation takes no caller-owned pointers. A non-null result is owned by the
         // `ContextOwner` created below, which frees it exactly once.
-        let ctx = unsafe { lh::heif_context_alloc() };
+        let ctx = unsafe { lh::heif_context_alloc() }?;
         if ctx.is_null() {
             Err(HeifError {
                 code: HeifErrorCode::ContextCreateFailed,

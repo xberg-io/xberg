@@ -29,15 +29,14 @@ pub use track::*;
 pub use utils::check_file_type;
 
 // Every libheif call goes through `lh`: the linked `libheif-sys` declarations, or with the
-// `dynamic` feature their runtime-loaded wrappers. ~keep
+// `dynamic` feature their runtime-loaded wrappers. In both, a root function (one reachable
+// without a libheif object) returns `Result`, so a missing library is an error on every path. ~keep
 #[cfg(feature = "dynamic")]
 use dynamic as lh;
 #[cfg(not(feature = "dynamic"))]
-use libheif_sys as lh;
+use linked as lh;
 
 /// Fails with why libheif cannot be loaded (`dynamic` feature); always succeeds when linked.
-/// Every public entry point that reaches libheif without a context or image calls this first,
-/// so a missing library is an error rather than a panic in a wrapper.
 #[inline]
 pub(crate) fn ensure_libheif() -> Result<()> {
     #[cfg(feature = "dynamic")]
@@ -58,12 +57,6 @@ pub fn ensure_available() -> Result<()> {
     ensure_libheif()
 }
 
-/// [`ensure_libheif`] for entry points with no error to return.
-#[inline]
-pub(crate) fn libheif_available() -> bool {
-    ensure_libheif().is_ok()
-}
-
 mod color_profile;
 mod context;
 mod decoder;
@@ -77,6 +70,8 @@ mod image;
 mod image_handle;
 #[cfg(feature = "image")]
 pub mod integration;
+#[cfg(not(feature = "dynamic"))]
+mod linked;
 mod metadata;
 mod reader;
 #[cfg(feature = "v1_18")]

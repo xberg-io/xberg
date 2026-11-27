@@ -23,12 +23,9 @@ pub struct DecodingOptions {
 impl DecodingOptions {
     /// `None` when libheif cannot allocate the options or cannot be loaded (`dynamic` feature).
     pub fn new() -> Option<Self> {
-        if !crate::libheif_available() {
-            return None;
-        }
         // SAFETY: The allocator returns a `new` struct filled with defaults, including
         // `version`, which this wrapper owns until Drop once the result is non-null.
-        let inner_ptr = unsafe { lh::heif_decoding_options_alloc() };
+        let inner_ptr = unsafe { lh::heif_decoding_options_alloc() }.ok()?;
         ptr::NonNull::new(inner_ptr).map(|inner| Self {
             inner,
             decoder_id: None,
@@ -164,8 +161,11 @@ impl DecodingOptions {
         let inner = self.inner_mut();
         if inner.color_conversion_options_ext.is_null() {
             // SAFETY: The allocator returns a `new` extension filled with defaults, or null.
-            // A non-null result is owned by these options and freed in Drop.
-            inner.color_conversion_options_ext = unsafe { lh::heif_color_conversion_options_ext_alloc() };
+            // A non-null result is owned by these options and freed in Drop. These options exist,
+            // so libheif is loaded; a load error would leave the extension null, as an
+            // allocation failure does.
+            inner.color_conversion_options_ext =
+                unsafe { lh::heif_color_conversion_options_ext_alloc() }.unwrap_or(ptr::null_mut());
         }
         v.fill_libheif_cc_options_ext(inner.color_conversion_options_ext);
     }
@@ -257,13 +257,12 @@ impl Default for ColorConversionOptions {
             preferred_chroma_upsampling_algorithm: 0,
             only_use_preferred_chroma_algorithm: 0,
         };
-        // Without a loadable libheif (`dynamic` feature) the zeroed fields stand. ~keep
+        // Without a loadable libheif (`dynamic` feature) the call fails and the zeroed fields
+        // stand. ~keep
         #[cfg(feature = "v1_19")]
-        if crate::libheif_available() {
-            // SAFETY: cc_options is a writable, initialized version-1 structure that
-            // stays live while libheif sets its default fields.
-            unsafe { lh::heif_color_conversion_options_set_defaults(&mut cc_options) };
-        }
+        // SAFETY: cc_options is a writable, initialized version-1 structure that
+        // stays live while libheif sets its default fields.
+        let _ = unsafe { lh::heif_color_conversion_options_set_defaults(&mut cc_options) };
         Self::from_cc_options(&cc_options)
     }
 }

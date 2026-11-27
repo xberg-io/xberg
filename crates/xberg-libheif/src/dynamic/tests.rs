@@ -159,14 +159,71 @@ fn only_a_user_private_group_may_have_write_access() {
 
 #[test]
 fn the_installed_libheif_provides_every_wrapped_function() {
-    load().expect("libheif should load and export every function xberg-libheif calls");
+    ensure_loaded().expect("libheif should load and export every function xberg-libheif calls");
+}
+
+/// Every root wrapper, the only libheif functions reachable without a libheif object, returns the
+/// load error without calling into libheif, so the null arguments are never read.
+fn root_functions_return_the_load_error() {
+    macro_rules! unloaded {
+        ($call:expr) => {
+            // SAFETY: An unloaded root wrapper returns before using its arguments.
+            match unsafe { $call } {
+                Err(error) => assert!(
+                    matches!(error.code, crate::HeifErrorCode::PluginLoadingError)
+                        && error.message.contains(LIBHEIF_PATH_ENV_VAR),
+                    "{}: {error:?}",
+                    stringify!($call)
+                ),
+                Ok(_) => panic!("{} succeeded without libheif", stringify!($call)),
+            }
+        };
+    }
+    unloaded!(heif_check_filetype(std::ptr::null(), 0));
+    unloaded!(heif_context_alloc());
+    unloaded!(heif_context_get_encoder_for_format(
+        std::ptr::null_mut(),
+        0,
+        std::ptr::null_mut()
+    ));
+    unloaded!(heif_decoding_options_alloc());
+    unloaded!(heif_deinit());
+    unloaded!(heif_encoding_options_alloc());
+    unloaded!(heif_get_decoder_descriptors(0, std::ptr::null_mut(), 0));
+    unloaded!(heif_get_encoder_descriptors(
+        0,
+        std::ptr::null(),
+        std::ptr::null_mut(),
+        0
+    ));
+    unloaded!(heif_get_version_number());
+    unloaded!(heif_image_create(1, 1, 0, 0, std::ptr::null_mut()));
+    unloaded!(heif_init(std::ptr::null_mut()));
+    unloaded!(heif_load_plugins(
+        std::ptr::null(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        0
+    ));
+    unloaded!(heif_nclx_color_profile_alloc());
+    #[cfg(feature = "v1_19")]
+    unloaded!(heif_color_conversion_options_set_defaults(std::ptr::null_mut()));
+    #[cfg(feature = "v1_19")]
+    unloaded!(heif_get_global_security_limits());
+    #[cfg(feature = "v1_20")]
+    unloaded!(heif_color_conversion_options_ext_alloc());
 }
 
 #[test]
 fn entry_points_report_an_unloadable_library_instead_of_panicking() {
     let test = "entry_points_report_an_unloadable_library_instead_of_panicking";
     if std::env::var(CHILD).as_deref() == Ok(test) {
-        assert!(load().is_err(), "the parent names a library that does not exist");
+        assert!(
+            ensure_loaded().is_err(),
+            "the parent names a library that does not exist"
+        );
+        root_functions_return_the_load_error();
+        assert!(crate::ensure_available().is_err());
         {
             let lib = crate::LibHeif::new();
             assert_eq!(lib.version(), [0; 3]);

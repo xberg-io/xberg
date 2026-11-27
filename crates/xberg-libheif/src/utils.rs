@@ -64,12 +64,11 @@ pub(crate) fn get_non_null_ptr<T>(ptr: *mut T) -> Result<std::ptr::NonNull<T>> {
 /// be read then.
 #[allow(unsafe_code)]
 pub fn check_file_type(data: &[u8]) -> FileTypeResult {
-    if !crate::libheif_available() {
-        return FileTypeResult::No;
-    }
     // SAFETY: `data` is a live slice and libheif bounds its reads with the length passed beside the
     // pointer: it returns before reading anything below 8 bytes and reads the brand only at 12
     // or more.
-    let res = unsafe { lh::heif_check_filetype(data.as_ptr(), data.len() as _) };
-    FileTypeResult::n(res).unwrap_or(FileTypeResult::No)
+    match unsafe { lh::heif_check_filetype(data.as_ptr(), data.len() as _) } {
+        Ok(res) => FileTypeResult::n(res).unwrap_or(FileTypeResult::No),
+        Err(_) => FileTypeResult::No,
+    }
 }
