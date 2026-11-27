@@ -324,6 +324,11 @@ pub(crate) fn write_run_artifacts_and_check_gate(
     Ok(())
 }
 
+/// Whether the selection runs any xberg framework; an empty selection runs them all.
+pub(crate) fn selects_xberg(frameworks: &[String]) -> bool {
+    frameworks.is_empty() || frameworks.iter().any(|framework| framework.starts_with("xberg-"))
+}
+
 pub(crate) fn selected_frameworks_use_tesseract(frameworks: &[String]) -> bool {
     frameworks.is_empty()
         || frameworks.iter().any(|framework| {
@@ -678,6 +683,9 @@ async fn setup(args: &RunArgs) -> Result<RunSetup> {
     let batch_mode = matches!(config.benchmark_mode, BenchmarkMode::Batch);
     let frameworks = normalize_run_frameworks(&args.frameworks, batch_mode);
     reject_plaintext_layout_requests(&frameworks)?;
+    if selects_xberg(&frameworks) {
+        benchmark_harness::ocr_preflight::ensure_ambient_tessdata_model_matches(args.tessdata_model.into())?;
+    }
     let model_provenance = parse_model_provenance(&args.model_ids)?;
 
     let registry = build_registry(

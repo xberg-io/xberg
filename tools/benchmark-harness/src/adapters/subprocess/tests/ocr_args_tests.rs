@@ -649,32 +649,52 @@ mod tessdata_model {
         args.windows(2).any(|pair| pair == BEST_FLAG)
     }
 
+    /// The value following each `--ocr-tessdata-model` in `args`.
+    fn model_flag_values(args: &[String]) -> Vec<&str> {
+        args.windows(2)
+            .filter(|pair| pair[0] == BEST_FLAG[0])
+            .map(|pair| pair[1].as_str())
+            .collect()
+    }
+
     fn config_json(args: &[String]) -> serde_json::Value {
         let index = args.iter().rposition(|arg| arg == "--config-json").unwrap();
         serde_json::from_str(&args[index + 1]).unwrap()
     }
 
     #[test]
-    fn fast_tessdata_model_leaves_xberg_argv_unchanged() {
+    fn fast_tessdata_model_is_passed_explicitly_on_every_xberg_request() {
         for batch in [false, true] {
             let default = tesseract_adapter(batch);
             let fast = tesseract_adapter(batch).with_tessdata_model(xberg::TessdataModel::Fast);
 
-            for force_ocr in [false, true] {
-                assert_eq!(fast.request_args(force_ocr), default.request_args(force_ocr));
-                assert_eq!(
-                    fast.single_file_request_args(force_ocr),
-                    default.single_file_request_args(force_ocr)
-                );
-                assert!(!fast.request_args(force_ocr).iter().any(|arg| arg == BEST_FLAG[0]));
-            }
-            for mode in [BenchmarkMode::SingleFile, BenchmarkMode::Batch] {
-                assert_eq!(
-                    fast.provenance_args_for_mode(mode),
-                    default.provenance_args_for_mode(mode)
-                );
+            for adapter in [&default, &fast] {
+                for force_ocr in [false, true] {
+                    assert_eq!(model_flag_values(&adapter.request_args(force_ocr)), ["fast"]);
+                    assert_eq!(
+                        model_flag_values(&adapter.single_file_request_args(force_ocr)),
+                        ["fast"]
+                    );
+                }
+                for mode in [BenchmarkMode::SingleFile, BenchmarkMode::Batch] {
+                    assert_eq!(
+                        model_flag_values(&adapter.provenance_args_for_mode(mode)),
+                        ["fast"],
+                        "{mode:?}"
+                    );
+                }
             }
         }
+    }
+
+    #[test]
+    fn fast_tessdata_model_stays_on_argv_when_the_tesseract_config_is_rewritten() {
+        let adapter = tesseract_adapter(false);
+
+        let rewritten = apply_tesseract_ocr_override_to_args(&adapter.single_file_request_args(false), Some("deu"))
+            .expect("tesseract OCR config to rewrite");
+
+        assert_eq!(model_flag_values(&rewritten), ["fast"]);
     }
 
     #[test]

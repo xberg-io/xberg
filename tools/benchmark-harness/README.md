@@ -410,6 +410,12 @@ process starts, and record no `xberg_env`; their memory and timing therefore ref
 allocator configuration, not the launchers'. To measure a launcher-equivalent in-process run, set
 `MallocMaxMagazines=1` in the environment that starts the harness.
 
+`--tessdata-model fast|best` (default `fast`) selects the Tesseract model set of every Xberg row.
+Xberg CLI rows always receive `--ocr-tessdata-model <set>`, `fast` included, so the set never
+comes from an inherited `XBERG_OCR_TESSDATA_MODEL`. A run that selects an Xberg framework while
+that variable holds a different or invalid value is refused before anything executes: unset it,
+or pass the `--tessdata-model` you mean to measure.
+
 The remote comparative workflow publishes eight independently validated cohorts. The pinned matrix
 contract contains these cell counts:
 

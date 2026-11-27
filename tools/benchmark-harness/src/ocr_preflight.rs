@@ -19,11 +19,41 @@
 //!
 //! This guard fails fast, before any framework runs, with an actionable hint.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::cohort::CohortManifest;
 use crate::error::{Error, Result};
 use crate::fixture::{Fixture, FixtureManager};
+
+/// The variable xberg's CLI reads for the Tesseract model set when no flag names one.
+const TESSDATA_MODEL_ENV_VAR: &str = "XBERG_OCR_TESSDATA_MODEL";
+
+/// Fail when the harness environment sets `XBERG_OCR_TESSDATA_MODEL` to anything but `requested`.
+///
+/// Subprocess rows name the set on argv, which overrides the variable, and in-process rows never
+/// read it, so a differing value could not change a row; it is refused anyway because it says the
+/// operator expects another set than the one this run records.
+pub fn ensure_ambient_tessdata_model_matches(requested: xberg::TessdataModel) -> Result<()> {
+    ambient_tessdata_model_matches(requested, std::env::var_os(TESSDATA_MODEL_ENV_VAR).as_deref())
+}
+
+fn ambient_tessdata_model_matches(requested: xberg::TessdataModel, ambient: Option<&OsStr>) -> Result<()> {
+    let Some(ambient) = ambient else {
+        return Ok(());
+    };
+    let parsed = ambient
+        .to_str()
+        .and_then(|value| value.parse::<xberg::TessdataModel>().ok());
+    if parsed == Some(requested) {
+        return Ok(());
+    }
+    let requested = requested.as_str();
+    Err(Error::Config(format!(
+        "{TESSDATA_MODEL_ENV_VAR}={} is set in the environment, but this run uses --tessdata-model {requested}.          Unset {TESSDATA_MODEL_ENV_VAR} or set it to '{requested}', or pass the --tessdata-model you mean to measure.",
+        ambient.to_string_lossy(),
+    )))
+}
 
 /// Tessdata directories xberg searches for `model`, mirroring the fallback chain in
 /// `xberg`'s `resolve_tessdata_path` (minus the per-call `tessdata_path`
@@ -312,6 +342,36 @@ mod tests {
             std::fs::write(dir.path().join(format!("{lang}.traineddata")), b"stub").unwrap();
         }
         dir
+    }
+
+    #[test]
+    fn an_unset_or_matching_ambient_tessdata_model_is_accepted() {
+        for model in [xberg::TessdataModel::Fast, xberg::TessdataModel::Best] {
+            assert!(ambient_tessdata_model_matches(model, None).is_ok());
+            assert!(ambient_tessdata_model_matches(model, Some(OsStr::new(model.as_str()))).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_conflicting_ambient_tessdata_model_is_refused() {
+        for (requested, ambient) in [
+            (xberg::TessdataModel::Fast, "best"),
+            (xberg::TessdataModel::Best, "fast"),
+            (xberg::TessdataModel::Fast, "medium"),
+            (xberg::TessdataModel::Fast, ""),
+            (xberg::TessdataModel::Best, "BEST"),
+        ] {
+            let error = ambient_tessdata_model_matches(requested, Some(OsStr::new(ambient))).unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains(&format!("XBERG_OCR_TESSDATA_MODEL={ambient} ")),
+                "{message}"
+            );
+            assert!(
+                message.contains(&format!("--tessdata-model {}", requested.as_str())),
+                "{message}"
+            );
+        }
     }
 
     #[test]
