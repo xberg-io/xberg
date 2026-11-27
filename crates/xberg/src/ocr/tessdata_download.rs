@@ -176,17 +176,19 @@ impl<'a> PinTables<'a> {
     }
 
     /// Move a file in `output_dir` that is not the pinned `model` pack of `lang` out of the way
-    /// (to `<lang>.traineddata.unverified`), so the pinned pack can be published there without
-    /// replacing anything. A language with no pin is left alone. Returns whether a file was moved.
+    /// (to `<lang>.traineddata.unverified`, or a unique name beside it when an earlier file holds
+    /// that one), so the pinned pack can be published there without replacing anything. A
+    /// language with no pin is left alone.
     ///
     /// For the directories xberg vouches for: a wrong file there would otherwise keep being
-    /// served as the pinned pack.
+    /// served as the pinned pack. A directory that cannot be written (permissions, a read-only
+    /// file system) keeps the file, with a warning, and reports [`SetAside::Blocked`].
     pub(crate) fn set_aside_unverified(
         &self,
         lang: &str,
         model: TessdataModel,
         output_dir: &Path,
-    ) -> std::io::Result<bool> {
+    ) -> std::io::Result<SetAside> {
         // ~keep One mover at a time, deciding on what is there now: a thread that saw the wrong
         // file earlier must not move the pack another thread has published since.
         static MOVING: Mutex<()> = Mutex::new(());
@@ -195,14 +197,28 @@ impl<'a> PinTables<'a> {
         let path = output_dir.join(format!("{lang}.traineddata"));
         match std::fs::symlink_metadata(&path) {
             Ok(_) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(SetAside::Untouched),
             Err(error) => return Err(error),
         }
         if self.pin(lang, model).is_none() || self.classify(lang, &path).is(model) {
-            return Ok(false);
+            return Ok(SetAside::Untouched);
         }
-        let aside = output_dir.join(format!("{lang}.traineddata.unverified"));
-        std::fs::rename(&path, &aside)?;
+        let aside = unused_unverified_path(output_dir, lang);
+        match std::fs::rename(&path, &aside) {
+            Ok(()) => {}
+            // ~keep Another process moved it first.
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(SetAside::Untouched),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem
+                ) =>
+            {
+                warn_blocked_once(&path, model, &error);
+                return Ok(SetAside::Blocked);
+            }
+            Err(error) => return Err(error),
+        }
         // ~keep Where the platform has no inode, the pack published next can share the size and
         // modification time of the file just moved, which is all the digest memo tells apart there.
         DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).remove(&path);
@@ -213,7 +229,7 @@ impl<'a> PinTables<'a> {
             "A file in xberg's tessdata directory is not the pinned language pack; moved it aside to \
              fetch the pinned one"
         );
-        Ok(true)
+        Ok(SetAside::Moved)
     }
 
     /// Copy the pinned `model` pack for `lang` into `output_dir` from the first of `sources`
@@ -229,6 +245,50 @@ impl<'a> PinTables<'a> {
             .iter()
             .filter(|source| source.as_path() != output_dir)
             .any(|source| adopt_verified(&source.join(&file_name), &output_path, sha256, size))
+    }
+}
+
+/// What [`PinTables::set_aside_unverified`] did with a language's file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SetAside {
+    /// Nothing to move: no file, no pin, or the pinned pack.
+    Untouched,
+    /// The file was moved aside; the pack can be published in its place.
+    Moved,
+    /// The file is not the pinned pack, but the directory cannot be written, so it stays and is
+    /// used as given.
+    Blocked,
+}
+
+/// `<lang>.traineddata.unverified` in `output_dir`, or, when an earlier set-aside file holds that
+/// name, one made unique by the time and process.
+fn unused_unverified_path(output_dir: &Path, lang: &str) -> PathBuf {
+    let plain = output_dir.join(format!("{lang}.traineddata.unverified"));
+    if matches!(std::fs::symlink_metadata(&plain), Err(error) if error.kind() == ErrorKind::NotFound) {
+        return plain;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos());
+    output_dir.join(format!("{lang}.traineddata.unverified.{nanos}.{}", std::process::id()))
+}
+
+/// Warn, once per file in this process, that a wrong file in a verified directory stays because
+/// the directory cannot be written.
+fn warn_blocked_once(path: &Path, model: TessdataModel, error: &std::io::Error) {
+    static WARNED: LazyLock<Mutex<std::collections::HashSet<PathBuf>>> = LazyLock::new(Default::default);
+    if WARNED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(path.to_path_buf())
+    {
+        tracing::warn!(
+            path = %path.display(),
+            model = %model,
+            %error,
+            "A file in xberg's tessdata directory is not the pinned language pack and cannot be moved \
+             aside; it is used as given. Replace it with the pinned pack or make the directory writable"
+        );
     }
 }
 
@@ -912,7 +972,7 @@ mod tests {
 
     #[test]
     fn only_a_wrong_file_for_a_pinned_language_is_set_aside() {
-        use super::{PinTables, TessdataModel};
+        use super::{PinTables, SetAside, TessdataModel};
 
         let directory = tempfile::tempdir().unwrap();
         let digest = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
@@ -928,25 +988,71 @@ mod tests {
             pins.set_aside_unverified(lang, TessdataModel::Best, directory.path())
                 .unwrap()
         };
+        let set_aside_files = || {
+            let mut contents: Vec<Vec<u8>> = directory
+                .path()
+                .read_dir()
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| path.to_string_lossy().contains(".traineddata.unverified"))
+                .map(|path| std::fs::read(path).unwrap())
+                .collect();
+            contents.sort();
+            contents
+        };
 
-        assert!(!set_aside("eng"), "nothing there");
+        assert_eq!(set_aside("eng"), SetAside::Untouched, "nothing there");
         std::fs::write(pack("custom"), b"user trained").unwrap();
-        assert!(!set_aside("custom"), "no pin to hold it to");
+        assert_eq!(set_aside("custom"), SetAside::Untouched, "no pin to hold it to");
         std::fs::write(pack("eng"), b"best!").unwrap();
-        assert!(!set_aside("eng"), "the pinned pack stays");
+        assert_eq!(set_aside("eng"), SetAside::Untouched, "the pinned pack stays");
         assert_eq!(std::fs::read(pack("eng")).unwrap(), b"best!");
 
         std::fs::remove_file(pack("eng")).unwrap();
         std::fs::write(pack("eng"), b"fast").unwrap();
-        assert!(set_aside("eng"));
+        assert_eq!(set_aside("eng"), SetAside::Moved);
         assert!(!pack("eng").exists());
         assert_eq!(
             std::fs::read(directory.path().join("eng.traineddata.unverified")).unwrap(),
             b"fast"
         );
         std::fs::write(pack("eng"), b"").unwrap();
-        assert!(set_aside("eng"), "an earlier set-aside file does not block the next");
+        assert_eq!(
+            set_aside("eng"),
+            SetAside::Moved,
+            "an earlier set-aside file does not block the next"
+        );
         assert!(!pack("eng").exists());
+        assert_eq!(
+            set_aside_files(),
+            [b"".to_vec(), b"fast".to_vec()],
+            "the earlier set-aside file is kept, not overwritten"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_wrong_file_in_a_directory_that_cannot_be_written_stays() {
+        use super::{PinTables, SetAside, TessdataModel};
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let directory = tempfile::tempdir().unwrap();
+        let best_pack = hex::encode(Sha256::digest(b"best!"));
+        let best = [("eng", best_pack.as_str(), 5)];
+        let pins = PinTables { fast: &[], best: &best };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast").unwrap();
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        let writable = std::fs::write(directory.path().join("probe"), b"").is_ok();
+
+        let outcome = pins.set_aside_unverified("eng", TessdataModel::Best, directory.path());
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        if writable {
+            eprintln!("SKIP: permissions do not restrict this user");
+            return;
+        }
+        assert_eq!(outcome.unwrap(), SetAside::Blocked);
+        assert_eq!(std::fs::read(&pack).unwrap(), b"fast");
     }
 
     #[test]

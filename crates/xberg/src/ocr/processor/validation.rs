@@ -82,7 +82,8 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 /// The override and `TESSDATA_PREFIX` are the caller's choice and are used whichever model set
 /// they hold; `model` applies only to the directories xberg manages. In the managed and built-in
 /// `best` directories a pinned language counts as present only when its file is the pinned
-/// `tessdata_best` pack; in the managed one a wrong file is moved aside and the pack fetched.
+/// `tessdata_best` pack; in the managed one a wrong file is moved aside and the pack fetched, or,
+/// when the directory cannot be written, used as given with a warning.
 ///
 /// # Arguments
 ///
@@ -227,14 +228,28 @@ fn resolve_tessdata_path_with(
     // ~keep A best request is only ever filled into the managed best directory, whose packs are
     // held to their pins.
     let destination_is_verified = tessdata_env.model == TessdataModel::Best;
-    materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, provision)?;
+    let used_as_given =
+        materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, provision)?;
     adopt_shared_packs(&destination, tessdata_env.model, &sources, provision.pins);
 
     let dest_str = destination
         .to_str()
         .ok_or_else(|| OcrError::TesseractInitializationFailed("Tessdata path is not valid UTF-8".to_string()))?;
 
-    if directory_serves(dest_str, languages, destination_is_verified, provision.pins) {
+    // ~keep A wrong pack that cannot be moved aside is served as given, with the warning
+    // set_aside_unverified gave, rather than failing every request on a read-only cache.
+    let held_to_pins: Vec<String> = languages
+        .iter()
+        .filter(|lang| !used_as_given.contains(*lang))
+        .cloned()
+        .collect();
+    let serves_as_given = used_as_given
+        .iter()
+        .all(|lang| destination.join(format!("{lang}.traineddata")).is_file());
+    if serves_as_given
+        && (held_to_pins.is_empty()
+            || directory_serves(dest_str, &held_to_pins, destination_is_verified, provision.pins))
+    {
         log_resolved(dest_str, languages, override_path, tessdata_env, provision.pins);
         Ok(dest_str.to_string())
     } else {
@@ -758,6 +773,9 @@ const SYSTEM_TESSDATA_PATHS: &[&str] = &[
 /// A pack is copied from the first of `sources` holding a file that matches its pin; for
 /// [`TessdataModel::Fast`], `eng` can come from the bundled bytes; everything else is a pinned,
 /// verified download. A `best` request never uses the bundled model, which is tessdata_fast.
+///
+/// Returns the languages whose wrong file in the `best` directory could not be moved aside
+/// because the directory cannot be written: they are left as they are.
 #[cfg(not(target_arch = "wasm32"))]
 fn materialize_missing_languages(
     tessdata_path: &Path,
@@ -765,7 +783,8 @@ fn materialize_missing_languages(
     model: TessdataModel,
     sources: &[PathBuf],
     provision: &Provision<'_>,
-) -> Result<(), OcrError> {
+) -> Result<Vec<String>, OcrError> {
+    let mut used_as_given = Vec::new();
     // ~keep Best packs are only ever filled into the managed best directory, where a file that
     // is not the pinned pack (hand-copied fast data, an empty or truncated file) is replaced
     // rather than served.
@@ -776,7 +795,7 @@ fn materialize_missing_languages(
             continue;
         }
         if verified_best {
-            provision
+            let set_aside = provision
                 .pins
                 .set_aside_unverified(lang, model, tessdata_path)
                 .map_err(|e| {
@@ -786,6 +805,10 @@ fn materialize_missing_languages(
                         model.repository()
                     ))
                 })?;
+            if set_aside == crate::ocr::tessdata_download::SetAside::Blocked {
+                used_as_given.push(lang.clone());
+                continue;
+            }
         }
         if provision.pins.adopt(lang, model, tessdata_path, sources) {
             continue;
@@ -811,7 +834,7 @@ fn materialize_missing_languages(
         (provision.fetch)(lang, model, tessdata_path)?;
     }
 
-    Ok(())
+    Ok(used_as_given)
 }
 
 /// WASM stub: no network access, no file writes.
@@ -822,7 +845,7 @@ fn materialize_missing_languages(
     _model: TessdataModel,
     _sources: &[PathBuf],
     _provision: &Provision<'_>,
-) -> Result<(), OcrError> {
+) -> Result<Vec<String>, OcrError> {
     Err(OcrError::TesseractInitializationFailed(format!(
         "Cannot download language packs on WASM. Requested: {:?}",
         languages

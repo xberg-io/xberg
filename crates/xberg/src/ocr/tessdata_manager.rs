@@ -188,7 +188,7 @@ impl TessdataManager {
                 continue;
             }
             if self.model == TessdataModel::Best {
-                super::tessdata_download::PINNED
+                let set_aside = super::tessdata_download::PINNED
                     .set_aside_unverified(lang, self.model, &self.cache_dir)
                     .map_err(|e| {
                         OcrError::TesseractInitializationFailed(format!(
@@ -198,6 +198,11 @@ impl TessdataManager {
                             self.model.repository()
                         ))
                     })?;
+                // ~keep The directory cannot be written, so nothing can be fetched into it either;
+                // set_aside_unverified has warned that the file stays.
+                if set_aside == super::tessdata_download::SetAside::Blocked {
+                    continue;
+                }
             }
             tracing::info!(
                 lang,

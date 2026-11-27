@@ -979,3 +979,35 @@ fn test_pack_identity_sees_a_replacement_that_keeps_size_and_modification_time()
     replace_keeping_size_and_time(&pack, b"other model");
     assert_ne!(identity(), first);
 }
+
+#[cfg(unix)]
+#[test]
+fn test_a_wrong_best_pack_in_a_read_only_cache_is_used_as_given() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let best_pack = sha256_hex(b"best!");
+    let best = [("eng", best_pack.as_str(), 5)];
+    let pins = PinTables { fast: &[], best: &best };
+    let cache = tempfile::tempdir().unwrap();
+    let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+    std::fs::create_dir_all(&managed).unwrap();
+    std::fs::write(managed.join("eng.traineddata"), b"fast").unwrap();
+    std::fs::set_permissions(&managed, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let writable = std::fs::write(managed.join("probe"), b"").is_ok();
+
+    let resolved = (!writable).then(|| {
+        resolve_tessdata_path_with(
+            &["eng".to_string()],
+            None,
+            &cache_env(cache.path(), TessdataModel::Best),
+            &offline(&NO_SYSTEM, &pins),
+        )
+    });
+    std::fs::set_permissions(&managed, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let Some(resolved) = resolved else {
+        eprintln!("SKIP: permissions do not restrict this user");
+        return;
+    };
+    assert_eq!(resolved.unwrap(), managed.to_str().unwrap());
+    assert_eq!(std::fs::read(managed.join("eng.traineddata")).unwrap(), b"fast");
+}
