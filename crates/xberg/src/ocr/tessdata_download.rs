@@ -371,6 +371,10 @@ pub(super) fn pinned_source_url(lang: &str, model: TessdataModel) -> String {
 /// Make the pinned `model` pack for `lang` present in `output_dir`: keep an existing file, else
 /// copy a verified one from the first of `sources` holding it, else download it.
 ///
+/// For [`TessdataModel::Best`] an existing file is kept only when it is the pinned pack; the
+/// caller moves a wrong one aside first ([`PinTables::set_aside_unverified`]), and one that is
+/// still there (another process wrote it meanwhile) is an error rather than reported as present.
+///
 /// Returns whether this call published a new file.
 pub(crate) fn ensure_language_pack(
     lang: &str,
@@ -378,12 +382,25 @@ pub(crate) fn ensure_language_pack(
     output_dir: &Path,
     sources: &[PathBuf],
 ) -> Result<bool, OcrError> {
-    materialize_once(&output_dir.join(format!("{lang}.traineddata")), || {
+    let output_path = output_dir.join(format!("{lang}.traineddata"));
+    let published = materialize_once(&output_path, || {
         if PINNED.adopt(lang, model, output_dir, sources) {
             return Ok(true);
         }
         download_missing_language_pack(lang, model, output_dir)
-    })
+    })?;
+    if !published
+        && model == TessdataModel::Best
+        && PINNED.pin(lang, model).is_some()
+        && !PINNED.classify(lang, &output_path).is(model)
+    {
+        return Err(OcrError::TesseractInitializationFailed(format!(
+            "'{}' is not the pinned {} language pack. Remove it",
+            output_path.display(),
+            model.repository()
+        )));
+    }
+    Ok(published)
 }
 
 /// Run `materialize` unless `output_path` is already a file, one caller at a time per path in
@@ -886,11 +903,23 @@ mod tests {
     }
 
     #[test]
-    fn a_cached_vertical_model_is_kept_without_reverification() {
+    fn a_cached_fast_model_is_kept_without_reverification() {
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("jpn_vert.traineddata");
         std::fs::write(&output, b"locally supplied vertical model").unwrap();
-        assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[]).unwrap());
+        assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Fast, directory.path(), &[]).unwrap());
+        assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
+        assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn an_existing_best_file_that_is_not_the_pinned_pack_is_not_reported_present() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("jpn_vert.traineddata");
+        std::fs::write(&output, b"locally supplied vertical model").unwrap();
+        let error = super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[])
+            .expect_err("an unpinned file must not pass for the best pack");
+        assert!(error.to_string().contains("tessdata_best"), "{error}");
         assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
     }
