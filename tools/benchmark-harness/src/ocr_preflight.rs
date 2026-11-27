@@ -58,7 +58,7 @@ fn ambient_tessdata_model_matches(requested: xberg::TessdataModel, ambient: Opti
 /// The environment values xberg's tessdata resolver reads: `TessdataEnv` in
 /// `crates/xberg/src/ocr/processor/validation.rs`, crate-private, so mirrored here.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TessdataEnvironment {
+pub(crate) struct TessdataEnvironment {
     /// `TESSDATA_PREFIX`; xberg skips an empty value.
     prefix: Option<PathBuf>,
     /// `XBERG_CACHE_DIR` exactly as set. xberg does not treat an empty value as unset: it becomes
@@ -71,7 +71,7 @@ struct TessdataEnvironment {
 }
 
 impl TessdataEnvironment {
-    fn from_process() -> Self {
+    pub(crate) fn from_process() -> Self {
         Self::from_lookup(|name| std::env::var(name).ok())
     }
 
@@ -86,6 +86,25 @@ impl TessdataEnvironment {
                 value == "0" || value.eq_ignore_ascii_case("false")
             }),
         }
+    }
+
+    /// A path-free name for one of the searched directories, for provenance: `TESSDATA_PREFIX`,
+    /// `<cache>/tessdata[/<model>]`, or the system or image directory itself, which is the same
+    /// on every machine.
+    pub(crate) fn directory_label(&self, dir: &Path) -> String {
+        if self.prefix.as_deref() == Some(dir) {
+            return "TESSDATA_PREFIX".to_string();
+        }
+        let cache = self.cache_base().join("tessdata");
+        if dir == cache {
+            return "<cache>/tessdata".to_string();
+        }
+        for model in [xberg::TessdataModel::Fast, xberg::TessdataModel::Best] {
+            if dir == cache.join(model.as_str()) {
+                return format!("<cache>/tessdata/{}", model.as_str());
+            }
+        }
+        dir.display().to_string()
     }
 
     /// xberg's cache base (`cache_base_for` in `crates/xberg/src/cache_dir.rs`): `XBERG_CACHE_DIR`
@@ -130,7 +149,10 @@ const IMAGE_BEST_TESSDATA_DIR: &str = "/usr/share/xberg/tessdata/best";
 /// `<cache>/tessdata/fast` and the system packages, and for `best` only `<cache>/tessdata/best`
 /// and, on Unix, the read-only image directory. A run whose packs are in none of them fails here
 /// instead of downloading inside timed rows.
-fn candidate_tessdata_dirs_for(model: xberg::TessdataModel, environment: &TessdataEnvironment) -> Vec<PathBuf> {
+pub(crate) fn candidate_tessdata_dirs_for(
+    model: xberg::TessdataModel,
+    environment: &TessdataEnvironment,
+) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = environment.prefix.iter().cloned().collect();
     let cache = environment.cache_base().join("tessdata");
     match model {
@@ -179,7 +201,7 @@ fn refuse_unverifiable_best_prefix(model: xberg::TessdataModel, environment: &Te
 
 /// The first of `dirs` holding every pack of `languages`: the directory xberg resolves the
 /// request to (`first_directory_holding` in xberg's `validation.rs`).
-fn first_dir_holding<'a>(languages: &[&str], dirs: &'a [PathBuf]) -> Option<&'a Path> {
+pub(crate) fn first_dir_holding<'a>(languages: &[&str], dirs: &'a [PathBuf]) -> Option<&'a Path> {
     dirs.iter()
         .find(|dir| languages.iter().all(|language| traineddata_present(dir, language)))
         .map(PathBuf::as_path)
@@ -203,10 +225,10 @@ fn language_set_resolvable(languages: &[&str], dirs: &[PathBuf]) -> bool {
 
 /// xberg's default OCR language when a fixture pins none. It is NOT bundled on
 /// the native harness build (see module docs), so it is checked like any pack.
-const DEFAULT_OCR_LANGUAGE: &str = "eng";
+pub(crate) const DEFAULT_OCR_LANGUAGE: &str = "eng";
 
 /// Split a Tesseract language request (`"deu"`, `"deu+eng"`) into its codes.
-fn requested_languages(language: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn requested_languages(language: &str) -> impl Iterator<Item = &str> {
     language.split('+').map(str::trim).filter(|code| !code.is_empty())
 }
 
@@ -606,6 +628,30 @@ mod tests {
             );
         }
         assert!(environment_from(&[("XBERG_TESSDATA_SYSTEM_PATHS", "1")]).system_paths);
+    }
+
+    #[test]
+    fn searched_directories_are_labelled_without_local_paths() {
+        let cache = TempDir::new().unwrap();
+        let prefix = TempDir::new().unwrap();
+        let environment = environment_with(Some(prefix.path()), cache.path());
+        let mut labels = Vec::new();
+        for model in [xberg::TessdataModel::Fast, xberg::TessdataModel::Best] {
+            for dir in candidate_tessdata_dirs_for(model, &environment) {
+                labels.push(environment.directory_label(&dir));
+            }
+        }
+
+        assert_eq!(
+            labels[..3],
+            ["TESSDATA_PREFIX", "<cache>/tessdata", "<cache>/tessdata/fast"]
+        );
+        assert!(labels.contains(&"<cache>/tessdata/best".to_string()), "{labels:?}");
+        assert!(labels.contains(&"/usr/share/tessdata".to_string()), "{labels:?}");
+        for label in &labels {
+            assert!(!label.contains(cache.path().to_string_lossy().as_ref()), "{label}");
+            assert!(!label.contains(prefix.path().to_string_lossy().as_ref()), "{label}");
+        }
     }
 
     #[test]

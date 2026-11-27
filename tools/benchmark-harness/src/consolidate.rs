@@ -411,6 +411,7 @@ mod tests {
             },
             fixed_batch_size: None,
             coverage: None,
+            tessdata: None,
         }
     }
 

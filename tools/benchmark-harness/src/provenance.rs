@@ -14,6 +14,10 @@ use crate::fixture::FixtureManager;
 use crate::types::{BatchCapability, BatchEntryPoint, OutputFormat};
 use crate::{CohortManifest, Error, Result};
 
+mod tessdata;
+
+pub use tessdata::{TessdataPackProvenance, TessdataProvenance, TessdataRequestProvenance};
+
 const PROVENANCE_SCHEMA_VERSION: u32 = 3;
 
 /// A path-free executable identity.
@@ -184,6 +188,10 @@ pub struct RunProvenance {
     /// provenance captured before execution has run (see [`RunProvenance::capture`]).
     #[serde(default)]
     pub coverage: Option<CoverageGateProvenance>,
+    /// The Tesseract packs the run's Xberg Tesseract rows resolve. Absent in sidecars written
+    /// before the field existed and when the run has no such row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tessdata: Option<TessdataProvenance>,
 }
 
 /// Inputs used to capture a run's provenance before framework execution.
@@ -320,6 +328,8 @@ impl RunProvenance {
         let models = model_identifiers_by_framework(inputs.models);
         reject_models_for_unselected_frameworks(&inputs)?;
 
+        let tessdata = tessdata::capture(&inputs)?;
+
         let repository = capture_repository(inputs.fixture_root);
         let mut frameworks = Vec::with_capacity(inputs.frameworks.len());
         for adapter in inputs.frameworks {
@@ -345,6 +355,7 @@ impl RunProvenance {
             },
             fixed_batch_size: inputs.fixed_batch_size,
             coverage: None,
+            tessdata,
         })
     }
 }

@@ -303,6 +303,7 @@ fn build_provenance(
         },
         fixed_batch_size: batch.then_some(contract.batch_size),
         coverage: None,
+        tessdata: None,
     }
 }
 

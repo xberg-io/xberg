@@ -430,6 +430,13 @@ are `tessdata_best`, so the rows could be measured on fast models and recorded a
 variable and provision the packs with
 `xberg cache warm --tessdata-model best --tessdata-languages <codes>`.
 
+Provenance records what those rows actually resolve, not only the set they asked for:
+`provenance.json` carries a top-level `tessdata` object with the requested set and, per OCR
+language request among the fixtures, the directory Xberg resolves it to (as a path-free label
+such as `TESSDATA_PREFIX` or `<cache>/tessdata/best`) and each `<language>.traineddata` file's
+byte size and SHA-256. Two result sets were measured on the same models when those entries are
+equal; see [SCHEMA.md](SCHEMA.md#run-provenance-sidecar).
+
 The remote comparative workflow publishes eight independently validated cohorts. The pinned matrix
 contract contains these cell counts:
 
