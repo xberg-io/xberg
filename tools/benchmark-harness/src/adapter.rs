@@ -369,6 +369,13 @@ pub trait FrameworkAdapter: Send + Sync {
         None
     }
 
+    /// Environment the harness adds to every xberg process this adapter spawns so it runs as
+    /// xberg's shipped launchers start it. Empty for other frameworks and for in-process
+    /// extraction, which starts no process.
+    fn injected_xberg_env(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
     /// Perform any necessary setup before benchmarking
     async fn setup(&self) -> Result<()> {
         Ok(())

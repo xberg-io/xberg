@@ -29,6 +29,8 @@ pub struct SubprocessAdapter {
     command: PathBuf,
     args: Vec<String>,
     env: Vec<(String, String)>,
+    /// The part of `env` added to match xberg's shipped launchers, recorded in provenance.
+    launcher_env: Vec<(String, String)>,
     batch_capability: Option<BatchCapability>,
     working_dir: Option<PathBuf>,
     supported_formats: Vec<String>,
@@ -94,6 +96,7 @@ impl SubprocessAdapter {
             command: command.into(),
             args,
             env,
+            launcher_env: Vec::new(),
             batch_capability: None,
             working_dir: None,
             supported_formats,
@@ -139,6 +142,7 @@ impl SubprocessAdapter {
             command: command.into(),
             args,
             env,
+            launcher_env: Vec::new(),
             batch_capability: Some(batch_capability),
             working_dir: None,
             supported_formats,
@@ -221,6 +225,17 @@ impl SubprocessAdapter {
     pub(crate) fn with_executable_build_identity(mut self, identity: crate::adapter::ExecutableBuildIdentity) -> Self {
         self.executable_build_identity = Some(identity);
         self
+    }
+    /// Add the environment xberg's shipped launchers set to every process this adapter spawns,
+    /// and record it as injected.
+    pub(crate) fn with_launcher_env(mut self, launcher_env: Vec<(String, String)>) -> Self {
+        self.env.extend(launcher_env.iter().cloned());
+        self.launcher_env = launcher_env;
+        self
+    }
+    #[cfg(test)]
+    pub(crate) fn env(&self) -> &[(String, String)] {
+        &self.env
     }
     /// Set the bounded worker count used by native batch implementations.
     pub fn with_batch_workers(mut self, workers: usize) -> Self {

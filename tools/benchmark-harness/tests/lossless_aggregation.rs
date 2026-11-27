@@ -166,6 +166,7 @@ fn sample_provenance() -> RunProvenance {
             effective_workers: Some(4),
             configured_thread_budget: Some(8),
             tessdata_model: None,
+            xberg_env: None,
             worker_semantics: "configured document concurrency cap; Xberg thread budget is recorded separately"
                 .to_string(),
             effective_warmup_iterations: 1,

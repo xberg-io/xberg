@@ -43,6 +43,20 @@ const SCEPTRE_TRACT_OPTIONS_JSON: &str = r#"{"model":{"backend":"tract"}}"#;
 /// data is emitted and discarded; cold-start attribution needs the parse, a result field, and
 /// reporting wired together before it is available.
 const STAGE_TIMING_ENV_VAR: &str = "XBERG_EMIT_STAGE_TIMING";
+/// libmalloc magazine cap xberg's npm, PyPI and plugin launchers set on macOS (ADR 0022).
+const MALLOC_MAGAZINES_ENV_VAR: &str = "MallocMaxMagazines";
+
+/// Environment xberg's shipped launchers add before starting the CLI, so a benchmark row measures
+/// the binary as users run it. Mirrors the launchers exactly: macOS only, and a variable the
+/// harness environment already defines, even as an empty string, is inherited untouched.
+/// `is_set` reports whether the harness environment defines a variable.
+pub(crate) fn launcher_env(is_set: impl Fn(&str) -> bool) -> Vec<(String, String)> {
+    if cfg!(target_os = "macos") && !is_set(MALLOC_MAGAZINES_ENV_VAR) {
+        vec![(MALLOC_MAGAZINES_ENV_VAR.to_string(), "1".to_string())]
+    } else {
+        Vec::new()
+    }
+}
 /// Xberg's own extraction limit stays this far below the harness `--timeout`, so Xberg reports
 /// its timeout before the harness kills the process (1800 s keeps the historical 1740 s).
 const EXTRACTION_TIMEOUT_MARGIN_SECS: u64 = 60;
@@ -378,7 +392,8 @@ fn assemble_adapter(
     }
     .with_supported_output_formats(vec![output_format])
     .with_ocr_language_policy(declared_ocr_language_policy(&framework_name))
-    .with_executable_build_identity(build_identity);
+    .with_executable_build_identity(build_identity)
+    .with_launcher_env(launcher_env(|name| std::env::var_os(name).is_some()));
     // A layout row must prove the detector ran: a failed layout pass otherwise yields plausible
     // text that the harness would score as layout output. ~keep
     let mut adapter = if reject_layout_failures {

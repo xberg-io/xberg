@@ -855,6 +855,13 @@ cap. `effective_workers` remains `null` because Xberg resolves effective documen
 from the workload. Non-Xberg rows and automatic-budget single-file rows omit
 `configured_thread_budget`.
 
+`frameworks[].xberg_env` is an optional object mapping each environment variable the harness
+injected into that framework's xberg processes to its value, so they run as xberg's shipped
+launchers start them (ADR 0022): `{"MallocMaxMagazines": "1"}` on macOS when the harness
+environment does not already define the variable. It is omitted when nothing was injected:
+non-Xberg rows, Linux and Windows, a user-set value, and in-process rows, which start no process.
+Older sidecars without the field still load, and it does not change the schema version.
+
 #### Run provenance migration from schema 2 to schema 3
 
 - Added required measurement-contract identity through `FrameworkProvenance.timing_regime` and
