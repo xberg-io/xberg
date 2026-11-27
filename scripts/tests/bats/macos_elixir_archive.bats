@@ -11,6 +11,6 @@ setup() {
 	xberg_assert_status 0
 	# 25 MacosElixirArchiveTests + 4 ProjectNoticeTests in scripts/ci/test_macos_elixir_archive.py.
 	# A discovery change that silently stops collecting a class is what this exact count catches.
-	xberg_assert_output_contains "Ran 29 tests"
+	xberg_assert_output_contains "Ran 30 tests"
 	xberg_assert_output_contains "OK"
 }
