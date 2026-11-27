@@ -49,11 +49,11 @@ impl<'doc> TextExtractor<'doc> {
                 }
                 w_sum
             } else if wmode == 0 {
-                // Type0/CID font, horizontal: use TextCharIter so that the byte-width
+                // Type0/CID font, horizontal: use `shown_codes` so that the byte-width
                 // (1 or 2) is determined by the font's encoding / ToUnicode CMap
                 // codespace, not hardcoded to 2. Per ISO 32000-1:2008 §9.7.6.2. ~keep
                 let mut w_sum = 0.0f32;
-                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in shown_codes(text, Some(font)) {
                     // GH #1631: `code` is a raw content-stream character
                     // code, not a CID — it must go through `code_to_cid`
                     // before it keys /W/DW/W2, or a non-Identity
@@ -67,7 +67,7 @@ impl<'doc> TextExtractor<'doc> {
                     w += cs_hs;
                     // Per ISO 32000-1:2008 §9.3.3: Tw applies ONLY to the
                     // single-byte character code 32, never to the byte value 32
-                    // inside a multi-byte code. `TextCharIter` yields the raw
+                    // inside a multi-byte code. `shown_codes` yields the raw
                     // code plus its byte width, so gate on a single-byte 32 — a
                     // 2-byte CID #32 (0x0020) in an Identity-H/CJK font must not
                     // take Tw (it would over-advance and mis-position the run). ~keep
@@ -87,7 +87,7 @@ impl<'doc> TextExtractor<'doc> {
                 // glyph-stretching axis — it does not scale w1y, Tc, or
                 // Tw in vertical mode. ~keep
                 let mut w_sum = 0.0f32;
-                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in shown_codes(text, Some(font)) {
                     // GH #1631: translate the raw code to a CID before the
                     // /W2 lookup; the Tw check stays on the raw code. ~keep
                     let cid = font.code_to_cid(code);
@@ -249,7 +249,7 @@ impl<'doc> TextExtractor<'doc> {
                 // 2-byte codes per ToUnicode codespace. ~keep
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
-                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in shown_codes(text, Some(font)) {
                     // GH #1631: translate to a CID before the width lookup;
                     // Tw stays keyed on the raw code (§9.3.3). ~keep
                     let cid = font.code_to_cid(code);
@@ -277,7 +277,7 @@ impl<'doc> TextExtractor<'doc> {
                 // axis per §9.3.4). ~keep
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
-                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in shown_codes(text, Some(font)) {
                     let cid = font.code_to_cid(code);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
@@ -476,7 +476,7 @@ impl<'doc> TextExtractor<'doc> {
                 buffer.record_decode(run_start, || text.len() == 1);
                 w_sum
             } else if wmode == 0 {
-                // Width calculation: use TextCharIter so byte-width respects the
+                // Width calculation: use `shown_codes` so byte-width respects the
                 // CMap codespace (1 or 2 bytes per character). Fixes CJK fonts
                 // whose encoding name doesn't match the well-known Identity-H/EUC/…
                 // keyword patterns but whose ToUnicode CMap declares a 2-byte
@@ -485,7 +485,7 @@ impl<'doc> TextExtractor<'doc> {
                 // `kept_from` is where the text not yet appended starts; `offset` is the current code. ~keep
                 let mut kept_from = 0usize;
                 let mut offset = 0usize;
-                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in shown_codes(text, Some(font)) {
                     // GH #1631: translate to a CID before the width lookup;
                     // Tw stays keyed on the raw code (§9.3.3). ~keep
                     let cid = font.code_to_cid(code);
@@ -519,7 +519,7 @@ impl<'doc> TextExtractor<'doc> {
                 // (§9.3.4). ~keep
                 buffer.append(text)?;
                 let mut w_sum = 0.0f32;
-                for (code, nbytes) in TextCharIter::new(text, Some(font)) {
+                for (code, nbytes) in shown_codes(text, Some(font)) {
                     let cid = font.code_to_cid(code);
                     let w1y = font.get_vertical_metrics(cid).w1y;
                     let mut w = w1y * fs_factor;
@@ -1059,7 +1059,7 @@ impl<'doc> TextExtractor<'doc> {
             .filter(|font| font.subtype != "Type0")
             .map(|font| Self::simple_widths(self.cached_extraction_widths.as_deref(), font, repair_zero_widths));
 
-        for (char_code, nbytes) in TextCharIter::new(text, font) {
+        for (char_code, nbytes) in shown_codes(text, font) {
             // Get current text matrix (may be updated by previous characters in this string) ~keep
             let state = self.state_stack.current();
             let text_matrix = state.text_matrix;
@@ -1257,4 +1257,32 @@ impl<'doc> TextExtractor<'doc> {
 /// How many letters a Type0 code yields, at least one. ~keep
 fn letter_count_of(font: &FontInfo, code: u32) -> usize {
     font.char_to_unicode(code).map_or(1, |s| s.chars().count().max(1))
+}
+
+/// The codes a shown string holds, segmented as `decode_text_to_unicode` segments them, so the
+/// widths pushed per code stay aligned with the decoded letters. A UTF-8 CMap's 1-4 byte codes
+/// are not `TextCharIter`'s fixed grouping. ~keep
+fn shown_codes<'a>(text: &'a [u8], font: Option<&FontInfo>) -> ShownCodes<'a> {
+    match font {
+        Some(font) if crate::fonts::unicode_decode::font_has_utf8_cmap(font) => {
+            ShownCodes::Utf8(crate::fonts::unicode_decode::char_codes_with_len(text, font).into_iter())
+        }
+        _ => ShownCodes::Fixed(TextCharIter::new(text, font)),
+    }
+}
+
+enum ShownCodes<'a> {
+    Fixed(TextCharIter<'a>),
+    Utf8(std::vec::IntoIter<(u32, usize)>),
+}
+
+impl Iterator for ShownCodes<'_> {
+    type Item = (u32, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Fixed(codes) => codes.next(),
+            Self::Utf8(codes) => codes.next(),
+        }
+    }
 }
