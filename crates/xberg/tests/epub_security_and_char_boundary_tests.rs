@@ -232,7 +232,7 @@ async fn test_ordinary_epub_extracts_exact_content() {
 /// is ever read.
 #[tokio::test]
 async fn test_high_compression_ratio_member_is_rejected() {
-    const BOMB_PAYLOAD_LEN: usize = 5 * 1024 * 1024;
+    const BOMB_PAYLOAD_LEN: usize = 32 * 1024 * 1024;
     let bomb_payload = vec![b'A'; BOMB_PAYLOAD_LEN];
 
     let mut buffer = Vec::new();

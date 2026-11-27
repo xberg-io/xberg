@@ -1421,6 +1421,29 @@ mod tests {
         );
     }
 
+    /// GH#3416: a chart drawing of a few MiB deflating past the default ratio, in a
+    /// workbook far too small to exhaust memory, must not reject the workbook.
+    #[cfg(feature = "excel")]
+    #[tokio::test]
+    async fn test_xlsx_extract_content_accepts_highly_compressible_media_below_ratio_floor() {
+        let drawing = vec![b'A'; 2 * 1024 * 1024];
+        let data = build_test_xlsx(&[("xl/media/image1.emf", &drawing)]);
+
+        let result = ExcelExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                &ExtractionConfig::default(),
+            )
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "a 2 MiB media member must not reject the workbook: {:?}",
+            result.err()
+        );
+    }
+
     /// Gap: XLSX had only an entry-count check (`check_zip_entry_count`, now
     /// `validate_zip_container`'s first half) -- no `ZipBombValidator`, so nothing
     /// ever checked aggregate declared uncompressed size or compression ratio.
@@ -1431,10 +1454,9 @@ mod tests {
     #[cfg(feature = "excel")]
     #[tokio::test]
     async fn test_xlsx_extract_content_rejects_high_compression_ratio_archive() {
-        // 64 KiB of a single repeated byte, deflated: compresses far past any sane
-        // ratio in a few hundred bytes, so the archive stays tiny while the ratio
-        // comparison still fires.
-        let bomb_payload = vec![0u8; 64 * 1024];
+        // 32 MiB of a single repeated byte, deflated: the smallest member the ratio
+        // cap applies to (GH#3416), compressed far past the lowered limit.
+        let bomb_payload = vec![0u8; 32 * 1024 * 1024];
         let data = build_test_xlsx(&[("xl/media/bomb.bin", &bomb_payload)]);
         let extractor = ExcelExtractor::new();
         let config = ExtractionConfig {

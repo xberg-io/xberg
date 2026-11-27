@@ -1613,6 +1613,36 @@ mod tests {
         );
     }
 
+    /// GH#3416: a chart drawing of a few MiB deflating past the default ratio, in a
+    /// presentation far too small to exhaust memory, must not reject the presentation.
+    #[tokio::test]
+    async fn test_pptx_extract_content_accepts_highly_compressible_media_below_ratio_floor() {
+        use crate::core::config::ExtractionConfig;
+
+        let slide_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+    <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Chart slide</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>"#;
+        let drawing = vec![b'A'; 2 * 1024 * 1024];
+        let pptx = crate::extraction::pptx::tests::build_single_slide_pptx(
+            slide_xml,
+            None,
+            &[("ppt/media/image1.emf", &drawing)],
+        );
+
+        let mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        let result = PptxExtractor::new()
+            .extract_content(&pptx, mime, &ExtractionConfig::default())
+            .await;
+        let document = result.expect("a 2 MiB media member must not reject the presentation");
+        assert!(
+            document.content().contains("Chart slide"),
+            "slide text must survive, got: {:?}",
+            document.content()
+        );
+    }
+
     /// Gap: PPTX had `check_entry_count` (file count only) but no `ZipBombValidator`
     /// at all, so nothing ever checked aggregate declared uncompressed size or
     /// compression ratio -- unlike ODT/ODP (see `extractors::odt`/`extractors::odp`).
@@ -1629,10 +1659,9 @@ mod tests {
        xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
     <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Hello</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
 </p:sld>"#;
-        // 64 KiB of a single repeated byte, deflated: compresses far past any sane
-        // ratio in a few hundred bytes, so the archive stays tiny while the ratio
-        // comparison still fires.
-        let bomb_payload = vec![0u8; 64 * 1024];
+        // 32 MiB of a single repeated byte, deflated: the smallest member the ratio
+        // cap applies to (GH#3416), compressed far past the lowered limit.
+        let bomb_payload = vec![0u8; 32 * 1024 * 1024];
         let pptx = crate::extraction::pptx::tests::build_single_slide_pptx(
             slide_xml,
             None,

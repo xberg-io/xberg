@@ -41,12 +41,13 @@ fn zip_ratio_allows_small_highly_compressible_entry() {
 #[cfg(feature = "office")]
 #[test]
 fn zip_ratio_rejects_large_highly_compressible_entry() {
-    let mut archive = archive_with_compressible_entry(4 * 1024 * 1024);
+    let floor = ZipBombValidator::RATIO_FLOOR;
+    let mut archive = archive_with_compressible_entry(usize::try_from(floor).expect("floor fits in usize"));
 
     assert!(matches!(
         ZipBombValidator::new(SecurityLimits::default()).validate(&mut archive),
         Err(SecurityError::ZipBombDetected { uncompressed_size, .. })
-            if uncompressed_size == 4 * 1024 * 1024
+            if uncompressed_size == floor
     ));
 }
 
@@ -426,13 +427,62 @@ fn zip_bomb_ratio_cap_ignores_small_members_and_keeps_large_ones() {
         .expect("a 200 KiB member past the ratio cap is not a bomb");
 
     let mut large = deflated_archive(&[
-        ("bomb.bin", vec![b'A'; 8 * 1024 * 1024]),
+        ("bomb.bin", vec![b'A'; 40 * 1024 * 1024]),
         ("photo.jpg", incompressible(2 * 1024 * 1024)),
     ]);
     let error = validator
         .validate(&mut large)
-        .expect_err("an 8 MiB member past the ratio cap is rejected");
+        .expect_err("a 40 MiB member past the ratio cap is rejected");
     assert!(matches!(error, SecurityError::ZipBombDetected { .. }), "{error}");
+}
+
+/// GH#3416: an Office chart drawing of a few MiB deflating past 100:1, alone in a short
+/// document, puts both the member and the whole archive past the ratio cap.
+#[cfg(feature = "office")]
+#[test]
+fn zip_ratio_cap_ignores_a_multi_mib_media_member_and_archive_below_the_floor() {
+    let mut archive = deflated_archive(&[
+        ("word/document.xml", b"<w:document/>".to_vec()),
+        ("word/media/image17.emf", vec![b'A'; 3_378_512]),
+    ]);
+    let (mut compressed, mut uncompressed) = (0u64, 0u64);
+    for index in 0..archive.len() {
+        let entry = archive.by_index_raw(index).expect("entry header");
+        compressed += entry.compressed_size();
+        uncompressed += entry.size();
+    }
+    assert!(
+        uncompressed > 100 * compressed,
+        "the whole archive must exceed the default ratio: {uncompressed}B from {compressed}B"
+    );
+
+    ZipBombValidator::new(SecurityLimits::default())
+        .validate(&mut archive)
+        .expect("a 3.3 MiB archive cannot exhaust memory whatever its ratio");
+}
+
+/// Members each below the floor still add up: once the archive total reaches the floor
+/// the whole-archive ratio cap applies.
+#[cfg(feature = "office")]
+#[test]
+fn zip_ratio_cap_rejects_an_archive_total_past_the_floor_from_small_members() {
+    let member = vec![b'A'; 12 * 1024 * 1024];
+    let mut archive = deflated_archive(&[
+        ("word/media/image1.emf", member.clone()),
+        ("word/media/image2.emf", member.clone()),
+        ("word/media/image3.emf", member),
+    ]);
+
+    let error = ZipBombValidator::new(SecurityLimits::default())
+        .validate(&mut archive)
+        .expect_err("36 MiB past the ratio cap is rejected even when no member reaches the floor");
+    assert!(
+        matches!(
+            error,
+            SecurityError::ZipBombDetected { uncompressed_size, .. } if uncompressed_size == 36 * 1024 * 1024
+        ),
+        "{error}"
+    );
 }
 
 #[cfg(feature = "archives")]

@@ -205,7 +205,8 @@ async fn should_enforce_security_accounting_before_skipping_an_encrypted_member(
     let total_size = READABLE_PAYLOAD.len() + SECRET_PAYLOAD.len();
     let mut high_ratio = original.clone();
     let (local, central) = header_offsets(&high_ratio);
-    const DECLARED_SIZE: u32 = 8192;
+    // The smallest declared size the ratio cap applies to (GH#3416). ~keep
+    const DECLARED_SIZE: u32 = 32 * 1024 * 1024;
     for offset in [local + LOCAL_SIZE_OFFSET, central + CENTRAL_SIZE_OFFSET] {
         high_ratio[offset..offset + 4].copy_from_slice(&DECLARED_SIZE.to_le_bytes());
     }

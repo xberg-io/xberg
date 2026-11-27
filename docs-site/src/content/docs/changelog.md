@@ -92,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PDF: a lone wide glyph raised above its base, such as the minus of `5.0 × 10^−4`, no longer reads as a multi-glyph run, so a negative exponent stays in its sentence instead of splitting the line (regression from the ordinal-suffix fix).
 - PDF Markdown no longer wraps number records, tick-label rows, equation fragments or citation lists in `$...$` math. An equation line needs a relation joining two operands on both the font-based and heuristic paths; native exponents and indices inside a math run or display equation are written as `^{..}` and `_{..}` instead of being flattened (`x5`, `HNf`), and a bracketed reference such as `[45, 48]` stays outside inline math.
 - PDF tables drawn with a 90, 180 or 270 degree text matrix (no page `/Rotate`), such as a landscape table on a portrait sheet, now extract one row per line in displayed top-to-bottom order, each label next to its value, instead of scrambling the cell order.
+- **security:** DOCX, PPTX, XLSX and other ZIP-based documents with large EMF/WMF chart drawings are no longer rejected as ZIP bombs. These drawings reach several MiB at 100-300:1, past `max_compression_ratio` for the member and, in a short document, for the whole archive. The ratio limit now applies to a member or the archive total only from 32 MiB of uncompressed output, up from 1 MiB per member; `max_archive_size` and the per-member read caps still bound memory. (#3416)
+
 
 ## [1.5.4] - 2026-11-25
 

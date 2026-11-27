@@ -4955,9 +4955,10 @@ mod tests {
     /// but never a compression ratio -- unlike every other OOXML/ODF container (XLSX, PPTX,
     /// ODT, ODP, HWPX, EPUB, iWork), which routes its ratio check through
     /// `ZipBombValidator`. A member well under both size limits can still be a compression
-    /// bomb by ratio: this part is 2,000,000 bytes of a single repeated byte -- far under the
-    /// 100 MB per-file / 500 MB total ceilings -- but compresses to a few hundred bytes,
-    /// comfortably past the default 100:1 `max_compression_ratio`. Against the unfixed code
+    /// bomb by ratio: this part is 32 MiB of a single repeated byte -- under the 100 MB
+    /// per-file / 500 MB total ceilings, and the smallest member the ratio cap applies to
+    /// (GH#3416) -- but compresses to a few tens of kilobytes, comfortably past the default
+    /// 100:1 `max_compression_ratio`. Against the unfixed code
     /// this document extracts successfully (the ratio is never examined); against the fixed
     /// code `ZipBombValidator::validate` rejects it before `word/document.xml` is even read.
     #[tokio::test]
@@ -4966,7 +4967,7 @@ mod tests {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body>
 </w:document>"#;
-        let bomb_content = "A".repeat(2_000_000);
+        let bomb_content = "A".repeat(32 * 1024 * 1024);
         let data = build_test_docx_with_files(document_xml, &[("word/bomb.xml", &bomb_content)]);
 
         let extractor = DocxExtractor::new();
