@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "name": "ocr-cord-v1",
+  "batch_size": 10,
+  "ocr_enabled": true,
+  "fixtures": [
+    "cord_receipt_01.json",
+    "cord_receipt_02.json",
+    "cord_receipt_03.json",
+    "cord_receipt_04.json",
+    "cord_receipt_05.json",
+    "cord_receipt_06.json",
+    "cord_receipt_07.json",
+    "cord_receipt_08.json",
+    "cord_receipt_09.json",
+    "cord_receipt_10.json",
+    "cord_receipt_11.json",
+    "cord_receipt_12.json",
+    "cord_receipt_13.json",
+    "cord_receipt_14.json",
+    "cord_receipt_15.json",
+    "cord_receipt_16.json",
+    "cord_receipt_17.json",
+    "cord_receipt_18.json",
+    "cord_receipt_19.json",
+    "cord_receipt_20.json"
+  ]
+}
