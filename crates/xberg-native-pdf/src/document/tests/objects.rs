@@ -880,7 +880,7 @@ fn document_with_ten_objects() -> PdfDocument {
 }
 
 #[test]
-fn reference_to_free_object_zero_is_null_without_scanning_the_file() {
+fn reference_to_free_object_zero_is_null_without_indexing_object_headers() {
     use crate::xref::XRefEntry;
 
     let mut document = document_with_ten_objects();
@@ -892,7 +892,10 @@ fn reference_to_free_object_zero_is_null_without_scanning_the_file() {
         );
     }
     assert!(!object_headers_were_indexed(&document));
-    assert!(!object_streams_were_swept(&document));
+    assert!(
+        object_streams_were_swept(&document),
+        "the sweep repairs later lookups of compressed objects the xref omits"
+    );
 
     let mut control = document_with_ten_objects();
     control.xref.add_entry(11, XRefEntry::free(0, 1));

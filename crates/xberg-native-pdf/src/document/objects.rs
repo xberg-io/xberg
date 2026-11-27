@@ -941,15 +941,11 @@ impl PdfDocument {
             // Recovery path 2 — the object may be compressed inside a
             // `/Type /ObjStm`. Real-world producers have been seen to
             // mis-flag every compressed object's xref slot as free, so
-            // sweep the object streams once and recheck the cache. Object 0
-            // is free by definition, so a reference to it never pays for the
-            // sweep. ~keep
-            let recovered = if obj_ref.id == 0 {
-                None
-            } else {
-                self.recover_from_object_streams();
-                self.object_cache.lock_or_recover().get_shared(&obj_ref)
-            };
+            // sweep the object streams once and recheck the cache. A reference
+            // to object 0 still runs the sweep: it republishes every compressed
+            // object, which repairs later lookups of objects the xref omits. ~keep
+            self.recover_from_object_streams();
+            let recovered = self.object_cache.lock_or_recover().get_shared(&obj_ref);
             if let Some(obj) = recovered
                 && !matches!(*obj, Object::Null)
             {
