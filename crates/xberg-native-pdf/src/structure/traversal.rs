@@ -266,6 +266,12 @@ pub fn traverse_structure_tree(struct_tree: &StructTreeRoot, page_num: u32) -> R
 pub fn traverse_structure_tree_all_pages(
     struct_tree: &StructTreeRoot,
 ) -> std::collections::HashMap<u32, Vec<OrderedContent>> {
+    let span = tracing::debug_span!(
+        "xberg_native_pdf::structure_tree_traverse",
+        root_count = struct_tree.root_elements.len(),
+        pages = tracing::field::Empty
+    );
+    let _entered = span.enter();
     let mut result: std::collections::HashMap<u32, Vec<OrderedContent>> = std::collections::HashMap::new();
 
     let mut block_counter = 0u32;
@@ -273,6 +279,7 @@ pub fn traverse_structure_tree_all_pages(
         traverse_element_all_pages(root_elem, InheritedContext::default(), &mut block_counter, &mut result);
     }
 
+    span.record("pages", result.len());
     result
 }
 

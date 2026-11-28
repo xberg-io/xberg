@@ -200,6 +200,7 @@ fn build_page_map(document: &PdfDocument) -> HashMap<u32, u32> {
 /// * `Ok(None)` - the document is not tagged (no `/StructTreeRoot`)
 /// * `Err(Error)` - parsing failed
 pub fn parse_structure_tree(document: &PdfDocument) -> Result<Option<StructTreeRoot>, Error> {
+    let _span = tracing::debug_span!("xberg_native_pdf::structure_tree_parse", budgeted = false).entered();
     parse_structure_tree_inner(document, ParseBudget::unbounded())
 }
 
@@ -215,6 +216,7 @@ pub fn parse_structure_tree_with_budget(
     document: &PdfDocument,
     budget: Option<Duration>,
 ) -> Result<Option<StructTreeRoot>, Error> {
+    let _span = tracing::debug_span!("xberg_native_pdf::structure_tree_parse", budgeted = budget.is_some()).entered();
     parse_structure_tree_inner(document, ParseBudget::from_option(budget))
 }
 

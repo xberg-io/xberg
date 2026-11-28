@@ -628,6 +628,7 @@ pub(crate) fn extract_all_segment_carriers(
     doc: &super::NativeDocument,
     artifacts: ArtifactRetention,
 ) -> crate::pdf::error::Result<(Vec<NativePageSegments>, bool)> {
+    let _span = tracing::debug_span!("xberg::pdf::segment_carriers").entered();
     if let Some(page_roles) = super::structure_tree_page_roles(doc)? {
         let pages = super::read_pages(page_roles.len(), |page| {
             extract_page(doc, page, &page_roles[page], artifacts, ScriptGeometry::Preserve)

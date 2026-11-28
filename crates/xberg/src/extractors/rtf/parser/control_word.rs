@@ -284,6 +284,13 @@ fn handle_u_control_word(
         }
     }
     let uc_count = ctx.uc_stack.last().copied().unwrap_or(1);
+    skip_unicode_fallback(chars, uc_count);
+}
+
+/// Skip the `uc_count` fallback units that follow a `\uN` escape: plain characters or
+/// `\'hh` escapes. A following control word or group boundary is left unread. Shared by
+/// the text and formatting passes so both read the same characters.
+pub(super) fn skip_unicode_fallback(chars: &mut std::iter::Peekable<std::str::Chars>, uc_count: u8) {
     let mut skipped = 0u8;
     while skipped < uc_count {
         let Some(&next) = chars.peek() else { break };
@@ -295,11 +302,12 @@ fn handle_u_control_word(
             skipped += 1;
             continue;
         }
-        chars.next();
-        let Some(&apos) = chars.peek() else { break };
-        if apos != '\'' {
+        let mut lookahead = chars.clone();
+        lookahead.next();
+        if lookahead.peek() != Some(&'\'') {
             break;
         }
+        *chars = lookahead;
         chars.next();
         chars.next();
         chars.next();

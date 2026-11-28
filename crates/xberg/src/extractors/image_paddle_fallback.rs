@@ -332,7 +332,7 @@ async fn models_ready(config: &OcrConfig) -> bool {
     let set = match crate::paddle_ocr::RequiredModelSet::resolve(&Default::default(), config) {
         Ok(set) => set,
         Err(error) => {
-            tracing::debug!(%error, "PaddleOCR image fallback skipped: model set unresolved");
+            tracing::debug!(target: "xberg::ocr", %error, "PaddleOCR image fallback skipped: model set unresolved");
             return false;
         }
     };
@@ -424,21 +424,32 @@ async fn retry_with(
         return Ok((primary, None));
     };
     if !sparse_unreliable_read(&primary) {
+        tracing::debug!(
+            target: "xberg::ocr",
+            consulted = false,
+            "PaddleOCR image fallback not consulted: the Tesseract read is reliable"
+        );
         return Ok((primary, None));
     }
     let config = paddle_read_config(effective);
     if !ready(&config).await {
-        tracing::debug!("PaddleOCR image fallback skipped: models are not cached locally");
+        tracing::debug!(target: "xberg::ocr", "PaddleOCR image fallback skipped: models are not cached locally");
         return Ok((primary, None));
     }
     let thresholds = original.effective_thresholds();
-    let (selected, adopted) = read_if_better(
-        cancel,
-        async || paddle.process_image_owned(bytes, &config).await,
-        primary,
-        &thresholds,
+    let span =
+        tracing::debug_span!(target: "xberg::ocr", "xberg::ocr::paddle_fallback", adopted = tracing::field::Empty);
+    let (selected, adopted) = tracing::Instrument::instrument(
+        read_if_better(
+            cancel,
+            async || paddle.process_image_owned(bytes, &config).await,
+            primary,
+            &thresholds,
+        ),
+        span.clone(),
     )
     .await?;
+    span.record("adopted", adopted);
     Ok((selected, adopted.then_some(paddle)))
 }
 
@@ -453,7 +464,7 @@ async fn read_if_better(
     check_cancelled(cancel)?;
     match result {
         Ok(mut candidate) if paddle_read_wins(&primary, &candidate, thresholds) => {
-            tracing::debug!("PaddleOCR image fallback adopted");
+            tracing::debug!(target: "xberg::ocr", "PaddleOCR image fallback adopted");
             candidate.metadata.additional.insert(
                 std::borrow::Cow::Borrowed(FALLBACK_BACKEND_METADATA_KEY),
                 serde_json::Value::String(PADDLE_BACKEND.to_string()),
@@ -461,7 +472,7 @@ async fn read_if_better(
             Ok((candidate, true))
         }
         Ok(_) => {
-            tracing::debug!("PaddleOCR image fallback rejected; keeping the Tesseract read");
+            tracing::debug!(target: "xberg::ocr", "PaddleOCR image fallback rejected; keeping the Tesseract read");
             Ok((primary, false))
         }
         Err(error @ crate::XbergError::Cancelled) => Err(error),

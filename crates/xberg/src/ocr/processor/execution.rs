@@ -605,6 +605,7 @@ fn native_ocr_stop_check_observes_expired_deadline_without_stop_flag() {
 }
 
 pub(super) fn recognize_until_stop(api: &TesseractAPI) -> xberg_tesseract::Result<()> {
+    let _span = tracing::debug_span!("xberg::ocr::recognize").entered();
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(token) = crate::core::extractor::cacheability::ocr_stop_token() {
         let stopped = || native_ocr_stopped(&token);
@@ -2859,6 +2860,13 @@ pub(super) fn perform_ocr(
         )
     });
 
+    let _span = tracing::debug_span!(
+        "xberg::ocr::tesseract_page",
+        input_bytes = image_bytes.len(),
+        psm = config.psm,
+        language = %config.language
+    )
+    .entered();
     let request = OcrRequest {
         image_bytes,
         config,
@@ -3043,6 +3051,14 @@ struct OcrRequest<'a> {
 impl OcrRequest<'_> {
     /// Prepare the raster Tesseract will recognize, under the request's security limits.
     fn prepare_page(&self) -> Result<PreparedOcrImage, OcrError> {
+        let span = tracing::debug_span!(
+            "xberg::ocr::prepare",
+            width = tracing::field::Empty,
+            height = tracing::field::Empty,
+            source_dpi = tracing::field::Empty,
+            preprocessing = tracing::field::Empty
+        );
+        let _entered = span.enter();
         let images_config = self
             .extraction_config
             .and_then(|extraction_config| extraction_config.images.as_ref());
@@ -3056,6 +3072,10 @@ impl OcrRequest<'_> {
         )
         .map(|mut image| {
             image.source_dpi = image.source_dpi.max(MIN_SOURCE_DPI);
+            span.record("width", image.width);
+            span.record("height", image.height);
+            span.record("source_dpi", image.source_dpi);
+            span.record("preprocessing", image.apply_pix_preprocessing);
             image
         })
         .map_err(|error| OcrError::ImageProcessingFailed(error.to_string()))
@@ -3184,6 +3204,8 @@ impl OcrRequest<'_> {
         if !image.apply_pix_preprocessing {
             return None;
         }
+        let _span =
+            tracing::debug_span!("xberg::ocr::preprocess", width = image.width, height = image.height).entered();
         // A gray raster on the contrast policy takes the 8-bit route, which frees the RGB (the
         // workspace model's `known_gray_phase_peak`); anything else keeps the colour path. ~keep
         if native_image_budget::releases_source_rgb(preprocessing)

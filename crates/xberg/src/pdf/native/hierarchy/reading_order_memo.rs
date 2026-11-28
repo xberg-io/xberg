@@ -201,10 +201,21 @@ pub(super) fn reorder(
         (stored, keys)
     });
     let input = (stored.is_some() || keys.is_some()).then(|| fingerprint(spans));
+    let had_stored = stored.is_some();
     if let Some((_, ordered)) = stored.filter(|(stored_input, _)| Some(*stored_input) == input) {
+        tracing::trace!(page_index, outcome = "hit", spans = spans.len(), "reading-order memo");
         ordered.serve(spans);
         return;
     }
+    tracing::trace!(
+        page_index,
+        outcome = "miss",
+        memo = shared.is_some(),
+        stored_mismatch = had_stored,
+        admits = keys.is_some(),
+        spans = spans.len(),
+        "reading-order memo"
+    );
     let input = input.zip(keys);
     // Encoded only on a page the memo will keep, so a served page pays for the fingerprint alone. ~keep
     let input_encodings = input.as_ref().map(|_| SpanEncodings::of(spans));
@@ -226,6 +237,7 @@ pub(super) fn reorder(
         let released = memo.pages.get(&page_index).map_or(0, |page| page.bytes);
         let used = memo.used - released + bytes;
         if used > memo.budget {
+            tracing::trace!(page_index, outcome = "refused", bytes, "reading-order memo");
             return;
         }
         memo.used = used;

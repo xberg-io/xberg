@@ -119,34 +119,11 @@ fn collect_section_formulas<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) ->
     use crate::utils::xml_utils::EntityReader;
     use quick_xml::events::Event;
 
-    // `unhwp` numbers a section by its position in the list it reads, not by the
-    // digits in its name, so the key is the position here too. A package whose
-    // parts are `section0` and `section2` gives positions 0 and 1 on both sides.
-    let mut section_parts: Vec<(usize, String)> = archive
-        .file_names()
-        .filter_map(|name| {
-            let name = name.ok()?;
-            section_index_of(&name).map(|digits| (digits, name.into_owned()))
-        })
-        .collect();
-    section_parts.sort();
-    let section_parts: Vec<(usize, String)> = section_parts
-        .into_iter()
-        .enumerate()
-        .map(|(position, (_, name))| (position, name))
-        .collect();
-
     let mut per_section: AHashMap<usize, Vec<(usize, String)>> = AHashMap::new();
-    for (section_index, name) in section_parts {
-        let mut xml = String::new();
-        if archive
-            .by_name(&name)
-            .ok()
-            .and_then(|part| part.take(MAX_HWPX_MEMBER_SIZE).read_to_string(&mut xml).ok())
-            .is_none()
-        {
+    for (section_index, name) in section_parts(archive) {
+        let Some(xml) = read_section_xml(archive, &name) else {
             continue;
-        }
+        };
 
         let mut formulas: Vec<(usize, String)> = Vec::new();
         // `EntityReader` resolves `&amp;` and friends into the text it returns. A
@@ -200,6 +177,112 @@ fn collect_section_formulas<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) ->
     per_section
 }
 
+/// The section parts of the archive in order, each with its position.
+///
+/// `unhwp` numbers a section by its position in the list it reads, not by the
+/// digits in its name, so the key is the position here too. A package whose
+/// parts are `section0` and `section2` gives positions 0 and 1 on both sides.
+fn section_parts<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Vec<(usize, String)> {
+    let mut parts: Vec<(usize, String)> = archive
+        .file_names()
+        .filter_map(|name| {
+            let name = name.ok()?;
+            section_index_of(&name).map(|digits| (digits, name.into_owned()))
+        })
+        .collect();
+    parts.sort();
+    parts
+        .into_iter()
+        .enumerate()
+        .map(|(position, (_, name))| (position, name))
+        .collect()
+}
+
+fn read_section_xml<R: Read + Seek>(archive: &mut zip::ZipArchive<R>, name: &str) -> Option<String> {
+    let mut xml = String::new();
+    archive
+        .by_name(name)
+        .ok()
+        .and_then(|part| part.take(MAX_HWPX_MEMBER_SIZE).read_to_string(&mut xml).ok())?;
+    Some(xml)
+}
+
+/// The paragraphs of every `<hp:header>` and `<hp:footer>`, one entry each, in document order.
+///
+/// `unhwp` reads a header or footer only into `Section::header`/`footer`, which its
+/// HWPX reader never fills: the `<hp:ctrl>` that holds them is skipped. The text is
+/// read from the section XML here instead.
+fn collect_section_furniture<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Vec<(ContentLayer, Vec<String>)> {
+    use crate::utils::xml_utils::EntityReader;
+    use quick_xml::events::Event;
+
+    let mut found = Vec::new();
+    for (_, name) in section_parts(archive) {
+        let Some(xml) = read_section_xml(archive, &name) else {
+            continue;
+        };
+        let mut reader = EntityReader::from_str(&xml);
+        let mut layer: Option<ContentLayer> = None;
+        let mut in_text = false;
+        // One buffer per open paragraph, so a paragraph nested in a table cell does not run
+        // into the text around it.
+        let mut open_paragraphs: Vec<String> = Vec::new();
+        let mut paragraphs: Vec<String> = Vec::new();
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                    "header" => layer = Some(ContentLayer::Header),
+                    "footer" => layer = Some(ContentLayer::Footer),
+                    "p" if layer.is_some() => {
+                        // The text before a nested paragraph is complete; what follows it is new.
+                        if let Some(outer) = open_paragraphs.last_mut() {
+                            if !outer.trim().is_empty() {
+                                paragraphs.push(outer.trim().to_string());
+                            }
+                            outer.clear();
+                        }
+                        open_paragraphs.push(String::new());
+                    }
+                    "t" if layer.is_some() => in_text = true,
+                    "tab" if in_text => open_paragraphs.last_mut().into_iter().for_each(|p| p.push(' ')),
+                    _ => {}
+                },
+                Ok(Event::Empty(e)) if in_text && local_name(e.name().as_ref()) == "tab" => {
+                    open_paragraphs.last_mut().into_iter().for_each(|p| p.push(' '));
+                }
+                Ok(Event::Text(t)) if in_text => {
+                    if let Some(paragraph) = open_paragraphs.last_mut() {
+                        paragraph.push_str(&std::borrow::Cow::Borrowed(t.as_ref()));
+                    }
+                }
+                Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
+                    "t" => in_text = false,
+                    "p" if layer.is_some() => {
+                        let text = open_paragraphs.pop().unwrap_or_default();
+                        if !text.trim().is_empty() {
+                            paragraphs.push(text.trim().to_string());
+                        }
+                    }
+                    "header" | "footer" => {
+                        if let Some(layer) = layer
+                            && !paragraphs.is_empty()
+                        {
+                            found.push((layer, std::mem::take(&mut paragraphs)));
+                        }
+                        paragraphs.clear();
+                        layer = None;
+                        open_paragraphs.clear();
+                    }
+                    _ => {}
+                },
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+    }
+    found
+}
+
 /// Return the number in a section part's name, so `Contents/section3.xml`
 /// gives `3`.
 ///
@@ -219,10 +302,36 @@ fn local_name(qname: &str) -> &str {
     }
 }
 
+#[cfg(test)]
 fn build_hwpx_internal_document(
     doc: unhwp::model::Document,
     mime_type: &str,
     section_formulas: &AHashMap<usize, Vec<(usize, String)>>,
+) -> InternalDocument {
+    build_hwpx_internal_document_with_furniture(doc, mime_type, section_formulas, &[], None)
+}
+
+/// Whether the content filter lets the header or footer layer through. Without a
+/// filter the layers are kept, as they are not rendered then.
+fn furniture_layer_kept(layer: ContentLayer, filter: Option<&crate::core::config::ContentFilterConfig>) -> bool {
+    filter.is_none_or(|filter| match layer {
+        ContentLayer::Header => filter.include_headers,
+        ContentLayer::Footer => filter.include_footers,
+        _ => true,
+    })
+}
+
+/// Build the document. `scanned_furniture` adds header and footer paragraphs read from the
+/// section XML to those in the parsed model. Each distinct header or footer, as a whole, is
+/// pushed once, so one repeated per section appears once while a repeated paragraph inside
+/// it stays, and a layer the filter drops is not built at
+/// all, which keeps the footnote definitions inside it out of the document.
+fn build_hwpx_internal_document_with_furniture(
+    doc: unhwp::model::Document,
+    mime_type: &str,
+    section_formulas: &AHashMap<usize, Vec<(usize, String)>>,
+    scanned_furniture: &[(ContentLayer, Vec<String>)],
+    filter: Option<&crate::core::config::ContentFilterConfig>,
 ) -> InternalDocument {
     let mut builder = InternalDocumentBuilder::new("hwpx");
     builder.set_mime_type(Cow::Owned(mime_type.to_string()));
@@ -262,6 +371,7 @@ fn build_hwpx_internal_document(
     let mut image_index: usize = 0;
     let mut footnote_counter: u32 = 0;
     let image_resources = ImageResourceLookup::new(&doc.resources);
+    let mut furniture: Vec<(&[unhwp::model::Paragraph], ContentLayer)> = Vec::new();
 
     for section in &doc.sections {
         // Key on the section's own index. `unhwp` drops a section it cannot
@@ -270,22 +380,17 @@ fn build_hwpx_internal_document(
         let mut next_formula = 0usize;
         let mut paragraph_ordinal = 0usize;
         // Section headers/footers (`unhwp::model::Section::header`/`footer`) previously
-        // went unread entirely — only `section.content` was visited (#96). ~keep
-        if let Some(header_paragraphs) = &section.header {
-            push_header_footer_paragraphs(
-                &mut builder,
-                header_paragraphs,
-                ContentLayer::Header,
-                &mut footnote_counter,
-            );
+        // went unread entirely — only `section.content` was visited (#96). They are
+        // pushed after the last section so the text follows the body. ~keep
+        if let Some(header_paragraphs) = &section.header
+            && furniture_layer_kept(ContentLayer::Header, filter)
+        {
+            furniture.push((header_paragraphs, ContentLayer::Header));
         }
-        if let Some(footer_paragraphs) = &section.footer {
-            push_header_footer_paragraphs(
-                &mut builder,
-                footer_paragraphs,
-                ContentLayer::Footer,
-                &mut footnote_counter,
-            );
+        if let Some(footer_paragraphs) = &section.footer
+            && furniture_layer_kept(ContentLayer::Footer, filter)
+        {
+            furniture.push((footer_paragraphs, ContentLayer::Footer));
         }
 
         for block in &section.content {
@@ -410,6 +515,27 @@ fn build_hwpx_internal_document(
         // An equation the block walk never reached still belongs to the output.
         for (_, latex) in scanned.into_iter().flatten().skip(next_formula) {
             builder.push_formula(latex, None, None);
+        }
+    }
+
+    // Checked before a header is built, since building records its footnotes.
+    let mut seen: ahash::AHashSet<(bool, Vec<String>)> = ahash::AHashSet::new();
+    for (paragraphs, layer) in furniture {
+        let key: Vec<String> = paragraphs
+            .iter()
+            .map(|p| p.plain_text().trim().to_string())
+            .filter(|text| !text.is_empty())
+            .collect();
+        if seen.insert((layer == ContentLayer::Header, key)) {
+            push_header_footer_paragraphs(&mut builder, paragraphs, layer, &mut footnote_counter);
+        }
+    }
+    for (layer, paragraphs) in scanned_furniture {
+        if furniture_layer_kept(*layer, filter) && seen.insert((*layer == ContentLayer::Header, paragraphs.clone())) {
+            for text in paragraphs {
+                let idx = builder.push_paragraph(text, vec![], None, None);
+                builder.set_layer(idx, *layer);
+            }
         }
     }
 
@@ -630,10 +756,21 @@ impl InternalDocumentExtractor for HwpxExtractor {
             .map_err(|e| crate::XbergError::validation(e.to_string()))?;
 
         let section_formulas = collect_section_formulas(&mut archive);
+        let furniture = collect_section_furniture(&mut archive);
 
         let doc = unhwp::parse_bytes(content)
             .map_err(|e| crate::XbergError::parsing(format!("Failed to parse HWPX: {e}")))?;
-        Ok(build_hwpx_internal_document(doc, mime_type, &section_formulas))
+        let mut internal = build_hwpx_internal_document_with_furniture(
+            doc,
+            mime_type,
+            &section_formulas,
+            &furniture,
+            config.content_filter.as_ref(),
+        );
+        if let Some(filter) = &config.content_filter {
+            internal.apply_furniture_filter(filter);
+        }
+        Ok(internal)
     }
 
     fn supported_mime_types(&self) -> &[&str] {
@@ -855,6 +992,219 @@ mod tests {
             .find(|e| e.layer == ContentLayer::Footer)
             .expect("footer element must be present");
         assert_eq!(footer.text, "Page footer text");
+    }
+
+    fn hwpx_document_with_furniture() -> Document {
+        let mut doc = Document::new();
+        let mut section = Section::new(0);
+        section.header = Some(vec![Paragraph::text("Running header")]);
+        section.footer = Some(vec![Paragraph::text("Running footer")]);
+        section.content.push(Block::Paragraph(Paragraph::text("Body text")));
+        doc.sections.push(section);
+        doc
+    }
+
+    #[test]
+    fn hwpx_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+                let mut internal = build_hwpx_internal_document(
+                    hwpx_document_with_furniture(),
+                    "application/haansofthwpx",
+                    &AHashMap::new(),
+                );
+                internal.apply_furniture_filter(&ContentFilterConfig {
+                    include_headers: headers,
+                    include_footers: footers,
+                    ..Default::default()
+                });
+                let content =
+                    crate::extraction::derive::derive_extraction_result(internal, false, format.clone()).content;
+                assert!(content.contains("Body text"), "{content}");
+                assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+                assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+                if let Some(at) = content.find("Running header") {
+                    assert!(at > content.find("Body text").unwrap(), "{content}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hwpx_header_and_footer_text_is_not_rendered_by_default() {
+        let internal = build_hwpx_internal_document(
+            hwpx_document_with_furniture(),
+            "application/haansofthwpx",
+            &AHashMap::new(),
+        );
+        let content = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        )
+        .content;
+        assert_eq!(content.trim(), "Body text");
+    }
+
+    fn hwpx_manifest(sections: usize) -> String {
+        let items: String = (0..sections)
+            .map(|n| {
+                format!(r#"<opf:item id="section{n}" href="Contents/section{n}.xml" media-type="application/xml"/>"#)
+            })
+            .collect();
+        let spine: String = (0..sections)
+            .map(|n| format!(r#"<opf:itemref idref="section{n}"/>"#))
+            .collect();
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?><opf:package xmlns:opf="http://www.idpf.org/2007/opf"><opf:manifest>{items}</opf:manifest><opf:spine>{spine}</opf:spine></opf:package>"#
+        )
+    }
+
+    fn hwpx_section(body: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?><hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p><hp:run><hp:t>{body}</hp:t></hp:run></hp:p>
+  <hp:p><hp:run><hp:ctrl><hp:header id="1"><hp:subList><hp:p><hp:run><hp:t>Running header</hp:t></hp:run></hp:p></hp:subList></hp:header></hp:ctrl></hp:run></hp:p>
+  <hp:p><hp:run><hp:ctrl><hp:footer id="2"><hp:subList><hp:p><hp:run><hp:t>Running footer</hp:t></hp:run></hp:p></hp:subList></hp:footer></hp:ctrl></hp:run></hp:p>
+</hs:sec>"#
+        )
+    }
+
+    async fn extract_hwpx_text(sections: &[&str], headers: bool, footers: bool, filter: bool) -> String {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        let parts: Vec<String> = sections.iter().map(|body| hwpx_section(body)).collect();
+        let manifest = hwpx_manifest(parts.len());
+        let names: Vec<String> = (0..parts.len()).map(|n| format!("Contents/section{n}.xml")).collect();
+        let mut files = vec![("Contents/content.hpf", manifest.as_str())];
+        files.extend(
+            names
+                .iter()
+                .zip(&parts)
+                .map(|(name, xml)| (name.as_str(), xml.as_str())),
+        );
+        let config = ExtractionConfig {
+            content_filter: filter.then(|| ContentFilterConfig {
+                include_headers: headers,
+                include_footers: footers,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let doc = HwpxExtractor::new()
+            .extract_content(&hwpx_package(&files), "application/haansofthwpx", &config)
+            .await
+            .unwrap();
+        crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Plain).content
+    }
+
+    #[tokio::test]
+    async fn hwpx_extractor_renders_header_and_footer_only_when_the_content_filter_includes_them() {
+        for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+            let content = extract_hwpx_text(&["Body one"], headers, footers, true).await;
+            assert!(content.contains("Body one"), "{content}");
+            assert_eq!(content.contains("Running header"), headers, "{content}");
+            assert_eq!(content.contains("Running footer"), footers, "{content}");
+            if headers {
+                assert!(content.find("Running header").unwrap() > content.find("Body one").unwrap());
+            }
+        }
+        let content = extract_hwpx_text(&["Body one"], true, true, false).await;
+        assert!(!content.contains("Running"), "no filter keeps the default: {content}");
+    }
+
+    #[tokio::test]
+    async fn hwpx_extractor_emits_a_header_repeated_across_sections_once() {
+        let content = extract_hwpx_text(&["Body one", "Body two"], true, true, true).await;
+        assert!(
+            content.contains("Body one") && content.contains("Body two"),
+            "{content}"
+        );
+        assert_eq!(content.matches("Running header").count(), 1, "{content}");
+        assert_eq!(content.matches("Running footer").count(), 1, "{content}");
+    }
+
+    #[tokio::test]
+    async fn hwpx_extractor_keeps_a_paragraph_repeated_inside_one_header() {
+        use crate::core::config::ContentFilterConfig;
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?><hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p><hp:run><hp:t>Body</hp:t></hp:run></hp:p>
+  <hp:p><hp:run><hp:ctrl><hp:header id="1"><hp:subList><hp:p><hp:run><hp:t>Alpha</hp:t></hp:run></hp:p><hp:p><hp:run><hp:t>Beta</hp:t></hp:run></hp:p><hp:p><hp:run><hp:t>Alpha</hp:t></hp:run></hp:p></hp:subList></hp:header></hp:ctrl></hp:run></hp:p>
+</hs:sec>"#;
+        let manifest = hwpx_manifest(1);
+        let package = hwpx_package(&[
+            ("Contents/content.hpf", manifest.as_str()),
+            ("Contents/section0.xml", xml),
+        ]);
+        let config = ExtractionConfig {
+            content_filter: Some(ContentFilterConfig {
+                include_headers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let doc = HwpxExtractor::new()
+            .extract_content(&package, "application/haansofthwpx", &config)
+            .await
+            .unwrap();
+        let header: Vec<&str> = doc
+            .elements
+            .iter()
+            .filter(|e| e.layer == ContentLayer::Header)
+            .map(|e| e.text.as_str())
+            .collect();
+        assert_eq!(header, ["Alpha", "Beta", "Alpha"]);
+    }
+
+    #[test]
+    fn hwpx_furniture_scan_turns_a_tab_into_a_space_and_splits_nested_paragraphs() {
+        let xml = r#"<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p><hp:run><hp:ctrl><hp:header id="1"><hp:subList>
+    <hp:p><hp:run><hp:t>Company<hp:tab/>Page 1</hp:t></hp:run></hp:p>
+    <hp:p><hp:run><hp:t>Title</hp:t><hp:tbl><hp:tr><hp:tc><hp:subList><hp:p><hp:run><hp:t>Cell</hp:t></hp:run></hp:p></hp:subList></hp:tc></hp:tr></hp:tbl></hp:run></hp:p>
+  </hp:subList></hp:header></hp:ctrl></hp:run></hp:p>
+</hs:sec>"#;
+        let package = hwpx_package(&[("Contents/section0.xml", xml)]);
+        let mut archive = zip::ZipArchive::new(Cursor::new(package)).unwrap();
+        let found = collect_section_furniture(&mut archive);
+        assert_eq!(
+            found,
+            vec![(
+                ContentLayer::Header,
+                vec!["Company Page 1".to_string(), "Title".to_string(), "Cell".to_string()]
+            )]
+        );
+    }
+
+    #[test]
+    fn hwpx_footnote_inside_a_dropped_header_does_not_leak() {
+        use crate::core::config::ContentFilterConfig;
+        let mut header = Paragraph::text("Header note ");
+        header
+            .content
+            .push(InlineContent::Footnote("Secret header footnote".to_string()));
+        let mut doc = Document::new();
+        let mut section = Section::new(0);
+        section.header = Some(vec![header]);
+        section.content.push(Block::Paragraph(Paragraph::text("Body text")));
+        doc.sections.push(section);
+        let filter = ContentFilterConfig {
+            include_headers: false,
+            include_footers: true,
+            ..Default::default()
+        };
+        let internal = build_hwpx_internal_document_with_furniture(
+            doc,
+            "application/haansofthwpx",
+            &AHashMap::new(),
+            &[],
+            Some(&filter),
+        );
+        assert!(
+            internal.elements.iter().all(|e| !e.text.contains("Secret")),
+            "{:?}",
+            internal.elements.iter().map(|e| &e.text).collect::<Vec<_>>()
+        );
     }
 
     #[test]

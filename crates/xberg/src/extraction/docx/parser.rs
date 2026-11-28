@@ -1923,14 +1923,53 @@ struct TableContext {
     pending_grid_after: u32,
     /// The open row carries `w:trPr/w:del` (a tracked row deletion); it is dropped when it closes.
     pending_row_deleted: bool,
+    /// The open cell carries `w:tcPr/w:cellDel` (a tracked cell deletion); it is dropped when it
+    /// closes.
+    pending_cell_deleted: bool,
+    /// Cells dropped from the open row for a tracked cell deletion.
+    row_deleted_cells: u32,
+    /// Cells kept in the open row.
+    row_live_cells: u32,
+    /// Indices in `table.rows` of rows that lost a cell; at `</w:tbl>` those still narrower than
+    /// the table are padded to its width.
+    rows_with_deleted_cells: Vec<usize>,
     /// `PageBreakState::text_since_break` when the open deleted row began, restored when it is
     /// dropped so its discarded text cannot make a later live hint look new.
     text_since_break_before_deleted_row: bool,
+    /// The same restore point for an open deleted cell.
+    text_since_break_before_deleted_cell: bool,
     /// Note references read in this table's cells, in reading order.
     note_refs: Vec<NoteRef>,
 }
 
 impl TableContext {
+    /// The open row or cell is a tracked deletion, so what it holds is not kept.
+    /// Pad each row that lost a deleted cell out to the widest row, so a cell deleted from one
+    /// row leaves it as wide as its neighbours while a column deleted from every row leaves no
+    /// empty column behind.
+    fn pad_rows_with_deleted_cells(&mut self, budget: &mut SecurityBudget) -> Result<(), SecurityError> {
+        let width = |row: &TableRow| -> u32 {
+            row.cells
+                .iter()
+                .map(|c| c.properties.as_ref().and_then(|p| p.grid_span).unwrap_or(1))
+                .fold(0u32, u32::saturating_add)
+        };
+        let table_width = self.table.rows.iter().map(width).max().unwrap_or(0);
+        for &index in &self.rows_with_deleted_cells {
+            let row = &mut self.table.rows[index];
+            let missing = table_width - width(row);
+            if missing > 0 {
+                budget.add_cells(missing as usize)?;
+                row.cells.push(TableCell::grid_padding(missing));
+            }
+        }
+        Ok(())
+    }
+
+    fn in_deleted_content(&self) -> bool {
+        self.pending_row_deleted || self.pending_cell_deleted
+    }
+
     fn new() -> Self {
         Self {
             table: Table::new(),
@@ -1941,7 +1980,12 @@ impl TableContext {
             cell_ordinal: 0,
             pending_grid_after: 0,
             pending_row_deleted: false,
+            pending_cell_deleted: false,
+            row_deleted_cells: 0,
+            row_live_cells: 0,
+            rows_with_deleted_cells: Vec::new(),
             text_since_break_before_deleted_row: false,
+            text_since_break_before_deleted_cell: false,
             note_refs: Vec::new(),
         }
     }
@@ -2768,7 +2812,7 @@ fn push_or_defer_page_break(
     page_breaks: &mut PageBreakState,
     is_hint: bool,
 ) {
-    if table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+    if table_stack.iter().any(TableContext::in_deleted_content) {
         return;
     }
     if let Some(row_context) = table_stack.last() {
@@ -2831,7 +2875,7 @@ fn apply_break(
     }
 
     if is_page_break {
-        if table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+        if table_stack.iter().any(TableContext::in_deleted_content) {
             return;
         }
         push_or_defer_page_break(
@@ -2885,7 +2929,7 @@ fn apply_last_rendered_page_break(
     elements: &mut Vec<DocumentElement>,
     page_breaks: &mut PageBreakState,
 ) {
-    if !page_breaks.text_since_break || table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+    if !page_breaks.text_since_break || table_stack.iter().any(TableContext::in_deleted_content) {
         return;
     }
     push_or_defer_page_break(
@@ -3028,6 +3072,8 @@ struct DocxParser<R: Read + Seek> {
     relationships: AHashMap<String, String>,
     styles: Option<super::styles::StyleCatalog>,
     theme: Option<super::theme::Theme>,
+    /// Parts whose non-conventional namespace prefixes could not be canonicalized.
+    namespace_failures: Vec<String>,
 }
 
 impl<R: Read + Seek> DocxParser<R> {
@@ -3046,7 +3092,8 @@ impl<R: Read + Seek> DocxParser<R> {
                     .read_to_string(&mut xml)
                     .is_ok()
                 {
-                    styles_result = super::styles::parse_styles_xml(&xml).ok();
+                    styles_result =
+                        super::styles::parse_styles_xml(&super::namespace::strict_to_transitional(&xml)).ok();
                 }
             }
             styles_result
@@ -3061,7 +3108,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     .read_to_string(&mut xml)
                     .is_ok()
                 {
-                    theme_result = super::theme::parse_theme_xml(&xml).ok();
+                    theme_result = super::theme::parse_theme_xml(&super::namespace::strict_to_transitional(&xml)).ok();
                 }
             }
             theme_result
@@ -3072,6 +3119,7 @@ impl<R: Read + Seek> DocxParser<R> {
             relationships: AHashMap::new(),
             styles,
             theme,
+            namespace_failures: Vec::new(),
         })
     }
 
@@ -3159,6 +3207,16 @@ impl<R: Read + Seek> DocxParser<R> {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
+        for part in std::mem::take(&mut self.namespace_failures) {
+            crate::core::diagnostics::push_warning(
+                &mut document.warnings,
+                "docx",
+                format!(
+                    "{part} binds the WordprocessingML namespace to a non-standard prefix and is not well-formed XML; its content could not be read"
+                ),
+            );
+        }
+
         Ok((document, hyperlinks))
     }
 
@@ -3212,7 +3270,16 @@ impl<R: Read + Seek> DocxParser<R> {
 
         let mut contents = String::new();
         file.take(read_limit).read_to_string(&mut contents)?;
-        Ok(contents)
+        let canonical = super::namespace::canonicalize_prefixes(&contents);
+        if canonical.gave_up {
+            self.namespace_failures.push(path.to_string());
+        }
+        let rewritten = match canonical.xml {
+            std::borrow::Cow::Owned(rewritten) => Some(rewritten),
+            // Nothing to rewrite: keep the original allocation.
+            std::borrow::Cow::Borrowed(_) => None,
+        };
+        Ok(rewritten.unwrap_or(contents))
     }
 
     /// Parse `word/document.xml`'s body content and populate `document` from it.
@@ -3478,6 +3545,8 @@ impl<R: Read + Seek> DocxParser<R> {
                             if let Some(ctx) = table_stack.last_mut() {
                                 ctx.current_row = Some(TableRow::default());
                                 ctx.row_ordinal += 1;
+                                ctx.row_deleted_cells = 0;
+                                ctx.row_live_cells = 0;
                                 if std::mem::take(&mut ctx.pending_row_deleted) {
                                     move_from_depth = move_from_depth.saturating_sub(1);
                                 }
@@ -3510,13 +3579,24 @@ impl<R: Read + Seek> DocxParser<R> {
                             if let Some(ctx) = table_stack.last_mut() {
                                 ctx.current_cell = Some(TableCell::default());
                                 ctx.cell_ordinal += 1;
+                                if std::mem::take(&mut ctx.pending_cell_deleted) {
+                                    move_from_depth = move_from_depth.saturating_sub(1);
+                                }
                             }
                         }
                         "w:tcPr" => {
                             if let Some(ctx) = table_stack.last_mut()
                                 && let Some(ref mut cell) = ctx.current_cell
                             {
-                                cell.properties = Some(super::table::parse_cell_properties(reader, budget)?);
+                                let (properties, deleted) = super::table::parse_cell_properties(reader, budget)?;
+                                cell.properties = Some(properties);
+                                // The cell's content follows `w:tcPr`. A deleted cell is read but
+                                // not kept, like a deleted row or a `w:moveFrom`.
+                                if deleted && !ctx.pending_cell_deleted {
+                                    ctx.pending_cell_deleted = true;
+                                    ctx.text_since_break_before_deleted_cell = page_breaks.text_since_break;
+                                    move_from_depth += 1;
+                                }
                             }
                         }
                         "w:b" | "w:i" | "w:u" | "w:strike" | "w:dstrike" | "w:vertAlign" | "w:sz" | "w:color"
@@ -3740,7 +3820,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                             } else {
                                                 id.to_string()
                                             };
-                                            if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                            if table_stack.iter().any(TableContext::in_deleted_content) {
                                                 out.notes_in_deleted_rows.insert((note_type, id.to_string()));
                                             }
                                             let marker_start = run.text.len();
@@ -3770,7 +3850,7 @@ impl<R: Read + Seek> DocxParser<R> {
                             for attr in e.attributes().flatten() {
                                 if attr.key.as_ref() == "w:id" {
                                     let id = attr.value.as_ref();
-                                    if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                    if table_stack.iter().any(TableContext::in_deleted_content) {
                                         out.comments_in_deleted_rows.insert(id.to_string());
                                         continue;
                                     }
@@ -3954,8 +4034,17 @@ impl<R: Read + Seek> DocxParser<R> {
                                 && let Some(cell) = ctx.current_cell.take()
                                 && let Some(ref mut row) = ctx.current_row
                             {
-                                budget.add_cells(1)?;
-                                row.cells.push(cell);
+                                if std::mem::take(&mut ctx.pending_cell_deleted) {
+                                    // Word's final view removes the cell and shifts the cells
+                                    // after it left.
+                                    move_from_depth = move_from_depth.saturating_sub(1);
+                                    page_breaks.text_since_break = ctx.text_since_break_before_deleted_cell;
+                                    ctx.row_deleted_cells += 1;
+                                } else {
+                                    budget.add_cells(1)?;
+                                    ctx.row_live_cells += 1;
+                                    row.cells.push(cell);
+                                }
                             }
                         }
                         "w:tr" => {
@@ -3963,21 +4052,29 @@ impl<R: Read + Seek> DocxParser<R> {
                                 && let Some(mut row) = ctx.current_row.take()
                             {
                                 let grid_after = std::mem::take(&mut ctx.pending_grid_after);
+                                let deleted_cells = std::mem::take(&mut ctx.row_deleted_cells);
+                                let live_cells = std::mem::take(&mut ctx.row_live_cells);
                                 // Word hides a row whose deletion is tracked, so no output keeps it.
                                 if std::mem::take(&mut ctx.pending_row_deleted) {
                                     move_from_depth = move_from_depth.saturating_sub(1);
                                     page_breaks.text_since_break = ctx.text_since_break_before_deleted_row;
+                                } else if deleted_cells > 0 && live_cells == 0 {
+                                    // Every cell of the row was deleted, so the row is gone too.
                                 } else {
                                     if grid_after > 0 {
                                         budget.add_cells(grid_after as usize)?;
                                         row.cells.push(TableCell::grid_padding(grid_after));
+                                    }
+                                    if deleted_cells > 0 {
+                                        ctx.rows_with_deleted_cells.push(ctx.table.rows.len());
                                     }
                                     ctx.table.rows.push(row);
                                 }
                             }
                         }
                         "w:tbl" => {
-                            if let Some(completed_ctx) = table_stack.pop() {
+                            if let Some(mut completed_ctx) = table_stack.pop() {
+                                completed_ctx.pad_rows_with_deleted_cells(budget)?;
                                 let completed_table = completed_ctx.table;
                                 let completed_note_refs = completed_ctx.note_refs;
                                 if let Some(parent_ctx) = table_stack.last_mut() {
@@ -4766,6 +4863,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut budget = SecurityBudget::with_defaults();
         let defs = parser.parse_numbering(&xml, &mut budget).unwrap().list_types;
@@ -5007,6 +5105,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut budget = SecurityBudget::with_defaults();
         let numbering = parser.parse_numbering(xml, &mut budget).unwrap();
@@ -5071,6 +5170,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         parser.parse_numbering(&xml, &mut SecurityBudget::from_limits(limits))
     }
@@ -5383,6 +5483,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -5420,6 +5521,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -5460,6 +5562,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -5484,6 +5587,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut notes = Vec::new();
         let mut budget = crate::extractors::security::SecurityBudget::with_defaults();
@@ -6102,6 +6206,281 @@ mod tests {
         );
     }
 
+    /// Cell grid of the first table of a body made of `rows` (each row's `<w:tc>` list).
+    fn deleted_cell_grid(rows: &[&str]) -> Vec<Vec<String>> {
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl>{}</w:tbl></w:body>
+</w:document>"#,
+            rows.iter().map(|r| format!("<w:tr>{r}</w:tr>")).collect::<String>()
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown)
+    }
+
+    fn tc(text: &str) -> String {
+        format!(r#"<w:tc><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:tc>"#)
+    }
+
+    fn deleted_tc(props: &str, text: &str) -> String {
+        format!(
+            r#"<w:tc><w:tcPr><w:cellDel w:id="1" w:author="A"/>{props}</w:tcPr><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:tc>"#
+        )
+    }
+
+    #[test]
+    fn test_deleted_middle_cell_is_dropped_and_later_cells_shift_left() {
+        let row = format!("{}{}{}", tc("A"), deleted_tc("", "B"), tc("C"));
+        let grid = deleted_cell_grid(&[&row, &format!("{}{}{}", tc("D"), tc("E"), tc("F"))]);
+        assert_eq!(grid, vec![vec!["A", "C", ""], vec!["D", "E", "F"]]);
+    }
+
+    #[test]
+    fn test_deleted_first_and_last_cells_are_dropped() {
+        let first = format!("{}{}{}", deleted_tc("", "A"), tc("B"), tc("C"));
+        let last = format!("{}{}{}", tc("D"), tc("E"), deleted_tc("", "F"));
+        let grid = deleted_cell_grid(&[&first, &last]);
+        assert_eq!(grid, vec![vec!["B", "C"], vec!["D", "E"]]);
+    }
+
+    #[test]
+    fn test_deleted_spanning_cell_pads_every_column_it_covered() {
+        let row = format!("{}{}", deleted_tc(r#"<w:gridSpan w:val="2"/>"#, "Wide"), tc("Kept"));
+        let grid = deleted_cell_grid(&[&row, &format!("{}{}{}", tc("A"), tc("B"), tc("C"))]);
+        assert_eq!(grid, vec![vec!["Kept", "", ""], vec!["A", "B", "C"]]);
+    }
+
+    #[test]
+    fn test_deleted_vmerge_restart_cell_leaves_its_continuation_blank() {
+        let first = format!("{}{}", deleted_tc(r#"<w:vMerge w:val="restart"/>"#, "Top"), tc("R1"));
+        let second = format!(r#"<w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>{}"#, tc("R2"));
+        let grid = deleted_cell_grid(&[&first, &second]);
+        assert_eq!(grid, vec![vec!["R1", ""], vec!["", "R2"]]);
+    }
+
+    #[test]
+    fn test_cell_del_inside_tcprchange_does_not_delete_the_cell() {
+        let changed = r#"<w:tc><w:tcPr><w:gridSpan w:val="2"/><w:tcPrChange w:id="1" w:author="A"><w:tcPr><w:cellDel w:id="2" w:author="A"/><w:gridSpan w:val="1"/></w:tcPr></w:tcPrChange></w:tcPr><w:p><w:r><w:t>Stays</w:t></w:r></w:p></w:tc>"#;
+        let grid = deleted_cell_grid(&[changed]);
+        assert_eq!(grid, vec![vec!["Stays", ""]]);
+    }
+
+    #[test]
+    fn test_deleting_a_column_in_every_row_leaves_no_empty_column() {
+        let r1 = format!("{}{}{}", tc("A"), deleted_tc("", "B"), tc("C"));
+        let r2 = format!("{}{}{}", tc("D"), deleted_tc("", "E"), tc("F"));
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr>{r1}</w:tr><w:tr>{r2}</w:tr></w:tbl></w:body>
+</w:document>"#
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert_eq!(
+            doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown),
+            vec![vec!["A", "C"], vec!["D", "F"]]
+        );
+        assert_eq!(
+            doc.tables[0].to_markdown(),
+            "| A   | C   |\n| --- | --- |\n| D   | F   |"
+        );
+    }
+
+    #[test]
+    fn test_row_whose_every_cell_is_deleted_is_dropped() {
+        let all_gone = format!("{}{}", deleted_tc("", "X"), deleted_tc("", "Y"));
+        let live = format!("{}{}", tc("A"), tc("B"));
+        let grid = deleted_cell_grid(&[&all_gone, &live]);
+        assert_eq!(grid, vec![vec!["A", "B"]]);
+    }
+
+    #[test]
+    fn test_row_that_was_empty_to_begin_with_is_kept() {
+        let grid = deleted_cell_grid(&["", &tc("A")]);
+        assert_eq!(grid, vec![vec![], vec!["A"]]);
+    }
+
+    #[test]
+    fn test_header_row_with_every_cell_deleted_is_dropped_with_its_separator() {
+        let header = format!(
+            r#"<w:trPr><w:tblHeader/></w:trPr>{}{}"#,
+            deleted_tc("", "H1"),
+            deleted_tc("", "H2")
+        );
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr>{header}</w:tr><w:tr>{}{}</w:tr></w:tbl></w:body>
+</w:document>"#,
+            tc("a"),
+            tc("b")
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert_eq!(doc.tables[0].rows.len(), 1);
+        assert_eq!(doc.tables[0].to_markdown(), "| a   | b   |\n| --- | --- |");
+    }
+
+    #[test]
+    fn test_cell_del_only_inside_tcprchange_keeps_the_cell() {
+        let changed = r#"<w:tc><w:tcPr><w:tcPrChange w:id="1" w:author="A"><w:tcPr><w:cellDel w:id="2" w:author="A"/></w:tcPr></w:tcPrChange></w:tcPr><w:p><w:r><w:t>Stays</w:t></w:r></w:p></w:tc>"#;
+        let grid = deleted_cell_grid(&[changed]);
+        assert_eq!(grid, vec![vec!["Stays"]]);
+    }
+
+    #[test]
+    fn test_previous_vmerge_and_width_inside_tcprchange_do_not_leak_into_the_cell() {
+        let changed = r#"<w:tc><w:tcPr><w:tcPrChange w:id="1" w:author="A"><w:tcPr><w:tcW w:w="999" w:type="dxa"/><w:vMerge/></w:tcPr></w:tcPrChange></w:tcPr><w:p><w:r><w:t>Live</w:t></w:r></w:p></w:tc>"#;
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr>{changed}</w:tr></w:tbl></w:body>
+</w:document>"#
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let props = doc.tables[0].rows[0].cells[0].properties.as_ref().expect("properties");
+        assert!(props.v_merge.is_none() && props.width.is_none(), "{props:?}");
+        assert_eq!(
+            doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown),
+            vec![vec!["Live"]]
+        );
+    }
+
+    #[test]
+    fn test_deleted_cell_in_a_row_with_grid_before_and_after_keeps_its_live_cells_in_place() {
+        let row = format!(
+            r#"<w:trPr><w:gridBefore w:val="1"/><w:gridAfter w:val="1"/></w:trPr>{}{}"#,
+            deleted_tc("", "Gone"),
+            tc("Kept")
+        );
+        let full = format!("{}{}{}{}", tc("A"), tc("B"), tc("C"), tc("D"));
+        let grid = deleted_cell_grid(&[&row, &full]);
+        assert_eq!(grid, vec![vec!["", "Kept", "", ""], vec!["A", "B", "C", "D"]]);
+    }
+
+    #[test]
+    fn test_page_break_inside_a_deleted_cell_is_not_emitted() {
+        let row = format!(
+            r#"<w:tc><w:tcPr><w:cellDel w:id="1" w:author="A"/></w:tcPr><w:p><w:r><w:t>Gone</w:t><w:br w:type="page"/></w:r></w:p></w:tc>{}"#,
+            tc("Kept")
+        );
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr>{row}</w:tr></w:tbl></w:body>
+</w:document>"#
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert!(
+            !doc.elements.iter().any(|e| matches!(e, DocumentElement::PageBreak)),
+            "elements: {:?}",
+            doc.elements
+        );
+    }
+
+    #[test]
+    fn test_deleted_cell_text_does_not_make_the_next_live_hint_look_new() {
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>Live</w:t><w:br w:type="page"/></w:r></w:p></w:tc></w:tr>
+    <w:tr>{}<w:tc><w:p><w:r><w:lastRenderedPageBreak/><w:t>Kept</w:t></w:r></w:p></w:tc></w:tr>
+  </w:tbl></w:body>
+</w:document>"#,
+            deleted_tc("", "Gone")
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let breaks = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e, DocumentElement::PageBreak))
+            .count();
+        assert_eq!(breaks, 1, "elements: {:?}", doc.elements);
+    }
+
+    #[test]
+    fn test_nested_table_inside_a_deleted_cell_is_dropped_and_later_content_survives() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc>
+          <w:tcPr><w:cellDel w:id="1" w:author="A"/></w:tcPr>
+          <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Inner</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+          <w:p><w:r><w:t>Outer gone</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc><w:p><w:r><w:t>Kept</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>After</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert_eq!(doc.tables.len(), 1);
+        assert_eq!(
+            doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown),
+            vec![vec!["Kept"]]
+        );
+        assert!(
+            doc.paragraphs.iter().any(|p| p.to_text().contains("After")),
+            "text after the table must survive a deleted cell: {:?}",
+            doc.paragraphs
+        );
+    }
+
+    #[test]
+    fn test_inserted_cell_is_kept() {
+        let inserted =
+            r#"<w:tc><w:tcPr><w:cellIns w:id="1" w:author="A"/></w:tcPr><w:p><w:r><w:t>New</w:t></w:r></w:p></w:tc>"#;
+        let grid = deleted_cell_grid(&[&format!("{inserted}{}", tc("Old"))]);
+        assert_eq!(grid, vec![vec!["New", "Old"]]);
+    }
+
+    #[test]
+    fn test_deleted_header_row_cell_is_dropped() {
+        let header = format!(
+            r#"<w:trPr><w:tblHeader/></w:trPr>{}{}{}"#,
+            tc("H1"),
+            deleted_tc("", "H2"),
+            tc("H3")
+        );
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr>{header}</w:tr><w:tr>{}{}{}</w:tr></w:tbl></w:body>
+</w:document>"#,
+            tc("a"),
+            tc("b"),
+            tc("c")
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let md = doc.tables[0].to_markdown();
+        assert!(!md.contains("H2"), "{md}");
+        let lines: Vec<&str> = md.lines().collect();
+        assert_eq!(lines.len(), 3, "{md}");
+        assert!(lines[0].contains("H1") && lines[0].contains("H3"), "{md}");
+        assert!(lines[1].contains("---"), "{md}");
+        assert_eq!(doc.tables[0].to_plain_text(), "H1\tH3\t\na\tb\tc\n");
+    }
+
     #[test]
     fn test_page_break_inside_a_deleted_row_is_not_emitted() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -6291,6 +6670,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -6311,6 +6691,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         parser_struct.parse_document_xml(xml, &mut document, budget).unwrap();
@@ -6326,6 +6707,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         parser_struct.parse_document_xml(xml, &mut document, budget)?;
@@ -6925,6 +7307,7 @@ mod tests {
             relationships: rels,
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {

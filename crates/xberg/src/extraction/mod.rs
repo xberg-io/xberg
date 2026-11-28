@@ -34,6 +34,8 @@ pub mod hwp;
 
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
 pub mod image;
+#[cfg(feature = "ocr")]
+pub(crate) mod image_tiff;
 
 /// HEIF-family (HEIC, HEIF, AVIF) detection and decoding.
 ///
