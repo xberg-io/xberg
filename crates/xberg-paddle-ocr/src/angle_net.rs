@@ -47,6 +47,11 @@ impl AngleNet {
         most_angle: bool,
         cls_thresh: f32,
     ) -> Result<Vec<Angle>, OcrError> {
+        // Checked before the loop so a read with no regions fails the same way as one with text.
+        if do_angle && self.backend.is_none() {
+            return Err(OcrError::SessionNotInitialized);
+        }
+
         let mut angles = Vec::with_capacity(part_imgs.len());
 
         if do_angle {
@@ -153,6 +158,15 @@ mod tests {
         let error = AngleNet::new()
             .get_angles(&regions(), true, false, 0.9)
             .expect_err("a missing classifier must not read as upright text");
+
+        assert!(matches!(error, OcrError::SessionNotInitialized));
+    }
+
+    #[test]
+    fn angle_classification_without_a_classifier_fails_with_no_regions() {
+        let error = AngleNet::new()
+            .get_angles(&[], true, false, 0.9)
+            .expect_err("a missing classifier fails whatever the page holds");
 
         assert!(matches!(error, OcrError::SessionNotInitialized));
     }
