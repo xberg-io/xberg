@@ -87,18 +87,20 @@ fn split_html_tables(text: &str) -> Vec<Segment<'_>> {
     let mut segments = Vec::new();
     let mut markdown_start = 0;
     let mut offset = 0;
-    let mut fence: Option<char> = None;
+    let mut fence: Option<(char, usize)> = None;
     while offset < text.len() {
         let line_end = text[offset..].find('\n').map_or(text.len(), |at| offset + at + 1);
         let line = &text[offset..line_end];
         let trimmed = line.trim_start();
-        if let Some(marker) = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))
-            && trimmed.starts_with(&marker.to_string().repeat(3))
-        {
+        if let Some((marker, length)) = fence_marker(trimmed) {
             fence = match fence {
-                Some(open) if open == marker => None,
+                Some((open, open_length))
+                    if open == marker && length >= open_length && trimmed[length..].trim().is_empty() =>
+                {
+                    None
+                }
                 Some(open) => Some(open),
-                None => Some(marker),
+                None => Some((marker, length)),
             };
         }
         if fence.is_none()
@@ -119,6 +121,13 @@ fn split_html_tables(text: &str) -> Vec<Segment<'_>> {
         segments.push(Segment::Markdown(&text[markdown_start..]));
     }
     segments
+}
+
+/// The marker and run length of a code fence line (three or more backticks or tildes).
+fn fence_marker(trimmed: &str) -> Option<(char, usize)> {
+    let marker = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))?;
+    let length = trimmed.chars().take_while(|c| *c == marker).count();
+    (length >= 3).then_some((marker, length))
 }
 
 fn table_start(line: &str) -> Option<usize> {
@@ -155,6 +164,10 @@ fn append(document: &mut InternalDocument, part: InternalDocument) {
     let element_base = document.elements.len() as u32;
     let table_base = document.tables.len() as u32;
     document.tables.extend(part.tables);
+    for uri in part.uris {
+        document.push_uri(uri);
+    }
+    document.uris_dropped += part.uris_dropped;
     for mut element in part.elements {
         if let ElementKind::Table { table_index } = &mut element.kind {
             *table_index += table_base;
@@ -197,6 +210,22 @@ mod tests {
         let text = "```html\n<table><tr><td>x</td></tr></table>\n```";
         let segments = split_html_tables(text);
         assert!(matches!(segments.as_slice(), [Segment::Markdown(whole)] if *whole == text));
+    }
+
+    #[test]
+    fn a_shorter_fence_inside_a_longer_one_does_not_end_it() {
+        let text = "````\n```\n<table><tr><td>x</td></tr></table>\n````";
+        assert!(matches!(split_html_tables(text).as_slice(), [Segment::Markdown(whole)] if *whole == text));
+    }
+
+    #[test]
+    fn links_in_a_parsed_page_keep_their_uris() {
+        let document = markdown_ocr_document("# T\n\nSee [site](https://example.com/a).").expect("structure");
+        assert!(
+            document.uris.iter().any(|uri| uri.url == "https://example.com/a"),
+            "{:?}",
+            document.uris
+        );
     }
 
     #[test]

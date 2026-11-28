@@ -57,7 +57,7 @@ impl Drop for BackendRegistration {
 }
 
 /// Run `response` through the standalone-image OCR route and render it.
-async fn render(response: &'static str, format: OutputFormat, escape_markdown: bool) -> String {
+async fn extract(response: &'static str, format: &OutputFormat) -> InternalDocument {
     let _ = crate::plugins::unregister_ocr_backend("vlm");
     crate::plugins::register_ocr_backend(std::sync::Arc::new(CannedVlmBackend { response })).unwrap();
     let _registration = BackendRegistration;
@@ -90,10 +90,14 @@ async fn render(response: &'static str, format: OutputFormat, escape_markdown: b
     image::RgbImage::from_pixel(16, 16, image::Rgb([255, 255, 255]))
         .write_to(&mut png, image::ImageFormat::Png)
         .unwrap();
-    let mut document = ImageExtractor::new()
+    ImageExtractor::new()
         .extract_with_ocr_pipeline(&png.into_inner(), &config, &pipeline)
         .await
-        .expect("image OCR pipeline");
+        .expect("image OCR pipeline")
+}
+
+async fn render(response: &'static str, format: OutputFormat, escape_markdown: bool) -> String {
+    let mut document = extract(response, &format).await;
     document.escape_markdown = escape_markdown;
     match format {
         OutputFormat::Markdown => crate::rendering::render_markdown(&document),
@@ -170,4 +174,15 @@ async fn vlm_mixed_page_keeps_every_block_in_order_with_each_table_once() {
     let page = "# Report\n\nIntro.\n\n<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>\n\n- one\n- two\n\n| X | Y |\n|---|---|\n| 3 | 4 |\n\nEnd.";
     let expected = "# Report\n\nIntro.\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n- one\n- two\n\n| X | Y |\n| --- | --- |\n| 3 | 4 |\n\nEnd.\n";
     assert_eq!(render(page, OutputFormat::Markdown, true).await, expected);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn vlm_gfm_table_is_listed_on_its_page() {
+    let document = extract(GFM_TABLE_PAGE, &OutputFormat::Markdown).await;
+    let result = crate::extraction::derive::derive_extraction_result(document, true, OutputFormat::Markdown);
+    assert_eq!(result.tables.len(), 1);
+    let pages = result.pages.as_ref().expect("standalone image page");
+    assert_eq!(pages[0].tables.len(), 1);
+    assert_eq!(pages[0].tables[0].cells[0], ["Item", "For", "Against", "Decision"]);
 }
