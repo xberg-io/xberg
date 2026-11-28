@@ -504,11 +504,11 @@ fn should_write_two_stacked_script_size_marks_as_nested_scripts() {
     assert_eq!(texts(&rewritten), ["$$[4486.6,4517.3]_{B_{\\dagger}}$$"]);
 }
 
-/// Gutenberg 38769 p412: a sum sign drawn between two lines of prose that no formula claims
-/// stays as source text but is set apart from the words beside it.
+/// Gutenberg 38769 p412: a sum sign drawn between two lines of prose, under the span of the
+/// first, is set apart from the words of that span.
 #[test]
-fn should_set_a_refused_math_glyph_apart_from_the_prose_beside_it() {
-    let spans = vec![
+fn should_set_a_math_glyph_under_a_prose_span_apart_from_it() {
+    let spans = [
         span(
             "this result might have been",
             "NWIADI+CMR10",
@@ -518,16 +518,16 @@ fn should_set_a_refused_math_glyph_apart_from_the_prose_beside_it() {
             522.28,
         ),
         span("P", "XXJGHY+CMEX10", 10.91, 198.77, 11.52, 516.91),
-        span("n", MMI, 10.91, 210.0, 6.0, 505.0),
-        span("s", MMI, 10.91, 216.5, 5.0, 512.0),
         span("derived at once", "NWIADI+CMR10", 10.91, 9.0, 185.29, 508.73),
     ];
-    let rewritten = rewrite_math_spans(&spans).expect("the page has refused math");
-    let glyph = rewritten
+    let pieces: Vec<super::Piece<'_>> = spans
         .iter()
-        .find(|span| span.text.trim() == "P")
-        .expect("the glyph is kept");
-    assert_eq!(glyph.text, " P ");
+        .enumerate()
+        .filter_map(|(i, span)| super::Piece::new(i, span, span.bbox.y))
+        .collect();
+    let apart = super::set_apart(&spans[1], &pieces[1], &pieces).expect("prose covers the glyph");
+    assert_eq!(apart.text, " P ");
+    assert!(super::set_apart(&spans[0], &pieces[0], &pieces).is_none());
 }
 
 /// A radical in a numerator is that fraction's, not the axis row's.
@@ -719,4 +719,15 @@ fn should_not_nest_a_fraction_with_a_glyph_of_the_line_above() {
         texts(&rewritten),
         ["\u{2212}", " 1", "\u{2212}", "$$-\\frac{2}{4}=-\\frac{13}{26}.$$"]
     );
+}
+
+#[test]
+fn should_write_a_trailing_full_stop_as_punctuation_not_as_a_script() {
+    use super::reliability::without_punctuation_scripts;
+    assert_eq!(
+        without_punctuation_scripts("2a[8\\sin(\\omega)]_{.}"),
+        "2a[8\\sin(\\omega)]."
+    );
+    assert_eq!(without_punctuation_scripts("x{}_{,}y"), "x,y");
+    assert_eq!(without_punctuation_scripts("a_{i,j}+b^{2}"), "a_{i,j}+b^{2}");
 }

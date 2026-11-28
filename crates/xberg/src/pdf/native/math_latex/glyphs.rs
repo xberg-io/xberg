@@ -45,12 +45,18 @@ const RADICAL_SLOTS: std::ops::RangeInclusive<char> = 'p'..='t';
 /// Whether `text` set in `font_name` is a radical sign: the extension fonts hold no ToUnicode
 /// entry for it, so it reads as the letter of its slot.
 pub(crate) fn is_radical_glyph(font_name: &str, text: &str) -> bool {
-    let family = font_family(font_name);
     let mut chars = text.trim().chars();
     matches!((chars.next(), chars.next()), (Some(c), None) if RADICAL_SLOTS.contains(&c))
-        && RADICAL_FAMILIES.iter().any(|prefix| {
-            family.len() >= prefix.len() && family[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes())
-        })
+        && is_extension_font(font_name)
+}
+
+/// Whether `font_name` is a TeX extension font, whose glyphs are the big operator, bracket and
+/// radical signs.
+pub(crate) fn is_extension_font(font_name: &str) -> bool {
+    let family = font_family(font_name);
+    RADICAL_FAMILIES
+        .iter()
+        .any(|prefix| family.len() >= prefix.len() && family[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes()))
 }
 
 /// Classify a PDF font name as a math font, or `None` for a text font.

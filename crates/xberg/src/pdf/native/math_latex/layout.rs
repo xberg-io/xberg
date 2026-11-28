@@ -412,9 +412,9 @@ fn stacks_with(
 
 /// Hang each unpaired cluster on the item it scripts; a cluster with no base in reach gets an
 /// [`ItemKind::Orphan`] base at its own position. `None` when a cluster is a full-size line
-/// (a problem number over an expression, a line of a stack that is no fraction): no script
-/// is as large as its base, so the group is not one formula. A script group is sized against
-/// its own largest glyph, so its lines are not compared.
+/// (a problem number over an expression, a line of a stack that is no fraction): no script is
+/// as large as its base, so the group is not one formula; the pieces of an extension font are
+/// exempt. A script group is sized against its own largest glyph, so its lines are not compared.
 fn attach_scripts<'p, 'a>(
     items: &mut Vec<Item<'p, 'a>>,
     above: Clusters<'p, 'a>,
@@ -428,7 +428,14 @@ fn attach_scripts<'p, 'a>(
                 .iter()
                 .all(|piece| piece.text.trim().chars().all(|c| matches!(c, '\'' | '′' | '″')))
     };
-    if !script && above.iter().chain(&below).any(|cluster| is_line(cluster)) {
+    // A cluster with a big operator or bracket sign is that operator's limit or a bracket piece, which
+    // sits off the axis at full size by design.
+    if !script
+        && above
+            .iter()
+            .chain(&below)
+            .any(|cluster| is_line(cluster) && !cluster.iter().any(|piece| piece.is_operator_sign()))
+    {
         return None;
     }
     let mut orphans = Vec::new();

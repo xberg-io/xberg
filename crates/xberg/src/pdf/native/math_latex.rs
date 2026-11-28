@@ -23,9 +23,12 @@ use evidence::{
     has_math_evidence, has_structure, is_trailing_note_mark, missing_closers, only_operator_glyphs,
     reads_as_numeric_row,
 };
-use glyphs::{MathFont, accent_command, is_mark, is_operator, is_radical_glyph, is_relation, is_unmapped, math_font};
+use glyphs::{
+    MathFont, accent_command, is_extension_font, is_mark, is_operator, is_radical_glyph, is_relation, is_unmapped,
+    math_font,
+};
 use layout::group_tex;
-use reliability::tex_is_reliable;
+use reliability::{tex_is_reliable, without_punctuation_scripts};
 use xberg_native_pdf::layout::TextSpan;
 
 /// A glyph below this fraction of the formula's largest size is a script or limit.
@@ -84,14 +87,24 @@ const MAX_COMPONENT_PIECES: usize = 256;
 const MAX_NUMERIC_RUNS: usize = 3;
 /// Nesting depth past which a group is spelled flat.
 const MAX_DEPTH: usize = 6;
-/// Largest distance, in ems, between the centres of the numerator and denominator of a fraction.
+/// Largest distance, in ems, between the centres of the numerator and denominator of a fraction
+/// nested in another: both are centred on their bar, so their centres differ by the rounding of
+/// glyph advances, a third of an em at most.
 const NESTED_CENTRE_EM: f32 = 0.3;
-/// Share of the wider part's width that the narrower part of a nested fraction has at least.
+/// Share of the wider part's width that the narrower part of a nested fraction has at least:
+/// parts of one fraction are set in the same type and the narrower is seldom under 60% of the
+/// wider (`dx` over `dy` is 93%, a digit over a two-letter name 50%, which is left to the
+/// plain reading).
 const NESTED_WIDTH_SHARE: f32 = 0.6;
-/// Smallest baseline distance, in ems, between a nested fraction's numerator and denominator:
-/// the bar's clearance. Ordinary leading of 10 pt type on 12 pt lines is 1.2 em, so the margin
-/// keeps two stacked lines of text from reading as parts of a fraction.
+/// Smallest baseline distance, in ems, between a nested fraction's numerator and denominator.
+/// Ordinary leading of 10 to 11 pt type is 1.2 to 1.4 em (gutenberg-36670 p189's lines are
+/// 1.33 em apart, p133's 1.42 em), so no distance separates a nested fraction (1.36 em on
+/// gutenberg-33283 p139) from two lines of text; the bar only keeps tightly set lines
+/// (1.2 em and under) from pairing, and [`Piece::crowded`] excludes the rest.
 const NESTED_BAR_EM: f32 = 1.3;
+/// Largest gap, in ems, at which another glyph on a piece's baseline makes it part of a line of
+/// text: one em, a word space and a half.
+const CROWDED_GAP_EM: f32 = 1.0;
 /// Share of the narrower of two axis glyphs they overlap by when one is drawn over the other.
 const COLLISION_SHARE: f32 = 0.5;
 /// Distance, in ems, within which a glyph run with the same text is an overdraw of another.
@@ -377,6 +390,8 @@ struct Piece<'a> {
     class: Class,
     /// A radical sign of a TeX extension font, drawn off the axis of the radicand it covers.
     radical: bool,
+    /// A glyph of a TeX extension font: a big operator, bracket or radical sign.
+    extension: bool,
     /// Another piece of the page shares this one's baseline within a size of it: it is part of
     /// a line of text, which the parts of a nested fraction are not.
     crowded: bool,
@@ -405,6 +420,7 @@ impl<'a> Piece<'a> {
             size: source.font_size,
             class: classify(text, &source.font_name),
             radical,
+            extension: is_extension_font(&source.font_name),
             crowded: false,
         })
     }
@@ -427,6 +443,12 @@ impl<'a> Piece<'a> {
 
     fn is_radical(&self) -> bool {
         self.radical
+    }
+
+    /// A big operator or bracket sign of an extension font: not its radical signs, which are
+    /// drawn over their radicand and never script a base.
+    fn is_operator_sign(&self) -> bool {
+        self.extension && !self.radical
     }
 
     fn accent(&self) -> Option<&'static str> {
@@ -567,8 +589,15 @@ fn find_formulas<'a>(pieces: &[Piece<'a>]) -> (Vec<Formula<'a>>, Vec<usize>) {
                 .map(|piece| piece.span)
                 .collect();
             match build_formula(unit, &prose) {
-                Built::Formula(formula) if tex_is_reliable(&formula.tex) => formulas.push(*formula),
-                Built::Formula(_) | Built::Refused => refused.extend(math_spans),
+                Built::Formula(mut formula) => {
+                    formula.tex = without_punctuation_scripts(&formula.tex);
+                    if tex_is_reliable(&formula.tex) {
+                        formulas.push(*formula);
+                    } else {
+                        refused.extend(math_spans);
+                    }
+                }
+                Built::Refused => refused.extend(math_spans),
                 Built::NotMath => {}
             }
         }
@@ -642,7 +671,7 @@ fn mark_crowded(pieces: &mut [Piece<'_>]) {
             if pieces[j].base - pieces[i].base > pieces[i].size * ROW_TOLERANCE_EM {
                 break;
             }
-            if pieces[i].gap(&pieces[j]) <= pieces[i].size.max(pieces[j].size) {
+            if pieces[i].gap(&pieces[j]) <= pieces[i].size.max(pieces[j].size) * CROWDED_GAP_EM {
                 pieces[i].crowded = true;
                 pieces[j].crowded = true;
             }
@@ -780,6 +809,7 @@ fn hangs_off(piece: &Piece<'_>, unit: &[&Piece<'_>], base: f32, size: f32) -> bo
 fn stacks_on_part(piece: &Piece<'_>, part: &Piece<'_>, base: f32, size: f32) -> bool {
     let side = |p: &Piece<'_>| (p.base - base).signum();
     !part.is_blank()
+        && !piece.crowded
         && (part.base - base).abs() > size * FRACTION_OFFSET_EM
         && side(piece) == side(part)
         && are_nested_fraction_lines(piece, part)

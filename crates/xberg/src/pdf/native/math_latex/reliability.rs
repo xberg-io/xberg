@@ -37,6 +37,31 @@ pub(super) fn tex_is_reliable(tex: &str) -> bool {
     depth == 0
 }
 
+/// `tex` with each script that is only punctuation written as that punctuation: a sentence's
+/// full stop printed after a formula is not its subscript (`...]_{.}` reads `...].`).
+pub(super) fn without_punctuation_scripts(tex: &str) -> String {
+    let mut out = String::with_capacity(tex.len());
+    let mut rest = tex;
+    while let Some(at) = rest.find(['_', '^']) {
+        let group = &rest[at + 1..];
+        let end = group.find('}').filter(|_| group.starts_with('{'));
+        match end {
+            Some(end) if end > 1 && group[1..end].chars().all(|c| matches!(c, '.' | ',' | ';' | ':')) => {
+                let before = rest[..at].strip_suffix("{}").unwrap_or(&rest[..at]);
+                out.push_str(before);
+                out.push_str(&group[1..end]);
+                rest = &group[end + 1..];
+            }
+            _ => {
+                out.push_str(&rest[..=at]);
+                rest = group;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// A script group of `tex`: its content, and whether it hangs on an empty base `{}` or on
 /// nothing, so that no glyph of the formula carries it.
 struct Script<'a> {
