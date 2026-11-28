@@ -113,37 +113,6 @@ fn blake3_hash_reader(file: &std::fs::File) -> Result<String> {
     Ok(hex::encode(&hash.as_bytes()[..CACHE_KEY_HASH_WIDTH / 2]))
 }
 
-/// Files [`blake3_hash_file`] refuses to read in tests, as if their permissions denied it.
-///
-/// Permissions cannot make a file unreadable for root, so tests that need a model file that
-/// cannot be read register it here instead and run the same for every user.
-#[cfg(test)]
-pub(crate) mod unreadable_for_tests {
-    use std::collections::HashSet;
-    use std::path::{Path, PathBuf};
-    use std::sync::{LazyLock, Mutex, PoisonError};
-
-    static UNREADABLE: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
-
-    fn canonical(path: &Path) -> PathBuf {
-        std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
-    }
-
-    /// Make every later [`super::blake3_hash_file`] of `path` fail; the file itself is untouched.
-    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
-    pub(crate) fn insert(path: &Path) {
-        UNREADABLE
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(canonical(path));
-    }
-
-    pub(super) fn contains(path: &Path) -> bool {
-        let unreadable = UNREADABLE.lock().unwrap_or_else(PoisonError::into_inner);
-        !unreadable.is_empty() && unreadable.contains(&canonical(path))
-    }
-}
-
 /// Hash bytes with blake3 and return first 128 bits as 32 hex chars.
 #[cfg(any(test, feature = "ocr"))]
 fn blake3_hash_to_hex(data: &[u8]) -> String {
@@ -202,4 +171,35 @@ pub(crate) fn fast_hash(data: &[u8]) -> u64 {
 #[cfg(test)]
 pub(crate) fn validate_cache_key(key: &str) -> bool {
     key.len() == 32 && key.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Files [`blake3_hash_file`] refuses to read in tests, as if their permissions denied it.
+///
+/// Permissions cannot make a file unreadable for root, so tests that need a model file that
+/// cannot be read register it here instead and run the same for every user.
+#[cfg(test)]
+pub(crate) mod unreadable_for_tests {
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    static UNREADABLE: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
+
+    fn canonical(path: &Path) -> PathBuf {
+        std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    }
+
+    /// Make every later [`super::blake3_hash_file`] of `path` fail; the file itself is untouched.
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
+    pub(crate) fn insert(path: &Path) {
+        UNREADABLE
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(canonical(path));
+    }
+
+    pub(super) fn contains(path: &Path) -> bool {
+        let unreadable = UNREADABLE.lock().unwrap_or_else(PoisonError::into_inner);
+        !unreadable.is_empty() && unreadable.contains(&canonical(path))
+    }
 }
