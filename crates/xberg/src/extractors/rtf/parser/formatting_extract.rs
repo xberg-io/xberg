@@ -516,6 +516,7 @@ pub(crate) fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
         header_text: nonempty_text(&parser.header.text),
         footer_text: nonempty_text(&parser.footer.text),
         hyperlinks: parser.fields.hyperlinks,
+        footnotes: Vec::new(),
     }
 }
 
