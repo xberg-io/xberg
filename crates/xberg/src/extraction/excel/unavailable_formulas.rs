@@ -12,8 +12,24 @@ use std::io::{Read, Seek};
 
 use calamine::{Cell, Data, Range, Reader};
 
+use super::MAX_METADATA_ENTRIES_PER_SHEET;
 use crate::core::diagnostics::push_warning;
 use crate::types::ProcessingWarning;
+
+/// How a sheet's formula cells without a saved result are handled while it is read.
+#[derive(Clone, Copy, Default)]
+pub(super) struct SheetFormulas<'a> {
+    /// Whether such cells are output as formula text (`false` when the preflight suppressed them).
+    pub(super) show: bool,
+    /// The sheet's formulas, read once for the dense path.
+    pub(super) range: Option<&'a Range<String>>,
+}
+
+impl<'a> SheetFormulas<'a> {
+    pub(super) fn new(show: bool, range: Option<&'a Range<String>>) -> Self {
+        Self { show, range }
+    }
+}
 
 /// The text a cell with formula `formula` and no saved result is shown as: `=<formula>`.
 ///
@@ -28,71 +44,72 @@ pub(super) fn unavailable_formula_value(formula: &str) -> Data {
     Data::String(format!("={expression}"))
 }
 
-/// Warn that `count` formula cells of `sheet_name` have no saved result.
-///
-/// `shown` is whether their formula text is in the sheet output; when it is not, the formulas are
-/// still listed in the sheet's `formulas_<sheet>` metadata.
-pub(super) fn warn_unavailable_formulas(
-    warnings: &mut Vec<ProcessingWarning>,
-    sheet_name: &str,
-    count: usize,
-    shown: bool,
-) {
+/// Warn that `count` formula cells of `sheet_name` have no saved result and are shown as formula text.
+pub(super) fn warn_unavailable_formulas(warnings: &mut Vec<ProcessingWarning>, sheet_name: &str, count: usize) {
     if count == 0 {
         return;
     }
     let noun = if count == 1 { "cell" } else { "cells" };
-    let message = if shown {
+    push_warning(
+        warnings,
+        "excel",
         format!(
             "Sheet '{sheet_name}' has {count} formula {noun} with no saved result; shown as the formula text \
              prefixed with '=' (formulas are not evaluated)"
-        )
-    } else {
+        ),
+    );
+}
+
+/// Warn that `count` formula cells of `sheet_name` have no saved result and were left empty because
+/// showing their text would exceed the content-size limit.
+pub(super) fn warn_suppressed_formulas(warnings: &mut Vec<ProcessingWarning>, sheet_name: &str, count: usize) {
+    let noun = if count == 1 { "cell" } else { "cells" };
+    push_warning(
+        warnings,
+        "excel",
         format!(
-            "Sheet '{sheet_name}' has {count} formula {noun} with no saved result that could not be shown in the \
-             table without exceeding the table-cell budget; see the 'formulas_{sheet_name}' metadata"
-        )
-    };
-    push_warning(warnings, "excel", message);
+            "Sheet '{sheet_name}' has {count} formula {noun} with no saved result that were left empty: their \
+             formula text would exceed the content size limit (`security_limits.max_content_size`); the values \
+             of the other cells are kept"
+        ),
+    );
 }
 
-fn area(start: (u32, u32), end: (u32, u32)) -> u64 {
-    (u64::from(end.0 - start.0) + 1) * (u64::from(end.1 - start.1) + 1)
-}
-
-/// Show every formula cell of `range` that has no saved result as its formula text.
-///
-/// The value range is trimmed to its non-empty cells, so adding the formula cells can widen it.
-/// XLSX preflight charges that widened box against the table-cell budget (`widening_charged`).
-/// For the other formats it charged only the larger of the value and formula areas, so there the
-/// range is widened only to a box within that; otherwise `range` is returned as it was and the
-/// warning says so. If the formulas cannot be read the range is also unchanged, with a warning.
-pub(super) fn show_unavailable_formulas<RS, R>(
-    workbook: &mut R,
-    sheet_name: &str,
-    range: Range<Data>,
-    widening_charged: bool,
-    warnings: &mut Vec<ProcessingWarning>,
-) -> Range<Data>
+/// Read a sheet's formulas once, for both the formula text shown in place of a missing result and
+/// the `formulas_<sheet>` metadata. An error is the backend's message, for [`warn_unreadable_formulas`].
+pub(super) fn read_sheet_formulas<RS, R>(workbook: &mut R, sheet_name: &str) -> Result<Range<String>, String>
 where
     RS: Read + Seek,
     R: Reader<RS>,
     R::Error: Display,
 {
-    let formulas = match workbook.worksheet_formula(sheet_name) {
-        Ok(formulas) => formulas,
-        Err(error) => {
-            push_warning(
-                warnings,
-                "excel",
-                format!(
-                    "Sheet '{sheet_name}' formulas could not be read ({error}); formula cells with no saved result \
-                     may appear empty"
-                ),
-            );
-            return range;
-        }
-    };
+    workbook
+        .worksheet_formula(sheet_name)
+        .map_err(|error| error.to_string())
+}
+
+/// Warn that a sheet's formulas could not be read, so cells with no saved result may appear empty.
+pub(super) fn warn_unreadable_formulas(warnings: &mut Vec<ProcessingWarning>, sheet_name: &str, error: &str) {
+    push_warning(
+        warnings,
+        "excel",
+        format!(
+            "Sheet '{sheet_name}' formulas could not be read ({error}); formula cells with no saved result may \
+             appear empty"
+        ),
+    );
+}
+
+/// Show every formula cell of `range` that has no saved result as its formula text.
+///
+/// The value range is trimmed to its non-empty cells, so adding the formula cells can widen it.
+/// Every format's preflight charges that widened box against the table-cell budget.
+pub(super) fn show_unavailable_formulas(
+    mut range: Range<Data>,
+    formulas: &Range<String>,
+    sheet_name: &str,
+    warnings: &mut Vec<ProcessingWarning>,
+) -> Range<Data> {
     let Some(formula_start) = formulas.start() else {
         return range;
     };
@@ -110,6 +127,7 @@ where
     if missing.is_empty() {
         return range;
     }
+    warn_unavailable_formulas(warnings, sheet_name, missing.len());
 
     let (mut lo, mut hi) = missing.iter().fold(
         (missing[0].get_position(), missing[0].get_position()),
@@ -118,25 +136,56 @@ where
             ((lo.0.min(row), lo.1.min(col)), (hi.0.max(row), hi.1.max(col)))
         },
     );
-    let mut charged = formulas.end().map_or(0, |end| area(formula_start, end));
-    if let (Some(start), Some(end)) = (range.start(), range.end()) {
-        charged = charged.max(area(start, end));
+    let old = range.start().zip(range.end());
+    if let Some((start, end)) = old {
         lo = (lo.0.min(start.0), lo.1.min(start.1));
         hi = (hi.0.max(end.0), hi.1.max(end.1));
     }
-    if !widening_charged && area(lo, hi) > charged {
-        warn_unavailable_formulas(warnings, sheet_name, missing.len(), false);
-        return range;
-    }
 
-    warn_unavailable_formulas(warnings, sheet_name, missing.len(), true);
-    let mut cells: Vec<Cell<Data>> = match range.start() {
-        Some(start) => range
-            .used_cells()
-            .map(|(row, col, value)| Cell::new((start.0 + row as u32, start.1 + col as u32), value.clone()))
-            .collect(),
-        None => Vec::new(),
-    };
-    cells.extend(missing);
-    Range::from_sparse(cells)
+    // Move the existing cells into a range that also covers the formula cells.
+    let mut widened = Range::new(lo, hi);
+    if let Some((start, _)) = old {
+        let (rows, cols) = range.get_size();
+        for row in 0..rows {
+            for col in 0..cols {
+                let value = std::mem::take(&mut range[(row, col)]);
+                if value != Data::Empty {
+                    widened[((start.0 - lo.0) as usize + row, (start.1 - lo.1) as usize + col)] = value;
+                }
+            }
+        }
+    }
+    for cell in missing {
+        let (row, col) = cell.get_position();
+        widened[((row - lo.0) as usize, (col - lo.1) as usize)] = cell.get_value().clone();
+    }
+    widened
+}
+
+/// Formula entries as `"<cell_ref>=<formula>"` joined by `"; "`, at most
+/// [`MAX_METADATA_ENTRIES_PER_SHEET`] of them, with each reference relative to `origin` (the top-left
+/// formula cell, matching the convention of the other cell references this extractor reports).
+/// `None` when there are no formulas.
+pub(super) fn format_formula_entries<'a>(
+    entries: impl Iterator<Item = ((u32, u32), &'a str)>,
+    origin: (u32, u32),
+) -> Option<String> {
+    let joined = entries
+        .filter(|(_, formula)| !formula.is_empty())
+        .take(MAX_METADATA_ENTRIES_PER_SHEET)
+        .map(|((row, col), formula)| format!("{}={formula}", super::cell_reference(row - origin.0, col - origin.1)))
+        .collect::<Vec<_>>()
+        .join("; ");
+    (!joined.is_empty()).then_some(joined)
+}
+
+/// The sheet's non-empty formulas, as [`format_formula_entries`] lists them.
+pub(super) fn format_sheet_formulas(formulas: &Range<String>) -> Option<String> {
+    let origin = formulas.start()?;
+    format_formula_entries(
+        formulas
+            .cells()
+            .map(|(row, col, formula)| ((origin.0 + row as u32, origin.1 + col as u32), formula.as_str())),
+        origin,
+    )
 }

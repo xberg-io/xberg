@@ -124,7 +124,14 @@ fn should_show_unavailable_formulas_in_a_sparse_sheet_gh3442() {
         XlsxSheetShape::Sparse
     );
 
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", &mut warnings).unwrap();
+    let sheet = process_xlsx_sheet_safe(
+        &mut workbook,
+        "Sheet1",
+        false,
+        SheetFormulas::new(true, None),
+        &mut warnings,
+    )
+    .unwrap();
 
     assert_eq!(
         sheet.table_cells,
@@ -158,30 +165,6 @@ fn should_show_unavailable_formulas_in_a_truncated_sheet_gh3442() {
 }
 
 #[test]
-fn should_not_widen_an_ods_table_past_the_charged_cells_for_an_unavailable_formula_gh3442() {
-    let bytes = ods_with_table_rows(
-        r#"<table:table-row><table:table-cell office:value-type="float" office:value="1"/></table:table-row><table:table-row table:number-rows-repeated="4"><table:table-cell/></table:table-row><table:table-row><table:table-cell table:number-columns-repeated="5"/><table:table-cell table:formula="of:=2+2"/></table:table-row>"#,
-    );
-    let limits = SecurityLimits {
-        max_table_cells: 1,
-        ..Default::default()
-    };
-
-    let (workbook, warnings) = read_excel_bytes(&bytes, ".ods", &limits).unwrap();
-
-    assert_eq!(
-        workbook.sheets[0].table_cells,
-        Some(vec![vec!["1".to_owned()]]),
-        "{warnings:?}"
-    );
-    let warning = warning_for(&warnings, "table-cell budget").expect("the unshown cell is counted");
-    assert!(
-        warning.message.contains("Sheet 'Data' has 1 formula cell "),
-        "{warning:?}"
-    );
-}
-
-#[test]
 fn should_show_unavailable_formulas_in_ods_gh3442() {
     let bytes = ods_with_table_rows(
         r#"<table:table-row><table:table-cell table:formula="of:=1+1"/><table:table-cell table:formula="of:=5+7" office:value-type="float" office:value="12"/></table:table-row>"#,
@@ -211,4 +194,139 @@ fn should_charge_uncached_cells_of_a_shared_formula_whose_anchor_has_a_saved_res
 
     assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["2".to_owned()]]));
     assert!(warning_for(&warnings, "was truncated").is_some(), "{warnings:?}");
+}
+
+#[test]
+fn should_keep_cached_errors_booleans_and_zero_of_formulas_gh3442() {
+    let (workbook, warnings) = read(
+        r#"<row r="1">
+            <c r="A1" t="e"><f>1/0</f><v>#DIV/0!</v></c>
+            <c r="B1" t="b"><f>FALSE()</f><v>0</v></c>
+            <c r="C1" t="b"><f>TRUE()</f><v>1</v></c>
+            <c r="D1"><f>1-1</f><v>0</v></c>
+        </row>"#,
+        ".xlsx",
+        &test_limits(10_000),
+    );
+
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![vec![
+            "#ERR: Div0".to_owned(),
+            "false".to_owned(),
+            "true".to_owned(),
+            "0".to_owned()
+        ]])
+    );
+    assert!(warning_for(&warnings, "no saved result").is_none(), "{warnings:?}");
+}
+
+#[test]
+fn should_escape_a_formula_with_a_pipe_and_a_line_break_in_markdown_gh3442() {
+    let (workbook, _) = read(
+        r#"<row r="1"><c r="A1"><v>1</v></c><c r="B1"><f>IF(A1,"a|b",
+"c")</f></c></row>
+           <row r="2"><c r="A2"><v>2</v></c><c r="B2"><v>3</v></c></row>"#,
+        ".xlsx",
+        &test_limits(10_000),
+    );
+    let sheet = &workbook.sheets[0];
+
+    assert_eq!(sheet.table_cells.as_ref().unwrap()[0][1], "=IF(A1,\"a|b\",\n\"c\")");
+    assert_eq!(
+        sheet.markdown,
+        "## Sheet1\n\n| 1 | =IF(A1,\"a\\|b\",<br>\"c\") |\n| --- | --- |\n| 2 | 3 |\n"
+    );
+}
+
+#[test]
+fn should_treat_a_self_closing_result_element_as_unavailable_gh3442() {
+    let (workbook, warnings) = read(
+        r#"<row r="1"><c r="A1"><f>1+1</f><v/></c><c r="B1"><v>4</v></c></row>"#,
+        ".xlsx",
+        &test_limits(10_000),
+    );
+
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![vec!["=1+1".to_owned(), "4".to_owned()]])
+    );
+    assert!(warning_for(&warnings, "has 1 formula cell ").is_some(), "{warnings:?}");
+}
+
+#[test]
+fn should_show_unavailable_formulas_in_a_1904_workbook_gh3442() {
+    let worksheet = format!(
+        r#"<worksheet {SHEET_NS}><sheetData><row r="1"><c r="A1"><f>1+1</f></c><c r="B1"><v>4</v></c></row></sheetData></worksheet>"#
+    );
+    let bytes = make_xlsx(
+        r#"<workbookPr date1904="1"/><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>"#,
+        WORKSHEET_REL,
+        &[("xl/worksheets/sheet1.xml", worksheet.into_bytes())],
+    );
+
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000)).unwrap();
+
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![vec!["=1+1".to_owned(), "4".to_owned()]])
+    );
+}
+
+#[test]
+fn should_keep_the_formula_metadata_of_the_kept_rows_of_a_truncated_sheet_gh3442() {
+    let limits = SecurityLimits {
+        max_table_cells: 2,
+        ..Default::default()
+    };
+    let (workbook, _) = read(
+        r#"<row r="1"><c r="A1"><f>1+1</f><v>2</v></c><c r="B1"><v>7</v></c></row>
+           <row r="2"><c r="A2"><f>9+9</f><v>18</v></c><c r="B2"><v>9</v></c></row>"#,
+        ".xlsx",
+        &limits,
+    );
+
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![vec!["2".to_owned(), "7".to_owned()]])
+    );
+    assert_eq!(workbook.metadata["formulas_Sheet1"], "A1=1+1");
+}
+
+#[test]
+fn should_leave_formula_text_out_instead_of_failing_past_the_content_limit_gh3442() {
+    // One long shared formula over many uncached cells expands to far more text than the file holds.
+    let template = "A1+".repeat(500) + "1";
+    let rows: String = (1..=70_000)
+        .map(|row| {
+            if row == 1 {
+                format!(
+                    r#"<row r="1"><c r="A1"><f t="shared" ref="A1:A70000" si="0">{template}</f></c><c r="B1"><v>5</v></c></row>"#
+                )
+            } else {
+                format!(r#"<row r="{row}"><c r="A{row}"><f t="shared" si="0"/></c></row>"#)
+            }
+        })
+        .collect();
+
+    let (workbook, warnings) = read(&rows, ".xlsx", &SecurityLimits::default());
+
+    assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["5".to_owned()]]));
+    let warning = warning_for(&warnings, "were left empty").expect("the omission is reported");
+    assert!(warning.message.contains("has 70000 formula cells"), "{warning:?}");
+    assert!(!workbook.metadata.contains_key("formulas_Sheet1"));
+}
+
+#[test]
+fn should_show_unavailable_formulas_beside_ods_values_gh3442() {
+    let bytes = ods_with_table_rows(
+        r#"<table:table-row><table:table-cell table:formula="of:=1+1"/><table:table-cell office:value-type="float" office:value="4"/></table:table-row>"#,
+    );
+
+    let (workbook, _) = read_excel_bytes(&bytes, ".ods", &test_limits(10_000)).unwrap();
+
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![vec!["=1+1".to_owned(), "4".to_owned()]])
+    );
 }

@@ -96,7 +96,10 @@ mod datetime;
 mod table_budget;
 mod unavailable_formulas;
 use table_budget::SkippedSheets;
-use unavailable_formulas::{show_unavailable_formulas, unavailable_formula_value, warn_unavailable_formulas};
+use unavailable_formulas::{
+    SheetFormulas, format_sheet_formulas, read_sheet_formulas, show_unavailable_formulas, unavailable_formula_value,
+    warn_suppressed_formulas, warn_unavailable_formulas, warn_unreadable_formulas,
+};
 
 /// Format dispatch and the `read_excel_file`/`read_excel_bytes` entry points, split out to
 /// keep this file under the line-count limit.
@@ -123,6 +126,7 @@ fn process_xlsx_workbook<RS: Read + Seek>(
     skipped: &SkippedSheets,
 ) -> Result<ExcelWorkbook> {
     let sheet_names = workbook.sheet_names();
+    let epoch_1904 = workbook.has_1904_epoch();
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
@@ -132,12 +136,40 @@ fn process_xlsx_workbook<RS: Read + Seek>(
             continue;
         }
         let truncated = skipped.truncated(index);
+        let suppressed = skipped.suppressed_formulas(index);
+        // A truncated sheet's formula range would be built in full, past the cell budget.
+        let formula_read = (truncated.is_none() && suppressed.is_none()).then(|| read_sheet_formulas(&mut workbook, name));
+        let formula_range = formula_read.as_ref().and_then(|read| read.as_ref().ok());
+        let show_formulas = suppressed.is_none();
+        let mut formula_metadata = formula_range.and_then(format_sheet_formulas);
         let sheet = match truncated {
-            Some(truncated) => table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, warnings),
-            None => process_xlsx_sheet_safe(&mut workbook, name, warnings),
+            Some(truncated) => {
+                table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, epoch_1904, show_formulas, warnings)
+                    .map(
+                    |(sheet, kept_formulas)| {
+                        formula_metadata = kept_formulas;
+                        sheet
+                    },
+                )
+            }
+            None => process_xlsx_sheet_safe(
+                &mut workbook,
+                name,
+                epoch_1904,
+                SheetFormulas::new(show_formulas, formula_range),
+                warnings,
+            ),
         };
+        if let Some(count) = suppressed {
+            warn_suppressed_formulas(warnings, name, count);
+        }
         match sheet {
-            Ok(sheet) => sheets.push(sheet),
+            Ok(sheet) => {
+                if let Some(Err(error)) = &formula_read {
+                    warn_unreadable_formulas(warnings, name, error);
+                }
+                sheets.push(sheet);
+            }
             Err(e) => {
                 tracing::warn!("Failed to process sheet '{}': {}", name, e);
                 push_warning(
@@ -148,10 +180,7 @@ fn process_xlsx_workbook<RS: Read + Seek>(
             }
         }
 
-        // A truncated sheet's formula range would be built in full, past the cell budget.
-        if truncated.is_none()
-            && let Some(formulas) = collect_sheet_formulas(&mut workbook, name)
-        {
+        if let Some(formulas) = formula_metadata {
             extra_metadata.insert(format!("formulas_{name}"), formulas);
         }
         if let Some(hyperlinks) = collect_sheet_hyperlinks(&mut workbook, name) {
@@ -175,13 +204,19 @@ fn process_xlsx_workbook<RS: Read + Seek>(
 fn process_xlsx_sheet_safe<RS: Read + Seek>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
+    epoch_1904: bool,
+    formulas: SheetFormulas<'_>,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<ExcelSheet> {
     match classify_xlsx_sheet_shape(workbook, sheet_name)? {
         XlsxSheetShape::Empty => return Ok(empty_excel_sheet(sheet_name)),
         XlsxSheetShape::Dense => {}
         XlsxSheetShape::Sparse => {
-            let (cells, row_min, row_max, col_min, col_max) = collect_xlsx_sheet_cells(workbook, sheet_name, warnings)?;
+            let (mut cells, row_min, row_max, col_min, col_max) =
+                collect_xlsx_sheet_cells(workbook, sheet_name, formulas.show, warnings)?;
+            if epoch_1904 {
+                datetime::resolve_xlsx_epoch_zero_in_cells(workbook, sheet_name, &mut cells);
+            }
             if cells.is_empty() {
                 return Ok(empty_excel_sheet(sheet_name));
             }
@@ -195,11 +230,17 @@ fn process_xlsx_sheet_safe<RS: Read + Seek>(
         }
     }
 
-    let range = workbook
+    let mut range = workbook
         .worksheet_range(sheet_name)
         .map_err(|e| XbergError::parsing(format!("Failed to parse sheet '{}': {}", sheet_name, e)))?;
+    if epoch_1904 {
+        datetime::resolve_xlsx_epoch_zero_in_range(workbook, sheet_name, &mut range);
+    }
 
-    let range = show_unavailable_formulas(workbook, sheet_name, range, true, warnings);
+    let range = match formulas.range {
+        Some(formulas) => show_unavailable_formulas(range, formulas, sheet_name, warnings),
+        None => range,
+    };
 
     Ok(process_sheet(sheet_name, &range, warnings))
 }
@@ -247,6 +288,7 @@ type XlsxOwnedCells = (Vec<((u32, u32), Data)>, u32, u32, u32, u32);
 fn collect_xlsx_sheet_cells<RS: Read + Seek>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
+    show_formulas: bool,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<XlsxOwnedCells> {
     let mut cell_reader = workbook
@@ -266,7 +308,7 @@ fn collect_xlsx_sheet_cells<RS: Read + Seek>(
         col_min = col_min.min(col);
         col_max = col_max.max(col);
         let value = match (&cell.value, cell.formula.as_deref()) {
-            (DataRef::Empty, Some(formula)) if !formula.is_empty() => {
+            (DataRef::Empty, Some(formula)) if show_formulas && !formula.is_empty() => {
                 unavailable += 1;
                 unavailable_formula_value(formula)
             }
@@ -274,7 +316,7 @@ fn collect_xlsx_sheet_cells<RS: Read + Seek>(
         };
         cells.push(((row, col), value));
     }
-    warn_unavailable_formulas(warnings, sheet_name, unavailable, true);
+    warn_unavailable_formulas(warnings, sheet_name, unavailable);
 
     Ok((cells, row_min, row_max, col_min, col_max))
 }
@@ -501,6 +543,29 @@ fn process_sparse_sheet_from_cells(
     })
 }
 
+/// Whether a workbook uses the 1904 date system, which calamine exposes per backend rather than on `Reader`.
+trait DateSystem {
+    fn is_1904(&self) -> bool;
+}
+
+impl<RS: Read + Seek> DateSystem for calamine::Xls<RS> {
+    fn is_1904(&self) -> bool {
+        self.has_1904_epoch()
+    }
+}
+
+impl<RS: Read + Seek> DateSystem for calamine::Xlsb<RS> {
+    fn is_1904(&self) -> bool {
+        self.has_1904_epoch()
+    }
+}
+
+impl<RS: Read + Seek> DateSystem for calamine::Ods<RS> {
+    fn is_1904(&self) -> bool {
+        false
+    }
+}
+
 fn process_workbook<RS, R>(
     mut workbook: R,
     office_metadata: Option<HashMap<String, String>>,
@@ -509,7 +574,7 @@ fn process_workbook<RS, R>(
 ) -> Result<ExcelWorkbook>
 where
     RS: std::io::Read + std::io::Seek,
-    R: Reader<RS>,
+    R: Reader<RS> + DateSystem,
     // Forwarded from `process_named_sheets`, which names the cause in its warning.
     R::Error: std::fmt::Display,
 {
@@ -546,22 +611,33 @@ fn process_named_sheets<RS, R>(
 ) -> (Vec<ExcelSheet>, HashMap<String, String>)
 where
     RS: std::io::Read + std::io::Seek,
-    R: Reader<RS>,
+    R: Reader<RS> + DateSystem,
     // The warning names the failure cause, so the reader's error type has to be
     // renderable. Every concrete calamine reader (Xlsx, Xls, Ods) satisfies this.
     R::Error: std::fmt::Display,
 {
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
+    let epoch_1904 = workbook.is_1904();
 
     for (index, name) in sheet_names.iter().enumerate() {
         if let Some(sheet) = skipped.placeholder(index, name, warnings) {
             sheets.push(sheet);
             continue;
         }
+        let formulas = read_sheet_formulas(workbook, name);
         match workbook.worksheet_range(name) {
-            Ok(range) => {
-                let range = show_unavailable_formulas(workbook, name, range, false, warnings);
+            Ok(mut range) => {
+                if epoch_1904 {
+                    datetime::resolve_unstyled_epoch_zero_in_range(&mut range);
+                }
+                let range = match &formulas {
+                    Ok(formulas) => show_unavailable_formulas(range, formulas, name, warnings),
+                    Err(error) => {
+                        warn_unreadable_formulas(warnings, name, error);
+                        range
+                    }
+                };
                 sheets.push(process_sheet(name, &range, warnings));
             }
             Err(e) => {
@@ -574,7 +650,7 @@ where
             }
         }
 
-        if let Some(formulas) = collect_sheet_formulas(workbook, name) {
+        if let Some(formulas) = formulas.as_ref().ok().and_then(format_sheet_formulas) {
             extra_metadata.insert(format!("formulas_{name}"), formulas);
         }
     }
@@ -869,41 +945,6 @@ fn column_letters(mut col: u32) -> String {
 /// coordinates).
 fn cell_reference(row: u32, col: u32) -> String {
     format!("{}{}", column_letters(col), row + 1)
-}
-
-/// Collect non-empty formulas from a sheet as `"<cell_ref>=<formula>"` entries
-/// joined by `"; "`. Works across every calamine `Reader` (xlsx/xls/xlsb/ods)
-/// since `worksheet_formula` is part of the shared trait. Returns `None` when
-/// the sheet has no formulas or the backend cannot report them.
-fn collect_sheet_formulas<RS, R>(workbook: &mut R, sheet_name: &str) -> Option<String>
-where
-    RS: Read + Seek,
-    R: Reader<RS>,
-{
-    let range = workbook.worksheet_formula(sheet_name).ok()?;
-    let mut entries = Vec::new();
-
-    'outer: for (row_idx, row) in range.rows().enumerate() {
-        for (col_idx, formula) in row.iter().enumerate() {
-            if formula.is_empty() {
-                continue;
-            }
-            entries.push(format!(
-                "{}={}",
-                cell_reference(row_idx as u32, col_idx as u32),
-                formula
-            ));
-            if entries.len() >= MAX_METADATA_ENTRIES_PER_SHEET {
-                break 'outer;
-            }
-        }
-    }
-
-    if entries.is_empty() {
-        None
-    } else {
-        Some(entries.join("; "))
-    }
 }
 
 /// Collect hyperlinks from an XLSX sheet as `"<anchor>=<target>"` entries

@@ -486,11 +486,15 @@ fn build_internal_document(
         }
     }
 
+    // Word stores first-page, even-page and odd-page variants as separate parts, and a variant
+    // is often a verbatim copy of another; each distinct text is emitted once, after the body.
+    let mut seen_headers = ahash::AHashSet::new();
     for hf in &doc.headers {
-        push_header_footer_content(&mut builder, hf, ContentLayer::Header);
+        push_header_footer_content(&mut builder, hf, ContentLayer::Header, &mut seen_headers);
     }
+    let mut seen_footers = ahash::AHashSet::new();
     for hf in &doc.footers {
-        push_header_footer_content(&mut builder, hf, ContentLayer::Footer);
+        push_header_footer_content(&mut builder, hf, ContentLayer::Footer, &mut seen_footers);
     }
 
     for note in doc.footnotes.iter().chain(doc.endnotes.iter()) {
@@ -584,6 +588,7 @@ fn push_header_footer_content(
     builder: &mut InternalDocumentBuilder,
     hf: &crate::extraction::docx::parser::HeaderFooter,
     layer: crate::types::document_structure::ContentLayer,
+    seen: &mut ahash::AHashSet<String>,
 ) {
     let text: String = hf
         .paragraphs
@@ -591,7 +596,9 @@ fn push_header_footer_content(
         .map(|p| p.runs_to_markdown())
         .collect::<Vec<_>>()
         .join("\n");
-    if !text.is_empty() {
+    // ~keep Keys carry a kind prefix so a paragraph whose text happens to spell a table's cell
+    // grid cannot suppress that table.
+    if !text.is_empty() && seen.insert(format!("p:{text}")) {
         let idx = builder.push_paragraph(&text, vec![], None, None);
         builder.set_layer(idx, layer);
     }
@@ -601,7 +608,7 @@ fn push_header_footer_content(
         // following cell left; now shares the same origin-once grid as body tables
         // (xberg-io/xberg#1549). ~keep
         let cells = table.to_cell_grid(crate::extraction::docx::parser::Paragraph::runs_to_markdown);
-        if !cells.is_empty() {
+        if !cells.is_empty() && seen.insert(format!("t:{cells:?}")) {
             let idx = builder.push_table_from_cells(&cells, None, None);
             builder.set_layer(idx, layer);
         }
@@ -1498,12 +1505,7 @@ impl InternalDocumentExtractor for DocxExtractor {
         };
 
         if let Some(ref filter) = config.content_filter {
-            use crate::types::document_structure::ContentLayer;
-            internal_doc.elements.retain(|elem| match elem.layer {
-                ContentLayer::Header => filter.include_headers,
-                ContentLayer::Footer => filter.include_footers,
-                _ => true,
-            });
+            internal_doc.apply_furniture_filter(filter);
         }
 
         internal_doc.images = extracted_images;
@@ -2270,6 +2272,207 @@ mod tests {
             .filter(|n| n.content_layer == ContentLayer::Footer)
             .collect();
         assert!(!footer_nodes.is_empty(), "Should have footer layer nodes");
+    }
+
+    #[tokio::test]
+    async fn header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>Body content here.</w:t></w:r></w:p></w:body>
+</w:document>"#;
+        let header_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Page Header</w:t></w:r></w:p>
+</w:hdr>"#;
+        let footer_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Page Footer</w:t></w:r></w:p>
+</w:ftr>"#;
+        let data = build_test_docx_with_parts(document_xml, None, None, None, Some(header_xml), Some(footer_xml), None);
+        let mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            for filter in [
+                None,
+                Some(ContentFilterConfig::default()),
+                Some(ContentFilterConfig {
+                    include_headers: true,
+                    include_footers: true,
+                    ..Default::default()
+                }),
+                Some(ContentFilterConfig {
+                    include_headers: true,
+                    ..Default::default()
+                }),
+            ] {
+                let config = ExtractionConfig {
+                    content_filter: filter.clone(),
+                    ..Default::default()
+                };
+                let internal = DocxExtractor::new()
+                    .extract_content(&data, mime, &config)
+                    .await
+                    .unwrap();
+                let content =
+                    crate::extraction::derive::derive_extraction_result(internal, false, format.clone()).content;
+                let (header, footer) = filter
+                    .as_ref()
+                    .map_or((false, false), |f| (f.include_headers, f.include_footers));
+                assert!(content.contains("Body content here."), "{content}");
+                assert_eq!(
+                    content.contains("Page Header"),
+                    header,
+                    "{format:?} {filter:?}: {content}"
+                );
+                assert_eq!(
+                    content.contains("Page Footer"),
+                    footer,
+                    "{format:?} {filter:?}: {content}"
+                );
+            }
+        }
+    }
+
+    fn hf_part(root: &str, text: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:{root} xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:{root}>"#
+        )
+    }
+
+    const HF_BODY_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>Body content here.</w:t></w:r></w:p></w:body>
+</w:document>"#;
+
+    const DOCX_MIME: &str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    #[tokio::test]
+    async fn a_header_paragraph_spelling_a_cell_grid_keeps_the_header_table() {
+        use crate::core::config::ContentFilterConfig;
+        let header = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>[["X"]]</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>X</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:hdr>"#;
+        let data = build_test_docx_with_files(HF_BODY_XML, &[("word/header1.xml", header)]);
+        let config = ExtractionConfig {
+            content_filter: Some(ContentFilterConfig {
+                include_headers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = DocxExtractor::new()
+            .extract_content(&data, DOCX_MIME, &config)
+            .await
+            .unwrap();
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+        assert_eq!(result.tables.len(), 1, "{:?}", result.tables);
+        assert_eq!(result.tables[0].cells, vec![vec!["X".to_string()]]);
+    }
+
+    #[tokio::test]
+    async fn identical_header_and_footer_variants_are_emitted_once_after_the_body() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Shared Header")),
+            ("word/header2.xml", hf_part("hdr", "Shared Header")),
+            ("word/header3.xml", hf_part("hdr", "First Page Header")),
+            ("word/footer1.xml", hf_part("ftr", "Shared Footer")),
+            ("word/footer2.xml", hf_part("ftr", "Shared Footer")),
+        ];
+        let files: Vec<(&str, &str)> = parts.iter().map(|(n, c)| (*n, c.as_str())).collect();
+        let data = build_test_docx_with_files(HF_BODY_XML, &files);
+        let config = ExtractionConfig {
+            include_document_structure: true,
+            content_filter: Some(ContentFilterConfig {
+                include_headers: true,
+                include_footers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            let internal = DocxExtractor::new()
+                .extract_content(&data, DOCX_MIME, &config)
+                .await
+                .unwrap();
+            let result = crate::extraction::derive::derive_extraction_result(internal, true, format.clone());
+            let content = result.content.clone();
+            assert_eq!(content.matches("Shared Header").count(), 1, "{format:?}: {content}");
+            assert_eq!(content.matches("First Page Header").count(), 1, "{format:?}: {content}");
+            assert_eq!(content.matches("Shared Footer").count(), 1, "{format:?}: {content}");
+            let body = content.find("Body content here.").unwrap();
+            for needle in ["Shared Header", "First Page Header", "Shared Footer"] {
+                assert!(
+                    content.find(needle).unwrap() > body,
+                    "{needle} precedes the body: {content}"
+                );
+            }
+
+            let layers: Vec<_> = result
+                .document
+                .as_ref()
+                .expect("document structure")
+                .nodes
+                .iter()
+                .filter_map(|n| match &n.content {
+                    NodeContent::Paragraph { text } => Some((n.content_layer, text.clone())),
+                    _ => None,
+                })
+                .collect();
+            let layer_of = |needle: &str| {
+                layers
+                    .iter()
+                    .filter(|(_, text)| text.contains(needle))
+                    .map(|(layer, _)| *layer)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(layer_of("Shared Header"), vec![crate::types::ContentLayer::Header]);
+            assert_eq!(layer_of("First Page Header"), vec![crate::types::ContentLayer::Header]);
+            assert_eq!(layer_of("Shared Footer"), vec![crate::types::ContentLayer::Footer]);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_dropped_header_table_is_removed_from_the_tables() {
+        let header = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:tbl><w:tr><w:tc><w:p><w:r><w:t>HeaderCell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+  <w:p/>
+</w:hdr>"#;
+        let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr><w:tc><w:p><w:r><w:t>BodyCell</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body>
+</w:document>"#;
+        let data = build_test_docx_with_files(body, &[("word/header1.xml", header)]);
+        for (include, expected_tables) in [(false, 1), (true, 2)] {
+            let config = ExtractionConfig {
+                content_filter: Some(crate::core::config::ContentFilterConfig {
+                    include_headers: include,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let internal = DocxExtractor::new()
+                .extract_content(&data, DOCX_MIME, &config)
+                .await
+                .unwrap();
+            assert_eq!(internal.tables.len(), expected_tables, "include_headers={include}");
+            let referenced: Vec<u32> = internal
+                .elements
+                .iter()
+                .filter_map(|e| match e.kind {
+                    crate::types::internal::ElementKind::Table { table_index } => Some(table_index),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(referenced.len(), expected_tables);
+            assert!(referenced.iter().all(|i| (*i as usize) < internal.tables.len()));
+            assert!(format!("{:?}", internal.tables[referenced[0] as usize]).contains("BodyCell"));
+        }
     }
 
     #[tokio::test]

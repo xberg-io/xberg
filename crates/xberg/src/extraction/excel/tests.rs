@@ -505,7 +505,8 @@ fn should_preserve_dense_xlsx_output_after_position_only_preflight() {
         XlsxSheetShape::Dense
     );
     let mut warnings = Vec::new();
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", &mut warnings).unwrap();
+    let sheet =
+        process_xlsx_sheet_safe(&mut workbook, "Sheet1", false, SheetFormulas::default(), &mut warnings).unwrap();
 
     assert_eq!(sheet.row_count, 2);
     assert_eq!(sheet.col_count, 2);
@@ -542,7 +543,8 @@ fn should_preserve_pathological_sparse_xlsx_output_after_reopening_reader() {
         XlsxSheetShape::Sparse
     );
     let mut warnings = Vec::new();
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", &mut warnings).unwrap();
+    let sheet =
+        process_xlsx_sheet_safe(&mut workbook, "Sheet1", false, SheetFormulas::default(), &mut warnings).unwrap();
 
     assert_eq!(sheet.row_count, 1_048_575);
     assert_eq!(sheet.col_count, 16_384);
@@ -1264,8 +1266,9 @@ fn should_budget_formula_only_xlsx_ranges_before_collecting_formulas_gh2296() {
     };
     let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 1);
     assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["=1+1".to_string()]]));
-    assert!(
-        !workbook.metadata.contains_key("formulas_Sheet1"),
+    assert_eq!(
+        workbook.metadata.get("formulas_Sheet1").map(String::as_str),
+        Some("A1=1+1"),
         "{:?}",
         workbook.metadata
     );
@@ -1593,7 +1596,7 @@ fn should_ignore_ods_formatted_empty_tails_without_origin_padding_gh2296() {
 }
 
 #[test]
-fn should_keep_ods_value_and_formula_ranges_independent_gh2296() {
+fn should_charge_an_uncached_ods_formula_with_the_values_it_widens_the_table_to_gh2296() {
     let bytes = ods_with_table_rows(
         r#"<table:table-row><table:table-cell office:value-type="float" office:value="1"/></table:table-row><table:table-row table:number-rows-repeated="4"><table:table-cell/></table:table-row><table:table-row><table:table-cell table:number-columns-repeated="5"/><table:table-cell table:formula="of:=2+2"/></table:table-row>"#,
     );
@@ -1601,12 +1604,7 @@ fn should_keep_ods_value_and_formula_ranges_independent_gh2296() {
         max_table_cells: 1,
         ..Default::default()
     };
-    let (workbook, _) = read_excel_bytes(&bytes, ".ods", &limits).unwrap();
-    assert_eq!(
-        workbook.sheets[0].table_cells.as_ref().unwrap(),
-        &[vec!["1".to_string()]]
-    );
-    assert!(workbook.metadata.get("formulas_Data").unwrap().contains("2+2"));
+    assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, ".ods", &limits), "Data", 1);
 }
 
 #[test]
