@@ -564,4 +564,65 @@ mod tests {
         let encoded = vec![1, 0x10, 0x20, 0x30];
         assert_eq!(decode_predictor(&encoded, &params).unwrap(), vec![0x10, 0x20, 0x40]);
     }
+
+    /// One- and two-bit samples with several colors still pack a pixel into under a byte, so the
+    /// filter distance is one byte, not `colors`.
+    #[test]
+    fn test_png_sub_predictor_sub_byte_multi_color_uses_one_byte_pixels() {
+        let one_bit_rgb = DecodeParams {
+            predictor: 11,
+            columns: 8,
+            colors: 3,
+            bits_per_component: 1,
+        };
+        // Each byte adds the decoded byte before it: 0x10, 0x10 + 0x20, 0x30 + 0x30. ~keep
+        let encoded = vec![1, 0x10, 0x20, 0x30];
+        assert_eq!(
+            decode_predictor(&encoded, &one_bit_rgb).unwrap(),
+            vec![0x10, 0x30, 0x60]
+        );
+
+        let two_bit_pairs = DecodeParams {
+            predictor: 11,
+            columns: 4,
+            colors: 2,
+            bits_per_component: 2,
+        };
+        let encoded = vec![1, 0x05, 0x07];
+        assert_eq!(decode_predictor(&encoded, &two_bit_pairs).unwrap(), vec![0x05, 0x0C]);
+    }
+
+    /// Average over 16-bit samples takes the left byte two bytes back. Row 1, bytes 2 and 3:
+    /// 3 + (6 + 30) / 2 = 21 and 4 + (12 + 40) / 2 = 30.
+    #[test]
+    fn test_png_average_predictor_16bpc_uses_two_byte_pixels() {
+        let params = DecodeParams {
+            predictor: 15,
+            columns: 2,
+            colors: 1,
+            bits_per_component: 16,
+        };
+        let encoded = vec![0, 10, 20, 30, 40, 3, 1, 2, 3, 4];
+        assert_eq!(
+            decode_predictor(&encoded, &params).unwrap(),
+            vec![10, 20, 30, 40, 6, 12, 21, 30]
+        );
+    }
+
+    /// Paeth over 16-bit samples reads left and upper-left two bytes back. Row 1, byte 2: left 11,
+    /// up 10, upper-left 10 give p = 11, nearest the left, so 3 + 11 = 14.
+    #[test]
+    fn test_png_paeth_predictor_16bpc_uses_two_byte_pixels() {
+        let params = DecodeParams {
+            predictor: 15,
+            columns: 2,
+            colors: 1,
+            bits_per_component: 16,
+        };
+        let encoded = vec![0, 10, 20, 10, 20, 4, 1, 2, 3, 4];
+        assert_eq!(
+            decode_predictor(&encoded, &params).unwrap(),
+            vec![10, 20, 10, 20, 11, 22, 14, 26]
+        );
+    }
 }
