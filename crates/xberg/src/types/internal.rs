@@ -465,6 +465,7 @@ impl From<InternalDocument> for crate::types::extraction::ExtractedDocument {
 impl InternalDocument {
     /// Apply the content filter to header and footer elements: drop the layers it excludes and opt the
     /// retained ones into body rendering, which otherwise skips furniture layers.
+    #[cfg(any(feature = "office", feature = "hwpx", feature = "wordperfect"))]
     pub(crate) fn apply_furniture_filter(&mut self, filter: &crate::core::config::ContentFilterConfig) {
         let mut dropped_tables = Vec::new();
         self.elements.retain_mut(|element| {
@@ -488,6 +489,7 @@ impl InternalDocument {
     }
 
     /// Remove the tables whose elements were dropped, renumbering the `Table` elements that remain.
+    #[cfg(any(feature = "office", feature = "hwpx", feature = "wordperfect"))]
     fn drop_orphaned_tables(&mut self, dropped: &[u32]) {
         if dropped.is_empty() {
             return;
