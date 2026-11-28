@@ -39,6 +39,24 @@ pub(super) fn compact_prm_script(prm: u16) -> Option<Script> {
     }
 }
 
+/// `sprmCFRMarkDel` carried by a compact `Prm0` (`isprm` 0x41, [MS-DOC] 2.9.215), whose
+/// `val` byte is the Bool8 operand. ~keep
+pub(super) fn compact_prm_deleted(prm: u16) -> Option<bool> {
+    const ISPRM_C_F_RMARK_DEL: u16 = 0x41;
+    if prm & 1 != 0 || (prm >> 1) & 0x7f != ISPRM_C_F_RMARK_DEL {
+        return None;
+    }
+    decode_deleted((prm >> 8) as u8)
+}
+
+/// The deletion a piece's `Prm` sets: compact (`Prm0`) or an index into the CLX property groups.
+pub(super) fn piece_deleted_override(prm: u16, groups: &[Option<bool>]) -> Option<bool> {
+    if prm & 1 == 0 {
+        return compact_prm_deleted(prm);
+    }
+    groups.get(usize::from(prm >> 1)).copied().flatten()
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ScriptProperty {
     Unchanged,

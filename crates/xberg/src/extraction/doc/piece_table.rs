@@ -5,6 +5,7 @@ use super::*;
 
 #[path = "clx.rs"]
 mod clx;
+mod deletions;
 
 /// Read a little-endian `u16` at `offset`, or an error naming `what` when `data` is too
 /// short to contain it.
@@ -307,6 +308,9 @@ struct PieceTableContext<'a> {
     scripts: &'a chpx::ScriptIndex,
     piece_scripts: &'a [chpx::ScriptProperty],
     piece_deleted: &'a [Option<bool>],
+    lists: &'a papx::ListTables,
+    /// A character of the table row being read survived deletion; reset by each row-end mark. ~keep
+    row_has_content: std::cell::Cell<bool>,
 }
 
 /// Process one entry of the piece table (`PlcPcd`), appending its decoded characters to
@@ -366,15 +370,14 @@ fn process_piece(
         .iter()
         .map(|&fc| override_script.unwrap_or_else(|| ctx.scripts.at(fc)))
         .collect();
-    let piece_deleted = (prm & 1 != 0).then(|| ctx.piece_deleted.get(usize::from(prm >> 1)).copied().flatten());
+    let piece_deleted = chpx::piece_deleted_override(prm, ctx.piece_deleted);
     let keep: Vec<bool> = piece
-        .fc_ends
+        .chars
         .iter()
-        .map(|&fc| {
-            !piece_deleted
-                .flatten()
-                .or_else(|| ctx.scripts.is_deleted(fc))
-                .unwrap_or(false)
+        .zip(&piece.fc_ends)
+        .map(|(&character, &fc)| {
+            let deleted = piece_deleted.or_else(|| ctx.scripts.is_deleted(fc)).unwrap_or(false);
+            ctx.keeps(character, fc, deleted)
         })
         .collect();
     piece.retain(&keep);
@@ -502,6 +505,8 @@ fn extract_text_from_piece_table(
         scripts: &tables.scripts,
         piece_scripts: &tables.piece_scripts,
         piece_deleted: &tables.piece_deleted,
+        lists: &tables.lists,
+        row_has_content: std::cell::Cell::new(false),
     };
 
     for i in 0..n {
