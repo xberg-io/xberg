@@ -119,6 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **benchmarks:** published results now give liteparse each fixture's OCR language and run it on images and LibreOffice formats, measure every framework's peak memory the same way, score a leading front-matter block as metadata rather than body text, and use corrected ground truth for the table papers, Federal Register, ParseBench, OSHPD, image, msg, docx and pptx fixtures.
 - Replace `chrono` with `jiff` for timestamps in `xberg`, `xberg-native-pdf` and `xberg-pdfium-render`, and drop calamine's `dates` feature and rmcp's default `chrono` feature. `PdfPageAnnotationCommon::set_creation_date` and `set_modification_date` in `xberg-pdfium-render` now take `jiff::Timestamp`. `chrono` remains only through `nom-exif` and `hf-hub` (RUSTSEC-2026-0543).
 - Upgrade `crawlberg` to 1.13.6, `liter-llm` to 2.7.7, `html-to-markdown-rs` to 3.23.5, `sceptre` to 0.10.5, `tree-sitter-language-pack` to 1.28.0, `tract-onnx` to 0.23.11 and `rmcp` to 3.12.
+- **ocr:** an OCR pipeline made only of built-in Tesseract stages renders no more pages ahead than recognition sessions can read, so rasters waiting for a session no longer stay resident; pipelines with any other backend keep their batch width. An extraction stopped by its time limit can stop on an earlier page boundary than before.
 
 ### Removed
 
