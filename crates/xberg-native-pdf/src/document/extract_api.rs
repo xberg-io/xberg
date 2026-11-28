@@ -564,21 +564,26 @@ impl PdfDocument {
                 paired_preserved_share(cache.budget_bytes(), page_index, paired_pages)
             });
             let preserved_bytes = self.admitted_bytes(&preserved_key, &preserved, paced);
+            let spans = preserved.spans.len();
+            let estimated_bytes = preserved_bytes.unwrap_or_else(|| preserved.estimated_bytes());
+            let admitted = match preserved_bytes {
+                Some(bytes) => self
+                    .raw_page_spans_cache
+                    .lock_or_recover()
+                    .as_mut()
+                    .is_some_and(|cache| cache.insert(preserved_key, std::sync::Arc::new(preserved), bytes)),
+                None => false,
+            };
             tracing::trace!(
                 target: LOG_TARGET,
                 page_index,
                 geometry = ?ScriptGeometry::Preserve,
                 outcome = "paired",
-                spans = preserved.spans.len(),
-                admitted = preserved_bytes.is_some(),
-                estimated_bytes = preserved_bytes.unwrap_or_else(|| preserved.estimated_bytes()),
+                spans,
+                admitted,
+                estimated_bytes,
                 "page pass read"
             );
-            if let Some(bytes) = preserved_bytes
-                && let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut()
-            {
-                cache.insert(preserved_key, std::sync::Arc::new(preserved), bytes);
-            }
         }
         Ok(page)
     }
@@ -618,8 +623,8 @@ impl PdfDocument {
     }
 
     /// Share `page` with the page-pass cache when the passes run and its budget
-    /// admits it, returning the estimated bytes it was admitted with. The first admission check
-    /// runs without walking the spans.
+    /// admits it, returning the estimated bytes it was stored with, or `None` when it was not
+    /// stored. The first admission check runs without walking the spans.
     fn retain_interpretation(&self, key: RawSpanKey, page: &InterpretedPage) -> Option<usize> {
         let bytes = self.admitted_bytes(&key, page, usize::MAX)?;
         // ~keep A fresh read's vectors and strings keep their growth slack; the caller consumes that
@@ -633,10 +638,12 @@ impl PdfDocument {
             script_baselines: page.script_baselines.clone(),
             preserved: None,
         };
-        if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
-            cache.insert(key, Arc::new(copy), bytes);
-        }
-        Some(bytes)
+        let stored = self
+            .raw_page_spans_cache
+            .lock_or_recover()
+            .as_mut()
+            .is_some_and(|cache| cache.insert(key, Arc::new(copy), bytes));
+        stored.then_some(bytes)
     }
 
     /// The estimated bytes of `page` when the page-pass cache admits it under

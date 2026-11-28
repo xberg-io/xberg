@@ -5010,7 +5010,9 @@ fn build_document_structure_with_native(
         ));
     }
 
+    let parent_span = tracing::Span::current();
     let process_page = |mut input: PageInput| {
+        let _entered = parent_span.enter();
         input.paragraph_gap_ys = compute_paragraph_gap_ys(&input.heuristic_segments);
         let mut accepted_folio = None;
         let paragraphs =
