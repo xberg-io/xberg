@@ -487,13 +487,15 @@ fn build_internal_document(
     }
 
     // Word stores first-page, even-page and odd-page variants as separate parts, and a variant
-    // is often a verbatim copy of another; each distinct text is emitted once, after the body.
+    // is often a verbatim copy of another; only the parts a section activates are emitted, each
+    // distinct text once, after the body.
+    let (active_headers, active_footers) = doc.active_headers_footers();
     let mut seen_headers = ahash::AHashSet::new();
-    for hf in &doc.headers {
+    for hf in active_headers {
         push_header_footer_content(&mut builder, hf, ContentLayer::Header, &mut seen_headers);
     }
     let mut seen_footers = ahash::AHashSet::new();
-    for hf in &doc.footers {
+    for hf in active_footers {
         push_header_footer_content(&mut builder, hf, ContentLayer::Footer, &mut seen_footers);
     }
 
@@ -1702,6 +1704,22 @@ mod tests {
         rels_xml: Option<&str>,
     ) -> Vec<u8> {
         use std::io::Write;
+        // A lone header or footer part is shown by a default reference from the body section.
+        let mut files: Vec<(&str, &str)> = Vec::new();
+        if header_xml.is_some() {
+            files.push(("word/header1.xml", ""));
+        }
+        if footer_xml.is_some() {
+            files.push(("word/footer1.xml", ""));
+        }
+        let (document_owned, rels_owned);
+        let (document_xml, rels_xml) = if rels_xml.is_none() && !files.is_empty() {
+            document_owned = with_default_hf_sect(document_xml);
+            rels_owned = hf_rels(&files);
+            (document_owned.as_str(), Some(rels_owned.as_str()))
+        } else {
+            (document_xml, rels_xml)
+        };
         let buf = Vec::new();
         let cursor = std::io::Cursor::new(buf);
         let mut zip = zip::ZipWriter::new(cursor);
@@ -1752,6 +1770,42 @@ mod tests {
         zip.finish().unwrap().into_inner()
     }
 
+    const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+    /// Relationships declaring each `word/header*.xml` / `word/footer*.xml` file, with the
+    /// file stem (`header1`) as the relationship id.
+    fn hf_rels(files: &[(&str, &str)]) -> String {
+        let mut rels = String::from(
+            r#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
+        );
+        for (path, _) in files {
+            let target = path.trim_start_matches("word/");
+            let stem = target.trim_end_matches(".xml");
+            let kind = if stem.starts_with("header") { "header" } else { "footer" };
+            rels.push_str(&format!(
+                r#"<Relationship Id="{stem}" Type="{REL_NS}/{kind}" Target="{target}"/>"#
+            ));
+        }
+        rels.push_str("</Relationships>");
+        rels
+    }
+
+    /// The `w:sectPr` for a section naming `header1` and `footer1` as its default parts.
+    const DEFAULT_HF_SECT: &str =
+        r#"<w:headerReference w:type="default" r:id="header1"/><w:footerReference w:type="default" r:id="footer1"/>"#;
+
+    /// Close `document_xml`'s body with a section whose `w:sectPr` holds `sect_inner`.
+    fn with_sect(document_xml: &str, sect_inner: &str) -> String {
+        document_xml.replace(
+            "</w:body>",
+            &format!(r#"<w:sectPr xmlns:r="{REL_NS}">{sect_inner}</w:sectPr></w:body>"#),
+        )
+    }
+
+    fn with_default_hf_sect(document_xml: &str) -> String {
+        with_sect(document_xml, DEFAULT_HF_SECT)
+    }
+
     /// Helper: build a DOCX ZIP from `word/document.xml` plus an arbitrary list of
     /// additional package parts (path, content). Unlike [`build_test_docx_with_parts`],
     /// this isn't limited to one header/footer/rels part — used for synthetic
@@ -1782,6 +1836,21 @@ mod tests {
         }
 
         zip.finish().unwrap().into_inner()
+    }
+
+    /// Helper: a DOCX whose body section holds `sect_inner` and whose relationships declare
+    /// every header/footer file in `files` (settings and other parts pass through unchanged).
+    fn build_hf_docx(document_xml: &str, sect_inner: &str, files: &[(&str, &str)]) -> Vec<u8> {
+        let document = with_sect(document_xml, sect_inner);
+        let hf_files: Vec<(&str, &str)> = files
+            .iter()
+            .copied()
+            .filter(|(path, _)| path.starts_with("word/header") || path.starts_with("word/footer"))
+            .collect();
+        let rels = hf_rels(&hf_files);
+        let mut all = files.to_vec();
+        all.push(("word/_rels/document.xml.rels", rels.as_str()));
+        build_test_docx_with_files(&document, &all)
     }
 
     /// `crate::core::batch_mode` is itself gated on `tokio-runtime`
@@ -2352,7 +2421,7 @@ mod tests {
         use crate::core::config::ContentFilterConfig;
         let header = r#"<?xml version="1.0" encoding="UTF-8"?>
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>[["X"]]</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>X</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:hdr>"#;
-        let data = build_test_docx_with_files(HF_BODY_XML, &[("word/header1.xml", header)]);
+        let data = build_hf_docx(HF_BODY_XML, DEFAULT_HF_SECT, &[("word/header1.xml", header)]);
         let config = ExtractionConfig {
             content_filter: Some(ContentFilterConfig {
                 include_headers: true,
@@ -2384,7 +2453,15 @@ mod tests {
             ("word/footer2.xml", hf_part("ftr", "Shared Footer")),
         ];
         let files: Vec<(&str, &str)> = parts.iter().map(|(n, c)| (*n, c.as_str())).collect();
-        let data = build_test_docx_with_files(HF_BODY_XML, &files);
+        let sect = concat!(
+            r#"<w:headerReference w:type="default" r:id="header1"/><w:headerReference w:type="even" r:id="header2"/>"#,
+            r#"<w:headerReference w:type="first" r:id="header3"/><w:footerReference w:type="default" r:id="footer1"/>"#,
+            r#"<w:footerReference w:type="even" r:id="footer2"/><w:titlePg/>"#,
+        );
+        let settings = r#"<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:evenAndOddHeaders/></w:settings>"#;
+        let mut files = files;
+        files.push(("word/settings.xml", settings));
+        let data = build_hf_docx(HF_BODY_XML, sect, &files);
         let config = ExtractionConfig {
             include_document_structure: true,
             content_filter: Some(ContentFilterConfig {
@@ -2436,6 +2513,202 @@ mod tests {
         }
     }
 
+    const WML_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    fn settings_part(flag: &str) -> String {
+        format!(r#"<w:settings xmlns:w="{WML_NS}">{flag}</w:settings>"#)
+    }
+
+    /// A body with `sections` closed by the given `sectPr` contents: every one but the last
+    /// by a paragraph-level `w:sectPr`, the last by the body-level one.
+    fn sectioned_body(sections: &[&str]) -> String {
+        let mut body = String::new();
+        for (i, inner) in sections.iter().enumerate() {
+            let sect = format!(r#"<w:sectPr xmlns:r="{REL_NS}">{inner}</w:sectPr>"#);
+            if i + 1 == sections.len() {
+                body.push_str(&sect);
+            } else {
+                body.push_str(&format!(
+                    "<w:p><w:r><w:t>Section {i} text.</w:t></w:r></w:p><w:p><w:pPr>{sect}</w:pPr></w:p>"
+                ));
+            }
+        }
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="{WML_NS}"><w:body>{body}</w:body></w:document>"#
+        )
+    }
+
+    /// Plain text of the header and footer layers (body excluded) for a document built from
+    /// `document_xml` and the extra `files`, with headers and footers included.
+    async fn hf_text(document_xml: &str, files: &[(&str, &str)]) -> String {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        let hf_files: Vec<(&str, &str)> = files
+            .iter()
+            .copied()
+            .filter(|(path, _)| path.starts_with("word/header") || path.starts_with("word/footer"))
+            .filter(|(path, _)| !path.contains("orphan"))
+            .collect();
+        let rels = hf_rels(&hf_files);
+        let mut all = files.to_vec();
+        all.push(("word/_rels/document.xml.rels", rels.as_str()));
+        let data = build_test_docx_with_files(document_xml, &all);
+        let config = ExtractionConfig {
+            content_filter: Some(ContentFilterConfig {
+                include_headers: true,
+                include_footers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = DocxExtractor::new()
+            .extract_content(&data, DOCX_MIME, &config)
+            .await
+            .unwrap();
+        crate::extraction::derive::derive_extraction_result(internal, false, OutputFormat::Plain).content
+    }
+
+    fn hf_files<'a>(parts: &'a [(&'a str, String)]) -> Vec<(&'a str, &'a str)> {
+        parts.iter().map(|(n, c)| (*n, c.as_str())).collect()
+    }
+
+    #[tokio::test]
+    async fn a_first_page_part_is_emitted_only_when_the_section_sets_title_pg() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "First Header")),
+            ("word/footer1.xml", hf_part("ftr", "Default Footer")),
+            ("word/footer2.xml", hf_part("ftr", "First Footer")),
+        ];
+        let refs = concat!(
+            r#"<w:headerReference w:type="default" r:id="header1"/><w:headerReference w:type="first" r:id="header2"/>"#,
+            r#"<w:footerReference w:type="default" r:id="footer1"/><w:footerReference w:type="first" r:id="footer2"/>"#,
+        );
+        let without = hf_text(&sectioned_body(&[refs]), &hf_files(&parts)).await;
+        assert!(
+            without.contains("Default Header") && without.contains("Default Footer"),
+            "{without}"
+        );
+        assert!(
+            !without.contains("First Header") && !without.contains("First Footer"),
+            "{without}"
+        );
+
+        let with_title_pg = format!("{refs}<w:titlePg/>");
+        let with = hf_text(&sectioned_body(&[&with_title_pg]), &hf_files(&parts)).await;
+        for needle in ["Default Header", "First Header", "Default Footer", "First Footer"] {
+            assert_eq!(with.matches(needle).count(), 1, "{needle}: {with}");
+        }
+
+        let switched_off = format!(r#"{refs}<w:titlePg w:val="0"/>"#);
+        let off = hf_text(&sectioned_body(&[&switched_off]), &hf_files(&parts)).await;
+        assert!(!off.contains("First Header"), "{off}");
+    }
+
+    #[tokio::test]
+    async fn an_even_page_part_is_emitted_only_when_settings_enable_even_and_odd_headers() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "Even Header")),
+            ("word/footer1.xml", hf_part("ftr", "Default Footer")),
+            ("word/footer2.xml", hf_part("ftr", "Even Footer")),
+        ];
+        let refs = concat!(
+            r#"<w:headerReference w:type="default" r:id="header1"/><w:headerReference w:type="even" r:id="header2"/>"#,
+            r#"<w:footerReference w:type="default" r:id="footer1"/><w:footerReference w:type="even" r:id="footer2"/>"#,
+        );
+        let body = sectioned_body(&[refs]);
+        let absent = hf_text(&body, &hf_files(&parts)).await;
+        assert!(
+            !absent.contains("Even Header") && !absent.contains("Even Footer"),
+            "{absent}"
+        );
+
+        for (flag, emitted) in [
+            ("<w:evenAndOddHeaders/>", true),
+            (r#"<w:evenAndOddHeaders w:val="1"/>"#, true),
+            (r#"<w:evenAndOddHeaders w:val="false"/>"#, false),
+        ] {
+            let settings = settings_part(flag);
+            let mut files = hf_files(&parts);
+            files.push(("word/settings.xml", settings.as_str()));
+            let text = hf_text(&body, &files).await;
+            assert_eq!(text.contains("Even Header"), emitted, "{flag}: {text}");
+            assert_eq!(text.contains("Even Footer"), emitted, "{flag}: {text}");
+            assert!(text.contains("Default Header"), "{flag}: {text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_section_without_its_own_reference_inherits_the_previous_sections_part() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Inherited Header")),
+            ("word/footer1.xml", hf_part("ftr", "Inherited Footer")),
+        ];
+        let first = r#"<w:headerReference w:type="default" r:id="header1"/><w:footerReference w:type="default" r:id="footer1"/>"#;
+        let text = hf_text(&sectioned_body(&[first, ""]), &hf_files(&parts)).await;
+        assert_eq!(text.matches("Inherited Header").count(), 1, "{text}");
+        assert_eq!(text.matches("Inherited Footer").count(), 1, "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_section_with_its_own_reference_adds_its_part_after_the_earlier_sections() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Chapter One Header")),
+            ("word/header2.xml", hf_part("hdr", "Chapter Two Header")),
+            ("word/footer1.xml", hf_part("ftr", "Shared Footer")),
+        ];
+        let first = r#"<w:headerReference w:type="default" r:id="header1"/><w:footerReference w:type="default" r:id="footer1"/>"#;
+        let second = r#"<w:headerReference w:type="default" r:id="header2"/>"#;
+        let text = hf_text(&sectioned_body(&[first, second]), &hf_files(&parts)).await;
+        let one = text.find("Chapter One Header").expect(&text);
+        let two = text.find("Chapter Two Header").expect(&text);
+        assert!(one < two, "{text}");
+        assert_eq!(text.matches("Shared Footer").count(), 1, "{text}");
+    }
+
+    #[tokio::test]
+    async fn header_and_footer_parts_no_section_references_are_not_emitted() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Referenced Header")),
+            ("word/header2.xml", hf_part("hdr", "Declared But Unreferenced Header")),
+            ("word/header9-orphan.xml", hf_part("hdr", "Orphan Header")),
+            ("word/header10.xml", hf_part("hdr", "Undeclared Header")),
+            ("word/footer1.xml", hf_part("ftr", "Declared But Unreferenced Footer")),
+        ];
+        let sect = r#"<w:headerReference w:type="default" r:id="header1"/>"#;
+        let text = hf_text(&sectioned_body(&[sect]), &hf_files(&parts)).await;
+        assert!(text.contains("Referenced Header"), "{text}");
+        for absent in [
+            "Declared But Unreferenced Header",
+            "Orphan Header",
+            "Undeclared Header",
+            "Declared But Unreferenced Footer",
+        ] {
+            assert!(!text.contains(absent), "{absent} was emitted: {text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn alias_and_strict_namespace_prefixes_still_resolve_the_active_parts() {
+        const STRICT_WML: &str = "http://purl.oclc.org/ooxml/wordprocessingml/main";
+        const STRICT_REL: &str = "http://purl.oclc.org/ooxml/officeDocument/relationships";
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "First Header")),
+        ];
+        let settings = format!(r#"<x:settings xmlns:x="{WML_NS}"><x:evenAndOddHeaders/></x:settings>"#);
+        for (wml, rel) in [(WML_NS, REL_NS), (STRICT_WML, STRICT_REL)] {
+            let document = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?><x:document xmlns:x="{wml}" xmlns:rel="{rel}"><x:body><x:sectPr><x:headerReference x:type="default" rel:id="header1"/><x:headerReference x:type="first" rel:id="header2"/><x:titlePg/></x:sectPr></x:body></x:document>"#
+            );
+            let mut files = hf_files(&parts);
+            files.push(("word/settings.xml", settings.as_str()));
+            let text = hf_text(&document, &files).await;
+            assert!(text.contains("Default Header"), "{wml}: {text}");
+            assert!(text.contains("First Header"), "{wml}: {text}");
+        }
+    }
+
     #[tokio::test]
     async fn a_dropped_header_table_is_removed_from_the_tables() {
         let header = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -2447,7 +2720,7 @@ mod tests {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body><w:tbl><w:tr><w:tc><w:p><w:r><w:t>BodyCell</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body>
 </w:document>"#;
-        let data = build_test_docx_with_files(body, &[("word/header1.xml", header)]);
+        let data = build_hf_docx(body, DEFAULT_HF_SECT, &[("word/header1.xml", header)]);
         for (include, expected_tables) in [(false, 1), (true, 2)] {
             let config = ExtractionConfig {
                 content_filter: Some(crate::core::config::ContentFilterConfig {
@@ -4505,10 +4778,18 @@ mod tests {
         let h4 = hdr("Header 4 text");
         let f4 = ftr("Footer 4 text");
 
+        let settings = r#"<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:evenAndOddHeaders/></w:settings>"#;
+        let document_xml = document_xml.replace(
+            "</w:body>",
+            &format!(
+                r#"<w:p><w:pPr><w:sectPr xmlns:r="{REL_NS}"><w:headerReference w:type="default" r:id="rId1"/><w:headerReference w:type="first" r:id="rId2"/><w:headerReference w:type="even" r:id="rId3"/><w:titlePg/></w:sectPr></w:pPr></w:p><w:sectPr xmlns:r="{REL_NS}"><w:headerReference w:type="default" r:id="rId4"/><w:footerReference w:type="default" r:id="rId5"/></w:sectPr></w:body>"#
+            ),
+        );
         let data = build_test_docx_with_files(
-            document_xml,
+            &document_xml,
             &[
                 ("word/_rels/document.xml.rels", rels_xml),
+                ("word/settings.xml", settings),
                 ("word/header1.xml", &h1),
                 ("word/header2.xml", &h2),
                 ("word/header3.xml", &h3),

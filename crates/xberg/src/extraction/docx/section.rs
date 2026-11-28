@@ -3,6 +3,7 @@
 //! Parses page size, margins, orientation, columns, and other
 //! section-level properties from OOXML documents.
 
+use super::parser::HeaderFooterType;
 #[cfg(test)]
 use crate::extraction::ooxml_constants::WORDPROCESSINGML_NAMESPACE;
 use crate::extractors::security::{SecurityBudget, SecurityError};
@@ -87,6 +88,12 @@ pub struct SectionProperties {
     pub columns: ColumnLayout,
     /// Document grid line pitch in twips (from `w:docGrid w:linePitch`).
     pub doc_grid_line_pitch: Option<i32>,
+    /// `w:headerReference` entries: the page set each covers and the relationship id of its part.
+    pub header_refs: Vec<(HeaderFooterType, String)>,
+    /// `w:footerReference` entries, shaped like `header_refs`.
+    pub footer_refs: Vec<(HeaderFooterType, String)>,
+    /// `w:titlePg`: the section's first page uses its first-page header and footer.
+    pub title_page: bool,
 }
 
 /// Get a namespaced integer attribute.
@@ -102,6 +109,14 @@ fn get_w_attr_i32(element: &BytesStart, local_name: &str) -> Option<i32> {
         }
     }
     None
+}
+
+/// Whether an on/off element is enabled: present without `w:val`, or with a true value.
+fn on_off_attr_enabled(element: &BytesStart) -> bool {
+    !matches!(
+        get_w_attr_string(element, "val").as_deref(),
+        Some("0" | "false" | "off")
+    )
 }
 
 /// Get a namespaced string attribute.
@@ -260,6 +275,24 @@ fn apply_section_element(e: &BytesStart, props: &mut SectionProperties) {
         }
         "w:docGrid" => {
             props.doc_grid_line_pitch = get_w_attr_i32(e, "linePitch");
+        }
+        "w:headerReference" | "w:footerReference" => {
+            if let Some(id) = get_w_attr_string(e, "id") {
+                let kind = match get_w_attr_string(e, "type").as_deref() {
+                    Some("first") => HeaderFooterType::First,
+                    Some("even") => HeaderFooterType::Even,
+                    _ => HeaderFooterType::Default,
+                };
+                let refs = if e.name().as_ref() == "w:headerReference" {
+                    &mut props.header_refs
+                } else {
+                    &mut props.footer_refs
+                };
+                refs.push((kind, id));
+            }
+        }
+        "w:titlePg" => {
+            props.title_page = on_off_attr_enabled(e);
         }
         _ => {}
     }

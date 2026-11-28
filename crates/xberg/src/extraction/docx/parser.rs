@@ -54,6 +54,8 @@ pub(crate) struct Document {
     pub tables: Vec<Table>,
     pub headers: Vec<HeaderFooter>,
     pub footers: Vec<HeaderFooter>,
+    /// `w:evenAndOddHeaders` in `word/settings.xml`: even pages use the even-page header and footer.
+    pub(crate) even_and_odd_headers: bool,
     pub footnotes: Vec<Note>,
     pub endnotes: Vec<Note>,
     pub numbering_defs: AHashMap<(i64, i64), ListType>,
@@ -346,11 +348,13 @@ pub struct HeaderFooter {
     pub tables: Vec<Table>,
     /// Which pages this header/footer applies to.
     pub header_type: HeaderFooterType,
+    /// Relationship id the document's `w:headerReference`/`w:footerReference` entries name this part by.
+    pub(crate) rel_id: String,
 }
 
 /// Specifies which pages a header or footer applies to.
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum HeaderFooterType {
     /// Default header/footer (applies to all pages not covered by First or Even).
     #[default]
@@ -912,6 +916,64 @@ fn heading_level_from_style_name(style: &str) -> Option<u8> {
 impl Document {
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+
+    /// The headers and the footers Word shows, each part once, in section order.
+    ///
+    /// A section shows its default-type part, plus its first-page part when it sets
+    /// `w:titlePg` and its even-page part when `word/settings.xml` sets
+    /// `w:evenAndOddHeaders`. A type a section gives no reference for is inherited from the
+    /// previous section; a part no section reaches is not returned.
+    pub(crate) fn active_headers_footers(&self) -> (Vec<&HeaderFooter>, Vec<&HeaderFooter>) {
+        fn resolve<'a>(
+            parts: &'a [HeaderFooter],
+            inherited: &mut [Option<&'a str>; 3],
+            refs: &'a [(HeaderFooterType, String)],
+            wanted: [bool; 3],
+            out: &mut Vec<&'a HeaderFooter>,
+        ) {
+            for (kind, id) in refs {
+                inherited[kind_slot(*kind)] = Some(id.as_str());
+            }
+            for (slot, active) in wanted.into_iter().enumerate() {
+                let Some(id) = inherited[slot].filter(|_| active) else {
+                    continue;
+                };
+                if let Some(part) = parts.iter().find(|part| part.rel_id == id)
+                    && !out.iter().any(|seen| std::ptr::eq(*seen, part))
+                {
+                    out.push(part);
+                }
+            }
+        }
+        fn kind_slot(kind: HeaderFooterType) -> usize {
+            match kind {
+                HeaderFooterType::First => 1,
+                HeaderFooterType::Even => 2,
+                HeaderFooterType::Default | HeaderFooterType::Odd => 0,
+            }
+        }
+
+        let (mut headers, mut footers) = (Vec::new(), Vec::new());
+        let (mut inherited_headers, mut inherited_footers) = ([None; 3], [None; 3]);
+        for section in &self.sections {
+            let wanted = [true, section.title_page, self.even_and_odd_headers];
+            resolve(
+                &self.headers,
+                &mut inherited_headers,
+                &section.header_refs,
+                wanted,
+                &mut headers,
+            );
+            resolve(
+                &self.footers,
+                &mut inherited_footers,
+                &section.footer_refs,
+                wanted,
+                &mut footers,
+            );
+        }
+        (headers, footers)
     }
 
     /// The numbers the notes' definitions are written under in the parser's own text.
@@ -3007,21 +3069,6 @@ pub(crate) fn validate_archive_security(
     Ok(())
 }
 
-/// Recognise a conventionally-named header/footer part, e.g. `word/header2.xml`.
-///
-/// Returns `(is_header, index)`. Used only as the fallback sweep in
-/// [`DocxParser::parse_headers_footers`], for parts no relationship declares.
-fn conventional_header_footer_part(name: &str) -> Option<(bool, u32)> {
-    let stem = name.strip_prefix("word/")?.strip_suffix(".xml")?;
-    let (is_header, digits) = match stem.strip_prefix("header") {
-        Some(rest) => (true, rest),
-        None => (false, stem.strip_prefix("footer")?),
-    };
-    // Reject `word/headerReference.xml` and friends: only a bare numeric suffix is
-    // the conventional part naming.
-    digits.parse::<u32>().ok().map(|index| (is_header, index))
-}
-
 #[derive(Debug)]
 struct DocxParser<R: Read + Seek> {
     archive: zip::ZipArchive<R>,
@@ -4169,46 +4216,27 @@ impl<R: Read + Seek> DocxParser<R> {
         Ok(numbering.finish())
     }
 
-    /// Discover and parse every header/footer part in the package (#83).
+    /// Parse every header/footer part the document relationships declare (#83).
     ///
-    /// Earlier versions of this parser only looked for `word/header{1,2,3}.xml` and
-    /// `word/footer{1,2,3}.xml`, silently dropping any part beyond index 3. The
-    /// relationships in `word/_rels/document.xml.rels` are the authoritative index, so
-    /// they are read first and in declaration order.
-    ///
-    /// The conventional filenames are then swept as a *fallback*, not a replacement:
-    /// a package can carry a header/footer part that no relationship points at, and
-    /// dropping those would trade one silent loss (index > 3) for another (unreferenced
-    /// part). Anything already named by a relationship is skipped, so a well-formed
-    /// document is unaffected.
+    /// The relationships in `word/_rels/document.xml.rels` are the authoritative index, in
+    /// declaration order, so a package may carry any number of parts. A part no relationship
+    /// names is not reachable from any section, so it is not read. Which parts a section
+    /// shows is decided from its `w:sectPr` references by [`Document::active_headers_footers`].
     fn parse_headers_footers(
         &mut self,
         document: &mut Document,
         budget: &mut SecurityBudget,
     ) -> Result<(), DocxParseError> {
         let rels_xml = self.read_file("word/_rels/document.xml.rels").unwrap_or_default();
-        let mut targets = Self::parse_header_footer_relationship_targets(&rels_xml);
+        let targets = Self::parse_header_footer_relationship_targets(&rels_xml);
 
-        // Collect before touching `self.archive` mutably in the read loop below.
-        let mut orphans = Vec::new();
-        for name in self.archive.file_names() {
-            let name = name?;
-            let Some((is_header, index)) = conventional_header_footer_part(&name) else {
-                continue;
-            };
-            if !targets.iter().any(|(_, seen)| seen == name.as_ref()) {
-                orphans.push((is_header, index, name.into_owned()));
-            }
-        }
-        // Headers before footers, each in numeric order, so output does not depend on
-        // the order the zip central directory happens to list parts in.
-        orphans.sort_by_key(|(is_header, index, _)| (!is_header, *index));
-        targets.extend(orphans.into_iter().map(|(is_header, _, path)| (is_header, path)));
-
-        for (is_header, path) in targets {
+        for (is_header, path, rel_id) in targets {
             match self.read_file(&path) {
                 Ok(xml) => {
-                    let mut header_footer = HeaderFooter::default();
+                    let mut header_footer = HeaderFooter {
+                        rel_id,
+                        ..HeaderFooter::default()
+                    };
                     self.parse_header_footer_content(&xml, &mut header_footer, budget, &mut document.warnings)?;
                     if is_header {
                         document.headers.push(header_footer);
@@ -4231,16 +4259,39 @@ impl<R: Read + Seek> DocxParser<R> {
             }
         }
 
+        if let Ok(settings_xml) = self.read_file("word/settings.xml") {
+            document.even_and_odd_headers = Self::parse_even_and_odd_headers(&settings_xml, budget)?;
+        }
+
         Ok(())
+    }
+
+    /// Read only the `w:evenAndOddHeaders` flag from `word/settings.xml`.
+    fn parse_even_and_odd_headers(xml: &str, budget: &mut SecurityBudget) -> Result<bool, DocxParseError> {
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        loop {
+            budget.step()?;
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.name().as_ref() == "w:evenAndOddHeaders" => {
+                    return Ok(!e.attributes().flatten().any(|attr| {
+                        attr.key.as_ref() == "w:val" && matches!(attr.value.as_ref(), "0" | "false" | "off")
+                    }));
+                }
+                Ok(Event::Eof) | Err(_) => return Ok(false),
+                _ => {}
+            }
+            buf.clear();
+        }
     }
 
     /// Scan a relationships XML document for header/footer part targets.
     ///
-    /// Returns `(is_header, resolved_zip_path)` pairs in document order. Relationship
+    /// Returns `(is_header, resolved_zip_path, relationship_id)` triples in document order. Relationship
     /// targets are resolved relative to `word/` (the directory containing
     /// `document.xml`, per OPC convention), or treated as package-root-absolute when
     /// they start with `/`.
-    fn parse_header_footer_relationship_targets(xml: &str) -> Vec<(bool, String)> {
+    fn parse_header_footer_relationship_targets(xml: &str) -> Vec<(bool, String, String)> {
         let mut targets = Vec::new();
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(true);
@@ -4251,9 +4302,11 @@ impl<R: Read + Seek> DocxParser<R> {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.name().as_ref() == "Relationship" => {
                     let mut target: Option<String> = None;
                     let mut kind: Option<bool> = None;
+                    let mut rel_id: Option<String> = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             "Target" => target = Some(attr.value.to_string()),
+                            "Id" => rel_id = Some(attr.value.to_string()),
                             "Type" => {
                                 kind = if attr.value.ends_with("/header") {
                                     Some(true)
@@ -4266,12 +4319,12 @@ impl<R: Read + Seek> DocxParser<R> {
                             _ => {}
                         }
                     }
-                    if let (Some(target), Some(is_header)) = (target, kind) {
+                    if let (Some(target), Some(is_header), Some(rel_id)) = (target, kind, rel_id) {
                         let resolved = match target.strip_prefix('/') {
                             Some(stripped) => stripped.to_string(),
                             None => format!("word/{}", target),
                         };
-                        targets.push((is_header, resolved));
+                        targets.push((is_header, resolved, rel_id));
                     }
                 }
                 Ok(Event::Eof) => break,
@@ -8171,7 +8224,11 @@ mod tests {
             r#"<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{}</w:hdr>"#,
             list_styled_paragraph("In a header")
         );
-        let doc = parse_bytes(&docx_with_list_style("", &[("word/header1.xml", &header)]));
+        let rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>"#;
+        let doc = parse_bytes(&docx_with_list_style(
+            "",
+            &[("word/header1.xml", &header), ("word/_rels/document.xml.rels", rels)],
+        ));
         assert_eq!(doc.headers.len(), 1, "header part was picked up");
         assert_eq!(doc.headers[0].paragraphs[0].numbering_id, Some(1));
     }
