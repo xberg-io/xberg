@@ -26,7 +26,7 @@ $$
 
 **Corollary 3.1.** Under the conditions of Theorem 3.2, the eigenfunction approximation $u_{i,h}^{(\ell+1)}$
 
-¯$\gamma(\lambda_{i,h})^{\ell}$ $1+\frac{1}{\lambda_{1}\delta_{\lambda}^{(\ell+1)}}\eta_{a}(W_{H})u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$ u¯~i,h~ − E \!
+¯$\gamma(\lambda_{i,h})^{\ell}$ $1+\frac{1}{\lambda_{1}\delta_{\lambda}^{(\ell+1)}}\eta_{a}(W_{H})u_{i,h}-E_{i,h}^{(\ell+1)}u_{i,h}$ $u_{i,h}-E_{i,h}^{(1)}u_{i,h}$¯ \!
 
 \!
 
@@ -56,9 +56,11 @@ $$
 
 (3.24)
 
-- (1) u~i,h~ ¯ $${}&#95;{a,h},$$
+¯
 
-i,h
+$$
+{}_{a,h},
+$$
 
 ¯
 
@@ -104,15 +106,11 @@ $$
 \leq CH,
 $$
 
-where the constant C depends on shape of the meshes $\mathcal{T}&#95;{H}$ Based on Theorems 3.1 and 3.2, the convergence results can be concluded with the following inequalities $u_{i,h}-F_{k,h}^{(\ell+1)}u_{i,h}$¯ ¯ ${}&#95;{a,h}\leq CCH^{2\ell}$ u~i,h~ ¯
+where the constant C depends on shape of the meshes $\mathcal{T}&#95;{H}$ Based on Theorems 3.1 and 3.2, the convergence results can be concluded with the following inequalities $u_{i,h}-F_{k,h}^{(\ell+1)}u_{i,h}$¯ ¯ ${}&#95;{a,h}\leq CCH^{2\ell}$ $u_{i,h}-F_{k,h}^{(1)}u_{i,h}$¯
 
 16
 
-and $\mathcal{T}&#95;{h}.$
-
-(1)
-
-− F~k,h~u~i,h~ ¯
+and $\mathcal{T}&#95;{h}.$ ¯
 
 $$
 {}_{a,h},

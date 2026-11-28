@@ -46,7 +46,7 @@ These terms serve a similar role as the V = 2t term in the meron cluster algorit
 
 f
 
-where Q = (−1) ${}&#95;{f,\alpha}s_{x,x}^{3}$ s~x~${}&#95;{-\alpha,x,f},\alpha$ˆ are the x ˆ +ˆα,f ˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~ , which commutes Q<sup>(1)</sup>
+where Q = (−1) ${}&#95;{f,\alpha}s_{x,x}^{3}$ s~x~${}&#95;{-\alpha,x,f},\alpha$ˆ are the x ˆ +ˆ α,f ˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~ , which commutes Q<sup>(1)</sup>
 
 U(1)
 

@@ -17,8 +17,6 @@ Hence the sum of the fractions equals
 | = | = | . |
 |  | 12 | 6 |
 
-$$=\frac{9a-12b-8a+4b-4c+a-4c}{12}$$
-
 The preceding work may be arranged as follows:
 
 The $L. C. D. = 12$.
@@ -26,16 +24,32 @@ The $L. C. D. = 12$.
 The multipliers are 3, 4, and 1, respectively.
 
 $$
-3(3a-4b)=9a-12b
+3(3a-4b
 $$
 
-= 1st numerator. −4(2a − b + c) = −8a + 4b − 4c = 2d numerator. $1(a − 4c) = a − 4c = 3d$ numerator.
+) =
 
 $$
-2a-
+9a-12b
 $$
 
-8b − 8c or 2(a − 4b − 4c) = the sum of the numerators. ∴ sum of fractions = 2(a − 4b 12 − 4c) = a − 4b 6 − 4c .
+= 1st numerator. −4(2a − b + c) = −8a + 4b − 4c = 2d numerator.
+
+$$
+1(a-
+$$
+
+$$
+4c)=
+$$
+
+$a − 4c = 3d$ numerator.
+
+$$
+2a-8b-8c
+$$
+
+or 2(a − 4b − 4c) = the sum of the numerators. ∴ sum of fractions = 2(a − 4b 12 − 4c) = a − 4b 6 − 4c .
 
 **Exercise 46.**
 

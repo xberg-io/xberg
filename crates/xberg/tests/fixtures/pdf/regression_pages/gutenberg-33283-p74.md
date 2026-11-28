@@ -12,11 +12,7 @@ When t = 3.03, θ = 6.28; ω = 2 − 2.754 = −0.754 rad./sec.;
 
 The velocity is reversed. The wheel is evidently at rest between these two instants; it is at rest when ω = 0, that is when 0 = 2 $-0.3t^{3},$ or when t = 2.58 sec., it has performed
 
-$$
-\frac{\theta}{2\pi}=\frac{3+2\times2.58-0.1\times2.58^{3}}{6.28}
-$$
-
-= 1.025 revolutions.
+θ 2π = 3 + 2 × 2.58 − 6.28 0.1 × 2.58<sup>3</sup> = 1.025 revolutions.
 
 Exercises V. (See page 255 for Answers.)
 

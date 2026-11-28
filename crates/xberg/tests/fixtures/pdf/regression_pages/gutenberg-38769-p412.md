@@ -2,7 +2,7 @@
 
 396
 
-So far as divergence for $s < 1$ is concerned, this result might have beenP derived at once from comparison with (1/n), which we already know to be divergent. It is however interesting to see how the Integral Test may be applied to theP series (1/n), when the preceding analysis fails. In this case Z
+So far as divergence for $s < 1$ is concerned, this result might have been P derived at once from comparison with (1/n), which we already know to be divergent. It is however interesting to see how the Integral Test may be applied to the P series (1/n ), when the preceding analysis fails. In this case Z
 
 ξ
 
@@ -37,7 +37,7 @@ u Z
 
 2
 
-du and so $Φ(ξ) > n$ , which shows that $Φ(ξ) → ∞$ as $ξ → ∞. u$
+du and so $Φ( ξ) > n$ , which shows that $Φ(ξ) → ∞$ as $ξ → ∞. u$
 
 1
 
@@ -49,13 +49,13 @@ dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity ${}&
 
 −2 −3/2 −11/10
 
-2. The series n , n , n are convergent, and their sumsP P
+2. The series n , n , n are convergent, and their sums P P
 
 −1/2 −10/11
 
 are not greater than 2, 3, 11 respectively. The series n , n are divergent. P
 
-3. The series n<sup>s</sup>/(n<sup>t</sup> + a), where a \> 0, is convergent or divergent ac-P
+3. The series n<sup>s</sup>/(n<sup>t</sup> + a), where a \> 0, is convergent or divergent ac- P
 
 s−t
 

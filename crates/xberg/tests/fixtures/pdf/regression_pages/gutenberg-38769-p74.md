@@ -4,7 +4,13 @@ then
 
 6
 
-1 + y (1 + x)<sup>3</sup> = ; 1 − y (1 − x)<sup>2</sup> or if $q √ √ y = x + x + x$, then
+1 + y (1 + x)<sup>3</sup> = ;
+
+$$
+1-y
+$$
+
+(1 − x)<sup>2</sup> or if $q √ √ y = x + x + x$, then
 
 $$
 y^{4}-(4y^{2}+4y+1)x=0.

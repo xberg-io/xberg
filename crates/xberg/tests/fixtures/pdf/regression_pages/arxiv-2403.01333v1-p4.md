@@ -146,11 +146,11 @@ $$&#42;^{1}Y^{z}0\geq0,\mathrm{tr}&#91;Q_{1}&#93;\leq\gamma.$$
 
 ## V I
 
-h i The actuator noise is maximized by minimizing $k\kappa_{a}k_{2}$, the Similar to theorem 1, $\mathrm{tr}V^{T}V$ $\leq\gamma_{x_{F}}$ is equivalent control rate is minimized by minimizing kω k~2 c~ , and the con-
+h i The actuator noise is maximized by minimizing $k\kappa_{a}k_{2}$, the Similar to theorem 1, $\mathrm{tr}V^{T}V$ $\leq\gamma_{x_{F}}$ is equivalent control rate is minimized by minimizing $k\omega_{c}k_{{}^{2}x_{F}}$, and the con-
 
 $Q_{2}V^{T}$
 
-to ≥ 0 and $\mathrm{tr}&#91;Q_{2}&#93;\leq\gamma_{xF}$ . Maximum actrol magnitude is minimized by minimizing γ~**x**~ . Therefore, ~F~ the cost function for the optimization is
+to ≥ 0 and $\mathrm{tr}&#91;Q_{2}&#93;\leq\gamma_{xF}$ . Maximum actrol magnitude is minimized by minimizing γ . Therefore, the cost function for the optimization is
 
 $$
 {}_{\kappa_{a},\omega_{c},\gamma_{x}}\min{}_{\geq0,Q\geq0}\lambda_{a}k\kappa_{a}k_{2}+\lambda_{\omega_{c}}k\omega_{c}k_{2}+\lambda_{x_{F}}\gamma_{x_{F}},

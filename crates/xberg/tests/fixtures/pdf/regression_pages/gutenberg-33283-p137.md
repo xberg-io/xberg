@@ -18,10 +18,14 @@ The partial fractions are, therefore, 4 3 − . (x + 1)<sup>2</sup> (x + 1)<sup>
 | y = | ; we have |
 | 6x2 + 7x − 3 |  |
 
-$y=\frac{5-4x}{6x^{2}+7x-3}$
+$y=\frac{5-}{6x^{2}+7x-3}$
 
-dy (6x<sup>2</sup> + 7x − 3) × 4 + (5 − 4x)(12x + 7) = − dx (6x<sup>2</sup> + 7x − 3)<sup>2</sup>
+$$
+\frac{dy}{dx}=-\frac{(6x^{2}+7x-3)\times4+(5-4x)(12x+7)}{(6x^{2}+7x-3)^{2}}
+$$
 
-24x<sup>2</sup> − 60x − 23 = . (6x<sup>2</sup> + 7x − 3)<sup>2</sup> If we split the given expression into
+$$=\frac{24x^{2}-60x-23}{(6x^{2}+7x-3)^{2}}.$$
+
+If we split the given expression into
 
 3x 1 − 1 − 2x 2 + 3 , we get, however, dy 3 4 = − + , dx (3x − 1)<sup>2</sup> (2x + 3)<sup>2</sup>

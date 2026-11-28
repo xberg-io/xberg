@@ -14,11 +14,13 @@ x<sup>2</sup> + 2ax − a 2a(a + 1)
 
 - (2) ; . $$(x+a)^{2}(x+a)^{3}$$
 
+(3) 1 + x + 1 x<sup>2</sup> × 2 + 1
+
 $$
-(3)1+x+\frac{x^{2}}{1\times2}+\frac{x^{3}}{1\times2\times3};1+x+\frac{x^{2}}{1\times2}.
+x^{3}
 $$
 
-(4) (Exercises III.):
+× 2 × 3 ; 1 + x + 1 x<sup>2</sup> × 2 . (4) (Exercises III.):
 
 $$
 (1)(a)\frac{d^{2}y}{dx^{2}}=\frac{d^{3}y}{dx^{3}}=1+x+\frac{1}{2}x^{2}+\frac{1}{6}x^{3}+....

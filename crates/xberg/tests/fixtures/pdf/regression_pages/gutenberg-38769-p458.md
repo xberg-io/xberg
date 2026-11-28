@@ -24,7 +24,7 @@ Z
 
 0
 
-32. Show that if 2y = ax+(b/x), where a and b are positive, then two values √ of x correspond to any value of y greater than ab. Denoting the greater of√ these by $x_{1}$ and the less by $x_{2}$, show that, as y increases from$\sqrt{ab}$ towards ∞, p $x_{1}$ increases from b/a towards ∞, and $x_{2}$ decreases from b/a to 0. Hence show that ( ) Z Z ∞
+32. Show that if 2y = ax+(b/x), where a and b are positive, then two values √ of x correspond to any value of y greater than ab. Denoting the greater of√ these by $x_{1}$ and the less by $x_{2}$, show that, as y increases from ab towards ∞, p p $x_{1}$ increases from b/a towards ∞, and $x_{2}$ decreases from b/a to 0. Hence show that ( ) Z Z ∞
 
 ∞
 
@@ -43,6 +43,10 @@ $1 y f(y) dx_{2} = f(y) p − 1$ dy, √
 0
 
 a
+
+ab
+
+y<sup>2</sup> − ab
 
 | and that |  |  |  |
 | --- | --- | --- | --- |
@@ -65,11 +69,3 @@ a
 | 34. If a and b are positive, then |  |  |  |
 | Z ∞ |  | Z ∞ |  |
 | 0 (x2 + a2 )( x2 + b 2 ) | 2ab( a + b) | 0 (x2 + a 2 )( x2 + b 2 ) | 2( a + b) |
-
-$$
-{}_{0}\frac{dx}{(x^{2}+a^{2})(x^{2}+b^{2})}=\frac{\pi}{2ab(a+b)},
-$$
-
-ab
-
-y<sup>2</sup> − ab
