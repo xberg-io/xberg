@@ -205,14 +205,22 @@ fn test_rtf_color_table_extraction() {
 fn test_rtf_header_footer_extraction() {
     let rtf_content = r#"{\rtf1{\header My Header Text}{\footer My Footer Text}Body text}"#;
     let formatting = extract_rtf_formatting(rtf_content);
-    assert!(formatting.header_text.is_some(), "Should extract header text");
-    assert!(formatting.footer_text.is_some(), "Should extract footer text");
+    assert!(!formatting.header_texts.is_empty(), "Should extract header text");
+    assert!(!formatting.footer_texts.is_empty(), "Should extract footer text");
     assert!(
-        formatting.header_text.as_deref().unwrap_or("").contains("Header"),
+        formatting
+            .header_texts
+            .first()
+            .map_or("", String::as_str)
+            .contains("Header"),
         "Header text should contain 'Header'"
     );
     assert!(
-        formatting.footer_text.as_deref().unwrap_or("").contains("Footer"),
+        formatting
+            .footer_texts
+            .first()
+            .map_or("", String::as_str)
+            .contains("Footer"),
         "Footer text should contain 'Footer'"
     );
 }
@@ -712,9 +720,38 @@ async fn rtf_header_and_footer_text_is_not_rendered_by_default() {
 }
 
 #[test]
-fn rtf_header_and_footer_keep_decoded_escapes_and_separate_variants() {
-    let rtf = r"{\rtf1{\headerl Caf\'e9\tab one}{\headerr Right \emdash two}{\footerl Left}{\footerr Right}Body}";
+fn rtf_header_and_footer_keep_decoded_escapes_and_one_element_per_distinct_variant() {
+    let rtf = r"{\rtf1{\headerl Caf\'e9\tab one}{\headerr Right \emdash two}{\footerl Same}{\footerr Same}{\footerf Same}Body}";
     let formatting = extract_rtf_formatting(rtf);
-    assert_eq!(formatting.header_text.as_deref(), Some("Café\tone\nRight \u{2014}two"));
-    assert_eq!(formatting.footer_text.as_deref(), Some("Left\nRight"));
+    assert_eq!(formatting.header_texts, vec!["Café\tone", "Right \u{2014}two"]);
+    assert_eq!(formatting.footer_texts, vec!["Same"]);
+}
+
+#[test]
+fn rtf_header_unicode_escape_skips_exactly_its_fallback() {
+    for (rtf, expected) in [
+        (r"{\rtf1{\header Caf\uc1\u233\'e9 x}Body}", "Café x"),
+        (r"{\rtf1{\header Caf\uc2\u233\'e9\'e9 x}Body}", "Café x"),
+        (r"{\rtf1{\header Caf\uc2\u233??x}Body}", "Caféx"),
+        (r"{\rtf1{\header Caf\uc0\u233 x}Body}", "Caféx"),
+        (r"{\rtf1{\header Caf\u233\par x}Body}", "Café\nx"),
+    ] {
+        assert_eq!(extract_rtf_formatting(rtf).header_texts, vec![expected], "{rtf}");
+    }
+}
+
+#[test]
+fn rtf_header_table_layout_separates_cells_and_rows() {
+    let rtf =
+        r"{\rtf1{\header \trowd\cellx3000\cellx6000\cellx9000\intbl Acme\cell Confidential\cell Page 1\cell\row}Body}";
+    assert_eq!(
+        extract_rtf_formatting(rtf).header_texts,
+        vec!["Acme\tConfidential\tPage 1"]
+    );
+}
+
+#[test]
+fn rtf_header_collapses_repeated_spaces_and_drops_hidden_text() {
+    let rtf = r"{\rtf1{\header One   two {\v secret}three}Body}";
+    assert_eq!(extract_rtf_formatting(rtf).header_texts, vec!["One two three"]);
 }

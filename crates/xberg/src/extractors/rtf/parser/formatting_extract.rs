@@ -2,6 +2,7 @@
 //! span-to-annotation conversion consumed by callers of the text-extraction
 //! pass in [`super::text_extract`].
 
+use super::control_word::skip_unicode_fallback;
 use super::{
     FldrsltCloseState, RtfFormattingData, RtfFormattingSpan, close_fldinst_group, close_fldrslt_group,
     consume_adjacent_hex_escape, parse_font_charset_table, parse_rtf_color_table, resolve_decode_codepage,
@@ -64,6 +65,8 @@ struct FormattingScope {
     font_id_stack: Vec<Option<u16>>,
     default_font_id: Option<u16>,
     deleted_stack: Vec<bool>,
+    uc_stack: Vec<u8>,
+    hidden_stack: Vec<bool>,
     expect_destination: bool,
     ignorable_pending: bool,
     group_depth: i32,
@@ -109,7 +112,39 @@ impl FieldCapture {
 struct TextCapture {
     active: bool,
     depth: i32,
+    /// Captured variants, each started by a header or footer control word and
+    /// separated by [`VARIANT_BREAK`].
     text: String,
+}
+
+/// Separates the header or footer variants (`\\headerl`, `\\headerr`, ...) in a capture.
+const VARIANT_BREAK: char = '\u{1e}';
+
+impl TextCapture {
+    /// The distinct non-empty variants, in order of first appearance.
+    fn variants(&self) -> Vec<String> {
+        let mut distinct: Vec<String> = Vec::new();
+        for variant in self.text.split(VARIANT_BREAK) {
+            let variant = variant.trim();
+            if !variant.is_empty() && !distinct.iter().any(|seen| seen == variant) {
+                distinct.push(variant.to_string());
+            }
+        }
+        distinct
+    }
+
+    fn append(&mut self, text: &str) {
+        if self.active {
+            self.text.push_str(text);
+        }
+    }
+
+    /// Append a space unless the capture is empty or already ends in whitespace.
+    fn append_space(&mut self) {
+        if self.active && !self.text.is_empty() && !self.text.ends_with(char::is_whitespace) {
+            self.text.push(' ');
+        }
+    }
 }
 
 #[derive(Default)]
@@ -158,6 +193,8 @@ impl FormattingParser {
                 ansi_codepage_stack: vec![1252],
                 font_id_stack: vec![None],
                 deleted_stack: vec![false],
+                uc_stack: vec![1],
+                hidden_stack: vec![false],
                 ..Default::default()
             },
             ..Default::default()
@@ -191,6 +228,10 @@ impl FormattingParser {
         self.scope.font_id_stack.push(font);
         let deleted = self.scope.deleted_stack.last().copied().unwrap_or(false);
         self.scope.deleted_stack.push(deleted);
+        let uc = self.scope.uc_stack.last().copied().unwrap_or(1);
+        self.scope.uc_stack.push(uc);
+        let hidden = self.scope.hidden_stack.last().copied().unwrap_or(false);
+        self.scope.hidden_stack.push(hidden);
     }
 
     fn close_group(&mut self) {
@@ -205,6 +246,12 @@ impl FormattingParser {
         }
         if self.scope.deleted_stack.len() > 1 {
             self.scope.deleted_stack.pop();
+        }
+        if self.scope.uc_stack.len() > 1 {
+            self.scope.uc_stack.pop();
+        }
+        if self.scope.hidden_stack.len() > 1 {
+            self.scope.hidden_stack.pop();
         }
         self.formatting.restore();
         if self.scope.skip_depth > 0 && self.scope.group_depth < self.scope.skip_depth {
@@ -224,6 +271,10 @@ impl FormattingParser {
         self.scope.deleted_stack.last().copied().unwrap_or(false)
     }
 
+    fn is_hidden(&self) -> bool {
+        self.scope.hidden_stack.last().copied().unwrap_or(false)
+    }
+
     fn text_suppressed(&self) -> bool {
         self.scope.skip_depth > 0 || self.is_deleted()
     }
@@ -238,11 +289,9 @@ impl FormattingParser {
         if self.formatting.text_offset > 0 {
             self.formatting.text_offset += 1;
         }
-        if self.header.active {
-            self.header.text.push(' ');
-        }
-        if self.footer.active {
-            self.footer.text.push(' ');
+        if !self.is_hidden() {
+            self.header.append_space();
+            self.footer.append_space();
         }
     }
 
@@ -254,13 +303,7 @@ impl FormattingParser {
         if self.text_suppressed() {
             return;
         }
-        self.formatting.text_offset += character.len_utf8();
-        if self.header.active {
-            self.header.text.push(character);
-        }
-        if self.footer.active {
-            self.footer.text.push(character);
-        }
+        self.emit_text(character.encode_utf8(&mut [0; 4]));
     }
 
     fn handle_escape(&mut self, chars: &mut Peekable<Chars<'_>>) {
@@ -301,17 +344,15 @@ impl FormattingParser {
     /// Advance the text offset and append to any open header or footer capture.
     fn emit_text(&mut self, text: &str) {
         self.formatting.text_offset += text.len();
-        if self.header.active {
-            self.header.text.push_str(text);
-        }
-        if self.footer.active {
-            self.footer.text.push_str(text);
+        if !self.is_hidden() {
+            self.header.append(text);
+            self.footer.append(text);
         }
     }
 
     fn start_furniture_capture(capture: &mut TextCapture, depth: i32) {
-        if !capture.text.is_empty() && !capture.text.ends_with('\n') {
-            capture.text.push('\n');
+        if !capture.text.is_empty() {
+            capture.text.push(VARIANT_BREAK);
         }
         capture.active = true;
         capture.depth = depth;
@@ -413,6 +454,18 @@ impl FormattingParser {
                     self.scope.default_font_id = Some(value.max(0) as u16);
                 }
             }
+            "uc" => {
+                if let Some(value) = param
+                    && let Some(uc) = self.scope.uc_stack.last_mut()
+                {
+                    *uc = value.max(0) as u8;
+                }
+            }
+            "v" => {
+                if let Some(hidden) = self.scope.hidden_stack.last_mut() {
+                    *hidden = param.unwrap_or(1) != 0;
+                }
+            }
             "deleted" => {
                 if let Some(deleted) = self.scope.deleted_stack.last_mut() {
                     *deleted = param.unwrap_or(1) != 0;
@@ -466,11 +519,23 @@ impl FormattingParser {
             }
             "par" | "line" => {
                 self.formatting.text_offset += 1;
-                if self.header.active {
-                    self.header.text.push('\n');
+                if !self.is_hidden() {
+                    self.header.append("\n");
+                    self.footer.append("\n");
                 }
-                if self.footer.active {
-                    self.footer.text.push('\n');
+            }
+            "cell" | "nestcell" => {
+                for capture in [&mut self.header, &mut self.footer] {
+                    capture.append("\t");
+                }
+            }
+            "row" | "nestrow" => {
+                for capture in [&mut self.header, &mut self.footer] {
+                    if capture.active {
+                        let kept = capture.text.trim_end_matches('\t').len();
+                        capture.text.truncate(kept);
+                        capture.text.push('\n');
+                    }
                 }
             }
             "tab" => self.emit_text("\t"),
@@ -497,9 +562,7 @@ impl FormattingParser {
                 self.emit_text(character.encode_utf8(&mut [0; 4]));
             }
         }
-        if chars.peek().is_some_and(|next| !matches!(next, '\\' | '{' | '}')) {
-            chars.next();
-        }
+        skip_unicode_fallback(chars, self.scope.uc_stack.last().copied().unwrap_or(1));
     }
 }
 
@@ -524,15 +587,10 @@ pub(crate) fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
     RtfFormattingData {
         spans: parser.formatting.spans,
         color_table: parse_rtf_color_table(content),
-        header_text: nonempty_text(&parser.header.text),
-        footer_text: nonempty_text(&parser.footer.text),
+        header_texts: parser.header.variants(),
+        footer_texts: parser.footer.variants(),
         hyperlinks: parser.fields.hyperlinks,
     }
-}
-
-fn nonempty_text(text: &str) -> Option<String> {
-    let text = text.trim().to_string();
-    (!text.is_empty()).then_some(text)
 }
 
 /// Convert formatting spans overlapping a paragraph into paragraph-relative annotations. ~keep

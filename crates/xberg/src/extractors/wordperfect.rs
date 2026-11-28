@@ -753,6 +753,27 @@ fn build_wordperfect_internal_document(doc: &WpdDocument) -> InternalDocument {
     builder.build()
 }
 
+/// Build the document and apply the content filter. A document that yields nothing at all is
+/// an error; one whose only content is a header or footer the filter drops is not, since it
+/// has content that the caller chose to leave out.
+fn finish_wordperfect_document(
+    doc: &WpdDocument,
+    mime_type: &str,
+    config: &ExtractionConfig,
+) -> Result<InternalDocument> {
+    let mut internal_doc = build_wordperfect_internal_document(doc);
+    if internal_doc.elements.is_empty() {
+        return Err(crate::XbergError::parsing(
+            "WordPerfect document produced no extractable content".to_string(),
+        ));
+    }
+    internal_doc.mime_type = mime_type.to_string();
+    if let Some(filter) = &config.content_filter {
+        internal_doc.apply_furniture_filter(filter);
+    }
+    Ok(internal_doc)
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl InternalDocumentExtractor for WordPerfectExtractor {
@@ -797,17 +818,7 @@ impl InternalDocumentExtractor for WordPerfectExtractor {
         }
         .map_err(|e| crate::XbergError::parsing(format!("Failed to read WordPerfect document: {e}")))?;
 
-        let mut internal_doc = build_wordperfect_internal_document(&doc);
-        if internal_doc.elements.is_empty() {
-            return Err(crate::XbergError::parsing(
-                "WordPerfect document produced no extractable content".to_string(),
-            ));
-        }
-        internal_doc.mime_type = mime_type.to_string();
-        if let Some(filter) = &config.content_filter {
-            internal_doc.apply_furniture_filter(filter);
-        }
-        Ok(internal_doc)
+        finish_wordperfect_document(&doc, mime_type, config)
     }
 
     fn supported_mime_types(&self) -> &[&str] {

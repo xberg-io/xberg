@@ -481,8 +481,8 @@ impl TextParser {
         let formatting = RtfFormattingData {
             spans: self.fmt_tracker.spans,
             color_table: parse_rtf_color_table(content),
-            header_text: None,
-            footer_text: None,
+            header_texts: Vec::new(),
+            footer_texts: Vec::new(),
             hyperlinks: self.fields.hyperlinks,
         };
         (

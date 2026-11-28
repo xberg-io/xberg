@@ -51,8 +51,8 @@ fn should_capture_field_result_offsets_and_header_footer_text() {
         r"{\rtf1{\header H\u233?}{\footer F}A",
         r#"{\field{\*\fldinst HYPERLINK "https://example.test"}{\fldrslt \b Link}}Z}"#
     ));
-    assert_eq!(formatting.header_text.as_deref(), Some("Hé"));
-    assert_eq!(formatting.footer_text.as_deref(), Some("F"));
+    assert_eq!(formatting.header_texts, vec!["Hé"]);
+    assert_eq!(formatting.footer_texts, vec!["F"]);
     assert_eq!(formatting.hyperlinks, vec![(5, 9, "https://example.test".into())]);
     assert_eq!(
         formatting

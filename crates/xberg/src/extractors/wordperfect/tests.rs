@@ -613,3 +613,69 @@ fn wordperfect_header_and_footer_text_is_not_rendered_by_default() {
     .content;
     assert_eq!(content.trim(), "Body text.");
 }
+
+fn header_only_document() -> WpdDocument {
+    WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    }
+}
+
+#[test]
+fn wordperfect_finish_applies_the_content_filter_through_the_extraction_config() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    for headers in [true, false] {
+        let config = ExtractionConfig {
+            content_filter: Some(ContentFilterConfig {
+                include_headers: headers,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = finish_wordperfect_document(&doc, "application/vnd.wordperfect", &config).unwrap();
+        let content = crate::extraction::derive::derive_extraction_result(internal, false, OutputFormat::Plain).content;
+        assert_eq!(content.contains("Running header"), headers, "{content}");
+        assert!(content.contains("Body text."), "{content}");
+    }
+}
+
+#[test]
+fn wordperfect_header_only_document_is_returned_even_when_the_filter_drops_it() {
+    let internal = finish_wordperfect_document(
+        &header_only_document(),
+        "application/vnd.wordperfect",
+        &ExtractionConfig::default(),
+    )
+    .unwrap();
+    assert_eq!(internal.elements.len(), 1);
+    let config = ExtractionConfig {
+        content_filter: Some(crate::core::config::ContentFilterConfig::default()),
+        ..Default::default()
+    };
+    let filtered =
+        finish_wordperfect_document(&header_only_document(), "application/vnd.wordperfect", &config).unwrap();
+    assert!(filtered.elements.is_empty());
+}
+
+#[test]
+fn wordperfect_document_with_no_content_is_an_error() {
+    let empty = WpdDocument {
+        events: vec![],
+        metadata: WpdMetadata::default(),
+    };
+    assert!(finish_wordperfect_document(&empty, "application/vnd.wordperfect", &ExtractionConfig::default()).is_err());
+}
