@@ -143,6 +143,9 @@ fn should_classify_the_format_section_that_applies_to_zero_gh3441() {
     assert!(!time_only("mmm hh:mm", None));
     assert!(time_only("mm:ss", None));
     assert!(time_only("[h]:mm:ss", None));
+    assert!(time_only("hh:mm;hh:mm;[h]:mm", None));
+    assert!(!time_only("hh mmm", None));
+    assert!(time_only("hh:mm", None));
     assert!(time_only("hh:mm AM/PM", None));
     assert!(time_only("[>0]yyyy-mm-dd;hh:mm", None));
     assert!(!time_only("[=0]yyyy-mm-dd;hh:mm", None));

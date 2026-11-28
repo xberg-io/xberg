@@ -54,6 +54,10 @@ fn format_sections(code: &str) -> Vec<FormatSection> {
                 if content.starts_with(['<', '>', '=']) {
                     section.condition = bracket.take();
                 } else {
+                    if content.chars().all(|c| matches!(c, 'h' | 'H' | 'm' | 'M' | 's' | 'S')) {
+                        // Elapsed-time tokens such as [h] stay: they are time components, unlike colors and locales.
+                        section.text.push_str(&content.to_ascii_uppercase());
+                    }
                     bracket = None;
                 }
             } else {
@@ -120,7 +124,7 @@ pub(super) fn is_time_only_format(code: &str, format_id: Option<u32>) -> bool {
     time && !date
 }
 
-/// An `M` run is minutes beside an hour or second token and a month anywhere else.
+/// An `M` or `MM` run is minutes beside an hour or second token; longer runs and other positions are months.
 fn has_month_token(text: &str) -> bool {
     let letters: Vec<char> = text.chars().filter(char::is_ascii_alphabetic).collect();
     let mut index = 0;
@@ -133,9 +137,10 @@ fn has_month_token(text: &str) -> bool {
         while index < letters.len() && letters[index] == 'M' {
             index += 1;
         }
+        let minute_width = index - start <= 2;
         let after_hour = start > 0 && letters[start - 1] == 'H';
         let before_second = letters.get(index) == Some(&'S');
-        if !after_hour && !before_second {
+        if !(minute_width && (after_hour || before_second)) {
             return true;
         }
     }
