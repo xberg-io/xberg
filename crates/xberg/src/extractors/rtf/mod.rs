@@ -18,9 +18,9 @@ mod tables;
 
 pub use formatting::normalize_whitespace;
 pub(crate) use metadata::extract_rtf_metadata;
-pub(crate) use parser::{
-    extract_document_parts_from_rtf, extract_rtf_formatting, extract_text_from_rtf, spans_to_annotations,
-};
+#[cfg(test)]
+pub(crate) use parser::extract_text_from_rtf;
+pub(crate) use parser::{extract_document_parts_from_rtf, extract_rtf_formatting, spans_to_annotations};
 
 use crate::Result;
 use crate::core::config::ExtractionConfig;
@@ -120,6 +120,14 @@ impl Default for RtfExtractor {
     }
 }
 
+type RtfDocumentParts = (
+    String,
+    Vec<crate::types::Table>,
+    Vec<images::RtfImage>,
+    Vec<parser::ParagraphMeta>,
+    parser::RtfFormattingData,
+);
+
 fn footnote_key(index: usize) -> String {
     format!("rtf-footnote-{}", index + 1)
 }
@@ -127,8 +135,13 @@ fn footnote_key(index: usize) -> String {
 /// Emit a `FootnoteRef` for every pending marker that sits before byte `limit` of the text.
 /// Renderers attach a reference to the block it follows, so the callers pass the start of the
 /// next paragraph. ~keep
-fn push_footnote_refs_before(builder: &mut InternalDocumentBuilder, markers: &[usize], next: &mut usize, limit: usize) {
-    while let Some(&offset) = markers.get(*next)
+fn push_footnote_refs_before(
+    builder: &mut InternalDocumentBuilder,
+    footnotes: &[(usize, String)],
+    next: &mut usize,
+    limit: usize,
+) {
+    while let Some(&(offset, _)) = footnotes.get(*next)
         && offset < limit
     {
         builder.push_footnote_ref(&(*next + 1).to_string(), &footnote_key(*next), None);
@@ -141,11 +154,17 @@ impl RtfExtractor {
     ///
     /// Extracts paragraphs (split on double-newlines), tables, formatting
     /// annotations, and header/footer content with appropriate content layers.
+    #[cfg(test)]
     fn build_internal_document(rtf_content: &str, plain: bool) -> InternalDocument {
+        Self::build_internal_document_from_parts(rtf_content, extract_document_parts_from_rtf(rtf_content, plain))
+    }
+
+    /// [`Self::build_internal_document`] over an already parsed document, so a caller that also
+    /// needs the text (metadata) parses once.
+    fn build_internal_document_from_parts(rtf_content: &str, parts: RtfDocumentParts) -> InternalDocument {
         use crate::types::document_structure::ContentLayer;
 
-        let (extracted_text, tables, rtf_images, para_metas, mut formatting) =
-            extract_document_parts_from_rtf(rtf_content, plain);
+        let (extracted_text, tables, rtf_images, para_metas, mut formatting) = parts;
         let legacy_formatting = extract_rtf_formatting(rtf_content);
         formatting.header_text = legacy_formatting.header_text;
         formatting.footer_text = legacy_formatting.footer_text;
@@ -171,12 +190,9 @@ impl RtfExtractor {
         let mut next_footnote_ref = 0usize;
 
         for paragraph in extracted_text.split("\n\n") {
-            push_footnote_refs_before(
-                &mut builder,
-                &formatting.footnote_markers,
-                &mut next_footnote_ref,
-                byte_offset,
-            );
+            if !in_table_rows {
+                push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, byte_offset);
+            }
             let trimmed = paragraph.trim();
             if trimmed.is_empty() {
                 byte_offset += paragraph.len() + 2;
@@ -207,6 +223,7 @@ impl RtfExtractor {
                     builder.push_table_from_cells(&tables[table_idx].cells, None, None);
                     table_idx += 1;
                 }
+                push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, byte_offset);
             }
 
             let lines: Vec<&str> = trimmed.lines().collect();
@@ -283,12 +300,10 @@ impl RtfExtractor {
             byte_offset += paragraph.len() + 2;
         }
 
-        push_footnote_refs_before(
-            &mut builder,
-            &formatting.footnote_markers,
-            &mut next_footnote_ref,
-            usize::MAX,
-        );
+        let trailing_tables = in_table_rows || table_idx < tables.len();
+        if !trailing_tables {
+            push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, usize::MAX);
+        }
 
         if in_list {
             for _ in 0..=list_depth {
@@ -306,7 +321,9 @@ impl RtfExtractor {
             table_idx += 1;
         }
 
-        for (index, note) in formatting.footnotes.iter().enumerate() {
+        push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, usize::MAX);
+
+        for (index, (_, note)) in formatting.footnotes.iter().enumerate() {
             builder.push_footnote_definition(note, &footnote_key(index), None);
         }
 
@@ -410,8 +427,8 @@ impl InternalDocumentExtractor for RtfExtractor {
         let rtf_content = String::from_utf8_lossy(&normalized_content);
         let plain = true;
 
-        let (extracted_text, _tables, _images, _metas, _formatting_data) = extract_text_from_rtf(&rtf_content, plain);
-        let mut metadata_map = extract_rtf_metadata(&rtf_content, &extracted_text);
+        let parts = extract_document_parts_from_rtf(&rtf_content, plain);
+        let mut metadata_map = extract_rtf_metadata(&rtf_content, &parts.0);
 
         let title = metadata_map
             .remove(&Cow::Borrowed("title"))
@@ -436,7 +453,7 @@ impl InternalDocumentExtractor for RtfExtractor {
             .remove(&Cow::Borrowed("modified_at"))
             .and_then(|v| v.as_str().map(|s| s.to_string()));
 
-        let mut doc = Self::build_internal_document(&rtf_content, plain);
+        let mut doc = Self::build_internal_document_from_parts(&rtf_content, parts);
 
         // `from_utf8_lossy` above already replaced every undecodable byte with U+FFFD.
         // RTF producers routinely emit raw 8-bit bytes instead of `\'hh` escapes, so this

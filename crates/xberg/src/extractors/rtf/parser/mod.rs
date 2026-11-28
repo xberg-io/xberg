@@ -12,7 +12,9 @@ mod group_close;
 mod text_extract;
 
 pub(crate) use formatting_extract::{extract_rtf_formatting, spans_to_annotations};
-pub(crate) use text_extract::{extract_document_parts_from_rtf, extract_text_from_rtf};
+pub(crate) use text_extract::extract_document_parts_from_rtf;
+#[cfg(test)]
+pub(crate) use text_extract::extract_text_from_rtf;
 
 use crate::extractors::rtf::encoding::{fcharset_to_codepage, parse_hex_byte, parse_rtf_control_word};
 use crate::extractors::rtf::formatting::map_offset;
@@ -66,10 +68,9 @@ pub struct RtfFormattingData {
     pub footer_text: Option<String>,
     /// Hyperlink spans: (start_byte, end_byte, url).
     pub hyperlinks: Vec<(usize, usize, String)>,
-    /// Byte offsets in the text of each footnote reference, in reading order (document-parts mode).
-    pub footnote_markers: Vec<usize>,
-    /// Footnote definitions in reading order (document-parts mode).
-    pub footnotes: Vec<String>,
+    /// `(byte offset of the reference in the text, note body)` per footnote, in reading order
+    /// (document-parts mode).
+    pub footnotes: Vec<(usize, String)>,
 }
 
 /// Tracks formatting state during the text extraction pass so that

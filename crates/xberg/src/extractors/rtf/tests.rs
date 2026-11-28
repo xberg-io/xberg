@@ -695,3 +695,92 @@ fn should_render_footnote_as_plain_text_reference_and_definition() {
     let rendered = crate::rendering::render_plain(&doc);
     assert_eq!(rendered.trim(), "Text[^1]\n\n\n[^1]: Note");
 }
+
+#[test]
+fn should_pair_footnote_reference_with_its_own_definition_when_an_earlier_note_is_empty() {
+    let rtf_content = r"{\rtf1\ansi A\chftn{\footnote\chftn }B\chftn{\footnote\chftn Second}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert_eq!(rendered.trim(), "AB[^1]\n\n[^1]:\n    Second");
+}
+
+#[test]
+fn should_not_emit_a_footnote_reference_for_hidden_chftn() {
+    let rtf_content = r"{\rtf1\ansi A{\v\chftn}B\chftn{\footnote\chftn Note}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert_eq!(rendered.trim(), "AB[^1]\n\n[^1]:\n    Note");
+}
+
+fn rtf_list_with_footnote(note_in_item: usize) -> String {
+    let items = ["First", "Second", "Third"];
+    let mut body = String::new();
+    for (index, item) in items.iter().enumerate() {
+        let note = if index == note_in_item {
+            r"\chftn{\footnote\chftn Note}"
+        } else {
+            ""
+        };
+        body.push_str(&format!(
+            "\\pard\\ilvl0\\ls1{{\\listtext {}.\\tab}}{item}{note}\\par\n",
+            index + 1
+        ));
+    }
+    format!("{{\\rtf1\\ansi\n{body}}}")
+}
+
+#[test]
+fn should_attach_footnote_reference_to_its_list_item_in_every_format() {
+    for (note_in_item, label) in [(1usize, "Second"), (2, "Third")] {
+        let doc = RtfExtractor::build_internal_document(&rtf_list_with_footnote(note_in_item), false);
+        let markdown = crate::rendering::render_markdown(&doc);
+        assert!(markdown.contains("1. "), "markdown list: {markdown:?}");
+        assert!(markdown.contains(&format!("{label}[^1]")), "markdown: {markdown:?}");
+        let plain = crate::rendering::render_plain(&doc);
+        assert!(plain.contains(&format!("{label}[^1]")), "plain: {plain:?}");
+        let djot = crate::rendering::render_djot(&doc);
+        assert!(djot.contains(&format!("{label}[^1]")), "djot: {djot:?}");
+    }
+}
+
+#[test]
+fn should_place_table_footnote_reference_after_the_table() {
+    let rtf_content = concat!(
+        r"{\rtf1\ansi Before\par",
+        r"\trowd\cellx3000\cellx6000\pard\intbl A\chftn{\footnote\chftn Note}\cell B\cell\row",
+        r"\pard After\par}"
+    );
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let kinds: Vec<_> = doc.elements.iter().map(|element| element.kind).collect();
+    let table = kinds
+        .iter()
+        .position(|k| matches!(k, crate::types::internal::ElementKind::Table { .. }));
+    let reference = kinds
+        .iter()
+        .position(|k| *k == crate::types::internal::ElementKind::FootnoteRef);
+    assert!(table.is_some() && reference.is_some(), "{kinds:?}");
+    assert!(reference > table, "{kinds:?}");
+}
+
+#[test]
+fn should_derive_metadata_word_count_without_footnote_literals() {
+    let rtf_content = r"{\rtf1\ansi One two\chftn{\footnote\chftn some long note body}}";
+    let extractor = RtfExtractor::new();
+    let result = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(extractor.extract_content(
+            rtf_content.as_bytes(),
+            "application/rtf",
+            &crate::core::config::ExtractionConfig::default(),
+        ))
+        .unwrap();
+    assert_eq!(
+        result.metadata.additional.get("word_count"),
+        Some(&serde_json::json!(2))
+    );
+    assert_eq!(
+        result.metadata.additional.get("character_count"),
+        Some(&serde_json::json!(7))
+    );
+}

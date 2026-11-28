@@ -126,7 +126,12 @@ struct TextDestinations {
     shptxt: CapturedText,
     annotation: CapturedText,
     footnote_count: usize,
+    /// Offsets of body `\chftn` markers not yet claimed by a closed `\footnote` group.
     footnote_markers: Vec<usize>,
+    /// Markers recorded before the previous `\footnote` group closed.
+    footnote_markers_claimed: usize,
+    /// `(marker offset, note)` of each non-empty note, paired when its group closes.
+    footnote_pairs: Vec<(usize, String)>,
     pending_atnid: Option<i32>,
 }
 
@@ -312,6 +317,8 @@ impl TextParser {
 
     fn close_captures(&mut self) {
         let footnote = &mut self.destinations.footnote;
+        let was_open = footnote.active;
+        let notes_before = footnote.items.len();
         close_footnote_group(
             self.scope.group_depth,
             &mut footnote.active,
@@ -319,6 +326,17 @@ impl TextParser {
             &mut footnote.buffer,
             &mut footnote.items,
         );
+        if was_open && !footnote.active && self.output.structured_notes {
+            let destinations = &mut self.destinations;
+            if destinations.footnote.items.len() > notes_before
+                && destinations.footnote_markers.len() > destinations.footnote_markers_claimed
+                && let Some(offset) = destinations.footnote_markers.last().copied()
+                && let Some(note) = destinations.footnote.items.last()
+            {
+                destinations.footnote_pairs.push((offset, note.trim().to_string()));
+            }
+            destinations.footnote_markers_claimed = destinations.footnote_markers.len();
+        }
         let shptxt = &mut self.destinations.shptxt;
         close_shptxt_group(
             self.scope.group_depth,
@@ -472,29 +490,18 @@ impl TextParser {
             link.1 = map_offset(&mapping, link.1);
         }
         self.fields.hyperlinks.retain(|link| link.0 < link.1);
-        let footnote_markers = self
+        let footnotes = self
             .destinations
-            .footnote_markers
+            .footnote_pairs
             .iter()
-            .map(|offset| map_offset(&mapping, *offset))
+            .map(|(offset, note)| (map_offset(&mapping, *offset), note.clone()))
             .collect();
-        let footnotes = if self.output.structured_notes {
-            self.destinations
-                .footnote
-                .items
-                .iter()
-                .map(|note| note.trim().to_string())
-                .collect()
-        } else {
-            Vec::new()
-        };
         let formatting = RtfFormattingData {
             spans: self.fmt_tracker.spans,
             color_table: parse_rtf_color_table(content),
             header_text: None,
             footer_text: None,
             hyperlinks: self.fields.hyperlinks,
-            footnote_markers,
             footnotes,
         };
         (
@@ -510,6 +517,7 @@ impl TextParser {
         &'a mut self,
         finalize_table: &'a dyn Fn(&mut Option<TableState>, &mut Vec<Table>),
     ) -> ControlWordCtx<'a> {
+        let text_suppressed = self.text_suppressed();
         ControlWordCtx {
             result: &mut self.output.result,
             table_state: &mut self.output.table_state,
@@ -533,6 +541,7 @@ impl TextParser {
             footnote_count: &mut self.destinations.footnote_count,
             structured_notes: self.output.structured_notes,
             footnote_markers: &mut self.destinations.footnote_markers,
+            text_suppressed,
             hidden_stack: &mut self.scope.hidden_stack,
             fmt_tracker: &mut self.fmt_tracker,
             font_id_stack: &mut self.scope.font_id_stack,
@@ -913,6 +922,7 @@ fn ensure_capture_separator(result: &mut String) {
 }
 
 /// Extract normalized text, table/image data and byte-aligned formatting from RTF. ~keep
+#[cfg(test)]
 pub(crate) fn extract_text_from_rtf(
     content: &str,
     plain: bool,

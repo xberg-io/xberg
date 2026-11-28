@@ -32,6 +32,7 @@ pub(super) struct ControlWordCtx<'a> {
     pub(super) footnote_count: &'a mut usize,
     pub(super) structured_notes: bool,
     pub(super) footnote_markers: &'a mut Vec<usize>,
+    pub(super) text_suppressed: bool,
     pub(super) hidden_stack: &'a mut Vec<bool>,
     pub(super) fmt_tracker: &'a mut FormattingTracker,
     pub(super) font_id_stack: &'a mut [Option<u16>],
@@ -128,7 +129,9 @@ fn handle_text_emission_control_word(
         "chftn" => {
             *ctx.footnote_count += 1;
             if ctx.structured_notes {
-                ctx.footnote_markers.push(ctx.result.len());
+                if !ctx.text_suppressed {
+                    ctx.footnote_markers.push(ctx.result.len());
+                }
                 return true;
             }
             let marker = format!("[^{}]", *ctx.footnote_count);
