@@ -492,3 +492,29 @@ fn ctm_key_absorbs_float_noise_at_every_scale() {
     assert_ne!(key(0.0991), key(0.0992));
     assert_eq!(key(-1.0)[0], -key(1.0)[0]);
 }
+
+fn ctm_key(a: f32, b: f32, d: f32) -> [i64; 6] {
+    crate::extractors::TextExtractor::quantize_ctm(crate::content::Matrix {
+        a,
+        b,
+        c: 0.0,
+        d,
+        e: 0.0,
+        f: 0.0,
+    })
+}
+
+#[test]
+fn ctm_key_keeps_small_components_of_mixed_scale_matrices_apart() {
+    assert_ne!(
+        ctm_key(1.0e4, 0.0, 0.05),
+        ctm_key(1.0e4, 0.0, 0.06),
+        "the millipoint key told these placements apart"
+    );
+}
+
+#[test]
+fn ctm_key_folds_rotation_noise_into_zero() {
+    assert_eq!(ctm_key(0.01, 1.0e-9, 0.01), ctm_key(0.01, 0.0, 0.01));
+    assert_eq!(ctm_key(0.01, -1.0e-9, 0.01), ctm_key(0.01, 0.0, 0.01));
+}

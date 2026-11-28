@@ -68,7 +68,10 @@ impl<'doc> TextExtractor<'doc> {
     /// small-scale placements of one Form shared a key and the second was
     /// dropped as a duplicate or replayed the first one's cached spans. Either
     /// grid is at least as fine as the millipoint one wherever it applies, so no
-    /// two placements the millipoint key told apart share a key.
+    /// two placements the millipoint key told apart share a key. A component
+    /// below 1e-5 of the matrix magnitude is rotation noise and keys as zero,
+    /// but only when it also rounds to zero millipoints, which keeps that claim
+    /// for mixed-scale matrices such as `a = 1e4, d = 0.05`.
     /// Rounding (not truncating) keeps float noise around decimal values such
     /// as 0.99999... / 1.00001... in one bucket. ~keep
     pub(crate) fn quantize_ctm(ctm: Matrix) -> [i64; 6] {
@@ -79,8 +82,10 @@ impl<'doc> TextExtractor<'doc> {
             let millipoints = (value * 1000.0).round() as i64;
             if millipoints.abs() >= MILLIPOINT_FLOOR {
                 millipoints
+            } else if millipoints == 0 && value.abs() <= magnitude * 1e-5 {
+                0
             } else {
-                Self::significant_key(value, magnitude)
+                Self::significant_key(value)
             }
         };
         [
@@ -94,12 +99,11 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// Encode `value` as decimal exponent and five-digit mantissa, sign applied
-    /// to the whole key. Values below 1e-5 of the matrix magnitude are rotation
-    /// noise and encode as zero.
-    fn significant_key(value: f32, magnitude: f32) -> i64 {
+    /// to the whole key. Zero and non-finite values encode as zero.
+    fn significant_key(value: f32) -> i64 {
         const DIGITS: i32 = 5;
         const MANTISSA_CEILING: i64 = 100_000;
-        if !value.is_finite() || value.abs() <= magnitude * 1e-5 {
+        if !value.is_finite() || value == 0.0 {
             return 0;
         }
         let abs = f64::from(value.abs());
