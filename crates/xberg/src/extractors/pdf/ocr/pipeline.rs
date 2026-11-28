@@ -2391,7 +2391,9 @@ pub(super) fn direct_route_recognition_sessions(
 pub(super) fn pipeline_route_recognition_sessions(pipeline: &crate::core::config::OcrPipelineConfig) -> Option<usize> {
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     {
-        let registry = crate::plugins::registry::get_ocr_backend_registry().read();
+        crate::plugins::ensure_ocr_backends_initialized();
+        let handle = crate::plugins::registry::get_ocr_backend_registry();
+        let registry = handle.read();
         pipeline_stages_all_match(pipeline, |name| {
             registry
                 .get(name)
