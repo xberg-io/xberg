@@ -1262,7 +1262,7 @@ fn letter_count_of(font: &FontInfo, code: u32) -> usize {
 /// The codes a shown string holds, segmented as `decode_text_to_unicode` segments them, so the
 /// widths pushed per code stay aligned with the decoded letters. A UTF-8 CMap's 1-4 byte codes
 /// are not `TextCharIter`'s fixed grouping. ~keep
-fn shown_codes<'a>(text: &'a [u8], font: Option<&FontInfo>) -> ShownCodes<'a> {
+pub(super) fn shown_codes<'a>(text: &'a [u8], font: Option<&FontInfo>) -> ShownCodes<'a> {
     match font {
         Some(font) if crate::fonts::unicode_decode::font_has_utf8_cmap(font) => {
             ShownCodes::Utf8(crate::fonts::unicode_decode::char_codes_with_len(text, font).into_iter())
@@ -1271,7 +1271,7 @@ fn shown_codes<'a>(text: &'a [u8], font: Option<&FontInfo>) -> ShownCodes<'a> {
     }
 }
 
-enum ShownCodes<'a> {
+pub(super) enum ShownCodes<'a> {
     Fixed(TextCharIter<'a>),
     Utf8(std::vec::IntoIter<(u32, usize)>),
 }
