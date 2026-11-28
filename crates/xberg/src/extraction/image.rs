@@ -893,6 +893,71 @@ pub(crate) fn detect_tiff_frame_count(bytes: &[u8]) -> Result<usize> {
     Ok(count)
 }
 
+/// Byte offsets of every frame's image file directory, in frame order.
+#[cfg(feature = "ocr")]
+pub(crate) fn tiff_frame_ifd_offsets(bytes: &[u8]) -> Result<Vec<u64>> {
+    use tiff::decoder::Decoder;
+    let mut decoder =
+        Decoder::new(Cursor::new(bytes)).map_err(|e| XbergError::parsing(format!("TIFF decode: {}", e)))?;
+    let mut offsets = Vec::new();
+    loop {
+        if let Some(pointer) = decoder.ifd_pointer() {
+            offsets.push(pointer.0);
+        }
+        if !decoder.more_images() || decoder.next_image().is_err() {
+            break;
+        }
+    }
+    Ok(offsets)
+}
+
+/// A copy of a TIFF whose only frame is the one at `ifd_offset`: the header points at that
+/// directory and the directory's next-frame link is cleared. The strip and tile data stay where
+/// they are, so every colour type and compression the decoder reads is kept unchanged.
+///
+/// Returns `None` for a header or directory that does not parse.
+#[cfg(feature = "ocr")]
+pub(crate) fn single_frame_tiff(bytes: &[u8], ifd_offset: u64) -> Option<Vec<u8>> {
+    let big_endian = match bytes.get(..2)? {
+        b"II" => false,
+        b"MM" => true,
+        _ => return None,
+    };
+    let read = |at: usize, len: usize| -> Option<u64> {
+        let raw = bytes.get(at..at.checked_add(len)?)?;
+        let mut value = 0u64;
+        for index in 0..len {
+            let byte = if big_endian { raw[index] } else { raw[len - 1 - index] };
+            value = (value << 8) | u64::from(byte);
+        }
+        Some(value)
+    };
+    let write = |out: &mut [u8], at: usize, len: usize, value: u64| -> Option<()> {
+        let target = out.get_mut(at..at.checked_add(len)?)?;
+        for (index, slot) in target.iter_mut().enumerate() {
+            let shift = if big_endian { len - 1 - index } else { index } * 8;
+            *slot = (value >> shift) as u8;
+        }
+        Some(())
+    };
+    let ifd = usize::try_from(ifd_offset).ok()?;
+    let (header_pointer, pointer_width, next_pointer_at) = match read(2, 2)? {
+        42 => {
+            let entries = usize::try_from(read(ifd, 2)?).ok()?;
+            (4, 4, ifd.checked_add(2)?.checked_add(entries.checked_mul(12)?)?)
+        }
+        43 => {
+            let entries = usize::try_from(read(ifd, 8)?).ok()?;
+            (8, 8, ifd.checked_add(8)?.checked_add(entries.checked_mul(20)?)?)
+        }
+        _ => return None,
+    };
+    let mut patched = bytes.to_vec();
+    write(&mut patched, header_pointer, pointer_width, ifd_offset)?;
+    write(&mut patched, next_pointer_at, pointer_width, 0)?;
+    Some(patched)
+}
+
 /// Extract text from image bytes using OCR with optional page tracking for multi-frame TIFFs.
 ///
 /// This function:

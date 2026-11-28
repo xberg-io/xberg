@@ -2624,6 +2624,9 @@ mod image_photo_title;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_table_reread.rs"]
 mod image_table_reread;
+#[cfg(feature = "ocr")]
+#[path = "image_tiff_frames.rs"]
+mod image_tiff_frames;
 #[cfg(all(
     not(target_arch = "wasm32"),
     any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline")
@@ -3276,6 +3279,44 @@ impl ImageExtractor {
             std::borrow::Cow::Borrowed("extraction_method"),
             serde_json::Value::String(crate::types::ExtractionMethod::Ocr.as_str().to_string()),
         );
+    }
+
+    /// OCR an image; a TIFF with several frames is read frame by frame, one page per frame (#3447).
+    #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
+    async fn ocr_image(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
+        #[cfg(feature = "ocr")]
+        if let Some(offsets) = image_tiff_frames::multi_frame_offsets(content, mime_type) {
+            return self.ocr_tiff_frames(content, mime_type, config, &offsets).await;
+        }
+        Box::pin(self.ocr_one_image(content, mime_type, config)).await
+    }
+
+    #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+    async fn ocr_one_image(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+    ) -> Result<InternalDocument> {
+        extract_selected_image_ocr_path(
+            should_use_layout_ocr(config),
+            || self.extract_with_layout_ocr(content, mime_type, config),
+            || self.extract_with_ocr(content, mime_type, config),
+        )
+        .await
+    }
+
+    #[cfg(all(
+        any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"),
+        not(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))
+    ))]
+    async fn ocr_one_image(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+    ) -> Result<InternalDocument> {
+        self.extract_with_ocr(content, mime_type, config).await
     }
 
     /// Extract text from image using OCR with optional page tracking for multi-frame TIFFs.
@@ -4675,6 +4716,10 @@ impl InternalDocumentExtractor for ImageExtractor {
                 ..Default::default()
             };
             doc.mime_type = mime_type.to_string();
+            #[cfg(feature = "ocr")]
+            if let Some(offsets) = image_tiff_frames::multi_frame_offsets(content, mime_type) {
+                doc.metadata.pages = Some(image_tiff_frames::page_count_metadata(offsets.len()));
+            }
             if let Some(warning) = exif_warning.clone() {
                 doc.processing_warnings.push(warning);
             }
@@ -4688,13 +4733,7 @@ impl InternalDocumentExtractor for ImageExtractor {
         {
             #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
             {
-                let use_layout = should_use_layout_ocr(config);
-                let mut doc = extract_selected_image_ocr_path(
-                    use_layout,
-                    || self.extract_with_layout_ocr(content, mime_type, config),
-                    || self.extract_with_ocr(content, mime_type, config),
-                )
-                .await?;
+                let mut doc = Box::pin(self.ocr_image(content, mime_type, config)).await?;
                 if let Some(ocr_config) = config.ocr.as_ref() {
                     apply_public_image_ocr_element_policy(&mut doc, ocr_config);
                 }
@@ -4715,7 +4754,7 @@ impl InternalDocumentExtractor for ImageExtractor {
                 not(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))
             ))]
             {
-                let mut doc = self.extract_with_ocr(content, mime_type, config).await?;
+                let mut doc = Box::pin(self.ocr_image(content, mime_type, config)).await?;
                 if let Some(ocr_config) = config.ocr.as_ref() {
                     apply_public_image_ocr_element_policy(&mut doc, ocr_config);
                 }
