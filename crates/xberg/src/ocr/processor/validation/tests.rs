@@ -1065,3 +1065,34 @@ fn test_a_wrong_best_pack_in_a_read_only_cache_is_used_as_given() {
     assert_eq!(resolved.unwrap(), managed.to_str().unwrap());
     assert_eq!(std::fs::read(managed.join("eng.traineddata")).unwrap(), b"fast");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_stamp_is_settled_only_once_both_its_times_are_outside_the_racy_window() {
+    use std::time::{Duration, SystemTime};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("eng.traineddata");
+    std::fs::write(&path, b"model").unwrap();
+    let stamp = |path: &Path| FileStamp::of(&std::fs::metadata(path).unwrap()).unwrap();
+    let now = SystemTime::now();
+    let hour = Duration::from_secs(3600);
+
+    assert!(!stamp(&path).settled_at(now), "a file written just now is racy");
+    assert!(stamp(&path).settled_at(now + hour), "an hour later it is settled");
+    assert!(
+        !stamp(&path).settled_at(now - hour),
+        "a stamp from after the read is never settled"
+    );
+
+    // ~keep Backdating the modification time (`cp -p`, an extracted archive) leaves the
+    // status-change time at now, and a write within its tick would still keep the whole stamp.
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(now - hour)
+        .unwrap();
+    assert!(!stamp(&path).settled_at(SystemTime::now()));
+    assert!(stamp(&path).settled_at(SystemTime::now() + hour));
+}

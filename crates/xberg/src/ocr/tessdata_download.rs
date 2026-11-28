@@ -368,7 +368,8 @@ pub(crate) fn memo_only_run_missed() -> bool {
 
 /// The SHA-256 of the regular file at `path`: on Unix read once per (path, [`FileStamp`]) in this
 /// process, elsewhere read on every call, since a stamp there is only the size and modification
-/// time, which a replacement (`cp -p`, robocopy, an extracted archive) can keep.
+/// time, which a replacement (`cp -p`, robocopy, an extracted archive) can keep. A file read too
+/// soon after it was written is read again next time ([`FileStamp::settled_at`]).
 ///
 /// The stamp is taken from the opened file, not from an earlier `stat` of the path, so a file
 /// replaced between the two is never remembered under the stamp of the one it replaced.
@@ -411,10 +412,12 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
     }
     let digest = hex::encode(hasher.finalize());
     #[cfg(unix)]
-    DIGESTS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(path.to_path_buf(), (state, digest.clone()));
+    if state.settled_at(std::time::SystemTime::now()) {
+        DIGESTS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(path.to_path_buf(), (state, digest.clone()));
+    }
     Some(digest)
 }
 
@@ -1052,6 +1055,8 @@ mod tests {
         let pins = PinTables { fast: &fast, best: &[] };
         let pack = directory.path().join("eng.traineddata");
         std::fs::write(&pack, b"fast english").unwrap();
+        #[cfg(unix)]
+        crate::ocr::processor::validation::wait_until_settled(&pack);
         assert_eq!(pins.classify("eng", &pack), VerifiedSet::Fast);
 
         let modified = std::fs::metadata(&pack).unwrap().modified().unwrap();
@@ -1106,6 +1111,31 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_digest_read_right_after_the_file_was_written_is_not_remembered() {
+        use super::without_reading_packs;
+
+        let directory = tempfile::tempdir().unwrap();
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+        let digest = Some(hex::encode(Sha256::digest(b"fast english")));
+
+        assert_eq!(super::memoized_sha256(&pack, 64), digest);
+        assert_eq!(
+            without_reading_packs(|| super::memoized_sha256(&pack, 64)),
+            None,
+            "a write in the same timestamp tick would keep the stamp, so the digest is read again"
+        );
+        crate::ocr::processor::validation::wait_until_settled(&pack);
+        assert_eq!(super::memoized_sha256(&pack, 64), digest);
+        assert_eq!(
+            without_reading_packs(|| super::memoized_sha256(&pack, 64)),
+            Some(digest),
+            "a settled file is remembered"
+        );
+    }
+
     #[test]
     fn a_memo_only_pass_never_reads_a_pack_and_reports_a_miss() {
         use super::{PinTables, VerifiedSet, without_reading_packs};
@@ -1118,6 +1148,8 @@ mod tests {
         std::fs::write(&pack, b"fast english").unwrap();
 
         assert_eq!(without_reading_packs(|| pins.classify("eng", &pack)), None, "cold memo");
+        #[cfg(unix)]
+        crate::ocr::processor::validation::wait_until_settled(&pack);
         assert_eq!(
             without_reading_packs(|| pins.classify("custom", &pack)),
             Some(VerifiedSet::Unknown),

@@ -269,6 +269,33 @@ pub(crate) fn canonical_tessdata_dir(directory: &str) -> PathBuf {
     })
 }
 
+/// How close to a file's last modification or status change a read may be and still be
+/// remembered ([`FileStamp::settled_at`]). Covers the coarsest timestamps a tessdata directory is
+/// likely to sit on: one second on HFS+ and many network file systems, two on FAT.
+#[cfg(unix)]
+const RACY_WINDOW: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Wait until the file at `path` is old enough for its digest to be remembered
+/// ([`FileStamp::settled_at`]). A status-change time cannot be set back, so a test that needs a
+/// file it just wrote answered from a memo waits out [`RACY_WINDOW`].
+#[cfg(all(test, unix))]
+pub(crate) fn wait_until_settled(path: &Path) {
+    let deadline = std::time::Instant::now() + RACY_WINDOW * 5;
+    while !std::fs::metadata(path)
+        .ok()
+        .as_ref()
+        .and_then(FileStamp::of)
+        .is_some_and(|stamp| stamp.settled_at(std::time::SystemTime::now()))
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{} did not settle; is its timestamp in the future?",
+            path.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 /// What tells one version of a file from another without reading it: its size and modification
 /// time and, on Unix, its device, inode and status-change time, which replacing the file changes
 /// even when the size and modification time are kept.
@@ -297,6 +324,22 @@ impl FileStamp {
             #[cfg(unix)]
             changed: (metadata.ctime(), metadata.ctime_nsec()),
         })
+    }
+
+    /// Whether bytes read from this version by `read_at` may be remembered under this stamp:
+    /// false while its modification or status-change time is less than [`RACY_WINDOW`] before
+    /// `read_at`, or after it. A write landing in the same timestamp tick as the one stamped keeps
+    /// every field, so a digest taken that close to it could be served for other bytes until the
+    /// file changes again; such a file is read again next time instead (git's racy-clean rule).
+    #[cfg(unix)]
+    pub(crate) fn settled_at(&self, read_at: std::time::SystemTime) -> bool {
+        let settled = |time: std::time::SystemTime| read_at.duration_since(time).is_ok_and(|age| age >= RACY_WINDOW);
+        let changed = match (u64::try_from(self.changed.0), u32::try_from(self.changed.1)) {
+            (Ok(seconds), Ok(nanos)) => std::time::UNIX_EPOCH.checked_add(std::time::Duration::new(seconds, nanos)),
+            (Err(_), _) => Some(std::time::UNIX_EPOCH),
+            (Ok(_), Err(_)) => None,
+        };
+        settled(self.modified) && changed.is_some_and(settled)
     }
 
     #[cfg(target_arch = "wasm32")]

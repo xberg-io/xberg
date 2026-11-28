@@ -1132,6 +1132,7 @@ mod tests {
 
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("eng.traineddata"), b"model fixture").unwrap();
+        crate::ocr::processor::validation::wait_until_settled(&root.path().join("eng.traineddata"));
         let dependencies = [CacheDependency {
             tessdata: vec![ModelSelection {
                 languages: vec!["eng".into()],
@@ -1181,6 +1182,9 @@ mod tests {
         let models = tempfile::tempdir().unwrap();
         std::fs::write(models.path().join("eng.traineddata"), b"english model fixture").unwrap();
         std::fs::write(models.path().join("jpn_vert.traineddata"), b"vertical model fixture").unwrap();
+        for model in ["eng", "jpn_vert"] {
+            crate::ocr::processor::validation::wait_until_settled(&models.path().join(format!("{model}.traineddata")));
+        }
         let mut dependency = CacheDependency::for_config(&ExtractionConfig::default(), Some("application/pdf"));
         assert!(
             dependency.model.is_none() && dependency.script_retry.is_some() && !dependency.tessdata.is_empty(),

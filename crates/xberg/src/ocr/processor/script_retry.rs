@@ -338,9 +338,10 @@ fn read_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
 }
 
 /// [`read_vertical_revision`], read through one opened handle and, on Unix, once per (path,
-/// [`FileStamp`](super::validation::FileStamp) of that handle) in this process. Off Unix a stamp
-/// is only the size and modification time, which a replacement can keep, so the model is read on
-/// every call there.
+/// [`FileStamp`](super::validation::FileStamp) of that handle) in this process, once it is old
+/// enough to be remembered ([`FileStamp::settled_at`](super::validation::FileStamp::settled_at)).
+/// Off Unix a stamp is only the size and modification time, which a replacement can keep, so the
+/// model is read on every call there.
 ///
 /// The outer cache key asks for it on every request whose OCR may retry vertical Japanese; the
 /// memo lets that key be computed on the async thread
@@ -368,10 +369,12 @@ fn memoized_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError
     }
     let digest = crate::cache::blake3_hash_opened(&path, &file).map_err(failed)?;
     let revision = blake3::hash(digest.as_bytes());
-    // ~keep A file that changed while it was read is not remembered under either stamp.
+    // ~keep A file that changed while it was read is not remembered under either stamp, nor one
+    // read so soon after it was written that a later write could keep the stamp.
     #[cfg(unix)]
     if let Some(before) = before
         && vertical_memo::stamp(&file) == Some(before)
+        && before.settled_at(std::time::SystemTime::now())
     {
         vertical_memo::insert(path, before, revision);
     }
@@ -651,6 +654,32 @@ fn the_memoized_vertical_revision_is_the_one_read_from_the_path() {
     assert_eq!(memoized_vertical_revision(root.path()).unwrap(), expected);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_vertical_model_read_right_after_it_was_written_is_not_remembered() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let model = root.path().join("jpn_vert.traineddata");
+    std::fs::write(&model, b"vertical model").unwrap();
+    let expected = read_vertical_revision(root.path()).unwrap();
+    let memoized = || memoized_vertical_revision(root.path()).ok();
+
+    assert_eq!(memoized(), Some(expected));
+    assert_eq!(
+        without_reading_packs(memoized),
+        None,
+        "a write in the same timestamp tick would keep the stamp, so the model is read again"
+    );
+    super::validation::wait_until_settled(&model);
+    assert_eq!(memoized(), Some(expected));
+    assert_eq!(
+        without_reading_packs(memoized),
+        Some(Some(expected)),
+        "a settled model is remembered"
+    );
+}
+
 #[cfg(all(not(unix), not(target_arch = "wasm32")))]
 #[test]
 fn outer_vertical_model_identity_is_never_answered_from_a_stamp_off_unix() {
@@ -676,6 +705,7 @@ fn outer_vertical_model_identity_is_answered_without_reading_until_the_model_cha
     std::fs::write(&model, b"model one").unwrap();
     let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).ok().flatten();
 
+    super::validation::wait_until_settled(&model);
     let first = fingerprint();
     assert!(first.is_some());
     assert_eq!(
@@ -690,6 +720,7 @@ fn outer_vertical_model_identity_is_answered_without_reading_until_the_model_cha
         None,
         "a changed model must be read again, which the async thread may not do"
     );
+    super::validation::wait_until_settled(&model);
     let second = fingerprint();
     assert_ne!(second, first);
     assert_eq!(without_reading_packs(fingerprint), Some(second));
