@@ -587,12 +587,7 @@ impl InternalDocumentExtractor for OdpExtractor {
         };
 
         if let Some(ref filter) = config.content_filter {
-            use crate::types::document_structure::ContentLayer;
-            doc.elements.retain(|elem| match elem.layer {
-                ContentLayer::Header => filter.include_headers,
-                ContentLayer::Footer => filter.include_footers,
-                _ => true,
-            });
+            doc.apply_furniture_filter(filter);
         }
 
         tracing::debug!(

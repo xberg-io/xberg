@@ -136,11 +136,11 @@ impl InternalDocumentExtractor for DocExtractor {
         // As in the DOCX extractor, the content filter decides here whether
         // header and footer text is kept.
         if let Some(filter) = &config.content_filter {
-            doc.elements.retain(|element| match element.layer {
-                ContentLayer::Header => filter.include_headers,
-                ContentLayer::Footer => filter.include_footers,
-                ContentLayer::Footnote if element.kind == ElementKind::FootnoteDefinition => filter.include_footnotes,
-                _ => true,
+            doc.apply_furniture_filter(filter);
+            doc.elements.retain(|element| {
+                !(element.layer == ContentLayer::Footnote
+                    && element.kind == ElementKind::FootnoteDefinition
+                    && !filter.include_footnotes)
             });
         }
 
@@ -919,6 +919,75 @@ mod tests {
                     ambiguous_text_present, expected,
                     "ambiguous header/footer text with include_headers={include_headers} and include_footers={include_footers}"
                 );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            for (include, expected) in [(true, true), (false, false)] {
+                let config = ExtractionConfig {
+                    content_filter: Some(ContentFilterConfig {
+                        include_headers: include,
+                        include_footers: include,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
+                let doc = extract_synthetic_with_config(PlcKind::Valid, PlcKind::Valid, config).await;
+                let content = crate::extraction::derive::derive_extraction_result(doc, false, format.clone()).content;
+                assert!(content.contains("Body paragraph"), "{format:?}: {content}");
+                for needle in ["Odd page header", "Odd page footer"] {
+                    assert_eq!(
+                        content.contains(needle),
+                        expected,
+                        "{format:?} include={include}: {content}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn header_and_footer_text_stays_out_of_default_output() {
+        let doc = extract_synthetic(PlcKind::Valid, PlcKind::Valid).await;
+        let content = crate::extraction::derive::derive_extraction_result(
+            doc,
+            false,
+            crate::core::config::OutputFormat::Markdown,
+        )
+        .content;
+        assert!(
+            !content.contains("Odd page header") && !content.contains("Odd page footer"),
+            "{content}"
+        );
+    }
+
+    #[tokio::test]
+    async fn header_only_and_footer_only_filters_render_only_their_own_layer() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        for (include_headers, include_footers) in [(true, false), (false, true)] {
+            let config = ExtractionConfig {
+                content_filter: Some(ContentFilterConfig {
+                    include_headers,
+                    include_footers,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let doc = extract_synthetic_with_config(PlcKind::Valid, PlcKind::Valid, config).await;
+            assert_eq!(on_layer(&doc, ContentLayer::Header, "Odd page header"), include_headers);
+            assert_eq!(on_layer(&doc, ContentLayer::Footer, "Odd page footer"), include_footers);
+            let content = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Plain).content;
+            let body = content.find("Body paragraph").expect("body text");
+            assert_eq!(content.contains("Odd page header"), include_headers, "{content}");
+            assert_eq!(content.contains("Odd page footer"), include_footers, "{content}");
+            for needle in ["Odd page header", "Odd page footer"] {
+                if let Some(at) = content.find(needle) {
+                    assert!(at > body, "{needle} precedes the body: {content}");
+                }
             }
         }
     }

@@ -463,6 +463,48 @@ impl From<InternalDocument> for crate::types::extraction::ExtractedDocument {
 }
 
 impl InternalDocument {
+    /// Apply the content filter to header and footer elements: drop the layers it excludes and opt the
+    /// retained ones into body rendering, which otherwise skips furniture layers.
+    pub(crate) fn apply_furniture_filter(&mut self, filter: &crate::core::config::ContentFilterConfig) {
+        let mut dropped_tables = Vec::new();
+        self.elements.retain_mut(|element| {
+            let keep = match element.layer {
+                ContentLayer::Header => filter.include_headers,
+                ContentLayer::Footer => filter.include_footers,
+                _ => return true,
+            };
+            if !keep && let ElementKind::Table { table_index } = element.kind {
+                dropped_tables.push(table_index);
+            }
+            if keep {
+                element
+                    .attributes
+                    .get_or_insert_with(AHashMap::new)
+                    .insert(RETAINED_FURNITURE_RENDER_ATTRIBUTE.to_owned(), "true".to_owned());
+            }
+            keep
+        });
+        self.drop_orphaned_tables(&dropped_tables);
+    }
+
+    /// Remove the tables whose elements were dropped, renumbering the `Table` elements that remain.
+    fn drop_orphaned_tables(&mut self, dropped: &[u32]) {
+        if dropped.is_empty() {
+            return;
+        }
+        let mut index = 0u32;
+        self.tables.retain(|_| {
+            let keep = !dropped.contains(&index);
+            index += 1;
+            keep
+        });
+        for element in &mut self.elements {
+            if let ElementKind::Table { table_index } = &mut element.kind {
+                *table_index -= dropped.iter().filter(|d| **d < *table_index).count() as u32;
+            }
+        }
+    }
+
     /// Create a new empty document with the given source format.
     pub fn new(source_format: impl Into<String>) -> Self {
         Self {

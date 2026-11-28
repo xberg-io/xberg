@@ -4429,8 +4429,10 @@ class ContentFilterConfig {
   ///
   /// - PDF: Disables top-margin furniture stripping and prevents the layout
   ///   model from treating `PageHeader`-classified regions as furniture.
-  /// - DOC/DOCX: Includes document headers in text output.
-  /// - RTF/ODT: Headers already included; this is a no-op when true.
+  /// - DOC/DOCX/ODT: Appends header text after the body, in markdown and plain
+  ///   output, on the `Header` content layer. DOCX emits each distinct header
+  ///   variant (first-page, even, odd) once, not once per page.
+  /// - RTF/ODP: No effect; header text is not emitted.
   /// - HTML/EPUB: Keeps `<header>` element content.
   ///
   /// Default: `false` (headers are stripped or excluded).
@@ -4440,8 +4442,10 @@ class ContentFilterConfig {
   ///
   /// - PDF: Disables bottom-margin furniture stripping and prevents the layout
   ///   model from treating `PageFooter`-classified regions as furniture.
-  /// - DOC/DOCX: Includes document footers in text output.
-  /// - RTF/ODT: Footers already included; this is a no-op when true.
+  /// - DOC/DOCX/ODT: Appends footer text after the body, in markdown and plain
+  ///   output, on the `Footer` content layer. DOCX emits each distinct footer
+  ///   variant (first-page, even, odd) once, not once per page.
+  /// - RTF/ODP: No effect; footer text is not emitted.
   /// - HTML/EPUB: Keeps `<footer>` element content.
   ///
   /// Default: `false` (footers are stripped or excluded).

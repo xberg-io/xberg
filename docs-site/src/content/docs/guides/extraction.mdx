@@ -616,6 +616,10 @@ let output = extract(ExtractInput::from_uri("contract.pdf"), &config).await?;
 </TabItem>
 </Tabs>
 
+For DOCX, DOC, and ODT, enabled headers and footers are appended after the body
+text, not placed per page. DOCX emits each distinct header or footer variant
+(first-page, even, odd) once, dropping verbatim duplicates.
+
 When a layout-detection model is active, it can independently classify regions
 as page headers or footers and strip them per page. Setting
 `include_headers=True` / `include_footers=True` also disables that per-page
