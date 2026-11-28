@@ -52,7 +52,7 @@ platforms). The Rust crate texts are collected from the same graphs `cargo deny`
 | WordPerfect parser (built from the vendored source archive) (`libwpd`) | MPL-2.0 | 0.10.3 — built from the vendored source archive | `T-fab3dd6bdab2` |
 | Noto Emoji (embedded emoji form font) (`noto-emoji`) | OFL-1.1 | embedded asset `crates/xberg-native-pdf/src/fonts/assets/NotoEmoji-Regular.ttf` at sha256 `415dc62903785741` | `T-5adcc08a7714`, `T-8eea8287e587` |
 | ONNX Runtime inference engine (`onnxruntime`) | MIT | 1.23.2 — [pinned source](https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.23.2/microsoft.ml.onnxruntime.1.23.2.nupkg) |  |
-| ONNX Runtime inference engine (`onnxruntime`) | MIT | 1.24.2 — [pinned source](https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg) |  |
+| ONNX Runtime inference engine (`onnxruntime`) | MIT | 1.32.0 — [pinned source](https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.32.0/microsoft.ml.onnxruntime.1.32.0.nupkg) |  |
 | ONNX Runtime inference engine (`onnxruntime`) | MIT | Alpine 3.24.3 package `onnxruntime` |  |
 | PDF rendering engine (`pdfium`) | BSD-3-Clause | 7678 — [pinned source](https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7678/pdfium-linux-arm64.tgz) | `T-1fe9dea718fb` |
 | OCR engine (`tesseract`) | Apache-2.0 | 5.5.4 — [pinned source](https://codeload.github.com/tesseract-ocr/tesseract/zip/7e548e6eff172f38f97664afe7f7ce40db36c8d6) | `T-cfc7749b96f6` |
@@ -226,7 +226,8 @@ upstream tarballs untouched.
   `auto-rotate`, transcription). License: MIT. Linked dynamically (system
   `libonnxruntime.so`) in the musl/container builds; bundled per the `ort-bundled` feature
   (official Microsoft binaries) otherwise.
-- **Redistribution:** the official release archives at 1.23.2 and 1.24.2 are pinned by
+- **Redistribution:** Microsoft's official NuGet packages at 1.23.2 and 1.32.0, and the
+  official PyPI wheels the build falls back to, are pinned by
   SHA-256 in `scripts/ci/actions/setup-onnx-runtime/checksums.sha256`; the Alpine 3.24.3
   CLI image installs its distribution package instead. The upstream MIT text is reproduced below.
 
