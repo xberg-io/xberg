@@ -2107,11 +2107,11 @@ impl XYCutStrategy {
     /// column or no row above the columns crosses the gutter.
     ///
     /// A column row holds at most one line of real ink on each side (a raised dagger or footnote
-    /// mark is no line); a row of author or affiliation cells holds several on one side, so it
-    /// never starts a column. Each side needs `MIN_COLUMN_ROWS` column rows, each inking
+    /// mark is no line); a row of author or affiliation cells holds several on one side. The
+    /// body starts at the first column row. Each side needs `MIN_COLUMN_ROWS` column rows, each inking
     /// `COLUMN_ROW_MIN_INK_FRACTION` of that side's width, over comparable heights: a form's few
-    /// label rows beside a lone caption are not columns. The header is every row above the
-    /// first column row, provided one of them crosses the gutter.
+    /// label rows beside a lone caption are not columns. The header is every row above the body
+    /// down to the last that is not a pair of column headings, provided one crosses the gutter.
     fn header_band_spans(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> Vec<usize> {
         struct Row {
             lines: Vec<usize>,
@@ -2158,35 +2158,59 @@ impl XYCutStrategy {
             .fold(f32::MIN, f32::max);
         let side_width = [split_x - left_edge, right_edge - split_x];
 
-        let mut column_rows: [Vec<(f32, f32)>; 2] = [Vec::new(), Vec::new()];
-        let mut first_column_row = None;
-        let mut crosses_above_columns = false;
-        for (row_index, row) in rows.iter().enumerate() {
-            let mut line_count = [0usize; 2];
-            let mut ink = [0.0f32; 2];
-            let mut crosses = false;
-            for &line_index in &row.lines {
-                let line = &lines[line_index];
-                let (left_ink, right_ink) = line_ink(all_spans, line, split_x);
-                if left_ink >= MIN_STRADDLING_INK_PTS && right_ink >= MIN_STRADDLING_INK_PTS {
-                    crosses = true;
-                    continue;
-                }
-                let font = line.iter().map(|&i| all_spans[i].font_size).fold(0.0f32, f32::max);
-                let side = usize::from(right_ink > left_ink);
-                if left_ink.max(right_ink) >= font * MARK_MAX_INK_EM {
-                    line_count[side] += 1;
-                    ink[side] += left_ink.max(right_ink);
-                }
-            }
-            if crosses {
-                crosses_above_columns |= first_column_row.is_none();
-            } else if line_count.iter().all(|&count| count <= 1) {
-                for side in 0..2 {
-                    if line_count[side] == 1 && ink[side] >= COLUMN_ROW_MIN_INK_FRACTION * side_width[side] {
-                        column_rows[side].push((row.top, row.bottom));
-                        first_column_row.get_or_insert(row_index);
+        // `column[side]`: the row is one line of body ink on that side; `paired`: one line on each
+        // side, a pair of column headings or two author cells.
+        struct Shape {
+            crosses: bool,
+            paired: bool,
+            column: [bool; 2],
+        }
+        let shapes: Vec<Shape> = rows
+            .iter()
+            .map(|row| {
+                let mut line_count = [0usize; 2];
+                let mut ink = [0.0f32; 2];
+                let mut crosses = false;
+                for &line_index in &row.lines {
+                    let line = &lines[line_index];
+                    let (left_ink, right_ink) = line_ink(all_spans, line, split_x);
+                    if left_ink >= MIN_STRADDLING_INK_PTS && right_ink >= MIN_STRADDLING_INK_PTS {
+                        crosses = true;
+                        continue;
                     }
+                    let font = line.iter().map(|&i| all_spans[i].font_size).fold(0.0f32, f32::max);
+                    let side = usize::from(right_ink > left_ink);
+                    if left_ink.max(right_ink) >= font * MARK_MAX_INK_EM {
+                        line_count[side] += 1;
+                        ink[side] += left_ink.max(right_ink);
+                    }
+                }
+                let single_lines = !crosses && line_count.iter().all(|&count| count <= 1);
+                Shape {
+                    crosses,
+                    paired: !crosses && line_count == [1, 1],
+                    column: [0, 1].map(|side| {
+                        single_lines
+                            && line_count[side] == 1
+                            && ink[side] >= COLUMN_ROW_MIN_INK_FRACTION * side_width[side]
+                    }),
+                }
+            })
+            .collect();
+
+        // The body starts at the first column row. A row with a cell on each side directly above
+        // a line crossing the gutter -- two author names over a shared affiliation -- is header
+        // text, not a column row.
+        let Some(body_start) = (0..shapes.len()).find(|&index| {
+            shapes[index].column.iter().any(|&on| on) && !shapes.get(index + 1).is_some_and(|next| next.crosses)
+        }) else {
+            return Vec::new();
+        };
+        let mut column_rows: [Vec<(f32, f32)>; 2] = [Vec::new(), Vec::new()];
+        for (shape, row) in shapes[body_start..].iter().zip(&rows[body_start..]) {
+            for side in 0..2 {
+                if shape.column[side] {
+                    column_rows[side].push((row.top, row.bottom));
                 }
             }
         }
@@ -2202,10 +2226,16 @@ impl XYCutStrategy {
         if left_extent.min(right_extent) < COLUMN_EXTENT_RATIO * left_extent.max(right_extent) {
             return Vec::new();
         }
-        let Some(first_column_row) = first_column_row.filter(|_| crosses_above_columns) else {
+        // A pair of column headings sits just above the body and belongs to its own columns,
+        // so the header ends at the last row that is not such a pair.
+        let header_end = (0..body_start)
+            .rev()
+            .find(|&row_index| !shapes[row_index].paired)
+            .map_or(0, |row_index| row_index + 1);
+        if !shapes[..header_end].iter().any(|shape| shape.crosses) {
             return Vec::new();
-        };
-        rows[..first_column_row]
+        }
+        rows[..header_end]
             .iter()
             .flat_map(|row| {
                 row.lines
@@ -3642,8 +3672,8 @@ mod tests {
         assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
     }
 
-    /// Prose crossing the gutter below the point where one column has started is not a header:
-    /// reading it before the upper right-column lines would reorder the page.
+    /// Crossing lines below an existing column start are not a header: reading them before the
+    /// upper right-column lines would reorder the page, so the cut stays refused.
     #[test]
     fn column_split_declines_crossing_lines_below_an_existing_column_start_gh3446() {
         let strategy = XYCutStrategy::new();
@@ -3662,6 +3692,68 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         assert!(strategy.find_column_cut(&spans, &indices, None).is_none());
+    }
+
+    /// Crossing prose between established body columns still refuses the cut (GH#2110).
+    #[test]
+    fn column_split_declines_crossing_lines_inside_the_body_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![make_span_text(150.0, 700.0, 300.0, 16.0, &text_of(30, 'T'), 14.0)];
+        spans.push(make_span_text(150.0, 680.0, 300.0, 16.0, &text_of(30, 'T'), 14.0));
+        for row in 0..8 {
+            let y = 640.0 - 11.0 * row as f32;
+            if row == 4 || row == 5 {
+                spans.push(make_span_text(60.0, y, 480.0, 8.4, &text_of(100, 'p'), 8.5));
+                continue;
+            }
+            spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
+            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        assert!(strategy.find_column_cut(&spans, &indices, None).is_none());
+    }
+
+    /// One author cell per side above a crossing affiliation line is a header, not the body.
+    #[test]
+    fn column_split_reads_two_authors_and_their_affiliation_before_the_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(70.0, 700.0, 460.0, 16.0, &text_of(60, 'T'), 14.0),
+            make_span_text(120.0, 680.0, 360.0, 16.0, &text_of(46, 'T'), 14.0),
+            make_span_text(80.0, 660.0, 100.0, 12.0, &text_of(14, 'a'), 11.0),
+            make_span_text(432.0, 660.0, 100.0, 12.0, &text_of(14, 'a'), 11.0),
+            make_span_text(150.0, 645.0, 300.0, 10.0, &text_of(70, 'f'), 9.0),
+        ];
+        let (left, right) = push_columns(&mut spans, 620.0, 8, 11.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
+            .expect("the affiliation line belongs to the header");
+        assert_eq!((cut.header, cut.left, cut.right), (vec![0, 1, 2, 3, 4], left, right));
+    }
+
+    /// Short headings, one per column, stay ahead of their own column rather than joining the
+    /// page header.
+    #[test]
+    fn column_split_keeps_short_column_headings_with_their_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(70.0, 700.0, 460.0, 16.0, &text_of(60, 'T'), 14.0),
+            make_span_text(120.0, 680.0, 360.0, 16.0, &text_of(46, 'T'), 14.0),
+            make_span_text(54.0, 655.0, 50.0, 10.0, &text_of(8, 'A'), 9.0),
+            make_span_text(322.0, 655.0, 50.0, 10.0, &text_of(8, 'B'), 9.0),
+        ];
+        let (left, right) = push_columns(&mut spans, 635.0, 8, 11.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
+            .expect("the columns start below the title");
+        let left: Vec<usize> = std::iter::once(2).chain(left).collect();
+        let right: Vec<usize> = std::iter::once(3).chain(right).collect();
+        assert_eq!((cut.header, cut.left, cut.right), (vec![0, 1], left, right));
     }
 
     #[test]
