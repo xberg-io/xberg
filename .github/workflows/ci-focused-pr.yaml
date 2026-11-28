@@ -9,10 +9,6 @@ on:
       - ".github/workflows/ci-rust.yaml"
       - ".github/actions/setup-onnx-runtime/**"
       - "scripts/ci/actions/setup-onnx-runtime/**"
-      - ".github/actions/install-system-deps/**"
-      - "scripts/ci/install-system-deps/**"
-      - ".github/actions/setup-tesseract-cache/**"
-      - "scripts/ci/actions/setup-tesseract-cache/**"
       - "crates/**"
       - "packages/**"
       - "fixtures/**"
@@ -49,10 +45,6 @@ on:
       - ".github/workflows/ci-rust.yaml"
       - ".github/actions/setup-onnx-runtime/**"
       - "scripts/ci/actions/setup-onnx-runtime/**"
-      - ".github/actions/install-system-deps/**"
-      - "scripts/ci/install-system-deps/**"
-      - ".github/actions/setup-tesseract-cache/**"
-      - "scripts/ci/actions/setup-tesseract-cache/**"
       - "crates/**"
       - "packages/**"
       - "fixtures/**"
@@ -262,31 +254,6 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           verify-linux-archive: "true"
-
-      # ~keep The snapshots hold only for the `full` feature set, which needs the same free disk,
-      # system libraries and ONNX Runtime as the `rust` job of ci-rust.yaml.
-      - name: Free disk space
-        if: matrix.suite == 'pdf-regression-pages'
-        uses: xberg-io/actions/free-disk-space-linux@v1
-        with:
-          show-initial: "false"
-          show-final: "true"
-
-      - name: Install system dependencies for regression page snapshots
-        if: matrix.suite == 'pdf-regression-pages'
-        uses: ./.github/actions/install-system-deps
-
-      - name: Setup ONNX Runtime for regression page snapshots
-        if: matrix.suite == 'pdf-regression-pages'
-        uses: ./.github/actions/setup-onnx-runtime
-        with:
-          verify-linux-archive: "true"
-
-      - name: Setup Tesseract cache for regression page snapshots
-        if: matrix.suite == 'pdf-regression-pages'
-        uses: ./.github/actions/setup-tesseract-cache
-        with:
-          label: ubuntu-latest
 
       - name: Install OCR build dependencies and pinned English data
         if: matrix.suite == 'pdf-ocr'

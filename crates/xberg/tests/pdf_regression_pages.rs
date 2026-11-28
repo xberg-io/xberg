@@ -9,7 +9,7 @@
 //! snapshot set that differs from the list fails the test. Each
 //! page's expected output is committed as `tests/fixtures/pdf/regression_pages/<stem>.md`.
 //! Regenerate the snapshots only for an intentional change, then review the diff:
-//! `XBERG_PDF_PAGES_GOLDEN_WRITE=1 cargo test -p xberg --features full,formula-recognition,bundle-tessdata-eng --test pdf_regression_pages`.
+//! `XBERG_PDF_PAGES_GOLDEN_WRITE=1 cargo test -p xberg --features pdf --test pdf_regression_pages`.
 //! Write mode covers exactly the listed pages and refuses a missing or unlisted PDF. To add a page,
 //! put its PDF in `test_documents/pdf/regression_pages/` and publish it to the corpus, add its name
 //! to the list (any 64-hex hash) and run write mode; to remove one, delete its name and the file
@@ -21,12 +21,12 @@
 
 #![allow(clippy::print_stderr)]
 // ~keep: test/bench binaries print by design; org logging policy exempts tests
-// Some features change native Markdown output, so the snapshots are written under this feature
-// list, which the focused `pdf-regression-pages` suite runs on pull requests from this repository
-// and on pushes to main (scripts/ci/rust/run-focused-pr-tests.sh); CI Rust's x86_64 Linux and
-// macOS legs also run them with `classification-onnx` added (scripts/ci/rust/run-unit-tests.sh).
-// `full` implies `pdf`.
-#![cfg(all(feature = "full", feature = "formula-recognition", feature = "bundle-tessdata-eng"))]
+// The snapshots are written under `pdf` with the default features on, the set the focused
+// `pdf-regression-pages` suite builds (scripts/ci/rust/run-focused-pr-tests.sh). CI Rust's x86_64
+// Linux and macOS legs run them under `full` with `formula-recognition`, `classification-onnx` and
+// `bundle-tessdata-eng` (scripts/ci/rust/run-unit-tests.sh), so a feature that changes native
+// Markdown output fails there.
+#![cfg(feature = "pdf")]
 
 mod helpers;
 use helpers::{extract_uri_document_blocking, get_test_documents_dir};
@@ -38,8 +38,7 @@ use xberg::{ExtractionConfig, OutputFormat};
 
 const WRITE_VAR: &str = "XBERG_PDF_PAGES_GOLDEN_WRITE";
 const SKIP_VAR: &str = "XBERG_REGRESSION_PAGES_SKIP";
-const TEST_COMMAND: &str =
-    "cargo test -p xberg --features full,formula-recognition,bundle-tessdata-eng --test pdf_regression_pages";
+const TEST_COMMAND: &str = "cargo test -p xberg --features pdf --test pdf_regression_pages";
 /// CI's `RUST_MIN_STACK`: debug builds with the full feature set overflow the 2 MiB thread default.
 const THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
 const MAX_REPORTED: usize = 20;
