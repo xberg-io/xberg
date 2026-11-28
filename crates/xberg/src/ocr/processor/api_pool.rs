@@ -44,7 +44,7 @@ struct ApiKey {
 impl ApiKey {
     fn for_models(models: &super::model_context::ModelContext, language: &str, oem: u8) -> Self {
         Self {
-            tessdata_path: super::validation::canonical_tessdata_dir(&models.directory),
+            tessdata_path: models.canonical_directory().to_path_buf(),
             language: language.into(),
             oem,
             osd_revision: models.osd_revision,

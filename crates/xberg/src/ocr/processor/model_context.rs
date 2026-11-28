@@ -18,6 +18,8 @@ fn invalidate_script_cache(invalidated: &AtomicBool, script: &str, error: &OcrEr
 #[derive(Clone)]
 pub(super) struct ModelContext {
     pub(super) directory: String,
+    /// `directory` as caches key it, resolved once with the context rather than on every key.
+    canonical_directory: std::path::PathBuf,
     pub(super) osd_revision: Option<blake3::Hash>,
     /// The identity of each primary language's model file
     /// ([`hash_pack_identities`](super::validation::hash_pack_identities)), for cache and pool
@@ -156,6 +158,11 @@ impl ModelContext {
 
     pub(super) fn primary_revision(&self) -> Option<blake3::Hash> {
         self.primary.as_ref().map(|primary| primary.revision)
+    }
+
+    /// The model directory as caches key it.
+    pub(super) fn canonical_directory(&self) -> &std::path::Path {
+        &self.canonical_directory
     }
 
     /// What identifies the primary model files this context was resolved against.
@@ -355,6 +362,7 @@ impl ModelContext {
             None
         };
         Ok(Self {
+            canonical_directory: super::validation::canonical_tessdata_dir(&directory),
             directory,
             osd_revision,
             identity: None,
@@ -404,7 +412,7 @@ impl ModelContext {
     }
 
     pub(super) fn result_key(&self, config: &TesseractConfig) -> String {
-        let mut base = super::config::hash_config(config, &self.directory);
+        let mut base = super::config::hash_config_in(config, &self.canonical_directory);
         // ~keep The directory path alone keeps matching after a pack is replaced in place.
         if let Some(identity) = self.identity() {
             let mut hash = blake3::Hasher::new();
@@ -518,6 +526,40 @@ mod tests {
         assert_eq!(
             key(directory.to_owned()),
             key(format!("{directory}{}", std::path::MAIN_SEPARATOR))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn result_key_names_the_directory_resolved_with_the_context() {
+        let root = tempfile::tempdir().unwrap();
+        let (first, second, link) = (root.path().join("a"), root.path().join("b"), root.path().join("link"));
+        for directory in [&first, &second] {
+            std::fs::create_dir(directory).unwrap();
+            std::fs::write(directory.join("eng.traineddata"), b"model").unwrap();
+        }
+        std::os::unix::fs::symlink(&first, &link).unwrap();
+        let config = TesseractConfig {
+            language: "eng".into(),
+            psm: 3,
+            ..Default::default()
+        };
+        let context = ModelContext::for_path(link.to_str().unwrap().into(), config.psm).unwrap();
+        let key = context.result_key(&config);
+        assert_eq!(context.canonical_directory(), std::fs::canonicalize(&first).unwrap());
+
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&second, &link).unwrap();
+        assert_eq!(
+            context.result_key(&config),
+            key,
+            "the directory is resolved once with the context, not again for every key"
+        );
+        assert_ne!(
+            ModelContext::for_path(link.to_str().unwrap().into(), config.psm)
+                .unwrap()
+                .result_key(&config),
+            key
         );
     }
 

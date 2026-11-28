@@ -33,6 +33,12 @@ pub(super) fn hash_config(config: &TesseractConfig, resolved_tessdata_path: &str
     hash_config_for_schema(config, resolved_tessdata_path, TESSERACT_RESULT_SCHEMA_VERSION)
 }
 
+/// [`hash_config`] for a directory already in its canonical form
+/// ([`super::validation::canonical_tessdata_dir`]).
+pub(super) fn hash_config_in(config: &TesseractConfig, canonical_tessdata_dir: &std::path::Path) -> String {
+    hash_config_at(config, canonical_tessdata_dir, TESSERACT_RESULT_SCHEMA_VERSION)
+}
+
 /// Fold the caller's `security_limits` into an OCR cache key.
 ///
 /// These bound the image decode inside `perform_ocr`, which runs only on a cache MISS -- so
@@ -71,6 +77,11 @@ fn hash_security_limits(hasher: &mut blake3::Hasher, limits: Option<&crate::extr
 }
 
 fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str, result_schema_version: u8) -> String {
+    let directory = super::validation::canonical_tessdata_dir(resolved_tessdata_path);
+    hash_config_at(config, &directory, result_schema_version)
+}
+
+fn hash_config_at(config: &TesseractConfig, directory: &std::path::Path, result_schema_version: u8) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(&[result_schema_version]);
     hash_bytes(&mut hasher, config.language.as_bytes());
@@ -85,7 +96,7 @@ fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str
     hasher.update(&config.table_row_threshold_ratio.to_bits().to_le_bytes());
     hash_tesseract_variables(&mut hasher, config);
     hash_security_limits(&mut hasher, config.security_limits.as_ref());
-    hash_source_context(&mut hasher, config, resolved_tessdata_path);
+    hash_source_context(&mut hasher, config, directory);
 
     let hash = hasher.finalize();
     hex::encode(&hash.as_bytes()[..16])
@@ -127,7 +138,7 @@ fn hash_tesseract_variables(hasher: &mut blake3::Hasher, config: &TesseractConfi
 }
 
 /// Hash fields that select the input raster, model directory, or page-stamped output. ~keep
-fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, resolved_tessdata_path: &str) {
+fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, directory: &std::path::Path) {
     hasher.update(&[config.auto_rotate as u8]);
     match config.source_dpi {
         Some(dpi) => {
@@ -141,7 +152,6 @@ fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, re
     hasher.update(&[config.known_full_page_scan as u8]);
     // ~keep Canonical, so one directory spelled `/a/b` and `/a/b/` (or reached through a
     // symlink) has one key.
-    let directory = super::validation::canonical_tessdata_dir(resolved_tessdata_path);
     hash_bytes(hasher, directory.as_os_str().as_encoded_bytes());
     // ~keep The resolved directory already differs per model set for xberg's own caches; a
     // non-fast set is hashed too so the key never depends on how a directory was chosen. Fast
@@ -362,7 +372,11 @@ mod tests {
             ..create_test_config()
         };
         let mut actual = blake3::Hasher::new();
-        hash_source_context(&mut actual, &config, TEST_TESSDATA_PATH);
+        hash_source_context(
+            &mut actual,
+            &config,
+            &super::super::validation::canonical_tessdata_dir(TEST_TESSDATA_PATH),
+        );
 
         let mut before_model_sets = blake3::Hasher::new();
         before_model_sets.update(&[config.auto_rotate as u8]);
