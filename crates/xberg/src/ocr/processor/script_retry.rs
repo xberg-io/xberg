@@ -2,13 +2,12 @@
 //! cannot read (GH#2300), merged per line so every word the first read got right stays.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::path::Path;
 
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
 use super::api_pool::{RetryApiPools, RetryStage};
-use super::validation::{FileStamp, SearchDir, TessdataEnv, first_directory_holding, retry_search_dirs};
+use super::validation::{SearchDir, TessdataEnv, first_directory_holding, retry_search_dirs};
 use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::RetainedWordConfidenceStats;
@@ -274,29 +273,28 @@ fn read_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
     Ok(hash_language_models(directory, [VERTICAL_JAPANESE_MODEL], crate::cache::blake3_hash_file)?.finalize())
 }
 
-/// [`read_vertical_revision`], read once per (path, [`FileStamp`]) in this process.
+/// [`read_vertical_revision`], read through one opened handle and, on Unix, once per (path,
+/// [`FileStamp`](super::validation::FileStamp) of that handle) in this process. Off Unix a stamp
+/// is only the size and modification time, which a replacement can keep, so the model is read on
+/// every call there.
 ///
 /// The outer cache key asks for it on every request whose OCR may retry vertical Japanese; the
 /// memo lets that key be computed on the async thread
 /// ([`without_reading_packs`](crate::ocr::tessdata_download::without_reading_packs)) once the
 /// model has been read.
 fn memoized_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
-    static SEEN: LazyLock<Mutex<HashMap<PathBuf, (FileStamp, blake3::Hash)>>> = LazyLock::new(Default::default);
-
     let path = directory.join(format!("{VERTICAL_JAPANESE_MODEL}.traineddata"));
-    let stamp = || {
-        std::fs::metadata(&path)
-            .ok()
-            .filter(std::fs::Metadata::is_file)
-            .as_ref()
-            .and_then(FileStamp::of)
-    };
-    let before = stamp();
-    if let Some(before) = before
-        && let Some((seen, revision)) = SEEN.lock().unwrap_or_else(PoisonError::into_inner).get(&path)
-        && *seen == before
-    {
-        return Ok(*revision);
+    let failed = |error: crate::XbergError| engine_error(&format!("fingerprint model '{}'", path.display()), error);
+    let file = std::fs::File::open(&path).map_err(|error| {
+        failed(crate::XbergError::cache(format!(
+            "Failed to open file for hashing: {error}"
+        )))
+    })?;
+    #[cfg(unix)]
+    let before = vertical_memo::stamp(&file);
+    #[cfg(unix)]
+    if let Some(revision) = vertical_memo::get(&path, before) {
+        return Ok(revision);
     }
     #[cfg(not(target_arch = "wasm32"))]
     if crate::ocr::tessdata_download::must_not_read() {
@@ -304,16 +302,51 @@ fn memoized_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError
             "The vertical Japanese model has not been read yet".into(),
         ));
     }
-    let revision = read_vertical_revision(directory)?;
+    let digest = crate::cache::blake3_hash_opened(&path, &file).map_err(failed)?;
+    let revision = blake3::hash(digest.as_bytes());
     // ~keep A file that changed while it was read is not remembered under either stamp.
+    #[cfg(unix)]
     if let Some(before) = before
-        && stamp() == Some(before)
+        && vertical_memo::stamp(&file) == Some(before)
     {
-        SEEN.lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(path, (before, revision));
+        vertical_memo::insert(path, before, revision);
     }
     Ok(revision)
+}
+
+/// The vertical model revisions [`memoized_vertical_revision`] has read, by path and the stamp of
+/// the handle each was read through.
+#[cfg(unix)]
+mod vertical_memo {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    use super::super::validation::FileStamp;
+
+    static SEEN: LazyLock<Mutex<HashMap<PathBuf, (FileStamp, blake3::Hash)>>> = LazyLock::new(Default::default);
+
+    pub(super) fn stamp(file: &std::fs::File) -> Option<FileStamp> {
+        file.metadata()
+            .ok()
+            .filter(std::fs::Metadata::is_file)
+            .as_ref()
+            .and_then(FileStamp::of)
+    }
+
+    pub(super) fn get(path: &Path, stamp: Option<FileStamp>) -> Option<blake3::Hash> {
+        let stamp = stamp?;
+        let seen = SEEN.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.get(path)
+            .filter(|(seen, _)| *seen == stamp)
+            .map(|(_, revision)| *revision)
+    }
+
+    pub(super) fn insert(path: PathBuf, stamp: FileStamp, revision: blake3::Hash) {
+        SEEN.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(path, (stamp, revision));
+    }
 }
 
 fn observe_vertical_model_with(
@@ -404,7 +437,31 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     assert_eq!(fingerprint(), None);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_memoized_vertical_revision_is_the_one_read_from_the_path() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("jpn_vert.traineddata"), b"vertical model").unwrap();
+
+    let expected = read_vertical_revision(root.path()).unwrap();
+    assert_eq!(memoized_vertical_revision(root.path()).unwrap(), expected);
+    assert_eq!(memoized_vertical_revision(root.path()).unwrap(), expected);
+}
+
+#[cfg(all(not(unix), not(target_arch = "wasm32")))]
+#[test]
+fn outer_vertical_model_identity_is_never_answered_from_a_stamp_off_unix() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    std::fs::write(root.path().join("jpn_vert.traineddata"), b"model one").unwrap();
+    let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).ok().flatten();
+
+    assert!(fingerprint().is_some());
+    assert_eq!(without_reading_packs(fingerprint), None);
+}
+
+#[cfg(unix)]
 #[test]
 fn outer_vertical_model_identity_is_answered_without_reading_until_the_model_changes() {
     use crate::ocr::tessdata_download::without_reading_packs;

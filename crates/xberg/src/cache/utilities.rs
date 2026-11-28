@@ -76,6 +76,25 @@ pub(crate) fn blake3_hash_file(path: &Path) -> Result<String> {
     }
     let file = std::fs::File::open(path)
         .map_err(|e| crate::error::XbergError::cache(format!("Failed to open file for hashing: {e}")))?;
+    blake3_hash_reader(&file)
+}
+
+/// [`blake3_hash_file`] of `path` read through `file`, already opened from it, so the bytes hashed
+/// are those of the handle the caller stamped.
+#[cfg(feature = "ocr")]
+pub(crate) fn blake3_hash_opened(path: &Path, file: &std::fs::File) -> Result<String> {
+    #[cfg(test)]
+    if unreadable_for_tests::contains(path) {
+        return Err(crate::error::XbergError::cache(
+            "Failed to open file for hashing: permission denied (test fault)",
+        ));
+    }
+    #[cfg(not(test))]
+    let _ = path;
+    blake3_hash_reader(file)
+}
+
+fn blake3_hash_reader(file: &std::fs::File) -> Result<String> {
     let mut reader = std::io::BufReader::with_capacity(64 * 1024, file);
     let mut hasher = blake3::Hasher::new();
 
