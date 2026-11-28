@@ -559,6 +559,7 @@ fn should_preserve_pathological_sparse_xlsx_output_after_reopening_reader() {
 
 mod revisions;
 mod spreadsheet_compatibility;
+mod unavailable_formulas;
 
 /// Build a minimal in-memory `.xlsx` zip from a caller-supplied `<workbook>`
 /// inner body (the `<sheets>`/`<definedNames>` elements) and workbook-rels
@@ -1261,7 +1262,8 @@ fn should_budget_formula_only_xlsx_ranges_before_collecting_formulas_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 0);
+    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8, 1);
+    assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["=1+1".to_string()]]));
     assert!(
         !workbook.metadata.contains_key("formulas_Sheet1"),
         "{:?}",
@@ -1289,8 +1291,10 @@ fn should_apply_the_xlsx_preflight_to_file_inputs_and_addins_gh2296() {
     }
 }
 
+/// A formula without a saved result is output as text, so it is charged with the values it
+/// widens the table to (xberg-io/xberg#3442); the rows past the budget are dropped as for any cell.
 #[test]
-fn should_not_union_disjoint_xlsx_value_and_formula_ranges_gh2296() {
+fn should_charge_a_disjoint_unavailable_xlsx_formula_to_the_table_budget_gh2296() {
     let bytes = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
         <sheetData><row r="1"><c r="A1"><v>1</v></c></row>
@@ -1300,13 +1304,11 @@ fn should_not_union_disjoint_xlsx_value_and_formula_ranges_gh2296() {
         max_table_cells: 1,
         ..Default::default()
     };
-    let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap();
-    assert_eq!(workbook.sheets.len(), 1);
+    let workbook = assert_sheet_truncated_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 1, 1);
     assert_eq!(
         workbook.sheets[0].table_cells.as_ref().unwrap(),
         &[vec!["1".to_string()]]
     );
-    assert!(workbook.metadata.get("formulas_Sheet1").unwrap().contains("2+2"));
 }
 
 #[test]

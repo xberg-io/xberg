@@ -124,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **xlsx:** a formula cell whose saved result is missing or empty is now output as its formula text with a leading `=` (for example `=SUM(A1:A3)`) instead of a blank cell that shifted the columns, and a warning counts such cells per sheet; cells with a saved result, including an empty string, are unchanged and formulas are never evaluated. The same applies to `.xlsm`, `.xltm`, `.xlam` and, within the table-cell budget, `.ods` (#3442)
 - **xlsx:** a workbook whose `sharedStrings.xml` declares a `uniqueCount` larger than the strings it holds is no longer rejected as too large; the content-size limit now applies to the strings actually present. (#3443)
 - **rtf:** adjacent runs with the same formatting, such as `{\b pre}{\b fix}`, merge into one emphasis span, so Markdown output is `**prefix**` instead of `**pre****fix**`. (#3433)
 - **rtf:** footnotes are emitted as footnote references and definitions instead of literal `[^N]` text, so Markdown output is `Text[^1]` with an unescaped definition rather than `Text[\^1]`. (#3434)

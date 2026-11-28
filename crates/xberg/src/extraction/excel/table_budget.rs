@@ -302,21 +302,24 @@ impl TruncatedRange {
         }
     }
 
+    fn len(&self) -> usize {
+        self.cells.len()
+    }
+
     /// Adds a cell of the kept rows; returns `false` at the first cell past them, where reading stops.
-    pub(super) fn push(&mut self, position: (u32, u32), value: &DataRef<'_>) -> bool {
+    pub(super) fn push(&mut self, position: (u32, u32), value: calamine::Data) -> bool {
         let row = position.0;
         if row >= self.sheet.row_end {
             return false;
         }
         self.first_row = Some(self.first_row.map_or(row, |first| first.min(row)));
-        if matches!(value, DataRef::Empty) {
+        if matches!(value, calamine::Data::Empty) {
             return true;
         }
         let mut grown = self.kept.clone();
         if grown.grow(position).is_ok_and(|cells| cells <= self.sheet.max_cells) {
             self.kept = grown;
-            self.cells
-                .push(calamine::Cell::new(position, super::owned_xlsx_cell_value(value)));
+            self.cells.push(calamine::Cell::new(position, value));
         }
         true
     }
@@ -356,14 +359,23 @@ pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
         .worksheet_cells_reader(name)
         .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
     let mut kept = TruncatedRange::new(sheet);
+    let mut unavailable = 0usize;
     while let Some(cell) = reader
-        .next_cell()
+        .next_cell_with_formula()
         .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
     {
-        if !kept.push(cell.get_position(), cell.get_value()) {
+        let value = match (&cell.value, cell.formula.as_deref()) {
+            (DataRef::Empty, Some(formula)) if !formula.is_empty() => super::unavailable_formula_value(formula),
+            (value, _) => super::owned_xlsx_cell_value(value),
+        };
+        let shown_formula = matches!(cell.value, DataRef::Empty) && !matches!(value, calamine::Data::Empty);
+        let before = kept.len();
+        if !kept.push(cell.pos, value) {
             break;
         }
+        unavailable += usize::from(shown_formula && kept.len() > before);
     }
+    super::warn_unavailable_formulas(warnings, name, unavailable, true);
     Ok(kept.finish(name, warnings))
 }
 
@@ -407,13 +419,22 @@ impl SheetBounds {
 struct SheetAllocation {
     values: SheetBounds,
     formulas: SheetBounds,
+    /// Values together with the formula cells output as text because they have no saved result.
+    shown: SheetBounds,
     charged_cells: usize,
 }
 
 impl SheetAllocation {
     fn value(&mut self, position: (u32, u32), budget: &mut SecurityBudget) -> Result<()> {
         budget.step()?;
-        let count = self.values.grow(position)?;
+        let count = self.values.grow(position)?.max(self.shown.grow(position)?);
+        self.charge(count, budget)
+    }
+
+    /// A formula cell without a saved result, output as its formula text.
+    fn unavailable_formula(&mut self, position: (u32, u32), budget: &mut SecurityBudget) -> Result<()> {
+        budget.step()?;
+        let count = self.shown.grow(position)?;
         self.charge(count, budget)
     }
 
@@ -457,6 +478,7 @@ fn validate_xlsx_sheet<R: Read + Seek>(
     let mut shared_formula_capacity = 0usize;
     let mut formula_budget = SecurityBudget::from_limits(limits);
     let mut nonempty_shared = ahash::AHashSet::new();
+    let mut shared_text_len = ahash::AHashMap::new();
     let mut reader = match workbook.worksheet_cells_reader(name) {
         Ok(reader) => reader,
         Err(calamine::XlsxError::NotAWorksheet(_) | calamine::XlsxError::WorksheetNotFound(_)) => return Ok(()),
@@ -491,6 +513,10 @@ fn validate_xlsx_sheet<R: Read + Seek>(
         if !matches!(cell.value, DataRef::Empty) {
             bounds.value(cell.pos, budget)?;
             account_xlsx_cell_text(&cell.value, budget)?;
+        } else if let Some(length) = formula_text_len(cell.formula.as_ref(), &mut shared_text_len) {
+            // ~keep A cell with no saved result is output as its formula text.
+            budget.account_text(length)?;
+            bounds.unavailable_formula(cell.pos, budget)?;
         }
         if formula_occupies_range(cell.formula.as_ref(), &mut nonempty_shared)? {
             bounds.formula(cell.pos, budget)?;
@@ -508,6 +534,27 @@ fn account_xlsx_cell_text(value: &DataRef<'_>, budget: &mut SecurityBudget) -> R
     };
     budget.account_text(length)?;
     Ok(())
+}
+
+/// Bytes of the formula text a cell without a saved result is output as, including the leading `=`.
+/// A derived shared-formula cell is as long as the anchor's template.
+fn formula_text_len(
+    formula: Option<&calamine::XlsxFormulaMetadata>,
+    shared_text_len: &mut ahash::AHashMap<usize, usize>,
+) -> Option<usize> {
+    match formula? {
+        calamine::XlsxFormulaMetadata::Normal { formula } => (!formula.is_empty()).then_some(formula.len() + 1),
+        calamine::XlsxFormulaMetadata::Shared {
+            shared_index, formula, ..
+        } => {
+            shared_text_len.insert(*shared_index, formula.len() + 1);
+            (!formula.is_empty()).then_some(formula.len() + 1)
+        }
+        calamine::XlsxFormulaMetadata::SharedDerived { shared_index } => {
+            shared_text_len.get(shared_index).copied().filter(|length| *length > 1)
+        }
+        _ => None,
+    }
 }
 
 fn formula_occupies_range(

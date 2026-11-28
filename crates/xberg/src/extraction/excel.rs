@@ -94,7 +94,9 @@ use package_metadata::{extract_xlsx_comments_from_bytes, extract_xlsx_revisions_
 
 mod datetime;
 mod table_budget;
+mod unavailable_formulas;
 use table_budget::SkippedSheets;
+use unavailable_formulas::{show_unavailable_formulas, unavailable_formula_value, warn_unavailable_formulas};
 
 /// Format dispatch and the `read_excel_file`/`read_excel_bytes` entry points, split out to
 /// keep this file under the line-count limit.
@@ -179,7 +181,7 @@ fn process_xlsx_sheet_safe<RS: Read + Seek>(
         XlsxSheetShape::Empty => return Ok(empty_excel_sheet(sheet_name)),
         XlsxSheetShape::Dense => {}
         XlsxSheetShape::Sparse => {
-            let (cells, row_min, row_max, col_min, col_max) = collect_xlsx_sheet_cells(workbook, sheet_name)?;
+            let (cells, row_min, row_max, col_min, col_max) = collect_xlsx_sheet_cells(workbook, sheet_name, warnings)?;
             if cells.is_empty() {
                 return Ok(empty_excel_sheet(sheet_name));
             }
@@ -196,6 +198,8 @@ fn process_xlsx_sheet_safe<RS: Read + Seek>(
     let range = workbook
         .worksheet_range(sheet_name)
         .map_err(|e| XbergError::parsing(format!("Failed to parse sheet '{}': {}", sheet_name, e)))?;
+
+    let range = show_unavailable_formulas(workbook, sheet_name, range, true, warnings);
 
     Ok(process_sheet(sheet_name, &range, warnings))
 }
@@ -243,6 +247,7 @@ type XlsxOwnedCells = (Vec<((u32, u32), Data)>, u32, u32, u32, u32);
 fn collect_xlsx_sheet_cells<RS: Read + Seek>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
+    warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<XlsxOwnedCells> {
     let mut cell_reader = workbook
         .worksheet_cells_reader(sheet_name)
@@ -252,15 +257,24 @@ fn collect_xlsx_sheet_cells<RS: Read + Seek>(
     let mut row_max = 0;
     let mut col_min = u32::MAX;
     let mut col_max = 0;
+    let mut unavailable = 0usize;
 
-    while let Ok(Some(cell)) = cell_reader.next_cell() {
-        let (row, col) = cell.get_position();
+    while let Ok(Some(cell)) = cell_reader.next_cell_with_formula() {
+        let (row, col) = cell.pos;
         row_min = row_min.min(row);
         row_max = row_max.max(row);
         col_min = col_min.min(col);
         col_max = col_max.max(col);
-        cells.push(((row, col), owned_xlsx_cell_value(cell.get_value())));
+        let value = match (&cell.value, cell.formula.as_deref()) {
+            (DataRef::Empty, Some(formula)) if !formula.is_empty() => {
+                unavailable += 1;
+                unavailable_formula_value(formula)
+            }
+            (value, _) => owned_xlsx_cell_value(value),
+        };
+        cells.push(((row, col), value));
     }
+    warn_unavailable_formulas(warnings, sheet_name, unavailable, true);
 
     Ok((cells, row_min, row_max, col_min, col_max))
 }
@@ -546,7 +560,10 @@ where
             continue;
         }
         match workbook.worksheet_range(name) {
-            Ok(range) => sheets.push(process_sheet(name, &range, warnings)),
+            Ok(range) => {
+                let range = show_unavailable_formulas(workbook, name, range, false, warnings);
+                sheets.push(process_sheet(name, &range, warnings));
+            }
             Err(e) => {
                 tracing::warn!("Failed to read worksheet range '{}': {}", name, e);
                 push_warning(
