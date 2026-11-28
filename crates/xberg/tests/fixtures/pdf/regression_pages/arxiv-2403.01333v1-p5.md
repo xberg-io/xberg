@@ -89,7 +89,7 @@ kx\rightarrow x_{F_{i}}k_{\infty}^{*}
 $$
 
 $$
-1/\sqrt{\kappa}_{i}^{*}
+1/\sqrt{\kappa_{i}^{*}}
 $$
 
 **0 10**
