@@ -68,6 +68,8 @@ struct TextOutput {
     tables: Vec<Table>,
     images: Vec<RtfImage>,
     plain: bool,
+    /// Footnote references and definitions are returned as data, not written into the text.
+    structured_notes: bool,
 }
 
 #[derive(Default)]
@@ -134,6 +136,12 @@ struct TextDestinations {
     shptxt: CapturedText,
     annotation: CapturedText,
     footnote_count: usize,
+    /// Offsets of body `\chftn` markers not yet claimed by a closed `\footnote` group.
+    footnote_markers: Vec<usize>,
+    /// Markers recorded before the previous `\footnote` group closed.
+    footnote_markers_claimed: usize,
+    /// `(marker offset if any, note)` of each non-empty note, paired when its group closes.
+    footnote_pairs: Vec<(Option<usize>, String)>,
     pending_atnid: Option<i32>,
 }
 
@@ -199,10 +207,11 @@ fn close_picture_group(
 }
 
 impl TextParser {
-    fn new(content: &str, plain: bool) -> Self {
+    fn new(content: &str, plain: bool, structured_notes: bool) -> Self {
         Self {
             output: TextOutput {
                 plain,
+                structured_notes,
                 ..Default::default()
             },
             scope: TextScope {
@@ -318,6 +327,8 @@ impl TextParser {
 
     fn close_captures(&mut self) {
         let footnote = &mut self.destinations.footnote;
+        let was_open = footnote.active;
+        let notes_before = footnote.items.len();
         close_footnote_group(
             self.scope.group_depth,
             &mut footnote.active,
@@ -325,6 +336,20 @@ impl TextParser {
             &mut footnote.buffer,
             &mut footnote.items,
         );
+        if was_open && !footnote.active && self.output.structured_notes {
+            let destinations = &mut self.destinations;
+            if destinations.footnote.items.len() > notes_before
+                && let Some(note) = destinations.footnote.items.last()
+            {
+                // A note anchored by a literal character instead of `\chftn` has no marker; its
+                // body is kept as a definition no reference points at.
+                let anchor = (destinations.footnote_markers.len() > destinations.footnote_markers_claimed)
+                    .then(|| destinations.footnote_markers.last().copied())
+                    .flatten();
+                destinations.footnote_pairs.push((anchor, note.trim().to_string()));
+            }
+            destinations.footnote_markers_claimed = destinations.footnote_markers.len();
+        }
         let shptxt = &mut self.destinations.shptxt;
         close_shptxt_group(
             self.scope.group_depth,
@@ -444,7 +469,7 @@ impl TextParser {
     }
 
     fn append_captured_text(&self, result: &mut String) {
-        if !self.destinations.footnote.items.is_empty() {
+        if !self.output.structured_notes && !self.destinations.footnote.items.is_empty() {
             ensure_capture_separator(result);
             for (index, note) in self.destinations.footnote.items.iter().enumerate() {
                 result.push_str(&format!("[^{}]: {}", index + 1, note.trim()));
@@ -478,12 +503,19 @@ impl TextParser {
             link.1 = map_offset(&mapping, link.1);
         }
         self.fields.hyperlinks.retain(|link| link.0 < link.1);
+        let footnotes = self
+            .destinations
+            .footnote_pairs
+            .iter()
+            .map(|(offset, note)| (offset.map(|offset| map_offset(&mapping, offset)), note.clone()))
+            .collect();
         let formatting = RtfFormattingData {
             spans: self.fmt_tracker.spans,
             color_table: parse_rtf_color_table(content),
             header_texts: Vec::new(),
             footer_texts: Vec::new(),
             hyperlinks: self.fields.hyperlinks,
+            footnotes,
         };
         (
             final_result,
@@ -498,6 +530,7 @@ impl TextParser {
         &'a mut self,
         finalize_table: &'a dyn Fn(&mut Option<TableState>, &mut Vec<Table>),
     ) -> ControlWordCtx<'a> {
+        let text_suppressed = self.text_suppressed();
         ControlWordCtx {
             result: &mut self.output.result,
             table_state: &mut self.output.table_state,
@@ -519,6 +552,9 @@ impl TextParser {
             uc_stack: &mut self.scope.uc_stack,
             ansi_codepage_stack: &mut self.scope.ansi_codepage_stack,
             footnote_count: &mut self.destinations.footnote_count,
+            structured_notes: self.output.structured_notes,
+            footnote_markers: &mut self.destinations.footnote_markers,
+            text_suppressed,
             hidden_stack: &mut self.scope.hidden_stack,
             fmt_tracker: &mut self.fmt_tracker,
             font_id_stack: &mut self.scope.font_id_stack,
@@ -899,11 +935,24 @@ fn ensure_capture_separator(result: &mut String) {
 }
 
 /// Extract normalized text, table/image data and byte-aligned formatting from RTF. ~keep
+#[cfg(test)]
 pub(crate) fn extract_text_from_rtf(
     content: &str,
     plain: bool,
 ) -> (String, Vec<Table>, Vec<RtfImage>, Vec<ParagraphMeta>, RtfFormattingData) {
-    let mut parser = TextParser::new(content, plain);
+    let mut parser = TextParser::new(content, plain, false);
+    parser.parse(content);
+    parser.finish(content)
+}
+
+/// Like [`extract_text_from_rtf`], but footnote references (`\chftn` in the body) and
+/// definitions come back in [`RtfFormattingData`] instead of as `[^N]` text, so the document
+/// builder can emit them as footnote elements. ~keep
+pub(crate) fn extract_document_parts_from_rtf(
+    content: &str,
+    plain: bool,
+) -> (String, Vec<Table>, Vec<RtfImage>, Vec<ParagraphMeta>, RtfFormattingData) {
+    let mut parser = TextParser::new(content, plain, true);
     parser.parse(content);
     parser.finish(content)
 }

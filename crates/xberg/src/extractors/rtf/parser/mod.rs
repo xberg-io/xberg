@@ -12,6 +12,8 @@ mod group_close;
 mod text_extract;
 
 pub(crate) use formatting_extract::{extract_rtf_formatting, spans_to_annotations};
+pub(crate) use text_extract::extract_document_parts_from_rtf;
+#[cfg(test)]
 pub(crate) use text_extract::extract_text_from_rtf;
 
 use crate::extractors::rtf::encoding::{fcharset_to_codepage, parse_hex_byte, parse_rtf_control_word};
@@ -66,6 +68,9 @@ pub struct RtfFormattingData {
     pub footer_texts: Vec<String>,
     /// Hyperlink spans: (start_byte, end_byte, url).
     pub hyperlinks: Vec<(usize, usize, String)>,
+    /// `(byte offset of the reference in the text if the note has one, note body)` per footnote, in reading order
+    /// (document-parts mode).
+    pub footnotes: Vec<(Option<usize>, String)>,
 }
 
 /// Tracks formatting state during the text extraction pass so that
@@ -224,6 +229,29 @@ impl FormattingTracker {
             span.end = map_offset(mapping, span.end);
         }
         self.spans.retain(|s| s.start < s.end);
+        self.merge_touching_spans();
+    }
+
+    /// Sibling groups such as `{\b pre}{\b fix}` close and reopen the same format; one span keeps
+    /// the renderer from emitting `**pre****fix**`. ~keep
+    fn merge_touching_spans(&mut self) {
+        let mut merged: Vec<RtfFormattingSpan> = Vec::with_capacity(self.spans.len());
+        for span in self.spans.drain(..) {
+            match merged.last_mut() {
+                Some(last)
+                    if last.end == span.start
+                        && last.bold == span.bold
+                        && last.italic == span.italic
+                        && last.underline == span.underline
+                        && last.strikethrough == span.strikethrough
+                        && last.color_index == span.color_index =>
+                {
+                    last.end = span.end;
+                }
+                _ => merged.push(span),
+            }
+        }
+        self.spans = merged;
     }
 }
 

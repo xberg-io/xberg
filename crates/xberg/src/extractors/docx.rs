@@ -596,7 +596,9 @@ fn push_header_footer_content(
         .map(|p| p.runs_to_markdown())
         .collect::<Vec<_>>()
         .join("\n");
-    if !text.is_empty() && seen.insert(text.clone()) {
+    // ~keep Keys carry a kind prefix so a paragraph whose text happens to spell a table's cell
+    // grid cannot suppress that table.
+    if !text.is_empty() && seen.insert(format!("p:{text}")) {
         let idx = builder.push_paragraph(&text, vec![], None, None);
         builder.set_layer(idx, layer);
     }
@@ -606,7 +608,7 @@ fn push_header_footer_content(
         // following cell left; now shares the same origin-once grid as body tables
         // (xberg-io/xberg#1549). ~keep
         let cells = table.to_cell_grid(crate::extraction::docx::parser::Paragraph::runs_to_markdown);
-        if !cells.is_empty() && seen.insert(format!("{cells:?}")) {
+        if !cells.is_empty() && seen.insert(format!("t:{cells:?}")) {
             let idx = builder.push_table_from_cells(&cells, None, None);
             builder.set_layer(idx, layer);
         }
@@ -2346,6 +2348,32 @@ mod tests {
     const DOCX_MIME: &str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
     #[tokio::test]
+    async fn a_header_paragraph_spelling_a_cell_grid_keeps_the_header_table() {
+        use crate::core::config::ContentFilterConfig;
+        let header = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>[["X"]]</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>X</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:hdr>"#;
+        let data = build_test_docx_with_files(HF_BODY_XML, &[("word/header1.xml", header)]);
+        let config = ExtractionConfig {
+            content_filter: Some(ContentFilterConfig {
+                include_headers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = DocxExtractor::new()
+            .extract_content(&data, DOCX_MIME, &config)
+            .await
+            .unwrap();
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+        assert_eq!(result.tables.len(), 1, "{:?}", result.tables);
+        assert_eq!(result.tables[0].cells, vec![vec!["X".to_string()]]);
+    }
+
+    #[tokio::test]
     async fn identical_header_and_footer_variants_are_emitted_once_after_the_body() {
         use crate::core::config::{ContentFilterConfig, OutputFormat};
         let parts = [
@@ -2539,6 +2567,78 @@ mod tests {
             !cell_line.contains("[^"),
             "a Plain table cell carries no note marker: {plain}"
         );
+    }
+
+    #[tokio::test]
+    async fn footnote_in_a_tracked_deleted_row_is_dropped_and_does_not_shift_numbering() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="9" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Removed cell</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Kept cell</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>After table</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let footnotes_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="1"><w:p><w:r><w:t>Removed note text.</w:t></w:r></w:p></w:footnote>
+  <w:footnote w:id="2"><w:p><w:r><w:t>Kept note text.</w:t></w:r></w:p></w:footnote>
+</w:footnotes>"#;
+        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None, None);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(!plain.contains("Removed"), "deleted row and its note are gone: {plain}");
+        assert!(plain.contains("Kept cell"), "{plain}");
+        assert!(plain.contains("After table[^1]"), "later note is numbered 1: {plain}");
+        assert!(plain.contains("Kept note text."), "{plain}");
+        assert!(!plain.contains("[^2]"), "numbering did not skip: {plain}");
+    }
+
+    #[tokio::test]
+    async fn comment_only_referenced_in_a_tracked_deleted_row_is_dropped() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="9" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Removed cell</w:t></w:r><w:r><w:commentReference w:id="0"/></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>Live text</w:t></w:r><w:r><w:commentReference w:id="1"/></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let comments_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:comment w:id="0" w:author="A"><w:p><w:r><w:t>Removed comment text.</w:t></w:r></w:p></w:comment>
+  <w:comment w:id="1" w:author="A"><w:p><w:r><w:t>Live comment text.</w:t></w:r></w:p></w:comment>
+</w:comments>"#;
+        let data = build_test_docx_with_files(document_xml, &[("word/comments.xml", comments_xml)]);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(!plain.contains("Removed"), "{plain}");
+        assert!(plain.contains("Live comment text."), "{plain}");
     }
 
     #[tokio::test]

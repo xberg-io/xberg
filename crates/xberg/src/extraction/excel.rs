@@ -121,6 +121,7 @@ fn process_xlsx_workbook<RS: Read + Seek>(
     skipped: &SkippedSheets,
 ) -> Result<ExcelWorkbook> {
     let sheet_names = workbook.sheet_names();
+    let epoch_1904 = workbook.has_1904_epoch();
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
@@ -131,8 +132,10 @@ fn process_xlsx_workbook<RS: Read + Seek>(
         }
         let truncated = skipped.truncated(index);
         let sheet = match truncated {
-            Some(truncated) => table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, warnings),
-            None => process_xlsx_sheet_safe(&mut workbook, name, warnings),
+            Some(truncated) => {
+                table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, epoch_1904, warnings)
+            }
+            None => process_xlsx_sheet_safe(&mut workbook, name, epoch_1904, warnings),
         };
         match sheet {
             Ok(sheet) => sheets.push(sheet),
@@ -173,13 +176,17 @@ fn process_xlsx_workbook<RS: Read + Seek>(
 fn process_xlsx_sheet_safe<RS: Read + Seek>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
+    epoch_1904: bool,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<ExcelSheet> {
     match classify_xlsx_sheet_shape(workbook, sheet_name)? {
         XlsxSheetShape::Empty => return Ok(empty_excel_sheet(sheet_name)),
         XlsxSheetShape::Dense => {}
         XlsxSheetShape::Sparse => {
-            let (cells, row_min, row_max, col_min, col_max) = collect_xlsx_sheet_cells(workbook, sheet_name)?;
+            let (mut cells, row_min, row_max, col_min, col_max) = collect_xlsx_sheet_cells(workbook, sheet_name)?;
+            if epoch_1904 {
+                datetime::resolve_xlsx_epoch_zero_in_cells(workbook, sheet_name, &mut cells);
+            }
             if cells.is_empty() {
                 return Ok(empty_excel_sheet(sheet_name));
             }
@@ -193,9 +200,12 @@ fn process_xlsx_sheet_safe<RS: Read + Seek>(
         }
     }
 
-    let range = workbook
+    let mut range = workbook
         .worksheet_range(sheet_name)
         .map_err(|e| XbergError::parsing(format!("Failed to parse sheet '{}': {}", sheet_name, e)))?;
+    if epoch_1904 {
+        datetime::resolve_xlsx_epoch_zero_in_range(workbook, sheet_name, &mut range);
+    }
 
     Ok(process_sheet(sheet_name, &range, warnings))
 }
@@ -487,6 +497,29 @@ fn process_sparse_sheet_from_cells(
     })
 }
 
+/// Whether a workbook uses the 1904 date system, which calamine exposes per backend rather than on `Reader`.
+trait DateSystem {
+    fn is_1904(&self) -> bool;
+}
+
+impl<RS: Read + Seek> DateSystem for calamine::Xls<RS> {
+    fn is_1904(&self) -> bool {
+        self.has_1904_epoch()
+    }
+}
+
+impl<RS: Read + Seek> DateSystem for calamine::Xlsb<RS> {
+    fn is_1904(&self) -> bool {
+        self.has_1904_epoch()
+    }
+}
+
+impl<RS: Read + Seek> DateSystem for calamine::Ods<RS> {
+    fn is_1904(&self) -> bool {
+        false
+    }
+}
+
 fn process_workbook<RS, R>(
     mut workbook: R,
     office_metadata: Option<HashMap<String, String>>,
@@ -495,7 +528,7 @@ fn process_workbook<RS, R>(
 ) -> Result<ExcelWorkbook>
 where
     RS: std::io::Read + std::io::Seek,
-    R: Reader<RS>,
+    R: Reader<RS> + DateSystem,
     // Forwarded from `process_named_sheets`, which names the cause in its warning.
     R::Error: std::fmt::Display,
 {
@@ -532,13 +565,14 @@ fn process_named_sheets<RS, R>(
 ) -> (Vec<ExcelSheet>, HashMap<String, String>)
 where
     RS: std::io::Read + std::io::Seek,
-    R: Reader<RS>,
+    R: Reader<RS> + DateSystem,
     // The warning names the failure cause, so the reader's error type has to be
     // renderable. Every concrete calamine reader (Xlsx, Xls, Ods) satisfies this.
     R::Error: std::fmt::Display,
 {
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
+    let epoch_1904 = workbook.is_1904();
 
     for (index, name) in sheet_names.iter().enumerate() {
         if let Some(sheet) = skipped.placeholder(index, name, warnings) {
@@ -546,7 +580,12 @@ where
             continue;
         }
         match workbook.worksheet_range(name) {
-            Ok(range) => sheets.push(process_sheet(name, &range, warnings)),
+            Ok(mut range) => {
+                if epoch_1904 {
+                    datetime::resolve_unstyled_epoch_zero_in_range(&mut range);
+                }
+                sheets.push(process_sheet(name, &range, warnings));
+            }
             Err(e) => {
                 tracing::warn!("Failed to read worksheet range '{}': {}", name, e);
                 push_warning(

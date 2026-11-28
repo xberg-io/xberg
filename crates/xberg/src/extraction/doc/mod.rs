@@ -18,6 +18,7 @@ mod papx;
 use cp1252::cp1252_to_char;
 
 pub(crate) use images::{DocPicture, DocWithImages};
+pub(crate) use papx::MAX_TABLE_DEPTH;
 
 #[cfg(test)]
 mod list_numbers_tests;
@@ -31,6 +32,8 @@ pub(crate) mod test_images;
 mod test_prm_scripts;
 #[cfg(all(test, feature = "tokio-runtime"))]
 mod test_scripts;
+#[cfg(all(test, feature = "tokio-runtime"))]
+mod test_tracked_deletions;
 
 /// Warning source tag for `.doc` extraction diagnostics (#171 convention).
 const DOC_WARNING_SOURCE: &str = "doc";
@@ -62,14 +65,17 @@ pub(crate) struct DocParagraph {
 /// Word ends the last paragraph of each cell with a cell mark instead of a
 /// paragraph mark, and ends each row with a paragraph holding only a row
 /// mark. A paragraph that is neither is one of several in its cell. A nested
-/// table's paragraphs end with paragraph marks, so its text stays in the cell
-/// of the outer table that holds it. ~keep
+/// table's cells and rows end with paragraph marks flagged by inner-table
+/// sprms, and `depth` (`sprmPItap`) says which table the paragraph is in. ~keep
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct DocTableMark {
     /// The paragraph ends a cell.
     pub cell_end: bool,
     /// The paragraph ends a row.
     pub row_end: bool,
+    /// Table depth, 1 for an outermost table; 0 (the serde default) reads as 1.
+    #[serde(default)]
+    pub depth: u8,
 }
 
 /// What the Word97+ text path produces: the assembled text plus the paragraph
@@ -570,9 +576,15 @@ impl ParagraphOutput {
         if value == PARAGRAPH_MARK || value == CELL_MARK {
             let table = fc_end.and_then(|fc| context.lists.table_for_paragraph_end(fc));
             if value == PARAGRAPH_MARK || table.is_some() {
+                // Nested cell and row ends are told apart by sprm, not mark character.
                 let table = table.map(|table| DocTableMark {
-                    cell_end: value == CELL_MARK && !table.row_end,
-                    row_end: value == CELL_MARK && table.row_end,
+                    cell_end: if table.depth > 1 {
+                        table.inner_cell_end && !table.row_end
+                    } else {
+                        value == CELL_MARK && !table.row_end
+                    },
+                    row_end: (table.depth > 1 || value == CELL_MARK) && table.row_end,
+                    depth: table.depth,
                 });
                 self.finish(fc_end, table, context.lists, budget)?;
                 return Ok(false);

@@ -195,3 +195,27 @@ fn should_discard_a_two_row_bte_with_a_descending_second_interval() {
     assert_eq!(index.at(101), Script::Normal);
     assert_eq!(index.at(103), Script::Normal);
 }
+
+#[test]
+fn should_read_tracked_deletion_from_chpx_runs_and_piece_property_groups() {
+    use super::chpx::piece_deleted_property;
+    let (word, table) = fixture(&[
+        &[0x00, 0x08, 1],
+        &[0x00, 0x08, 0x81],
+        &[0x00, 0x08, 0],
+        &[0x48, 0x2a, 1],
+    ]);
+    let (index, warnings) = read(&word, &table);
+    assert_eq!(warnings, 0);
+    assert_eq!(index.is_deleted(101), Some(true));
+    assert_eq!(index.is_deleted(103), Some(true));
+    assert_eq!(index.is_deleted(105), Some(false));
+    assert_eq!(index.is_deleted(107), None);
+    assert_eq!(piece_deleted_property(&[0x00, 0x08, 1]), Some(true));
+    assert_eq!(
+        piece_deleted_property(&[0x48, 0x2a, 1, 0x00, 0x08, 1, 0x00, 0x08, 0]),
+        Some(false)
+    );
+    assert_eq!(piece_deleted_property(&[0x48, 0x2a, 1]), None);
+    assert_eq!(piece_deleted_property(&[0x00, 0x08]), None);
+}

@@ -274,9 +274,20 @@ fn normalize_xlsx_dimensions(data: &[u8], limits: &SecurityLimits) -> Result<Opt
     rewrite_spreadsheet_zip(data, limits, |name, contents| {
         if name.starts_with("xl/worksheets/") && name.ends_with(".xml") {
             remove_row_only_xlsx_dimensions(contents)
+        } else if super::table_budget::is_shared_strings_part(name) {
+            super::table_budget::remove_unique_count(contents)
         } else {
             Ok((contents.to_vec(), false))
         }
+    })
+}
+
+/// Rewrite a workbook without its `uniqueCount` attributes; an input where that removes nothing is an error rather
+/// than a fallback to the original, which calamine would size from the overstated count.
+#[cfg(any(feature = "excel", feature = "excel-wasm"))]
+fn drop_overstated_shared_string_counts(data: &[u8], limits: &SecurityLimits) -> Result<Vec<u8>> {
+    normalize_xlsx_dimensions(data, limits)?.ok_or_else(|| {
+        XbergError::parsing("Could not drop the overstated shared-string count from the workbook".to_owned())
     })
 }
 
@@ -372,6 +383,7 @@ fn validate_zip_container<R: Read + Seek>(
     mut reader: R,
     file_extension: &str,
     limits: &SecurityLimits,
+    shared_strings_overstated: &mut bool,
 ) -> Result<SkippedSheets> {
     const OLE_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
@@ -389,13 +401,14 @@ fn validate_zip_container<R: Read + Seek>(
         Ok(archive) => archive,
         Err(_) => return Ok(SkippedSheets::default()),
     };
-    validate_spreadsheet_archive(&mut archive, &extension, limits)
+    validate_spreadsheet_archive(&mut archive, &extension, limits, shared_strings_overstated)
 }
 
 fn validate_spreadsheet_archive<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     extension: &str,
     limits: &SecurityLimits,
+    shared_strings_overstated: &mut bool,
 ) -> Result<SkippedSheets> {
     if archive.len() > limits.max_files_in_archive {
         return Err(XbergError::validation(format!(
@@ -413,7 +426,7 @@ fn validate_spreadsheet_archive<R: Read + Seek>(
         super::table_budget::validate_xlsb_parts(archive, limits)?;
     }
     if matches!(extension, ".xlsx" | ".xlsm" | ".xltm" | ".xlam") {
-        super::table_budget::validate_xlsx_string_parts(archive, limits)?;
+        *shared_strings_overstated = super::table_budget::validate_xlsx_string_parts(archive, limits)?;
     }
     if extension == ".ods" {
         return super::table_budget::validate_ods(archive, limits);
@@ -443,6 +456,7 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
     }
     let warnings: Vec<ProcessingWarning> = Vec::new();
 
+    let mut shared_strings_overstated = false;
     #[cfg(any(feature = "excel", feature = "excel-wasm"))]
     let skipped = {
         let check_file = std::fs::File::open(file_path)?;
@@ -451,7 +465,12 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
             .and_then(|extension| extension.to_str())
             .map(|extension| format!(".{extension}"))
             .unwrap_or_default();
-        validate_zip_container(std::io::BufReader::new(check_file), &file_extension, limits)?
+        validate_zip_container(
+            std::io::BufReader::new(check_file),
+            &file_extension,
+            limits,
+            &mut shared_strings_overstated,
+        )?
     };
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
     let skipped = {
@@ -472,6 +491,11 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
     let office_metadata: Option<HashMap<String, String>> = None;
 
     if lower_path.ends_with(".xlam") {
+        if shared_strings_overstated {
+            let data = read_bounded_spreadsheet_file(file_path, limits)?;
+            let data = drop_overstated_shared_string_counts(&data, limits)?;
+            return read_xlam_bytes(&data, office_metadata, warnings, limits);
+        }
         return read_xlam_file(file_path, office_metadata, warnings, limits);
     }
     if lower_path.ends_with(".xla") {
@@ -533,7 +557,9 @@ pub(crate) fn read_xlsx_family_file(reader: &mut BufReader<File>, limits: &Secur
         // Keep the buffering and input-size limits of the correction path.
         let bytes = read_bounded_spreadsheet(reader, limits)?;
         normalize_xlsx_dimensions(&bytes, limits)?
-            .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))
+            .ok_or_else(|| {
+                XbergError::parsing("Failed to normalize XLSX worksheet dimensions or shared-string counts".to_owned())
+            })
             .map(Some)
     })
 }
@@ -552,18 +578,24 @@ fn read_xlsx_family<R: Read + Seek>(
     let mut archive = zip::ZipArchive::new(&mut *reader)
         .map_err(|error| XbergError::parsing(format!("Invalid XLSX ZIP: {error}")))?;
     // XLSX, XLSM and XLTM use the same archive and string-part checks.
-    validate_spreadsheet_archive(&mut archive, ".xlsx", limits)?;
+    let mut shared_strings_overstated = false;
+    validate_spreadsheet_archive(&mut archive, ".xlsx", limits, &mut shared_strings_overstated)?;
 
     #[cfg(feature = "office")]
     let office_metadata = super::package_metadata::extract_xlsx_office_metadata_from_archive(&mut archive).ok();
     #[cfg(not(feature = "office"))]
     let office_metadata = None;
     let has_sidecars = has_xlsx_sidecars(&archive);
-    let needs_normalization = has_row_only_xlsx_dimensions(archive, limits)?;
+    let needs_normalization = shared_strings_overstated || has_row_only_xlsx_dimensions(archive, limits)?;
     reader.seek(SeekFrom::Start(0))?;
 
     let mut warnings = Vec::new();
     let normalized = if needs_normalization { normalize(reader)? } else { None };
+    if shared_strings_overstated && normalized.is_none() {
+        return Err(XbergError::parsing(
+            "Could not drop the overstated shared-string count from the workbook".to_owned(),
+        ));
+    }
     let mut result = if let Some(normalized) = normalized {
         parse_xlsx_workbook(Cursor::new(normalized), office_metadata, &mut warnings, limits)?
     } else {
@@ -690,8 +722,9 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     }
     let warnings = Vec::new();
 
+    let mut shared_strings_overstated = false;
     #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-    let skipped = validate_zip_container(Cursor::new(data), &extension, limits)?;
+    let skipped = validate_zip_container(Cursor::new(data), &extension, limits, &mut shared_strings_overstated)?;
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
     let skipped = {
         let _ = limits;
@@ -709,6 +742,10 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     let office_metadata: Option<HashMap<String, String>> = None;
 
     match extension.as_str() {
+        ".xlam" if shared_strings_overstated => {
+            let data = drop_overstated_shared_string_counts(data, limits)?;
+            read_xlam_bytes(&data, office_metadata, warnings, limits)
+        }
         ".xlam" => read_xlam_bytes(data, office_metadata, warnings, limits),
         ".xls" => read_xls_bytes(data, office_metadata, warnings, limits, &skipped),
         ".xla" => read_xla_bytes(data, office_metadata, warnings, limits, &skipped),
@@ -977,7 +1014,7 @@ mod zip_header_consistency_tests {
                 );
             }
         }
-        let error = validate_zip_container(Cursor::new(bytes), ".xlsx", &SecurityLimits::default())
+        let error = validate_zip_container(Cursor::new(bytes), ".xlsx", &SecurityLimits::default(), &mut false)
             .expect_err("constructor-readable inconsistent ZIP must be rejected before spreadsheet parsing");
         assert!(
             error.to_string().contains(reason),
@@ -1006,7 +1043,7 @@ mod zip_header_consistency_tests {
                 Cow::Borrowed("données.txt")
             ));
         }
-        validate_zip_container(Cursor::new(bytes), ".xlsx", &SecurityLimits::default())
+        validate_zip_container(Cursor::new(bytes), ".xlsx", &SecurityLimits::default(), &mut false)
             .expect("matching local and central headers must pass existing spreadsheet validation");
     }
 
@@ -1111,7 +1148,7 @@ mod zip_header_consistency_tests {
                 "Archive too large: 5 bytes (max: 1 bytes)",
             ),
         ] {
-            let error = validate_zip_container(Cursor::new(&bytes), ".xlsx", &limits)
+            let error = validate_zip_container(Cursor::new(&bytes), ".xlsx", &limits, &mut false)
                 .expect_err("configured limit must reject the inconsistent archive first");
             assert!(
                 error.to_string().contains(expected),

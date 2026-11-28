@@ -505,7 +505,7 @@ fn should_preserve_dense_xlsx_output_after_position_only_preflight() {
         XlsxSheetShape::Dense
     );
     let mut warnings = Vec::new();
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", &mut warnings).unwrap();
+    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", false, &mut warnings).unwrap();
 
     assert_eq!(sheet.row_count, 2);
     assert_eq!(sheet.col_count, 2);
@@ -542,7 +542,7 @@ fn should_preserve_pathological_sparse_xlsx_output_after_reopening_reader() {
         XlsxSheetShape::Sparse
     );
     let mut warnings = Vec::new();
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", &mut warnings).unwrap();
+    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", false, &mut warnings).unwrap();
 
     assert_eq!(sheet.row_count, 1_048_575);
     assert_eq!(sheet.col_count, 16_384);
@@ -1352,7 +1352,14 @@ fn should_keep_xlsx_cell_guards_when_a_file_is_renamed_gh2296() {
     }
 }
 
-fn xlsx_with_shared_strings(unique_count: usize) -> Vec<u8> {
+fn xlsx_with_shared_strings(unique_count: usize, actual_strings: usize) -> Vec<u8> {
+    let items = "<si><t>x</t></si>".repeat(actual_strings);
+    xlsx_with_shared_strings_part(&format!(
+        r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" uniqueCount="{unique_count}">{items}</sst>"#
+    ))
+}
+
+fn xlsx_with_shared_strings_part(shared_strings_xml: &str) -> Vec<u8> {
     use std::io::Write;
     let original = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -1378,13 +1385,13 @@ fn xlsx_with_shared_strings(unique_count: usize) -> Vec<u8> {
     writer
         .start_file("xl/sharedStrings.xml", zip::write::SimpleFileOptions::default())
         .unwrap();
-    write!(writer, r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" uniqueCount="{unique_count}"><si><t>x</t></si></sst>"#).unwrap();
+    writer.write_all(shared_strings_xml.as_bytes()).unwrap();
     writer.finish().unwrap().into_inner()
 }
 
 #[test]
-fn should_reject_shared_string_capacity_before_the_xlsx_constructor_gh2296() {
-    let bytes = xlsx_with_shared_strings(10);
+fn should_reject_a_shared_string_part_that_really_holds_more_strings_than_the_budget_gh2296() {
+    let bytes = xlsx_with_shared_strings(100, 100);
     let limits = SecurityLimits {
         max_content_size: std::mem::size_of::<String>() * 9,
         ..Default::default()
@@ -1392,7 +1399,7 @@ fn should_reject_shared_string_capacity_before_the_xlsx_constructor_gh2296() {
     let error = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap_err();
     assert!(error.to_string().contains("Content too large"), "{error}");
     let ample = SecurityLimits {
-        max_content_size: 4096,
+        max_content_size: 1 << 20,
         ..Default::default()
     };
     let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &ample).unwrap();
@@ -1400,6 +1407,90 @@ fn should_reject_shared_string_capacity_before_the_xlsx_constructor_gh2296() {
         workbook.sheets[0].table_cells.as_ref().unwrap(),
         &[vec!["x".to_string()]]
     );
+}
+
+#[test]
+fn should_read_xlsx_whose_shared_string_unique_count_overstates_the_entries_gh3443() {
+    let bytes = xlsx_with_shared_strings(4_294_967_295, 1);
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &SecurityLimits::default()).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+}
+
+#[test]
+fn should_read_xlsx_file_whose_shared_string_unique_count_overstates_the_entries_gh3443() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("overstated.xlsx");
+    std::fs::write(&path, xlsx_with_shared_strings(4_294_967_295, 1)).unwrap();
+    let (workbook, _) = read_excel_file(path.to_str().unwrap(), &SecurityLimits::default()).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+}
+
+#[test]
+fn should_read_xlsx_whose_overstated_unique_count_exceeds_a_tight_budget_but_the_strings_fit_gh3443() {
+    let bytes = xlsx_with_shared_strings(1_000, 1);
+    let limits = SecurityLimits {
+        max_content_size: std::mem::size_of::<String>() * 100,
+        ..Default::default()
+    };
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+}
+
+#[test]
+fn should_rewrite_the_workbook_only_when_the_declared_reservation_does_not_fit_gh3443() {
+    let validate = |bytes: Vec<u8>, limits: &SecurityLimits| {
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        super::table_budget::validate_xlsx_string_parts(&mut archive, limits).unwrap()
+    };
+    let tight = SecurityLimits {
+        max_content_size: std::mem::size_of::<String>() * 100,
+        ..Default::default()
+    };
+    assert!(!validate(xlsx_with_shared_strings(2, 1), &tight));
+    assert!(!validate(xlsx_with_shared_strings(1, 1), &tight));
+    assert!(validate(xlsx_with_shared_strings(1_000, 1), &tight));
+}
+
+#[test]
+fn should_read_xlam_whose_shared_string_unique_count_overstates_the_entries_gh3443() {
+    let bytes = xlsx_with_shared_strings(4_294_967_295, 1);
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlam", &SecurityLimits::default()).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("overstated.xlam");
+    std::fs::write(&path, &bytes).unwrap();
+    let (workbook, _) = read_excel_file(path.to_str().unwrap(), &SecurityLimits::default()).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+}
+
+#[test]
+fn should_charge_cdata_shared_string_text_to_the_content_budget_gh3443() {
+    let text = "y".repeat(4096);
+    let bytes = xlsx_with_shared_strings_part(&format!(
+        r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" uniqueCount="1"><si><t><![CDATA[{text}]]></t></si></sst>"#
+    ));
+    let limits = SecurityLimits {
+        max_content_size: 1024,
+        ..Default::default()
+    };
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let error = super::table_budget::validate_xlsx_string_parts(&mut archive, &limits).unwrap_err();
+    assert!(error.to_string().contains("Content too large"), "{error}");
 }
 
 #[test]

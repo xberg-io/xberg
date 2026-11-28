@@ -590,6 +590,7 @@ pub(crate) fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
         header_texts: parser.header.variants(),
         footer_texts: parser.footer.variants(),
         hyperlinks: parser.fields.hyperlinks,
+        footnotes: Vec::new(),
     }
 }
 

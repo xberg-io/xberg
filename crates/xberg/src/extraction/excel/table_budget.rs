@@ -17,7 +17,7 @@ mod zip_metadata;
 pub(super) use legacy::{drop_skipped_sheets as drop_skipped_xls_sheets, validate_xls};
 pub(super) use ods::{drop_skipped_sheets as drop_skipped_ods_sheets, validate_ods};
 pub(super) use xlsb_framing::validate_xlsb_parts;
-pub(super) use zip_metadata::validate_xlsx_string_parts;
+pub(super) use zip_metadata::{is_shared_strings_part, remove_unique_count, validate_xlsx_string_parts};
 
 /// Worksheets whose cells did not fit in the workbook's remaining `max_table_cells` budget.
 ///
@@ -350,19 +350,25 @@ pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
     workbook: &mut calamine::Xlsx<R>,
     name: &str,
     sheet: TruncatedSheet,
+    epoch_1904: bool,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> Result<crate::types::ExcelSheet> {
-    let mut reader = workbook
-        .worksheet_cells_reader(name)
-        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
     let mut kept = TruncatedRange::new(sheet);
-    while let Some(cell) = reader
-        .next_cell()
-        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
     {
-        if !kept.push(cell.get_position(), cell.get_value()) {
-            break;
+        let mut reader = workbook
+            .worksheet_cells_reader(name)
+            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
+        while let Some(cell) = reader
+            .next_cell()
+            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+        {
+            if !kept.push(cell.get_position(), cell.get_value()) {
+                break;
+            }
         }
+    }
+    if epoch_1904 {
+        super::datetime::resolve_xlsx_epoch_zero_in_sparse(workbook, name, &mut kept.cells);
     }
     Ok(kept.finish(name, warnings))
 }
