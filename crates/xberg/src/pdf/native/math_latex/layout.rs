@@ -5,7 +5,7 @@ use super::glyphs::{MathFont, spell_glyph};
 use super::{
     ACCENT_SHARE, AXIS_OVERLAP_EM, BASE_REACH_EM, CLUSTER_GAP_EM, COLLISION_SHARE, FRACTION_LEFT_GAP_EM,
     FRACTION_OFFSET_EM, LIMIT_OFFSET_EM, LIMIT_SHARE, MAX_DEPTH, OFF_AXIS_EM, Piece, SAME_ROW_EM, SCRIPT_REACH_EM,
-    SCRIPT_SIZE_RATIO, STACK_SHARE, STRUCTURE_OFFSET_EM, are_nested_fraction_lines, axis_row, contains, glyphs, rows,
+    SCRIPT_SIZE_RATIO, STACK_SHARE, STRUCTURE_OFFSET_EM, axis_row, contains, glyphs,
 };
 
 /// LaTeX writer that separates a command word from a following letter.
@@ -110,13 +110,6 @@ impl<'p, 'a> Item<'p, 'a> {
 /// source text for those left whole display formulas (arXiv 1602.03238's, whose integral
 /// signs and limits sit off the axis with no base) as a scatter of loose glyphs. ~keep
 pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
-    group_tex_in(pieces, depth, false)
-}
-
-/// [`group_tex`] for a group that is `script`-size content (a subscript or superscript, or a
-/// part of a fraction in one): its pieces are small only against the formula, so two of them
-/// over each other are a script pair, never a nested fraction.
-fn group_tex_in(pieces: &[&Piece<'_>], depth: usize, script: bool) -> Option<String> {
     let visible: Vec<&Piece<'_>> = pieces.iter().copied().filter(|piece| !piece.is_blank()).collect();
     if visible.is_empty() {
         return Some(String::new());
@@ -125,12 +118,6 @@ fn group_tex_in(pieces: &[&Piece<'_>], depth: usize, script: bool) -> Option<Str
         return Some(flat_tex(&visible));
     }
     let size = visible.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
-    if depth > 0
-        && !script
-        && let Some(fraction) = stacked_fraction(&visible, size, depth)
-    {
-        return fraction;
-    }
     let (accents, glyphs) = split_accents(&visible, size);
     let Some(axis) = axis_row(&glyphs) else {
         return Some(flat_tex(&visible));
@@ -159,29 +146,21 @@ fn group_tex_in(pieces: &[&Piece<'_>], depth: usize, script: bool) -> Option<Str
                 .collect();
         }
     }
-    let above = merge_stacked_lines(
-        script,
-        clusters(
-            rest.iter()
-                .copied()
-                .filter(|piece| !on_axis(piece) && piece.base > base + size * OFF_AXIS_EM),
-            size,
-        ),
+    let above = clusters(
+        rest.iter()
+            .copied()
+            .filter(|piece| !on_axis(piece) && piece.base > base + size * OFF_AXIS_EM),
         size,
     );
-    let below = merge_stacked_lines(
-        script,
-        clusters(
-            rest.iter()
-                .copied()
-                .filter(|piece| !on_axis(piece) && piece.base < base - size * OFF_AXIS_EM),
-            size,
-        ),
+    let below = clusters(
+        rest.iter()
+            .copied()
+            .filter(|piece| !on_axis(piece) && piece.base < base - size * OFF_AXIS_EM),
         size,
     );
     let (above, below) = pair_stacks(&mut items, above, below, &axis, base, size);
-    attach_scripts(&mut items, above, below, size, script)?;
-    write_items(&items, depth, script)
+    attach_scripts(&mut items, above, below, size);
+    write_items(&items, depth)
 }
 
 /// Whether the axis row carries the radicand of a radical sign drawn off the axis: a glyph of
@@ -206,52 +185,6 @@ fn covers_axis_radicand(radical: &Piece<'_>, axis: &[&Piece<'_>], glyphs: &[&Pie
         }
     }
     false
-}
-
-/// A nested fraction's lines: two full-size lines over each other with nothing else, an inner
-/// numerator over an inner denominator, written as `\frac`. `None` for any other group.
-fn stacked_fraction(visible: &[&Piece<'_>], size: f32, depth: usize) -> Option<Option<String>> {
-    let lines = rows(visible, size);
-    let [lower, upper] = lines.as_slice() else {
-        return None;
-    };
-    let full = |line: &[&Piece<'_>]| line.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO);
-    let stacked = full(lower)
-        && full(upper)
-        && upper
-            .iter()
-            .any(|top| lower.iter().any(|bottom| are_nested_fraction_lines(top, bottom)));
-    stacked.then(|| {
-        let (numerator, denominator) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
-        Some(format!("\\frac{{{numerator}}}{{{denominator}}}"))
-    })
-}
-
-/// Join the lines of one side of the axis that stand over each other at full size: the parts
-/// of a fraction nested in a numerator or a denominator, which a script never is.
-fn merge_stacked_lines<'p, 'a>(script: bool, lines: Clusters<'p, 'a>, size: f32) -> Clusters<'p, 'a> {
-    if script {
-        return lines;
-    }
-    // A line sharing its baseline with other glyphs of the page is a line of text; the parts
-    // of a nested fraction stand alone on theirs.
-    let alone = |line: &[&Piece<'_>]| line.iter().all(|piece| !piece.crowded);
-    let stacked = |a: &[&Piece<'_>], b: &[&Piece<'_>]| {
-        alone(a)
-            && alone(b)
-            && a.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
-            && b.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
-            && a.iter()
-                .any(|upper| b.iter().any(|lower| are_nested_fraction_lines(upper, lower)))
-    };
-    let mut merged: Clusters<'p, 'a> = Vec::new();
-    for line in lines {
-        match merged.iter_mut().find(|other| stacked(other, &line)) {
-            Some(other) => other.extend(line),
-            None => merged.push(line),
-        }
-    }
-    merged
 }
 
 /// Two axis glyphs sharing most of their width: one row drawn over another, not a formula.
@@ -410,43 +343,9 @@ fn stacks_with(
     x0 - left_edge >= size * FRACTION_LEFT_GAP_EM
 }
 
-/// Whether every full-size glyph of `cluster` is a big operator or bracket sign: such a cluster
-/// is the operator's own limit or bracket piece, not a line of text with a sign among it.
-fn full_size_glyphs_are_operator_signs(cluster: &[&Piece<'_>], size: f32) -> bool {
-    cluster
-        .iter()
-        .filter(|piece| piece.size > size * SCRIPT_SIZE_RATIO)
-        .all(|piece| piece.is_operator_sign())
-}
-
 /// Hang each unpaired cluster on the item it scripts; a cluster with no base in reach gets an
-/// [`ItemKind::Orphan`] base at its own position. `None` when a cluster is a full-size line
-/// (a problem number over an expression, a line of a stack that is no fraction): no script is
-/// as large as its base, so the group is not one formula; the pieces of an extension font are
-/// exempt. A script group is sized against its own largest glyph, so its lines are not compared.
-fn attach_scripts<'p, 'a>(
-    items: &mut Vec<Item<'p, 'a>>,
-    above: Clusters<'p, 'a>,
-    below: Clusters<'p, 'a>,
-    size: f32,
-    script: bool,
-) -> Option<()> {
-    let is_line = |cluster: &[&Piece<'_>]| {
-        cluster.iter().any(|piece| piece.size > size * SCRIPT_SIZE_RATIO)
-            && !cluster
-                .iter()
-                .all(|piece| piece.text.trim().chars().all(|c| matches!(c, '\'' | '′' | '″')))
-    };
-    // A cluster with a big operator or bracket sign is that operator's limit or a bracket piece, which
-    // sits off the axis at full size by design.
-    if !script
-        && above
-            .iter()
-            .chain(&below)
-            .any(|cluster| is_line(cluster) && !full_size_glyphs_are_operator_signs(cluster, size))
-    {
-        return None;
-    }
+/// [`ItemKind::Orphan`] base at its own position.
+fn attach_scripts<'p, 'a>(items: &mut Vec<Item<'p, 'a>>, above: Clusters<'p, 'a>, below: Clusters<'p, 'a>, size: f32) {
     let mut orphans = Vec::new();
     let sides = above
         .into_iter()
@@ -483,17 +382,16 @@ fn attach_scripts<'p, 'a>(
         items.extend(orphans);
         items.sort_by(|a, b| a.x0.total_cmp(&b.x0));
     }
-    Some(())
 }
 
-fn write_items(items: &[Item<'_, '_>], depth: usize, script: bool) -> Option<String> {
+fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
     let mut tex = Tex::default();
     // Radical signs whose argument is still to come: each takes the item after it, the
     // innermost last, so the braces of all of them close after that item.
     let mut pending = 0_usize;
     for item in items {
-        let subscript = group_tex_in(&item.subscripts, depth + 1, true)?;
-        let superscript = group_tex_in(&item.superscripts, depth + 1, true)?;
+        let subscript = group_tex(&item.subscripts, depth + 1)?;
+        let superscript = group_tex(&item.superscripts, depth + 1)?;
         // `Some(command)` for a radical sign still awaiting its argument.
         let mut radical_sign = None;
         let mut body = Tex::default();
@@ -519,18 +417,12 @@ fn write_items(items: &[Item<'_, '_>], depth: usize, script: bool) -> Option<Str
                 }
             }
             ItemKind::Fraction(upper, lower) => {
-                let (numerator, denominator) = (
-                    group_tex_in(upper, depth + 1, script)?,
-                    group_tex_in(lower, depth + 1, script)?,
-                );
+                let (numerator, denominator) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
                 body.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
                 write_scripts(&mut body, &subscript, &superscript);
             }
             ItemKind::Limits(upper, lower) => {
-                let (upper, lower) = (
-                    group_tex_in(upper, depth + 1, true)?,
-                    group_tex_in(lower, depth + 1, true)?,
-                );
+                let (upper, lower) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
                 body.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
                 write_scripts(&mut body, &subscript, &superscript);
             }

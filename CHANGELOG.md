@@ -124,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **pdf:** native PDF math keeps the plain reading where a rebuild cannot be right, and writes more of it correctly: a fraction nested in a fraction, a radical with a degree and the radical signs of the TeX extension fonts are rebuilt; a full-size line over a formula (a problem number), a script that is only punctuation, an operator or a list label, and chains of base-less scripts are no longer written as LaTeX. Centred title lines above a borderless table stay out of its header row and rows. (#3445)
+- **pdf:** native PDF math writes the radical signs of the TeX extension fonts and their degrees (`\sqrt[3]{x^{2}}`), nests consecutive radicals, takes the `×` or `÷` line between two rows of fractions as the axis, and keeps a radical formula as plain text where its radicand cannot be read. Centred title lines above a borderless table stay out of its header row and rows. (#3445)
 - **ocr:** a table detected on a standalone image is placed before the first paragraph below its top edge instead of after every paragraph, so a summary under a table no longer reads before it. Tables are ordered top to bottom; images recognized rotated keep the previous order.
 - **ocr:** `use_cache: false` on the extraction request now bypasses the OCR result cache; before, repeated runs still read cached OCR results. An `ocr.backend_options` that sets only `use_cache` no longer moves OCR off the default route.
 - **layout:** multi-page 300 dpi scans no longer lose layout detection because a fixed eight-page chunk exceeded the content-size budget; chunks now close before the page that would exceed it.

@@ -23,12 +23,9 @@ use evidence::{
     has_math_evidence, has_structure, is_trailing_note_mark, missing_closers, only_operator_glyphs,
     reads_as_numeric_row,
 };
-use glyphs::{
-    MathFont, accent_command, is_extension_font, is_mark, is_operator, is_radical_glyph, is_relation, is_unmapped,
-    math_font,
-};
+use glyphs::{MathFont, accent_command, is_mark, is_operator, is_radical_glyph, is_relation, is_unmapped, math_font};
 use layout::group_tex;
-use reliability::{tex_is_reliable, without_punctuation_scripts};
+use reliability::tex_is_reliable;
 use xberg_native_pdf::layout::TextSpan;
 
 /// A glyph below this fraction of the formula's largest size is a script or limit.
@@ -87,24 +84,6 @@ const MAX_COMPONENT_PIECES: usize = 256;
 const MAX_NUMERIC_RUNS: usize = 3;
 /// Nesting depth past which a group is spelled flat.
 const MAX_DEPTH: usize = 6;
-/// Largest distance, in ems, between the centres of the numerator and denominator of a fraction
-/// nested in another: both are centred on their bar, so their centres differ by the rounding of
-/// glyph advances, a third of an em at most.
-const NESTED_CENTRE_EM: f32 = 0.3;
-/// Share of the wider part's width that the narrower part of a nested fraction has at least:
-/// parts of one fraction are set in the same type and the narrower is seldom under 60% of the
-/// wider (`dx` over `dy` is 93%, a digit over a two-letter name 50%, which is left to the
-/// plain reading).
-const NESTED_WIDTH_SHARE: f32 = 0.6;
-/// Smallest baseline distance, in ems, between a nested fraction's numerator and denominator.
-/// Ordinary leading of 10 to 11 pt type is 1.2 to 1.4 em (gutenberg-36670 p189's lines are
-/// 1.33 em apart, p133's 1.42 em), so no distance separates a nested fraction (1.36 em on
-/// gutenberg-33283 p139) from two lines of text; the bar only keeps tightly set lines
-/// (1.2 em and under) from pairing, and [`Piece::crowded`] excludes the rest.
-const NESTED_BAR_EM: f32 = 1.3;
-/// Largest gap, in ems, at which another glyph on a piece's baseline makes it part of a line of
-/// text: one em, a word space and a half.
-const CROWDED_GAP_EM: f32 = 1.0;
 /// Share of the narrower of two axis glyphs they overlap by when one is drawn over the other.
 const COLLISION_SHARE: f32 = 0.5;
 /// Distance, in ems, within which a glyph run with the same text is an overdraw of another.
@@ -263,8 +242,7 @@ fn rewrite_with_baselines(
         .enumerate()
         .filter_map(|(i, span)| Piece::new(i, span, baselines.of(span)))
         .collect();
-    let (mut pieces, overdraws) = without_overdraws(all);
-    mark_crowded(&mut pieces);
+    let (pieces, overdraws) = without_overdraws(all);
     let (mut formulas, refused) = find_formulas(&pieces);
     if formulas.is_empty() && refused.is_empty() {
         return None;
@@ -390,11 +368,6 @@ struct Piece<'a> {
     class: Class,
     /// A radical sign of a TeX extension font, drawn off the axis of the radicand it covers.
     radical: bool,
-    /// A glyph of a TeX extension font: a big operator, bracket or radical sign.
-    extension: bool,
-    /// Another piece of the page shares this one's baseline within a size of it: it is part of
-    /// a line of text, which the parts of a nested fraction are not.
-    crowded: bool,
 }
 
 impl<'a> Piece<'a> {
@@ -420,8 +393,6 @@ impl<'a> Piece<'a> {
             size: source.font_size,
             class: classify(text, &source.font_name),
             radical,
-            extension: is_extension_font(&source.font_name),
-            crowded: false,
         })
     }
 
@@ -443,12 +414,6 @@ impl<'a> Piece<'a> {
 
     fn is_radical(&self) -> bool {
         self.radical
-    }
-
-    /// A big operator or bracket sign of an extension font: not its radical signs, which are
-    /// drawn over their radicand and never script a base.
-    fn is_operator_sign(&self) -> bool {
-        self.extension && !self.radical
     }
 
     fn accent(&self) -> Option<&'static str> {
@@ -589,8 +554,7 @@ fn find_formulas<'a>(pieces: &[Piece<'a>]) -> (Vec<Formula<'a>>, Vec<usize>) {
                 .map(|piece| piece.span)
                 .collect();
             match build_formula(unit, &prose) {
-                Built::Formula(mut formula) => {
-                    formula.tex = without_punctuation_scripts(&formula.tex);
+                Built::Formula(formula) => {
                     if tex_is_reliable(&formula.tex) {
                         formulas.push(*formula);
                     } else {
@@ -633,13 +597,7 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
             if candidates[j].base - candidates[i].base > reach {
                 break;
             }
-            if linked(
-                candidates[i],
-                candidates[j],
-                adjacent[i] || adjacent[j],
-                candidates[i].crowded || candidates[j].crowded,
-                prose,
-            ) {
+            if linked(candidates[i], candidates[j], adjacent[i] || adjacent[j], prose) {
                 let (root_i, root_j) = (find(&mut parent, i), find(&mut parent, j));
                 parent[root_i] = root_j;
             }
@@ -660,23 +618,6 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
         .into_values()
         .filter(|group| group.iter().any(|piece| piece.is_math()))
         .collect()
-}
-
-/// Set [`Piece::crowded`] on every piece that has another on its baseline within a size of it.
-fn mark_crowded(pieces: &mut [Piece<'_>]) {
-    let mut order: Vec<usize> = (0..pieces.len()).collect();
-    order.sort_by(|&a, &b| pieces[a].base.total_cmp(&pieces[b].base));
-    for (position, &i) in order.iter().enumerate() {
-        for &j in &order[position + 1..] {
-            if pieces[j].base - pieces[i].base > pieces[i].size * ROW_TOLERANCE_EM {
-                break;
-            }
-            if pieces[i].gap(&pieces[j]) <= pieces[i].size.max(pieces[j].size) * CROWDED_GAP_EM {
-                pieces[i].crowded = true;
-                pieces[j].crowded = true;
-            }
-        }
-    }
 }
 
 fn find(parent: &mut [usize], mut i: usize) -> usize {
@@ -704,7 +645,7 @@ fn is_prose_adjacent(piece: &Piece<'_>, prose: &[&Piece<'_>]) -> bool {
         })
 }
 
-fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, crowded: bool, prose: &[&Piece<'_>]) -> bool {
+fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, prose: &[&Piece<'_>]) -> bool {
     let size = a.size.max(b.size);
     let rise = (a.base - b.base).abs();
     let gap = a.gap(b);
@@ -714,8 +655,6 @@ fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, crowded: bool, pro
         gap <= size * ROW_GAP_EM && !prose_adjacent
     } else if rise <= size * LIMIT_EM && a.size.min(b.size) <= size * SCRIPT_SIZE_RATIO {
         gap <= size * STACK_GAP_EM && !prose_adjacent
-    } else if rise <= size * LIMIT_EM {
-        !prose_adjacent && !crowded && are_nested_fraction_lines(a, b)
     } else {
         false
     }
@@ -786,9 +725,6 @@ fn hangs_off(piece: &Piece<'_>, unit: &[&Piece<'_>], base: f32, size: f32) -> bo
     if rise <= size * STACK_EM {
         return near(LIMIT_EM);
     }
-    if unit.iter().any(|member| stacks_on_part(piece, member, base, size)) {
-        return true;
-    }
     let scripts_member = unit.iter().any(|member| {
         !member.is_blank()
             && (piece.base - member.base).abs() <= member.size * SAME_ROW_EM
@@ -802,33 +738,6 @@ fn hangs_off(piece: &Piece<'_>, unit: &[&Piece<'_>], base: f32, size: f32) -> bo
         && unit.iter().any(|member| {
             (member.base - base).abs() <= size * AXIS_MEMBER_EM && piece.gap(member) <= size * STACK_GAP_EM
         })
-}
-
-/// Whether `piece` is a full-size line stacked on `part`, a full-size line of the same side of
-/// the axis: the inner numerator over the inner denominator of a nested fraction.
-fn stacks_on_part(piece: &Piece<'_>, part: &Piece<'_>, base: f32, size: f32) -> bool {
-    let side = |p: &Piece<'_>| (p.base - base).signum();
-    !part.is_blank()
-        && !piece.crowded
-        && (part.base - base).abs() > size * FRACTION_OFFSET_EM
-        && side(piece) == side(part)
-        && are_nested_fraction_lines(piece, part)
-}
-
-/// Whether two full-size pieces are the numerator and denominator of a fraction nested in
-/// another: centred on each other, as wide as each other and a bar apart, which sets them
-/// further from each other than two lines of an aligned equation, whose denominators and
-/// numerators merely overlap in x.
-fn are_nested_fraction_lines(a: &Piece<'_>, b: &Piece<'_>) -> bool {
-    let size = a.size.max(b.size);
-    let centred = ((a.x0 + a.x1) - (b.x0 + b.x1)).abs() / 2.0 <= size * NESTED_CENTRE_EM;
-    let (narrow, wide) = (a.width().min(b.width()), a.width().max(b.width()));
-    let rise = (a.base - b.base).abs();
-    a.size.min(b.size) >= size * SCRIPT_SIZE_RATIO
-        && centred
-        && narrow >= wide * NESTED_WIDTH_SHARE
-        && rise >= size * NESTED_BAR_EM
-        && rise <= size * LIMIT_EM
 }
 
 /// The row a formula is built around: one holding a relation, else the widest.
@@ -900,6 +809,28 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Buil
     }
 }
 
+/// Whether the TeX of a formula with a radical sign can be trusted. A radical's extent is not
+/// drawn, so its radicand is taken to be the item after the sign; that guess is no better than
+/// the plain reading once the group holds a script with no base (rows already mixed), or a
+/// one-digit script right before the sign (a degree set on the glyph before it).
+fn radical_tex_is_sound(tex: &str) -> bool {
+    if tex.contains("{}_") || tex.contains("{}^") {
+        return false;
+    }
+    !tex.match_indices("\\sqrt").any(|(at, _)| {
+        let before = &tex[..at];
+        (0..=2).any(|closers| {
+            let split = before.len().saturating_sub(closers);
+            let (head, tail) = before.split_at(split);
+            tail.bytes().all(|b| b == b'}')
+                && head.len() >= 4
+                && head.ends_with('}')
+                && head.as_bytes()[head.len() - 2].is_ascii_digit()
+                && head[..head.len() - 2].ends_with("^{")
+        })
+    })
+}
+
 fn build_formula_inner<'a>(members: &mut Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Result<Option<Formula<'a>>, ()> {
     members.sort_by(|a, b| a.x0.total_cmp(&b.x0));
     while members
@@ -941,6 +872,9 @@ fn build_formula_inner<'a>(members: &mut Vec<&Piece<'a>>, prose: &[&Piece<'a>]) 
     let Some(tex) = tex else {
         return Err(());
     };
+    if members.iter().any(|piece| piece.is_radical()) && !radical_tex_is_sound(&tex) {
+        return Err(());
+    }
     let Some(anchor) = axis.iter().min_by(|a, b| a.x0.total_cmp(&b.x0)) else {
         return Ok(None);
     };

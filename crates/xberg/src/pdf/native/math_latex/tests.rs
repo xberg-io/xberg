@@ -398,61 +398,6 @@ const MMI: &str = "RRQMNM+CMMI12";
 const MR: &str = "TRYITZ+CMR12";
 const MSY12: &str = "LKAHCF+CMSY10";
 
-/// Gutenberg 33283 p139: `dy/dx = 1/(dx/dy)`, the inverse function's reciprocal written as a
-/// fraction whose denominator is itself a fraction.
-#[test]
-fn should_write_a_fraction_whose_denominator_is_a_fraction() {
-    let spans = vec![
-        span("dy", MMI, 11.96, 137.59, 11.79, 314.65),
-        span("1", MR, 11.96, 176.74, 5.85, 314.65),
-        span("=", MR, 11.96, 154.58, 9.11, 306.57),
-        span("dx", MMI, 11.96, 137.33, 12.73, 298.36),
-        span("dx", MMI, 11.96, 173.30, 12.73, 299.58),
-        span("dy", MMI, 11.96, 173.56, 11.79, 283.29),
-    ];
-    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
-    assert_eq!(texts(&rewritten), ["$$\\frac{dy}{dx}=\\frac{1}{\\frac{dx}{dy}}$$"]);
-}
-
-/// Gutenberg 33283 p139: a problem number `(15)` printed above a row of full-size text is not
-/// a script of the expression below it, so no formula is written and every span is kept.
-#[test]
-fn should_not_script_a_full_size_row_label_onto_a_formula() {
-    let spans = vec![
-        span("(15)", MR, 11.96, 47.71, 20.81, 519.55),
-        span("(", MR, 11.96, 75.57, 4.55, 511.35),
-        span("x", MMI, 11.96, 80.12, 6.65, 511.35),
-        span("+ 2)(", MR, 11.96, 89.43, 26.72, 511.35),
-        span("x", MMI, 11.96, 116.15, 6.65, 511.35),
-        span("2", "PSEHXM+CMR8", 7.97, 122.80, 4.23, 514.9),
-        span("+", MR, 11.96, 130.19, 9.11, 511.35),
-        span("x", MMI, 11.96, 141.95, 6.65, 511.35),
-        span("+ 1)", MR, 11.96, 151.26, 22.16, 511.35),
-        span("2", "PSEHXM+CMR8", 7.97, 173.42, 4.23, 514.9),
-    ];
-    assert!(rewrite_math_spans(&spans).is_none());
-}
-
-/// A big operator sign beside a problem number does not exempt the number's line.
-#[test]
-fn should_still_refuse_a_full_size_label_beside_an_operator_sign() {
-    let spans = vec![
-        span("(15)", MR, 11.96, 47.71, 20.81, 519.55),
-        span("P", "XXJGHY+CMEX10", 11.96, 69.0, 11.52, 519.55),
-        span("(", MR, 11.96, 75.57, 4.55, 511.35),
-        span("x", MMI, 11.96, 80.12, 6.65, 511.35),
-        span("+ 2)(", MR, 11.96, 89.43, 26.72, 511.35),
-        span("x", MMI, 11.96, 116.15, 6.65, 511.35),
-        span("2", "PSEHXM+CMR8", 7.97, 122.80, 4.23, 514.9),
-    ];
-    let rewritten = rewrite_math_spans(&spans).unwrap_or_default();
-    assert!(
-        rewritten.iter().all(|span| !span.text.starts_with('$')),
-        "{:?}",
-        texts(&rewritten)
-    );
-}
-
 /// Gutenberg 33283 p161: `y = ∛x`, a CMEX radical drawn above the axis with its degree over
 /// the radical's left edge.
 #[test]
@@ -466,18 +411,6 @@ fn should_write_the_degree_of_a_radical() {
     ];
     let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
     assert_eq!(texts(&rewritten), ["$$y=\\sqrt[3]{x}$$"]);
-}
-
-#[test]
-fn rebuilt_tex_with_scripts_that_are_labels_or_punctuation_is_not_published() {
-    for broken in [
-        "{}_{9.}x^{2}y_{2}^{2}+3xy_{\\times}2c+1_{.}",
-        "{}^{12.}16a^{2}-9b^{2}{}^{\\div}4a-3b^{.}",
-        "4440.3\\pm1.3_{+4^{-}}^{+4.1}{}_{4}{}_{.}{}_{.}{}_{1}",
-        "{}_{(16)}5x^{2}+8x-12",
-    ] {
-        assert!(!tex_is_reliable(broken), "{broken}");
-    }
 }
 
 /// arXiv 2312.13591 p5, `[∼4526.5]` with its virtual-state label `V` and mark `♯` after it: the
@@ -625,21 +558,6 @@ fn should_take_a_radical_sign_only_from_the_extension_fonts() {
     }
 }
 
-/// Two centred display equations at ordinary leading (1.2 em) are two formulas, not a fraction.
-#[test]
-fn should_keep_two_centred_lines_at_ordinary_leading_apart() {
-    let spans = vec![
-        span("ab", MMI, 12.0, 200.0, 12.0, 700.0),
-        span("=", MR, 12.0, 215.0, 9.0, 700.0),
-        span("cd", MMI, 12.0, 227.0, 12.0, 700.0),
-        span("ef", MMI, 12.0, 200.0, 12.0, 685.6),
-        span("=", MR, 12.0, 215.0, 9.0, 685.6),
-        span("gh", MMI, 12.0, 227.0, 12.0, 685.6),
-    ];
-    let rewritten = rewrite_math_spans(&spans).expect("both rows are rewritten");
-    assert_eq!(texts(&rewritten), ["$$ab=cd$$", "$$ef=gh$$"]);
-}
-
 /// Gutenberg 36670 p140, exercise 10: two fractions joined by a `×` on the middle line, with
 /// no relation to anchor the axis. The line of operators between the numerators and the
 /// denominators is the axis, not the widest line.
@@ -674,80 +592,13 @@ fn should_take_the_operator_line_between_two_fraction_rows_as_the_axis() {
     );
 }
 
-/// Gutenberg 36670 p133: `2a − 8b − 8c` over a line of prose that opens `or 2(a − 4b − 4c)`,
-/// 1.4 em below it with letters at the same x: two lines of text, not the parts of a fraction.
 #[test]
-fn should_not_take_two_lines_of_text_with_aligned_letters_for_a_fraction() {
-    let (cmr, mmi, msy) = ("DPBTON+CMR10", "ZTFHJE+CMMI10", "LKAHCF+CMSY10");
-    let spans = vec![
-        span("2", cmr, 10.91, 114.32, 5.45, 199.81),
-        span("a", mmi, 10.91, 119.77, 5.77, 199.81),
-        span(" \u{2212}", msy, 10.91, 125.54, 12.47, 199.81),
-        span("8", cmr, 10.91, 147.45, 5.45, 199.81),
-        span("b", mmi, 10.91, 152.90, 4.68, 199.81),
-        span(" \u{2212}", msy, 10.91, 157.59, 12.47, 199.81),
-        span("8", cmr, 10.91, 178.28, 5.45, 199.81),
-        span("c", mmi, 10.91, 183.73, 4.72, 199.81),
-        span("or 2(", cmr, 10.91, 97.60, 22.16, 184.27),
-        span("a", mmi, 10.91, 119.76, 5.77, 184.27),
-        span(" \u{2212}", msy, 10.91, 125.53, 12.48, 184.27),
-        span("4", cmr, 10.91, 147.45, 5.45, 184.27),
-        span("b", mmi, 10.91, 152.90, 4.68, 184.27),
-        span(" \u{2212}", msy, 10.91, 157.58, 12.47, 184.27),
-        span(" 4", cmr, 10.91, 170.05, 9.45, 184.27),
-        span("c", mmi, 10.91, 179.50, 4.72, 184.27),
-        span(") = the sum of the numerators.", cmr, 10.91, 184.22, 150.58, 184.27),
-    ];
-    let rewritten = rewrite_math_spans(&spans).expect("the lines are rewritten");
-    assert_eq!(
-        texts(&rewritten),
-        [
-            "$$2a-8b-8c$$",
-            "or 2(",
-            "a",
-            " \u{2212}",
-            "4",
-            "b",
-            " \u{2212}",
-            " 4",
-            "c",
-            ") = the sum of the numerators."
-        ]
-    );
+fn should_not_trust_a_radical_beside_a_base_less_script_or_a_stray_degree() {
+    use super::radical_tex_is_sound;
+    assert!(radical_tex_is_sound("y=\\sqrt[3]{x^{2}}"));
+    assert!(radical_tex_is_sound("\\frac{1}{\\sqrt{\\kappa_{i}^{*}}}"));
+    assert!(!radical_tex_is_sound("(x)^{{}_{1}}\\sqrt{x}"));
+    assert!(!radical_tex_is_sound("\\frac{7x}{3^{3}}\\sqrt{(x-1)^{4}}"));
+    assert!(!radical_tex_is_sound("a^{3}\\sqrt{x}"));
 }
 
-/// Gutenberg 36670 p189, `−2/4 = −13/26`: a `1` set 1.33 em above the numerator `2` on the line
-/// above, in a row of other glyphs, is not the numerator of a fraction nested in `2/4`.
-#[test]
-fn should_not_nest_a_fraction_with_a_glyph_of_the_line_above() {
-    let (cmr, msy) = ("DPBTON+CMR10", "LKAHCF+CMSY10");
-    let spans = vec![
-        span("\u{2212}", msy, 10.91, 206.81, 8.49, 238.87),
-        span(" 1", cmr, 10.91, 215.30, 7.88, 238.87),
-        span("\u{2212}", msy, 10.91, 242.02, 8.49, 238.87),
-        span("2", cmr, 10.91, 217.72, 5.45, 224.36),
-        span("13", cmr, 10.91, 250.51, 10.91, 224.36),
-        span("\u{2212}", msy, 10.91, 208.04, 8.49, 216.98),
-        span("=", cmr, 10.91, 228.36, 8.49, 216.98),
-        span(" \u{2212}", msy, 10.91, 236.84, 12.47, 216.98),
-        span(".", "ZTFHJE+CMMI10", 10.91, 262.61, 3.03, 216.98),
-        span("4", cmr, 10.91, 217.72, 5.45, 209.49),
-        span("26", cmr, 10.91, 250.51, 10.91, 209.49),
-    ];
-    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
-    assert_eq!(
-        texts(&rewritten),
-        ["\u{2212}", " 1", "\u{2212}", "$$-\\frac{2}{4}=-\\frac{13}{26}.$$"]
-    );
-}
-
-#[test]
-fn should_write_a_trailing_full_stop_as_punctuation_not_as_a_script() {
-    use super::reliability::without_punctuation_scripts;
-    assert_eq!(
-        without_punctuation_scripts("2a[8\\sin(\\omega)]_{.}"),
-        "2a[8\\sin(\\omega)]."
-    );
-    assert_eq!(without_punctuation_scripts("x{}_{,}y"), "x,y");
-    assert_eq!(without_punctuation_scripts("a_{i,j}+b^{2}"), "a_{i,j}+b^{2}");
-}
