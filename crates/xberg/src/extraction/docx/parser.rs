@@ -3028,6 +3028,8 @@ struct DocxParser<R: Read + Seek> {
     relationships: AHashMap<String, String>,
     styles: Option<super::styles::StyleCatalog>,
     theme: Option<super::theme::Theme>,
+    /// Nesting limit the namespace pass enforces before the body parser's own check.
+    max_xml_depth: usize,
 }
 
 impl<R: Read + Seek> DocxParser<R> {
@@ -3046,7 +3048,8 @@ impl<R: Read + Seek> DocxParser<R> {
                     .read_to_string(&mut xml)
                     .is_ok()
                 {
-                    styles_result = super::styles::parse_styles_xml(&xml).ok();
+                    styles_result =
+                        super::styles::parse_styles_xml(&super::namespace::strict_to_transitional(&xml)).ok();
                 }
             }
             styles_result
@@ -3072,6 +3075,7 @@ impl<R: Read + Seek> DocxParser<R> {
             relationships: AHashMap::new(),
             styles,
             theme,
+            max_xml_depth: limits.max_xml_depth.min(limits.max_nesting_depth),
         })
     }
 
@@ -3213,10 +3217,12 @@ impl<R: Read + Seek> DocxParser<R> {
         let mut contents = String::new();
         file.take(read_limit).read_to_string(&mut contents)?;
         // `Borrowed` means the part already uses the conventional prefixes; keep the original.
-        Ok(match super::namespace::canonicalize_prefixes(&contents) {
-            std::borrow::Cow::Borrowed(_) => contents,
-            std::borrow::Cow::Owned(canonical) => canonical,
-        })
+        Ok(
+            match super::namespace::canonicalize_prefixes(&contents, self.max_xml_depth)? {
+                std::borrow::Cow::Borrowed(_) => contents,
+                std::borrow::Cow::Owned(canonical) => canonical,
+            },
+        )
     }
 
     /// Parse `word/document.xml`'s body content and populate `document` from it.
@@ -4770,6 +4776,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut budget = SecurityBudget::with_defaults();
         let defs = parser.parse_numbering(&xml, &mut budget).unwrap().list_types;
@@ -5011,6 +5018,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut budget = SecurityBudget::with_defaults();
         let numbering = parser.parse_numbering(xml, &mut budget).unwrap();
@@ -5075,6 +5083,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         parser.parse_numbering(&xml, &mut SecurityBudget::from_limits(limits))
     }
@@ -5387,6 +5396,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         {
@@ -5424,6 +5434,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         {
@@ -5464,6 +5475,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         {
@@ -5488,6 +5500,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut notes = Vec::new();
         let mut budget = crate::extractors::security::SecurityBudget::with_defaults();
@@ -6295,6 +6308,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         {
@@ -6315,6 +6329,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         parser_struct.parse_document_xml(xml, &mut document, budget).unwrap();
@@ -6330,6 +6345,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         parser_struct.parse_document_xml(xml, &mut document, budget)?;
@@ -6929,6 +6945,7 @@ mod tests {
             relationships: rels,
             styles: None,
             theme: None,
+            max_xml_depth: SecurityLimits::default().max_xml_depth,
         };
         let mut document = Document::new();
         {
