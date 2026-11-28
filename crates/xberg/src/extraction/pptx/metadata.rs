@@ -366,7 +366,8 @@ pub(super) fn extract_section_names<R: Read + Seek>(container: &mut PptxContaine
         Err(_) => return Ok(HashMap::new()),
     };
 
-    let doc = match roxmltree::Document::parse(xml_str) {
+    let xml_str = crate::extraction::ooxml_constants::normalize_strict_namespaces(xml_str);
+    let doc = match roxmltree::Document::parse(&xml_str) {
         Ok(d) => d,
         Err(_) => return Ok(HashMap::new()),
     };
@@ -383,7 +384,8 @@ fn extract_notes_text(notes_xml: &[u8]) -> Result<String> {
     let xml_str = utf8_validation::from_utf8(notes_xml)
         .map_err(|e| crate::error::XbergError::parsing(format!("Invalid UTF-8 in notes XML: {}", e)))?;
 
-    let doc = Document::parse(xml_str)
+    let xml_str = crate::extraction::ooxml_constants::normalize_strict_namespaces(xml_str);
+    let doc = Document::parse(&xml_str)
         .map_err(|e| crate::error::XbergError::parsing(format!("Failed to parse notes XML: {}", e)))?;
 
     let mut text_parts = Vec::with_capacity(16);

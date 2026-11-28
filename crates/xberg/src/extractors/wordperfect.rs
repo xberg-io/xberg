@@ -288,6 +288,14 @@ struct WpdWalker<'a> {
     diversions: Vec<Diversion>,
     /// Shared counter for footnote and endnote anchor keys.
     note_counter: u32,
+    /// Header and footer paragraphs, pushed after the body so their text follows it.
+    furniture: Vec<FurnitureItem>,
+}
+
+/// A paragraph or table of a header or footer, kept in document order.
+enum FurnitureItem {
+    Paragraph(String, Vec<TextAnnotation>, ContentLayer),
+    Table(TableBuilder, ContentLayer),
 }
 
 impl<'a> WpdWalker<'a> {
@@ -302,6 +310,7 @@ impl<'a> WpdWalker<'a> {
             table_depth: 0,
             diversions: Vec::new(),
             note_counter: 0,
+            furniture: Vec::new(),
         }
     }
 
@@ -460,14 +469,14 @@ impl<'a> WpdWalker<'a> {
         match diversion.kind {
             DiversionKind::Header => {
                 if !text.trim().is_empty() {
-                    let idx = self.builder.push_paragraph(&text, annotations, None, None);
-                    self.builder.set_layer(idx, ContentLayer::Header);
+                    self.furniture
+                        .push(FurnitureItem::Paragraph(text, annotations, ContentLayer::Header));
                 }
             }
             DiversionKind::Footer => {
                 if !text.trim().is_empty() {
-                    let idx = self.builder.push_paragraph(&text, annotations, None, None);
-                    self.builder.set_layer(idx, ContentLayer::Footer);
+                    self.furniture
+                        .push(FurnitureItem::Paragraph(text, annotations, ContentLayer::Footer));
                 }
             }
             DiversionKind::Aside { kind } => {
@@ -548,6 +557,19 @@ impl<'a> WpdWalker<'a> {
         while self.list_stack.pop().is_some() {
             self.builder.end_list();
         }
+        let mut seen: std::collections::HashSet<(bool, String)> = std::collections::HashSet::new();
+        for item in std::mem::take(&mut self.furniture) {
+            match item {
+                FurnitureItem::Paragraph(text, annotations, layer) => {
+                    if !seen.insert((layer == ContentLayer::Header, text.trim().to_string())) {
+                        continue;
+                    }
+                    let idx = self.builder.push_paragraph(&text, annotations, None, None);
+                    self.builder.set_layer(idx, layer);
+                }
+                FurnitureItem::Table(table, layer) => self.push_table(&table, Some(layer)),
+            }
+        }
     }
 
     /// Handles the table-structure events (`TableStart`..`TableEnd`), returning `true` if
@@ -609,7 +631,22 @@ impl<'a> WpdWalker<'a> {
         if t.rows.is_empty() {
             return;
         }
+        let furniture_layer = self.diversions.iter().rev().find_map(|d| match d.kind {
+            DiversionKind::Header => Some(ContentLayer::Header),
+            DiversionKind::Footer => Some(ContentLayer::Footer),
+            _ => None,
+        });
+        match furniture_layer {
+            Some(layer) => self.furniture.push(FurnitureItem::Table(t, layer)),
+            None => self.push_table(&t, None),
+        }
+    }
+
+    fn push_table(&mut self, t: &TableBuilder, layer: Option<ContentLayer>) {
         let idx = self.builder.push_table_from_cells(&t.rows, None, None);
+        if let Some(layer) = layer {
+            self.builder.set_layer(idx, layer);
+        }
         if !t.header_row_indices.is_empty() {
             let header_rows = t
                 .header_row_indices
@@ -748,6 +785,27 @@ fn build_wordperfect_internal_document(doc: &WpdDocument) -> InternalDocument {
     builder.build()
 }
 
+/// Build the document and apply the content filter. A document that yields nothing at all is
+/// an error; one whose only content is a header or footer the filter drops is not, since it
+/// has content that the caller chose to leave out.
+fn finish_wordperfect_document(
+    doc: &WpdDocument,
+    mime_type: &str,
+    config: &ExtractionConfig,
+) -> Result<InternalDocument> {
+    let mut internal_doc = build_wordperfect_internal_document(doc);
+    if internal_doc.elements.is_empty() {
+        return Err(crate::XbergError::parsing(
+            "WordPerfect document produced no extractable content".to_string(),
+        ));
+    }
+    internal_doc.mime_type = mime_type.to_string();
+    if let Some(filter) = &config.content_filter {
+        internal_doc.apply_furniture_filter(filter);
+    }
+    Ok(internal_doc)
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl InternalDocumentExtractor for WordPerfectExtractor {
@@ -792,14 +850,7 @@ impl InternalDocumentExtractor for WordPerfectExtractor {
         }
         .map_err(|e| crate::XbergError::parsing(format!("Failed to read WordPerfect document: {e}")))?;
 
-        let mut internal_doc = build_wordperfect_internal_document(&doc);
-        if internal_doc.elements.is_empty() {
-            return Err(crate::XbergError::parsing(
-                "WordPerfect document produced no extractable content".to_string(),
-            ));
-        }
-        internal_doc.mime_type = mime_type.to_string();
-        Ok(internal_doc)
+        finish_wordperfect_document(&doc, mime_type, config)
     }
 
     fn supported_mime_types(&self) -> &[&str] {
