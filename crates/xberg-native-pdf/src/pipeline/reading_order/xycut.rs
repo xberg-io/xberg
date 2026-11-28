@@ -322,11 +322,61 @@ fn span_mask(len: usize, members: &[usize]) -> Vec<bool> {
     mask
 }
 
+/// The regions a split of one region yields, in reading order: `read_as_is` is a finished group,
+/// `header` a header band to partition, then `parts`.
+struct RegionSplit {
+    read_as_is: Vec<usize>,
+    header: Vec<usize>,
+    parts: Vec<Vec<usize>>,
+}
+
 /// A column cut: the `header` rows above both columns, then the `left` and `right` columns.
 struct ColumnCut {
     header: Vec<usize>,
+    /// `header` is already in reading order, row by row; it is read as it stands, not cut again.
+    header_in_rows: bool,
     left: Vec<usize>,
     right: Vec<usize>,
+}
+
+/// A visual row of lines: the lines overlapping one band of the page, with its vertical extent.
+struct LineRow {
+    lines: Vec<usize>,
+    top: f32,
+    bottom: f32,
+}
+
+/// Group `lines` (indices into `lines`) into rows, top row first. A line joins the row whose
+/// first line it overlaps by half the shorter of the two: a raised mark overlaps its line's
+/// height, adjacent lines of text do not.
+fn rows_top_down(all_spans: &[TextSpan], lines: &[Vec<usize>]) -> Vec<LineRow> {
+    let interval = |line: &[usize]| {
+        let top = line
+            .iter()
+            .map(|&i| all_spans[i].bbox.y + all_spans[i].bbox.height.abs())
+            .fold(f32::MIN, f32::max);
+        let bottom = line.iter().map(|&i| all_spans[i].bbox.y).fold(f32::MAX, f32::min);
+        (top, bottom)
+    };
+    let mut order: Vec<usize> = (0..lines.len()).collect();
+    order.sort_by(|&a, &b| interval(&lines[b]).0.total_cmp(&interval(&lines[a]).0));
+    let mut rows: Vec<LineRow> = Vec::new();
+    for index in order {
+        let (top, bottom) = interval(&lines[index]);
+        if let Some(row) = rows.last_mut() {
+            let overlap = row.top.min(top) - row.bottom.max(bottom);
+            if overlap >= ROW_OVERLAP_FRACTION * (row.top - row.bottom).min(top - bottom) {
+                row.lines.push(index);
+                continue;
+            }
+        }
+        rows.push(LineRow {
+            lines: vec![index],
+            top,
+            bottom,
+        });
+    }
+    rows
 }
 
 /// The ink of `line` on each side of `split_x`: the summed widths of its spans clipped to the side.
@@ -1142,6 +1192,18 @@ impl XYCutStrategy {
     /// header/footer strips can recurse O(n) deep (O(n² log n) work);
     /// `MAX_PARTITION_DEPTH` bounds it.
     fn partition_indexed_depth(&self, all_spans: &[TextSpan], indices: &[usize], depth: u32) -> Vec<Vec<usize>> {
+        self.partition_indexed_in(all_spans, indices, depth, false)
+    }
+
+    /// `partition_indexed_depth` for a region that may lie inside a header band (`in_header`):
+    /// the rows above both columns, whose own recursion reads a running head first.
+    fn partition_indexed_in(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        depth: u32,
+        in_header: bool,
+    ) -> Vec<Vec<usize>> {
         if indices.is_empty() {
             return Vec::new();
         }
@@ -1227,8 +1289,8 @@ impl XYCutStrategy {
                     below = below.len(),
                     "peeling Y-band before column cut"
                 );
-                let mut result = self.partition_indexed_depth(all_spans, &above, depth + 1);
-                result.extend(self.partition_indexed_depth(all_spans, &below, depth + 1));
+                let mut result = self.partition_indexed_in(all_spans, &above, depth + 1, in_header);
+                result.extend(self.partition_indexed_in(all_spans, &below, depth + 1, in_header));
                 return result;
             }
             let (left, right): (Vec<usize>, Vec<usize>) = indices
@@ -1245,8 +1307,8 @@ impl XYCutStrategy {
                     right = right.len(),
                     "two-column-prose detected"
                 );
-                let mut result = self.partition_indexed_depth(all_spans, &left, depth + 1);
-                result.extend(self.partition_indexed_depth(all_spans, &right, depth + 1));
+                let mut result = self.partition_indexed_in(all_spans, &left, depth + 1, in_header);
+                result.extend(self.partition_indexed_in(all_spans, &right, depth + 1, in_header));
                 return result;
             }
         }
@@ -1273,8 +1335,8 @@ impl XYCutStrategy {
                     right = right.len(),
                     "narrow-gutter prose detected"
                 );
-                let mut result = self.partition_indexed_depth(all_spans, &left, depth + 1);
-                result.extend(self.partition_indexed_depth(all_spans, &right, depth + 1));
+                let mut result = self.partition_indexed_in(all_spans, &left, depth + 1, in_header);
+                result.extend(self.partition_indexed_in(all_spans, &right, depth + 1, in_header));
                 return result;
             }
         }
@@ -1306,32 +1368,50 @@ impl XYCutStrategy {
         if let Some(bands) = self.peel_full_width_line_bands(all_spans, indices, &lines) {
             let mut result = Vec::new();
             for band in bands {
-                result.extend(self.partition_indexed_depth(all_spans, &band, depth + 1));
+                result.extend(self.partition_indexed_in(all_spans, &band, depth + 1, in_header));
             }
             return result;
         }
 
-        let split = |horizontal: bool| -> Option<Vec<Vec<usize>>> {
+        let split = |horizontal: bool| -> Option<RegionSplit> {
             if horizontal {
-                let cut = self.find_column_cut(all_spans, indices, Some(&lines))?;
-                // A header band is its own region, read before the columns it crosses. ~keep
-                Some(
-                    [cut.header, cut.left, cut.right]
-                        .into_iter()
-                        .filter(|part| !part.is_empty())
-                        .collect(),
-                )
+                let cut = self.find_column_cut(all_spans, indices, Some(&lines), in_header)?;
+                // A header band is its own region, read before the columns it crosses; one
+                // already in row order is read as it stands. ~keep
+                let (read_as_is, header) = if cut.header_in_rows {
+                    (cut.header, Vec::new())
+                } else {
+                    (Vec::new(), cut.header)
+                };
+                Some(RegionSplit {
+                    read_as_is,
+                    header,
+                    parts: vec![cut.left, cut.right],
+                })
             } else {
                 self.find_vertical_split_indexed(all_spans, indices)
-                    .map(|(top, bottom)| vec![top, bottom])
+                    .map(|(top, bottom)| RegionSplit {
+                        read_as_is: Vec::new(),
+                        header: Vec::new(),
+                        parts: vec![top, bottom],
+                    })
             }
         };
 
         for horizontal in [self.prefer_horizontal, !self.prefer_horizontal] {
-            if let Some(parts) = split(horizontal) {
+            if let Some(RegionSplit {
+                read_as_is,
+                header,
+                parts,
+            }) = split(horizontal)
+            {
                 let mut result = Vec::new();
-                for part in &parts {
-                    result.extend(self.partition_indexed_depth(all_spans, part, depth + 1));
+                if !read_as_is.is_empty() {
+                    result.push(read_as_is);
+                }
+                result.extend(self.partition_indexed_in(all_spans, &header, depth + 1, true));
+                for part in parts.iter().filter(|part| !part.is_empty()) {
+                    result.extend(self.partition_indexed_in(all_spans, part, depth + 1, in_header));
                 }
                 return result;
             }
@@ -2121,41 +2201,9 @@ impl XYCutStrategy {
     /// `COLUMN_ROW_MIN_INK_FRACTION` of that side's width, over comparable heights: a form's few
     /// label rows beside a lone caption are not columns. The header is every row above the body
     /// down to the last that is not a pair of column headings, provided one crosses the gutter.
-    fn header_band_spans(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> Vec<usize> {
-        struct Row {
-            lines: Vec<usize>,
-            top: f32,
-            bottom: f32,
-        }
+    fn header_band_spans(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> (Vec<usize>, bool) {
         let lines = group_lines(all_spans, indices, true);
-        let interval = |line: &[usize]| {
-            let top = line
-                .iter()
-                .map(|&i| all_spans[i].bbox.y + all_spans[i].bbox.height.abs())
-                .fold(f32::MIN, f32::max);
-            let bottom = line.iter().map(|&i| all_spans[i].bbox.y).fold(f32::MAX, f32::min);
-            (top, bottom)
-        };
-        let mut order: Vec<usize> = (0..lines.len()).collect();
-        order.sort_by(|&a, &b| interval(&lines[b]).0.total_cmp(&interval(&lines[a]).0));
-        // A line joins the row whose first line it overlaps by half the shorter of the two: a
-        // raised mark overlaps its line's height, adjacent lines of text do not.
-        let mut rows: Vec<Row> = Vec::new();
-        for index in order {
-            let (top, bottom) = interval(&lines[index]);
-            if let Some(row) = rows.last_mut() {
-                let overlap = row.top.min(top) - row.bottom.max(bottom);
-                if overlap >= ROW_OVERLAP_FRACTION * (row.top - row.bottom).min(top - bottom) {
-                    row.lines.push(index);
-                    continue;
-                }
-            }
-            rows.push(Row {
-                lines: vec![index],
-                top,
-                bottom,
-            });
-        }
+        let rows = rows_top_down(all_spans, &lines);
 
         let left_edge = indices
             .iter()
@@ -2213,7 +2261,7 @@ impl XYCutStrategy {
         let Some(body_start) = (0..shapes.len()).find(|&index| {
             shapes[index].column.iter().any(|&on| on) && !shapes.get(index + 1).is_some_and(|next| next.crosses)
         }) else {
-            return Vec::new();
+            return (Vec::new(), false);
         };
         let mut column_rows: [Vec<(f32, f32)>; 2] = [Vec::new(), Vec::new()];
         for (shape, row) in shapes[body_start..].iter().zip(&rows[body_start..]) {
@@ -2224,7 +2272,7 @@ impl XYCutStrategy {
             }
         }
         if column_rows.iter().any(|side| side.len() < MIN_COLUMN_ROWS) {
-            return Vec::new();
+            return (Vec::new(), false);
         }
         let extent = |side: &[(f32, f32)]| {
             let top = side.iter().map(|row| row.0).fold(f32::MIN, f32::max);
@@ -2233,7 +2281,7 @@ impl XYCutStrategy {
         };
         let (left_extent, right_extent) = (extent(&column_rows[0]), extent(&column_rows[1]));
         if left_extent.min(right_extent) < COLUMN_EXTENT_RATIO * left_extent.max(right_extent) {
-            return Vec::new();
+            return (Vec::new(), false);
         }
         // A pair of column headings sits just above the body and belongs to its own columns,
         // so the header ends at the last row that is not such a pair.
@@ -2242,16 +2290,53 @@ impl XYCutStrategy {
             .find(|&row_index| !shapes[row_index].paired)
             .map_or(0, |row_index| row_index + 1);
         if !shapes[..header_end].iter().any(|shape| shape.crosses) {
+            return (Vec::new(), false);
+        }
+        // A title and a tag set on one row, paired across the gutter, head a page whose header
+        // rows are read as rows: cutting the header again reads the right-hand tag and the right
+        // column of the worksheet below it after everything on the left.
+        let in_rows = shapes[0].paired;
+        let spans = rows[..header_end].iter().flat_map(|row| {
+            let mut row_spans: Vec<usize> = row
+                .lines
+                .iter()
+                .flat_map(|&line_index| lines[line_index].iter().copied())
+                .collect();
+            if in_rows {
+                row_spans.sort_by(|&a, &b| all_spans[a].bbox.left().total_cmp(&all_spans[b].bbox.left()));
+            }
+            row_spans
+        });
+        (spans.collect(), in_rows)
+    }
+
+    /// The spans of the top row of `indices` when a line of it runs across `split_x`: a running
+    /// head or title set above everything else, read before either column rather than assigned
+    /// to the side holding most of its ink. A line crosses when it keeps at least a straddling
+    /// line's ink on the left and reaches one em past the cut. Empty when no line of the top
+    /// row crosses, or the row is the only one.
+    fn leading_crossing_row_spans(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> Vec<usize> {
+        let lines = group_lines(all_spans, indices, true);
+        let rows = rows_top_down(all_spans, &lines);
+        let [top, _, ..] = rows.as_slice() else {
+            return Vec::new();
+        };
+        let crosses = top.lines.iter().any(|&line_index| {
+            let line = &lines[line_index];
+            let (left_ink, right_ink) = line_ink(all_spans, line, split_x);
+            let font = line.iter().map(|&i| all_spans[i].font_size).fold(0.0f32, f32::max);
+            left_ink >= MIN_STRADDLING_INK_PTS && right_ink >= font
+        });
+        if !crosses {
             return Vec::new();
         }
-        rows[..header_end]
+        let mut spans: Vec<usize> = top
+            .lines
             .iter()
-            .flat_map(|row| {
-                row.lines
-                    .iter()
-                    .flat_map(|&line_index| lines[line_index].iter().copied())
-            })
-            .collect()
+            .flat_map(|&line_index| lines[line_index].iter().copied())
+            .collect();
+        spans.sort_by(|&a, &b| all_spans[a].bbox.left().total_cmp(&all_spans[b].bbox.left()));
+        spans
     }
 
     fn is_single_column_region(&self, all_spans: &[TextSpan], indices: &[usize]) -> bool {
@@ -2467,7 +2552,7 @@ impl XYCutStrategy {
         indices: &[usize],
         lines: Option<&[Vec<usize>]>,
     ) -> Option<(Vec<usize>, Vec<usize>)> {
-        self.find_column_cut(all_spans, indices, lines)
+        self.find_column_cut(all_spans, indices, lines, false)
             .map(|cut| (cut.header.into_iter().chain(cut.left).collect(), cut.right))
     }
 
@@ -2478,6 +2563,7 @@ impl XYCutStrategy {
         all_spans: &[TextSpan],
         indices: &[usize],
         lines: Option<&[Vec<usize>]>,
+        in_header: bool,
     ) -> Option<ColumnCut> {
         let profile = self.horizontal_projection_indexed(all_spans, indices)?;
 
@@ -2542,14 +2628,31 @@ impl XYCutStrategy {
         // GH#3446: a header band above both columns also crosses the gutter, but no row split
         // peels it when it is narrower than a full-width line and set close to the body, so
         // refusing there read the page row by row. It does not count; it is read first.
+        let grouped;
+        let lines: &[Vec<usize>] = match lines {
+            Some(lines) => lines,
+            None => {
+                grouped = group_indices_into_lines(all_spans, indices);
+                &grouped
+            }
+        };
         let straddling = self.straddling_line_count(all_spans, indices, split_x);
         let mut header = Vec::new();
+        let mut header_in_rows = false;
         if straddling >= MIN_PEELED_FULL_WIDTH_LINES {
-            header = self.header_band_spans(all_spans, indices, split_x);
+            (header, header_in_rows) = self.header_band_spans(all_spans, indices, split_x);
             let in_header = span_mask(all_spans.len(), &header);
             let body: Vec<usize> = indices.iter().copied().filter(|&i| !in_header[i]).collect();
             if self.straddling_line_count(all_spans, &body, split_x) > 0 {
                 return None;
+            }
+        } else if in_header {
+            // A running head above the whole region that the whole-line assignment would send,
+            // in part, to the right side is read after every left cell: it heads both. ~keep
+            let leading = self.leading_crossing_row_spans(all_spans, indices, split_x);
+            let (_, right_side) = self.partition_lines_at(all_spans, indices, lines, split_x);
+            if leading.iter().any(|i| right_side.contains(i)) {
+                header = leading;
             }
         }
 
@@ -2562,14 +2665,6 @@ impl XYCutStrategy {
         // to the side holding the majority of its inked width, so a line entirely on one
         // side partitions exactly as `left edge < split_x` already did (unaffected), and
         // only a straddling line's assignment changes. ~keep
-        let grouped;
-        let lines: &[Vec<usize>] = match lines {
-            Some(lines) => lines,
-            None => {
-                grouped = group_indices_into_lines(all_spans, indices);
-                &grouped
-            }
-        };
         let (left, right) = self.partition_lines_at(all_spans, indices, lines, split_x);
         let in_header = span_mask(all_spans.len(), &header);
         let (left, right) = if header.is_empty() {
@@ -2668,8 +2763,17 @@ impl XYCutStrategy {
         }
 
         let left = left.into_iter().filter(|&i| !in_header[i]).collect();
-        let header = indices.iter().copied().filter(|&i| in_header[i]).collect();
-        Some(ColumnCut { header, left, right })
+        let header = if header_in_rows {
+            header
+        } else {
+            indices.iter().copied().filter(|&i| in_header[i]).collect()
+        };
+        Some(ColumnCut {
+            header,
+            header_in_rows,
+            left,
+            right,
+        })
     }
 
     /// True when the lowest y of the right side is at or above the highest y of the left side
@@ -3560,7 +3664,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("the columns are cut below the header");
         assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
     }
@@ -3587,7 +3691,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("the columns are cut below the header");
         assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
     }
@@ -3613,7 +3717,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("the columns are cut below the header");
         assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
     }
@@ -3669,7 +3773,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("a gutter between the columns is cut once the title is read first");
         assert_eq!(cut.header, Vec::<usize>::new());
         assert_eq!(cut.left, vec![0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]);
@@ -3697,7 +3801,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("header lines are not table rows");
         assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
     }
@@ -3726,7 +3830,7 @@ mod tests {
         };
         let cut = |spans: &[TextSpan]| {
             let indices: Vec<usize> = (0..spans.len()).collect();
-            strategy.find_column_cut(spans, &indices, None)
+            strategy.find_column_cut(spans, &indices, None, false)
         };
 
         assert!(cut(&build(true)).is_none());
@@ -3756,7 +3860,7 @@ mod tests {
         };
         let cut = |spans: &[TextSpan]| {
             let indices: Vec<usize> = (0..spans.len()).collect();
-            strategy.find_column_cut(spans, &indices, None)
+            strategy.find_column_cut(spans, &indices, None, false)
         };
 
         assert!(cut(&build(true)).is_none());
@@ -3781,7 +3885,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("the affiliation line belongs to the header");
         assert_eq!((cut.header, cut.left, cut.right), (vec![0, 1, 2, 3, 4], left, right));
     }
@@ -3801,7 +3905,7 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         let cut = strategy
-            .find_column_cut(&spans, &indices, None)
+            .find_column_cut(&spans, &indices, None, false)
             .expect("the columns start below the title");
         let left: Vec<usize> = std::iter::once(2).chain(left).collect();
         let right: Vec<usize> = std::iter::once(3).chain(right).collect();
@@ -6731,5 +6835,370 @@ mod tests {
             last_left < first_right,
             "every left span precedes every right span: {order:?}"
         );
+    }
+
+    /// Real span geometry (x, y, width, height, font size, text) of irs-p590b--2024 p29, above y 300.
+    #[rustfmt::skip]
+    const IRS_P590B_P29: &[(f32, f32, f32, f32, f32, &str)] = &[
+        (42.0, 738.5, 239.664, 12.0, 12.0, "Early Distribution Repayments Worksheet"),
+        (423.87598, 738.5, 118.091995, 12.0, 12.0, "Keep for Your Records"),
+        (54.73003, 717.46484, 6.672001, 8.0, 8.0, "1."),
+        (65.50012, 717.46484, 85.816, 8.0, 8.0, "Total distribution amount"),
+        (159.50012, 717.46484, 282.08047, 8.0, 8.0, "............................................................"),
+        (454.70422, 717.46484, 6.672001, 8.0, 8.0, "1."),
+        (54.73003, 701.66486, 6.672001, 8.0, 8.0, "2."),
+        (65.50012, 701.66486, 111.328, 8.0, 8.0, "Current year repayment amount"),
+        (182.99612, 701.66486, 258.5737, 8.0, 8.0, "......................................................."),
+        (454.70422, 701.66486, 6.672001, 8.0, 8.0, "2."),
+        (54.73003, 685.86487, 6.672001, 8.0, 8.0, "3."),
+        (65.50012, 685.86487, 100.784004, 8.0, 8.0, "Amount repaid in prior years "),
+        (173.60413, 685.86487, 267.9764, 8.0, 8.0, "........................................................."),
+        (454.70422, 685.86487, 6.672001, 8.0, 8.0, "3."),
+        (54.73003, 670.0649, 6.672001, 8.0, 8.0, "4."),
+        (65.50012, 670.0649, 124.856, 8.0, 8.0, "Total repayments. Add lines 2 and 3"),
+        (197.10011, 670.0649, 244.46968, 8.0, 8.0, "...................................................."),
+        (454.70422, 670.0649, 6.672001, 8.0, 8.0, "4."),
+        (54.73003, 654.26483, 6.672001, 8.0, 8.0, "5."),
+        (65.50012, 654.26483, 198.63202, 8.0, 8.0, "Distribution amount not repaid. Subtract line 4 from line 1"),
+        (272.3001, 654.26483, 169.24825, 8.0, 8.0, "...................................."),
+        (454.70422, 654.26483, 6.672001, 8.0, 8.0, "5."),
+        (54.73003, 638.46484, 6.672001, 8.0, 8.0, "6."),
+        (65.50012, 638.46484, 95.26399, 8.0, 8.0, "Basis in the retirement plan"),
+        (168.90012, 638.46484, 272.67776, 8.0, 8.0, ".........................................................."),
+        (454.70422, 638.46484, 6.672001, 8.0, 8.0, "6."),
+        (54.73003, 622.66486, 6.672001, 8.0, 8.0, "7."),
+        (65.50012, 622.66486, 171.67203, 8.0, 8.0, "Value of the retirement plan at the end of the year"),
+        (244.10013, 622.66486, 197.45628, 8.0, 8.0, ".........................................."),
+        (454.70422, 622.66486, 6.672001, 8.0, 8.0, "7."),
+        (54.73003, 606.86487, 6.672001, 8.0, 8.0, "8."),
+        (65.50012, 606.86487, 341.39203, 8.0, 8.0, "Divide line 6 by line 7. Enter the result as a decimal (rounded to at least three places). This is your "),
+        (406.93216, 606.86487, 10.608, 8.0, 8.0, "tax"),
+        (417.54016, 606.86487, 2.664, 8.0, 8.0, "-"),
+        (420.20416, 606.86487, 15.832001, 8.0, 8.0, "free/"),
+        (65.50018, 596.86487, 42.912003, 8.0, 8.0, "taxable ratio"),
+        (112.50018, 596.86487, 329.09402, 8.0, 8.0, "......................................................................"),
+        (454.70422, 596.86487, 6.672001, 8.0, 8.0, "8."),
+        (54.73003, 581.0649, 6.672001, 8.0, 8.0, "9."),
+        (65.50012, 581.0649, 78.888, 8.0, 8.0, "Multiply line 2 by line 8"),
+        (150.10013, 581.0649, 291.4832, 8.0, 8.0, ".............................................................."),
+        (454.70422, 581.0649, 6.672001, 8.0, 8.0, "9."),
+        (50.282032, 565.26483, 11.120001, 8.0, 8.0, "10."),
+        (65.50012, 565.26483, 373.80002, 8.0, 8.0, "Subtract line 9 from line 2. Reduce your AGI by this amount (in addition to any other changes you make) on "),
+        (65.50015, 555.26483, 73.176, 8.0, 8.0, "your amended return"),
+        (145.39615, 555.26483, 296.18454, 8.0, 8.0, "..............................................................."),
+        (450.25623, 555.26483, 11.120001, 8.0, 8.0, "10."),
+        (42.0, 534.7824, 257.46002, 10.0, 10.0, "an additional tax of $300 (10% (0.10) × $3,000). He files "),
+        (315.0, 534.7824, 141.55533, 10.0, 10.0, "Figuring the taxable amount. "),
+        (458.86533, 534.7824, 111.110016, 10.0, 10.0, "When you make a repay-"),
+        (42.00004, 523.2824, 89.15, 10.0, 10.0, "Form 5329. See the "),
+        (131.16003, 523.2824, 20.61, 10.0, 10.0, "filled"),
+        (151.78003, 523.2824, 3.3300002, 10.0, 10.0, "-"),
+        (155.11005, 523.2824, 57.680004, 10.0, 10.0, "in Form 5329"),
+        (212.79005, 523.2824, 26.760002, 10.0, 10.0, ", later."),
+        (315.00238, 523.2824, 257.43, 10.0, 10.0, "ment in a year other than the distribution year, you must "),
+        (314.99603, 511.7824, 257.44003, 10.0, 10.0, "figure the amount you must reduce your taxable income in "),
+        (78.000046, 506.7824, 218.99, 10.0, 10.0, "Early distributions of funds from a SIMPLE retire-"),
+        (315.00476, 500.2824, 257.46997, 10.0, 10.0, "the year of the distribution. If you are repaying less than "),
+        (104.41661, 495.2824, 195.05003, 10.0, 10.0, "account made within 2 years of beginning "),
+        (54.11539, 491.69452, 6.3398104, 19.03847, 19.03847, "!"),
+        (77.99661, 491.69452, 24.570002, 10.0, 10.0, "ment "),
+        (314.99554, 488.7824, 255.04001, 10.0, 10.0, "the full distribution, you must figure the part of the distribu-"),
+        (43.471153, 484.6849, 27.71759, 5.365387, 5.365387, "CAUTION"),
+        (78.00454, 483.7824, 221.41003, 10.0, 10.0, "participation in the SIMPLE are subject to a 25%, "),
+        (314.99817, 477.2824, 257.46008, 10.0, 10.0, "tion that was taxable when distributed. This will be the "),
+        (42.00206, 472.2824, 178.72, 10.0, 10.0, "rather than a 10%, early distributions tax."),
+        (314.999, 465.7824, 243.84003, 10.0, 10.0, "amount you lower your income on your amended return."),
+        (315.0, 445.2824, 128.22656, 10.0, 10.0, "The tax-free/taxable ratio. "),
+        (445.53656, 445.2824, 126.898315, 10.0, 10.0, "The tax-free/taxable ratio is "),
+        (42.0, 442.55, 175.212, 12.0, 12.0, "Early Distribution Repayments"),
+        (314.9997, 433.7824, 254.99004, 10.0, 10.0, "that fraction arrived at by dividing the retirement plans ba-"),
+        (315.0031, 422.2824, 257.38007, 10.0, 10.0, "sis by the value of the retirement plan at the end of the "),
+        (42.00201, 419.3379, 254.95003, 10.0, 10.0, "Certain early distributions are excepted from the 10% ad-"),
+        (315.00458, 410.7824, 257.44006, 10.0, 10.0, "year. This ratio is used to determine what portion of the "),
+        (41.99793, 407.8379, 257.38004, 10.0, 10.0, "ditional tax and may be repaid to an eligible retirement "),
+        (315.00116, 399.2824, 254.96997, 10.0, 10.0, "distribution you are repaying was taxable when distrib-"),
+        (41.9966, 396.3379, 257.42, 10.0, 10.0, "plan, which includes an IRA. These distributions are "),
+        (314.9975, 387.7824, 257.44, 10.0, 10.0, "uted. This will be the amount you reduce your income on "),
+        (41.99586, 384.8379, 255.00996, 10.0, 10.0, "known as “early distributions whose repayments are trea-"),
+        (315.00345, 376.2824, 94.25, 10.0, 10.0, "your amended return."),
+        (42.00365, 373.3379, 71.47, 10.0, 10.0, "ted as rollovers.”"),
+        (42.0, 352.8379, 257.72, 10.0, 10.0, "Early distributions whose repayments are treated as "),
+        (467.89386, 352.01483, 77.832, 8.0, 8.0, "Retirement Plan Basis"),
+        (42.00355, 341.3379, 51.773052, 10.0, 10.0, "rollovers.  "),
+        (96.08661, 341.3379, 200.89005, 10.0, 10.0, "This phrase describes the following distribu-"),
+        (329.888, 337.61484, 75.600006, 8.0, 8.0, "Tax-free/taxable ratio "),
+        (429.66946, 337.61484, 4.688, 8.0, 8.0, "="),
+        (452.85382, 337.21484, 110.119995, 8.0, 8.0, "Value of the Retirement Plan at "),
+        (42.00188, 329.8379, 23.860003, 10.0, 10.0, "tions:"),
+        (475.29382, 327.21484, 65.256004, 8.0, 8.0, "the end of the year"),
+        (48.00588, 312.85547, 4.692, 12.0, 12.0, "•"),
+        (58.99788, 312.85547, 169.37, 10.0, 10.0, "Qualified birth or adoption distributions"),
+        (228.36787, 313.3379, 2.7800002, 10.0, 10.0, "."),
+    ];
+    /// Real span geometry of fr-2026-08190-hcbs p15.
+    #[rustfmt::skip]
+    const FR_HCBS_P15: &[(f32, f32, f32, f32, f32, &str)] = &[
+        (145.72, 750.0, 76.78791, 10.0, 10.0, "Federal Register"),
+        (224.1298, 750.0, 246.93056, 10.0, 10.0, "/ Vol. 91, No. 81 / Tuesday, April 28, 2026 / Notices "),
+        (536.42, 750.0, 33.638004, 11.0, 11.0, "22837 "),
+        (84.8, 724.0, 195.5537, 10.0, 10.0, "TABLE 5—PROPOSED VOLUNTARY MEASURES"),
+        (280.3537, 724.0, 30.640015, 8.1882, 8.1882, " IN THE"),
+        (314.3128, 724.0, 215.5658, 10.0, 10.0, "2028 HCBS QUALITY MEASURE SET—Continued "),
+        (308.379, 707.5, 41.999306, 7.0, 7.0, "Type of data "),
+        (388.494, 707.5, 33.835205, 7.0, 7.0, "Method of "),
+        (497.176, 707.5, 31.899002, 7.0, 7.0, "Technical "),
+        (76.0, 704.0, 32.652203, 7.0, 7.0, "CMIT No. "),
+        (144.817, 704.0, 56.389206, 7.0, 7.0, "Measure steward "),
+        (228.6161, 704.0, 49.389206, 7.0, 7.0, "Measure name "),
+        (317.69598, 700.5, 22.953001, 7.0, 7.0, "source "),
+        (377.434, 700.5, 55.99231, 7.0, 7.0, "reporting to CMS "),
+        (487.537, 700.5, 42.014008, 7.0, 7.0, "specifications"),
+        (530.6947, 700.5, 6.0559525, 4.55, 4.55, "46"),
+        (536.7507, 700.5002, 1.9460002, 7.0, 7.0, " "),
+        (457.3, 685.1, 43.960007, 7.0, 7.0, "Denominator: "),
+        (501.638, 685.1, 59.87731, 7.0, 7.0, "A statistically valid "),
+        (464.3, 677.099, 99.17041, 7.0, 7.0, "random sample of inpatient dis-"),
+        (464.3, 669.098, 101.10451, 7.0, 7.0, "charges drawn from the eligible "),
+        (464.3, 661.09705, 99.56941, 7.0, 7.0, "population. The denominator is "),
+        (464.3, 653.09607, 91.7875, 7.0, 7.0, "based on discharges, not on "),
+        (464.3, 645.0951, 94.5063, 7.0, 7.0, "participants. Participants may "),
+        (464.3, 637.0941, 95.6676, 7.0, 7.0, "appear more than once in the "),
+        (464.3, 629.09314, 26.453003, 7.0, 7.0, "sample. "),
+        (45.3, 621.1001, 92.289215, 7.0, 7.0, "01255–01–C–LTSS .............. "),
+        (144.59851, 621.1001, 54.806305, 7.0, 7.0, "CMS .................. "),
+        (206.39801, 621.1001, 87.11431, 7.0, 7.0, "MLTSS–5: Screening, Risk "),
+        (305.19598, 621.10016, 42.014004, 7.0, 7.0, "Assessment/ "),
+        (358.494, 621.1002, 91.5061, 7.0, 7.0, "MDCT ..................................."),
+        (457.292, 621.1002, 36.953003, 7.0, 7.0, "Numerator: "),
+        (494.623, 621.1002, 64.55331, 7.0, 7.0, "The number of Med-"),
+        (213.398, 613.0991, 80.89341, 7.0, 7.0, "Assessment, and Plan of "),
+        (312.19598, 613.0992, 34.610104, 7.0, 7.0, "Case Man-"),
+        (464.292, 613.09924, 95.6634, 7.0, 7.0, "icaid MLTSS participants who "),
+        (213.398, 605.09814, 74.66341, 7.0, 7.0, "Care to Prevent Future "),
+        (312.19598, 605.0982, 29.183004, 7.0, 7.0, "agement "),
+        (464.292, 605.09827, 99.1844, 7.0, 7.0, "have documentation of an eval-"),
+        (213.398, 597.09717, 16.723001, 7.0, 7.0, "Falls."),
+        (312.19598, 597.0972, 25.284002, 7.0, 7.0, "System."),
+        (464.292, 597.0973, 103.4565, 7.0, 7.0, "uation of whether the participant "),
+        (464.292, 589.0963, 96.44251, 7.0, 7.0, "has experienced a fall or prob-"),
+        (464.292, 581.09534, 82.82051, 7.0, 7.0, "lems with balance or gait. "),
+        (457.3, 573.1003, 43.960007, 7.0, 7.0, "Denominator: "),
+        (501.638, 573.1003, 59.87731, 7.0, 7.0, "A statistically valid "),
+        (464.3, 565.0993, 89.440414, 7.0, 7.0, "random sample of Medicaid "),
+        (464.3, 557.0983, 101.494415, 7.0, 7.0, "MLTSS participants drawn from "),
+        (464.3, 549.09735, 72.73631, 7.0, 7.0, "the eligible population. "),
+        (45.3, 541.1003, 92.31229, 7.0, 7.0, "Varies ................................... "),
+        (144.59848, 541.1003, 54.7986, 7.0, 7.0, "Varies ................ "),
+        (206.39798, 541.1003, 82.818405, 7.0, 7.0, "Any HCBS CAHPS, NCI– "),
+        (305.19598, 541.0933, 37.345, 7.0, 7.0, "Participant- "),
+        (358.494, 541.0934, 81.283295, 7.0, 7.0, "HCBS CAHPS database, "),
+        (457.292, 541.0864, 23.730003, 7.0, 7.0, "Varies. "),
+        (213.398, 533.0993, 73.08842, 7.0, 7.0, "AD, NCI–IDD, or POM "),
+        (312.19598, 533.09235, 30.737001, 7.0, 7.0, "Reported "),
+        (365.494, 533.0924, 78.16131, 7.0, 7.0, "NCI–AD survey data col-"),
+        (213.398, 525.0983, 77.778404, 7.0, 7.0, "measure not included in "),
+        (312.19598, 525.0914, 40.460003, 7.0, 7.0, "Data/Survey."),
+        (365.494, 525.09143, 77.7693, 7.0, 7.0, "lection, NCI–IDD survey "),
+        (213.398, 517.09735, 78.55541, 7.0, 7.0, "the proposed list of man-"),
+        (365.494, 517.09045, 82.43342, 7.0, 7.0, "data collection, or MDCT, "),
+        (213.398, 509.09634, 54.45511, 7.0, 7.0, "datory measures."),
+        (365.494, 509.08945, 43.17811, 7.0, 7.0, "as applicable."),
+        (45.0, 476.7, 168.19559, 9.0, 9.0, "C. Proposed Stratification Requirements "),
+        (222.00299, 476.72723, 147.34259, 9.0, 9.0, "proposed mandatory measures that "),
+        (399.00598, 476.77246, 145.25641, 9.0, 9.0, "measures and the factors by which "),
+        (222.00299, 466.62924, 156.27602, 9.0, 9.0, "would require stratification using the "),
+        (399.00598, 466.77347, 160.27202, 9.0, 9.0, "States must report stratified measures, "),
+        (54.0, 462.696, 155.20679, 9.0, 9.0, "As discussed earlier in section I.B. of "),
+        (222.00299, 456.53125, 156.312, 9.0, 9.0, "likely maximum number of measures "),
+        (399.00598, 456.77448, 149.78702, 9.0, 9.0, "the Secretary will consider whether "),
+        (45.0, 452.69702, 150.2514, 9.0, 9.0, "this notice with comment period, at "),
+        (399.00598, 446.77548, 130.779, 9.0, 9.0, "such stratified sampling can be "),
+        (222.00299, 446.43326, 164.21579, 9.0, 9.0, "that States would need to report, rather "),
+        (45.0, 442.69803, 161.3043, 9.0, 9.0, "§ 441.312(f), we established a phase-in "),
+        (399.00598, 436.7765, 164.27701, 9.0, 9.0, "accomplished based on valid statistical "),
+        (222.00299, 436.33527, 143.2674, 9.0, 9.0, "than the total number of proposed "),
+        (45.0, 432.69904, 151.776, 9.0, 9.0, "schedule for stratified reporting that "),
+        (399.00598, 426.7775, 145.32661, 9.0, 9.0, "methods, without risking violating "),
+        (222.00299, 426.23727, 163.78738, 9.0, 9.0, "mandatory measures in the 2028 HCBS "),
+        (45.0, 422.70004, 167.24341, 9.0, 9.0, "requires States to provide stratified data "),
+        (399.00598, 416.7785, 159.81299, 9.0, 9.0, "beneficiary privacy, and, for measures "),
+        (222.00299, 416.23828, 157.284, 9.0, 9.0, "Quality Measure Set. Specifically, we "),
+        (45.0, 412.70105, 153.1872, 9.0, 9.0, "for 25 percent of the measures in the "),
+        (399.00598, 406.7795, 148.806, 9.0, 9.0, "obtained from surveys, whether the "),
+        (222.00299, 406.2393, 160.7544, 9.0, 9.0, "are soliciting comments on whether to "),
+        (45.0, 402.70206, 154.7388, 9.0, 9.0, "HCBS Quality Measure Set by July 9, "),
+        (399.00598, 396.78052, 161.78401, 9.0, 9.0, "original survey instrument collects the "),
+        (222.00299, 396.2403, 170.20981, 9.0, 9.0, "require States to report stratified data for "),
+        (45.0, 392.70306, 155.24818, 9.0, 9.0, "2028, 50 percent by July 9, 2030, and "),
+        (399.00598, 386.78152, 164.7594, 9.0, 9.0, "variables or factors necessary to stratify "),
+        (222.00299, 386.2413, 150.2694, 9.0, 9.0, "five of the mandatory measures. We "),
+        (45.0, 382.70407, 153.24117, 9.0, 9.0, "100 percent by July 9, 2032. To meet "),
+        (399.00598, 376.78253, 141.76439, 9.0, 9.0, "the measures. We believe that our "),
+        (222.00299, 376.2423, 159.804, 9.0, 9.0, "believe this approach more effectively "),
+        (45.0, 372.70508, 163.2564, 9.0, 9.0, "this requirement, States are required to "),
+        (399.00598, 366.78354, 136.296, 9.0, 9.0, "proposal to not require stratified "),
+        (222.00299, 366.24332, 164.781, 9.0, 9.0, "recognizes the practical implications of "),
+        (45.0, 362.7061, 164.22478, 9.0, 9.0, "provide stratified data for 25 percent of "),
+        (399.00598, 356.78455, 148.2624, 9.0, 9.0, "reporting of survey measures in the "),
+        (222.00299, 356.24432, 153.73979, 9.0, 9.0, "the design of the 2028 HCBS Quality "),
+        (45.0, 352.7071, 152.2764, 9.0, 9.0, "the mandatory measures in the 2028 "),
+        (399.00598, 346.78555, 145.27441, 9.0, 9.0, "2028 HCBS Quality Measure Set is "),
+        (222.00299, 346.24533, 166.22281, 9.0, 9.0, "Measure Set than an approach based on "),
+        (45.0, 342.7081, 158.75641, 9.0, 9.0, "HCBS Quality Measure Set. In section "),
+        (399.00598, 336.78656, 167.30731, 9.0, 9.0, "consistent with § 441.312(f). We request "),
+        (222.00299, 336.24634, 165.76738, 9.0, 9.0, "the total number of proposed measures. "),
+        (45.0, 332.7091, 139.2534, 9.0, 9.0, "II.A. of this notice with comment "),
+        (399.00598, 326.78757, 157.806, 9.0, 9.0, "comment on our proposals, including "),
+        (45.0, 322.7101, 135.75241, 9.0, 9.0, "period, we indicated that we are "),
+        (231.00299, 323.04333, 148.79701, 9.0, 9.0, "The specific measures proposed for "),
+        (399.00598, 316.78857, 161.7624, 9.0, 9.0, "whether any of the measures proposed "),
+        (45.0, 312.71112, 145.791, 9.0, 9.0, "soliciting comments on whether to "),
+        (222.00299, 313.04434, 161.27101, 9.0, 9.0, "required stratification are identified in "),
+        (399.00598, 306.78958, 163.25641, 9.0, 9.0, "for required stratification would not be "),
+        (45.0, 302.71213, 131.7744, 9.0, 9.0, "include a total of 23 mandatory "),
+        (222.00299, 303.04535, 152.6832, 9.0, 9.0, "Table 4 in section II.A. of this notice "),
+        (399.00598, 296.7906, 151.7364, 9.0, 9.0, "feasible for States to stratify without "),
+        (45.0, 292.71313, 150.2784, 9.0, 9.0, "measures in the 2028 HCBS Quality "),
+        (222.00299, 293.04636, 161.75339, 9.0, 9.0, "with comment period and include two "),
+        (399.00598, 286.7916, 156.7584, 9.0, 9.0, "undue burden or cost, whether States "),
+        (45.0, 282.71414, 167.75641, 9.0, 9.0, "Measure Set. However, we also clarified "),
+        (222.00299, 283.04736, 166.27501, 9.0, 9.0, "assessment and care planning measures "),
+        (399.00598, 276.7926, 165.6882, 9.0, 9.0, "should be required to stratify any of the "),
+        (45.0, 272.71515, 150.2298, 9.0, 9.0, "that we are not proposing to require "),
+        (222.00299, 273.04837, 135.315, 9.0, 9.0, "(LTSS–1 and LTSS–2) and three "),
+        (399.00598, 266.7936, 162.88022, 9.0, 9.0, "mandatory participant-reported survey "),
+        (45.0, 262.71616, 146.72879, 9.0, 9.0, "States to report on all 23 measures. "),
+        (222.00299, 263.04938, 163.8306, 9.0, 9.0, "administrative data measures (LTSS–6, "),
+        (399.00598, 256.79462, 154.29599, 9.0, 9.0, "measures, and whether the proposed "),
+        (45.0, 252.71716, 154.75139, 9.0, 9.0, "Instead, the number of measures that "),
+        (222.00299, 253.05038, 162.2844, 9.0, 9.0, "LTSS–7, and LTSS–8). We believe that "),
+        (399.00598, 246.79562, 166.8096, 9.0, 9.0, "stratification requirements would result "),
+        (45.0, 242.71817, 167.2002, 9.0, 9.0, "each State would need to report in 2028 "),
+        (222.00299, 243.05139, 165.20581, 9.0, 9.0, "these measures are feasible for States to "),
+        (399.00598, 236.79663, 93.8466, 9.0, 9.0, "in undue privacy risk. "),
+        (45.0, 232.71918, 155.7684, 9.0, 9.0, "would vary based on the populations "),
+        (222.00299, 233.0524, 168.2334, 9.0, 9.0, "stratify, and that the administrative data "),
+        (408.00598, 227.59863, 134.2278, 9.0, 9.0, "For each of the measures we are "),
+        (45.0, 222.72018, 153.2664, 9.0, 9.0, "served in the State’s HCBS programs "),
+        (222.00299, 223.0534, 135.792, 9.0, 9.0, "measures in particular would be "),
+        (399.00598, 217.59964, 145.791, 9.0, 9.0, "soliciting comments on whether to "),
+        (45.0, 212.72119, 162.7128, 9.0, 9.0, "and the survey(s) selected by the State. "),
+        (222.00299, 213.05441, 128.304, 9.0, 9.0, "relatively low burden for State "),
+        (399.00598, 207.60065, 132.7554, 9.0, 9.0, "require States to stratify, we are "),
+        (45.0, 202.7222, 167.2038, 9.0, 9.0, "We further clarified that we believe that "),
+        (222.00299, 203.05542, 169.2504, 9.0, 9.0, "reporting, particularly for States that opt "),
+        (399.00598, 197.60165, 145.791, 9.0, 9.0, "soliciting comments on whether to "),
+        (45.0, 192.7232, 157.68718, 9.0, 9.0, "each State would need to report up to "),
+        (222.00299, 193.05643, 154.6812, 9.0, 9.0, "for CMS to report the results on their "),
+        (399.00598, 187.60266, 146.8476, 9.0, 9.0, "require stratification by geography, "),
+        (45.0, 182.72421, 167.7744, 9.0, 9.0, "19 proposed mandatory measures in the "),
+        (222.00299, 183.05743, 159.76439, 9.0, 9.0, "behalf. Further, we are concerned that "),
+        (399.00598, 177.60367, 147.2544, 9.0, 9.0, "using a minimum standard of core- "),
+        (45.0, 172.72522, 158.7438, 9.0, 9.0, "2028 HCBS Quality Measure Set. As a "),
+        (222.00299, 173.05844, 130.8276, 9.0, 9.0, "requiring stratified reporting of "),
+        (399.00598, 167.60468, 117.862206, 9.0, 9.0, "based statistical area (CBSA)"),
+        (518.3622, 167.60468, 7.7862244, 5.85, 5.85, "47"),
+        (528.6083, 167.5, 28.414803, 9.0, 9.0, "with a "),
+        (45.0, 162.72623, 156.7494, 9.0, 9.0, "result, we are soliciting comments on "),
+        (222.00299, 163.05945, 148.8672, 9.0, 9.0, "participant-reported measures from "),
+        (398.99927, 157.501, 143.35559, 9.0, 9.0, "recommendation to move towards "),
+        (45.0, 152.72723, 151.7634, 9.0, 9.0, "whether to determine the number of "),
+        (222.00299, 153.06046, 149.27939, 9.0, 9.0, "experience of care surveys could be "),
+        (398.99927, 147.50201, 153.8982, 9.0, 9.0, "Rural-Urban Commuting Area Codes."),
+        (552.8986, 147.50201, 7.7862244, 5.85, 5.85, "48"),
+        (560.6847, 147.5, 2.5020003, 9.0, 9.0, " "),
+        (222.00299, 143.06146, 163.19879, 9.0, 9.0, "difficult for States to implement due to "),
+        (398.9997, 137.501, 133.2774, 9.0, 9.0, "We are not proposing to require "),
+        (52.0, 134.9147, 6.0559525, 4.55, 4.55, "46"),
+        (59.1959, 133.1, 153.43863, 7.0, 7.0, "For the measure with separate FFS and MLTSS "),
+        (222.00299, 133.06247, 116.31061, 9.0, 9.0, "small sample sizes, missing "),
+        (398.9997, 127.50201, 158.7564, 9.0, 9.0, "stratification for any other factors. We "),
+        (44.9999, 125.09901, 167.0662, 7.0, 7.0, "versions, there may be some wording differences in "),
+        (222.00299, 123.06347, 143.8416, 9.0, 9.0, "demographic information, and the "),
+        (398.9997, 117.503006, 163.24739, 9.0, 9.0, "acknowledge that stratified data can be "),
+        (44.9999, 117.09801, 150.73381, 7.0, 7.0, "the technical specifications for the FFS and/or "),
+        (222.00299, 113.06447, 163.2384, 9.0, 9.0, "potential need to increase sample sizes "),
+        (44.9999, 109.09701, 148.8242, 7.0, 7.0, "MLTSS versions compared to the information "),
+        (398.9997, 107.504005, 167.78702, 9.0, 9.0, "beneficial for identifying populations or "),
+        (222.00299, 103.06547, 146.34361, 9.0, 9.0, "or oversample certain populations, "),
+        (44.9999, 101.09601, 127.383194, 7.0, 7.0, "presented in this table. This table is for "),
+        (398.9997, 97.505005, 161.2764, 9.0, 9.0, "groups that receive poorer quality care "),
+        (44.9999, 93.09501, 139.85791, 7.0, 7.0, "informational purposes only for the ease of "),
+        (222.00299, 93.06647, 161.7534, 9.0, 9.0, "which could increase survey costs and "),
+        (44.9999, 85.09401, 158.91893, 7.0, 7.0, "commenting on the proposed measures. We refer "),
+        (222.00299, 83.06747, 168.291, 9.0, 9.0, "beneficiary burden. As discussed earlier "),
+        (406.0, 79.9147, 6.0559525, 4.55, 4.55, "47"),
+        (413.196, 78.1, 40.405403, 7.0, 7.0, "Available at "),
+        (453.6014, 78.1, 79.08111, 7.0, 7.0, "https://www.census.gov/"),
+        (44.9999, 77.09301, 160.05782, 7.0, 7.0, "the reader to the detailed technical specifications "),
+        (222.00299, 73.06847, 137.2068, 9.0, 9.0, "in section I.B. of this notice with "),
+        (399.0, 70.099, 160.4099, 7.0, 7.0, "geographies/reference-maps/2020/geo/cbsa.html. "),
+        (44.9999, 69.09201, 167.03334, 7.0, 7.0, "maintained by the measure steward for the most up "),
+        (222.00299, 63.069466, 150.33331, 9.0, 9.0, "comment period, at § 441.312(f), we "),
+        (406.0, 62.9147, 6.0559525, 4.55, 4.55, "48"),
+        (44.9999, 61.09101, 150.35022, 7.0, 7.0, "to date technical specifications and additional "),
+        (413.196, 61.1, 40.405403, 7.0, 7.0, "Available at "),
+        (453.6014, 61.1, 102.81671, 7.0, 7.0, "https://www.ers.usda.gov/data- "),
+        (44.9999, 53.09001, 95.9728, 7.0, 7.0, "information on the measures. "),
+        (222.00299, 53.070465, 141.27301, 9.0, 9.0, "established that, in specifying the "),
+        (399.0, 53.099, 150.67079, 7.0, 7.0, "products/rural-urban-commuting-area-codes/. "),
+    ];
+
+    fn spans_from_rows(rows: &[(f32, f32, f32, f32, f32, &str)]) -> Vec<TextSpan> {
+        rows.iter()
+            .map(|&(x, y, width, height, font, text)| make_span_text(x, y, width, height, text, font))
+            .collect()
+    }
+
+    fn partition_texts(rows: &[(f32, f32, f32, f32, f32, &str)]) -> Vec<String> {
+        let spans = spans_from_rows(rows);
+        flattened_partition(&XYCutStrategy::new(), &spans)
+            .into_iter()
+            .map(|i| spans[i].text.clone())
+            .collect()
+    }
+
+    /// The page tag in the title row is read with the title, before the worksheet it sits above.
+    #[test]
+    fn partition_reads_the_page_tag_before_the_worksheet_gh3465() {
+        let texts = partition_texts(IRS_P590B_P29);
+        assert_eq!(
+            &texts[..4],
+            [
+                "Early Distribution Repayments Worksheet",
+                "Keep for Your Records",
+                "1.",
+                "Total distribution amount"
+            ]
+        );
+    }
+
+    /// A running head set above a table's first rows is read before them.
+    #[test]
+    fn partition_reads_the_running_head_before_the_table_cells_gh3465() {
+        let texts = partition_texts(FR_HCBS_P15);
+        assert_eq!(
+            &texts[..3],
+            [
+                "Federal Register",
+                "/ Vol. 91, No. 81 / Tuesday, April 28, 2026 / Notices ",
+                "22837 "
+            ]
+        );
+    }
+
+    /// Inside a header band, a wrapped title merged into one tall span is a single crossing line,
+    /// mostly right of the cut: it is still read before the columns beneath it.
+    #[test]
+    fn column_split_reads_a_merged_wrapped_title_as_the_header_gh3465() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![make_span_text(190.0, 700.0, 340.0, 30.0, &text_of(60, 'T'), 14.0)];
+        let (left, right) = push_columns(&mut spans, 690.0, 8, 11.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None, true)
+            .expect("the columns start below the title");
+        assert_eq!((cut.header, cut.left, cut.right), (vec![0], left, right));
     }
 }

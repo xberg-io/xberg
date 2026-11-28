@@ -127,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** a page tag set beside a title ("Keep for Your Records") is read with the title ahead of the worksheet rows below it, and a running head above a table is read before the table's cells, instead of after the left-hand cells. (#3465)
 - **docx:** a table cell whose deletion is tracked (`w:tcPr/w:cellDel`) is dropped with its text, footnotes, comments and drawings, and the cells after it in the row shift left (a row left short is padded to the table's width, and a row whose cells are all deleted is dropped); a `w:cellDel` inside `w:tcPrChange` no longer deletes the cell. (#3453)
 - **pptx:** slides, charts, SmartArt and comments now resolve PresentationML, DrawingML, relationship and math elements by namespace URI, so equations and image or hyperlink relationships survive a prefix other than `m`/`r` or a default namespace, and strict (ISO 29500) namespaces extract like transitional ones. (#3467)
 - **docx:** a formula nested hundreds of levels deep (OMML `m:sSup`, `m:f`, `m:rad`, ...) overflowed the stack and aborted the process before the XML depth limit fired. The converter now follows at most 64 nested levels and drops a deeper formula with a warning, keeping the text around it; the same limit applies to every OMML caller. (#3479)
