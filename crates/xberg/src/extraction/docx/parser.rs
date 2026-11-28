@@ -4402,7 +4402,8 @@ impl<R: Read + Seek> DocxParser<R> {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.name().as_ref() == "w:evenAndOddHeaders" => {
                     return Ok(!e.attributes().flatten().any(|attr| {
-                        attr.key.as_ref() == "w:val" && matches!(attr.value.as_ref(), "0" | "false" | "off")
+                        attr.key.as_ref() == "w:val"
+                            && matches!(super::section::unescape_attribute(&attr.value).as_str(), "0" | "false" | "off")
                     }));
                 }
                 Ok(Event::Eof) | Err(_) => return Ok(false),
