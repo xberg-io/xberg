@@ -3212,7 +3212,11 @@ impl<R: Read + Seek> DocxParser<R> {
 
         let mut contents = String::new();
         file.take(read_limit).read_to_string(&mut contents)?;
-        Ok(contents)
+        // `Borrowed` means the part already uses the conventional prefixes; keep the original.
+        Ok(match super::namespace::canonicalize_prefixes(&contents) {
+            std::borrow::Cow::Borrowed(_) => contents,
+            std::borrow::Cow::Owned(canonical) => canonical,
+        })
     }
 
     /// Parse `word/document.xml`'s body content and populate `document` from it.
