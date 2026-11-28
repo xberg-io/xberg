@@ -216,8 +216,13 @@ fn merge_stacked_lines<'p, 'a>(script: bool, lines: Clusters<'p, 'a>, size: f32)
     if script {
         return lines;
     }
+    // A line sharing its baseline with other glyphs of the page is a line of text; the parts
+    // of a nested fraction stand alone on theirs.
+    let alone = |line: &[&Piece<'_>]| line.iter().all(|piece| !piece.crowded);
     let stacked = |a: &[&Piece<'_>], b: &[&Piece<'_>]| {
-        a.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
+        alone(a)
+            && alone(b)
+            && a.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
             && b.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
             && a.iter()
                 .any(|upper| b.iter().any(|lower| are_nested_fraction_lines(upper, lower)))
@@ -474,10 +479,15 @@ fn write_items(items: &[Item<'_, '_>], depth: usize, script: bool) -> Option<Str
                     continue;
                 }
                 if open_radical {
-                    tex.raw(&format!("{{{spelled}}}"));
-                } else {
-                    tex.push(&spelled, command && item.accents.is_empty());
+                    // The radicand's own scripts are part of the radical's argument.
+                    let mut radicand = Tex::default();
+                    radicand.raw(&spelled);
+                    write_scripts(&mut radicand, &subscript, &superscript);
+                    tex.raw(&format!("{{{}}}", radicand.out));
+                    open_radical = radical;
+                    continue;
                 }
+                tex.push(&spelled, command && item.accents.is_empty());
                 open_radical = radical;
             }
             ItemKind::Fraction(upper, lower) => {

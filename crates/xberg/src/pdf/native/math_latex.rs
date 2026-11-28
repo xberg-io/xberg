@@ -250,7 +250,8 @@ fn rewrite_with_baselines(
         .enumerate()
         .filter_map(|(i, span)| Piece::new(i, span, baselines.of(span)))
         .collect();
-    let (pieces, overdraws) = without_overdraws(all);
+    let (mut pieces, overdraws) = without_overdraws(all);
+    mark_crowded(&mut pieces);
     let (mut formulas, refused) = find_formulas(&pieces);
     if formulas.is_empty() && refused.is_empty() {
         return None;
@@ -376,6 +377,9 @@ struct Piece<'a> {
     class: Class,
     /// A radical sign of a TeX extension font, drawn off the axis of the radicand it covers.
     radical: bool,
+    /// Another piece of the page shares this one's baseline within a size of it: it is part of
+    /// a line of text, which the parts of a nested fraction are not.
+    crowded: bool,
 }
 
 impl<'a> Piece<'a> {
@@ -401,6 +405,7 @@ impl<'a> Piece<'a> {
             size: source.font_size,
             class: classify(text, &source.font_name),
             radical,
+            crowded: false,
         })
     }
 
@@ -583,7 +588,6 @@ enum Built<'a> {
 /// of more than [`MAX_COMPONENT_PIECES`] is left out.
 fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a>]) -> Vec<Vec<&'p Piece<'a>>> {
     let adjacent: Vec<bool> = candidates.iter().map(|piece| is_prose_adjacent(piece, prose)).collect();
-    let crowded = crowded_pieces(candidates);
     let mut parent: Vec<usize> = (0..candidates.len()).collect();
     let mut order: Vec<usize> = (0..candidates.len()).collect();
     order.sort_by(|&a, &b| candidates[a].base.total_cmp(&candidates[b].base));
@@ -604,7 +608,7 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
                 candidates[i],
                 candidates[j],
                 adjacent[i] || adjacent[j],
-                crowded[i] || crowded[j],
+                candidates[i].crowded || candidates[j].crowded,
                 prose,
             ) {
                 let (root_i, root_j) = (find(&mut parent, i), find(&mut parent, j));
@@ -629,25 +633,21 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
         .collect()
 }
 
-/// Whether each candidate has another on its own baseline within a size of it: a piece of a
-/// line of text. The parts of a nested fraction stand alone on their baseline, so two lines
-/// of text whose letters happen to align are not taken for them.
-fn crowded_pieces(candidates: &[&Piece<'_>]) -> Vec<bool> {
-    let mut order: Vec<usize> = (0..candidates.len()).collect();
-    order.sort_by(|&a, &b| candidates[a].base.total_cmp(&candidates[b].base));
-    let mut crowded = vec![false; candidates.len()];
+/// Set [`Piece::crowded`] on every piece that has another on its baseline within a size of it.
+fn mark_crowded(pieces: &mut [Piece<'_>]) {
+    let mut order: Vec<usize> = (0..pieces.len()).collect();
+    order.sort_by(|&a, &b| pieces[a].base.total_cmp(&pieces[b].base));
     for (position, &i) in order.iter().enumerate() {
         for &j in &order[position + 1..] {
-            if candidates[j].base - candidates[i].base > candidates[i].size * ROW_TOLERANCE_EM {
+            if pieces[j].base - pieces[i].base > pieces[i].size * ROW_TOLERANCE_EM {
                 break;
             }
-            if candidates[i].gap(candidates[j]) <= candidates[i].size.max(candidates[j].size) {
-                crowded[i] = true;
-                crowded[j] = true;
+            if pieces[i].gap(&pieces[j]) <= pieces[i].size.max(pieces[j].size) {
+                pieces[i].crowded = true;
+                pieces[j].crowded = true;
             }
         }
     }
-    crowded
 }
 
 fn find(parent: &mut [usize], mut i: usize) -> usize {

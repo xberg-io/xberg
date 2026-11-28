@@ -544,6 +544,21 @@ fn should_write_a_radical_inside_a_numerator() {
     assert_eq!(texts(&rewritten), ["$$y=\\frac{\\sqrt{x}}{2}$$"]);
 }
 
+/// A script of the radicand belongs inside the radical's argument: `\sqrt[3]{x^{2}}`.
+#[test]
+fn should_keep_the_scripts_of_a_radicand_inside_the_radical() {
+    let spans = vec![
+        span("y", MMI, 11.96, 78.27, 5.71, 429.39),
+        span("=", MR, 11.96, 87.73, 9.11, 429.39),
+        span("p", "QTXDXT+CMEX10", 11.96, 100.80, 11.96, 439.37),
+        span("3", "PXXQUV+CMR7", 6.97, 103.47, 3.97, 436.0),
+        span("x", MMI, 11.96, 114.0, 6.65, 429.39),
+        span("2", "PXXQUV+CMR7", 6.97, 121.0, 3.97, 433.5),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$y=\\sqrt[3]{x^{2}}$$"]);
+}
+
 /// A degree over the left edge of a wide radical is its degree.
 #[test]
 fn should_read_the_degree_of_a_wide_radical_by_its_left_edge() {
@@ -664,5 +679,30 @@ fn should_not_take_two_lines_of_text_with_aligned_letters_for_a_fraction() {
             "c",
             ") = the sum of the numerators."
         ]
+    );
+}
+
+/// Gutenberg 36670 p189, `−2/4 = −13/26`: a `1` set 1.33 em above the numerator `2` on the line
+/// above, in a row of other glyphs, is not the numerator of a fraction nested in `2/4`.
+#[test]
+fn should_not_nest_a_fraction_with_a_glyph_of_the_line_above() {
+    let (cmr, msy) = ("DPBTON+CMR10", "LKAHCF+CMSY10");
+    let spans = vec![
+        span("\u{2212}", msy, 10.91, 206.81, 8.49, 238.87),
+        span(" 1", cmr, 10.91, 215.30, 7.88, 238.87),
+        span("\u{2212}", msy, 10.91, 242.02, 8.49, 238.87),
+        span("2", cmr, 10.91, 217.72, 5.45, 224.36),
+        span("13", cmr, 10.91, 250.51, 10.91, 224.36),
+        span("\u{2212}", msy, 10.91, 208.04, 8.49, 216.98),
+        span("=", cmr, 10.91, 228.36, 8.49, 216.98),
+        span(" \u{2212}", msy, 10.91, 236.84, 12.47, 216.98),
+        span(".", "ZTFHJE+CMMI10", 10.91, 262.61, 3.03, 216.98),
+        span("4", cmr, 10.91, 217.72, 5.45, 209.49),
+        span("26", cmr, 10.91, 250.51, 10.91, 209.49),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(
+        texts(&rewritten),
+        ["\u{2212}", " 1", "\u{2212}", "$$-\\frac{2}{4}=-\\frac{13}{26}.$$"]
     );
 }
