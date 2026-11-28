@@ -736,3 +736,37 @@ fn wordperfect_repeated_header_is_emitted_once_and_a_header_table_takes_the_head
         .unwrap();
     assert!(table_at > position("Body text."), "the header table follows the body");
 }
+
+#[test]
+fn wordperfect_header_table_keeps_its_place_among_the_header_paragraphs() {
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::TableStart,
+            WpdEvent::RowStart { header: false },
+            WpdEvent::CellStart {
+                column: 0,
+                col_span: 1,
+                row_span: 1,
+            },
+            WpdEvent::Text("Cell".to_string()),
+            WpdEvent::CellEnd,
+            WpdEvent::RowEnd,
+            WpdEvent::TableEnd,
+            WpdEvent::Text("Caption".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    let internal = build_wordperfect_internal_document(&doc);
+    let order: Vec<bool> = internal
+        .elements
+        .iter()
+        .map(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }))
+        .collect();
+    let caption = internal.elements.iter().position(|e| e.text == "Caption").unwrap();
+    let table = order.iter().position(|is_table| *is_table).unwrap();
+    assert!(table < caption, "table before the caption that follows it");
+}

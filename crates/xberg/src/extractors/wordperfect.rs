@@ -289,9 +289,13 @@ struct WpdWalker<'a> {
     /// Shared counter for footnote and endnote anchor keys.
     note_counter: u32,
     /// Header and footer paragraphs, pushed after the body so their text follows it.
-    furniture: Vec<(String, Vec<TextAnnotation>, ContentLayer)>,
-    /// Tables completed inside a header or footer, pushed after the body with the paragraphs.
-    furniture_tables: Vec<(TableBuilder, ContentLayer)>,
+    furniture: Vec<FurnitureItem>,
+}
+
+/// A paragraph or table of a header or footer, kept in document order.
+enum FurnitureItem {
+    Paragraph(String, Vec<TextAnnotation>, ContentLayer),
+    Table(TableBuilder, ContentLayer),
 }
 
 impl<'a> WpdWalker<'a> {
@@ -307,7 +311,6 @@ impl<'a> WpdWalker<'a> {
             diversions: Vec::new(),
             note_counter: 0,
             furniture: Vec::new(),
-            furniture_tables: Vec::new(),
         }
     }
 
@@ -466,12 +469,14 @@ impl<'a> WpdWalker<'a> {
         match diversion.kind {
             DiversionKind::Header => {
                 if !text.trim().is_empty() {
-                    self.furniture.push((text, annotations, ContentLayer::Header));
+                    self.furniture
+                        .push(FurnitureItem::Paragraph(text, annotations, ContentLayer::Header));
                 }
             }
             DiversionKind::Footer => {
                 if !text.trim().is_empty() {
-                    self.furniture.push((text, annotations, ContentLayer::Footer));
+                    self.furniture
+                        .push(FurnitureItem::Paragraph(text, annotations, ContentLayer::Footer));
                 }
             }
             DiversionKind::Aside { kind } => {
@@ -553,15 +558,17 @@ impl<'a> WpdWalker<'a> {
             self.builder.end_list();
         }
         let mut seen: std::collections::HashSet<(bool, String)> = std::collections::HashSet::new();
-        for (text, annotations, layer) in std::mem::take(&mut self.furniture) {
-            if !seen.insert((layer == ContentLayer::Header, text.trim().to_string())) {
-                continue;
+        for item in std::mem::take(&mut self.furniture) {
+            match item {
+                FurnitureItem::Paragraph(text, annotations, layer) => {
+                    if !seen.insert((layer == ContentLayer::Header, text.trim().to_string())) {
+                        continue;
+                    }
+                    let idx = self.builder.push_paragraph(&text, annotations, None, None);
+                    self.builder.set_layer(idx, layer);
+                }
+                FurnitureItem::Table(table, layer) => self.push_table(&table, Some(layer)),
             }
-            let idx = self.builder.push_paragraph(&text, annotations, None, None);
-            self.builder.set_layer(idx, layer);
-        }
-        for (table, layer) in std::mem::take(&mut self.furniture_tables) {
-            self.push_table(&table, Some(layer));
         }
     }
 
@@ -630,7 +637,7 @@ impl<'a> WpdWalker<'a> {
             _ => None,
         });
         match furniture_layer {
-            Some(layer) => self.furniture_tables.push((t, layer)),
+            Some(layer) => self.furniture.push(FurnitureItem::Table(t, layer)),
             None => self.push_table(&t, None),
         }
     }

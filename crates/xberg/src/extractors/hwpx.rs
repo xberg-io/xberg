@@ -233,7 +233,16 @@ fn collect_section_furniture<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -
                 Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                     "header" => layer = Some(ContentLayer::Header),
                     "footer" => layer = Some(ContentLayer::Footer),
-                    "p" if layer.is_some() => open_paragraphs.push(String::new()),
+                    "p" if layer.is_some() => {
+                        // The text before a nested paragraph is complete; what follows it is new.
+                        if let Some(outer) = open_paragraphs.last_mut() {
+                            if !outer.trim().is_empty() {
+                                paragraphs.push(outer.trim().to_string());
+                            }
+                            outer.clear();
+                        }
+                        open_paragraphs.push(String::new());
+                    }
                     "t" if layer.is_some() => in_text = true,
                     "tab" if in_text => open_paragraphs.last_mut().into_iter().for_each(|p| p.push(' ')),
                     _ => {}
@@ -1162,7 +1171,7 @@ mod tests {
             found,
             vec![(
                 ContentLayer::Header,
-                vec!["Company Page 1".to_string(), "Cell".to_string(), "Title".to_string()]
+                vec!["Company Page 1".to_string(), "Title".to_string(), "Cell".to_string()]
             )]
         );
     }
