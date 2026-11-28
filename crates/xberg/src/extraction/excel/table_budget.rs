@@ -17,7 +17,7 @@ mod zip_metadata;
 pub(super) use legacy::{drop_skipped_sheets as drop_skipped_xls_sheets, validate_xls};
 pub(super) use ods::{drop_skipped_sheets as drop_skipped_ods_sheets, validate_ods};
 pub(super) use xlsb_framing::validate_xlsb_parts;
-pub(super) use zip_metadata::validate_xlsx_string_parts;
+pub(super) use zip_metadata::{is_shared_strings_part, remove_unique_count, validate_xlsx_string_parts};
 
 /// Worksheets whose cells did not fit in the workbook's remaining `max_table_cells` budget.
 ///

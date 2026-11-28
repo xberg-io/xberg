@@ -274,6 +274,8 @@ fn normalize_xlsx_dimensions(data: &[u8], limits: &SecurityLimits) -> Result<Opt
     rewrite_spreadsheet_zip(data, limits, |name, contents| {
         if name.starts_with("xl/worksheets/") && name.ends_with(".xml") {
             remove_row_only_xlsx_dimensions(contents)
+        } else if super::table_budget::is_shared_strings_part(name) {
+            super::table_budget::remove_unique_count(contents)
         } else {
             Ok((contents.to_vec(), false))
         }
@@ -389,13 +391,14 @@ fn validate_zip_container<R: Read + Seek>(
         Ok(archive) => archive,
         Err(_) => return Ok(SkippedSheets::default()),
     };
-    validate_spreadsheet_archive(&mut archive, &extension, limits)
+    validate_spreadsheet_archive(&mut archive, &extension, limits, None)
 }
 
 fn validate_spreadsheet_archive<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     extension: &str,
     limits: &SecurityLimits,
+    shared_strings_overstated: Option<&mut bool>,
 ) -> Result<SkippedSheets> {
     if archive.len() > limits.max_files_in_archive {
         return Err(XbergError::validation(format!(
@@ -413,7 +416,7 @@ fn validate_spreadsheet_archive<R: Read + Seek>(
         super::table_budget::validate_xlsb_parts(archive, limits)?;
     }
     if matches!(extension, ".xlsx" | ".xlsm" | ".xltm" | ".xlam") {
-        super::table_budget::validate_xlsx_string_parts(archive, limits)?;
+        super::table_budget::validate_xlsx_string_parts(archive, limits, shared_strings_overstated)?;
     }
     if extension == ".ods" {
         return super::table_budget::validate_ods(archive, limits);
@@ -533,7 +536,9 @@ pub(crate) fn read_xlsx_family_file(reader: &mut BufReader<File>, limits: &Secur
         // Keep the buffering and input-size limits of the correction path.
         let bytes = read_bounded_spreadsheet(reader, limits)?;
         normalize_xlsx_dimensions(&bytes, limits)?
-            .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))
+            .ok_or_else(|| {
+                XbergError::parsing("Failed to normalize XLSX worksheet dimensions or shared-string counts".to_owned())
+            })
             .map(Some)
     })
 }
@@ -552,14 +557,15 @@ fn read_xlsx_family<R: Read + Seek>(
     let mut archive = zip::ZipArchive::new(&mut *reader)
         .map_err(|error| XbergError::parsing(format!("Invalid XLSX ZIP: {error}")))?;
     // XLSX, XLSM and XLTM use the same archive and string-part checks.
-    validate_spreadsheet_archive(&mut archive, ".xlsx", limits)?;
+    let mut shared_strings_overstated = false;
+    validate_spreadsheet_archive(&mut archive, ".xlsx", limits, Some(&mut shared_strings_overstated))?;
 
     #[cfg(feature = "office")]
     let office_metadata = super::package_metadata::extract_xlsx_office_metadata_from_archive(&mut archive).ok();
     #[cfg(not(feature = "office"))]
     let office_metadata = None;
     let has_sidecars = has_xlsx_sidecars(&archive);
-    let needs_normalization = has_row_only_xlsx_dimensions(archive, limits)?;
+    let needs_normalization = shared_strings_overstated || has_row_only_xlsx_dimensions(archive, limits)?;
     reader.seek(SeekFrom::Start(0))?;
 
     let mut warnings = Vec::new();
