@@ -510,10 +510,12 @@ fn validate_xlsx_sheet<R: Read + Seek>(
                 shared_formula_capacity = bytes;
             }
         }
+        // The anchor's length is recorded even when it has a saved result: its derived cells may not.
+        let formula_length = formula_text_len(cell.formula.as_ref(), &mut shared_text_len);
         if !matches!(cell.value, DataRef::Empty) {
             bounds.value(cell.pos, budget)?;
             account_xlsx_cell_text(&cell.value, budget)?;
-        } else if let Some(length) = formula_text_len(cell.formula.as_ref(), &mut shared_text_len) {
+        } else if let Some(length) = formula_length {
             // ~keep A cell with no saved result is output as its formula text.
             budget.account_text(length)?;
             bounds.unavailable_formula(cell.pos, budget)?;

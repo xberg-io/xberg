@@ -195,3 +195,20 @@ fn should_show_unavailable_formulas_in_ods_gh3442() {
         "{warnings:?}"
     );
 }
+
+#[test]
+fn should_charge_uncached_cells_of_a_shared_formula_whose_anchor_has_a_saved_result_gh3442() {
+    let limits = SecurityLimits {
+        max_table_cells: 3,
+        ..Default::default()
+    };
+    let (workbook, warnings) = read(
+        r#"<row r="1"><c r="A1"><f t="shared" ref="A1:A9" si="0">B1*2</f><v>2</v></c></row>
+           <row r="9"><c r="A9"><f t="shared" si="0"/></c></row>"#,
+        ".xlsx",
+        &limits,
+    );
+
+    assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["2".to_owned()]]));
+    assert!(warning_for(&warnings, "was truncated").is_some(), "{warnings:?}");
+}
