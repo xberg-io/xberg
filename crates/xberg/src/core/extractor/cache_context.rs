@@ -1214,7 +1214,7 @@ mod tests {
         // host with `osd` and a Han model there bypasses the cache and fails here, not vacuously.
         assert!(
             read.as_deref()
-                .is_some_and(|context| context.starts_with(":script-retry-outer-v2:")),
+                .is_some_and(|context| context.starts_with(":script-retry-outer-v3:")),
             "the request is cacheable: {read:?}"
         );
         assert!(
