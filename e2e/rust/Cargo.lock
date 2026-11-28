@@ -45,9 +45,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.14"
+version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54dae3d1d7b8956f3506c4e999a74e77f932a59153ccf38ab8cf96db74bb9dc0"
+checksum = "3019c0b8d883a8a17df3129e417ef463c087807d245e8881a31d583dee1c0519"
 dependencies = [
  "cfg-if",
  "const-random",
@@ -7977,9 +7977,9 @@ dependencies = [
 
 [[package]]
 name = "unhwp"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d805fdd09b7740c30191ffca19bad9de3390ab387989e634eea20d718068bd6"
+checksum = "653c1355b1ff7324cfb7225ec9b4fd5fa756115d54a971cc93ca9066adbcec0f"
 dependencies = [
  "cfb 0.16.0",
  "flate2",
@@ -9429,9 +9429,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.8.2"
+version = "9.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d8dbe089cf6b0448b78f5fc50139ab5aaa40d08ac07cdc1baf2c13add35fcce"
+checksum = "07db37dec4a7c468df4723fba4cadb4822d1d0f10dbea367100b6a6881b2a9c9"
 dependencies = [
  "bzip2",
  "constant_time_eq",
