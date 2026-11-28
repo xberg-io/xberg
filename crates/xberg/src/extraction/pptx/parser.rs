@@ -14,9 +14,14 @@ use super::elements::{
     ParsedContent, Run, SlideElement, TableCell, TableElement, TableRow, TextElement,
 };
 
-use crate::extraction::ooxml_constants::{DRAWINGML_NAMESPACE, PRESENTATIONML_NAMESPACE, RELATIONSHIPS_NAMESPACE};
+use crate::extraction::ooxml_constants::{
+    DRAWINGML_NAMESPACE, PRESENTATIONML_NAMESPACE, RELATIONSHIPS_NAMESPACE, normalize_strict_namespaces,
+};
 
 mod chart_numbers;
+mod omml;
+
+use omml::omml_node_to_run;
 
 /// Markup-compatibility namespace (`mc:AlternateContent`/`mc:Choice`/`mc:Fallback`).
 ///
@@ -53,8 +58,10 @@ enum GraphicFrameContent {
 pub(super) fn parse_slide_xml(xml_data: &[u8]) -> Result<Vec<SlideElement>> {
     let xml_str = utf8_validation::from_utf8(xml_data)
         .map_err(|_| XbergError::parsing("Invalid UTF-8 in slide XML".to_string()))?;
+    let xml_str = normalize_strict_namespaces(xml_str);
 
-    let doc = Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse slide XML: {}", e)))?;
+    let doc =
+        Document::parse(&xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse slide XML: {}", e)))?;
 
     let root = doc.root_element();
     let ns = root.tag_name().namespace();
@@ -71,18 +78,14 @@ pub(super) fn parse_slide_xml(xml_data: &[u8]) -> Result<Vec<SlideElement>> {
 
     let mut elements = Vec::new();
     for child_node in sp_tree.children().filter(|n| n.is_element()) {
-        elements.extend(parse_group(&child_node, xml_str)?);
+        elements.extend(parse_group(&child_node)?);
     }
 
     Ok(elements)
 }
 
 /// Parse a shape-tree node into zero or more `SlideElement`s.
-///
-/// `xml_str` is the full original slide document text, needed to slice out
-/// raw OMML XML by byte range for the shared OMML-to-LaTeX converter (see
-/// `omml_node_to_run`).
-fn parse_group(node: &Node, xml_str: &str) -> Result<Vec<SlideElement>> {
+fn parse_group(node: &Node) -> Result<Vec<SlideElement>> {
     let tag_name = node.tag_name().name();
     let namespace = node.tag_name().namespace().unwrap_or("");
 
@@ -90,7 +93,7 @@ fn parse_group(node: &Node, xml_str: &str) -> Result<Vec<SlideElement>> {
     // connector geometry). Recurse into mc:Choice (preferred) or mc:Fallback
     // rather than dropping the subtree — see #79.
     if namespace == MARKUP_COMPATIBILITY_NAMESPACE && tag_name == "AlternateContent" {
-        return parse_alternate_content_shapes(node, xml_str);
+        return parse_alternate_content_shapes(node);
     }
 
     let mut elements = Vec::new();
@@ -103,7 +106,7 @@ fn parse_group(node: &Node, xml_str: &str) -> Result<Vec<SlideElement>> {
 
     match tag_name {
         "sp" | "cxnSp" => {
-            if let Some(content) = parse_sp(node, xml_str)? {
+            if let Some(content) = parse_sp(node)? {
                 match content {
                     ParsedContent::Text(text) => elements.push(SlideElement::Text(text, position)),
                     ParsedContent::List(list) => elements.push(SlideElement::List(list, position)),
@@ -125,7 +128,7 @@ fn parse_group(node: &Node, xml_str: &str) -> Result<Vec<SlideElement>> {
         },
         "grpSp" => {
             for child in node.children().filter(|n| n.is_element()) {
-                elements.extend(parse_group(&child, xml_str)?);
+                elements.extend(parse_group(&child)?);
             }
         }
         _ => elements.push(SlideElement::Unknown),
@@ -137,7 +140,7 @@ fn parse_group(node: &Node, xml_str: &str) -> Result<Vec<SlideElement>> {
 /// Resolve an `mc:AlternateContent` shape wrapper: prefer `mc:Choice` content
 /// (the modern representation, e.g. an extension shape or connector), and
 /// fall back to `mc:Fallback` only if `mc:Choice` yielded nothing.
-fn parse_alternate_content_shapes(node: &Node, xml_str: &str) -> Result<Vec<SlideElement>> {
+fn parse_alternate_content_shapes(node: &Node) -> Result<Vec<SlideElement>> {
     let choice = node.children().find(|n| {
         n.is_element()
             && n.tag_name().namespace() == Some(MARKUP_COMPATIBILITY_NAMESPACE)
@@ -152,7 +155,7 @@ fn parse_alternate_content_shapes(node: &Node, xml_str: &str) -> Result<Vec<Slid
     if let Some(choice_node) = choice {
         let mut elements = Vec::new();
         for child in choice_node.children().filter(|n| n.is_element()) {
-            elements.extend(parse_group(&child, xml_str)?);
+            elements.extend(parse_group(&child)?);
         }
         if !elements.is_empty() {
             return Ok(elements);
@@ -162,7 +165,7 @@ fn parse_alternate_content_shapes(node: &Node, xml_str: &str) -> Result<Vec<Slid
     if let Some(fallback_node) = fallback {
         let mut elements = Vec::new();
         for child in fallback_node.children().filter(|n| n.is_element()) {
-            elements.extend(parse_group(&child, xml_str)?);
+            elements.extend(parse_group(&child)?);
         }
         return Ok(elements);
     }
@@ -195,7 +198,7 @@ fn is_title_placeholder(sp_node: &Node) -> bool {
     false
 }
 
-fn parse_sp(sp_node: &Node, xml_str: &str) -> Result<Option<ParsedContent>> {
+fn parse_sp(sp_node: &Node) -> Result<Option<ParsedContent>> {
     let tx_body_node = match sp_node
         .children()
         .find(|n| n.tag_name().name() == "txBody" && n.tag_name().namespace() == Some(PRESENTATIONML_NAMESPACE))
@@ -219,21 +222,21 @@ fn parse_sp(sp_node: &Node, xml_str: &str) -> Result<Option<ParsedContent>> {
         });
 
     if is_list {
-        Ok(Some(ParsedContent::List(parse_list(&tx_body_node, xml_str)?)))
+        Ok(Some(ParsedContent::List(parse_list(&tx_body_node)?)))
     } else {
-        let mut text_el = parse_text(&tx_body_node, xml_str)?;
+        let mut text_el = parse_text(&tx_body_node)?;
         text_el.is_title = is_title;
         Ok(Some(ParsedContent::Text(text_el)))
     }
 }
 
-pub(super) fn parse_text(tx_body_node: &Node, xml_str: &str) -> Result<TextElement> {
+pub(super) fn parse_text(tx_body_node: &Node) -> Result<TextElement> {
     let mut runs = Vec::new();
 
     for p_node in tx_body_node.children().filter(|n| {
         n.is_element() && n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
     }) {
-        let mut paragraph_runs = parse_paragraph(&p_node, true, xml_str)?;
+        let mut paragraph_runs = parse_paragraph(&p_node, true)?;
         runs.append(&mut paragraph_runs);
     }
 
@@ -266,11 +269,7 @@ fn parse_graphic_frame(node: &Node) -> Result<Option<GraphicFrameContent>> {
             .find(|n| {
                 n.is_element() && n.tag_name().name() == "chart" && n.tag_name().namespace() == Some(CHART_NAMESPACE)
             })
-            .and_then(|n| {
-                n.attribute((RELATIONSHIPS_NAMESPACE, "id"))
-                    .or_else(|| n.attribute("r:id"))
-                    .map(|s| s.to_string())
-            });
+            .and_then(|n| n.attribute((RELATIONSHIPS_NAMESPACE, "id")).map(|s| s.to_string()));
         return Ok(rel_id.map(|rel_id| {
             GraphicFrameContent::Chart(ChartReference {
                 rel_id,
@@ -285,11 +284,7 @@ fn parse_graphic_frame(node: &Node) -> Result<Option<GraphicFrameContent>> {
             .find(|n| {
                 n.is_element() && n.tag_name().name() == "relIds" && n.tag_name().namespace() == Some(DIAGRAM_NAMESPACE)
             })
-            .and_then(|n| {
-                n.attribute((RELATIONSHIPS_NAMESPACE, "dm"))
-                    .or_else(|| n.attribute("r:dm"))
-                    .map(|s| s.to_string())
-            });
+            .and_then(|n| n.attribute((RELATIONSHIPS_NAMESPACE, "dm")).map(|s| s.to_string()));
         return Ok(rel_id.map(|rel_id| {
             GraphicFrameContent::SmartArt(DiagramReference {
                 rel_id,
@@ -309,7 +304,9 @@ fn parse_graphic_frame(node: &Node) -> Result<Option<GraphicFrameContent>> {
 pub(super) fn parse_chart_text(xml_data: &[u8]) -> Result<Option<String>> {
     let xml_str = utf8_validation::from_utf8(xml_data)
         .map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in chart XML: {}", e)))?;
-    let doc = Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse chart XML: {}", e)))?;
+    let xml_str = normalize_strict_namespaces(xml_str);
+    let doc =
+        Document::parse(&xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse chart XML: {}", e)))?;
 
     let title = doc
         .descendants()
@@ -353,8 +350,9 @@ pub(super) fn parse_chart_text(xml_data: &[u8]) -> Result<Option<String>> {
 pub(super) fn parse_diagram_text(xml_data: &[u8]) -> Result<Option<String>> {
     let xml_str = utf8_validation::from_utf8(xml_data)
         .map_err(|e| XbergError::parsing(format!("Invalid UTF-8 in diagram XML: {}", e)))?;
+    let xml_str = normalize_strict_namespaces(xml_str);
     let doc =
-        Document::parse(xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse diagram XML: {}", e)))?;
+        Document::parse(&xml_str).map_err(|e| XbergError::parsing(format!("Failed to parse diagram XML: {}", e)))?;
 
     let texts: Vec<String> = doc
         .descendants()
@@ -403,13 +401,10 @@ fn parse_table_cell(tc_node: &Node) -> Result<TableCell> {
     if let Some(tx_body_node) = tc_node.children().find(|n| {
         n.is_element() && n.tag_name().name() == "txBody" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
     }) {
-        // Table cells use the `a:txBody` schema directly (no `xml_str` slicing
-        // needed for math, since cell text is treated as plain runs); pass an
-        // empty document string as there is nothing to slice for OMML here.
         for p_node in tx_body_node.children().filter(|n| {
             n.is_element() && n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
         }) {
-            let mut paragraph_runs = parse_paragraph(&p_node, false, "")?;
+            let mut paragraph_runs = parse_paragraph(&p_node, false)?;
             // A cell renders on one line, so its paragraphs are separated by a space.
             if !runs.is_empty() && !paragraph_runs.is_empty() {
                 runs.push(Run {
@@ -434,7 +429,6 @@ fn parse_pic(pic_node: &Node) -> Result<ImageReference> {
 
     let embed_attr = blip_node
         .attribute((RELATIONSHIPS_NAMESPACE, "embed"))
-        .or_else(|| blip_node.attribute("r:embed"))
         .ok_or_else(|| XbergError::parsing("Image embed attribute not found".to_string()))?;
 
     let description = pic_node
@@ -464,7 +458,7 @@ fn parse_pic(pic_node: &Node) -> Result<ImageReference> {
     Ok(image_ref)
 }
 
-fn parse_list(tx_body_node: &Node, xml_str: &str) -> Result<ListElement> {
+fn parse_list(tx_body_node: &Node) -> Result<ListElement> {
     let mut items = Vec::new();
 
     for p_node in tx_body_node.children().filter(|n| {
@@ -472,7 +466,7 @@ fn parse_list(tx_body_node: &Node, xml_str: &str) -> Result<ListElement> {
     }) {
         let (level, is_ordered, has_bullet) = parse_list_properties(&p_node)?;
 
-        let runs = parse_paragraph(&p_node, true, xml_str)?;
+        let runs = parse_paragraph(&p_node, true)?;
 
         items.push(ListItem {
             level,
@@ -549,7 +543,7 @@ fn parse_list_properties(p_node: &Node) -> Result<(u32, bool, bool)> {
 ///
 /// `add_new_line` mirrors the pre-existing behavior of appending a trailing
 /// `"\n"` after the paragraph's last run (matching a `<a:p>` boundary).
-fn parse_paragraph(p_node: &Node, add_new_line: bool, xml_str: &str) -> Result<Vec<Run>> {
+fn parse_paragraph(p_node: &Node, add_new_line: bool) -> Result<Vec<Run>> {
     let mut runs: Vec<Run> = Vec::new();
 
     for child in p_node.children().filter(|n| n.is_element()) {
@@ -563,10 +557,10 @@ fn parse_paragraph(p_node: &Node, add_new_line: bool, xml_str: &str) -> Result<V
         } else if ns == Some(DRAWINGML_NAMESPACE) && name == "fld" {
             runs.push(parse_field(&child));
         } else if ns == Some(MARKUP_COMPATIBILITY_NAMESPACE) && name == "AlternateContent" {
-            runs.extend(parse_alternate_content_runs(&child, xml_str));
+            runs.extend(parse_alternate_content_runs(&child));
         } else if (ns == Some(MATH_NAMESPACE) && (name == "oMathPara" || name == "oMath")
             || ns == Some(DRAWING_2010_NAMESPACE) && name == "m")
-            && let Some(math_run) = omml_node_to_run(&child, xml_str)
+            && let Some(math_run) = omml_node_to_run(&child)
         {
             runs.push(math_run);
         }
@@ -624,7 +618,7 @@ fn parse_field(fld_node: &Node) -> Run {
 ///
 /// Prefers `mc:Choice` (where OMML math lives), falling back to `mc:Fallback`
 /// runs when the choice carries no recognized content.
-fn parse_alternate_content_runs(node: &Node, xml_str: &str) -> Vec<Run> {
+fn parse_alternate_content_runs(node: &Node) -> Vec<Run> {
     let choice = node.children().find(|n| {
         n.is_element()
             && n.tag_name().namespace() == Some(MARKUP_COMPATIBILITY_NAMESPACE)
@@ -637,7 +631,7 @@ fn parse_alternate_content_runs(node: &Node, xml_str: &str) -> Vec<Run> {
     });
 
     if let Some(choice_node) = choice {
-        if let Some(math_run) = omml_node_to_run(&choice_node, xml_str) {
+        if let Some(math_run) = omml_node_to_run(&choice_node) {
             return vec![math_run];
         }
         let runs = collect_runs_from_descendants(&choice_node);
@@ -676,67 +670,6 @@ fn collect_runs_from_descendants(container: &Node) -> Vec<Run> {
     out
 }
 
-/// Find the first OMML `m:oMathPara`/`m:oMath` node under `container` and
-/// convert it to LaTeX via the shared OMML converter (`extraction::docx::math`),
-/// producing a single math `Run`. Returns `None` if no math node is present or
-/// conversion fails.
-///
-/// The converter is a `quick_xml` streaming API positioned just after the
-/// start tag, while this module parses with `roxmltree` (a DOM). To bridge
-/// the two, the math node's byte range in the original document text
-/// (`xml_str`) is sliced out and re-parsed with a fresh `quick_xml::Reader`.
-fn omml_node_to_run(container: &Node, xml_str: &str) -> Option<Run> {
-    let (is_display, math_node) = if let Some(n) = container
-        .descendants()
-        .find(|d| d.tag_name().namespace() == Some(MATH_NAMESPACE) && d.tag_name().name() == "oMathPara")
-    {
-        (true, n)
-    } else {
-        let n = container
-            .descendants()
-            .find(|d| d.tag_name().namespace() == Some(MATH_NAMESPACE) && d.tag_name().name() == "oMath")?;
-        (false, n)
-    };
-
-    let raw_xml = xml_str.get(math_node.range())?;
-    let expected_tag: &str = if is_display { "m:oMathPara" } else { "m:oMath" };
-
-    let mut reader = quick_xml::Reader::from_str(raw_xml);
-    reader.config_mut().trim_text(false);
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == expected_tag => break,
-            Ok(quick_xml::events::Event::Eof) => return None,
-            Err(_) => return None,
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    let mut budget = crate::extractors::security::SecurityBudget::with_defaults();
-    let latex = if is_display {
-        crate::extraction::docx::math::collect_and_convert_omath_para(&mut reader, &mut budget).ok()?
-    } else {
-        crate::extraction::docx::math::collect_and_convert_omath(&mut reader, &mut budget).ok()?
-    };
-
-    // The rendered slide text is trimmed, so a converter result that keeps the
-    // source indentation would no longer equal the LaTeX kept for the formula
-    // element and the equation would stay in the text only.
-    let latex = latex.trim().to_string();
-    if latex.is_empty() {
-        return None;
-    }
-
-    Some(Run {
-        text: String::new(),
-        formatting: Formatting::default(),
-        hyperlink_id: None,
-        math_latex: Some((latex, is_display)),
-    })
-}
-
 /// Apply `a:rPr` run-property attributes and `a:hlinkClick` to `formatting`,
 /// returning the resolved hyperlink relationship ID if present.
 fn apply_run_properties(r_pr_node: &Node, formatting: &mut Formatting) -> Option<String> {
@@ -769,7 +702,6 @@ fn apply_run_properties(r_pr_node: &Node, formatting: &mut Formatting) -> Option
         .and_then(|hlink_node| {
             hlink_node
                 .attribute((RELATIONSHIPS_NAMESPACE, "id"))
-                .or_else(|| hlink_node.attribute("r:id"))
                 .map(|s| s.to_string())
         })
 }
