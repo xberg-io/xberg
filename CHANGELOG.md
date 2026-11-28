@@ -124,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** a centred title, author or affiliation block above two columns no longer stops the column cut, so the page is read column by column again instead of alternating lines of the left and right column (regression since 1.3.10). (#3446)
 - **ocr:** a table detected on a standalone image is placed before the first paragraph below its top edge instead of after every paragraph, so a summary under a table no longer reads before it. Tables are ordered top to bottom; images recognized rotated keep the previous order.
 - **ocr:** `use_cache: false` on the extraction request now bypasses the OCR result cache; before, repeated runs still read cached OCR results. An `ocr.backend_options` that sets only `use_cache` no longer moves OCR off the default route.
 - **layout:** multi-page 300 dpi scans no longer lose layout detection because a fixed eight-page chunk exceeded the content-size budget; chunks now close before the page that would exceed it.
