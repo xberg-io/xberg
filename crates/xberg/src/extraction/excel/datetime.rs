@@ -125,8 +125,13 @@ pub(super) fn is_time_only_format(code: &str, format_id: Option<u32>) -> bool {
     let sections = format_sections(code);
     let text = &section_for_zero(&sections).text;
     let meridiem = text.contains("AM/PM") || text.contains("A/P");
-    let letters = text.replace("AM/PM", "").replace("A/P", "").replace("GENERAL", "");
-    // G, E and B are era, era-year and Buddhist-year tokens.
+    let letters = text
+        .replace("AM/PM", "")
+        .replace("A/P", "")
+        .replace("GENERAL", "")
+        .replace("B1", "")
+        .replace("B2", "");
+    // G, E and B are era, era-year and Buddhist-year tokens; B1 and B2 only select a calendar.
     let date = letters.contains(['D', 'Y', 'G', 'E', 'B']) || has_month_token(&letters);
     let time = letters.contains(['H', 'S', 'T', 'U']) || meridiem;
     time && !date
