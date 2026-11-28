@@ -1448,13 +1448,22 @@ mod explicit_mode_tests {
         no_retry.tessdata.clear();
         assert_eq!(fingerprint(&[no_retry], None).await.unwrap().as_deref(), Some(""));
 
+        let present_key = &keys[1];
+        let retry_result = "汉字 read while the retry set was present".as_bytes().to_vec();
+        cache.set_default(present_key, retry_result.clone(), None).unwrap();
+
         std::fs::remove_file(han).unwrap();
         let after_removal = context().await.unwrap();
         assert_eq!(after_removal, missing);
         let current_key = apply_context(Some(legacy_key.into()), &after_removal)
             .expect("an image without the retry models remains cacheable");
         assert_eq!(cache.get_default(legacy_key, None).unwrap(), Some(legacy_result));
-        assert_eq!(cache.get_default(&current_key, None).unwrap(), None);
+        assert_eq!(cache.get_default(present_key, None).unwrap(), Some(retry_result));
+        assert_eq!(
+            cache.get_default(&current_key, None).unwrap(),
+            None,
+            "an entry stored with the retry set is not served once its packs are removed"
+        );
     }
 
     #[tokio::test]
