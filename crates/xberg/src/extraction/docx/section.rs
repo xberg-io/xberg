@@ -111,6 +111,16 @@ fn get_w_attr_i32(element: &BytesStart, local_name: &str) -> Option<i32> {
     None
 }
 
+/// The unescaped value of the attribute spelled exactly `key`. Namespace prefixes are canonical by
+/// now, so an unrelated `x:id` or `x:type` is not mistaken for `r:id` or `w:type`.
+fn exact_attr(element: &BytesStart, key: &str) -> Option<String> {
+    element
+        .attributes()
+        .flatten()
+        .find(|attr| attr.key.as_ref() == key)
+        .map(|attr| unescape_attribute(&attr.value))
+}
+
 /// An attribute value with its XML escapes resolved, so `rId&#49;` equals `rId1`.
 pub(crate) fn unescape_attribute(value: &str) -> String {
     quick_xml::escape::unescape(value).map_or_else(|_| value.to_string(), std::borrow::Cow::into_owned)
@@ -291,8 +301,8 @@ fn apply_section_element(e: &BytesStart, props: &mut SectionProperties) {
             props.doc_grid_line_pitch = get_w_attr_i32(e, "linePitch");
         }
         "w:headerReference" | "w:footerReference" => {
-            if let Some(id) = get_w_attr_string(e, "id") {
-                let kind = match get_w_attr_string(e, "type").as_deref() {
+            if let Some(id) = exact_attr(e, "r:id") {
+                let kind = match exact_attr(e, "w:type").as_deref() {
                     Some("first") => HeaderFooterType::First,
                     Some("even") => HeaderFooterType::Even,
                     _ => HeaderFooterType::Default,
@@ -302,7 +312,7 @@ fn apply_section_element(e: &BytesStart, props: &mut SectionProperties) {
                 } else {
                     &mut props.footer_refs
                 };
-                refs.push((kind, unescape_attribute(&id)));
+                refs.push((kind, id));
             }
         }
         "w:titlePg" => {
