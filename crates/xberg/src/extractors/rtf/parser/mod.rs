@@ -224,6 +224,29 @@ impl FormattingTracker {
             span.end = map_offset(mapping, span.end);
         }
         self.spans.retain(|s| s.start < s.end);
+        self.merge_touching_spans();
+    }
+
+    /// Sibling groups such as `{\b pre}{\b fix}` close and reopen the same format; one span keeps
+    /// the renderer from emitting `**pre****fix**`. ~keep
+    fn merge_touching_spans(&mut self) {
+        let mut merged: Vec<RtfFormattingSpan> = Vec::with_capacity(self.spans.len());
+        for span in self.spans.drain(..) {
+            match merged.last_mut() {
+                Some(last)
+                    if last.end == span.start
+                        && last.bold == span.bold
+                        && last.italic == span.italic
+                        && last.underline == span.underline
+                        && last.strikethrough == span.strikethrough
+                        && last.color_index == span.color_index =>
+                {
+                    last.end = span.end;
+                }
+                _ => merged.push(span),
+            }
+        }
+        self.spans = merged;
     }
 }
 

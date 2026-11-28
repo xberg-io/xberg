@@ -125,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **xlsx:** a workbook whose `sharedStrings.xml` declares a `uniqueCount` larger than the strings it holds is no longer rejected as too large; the content-size limit now applies to the strings actually present. (#3443)
+- **rtf:** adjacent runs with the same formatting, such as `{\b pre}{\b fix}`, merge into one emphasis span, so Markdown output is `**prefix**` instead of `**pre****fix**`. (#3433)
 - **ocr:** a table detected on a standalone image is placed before the first paragraph below its top edge instead of after every paragraph, so a summary under a table no longer reads before it. Tables are ordered top to bottom; images recognized rotated keep the previous order.
 - **ocr:** `use_cache: false` on the extraction request now bypasses the OCR result cache; before, repeated runs still read cached OCR results. An `ocr.backend_options` that sets only `use_cache` no longer moves OCR off the default route.
 - **layout:** multi-page 300 dpi scans no longer lose layout detection because a fixed eight-page chunk exceeded the content-size budget; chunks now close before the page that would exceed it.

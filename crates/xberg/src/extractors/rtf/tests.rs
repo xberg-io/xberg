@@ -668,3 +668,23 @@ fn test_listtext_ignorable_ordered_detection() {
         metas
     );
 }
+
+#[test]
+fn should_render_adjacent_bold_runs_as_one_emphasis_span() {
+    let rtf_content = r"{\rtf1\ansi{\b pre}{\b fix}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert_eq!(rendered.trim(), "**prefix**");
+}
+
+#[test]
+fn should_keep_adjacent_runs_with_different_formats_separate() {
+    let doc = RtfExtractor::build_internal_document(r"{\rtf1\ansi{\b a}{\i b}}", false);
+    assert_eq!(crate::rendering::render_markdown(&doc).trim(), "**a***b*");
+}
+
+#[test]
+fn should_keep_bold_runs_separated_by_whitespace_separate() {
+    let doc = RtfExtractor::build_internal_document(r"{\rtf1\ansi{\b a} {\b b}}", false);
+    assert_eq!(crate::rendering::render_markdown(&doc).trim(), "**a** **b**");
+}
