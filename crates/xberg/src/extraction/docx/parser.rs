@@ -3084,9 +3084,12 @@ impl<R: Read + Seek> DocxParser<R> {
         if let Ok(comments_xml) = self.read_file("word/comments.xml") {
             self.parse_comments(&comments_xml, &mut document.comments, budget, &mut document.warnings)?;
         }
-        document
-            .comments
-            .retain(|c| !document.comments_in_deleted_rows.contains(&c.id) || comment_ref_ids.contains(&c.id));
+        if !document.comments_in_deleted_rows.is_empty() {
+            let live_refs: ahash::AHashSet<&str> = comment_ref_ids.iter().map(String::as_str).collect();
+            document
+                .comments
+                .retain(|c| !document.comments_in_deleted_rows.contains(&c.id) || live_refs.contains(c.id.as_str()));
+        }
         if !comment_ref_ids.is_empty() {
             let known_ids: ahash::AHashSet<&str> = document.comments.iter().map(|c| c.id.as_str()).collect();
             for id in &comment_ref_ids {
