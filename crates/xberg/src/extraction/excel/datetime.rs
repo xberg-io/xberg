@@ -113,9 +113,33 @@ pub(super) fn is_time_only_format(code: &str, format_id: Option<u32>) -> bool {
     }
     let sections = format_sections(code);
     let text = &section_for_zero(&sections).text;
-    let date = text.contains(['D', 'Y']);
-    let time = text.contains(['H', 'S']) || text.contains("AM/PM") || text.contains("A/P");
+    let meridiem = text.contains("AM/PM") || text.contains("A/P");
+    let letters = text.replace("AM/PM", "").replace("A/P", "");
+    let date = letters.contains(['D', 'Y']) || has_month_token(&letters);
+    let time = letters.contains(['H', 'S']) || meridiem;
     time && !date
+}
+
+/// An `M` run is minutes beside an hour or second token and a month anywhere else.
+fn has_month_token(text: &str) -> bool {
+    let letters: Vec<char> = text.chars().filter(char::is_ascii_alphabetic).collect();
+    let mut index = 0;
+    while index < letters.len() {
+        if letters[index] != 'M' {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < letters.len() && letters[index] == 'M' {
+            index += 1;
+        }
+        let after_hour = start > 0 && letters[start - 1] == 'H';
+        let before_second = letters.get(index) == Some(&'S');
+        if !after_hour && !before_second {
+            return true;
+        }
+    }
+    false
 }
 
 fn is_zero_serial(value: &Data) -> bool {

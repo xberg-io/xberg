@@ -131,12 +131,11 @@ fn process_xlsx_workbook<RS: Read + Seek>(
             continue;
         }
         let truncated = skipped.truncated(index);
-        let epoch_styles = epoch_1904.then(|| workbook.worksheet_style(name).unwrap_or_default());
         let sheet = match truncated {
             Some(truncated) => {
-                table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, epoch_styles.as_ref(), warnings)
+                table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, epoch_1904, warnings)
             }
-            None => process_xlsx_sheet_safe(&mut workbook, name, epoch_styles.as_ref(), warnings),
+            None => process_xlsx_sheet_safe(&mut workbook, name, epoch_1904, warnings),
         };
         match sheet {
             Ok(sheet) => sheets.push(sheet),
@@ -177,7 +176,7 @@ fn process_xlsx_workbook<RS: Read + Seek>(
 fn process_xlsx_sheet_safe<RS: Read + Seek>(
     workbook: &mut calamine::Xlsx<RS>,
     sheet_name: &str,
-    epoch_styles: datetime::EpochStyles<'_>,
+    epoch_1904: bool,
     warnings: &mut Vec<ProcessingWarning>,
 ) -> Result<ExcelSheet> {
     match classify_xlsx_sheet_shape(workbook, sheet_name)? {
@@ -185,7 +184,9 @@ fn process_xlsx_sheet_safe<RS: Read + Seek>(
         XlsxSheetShape::Dense => {}
         XlsxSheetShape::Sparse => {
             let (mut cells, row_min, row_max, col_min, col_max) = collect_xlsx_sheet_cells(workbook, sheet_name)?;
-            datetime::resolve_epoch_zero_in_cells(&mut cells, epoch_styles);
+            if epoch_1904 {
+                datetime::resolve_xlsx_epoch_zero_in_cells(workbook, sheet_name, &mut cells);
+            }
             if cells.is_empty() {
                 return Ok(empty_excel_sheet(sheet_name));
             }
@@ -202,7 +203,9 @@ fn process_xlsx_sheet_safe<RS: Read + Seek>(
     let mut range = workbook
         .worksheet_range(sheet_name)
         .map_err(|e| XbergError::parsing(format!("Failed to parse sheet '{}': {}", sheet_name, e)))?;
-    datetime::resolve_epoch_zero_in_range(&mut range, epoch_styles);
+    if epoch_1904 {
+        datetime::resolve_xlsx_epoch_zero_in_range(workbook, sheet_name, &mut range);
+    }
 
     Ok(process_sheet(sheet_name, &range, warnings))
 }
@@ -569,8 +572,7 @@ where
 {
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
-    let no_cell_styles = calamine::StyleRange::default();
-    let epoch_styles = workbook.is_1904().then_some(&no_cell_styles);
+    let epoch_1904 = workbook.is_1904();
 
     for (index, name) in sheet_names.iter().enumerate() {
         if let Some(sheet) = skipped.placeholder(index, name, warnings) {
@@ -579,7 +581,9 @@ where
         }
         match workbook.worksheet_range(name) {
             Ok(mut range) => {
-                datetime::resolve_epoch_zero_in_range(&mut range, epoch_styles);
+                if epoch_1904 {
+                    datetime::resolve_unstyled_epoch_zero_in_range(&mut range);
+                }
                 sheets.push(process_sheet(name, &range, warnings));
             }
             Err(e) => {
