@@ -668,3 +668,11 @@ fn test_listtext_ignorable_ordered_detection() {
         metas
     );
 }
+
+#[test]
+fn should_render_adjacent_bold_runs_as_one_emphasis_span() {
+    let rtf_content = r"{\rtf1\ansi{\b pre}{\b fix}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert_eq!(rendered.trim(), "**prefix**");
+}
