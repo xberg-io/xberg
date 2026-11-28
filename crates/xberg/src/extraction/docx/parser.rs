@@ -4373,12 +4373,12 @@ impl<R: Read + Seek> DocxParser<R> {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.name().as_ref() == "Relationship" => {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.local_name().as_ref() == "Relationship" => {
                     let (mut target, mut is_settings) = (None, false);
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             "Target" => target = Some(super::section::unescape_attribute(&attr.value)),
-                            "Type" => is_settings = attr.value.ends_with("/settings"),
+                            "Type" => is_settings = super::section::unescape_attribute(&attr.value).ends_with("/settings"),
                             _ => {}
                         }
                     }
@@ -4426,7 +4426,7 @@ impl<R: Read + Seek> DocxParser<R> {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.name().as_ref() == "Relationship" => {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.local_name().as_ref() == "Relationship" => {
                     let mut target: Option<String> = None;
                     let mut kind: Option<bool> = None;
                     let mut rel_id: Option<String> = None;
@@ -4435,9 +4435,10 @@ impl<R: Read + Seek> DocxParser<R> {
                             "Target" => target = Some(super::section::unescape_attribute(&attr.value)),
                             "Id" => rel_id = Some(super::section::unescape_attribute(&attr.value)),
                             "Type" => {
-                                kind = if attr.value.ends_with("/header") {
+                                let rel_type = super::section::unescape_attribute(&attr.value);
+                                kind = if rel_type.ends_with("/header") {
                                     Some(true)
-                                } else if attr.value.ends_with("/footer") {
+                                } else if rel_type.ends_with("/footer") {
                                     Some(false)
                                 } else {
                                     None
