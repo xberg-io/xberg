@@ -16,9 +16,9 @@ function Assert-TesseractRuntime {
   param([string]$Executable)
   $output = @(& $Executable --version 2>&1)
   if ($LASTEXITCODE -ne 0) { throw "Tesseract runtime probe failed: $LASTEXITCODE" }
-  if ($output.Count -eq 0 -or $output[0] -notmatch '^tesseract\s+v?5\.5\.4(?:\D|$)' -or
+  if ($output.Count -eq 0 -or $output[0] -notmatch '^tesseract\s+v?5\.5\.5(?:\D|$)' -or
       @($output | Where-Object { $_ -match '^\s*leptonica-1\.87\.0(?:\D|$)' }).Count -ne 1) {
-    throw 'Expected actual Tesseract 5.5.4 and Leptonica 1.87.0 runtimes'
+    throw 'Expected actual Tesseract 5.5.5 and Leptonica 1.87.0 runtimes'
   }
 }
 
@@ -52,7 +52,7 @@ function Build-TesseractSource {
   New-Item -ItemType Directory -Path $work | Out-Null
   try {
     Expand-Archive -LiteralPath $SourceArchive -DestinationPath $work
-    $source = Join-Path $work 'tesseract-7e548e6eff172f38f97664afe7f7ce40db36c8d6'
+    $source = Join-Path $work 'tesseract-4292f6890aa86ef64eba32090358f40f69dd6d28'
     if (-not (Test-Path -LiteralPath (Join-Path $source 'CMakeLists.txt'))) { throw 'Tesseract source archive extracted no expected source' }
     Install-TesseractLeptonica -VcpkgRoot $VcpkgRoot
     $build = Join-Path $work 'build'
@@ -69,7 +69,7 @@ function Build-TesseractSource {
       -Arguments @('--build', $build, '--config', 'Release', '--target', 'install', '--parallel', '1')
     # Upstream CMake installs into bin; retain the established CLI location used by consumers. ~keep
     Get-ChildItem -LiteralPath (Join-Path $InstallRoot 'bin') -File | Copy-Item -Destination $InstallRoot
-    $notices = Join-Path $InstallRoot 'share/licenses/xberg-system-ocr/tesseract-5.5.4'
+    $notices = Join-Path $InstallRoot 'share/licenses/xberg-system-ocr/tesseract-5.5.5'
     New-Item -ItemType Directory -Path $notices -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $source 'LICENSE'), (Join-Path $source 'AUTHORS') -Destination $notices
     $leptNotices = Join-Path $InstallRoot 'share/licenses/xberg-system-ocr/leptonica-1.87.0'
@@ -82,18 +82,18 @@ function Build-TesseractSource {
 
 function Ensure-Tesseract {
   param([string]$Executable, [string]$SourceArchive, [string]$VcpkgRoot)
-  $required = [version]'5.5.4'
+  $required = [version]'5.5.5'
   $current = Get-TesseractVersion -Executable $Executable
   if ($null -ne $current -and $current -ge $required) {
     Assert-TesseractRuntime -Executable $Executable
     Write-Host "Verified Tesseract $current"
     return
   }
-  # 5.5.4 has no published Windows installer; build its signed-tag source instead. ~keep
-  $url = 'https://codeload.github.com/tesseract-ocr/tesseract/zip/7e548e6eff172f38f97664afe7f7ce40db36c8d6'
-  $expected = 'ef082fa5b1ddf469e8e5174298242afdc7605b278470693badf2dbf50e17721b'
+  # 5.5.5 has no published Windows installer; build its signed-tag source instead. ~keep
+  $url = 'https://codeload.github.com/tesseract-ocr/tesseract/zip/4292f6890aa86ef64eba32090358f40f69dd6d28'
+  $expected = 'd590ac276138238eb80e4d5833f65cb057cb90d02088d78a05027190a5318e41'
   Invoke-WebRequest -Uri $url -OutFile $SourceArchive -ErrorAction Stop
-  if ((Get-Item -LiteralPath $SourceArchive).Length -ne 2603004 -or
+  if ((Get-Item -LiteralPath $SourceArchive).Length -ne 2752925 -or
       (Get-FileHash -LiteralPath $SourceArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
     throw 'Tesseract source archive size or checksum mismatch'
   }

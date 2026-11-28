@@ -6,10 +6,10 @@ setup() {
 	export OCR_PREFIX="$XBERG_WORK/prefix" OCR_BUILD_JOBS=1 OCR_TESSDATA_DIR="$XBERG_WORK/tessdata"
 	mkdir -p "$OCR_PREFIX/bin" "$OCR_TESSDATA_DIR"
 	printf fixture >"$OCR_TESSDATA_DIR/eng.traineddata"
-	xberg_stub pkg-config 'case "$*" in *tesseract*) echo "${MOCK_TESS_VERSION:-5.5.4}" ;; *lept*) echo 1.87.0 ;; esac'
+	xberg_stub pkg-config 'case "$*" in *tesseract*) echo "${MOCK_TESS_VERSION:-5.5.5}" ;; *lept*) echo 1.87.0 ;; esac'
 	cat >"$OCR_PREFIX/bin/tesseract" <<'SH'
 #!/usr/bin/env bash
-if [ "$1" = --version ]; then printf 'tesseract %s\n leptonica-1.87.0\n' "${MOCK_TESS_VERSION:-5.5.4}"; else printf 'List of available languages (1):\neng\n'; fi
+if [ "$1" = --version ]; then printf 'tesseract %s\n leptonica-1.87.0\n' "${MOCK_TESS_VERSION:-5.5.5}"; else printf 'List of available languages (1):\neng\n'; fi
 SH
 	chmod +x "$OCR_PREFIX/bin/tesseract"
 }
@@ -40,7 +40,7 @@ SH
 	export MOCK_TESS_VERSION=5.3.4
 	run bash -euo pipefail -c 'source "$1"; ocr_assert_versions' _ "$SCRIPT"
 	xberg_assert_status 1
-	xberg_assert_output_contains 'expected Tesseract 5.5.4 and Leptonica 1.87.0'
+	xberg_assert_output_contains 'expected Tesseract 5.5.5 and Leptonica 1.87.0'
 }
 
 @test "linux OCR stack should_reject_the_previous_security_patch" {

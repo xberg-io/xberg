@@ -11,8 +11,8 @@ from pathlib import Path
 def verify_licenses(prefix: Path) -> list:
     """Check notices copied from the checksum-verified published source archives."""
     expected = {
-        "tesseract-5.5.4/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
-        "tesseract-5.5.4/AUTHORS": "b3b7a07a14c060efe17574b2946a01ecaa0a5873a8f606239cc28c6d31300109",
+        "tesseract-5.5.5/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "tesseract-5.5.5/AUTHORS": "b3b7a07a14c060efe17574b2946a01ecaa0a5873a8f606239cc28c6d31300109",
         "leptonica-1.87.0/leptonica-license.txt": "87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806",
     }
     for name, digest in expected.items():
@@ -28,7 +28,7 @@ def main() -> None:
     licenses = verify_licenses(prefix)
     rows = []
     for filename, symbol, expected in (
-        ("libtesseract.so.5.5", "TessVersion", "5.5.4"),
+        ("libtesseract.so.5.5", "TessVersion", "5.5.5"),
         ("libleptonica.so.6", "getLeptonicaVersion", "leptonica-1.87.0"),
     ):
         path = (prefix / "lib" / filename).resolve(strict=True)

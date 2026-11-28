@@ -128,9 +128,9 @@ path = "crates/xberg-tesseract/licenses/tesseract-LICENSE"
 sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 
 [[component.pin]]
-version = "5.5.4"
-url = "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.4.tar.gz"
-sha256 = "a8dbf8b8c8ee427ff6ad1d99116502feaf59440af1adb893caf60a6576826cf4"
+version = "5.5.5"
+url = "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.5.tar.gz"
+sha256 = "b02cf6f37cfc95be5bf7e4b2d39e51997b1ac41f7beb4e2bd16777bb67561c79"
 
 [[component.pin.texts]]
 name = "LICENSE"
@@ -138,9 +138,9 @@ path = "crates/xberg-tesseract/licenses/tesseract-LICENSE"
 sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 
 [[component.pin]]
-version = "5.5.4"
-url = "https://codeload.github.com/tesseract-ocr/tesseract/zip/7e548e6eff172f38f97664afe7f7ce40db36c8d6"
-sha256 = "ef082fa5b1ddf469e8e5174298242afdc7605b278470693badf2dbf50e17721b"
+version = "5.5.5"
+url = "https://codeload.github.com/tesseract-ocr/tesseract/zip/4292f6890aa86ef64eba32090358f40f69dd6d28"
+sha256 = "d590ac276138238eb80e4d5833f65cb057cb90d02088d78a05027190a5318e41"
 
 [[component.pin.texts]]
 name = "LICENSE"

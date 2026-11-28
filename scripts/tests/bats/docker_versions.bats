@@ -174,8 +174,8 @@ root = Path(sys.argv[1])
 missing = sys.argv[2] == "missing"
 workflow = (root / ".github/workflows/publish.yaml").read_text()
 notices = (
-    "tesseract-5.5.4/LICENSE",
-    "tesseract-5.5.4/AUTHORS",
+    "tesseract-5.5.5/LICENSE",
+    "tesseract-5.5.5/AUTHORS",
     "leptonica-1.87.0/leptonica-license.txt",
 )
 steps = (

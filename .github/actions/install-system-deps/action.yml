@@ -109,9 +109,9 @@ runs:
         path: |
           C:\Program Files\Tesseract-OCR
           C:\ProgramData\chocolatey\lib\tesseract
-        key: tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.4-source-7e548e6-data-v2
+        key: tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.5-source-4292f68-data-v2
         restore-keys: |
-          tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.4-source-7e548e6-data-
+          tesseract-windows-${{ runner.arch }}-${{ steps.msvc-toolset.outputs.id }}-v5.5.5-source-4292f68-data-
 
     - name: Cache LLVM (Windows)
       if: runner.os == 'Windows'

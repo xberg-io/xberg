@@ -15,7 +15,7 @@ setup() {
 	for platform in linux-x64-musl linux-x64-gnu; do
 		printf '{"files":["binding.node"]}\n' >"crates/xberg-node/npm/$platform/package.json"
 	done
-	for notice in tesseract-5.5.4/LICENSE tesseract-5.5.4/AUTHORS leptonica-1.87.0/leptonica-license.txt; do
+	for notice in tesseract-5.5.5/LICENSE tesseract-5.5.5/AUTHORS leptonica-1.87.0/leptonica-license.txt; do
 		mkdir -p "build-output/licenses/xberg-system-ocr/$(dirname "$notice")"
 		printf OCR >"build-output/licenses/xberg-system-ocr/$notice"
 	done

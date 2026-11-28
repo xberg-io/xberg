@@ -66,11 +66,11 @@ mod build_tesseract {
     const LEPTONICA_ARCHIVE_SIZE: u64 = 14_348_280;
     const LEPTONICA_ARCHIVE_ROOT: &str = "leptonica-13275a278eb55b5746e33f95fbf5a2c8f604b3ab";
     const LEPTONICA_LICENSE_FILE: &str = "leptonica-license.txt";
-    const TESSERACT_VERSION: &str = "5.5.4";
-    const TESSERACT_REVISION: &str = "7e548e6eff172f38f97664afe7f7ce40db36c8d6";
-    const TESSERACT_SHA256: &str = "ef082fa5b1ddf469e8e5174298242afdc7605b278470693badf2dbf50e17721b";
-    const TESSERACT_ARCHIVE_SIZE: u64 = 2_603_004;
-    const TESSERACT_ARCHIVE_ROOT: &str = "tesseract-7e548e6eff172f38f97664afe7f7ce40db36c8d6";
+    const TESSERACT_VERSION: &str = "5.5.5";
+    const TESSERACT_REVISION: &str = "4292f6890aa86ef64eba32090358f40f69dd6d28";
+    const TESSERACT_SHA256: &str = "d590ac276138238eb80e4d5833f65cb057cb90d02088d78a05027190a5318e41";
+    const TESSERACT_ARCHIVE_SIZE: u64 = 2_752_925;
+    const TESSERACT_ARCHIVE_ROOT: &str = "tesseract-4292f6890aa86ef64eba32090358f40f69dd6d28";
     const TESSERACT_LICENSE_FILE: &str = "LICENSE";
     const TESSDATA_FAST_REVISION: &str = "87416418657359cb625c412a48b6e1d6d41c29bd";
     const ENG_TRAINEDDATA_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
@@ -770,6 +770,7 @@ mod build_tesseract {
 
             std::fs::write(&cmakelists_path, cmakelists).expect("Failed to write CMakeLists.txt");
             skip_legacy_tables_in_lstm_only_init(&tesseract_dir);
+            drop_dropout_exception(&tesseract_dir);
 
             let mut tesseract_config = Config::new(
                 cmake_source_path(&tesseract_dir)
@@ -1310,6 +1311,28 @@ mod build_tesseract {
         fs::write(&path, patched).expect("Failed to write tessedit.cpp");
     }
 
+    /// Tesseract 5.5.5 throws from the `Dropout` constructor, which `-fno-exceptions` rejects.
+    /// Every caller passes a valid rate and dimension (deserialization validates before constructing
+    /// the layer), so the throw is unreachable and becomes an abort. Idempotent.
+    fn drop_dropout_exception(tesseract_dir: &Path) {
+        let path = tesseract_dir.join("src/lstm/dropout.cpp");
+        let source = fs::read_to_string(&path).expect("Failed to read dropout.cpp");
+        if !source.contains("throw std::invalid_argument(") {
+            return;
+        }
+        let include = "#include <stdexcept> // for std::invalid_argument";
+        let throw_stmt = "    throw std::invalid_argument(\n        \"Invalid dropout layer. The rate must be in [0, 1), the dimension 0, 1 or 2.\");";
+        assert!(
+            source.matches(include).count() == 1 && source.matches(throw_stmt).count() == 1,
+            "dropout.cpp no longer has the throw this build patches"
+        );
+        let patched = source.replace(include, "#include <cstdlib>   // for std::abort").replace(
+            throw_stmt,
+            "    tprintf(\"Invalid dropout layer. The rate must be in [0, 1), the dimension 0, 1 or 2.\\n\");\n    std::abort();",
+        );
+        fs::write(&path, patched).expect("Failed to write dropout.cpp");
+    }
+
     /// Apply C++ source fixups programmatically when the diff patch fails.
     /// These are the same changes from patches/tesseract.diff applied via string replacement.
     /// All replacements are idempotent (no-op if already applied).
@@ -1623,6 +1646,7 @@ Installation instructions:
             &tesseract_url(),
         );
         apply_tesseract_wasm_patch(&tesseract_source.path);
+        drop_dropout_exception(&tesseract_source.path);
         apply_wasm_noop_mutex_patch(&tesseract_source.path);
         let tesseract_dir = tesseract_source.path;
 
