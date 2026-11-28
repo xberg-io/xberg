@@ -1556,7 +1556,7 @@ impl<'a> MixedOcrContext<'a> {
             content,
             config,
             routing.preprocessing_render_dpi,
-            direct_route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
+            route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
         )
         .await;
 
@@ -2335,11 +2335,23 @@ pub(super) fn bound_batch_to_recognition(batch_size: usize, recognition_sessions
     sessions
 }
 
+/// Recognition sessions that bound the batch width of whichever route reads these pages.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn route_recognition_sessions(
+    effective_pipeline: Option<&crate::core::config::OcrPipelineConfig>,
+    backend: Option<&std::sync::Arc<dyn crate::plugins::OcrBackend>>,
+) -> Option<usize> {
+    match effective_pipeline {
+        Some(pipeline) => pipeline_route_recognition_sessions(pipeline),
+        None => direct_route_recognition_sessions(None, backend),
+    }
+}
+
 /// Recognition sessions that bound this route's batch width, or `None` when nothing does.
 ///
-/// Only the direct route to the built-in Tesseract backend has an admission limit: the
-/// pipeline route reads through stages that may each be a different backend, and a custom
-/// backend reads every page it is handed at once.
+/// Only the direct route to the built-in Tesseract backend has an admission limit here: a
+/// custom backend reads every page it is handed at once. The pipeline route is bounded by
+/// [`pipeline_route_recognition_sessions`].
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn direct_route_recognition_sessions(
     effective_pipeline: Option<&crate::core::config::OcrPipelineConfig>,
@@ -2368,6 +2380,41 @@ pub(super) fn direct_route_recognition_sessions(
         let _ = backend;
         None
     }
+}
+
+/// Recognition sessions that bound the pipeline route's batch width, or `None` when nothing does.
+///
+/// Every stage must be the built-in Tesseract backend, so every read of every page waits on the
+/// same admission limit. A pipeline with any other stage (a VLM, a custom backend) reads pages
+/// that Tesseract's sessions do not gate, and narrowing its batch would only serialise them.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn pipeline_route_recognition_sessions(pipeline: &crate::core::config::OcrPipelineConfig) -> Option<usize> {
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    {
+        crate::plugins::ensure_ocr_backends_initialized();
+        let handle = crate::plugins::registry::get_ocr_backend_registry();
+        let registry = handle.read();
+        pipeline_stages_all_match(pipeline, |name| {
+            registry
+                .get(name)
+                .is_ok_and(|backend| registry.is_builtin_tesseract(&backend))
+        })
+        .then(crate::core::config::concurrency::recognition_concurrency)
+    }
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    {
+        let _ = pipeline;
+        None
+    }
+}
+
+/// Whether the pipeline has stages and `is_tesseract` accepts the backend of every one.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn pipeline_stages_all_match(
+    pipeline: &crate::core::config::OcrPipelineConfig,
+    is_tesseract: impl Fn(&str) -> bool,
+) -> bool {
+    !pipeline.stages.is_empty() && pipeline.stages.iter().all(|stage| is_tesseract(&stage.backend))
 }
 
 /// Recognition sessions to report for any direct-route backend instead of asking whether it is
@@ -6863,7 +6910,9 @@ pub(super) fn adapt_batch_size_to_memory_inner(
         return configured;
     }
 
-    let reserved = document_size + 512 * 1024 * 1024;
+    let session_reserve =
+        usize::try_from(crate::core::config::concurrency::TESSERACT_SESSION_MEMORY_BYTES).unwrap_or(usize::MAX);
+    let reserved = document_size.saturating_add(session_reserve);
     let usable = available_bytes.saturating_sub(reserved);
     let memory_limited_batch = (usable / per_page_bytes).max(1);
     let result = configured.min(memory_limited_batch);

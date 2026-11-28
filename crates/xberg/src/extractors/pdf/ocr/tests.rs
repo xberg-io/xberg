@@ -4485,6 +4485,40 @@ pub(super) mod tests {
 
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[test]
+    fn pipeline_batch_is_bounded_only_when_every_stage_is_tesseract() {
+        let stage = |backend: &str| crate::core::config::OcrPipelineStage {
+            backend: backend.to_string(),
+            priority: 100,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        };
+        let pipeline = |backends: &[&str]| crate::core::config::OcrPipelineConfig {
+            stages: backends.iter().map(|backend| stage(backend)).collect(),
+            quality_thresholds: Default::default(),
+        };
+        let is_tesseract = |name: &str| name == "tesseract";
+
+        assert!(pipeline_stages_all_match(&pipeline(&["tesseract"]), is_tesseract));
+        assert!(pipeline_stages_all_match(
+            &pipeline(&["tesseract", "tesseract"]),
+            is_tesseract
+        ));
+        assert!(
+            !pipeline_stages_all_match(&pipeline(&["tesseract", "vlm"]), is_tesseract),
+            "a stage that no recognition session gates leaves the batch width alone"
+        );
+        assert!(
+            !pipeline_stages_all_match(&pipeline(&[]), is_tesseract),
+            "a pipeline without stages has nothing to bound"
+        );
+    }
+
+    #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+    #[test]
     fn batch_width_follows_the_recognition_sessions_that_read_it() {
         assert_eq!(
             bound_batch_to_recognition(8, None),
@@ -4663,6 +4697,88 @@ pub(super) mod tests {
             direct_route_recognition_sessions(None, Some(&tesseract)),
             Some(crate::core::config::concurrency::recognition_concurrency())
         );
+    }
+
+    /// The stages decide the pipeline route's bound through the registry: only a pipeline whose
+    /// every stage resolves to the built-in Tesseract backend is bounded, and the direct backend
+    /// plays no part once a pipeline is in effect.
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[test]
+    #[serial_test::serial]
+    fn pipeline_route_is_bounded_only_by_builtin_tesseract_stages() {
+        use std::sync::Arc;
+
+        const PROBE: &str = "pipeline-recognition-session-probe-backend";
+        crate::plugins::ensure_ocr_backends_initialized();
+        let probe: Arc<dyn crate::plugins::OcrBackend> = Arc::new(RasterWidthProbeBackend {
+            name: PROBE,
+            in_flight: Default::default(),
+            peak: Default::default(),
+            calls: Default::default(),
+        });
+        crate::plugins::register_ocr_backend(Arc::clone(&probe))
+            .expect("registering the pipeline recognition-session probe backend must succeed");
+        struct Unregister;
+        impl Drop for Unregister {
+            fn drop(&mut self) {
+                let _ = crate::plugins::unregister_ocr_backend(PROBE);
+            }
+        }
+        let _unregister = Unregister;
+        let tesseract = crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .get("tesseract")
+            .expect("the built-in Tesseract backend must be registered");
+        let sessions = Some(crate::core::config::concurrency::recognition_concurrency());
+        let stage = |backend: &str| crate::core::config::OcrPipelineStage {
+            backend: backend.to_string(),
+            priority: 100,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            paddle_ocr_settings: None,
+            vlm_config: None,
+            backend_options: None,
+        };
+        let pipeline = |backends: &[&str]| crate::core::config::OcrPipelineConfig {
+            stages: backends.iter().map(|backend| stage(backend)).collect(),
+            quality_thresholds: Default::default(),
+        };
+
+        assert_eq!(
+            route_recognition_sessions(Some(&pipeline(&["tesseract"])), None),
+            sessions,
+            "a Tesseract-only pipeline waits on the recognition sessions, so its batch is bounded by them"
+        );
+        assert_eq!(
+            route_recognition_sessions(Some(&pipeline(&["tesseract", "tesseract"])), Some(&probe)),
+            sessions,
+            "the pipeline's stages, not the direct backend, decide the pipeline route's bound"
+        );
+        assert_eq!(
+            route_recognition_sessions(Some(&pipeline(&["tesseract", PROBE])), Some(&tesseract)),
+            None,
+            "a custom stage reads pages no recognition session gates"
+        );
+        assert_eq!(
+            route_recognition_sessions(Some(&pipeline(&[PROBE])), Some(&tesseract)),
+            None
+        );
+        assert_eq!(
+            route_recognition_sessions(
+                Some(&pipeline(&["tesseract", "unregistered-pipeline-stage-backend"])),
+                Some(&tesseract)
+            ),
+            None,
+            "a stage whose backend is not registered is not the built-in Tesseract"
+        );
+        assert_eq!(route_recognition_sessions(None, Some(&tesseract)), sessions);
+        assert_eq!(route_recognition_sessions(None, Some(&probe)), None);
     }
 
     /// A batch renders all of its pages before any is read and keeps every raster until the

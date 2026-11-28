@@ -208,7 +208,7 @@ fn quota_period_to_cores(quota: f64, period: f64) -> Option<usize> {
 /// scales with the page raster, and a large page at a high scan resolution costs
 /// several times a letter-sized one. Reserving too much costs throughput on a
 /// small host; reserving too little costs the process.
-const TESSERACT_SESSION_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
+pub(crate) const TESSERACT_SESSION_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 
 /// Memory this process can grow into, read afresh on every call.
 ///
