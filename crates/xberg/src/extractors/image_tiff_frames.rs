@@ -229,6 +229,18 @@ fn append_frame(
     let frame_page = frame
         .prebuilt_pages
         .and_then(|frame_pages| frame_pages.into_iter().next());
+    let image_offset = if frame_has_images { image_base } else { 0 };
+    finish_page(frame_page, fallback_content, page_number, image_offset)
+}
+
+/// The frame's page: its own prebuilt page, or one rendered from its elements, with its tables
+/// and image indices moved to their merged positions.
+fn finish_page(
+    frame_page: Option<crate::types::PageContent>,
+    fallback_content: Option<String>,
+    page_number: u32,
+    image_offset: u32,
+) -> crate::types::PageContent {
     let mut page = match (frame_page, fallback_content) {
         (Some(page), _) => page,
         (None, Some(content)) => {
@@ -248,10 +260,8 @@ fn append_frame(
             std::sync::Arc::new(table)
         })
         .collect();
-    if frame_has_images {
-        for index in &mut page.image_indices {
-            *index += image_base;
-        }
+    for index in &mut page.image_indices {
+        *index += image_offset;
     }
     page
 }
