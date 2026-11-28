@@ -6,6 +6,10 @@ use roxmltree::Node;
 use super::{MATH_NAMESPACE, Run};
 use crate::extraction::pptx::elements::Formatting;
 
+/// Nesting limit for one equation. The converter recurses once per level, so the default XML
+/// depth limit (1024) can exhaust a worker thread's stack; real equations nest far less.
+const MAX_MATH_DEPTH: usize = 128;
+
 /// Prefix the converter matches OMML element and attribute names against.
 const MATH_PREFIX: &str = "m";
 
@@ -35,8 +39,15 @@ fn canonical_omml(node: Node) -> String {
                 out.push('<');
                 push_element_name(&mut out, n);
                 for attr in n.attributes() {
+                    // A foreign-namespace attribute must not surface as an unprefixed one the
+                    // converter would read as its own (`w:val` as `val`).
+                    let prefixed = match attr.namespace() {
+                        Some(MATH_NAMESPACE) => true,
+                        Some(_) => continue,
+                        None => false,
+                    };
                     out.push(' ');
-                    if attr.namespace() == Some(MATH_NAMESPACE) {
+                    if prefixed {
                         out.push_str(MATH_PREFIX);
                         out.push(':');
                     }
@@ -102,7 +113,11 @@ pub(super) fn omml_node_to_run(container: &Node) -> Option<Run> {
         buf.clear();
     }
 
-    let mut budget = crate::extractors::security::SecurityBudget::with_defaults();
+    let mut budget =
+        crate::extractors::security::SecurityBudget::from_limits(&crate::extractors::security::SecurityLimits {
+            max_xml_depth: MAX_MATH_DEPTH,
+            ..Default::default()
+        });
     let latex = if is_display {
         crate::extraction::docx::math::collect_and_convert_omath_para(&mut reader, &mut budget).ok()?
     } else {

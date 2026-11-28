@@ -89,7 +89,7 @@ fn transitional_uri(strict: &str) -> Option<&'static str> {
 /// Rewrite the strict (ISO 29500) namespace URIs in `xml` to their transitional equivalents.
 ///
 /// Only an attribute value inside a tag that is exactly a strict URI is rewritten (namespace
-/// declarations and `graphicData/@uri`); element text, comments and CDATA are left alone.
+/// declarations and `graphicData/@uri`); element text, comments, CDATA and processing instructions are left alone.
 /// Returns the input borrowed when it holds no strict URI, which is the common case.
 pub(crate) fn normalize_strict_namespaces(xml: &str) -> std::borrow::Cow<'_, str> {
     if !xml.contains("purl.oclc.org/ooxml/") {
@@ -106,6 +106,8 @@ pub(crate) fn normalize_strict_namespaces(xml: &str) -> std::borrow::Cow<'_, str
             Some("-->")
         } else if rest.starts_with("<![CDATA[") {
             Some("]]>")
+        } else if rest.starts_with("<?") {
+            Some("?>")
         } else {
             None
         };
@@ -134,7 +136,10 @@ pub(crate) fn normalize_strict_namespaces(xml: &str) -> std::borrow::Cow<'_, str
         }
         i = j + 1;
     }
-    out.push_str(&xml[copied.min(xml.len())..]);
+    if copied == 0 {
+        return std::borrow::Cow::Borrowed(xml);
+    }
+    out.push_str(&xml[copied..]);
     std::borrow::Cow::Owned(out)
 }
 
@@ -176,6 +181,35 @@ mod tests {
             normalize_strict_namespaces(xml),
             r#"<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" b="unterminated"#
         );
+    }
+
+    #[test]
+    fn cdata_comments_and_processing_instructions_are_not_scanned_as_tags() {
+        let strict = "http://purl.oclc.org/ooxml/drawingml/main";
+        let xml = format!(r#"<?pi "{strict}"?><a:t xmlns:a="{strict}"><![CDATA[<b c="{strict}">]]></a:t>"#);
+        let expected = format!(
+            r#"<?pi "{strict}"?><a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><![CDATA[<b c="{strict}">]]></a:t>"#
+        );
+        assert_eq!(normalize_strict_namespaces(&xml), expected);
+    }
+
+    #[test]
+    fn greater_than_inside_an_attribute_value_does_not_end_the_tag() {
+        let strict = "http://purl.oclc.org/ooxml/drawingml/main";
+        let xml = format!(r#"<a:t note="a > b" xmlns:a="{strict}"/>"#);
+        assert_eq!(
+            normalize_strict_namespaces(&xml),
+            r#"<a:t note="a > b" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/>"#
+        );
+    }
+
+    #[test]
+    fn strict_uri_that_is_not_rewritten_stays_borrowed() {
+        let xml = r#"<a:t>http://purl.oclc.org/ooxml/drawingml/main</a:t>"#;
+        assert!(matches!(
+            normalize_strict_namespaces(xml),
+            std::borrow::Cow::Borrowed(_)
+        ));
     }
 
     #[test]

@@ -184,8 +184,8 @@ fn test_deeply_nested_math_is_dropped_without_exhausting_the_stack() {
     <a:p><a:r><a:t>Survives</a:t></a:r><m:oMath>{open}<m:r><m:t>x</m:t></m:r>{close}</m:oMath></a:p>
   </p:txBody></p:sp></p:spTree></p:cSld>
 </p:sld>"#,
-        open = "<m:e>".repeat(depth),
-        close = "</m:e>".repeat(depth),
+        open = "<m:sSup><m:e>".repeat(depth),
+        close = "</m:e></m:sSup>".repeat(depth),
     );
     let pptx = build_single_slide_pptx(&slide_xml, None, &[]);
     let extraction =
@@ -194,4 +194,67 @@ fn test_deeply_nested_math_is_dropped_without_exhausting_the_stack() {
 
     assert!(extraction.formulas.is_empty(), "over-deep math is not converted");
     assert!(extraction.result.content.contains("Survives"));
+}
+
+fn extract_content_and_formulas(slide_xml: &str) -> (String, Vec<(String, bool)>) {
+    let pptx = build_single_slide_pptx(slide_xml, None, &[]);
+    let extraction =
+        super::extract_pptx_from_bytes_with_slide_contents(&pptx, &PptxExtractionOptions::default(), &mut Vec::new())
+            .unwrap();
+    (extraction.result.content.clone(), extraction.formulas)
+}
+
+#[test]
+fn test_table_cell_math_reaches_the_cell_text() {
+    let slide_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:a="{DML}" xmlns:p="{PML}" xmlns:q="{MATH}">
+  <p:cSld><p:spTree><p:graphicFrame><a:graphic>
+    <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>
+      <a:tr><a:tc><a:txBody><a:p><q:oMath><q:r><q:t>y</q:t></q:r></q:oMath></a:p></a:txBody></a:tc></a:tr>
+    </a:tbl></a:graphicData>
+  </a:graphic></p:graphicFrame></p:spTree></p:cSld>
+</p:sld>"#
+    );
+    let (content, formulas) = extract_content_and_formulas(&slide_xml);
+    assert!(content.contains("$y$"), "cell math missing from: {content:?}");
+    assert!(formulas.is_empty(), "cell math is not a slide formula: {formulas:?}");
+}
+
+#[test]
+fn test_math_escaping_and_attributes_survive_an_alias_prefix() {
+    let slide_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:a="{DML}" xmlns:p="{PML}" xmlns:x="{MATH}" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <p:cSld><p:spTree><p:sp><p:txBody>
+    <a:p><x:oMath><x:r><x:t>a &amp; b &lt; c ' d</x:t></x:r></x:oMath></a:p>
+    <a:p><x:oMath><x:nary><x:naryPr><x:chr x:val="&#8721;" w:val="bogus"/></x:naryPr>
+      <x:sub><x:r><x:t>i</x:t></x:r></x:sub><x:sup><x:r><x:t>n</x:t></x:r></x:sup>
+      <x:e><x:r><x:t>i</x:t></x:r></x:e></x:nary></x:oMath></a:p>
+  </p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>"#
+    );
+    let (_, formulas) = extract_content_and_formulas(&slide_xml);
+    assert_eq!(
+        formulas,
+        vec![
+            (r"a \& b < c ' d".to_string(), false),
+            (r"\sum_{i}^{n}{i}".to_string(), false)
+        ],
+        "text escaping and the `x:val` attribute survive the alias prefix"
+    );
+}
+
+#[test]
+fn test_strict_presentation_rels_discover_slides() {
+    let rels = br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rId2" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/slide" Target="slides/slide2.xml"/>
+  <Relationship Id="rId3" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/slide" Target="slides/slide1.xml"/>
+</Relationships>"#;
+    assert_eq!(
+        super::parser::parse_presentation_rels(rels).unwrap(),
+        vec!["ppt/slides/slide1.xml".to_string(), "ppt/slides/slide2.xml".to_string()]
+    );
 }
