@@ -1498,12 +1498,7 @@ impl InternalDocumentExtractor for DocxExtractor {
         };
 
         if let Some(ref filter) = config.content_filter {
-            use crate::types::document_structure::ContentLayer;
-            internal_doc.elements.retain(|elem| match elem.layer {
-                ContentLayer::Header => filter.include_headers,
-                ContentLayer::Footer => filter.include_footers,
-                _ => true,
-            });
+            internal_doc.apply_furniture_filter(filter);
         }
 
         internal_doc.images = extracted_images;
@@ -2270,6 +2265,65 @@ mod tests {
             .filter(|n| n.content_layer == ContentLayer::Footer)
             .collect();
         assert!(!footer_nodes.is_empty(), "Should have footer layer nodes");
+    }
+
+    #[tokio::test]
+    async fn header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>Body content here.</w:t></w:r></w:p></w:body>
+</w:document>"#;
+        let header_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Page Header</w:t></w:r></w:p>
+</w:hdr>"#;
+        let footer_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Page Footer</w:t></w:r></w:p>
+</w:ftr>"#;
+        let data = build_test_docx_with_parts(document_xml, None, None, None, Some(header_xml), Some(footer_xml), None);
+        let mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            for filter in [
+                None,
+                Some(ContentFilterConfig::default()),
+                Some(ContentFilterConfig {
+                    include_headers: true,
+                    include_footers: true,
+                    ..Default::default()
+                }),
+                Some(ContentFilterConfig {
+                    include_headers: true,
+                    ..Default::default()
+                }),
+            ] {
+                let config = ExtractionConfig {
+                    content_filter: filter.clone(),
+                    ..Default::default()
+                };
+                let internal = DocxExtractor::new()
+                    .extract_content(&data, mime, &config)
+                    .await
+                    .unwrap();
+                let content =
+                    crate::extraction::derive::derive_extraction_result(internal, false, format.clone()).content;
+                let (header, footer) = filter
+                    .as_ref()
+                    .map_or((false, false), |f| (f.include_headers, f.include_footers));
+                assert!(content.contains("Body content here."), "{content}");
+                assert_eq!(
+                    content.contains("Page Header"),
+                    header,
+                    "{format:?} {filter:?}: {content}"
+                );
+                assert_eq!(
+                    content.contains("Page Footer"),
+                    footer,
+                    "{format:?} {filter:?}: {content}"
+                );
+            }
+        }
     }
 
     #[tokio::test]

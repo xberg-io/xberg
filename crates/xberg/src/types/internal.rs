@@ -458,6 +458,25 @@ impl From<InternalDocument> for crate::types::extraction::ExtractedDocument {
 }
 
 impl InternalDocument {
+    /// Apply the content filter to header and footer elements: drop the layers it excludes and opt the
+    /// retained ones into body rendering, which otherwise skips furniture layers.
+    pub(crate) fn apply_furniture_filter(&mut self, filter: &crate::core::config::ContentFilterConfig) {
+        self.elements.retain_mut(|element| {
+            let keep = match element.layer {
+                ContentLayer::Header => filter.include_headers,
+                ContentLayer::Footer => filter.include_footers,
+                _ => return true,
+            };
+            if keep {
+                element
+                    .attributes
+                    .get_or_insert_with(AHashMap::new)
+                    .insert(RETAINED_FURNITURE_RENDER_ATTRIBUTE.to_owned(), "true".to_owned());
+            }
+            keep
+        });
+    }
+
     /// Create a new empty document with the given source format.
     pub fn new(source_format: impl Into<String>) -> Self {
         Self {
