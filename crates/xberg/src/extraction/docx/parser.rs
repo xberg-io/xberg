@@ -2761,6 +2761,9 @@ fn push_or_defer_page_break(
     page_breaks: &mut PageBreakState,
     is_hint: bool,
 ) {
+    if table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+        return;
+    }
     if let Some(row_context) = table_stack.last() {
         let position = (table_stack.len(), row_context.row_ordinal, row_context.cell_ordinal);
         let is_duplicate_row_hint = is_hint
@@ -6076,6 +6079,30 @@ mod tests {
         assert_eq!(
             doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown),
             vec![vec!["Kept"]]
+        );
+    }
+
+    #[test]
+    fn test_page_break_inside_a_deleted_row_is_not_emitted() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="1" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Gone</w:t><w:br w:type="page"/></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr><w:tc><w:p><w:r><w:t>Kept</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert!(
+            !doc.elements.iter().any(|e| matches!(e, DocumentElement::PageBreak)),
+            "elements: {:?}",
+            doc.elements
         );
     }
 
