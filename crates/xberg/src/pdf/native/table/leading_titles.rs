@@ -18,8 +18,12 @@ const MAX_TITLE_ROWS: usize = 3;
 /// Fewest rows the table below the title must keep: a header and three body rows.
 const MIN_TABLE_ROWS: usize = 4;
 
-/// Fewest column runs the table's first row needs to be a header band.
+/// Fewest column runs a row needs to be a header band.
 const MIN_HEADER_RUNS: usize = 2;
+
+/// Rows below the title in which the header band is looked for: a spanning header may sit
+/// over it.
+const HEADER_SEARCH_ROWS: usize = 2;
 
 /// Farthest, in median word heights, the centre of a title line may sit from the centre of
 /// the table below it. Two heights is a word's width of slack for the uneven word spacing of
@@ -59,16 +63,24 @@ pub(super) fn without_leading_titles(region: &[HocrWord], page_height: f32, rule
         return None;
     }
     let gap_limit = median_height.saturating_mul(RUN_GAP_HEIGHTS).max(MIN_ROW_TOLERANCE);
-    let title_rows = rows
+    let mut title_rows = rows
         .iter()
         .take(MAX_TITLE_ROWS)
         .take_while(|row| is_title_words(row) && row_runs(row, gap_limit).len() == 1)
         .count();
+    // A last line that lies within the extent of the row below it is a spanning header
+    // ("Fiscal Year 2024" over its columns), part of the table, not a title.
+    while title_rows > 0 && lies_within(&rows[title_rows - 1], &rows[title_rows]) {
+        title_rows -= 1;
+    }
     if title_rows == 0 || rows.len() - title_rows < MIN_TABLE_ROWS {
         return None;
     }
     let (titles, table) = rows.split_at(title_rows);
-    if row_runs(&table[0], gap_limit).len() < MIN_HEADER_RUNS
+    if !table
+        .iter()
+        .take(HEADER_SEARCH_ROWS)
+        .any(|row| row_runs(row, gap_limit).len() >= MIN_HEADER_RUNS)
         || !table
             .iter()
             .any(|row| row.iter().filter(|word| super::is_numeric_word(&word.text)).count() >= 2)
@@ -76,27 +88,15 @@ pub(super) fn without_leading_titles(region: &[HocrWord], page_height: f32, rule
         return None;
     }
     let (left, right) = extent(table.iter().flatten().copied())?;
-    let (header_left, header_right) = extent(table[0].iter().copied())?;
     let table_centre = (left + right) / 2;
     let table_width = right.saturating_sub(left);
-    let title_extents: Vec<(u32, u32)> = titles
-        .iter()
-        .map(|row| extent(row.iter().copied()))
-        .collect::<Option<_>>()?;
-    let centred = title_extents.iter().all(|&(start, end)| {
-        ((start + end) / 2).abs_diff(table_centre) <= median_height.saturating_mul(CENTRE_TOLERANCE_HEIGHTS)
-            && end.saturating_sub(start).saturating_mul(100) >= table_width.saturating_mul(MIN_TITLE_WIDTH_PERCENT)
+    let centred = titles.iter().all(|row| {
+        extent(row.iter().copied()).is_some_and(|(start, end)| {
+            ((start + end) / 2).abs_diff(table_centre) <= median_height.saturating_mul(CENTRE_TOLERANCE_HEIGHTS)
+                && end.saturating_sub(start).saturating_mul(100) >= table_width.saturating_mul(MIN_TITLE_WIDTH_PERCENT)
+        })
     });
-    // A line that lies within the header's own extent, over two or more of its runs, is a
-    // spanning header ("Fiscal Year 2024" over its columns), part of the table.
-    let spans_columns = title_extents
-        .iter()
-        .all(|&(start, end)| start >= header_left && end <= header_right);
-    if !centred
-        || spans_columns
-        || !title_stands_apart(titles, table)
-        || split_titled_region(region, page_height).is_some()
-    {
+    if !centred || !title_stands_apart(titles, table) || split_titled_region(region, page_height).is_some() {
         return None;
     }
     let cutoff = titles.iter().flatten().map(|word| word.top + word.height / 2).max()?;
@@ -107,6 +107,14 @@ pub(super) fn without_leading_titles(region: &[HocrWord], page_height: f32, rule
             .cloned()
             .collect(),
     )
+}
+
+/// Whether the words of `line` all lie between the leftmost and rightmost edge of `other`.
+fn lies_within(line: &[&HocrWord], other: &[&HocrWord]) -> bool {
+    match (extent(line.iter().copied()), extent(other.iter().copied())) {
+        (Some((start, end)), Some((left, right))) => start >= left && end <= right,
+        _ => false,
+    }
 }
 
 /// The leftmost and rightmost edge of `words`.
@@ -250,5 +258,26 @@ mod tests {
         words.push(word("Table", 258, 89, 40));
         let rest = without_leading_titles(&words, 792.0, false).expect("three lines are found");
         assert_eq!(rest.len(), log_table().len() - 13);
+    }
+
+    #[test]
+    fn a_wide_title_over_a_spanning_header_keeps_only_the_header_in_the_table() {
+        let mut words = log_table();
+        words.retain(|word| word.top >= 150);
+        for (text, left, top, width) in [
+            ("Annual", 63, 89, 55),
+            ("Financial", 122, 89, 75),
+            ("Results", 201, 89, 65),
+            ("Summary", 270, 89, 99),
+        ] {
+            words.push(word(text, left, top, width));
+        }
+        words.push(word("Fiscal", 150, 120, 36));
+        words.push(word("Year", 190, 120, 28));
+        words.push(word("Tables", 222, 120, 40));
+        let rest = without_leading_titles(&words, 792.0, false).expect("the wide title is found");
+        let texts: Vec<&str> = rest.iter().map(|word| word.text.as_str()).collect();
+        assert!(!texts.contains(&"Annual") && !texts.contains(&"Summary"), "{texts:?}");
+        assert!(texts.contains(&"Fiscal") && texts.contains(&"Tables"), "{texts:?}");
     }
 }
