@@ -2827,6 +2827,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn escaped_relationship_ids_and_a_relationship_named_settings_part_still_apply() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "Even Header")),
+            ("word/settings1.xml", settings_part("<w:evenAndOddHeaders/>")),
+        ];
+        let rels = format!(
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId&#49;" Type="{REL_NS}/header" Target="header1.xml"/><Relationship Id="rId2" Type="{REL_NS}/header" Target="header2.xml"/><Relationship Id="rId3" Type="{REL_NS}/settings" Target="settings1.xml"/></Relationships>"#
+        );
+        let sect = r#"<w:headerReference w:type="default" r:id="rId1"/><w:headerReference w:type="even" r:id="rId&#50;"/>"#;
+        let mut files = hf_files(&parts);
+        files.push(("word/_rels/document.xml.rels", rels.as_str()));
+        let data = build_test_docx_with_files(&sectioned_body(&[sect]), &files);
+        let config = ExtractionConfig {
+            content_filter: Some(crate::core::config::ContentFilterConfig {
+                include_headers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = DocxExtractor::new()
+            .extract_content(&data, DOCX_MIME, &config)
+            .await
+            .unwrap();
+        let text = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        )
+        .content;
+        assert!(text.contains("Default Header") && text.contains("Even Header"), "{text}");
+    }
+
+    #[tokio::test]
     async fn header_and_footer_parts_no_section_references_are_not_emitted() {
         let parts = [
             ("word/header1.xml", hf_part("hdr", "Referenced Header")),

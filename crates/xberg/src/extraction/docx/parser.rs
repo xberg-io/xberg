@@ -4359,11 +4359,38 @@ impl<R: Read + Seek> DocxParser<R> {
             }
         }
 
-        if let Ok(settings_xml) = self.read_file("word/settings.xml") {
+        let settings_path = Self::parse_settings_relationship_target(&rels_xml).unwrap_or_else(|| "word/settings.xml".into());
+        if let Ok(settings_xml) = self.read_file(&settings_path) {
             document.even_and_odd_headers = Self::parse_even_and_odd_headers(&settings_xml, budget)?;
         }
 
         Ok(())
+    }
+
+    /// The part a `/settings` relationship names, which need not be called `word/settings.xml`.
+    fn parse_settings_relationship_target(xml: &str) -> Option<String> {
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.name().as_ref() == "Relationship" => {
+                    let (mut target, mut is_settings) = (None, false);
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            "Target" => target = Some(attr.value.to_string()),
+                            "Type" => is_settings = attr.value.ends_with("/settings"),
+                            _ => {}
+                        }
+                    }
+                    if let (Some(target), true) = (target, is_settings) {
+                        return crate::extractors::security::resolve_container_entry("word", &target).ok();
+                    }
+                }
+                Ok(Event::Eof) | Err(_) => return None,
+                _ => {}
+            }
+            buf.clear();
+        }
     }
 
     /// Read only the `w:evenAndOddHeaders` flag from `word/settings.xml`.
@@ -4406,7 +4433,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             "Target" => target = Some(attr.value.to_string()),
-                            "Id" => rel_id = Some(attr.value.to_string()),
+                            "Id" => rel_id = Some(super::section::unescape_attribute(&attr.value)),
                             "Type" => {
                                 kind = if attr.value.ends_with("/header") {
                                     Some(true)

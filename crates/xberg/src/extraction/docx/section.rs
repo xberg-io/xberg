@@ -111,6 +111,11 @@ fn get_w_attr_i32(element: &BytesStart, local_name: &str) -> Option<i32> {
     None
 }
 
+/// An attribute value with its XML escapes resolved, so `rId&#49;` equals `rId1`.
+pub(crate) fn unescape_attribute(value: &str) -> String {
+    quick_xml::escape::unescape(value).map_or_else(|_| value.to_string(), std::borrow::Cow::into_owned)
+}
+
 /// Whether an on/off element is enabled: present without `w:val`, or with a true value.
 fn on_off_attr_enabled(element: &BytesStart) -> bool {
     !matches!(
@@ -298,7 +303,7 @@ fn apply_section_element(e: &BytesStart, props: &mut SectionProperties) {
                 } else {
                     &mut props.footer_refs
                 };
-                refs.push((kind, id));
+                refs.push((kind, unescape_attribute(&id)));
             }
         }
         "w:titlePg" => {
