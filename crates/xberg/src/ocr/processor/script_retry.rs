@@ -548,6 +548,9 @@ fn outer_han_retry_identity_is_answered_without_reading_until_a_pack_changes() {
         )
         .unwrap();
     }
+    for name in ["eng", "osd", "chi_sim"] {
+        super::validation::wait_until_settled(&root.path().join(format!("{name}.traineddata")));
+    }
     let identity = || observe_han_retry_models(&directories, "eng");
 
     let first = identity();
@@ -563,6 +566,7 @@ fn outer_han_retry_identity_is_answered_without_reading_until_a_pack_changes() {
         None,
         "a changed pack must be read again, which the async thread may not do"
     );
+    super::validation::wait_until_settled(&root.path().join("chi_sim.traineddata"));
     let second = identity();
     assert_ne!(second, first);
     assert_eq!(without_reading_packs(identity), Some(second));
