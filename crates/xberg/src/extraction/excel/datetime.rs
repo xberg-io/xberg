@@ -55,8 +55,9 @@ fn format_sections(code: &str) -> Vec<FormatSection> {
                     section.condition = bracket.take();
                 } else {
                     if content.chars().all(|c| matches!(c, 'h' | 'H' | 'm' | 'M' | 's' | 'S')) {
-                        // Elapsed-time tokens such as [h] stay: they are time components, unlike colors and locales.
-                        section.text.push_str(&content.to_ascii_uppercase());
+                        // Elapsed-time tokens such as [h] or [mm] are always time components, unlike colors and
+                        // locales, and [mm] must not be read as a month.
+                        section.text.push('H');
                     }
                     bracket = None;
                 }
