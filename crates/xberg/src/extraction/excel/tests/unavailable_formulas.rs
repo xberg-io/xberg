@@ -395,3 +395,39 @@ fn should_not_charge_the_cells_of_suppressed_formulas_to_the_table_budget_gh3442
     assert!(warning_for(&warnings, "were left empty").is_some(), "{warnings:?}");
     assert!(warning_for(&warnings, "was truncated").is_none(), "{warnings:?}");
 }
+
+#[test]
+fn should_not_charge_the_formula_text_of_dropped_rows_to_the_next_sheet_gh3442() {
+    let limits = SecurityLimits {
+        max_content_size: 8192,
+        max_table_cells: 3,
+        ..Default::default()
+    };
+    let first = format!(
+        r#"<worksheet {SHEET_NS}><sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="2"><c r="D2"><f>{}</f></c></row></sheetData></worksheet>"#,
+        long_formula(5000)
+    );
+    let second = format!(
+        r#"<worksheet {SHEET_NS}><sheetData><row r="1"><c r="A1"><f>{}</f></c></row></sheetData></worksheet>"#,
+        long_formula(4000)
+    );
+    let bytes = make_xlsx(
+        r#"<sheets><sheet name="First" sheetId="1" r:id="rId1"/><sheet name="Second" sheetId="2" r:id="rId2"/></sheets>"#,
+        &format!(
+            r#"{WORKSHEET_REL}<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>"#
+        ),
+        &[
+            ("xl/worksheets/sheet1.xml", first.into_bytes()),
+            ("xl/worksheets/sheet2.xml", second.into_bytes()),
+        ],
+    );
+
+    let (workbook, warnings) = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap();
+
+    assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["1".to_owned()]]));
+    assert_eq!(
+        workbook.sheets[1].table_cells.as_ref().map(|cells| cells[0][0].len()),
+        Some(4002),
+        "{warnings:?}"
+    );
+}

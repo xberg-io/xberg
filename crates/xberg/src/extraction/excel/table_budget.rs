@@ -536,6 +536,12 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
                 &mut unavailable,
             )
         })?;
+        // Formula text of rows and sheets the preflight dropped is not output, so it is not charged.
+        if skipped.contains(index) {
+            formula_text.used = text_before;
+        } else if skipped.truncated.contains_key(&index) {
+            formula_text.used = unavailable.row_start_text;
+        }
         if unavailable.suppressed {
             // The formula text cannot be shown, so the cells it would have occupied are not charged either:
             // read the sheet again from the start without them.
@@ -544,8 +550,8 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
             skipped.forget(index);
             let count = unavailable.count;
             let mut unavailable = UnavailableFormulas {
-                count: 0,
                 suppressed: true,
+                ..Default::default()
             };
             preflight_sheet_rows(index, &mut budget, &mut skipped, |budget, progress| {
                 validate_xlsx_sheet(
@@ -611,7 +617,11 @@ fn validate_xlsx_sheet<R: Read + Seek>(
         .next_cell_with_formula_metadata()
         .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
     {
+        let new_row = progress.row != Some(cell.pos.0);
         progress.enter(cell.pos.0, budget);
+        if new_row {
+            unavailable.row_start_text = formula_text.used;
+        }
         if let Some(calamine::XlsxFormulaMetadata::Shared {
             shared_index,
             range: Some(_),
@@ -669,6 +679,8 @@ fn account_xlsx_cell_text(value: &DataRef<'_>, budget: &mut SecurityBudget) -> R
 struct UnavailableFormulas {
     count: usize,
     suppressed: bool,
+    /// The formula text charged before the row the preflight is in.
+    row_start_text: usize,
 }
 
 /// Bytes of the formula text a cell without a saved result is output as, including the leading `=`.
