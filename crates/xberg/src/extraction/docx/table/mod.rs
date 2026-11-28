@@ -395,8 +395,9 @@ fn validate_grid_span(span: Option<u32>) -> Option<u32> {
 /// attributes -- handled identically whether the element arrives as `Event::Start` or
 /// `Event::Empty`. `tcBorders` and `tcMar` nest their own children instead and are handled
 /// by the caller.
-fn apply_simple_cell_property(props: &mut CellProperties, e: &BytesStart) {
+fn apply_simple_cell_property(props: &mut CellProperties, deleted: &mut bool, e: &BytesStart) {
     match e.local_name().as_ref() {
+        "cellDel" => *deleted = true,
         "tcW" => props.width = parse_width_element(e),
         "gridSpan" => props.grid_span = validate_grid_span(get_attribute_u32(e, "val")),
         "vMerge" => props.v_merge = Some(parse_vmerge(e)),
@@ -408,19 +409,30 @@ fn apply_simple_cell_property(props: &mut CellProperties, e: &BytesStart) {
     }
 }
 
+///
+/// Returns the properties and whether the cell carries `w:cellDel`, a tracked deletion of the
+/// cell. Nothing inside `w:tcPrChange` counts: it holds the cell's previous properties.
 pub(crate) fn parse_cell_properties(
     reader: &mut Reader<&[u8]>,
     budget: &mut SecurityBudget,
-) -> Result<CellProperties, SecurityError> {
+) -> Result<(CellProperties, bool), SecurityError> {
     let mut props = CellProperties::default();
+    let mut deleted = false;
     let mut buf = Vec::new();
+    let mut change_depth: usize = 0;
 
     loop {
         budget.step()?;
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 budget.enter()?;
+                if change_depth > 0 {
+                    change_depth += 1;
+                    buf.clear();
+                    continue;
+                }
                 match e.local_name().as_ref() {
+                    "tcPrChange" => change_depth = 1,
                     "tcBorders" => {
                         props.borders = Some(parse_cell_borders(reader));
                         // `parse_cell_borders` reads through its own `</w:tcBorders>`
@@ -433,20 +445,29 @@ pub(crate) fn parse_cell_properties(
                         // `</w:tcMar>` without touching `budget`; refund the enter above.
                         budget.leave();
                     }
-                    _ => apply_simple_cell_property(&mut props, &e),
+                    _ => apply_simple_cell_property(&mut props, &mut deleted, &e),
                 }
                 buf.clear();
             }
             Ok(Event::Empty(e)) => {
+                if change_depth > 0 {
+                    buf.clear();
+                    continue;
+                }
                 match e.local_name().as_ref() {
                     "tcBorders" => props.borders = Some(CellBorders::default()),
                     "tcMar" => props.margins = Some(CellMargins::default()),
-                    _ => apply_simple_cell_property(&mut props, &e),
+                    _ => apply_simple_cell_property(&mut props, &mut deleted, &e),
                 }
                 buf.clear();
             }
             Ok(Event::End(e)) => {
                 budget.leave();
+                if change_depth > 0 {
+                    change_depth -= 1;
+                    buf.clear();
+                    continue;
+                }
                 if e.local_name().as_ref() == "tcPr" {
                     break;
                 }
@@ -459,7 +480,7 @@ pub(crate) fn parse_cell_properties(
         }
     }
 
-    Ok(props)
+    Ok((props, deleted))
 }
 
 /// Parse table grid (column widths) from streaming XML reader.

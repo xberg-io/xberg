@@ -1923,14 +1923,26 @@ struct TableContext {
     pending_grid_after: u32,
     /// The open row carries `w:trPr/w:del` (a tracked row deletion); it is dropped when it closes.
     pending_row_deleted: bool,
+    /// The open cell carries `w:tcPr/w:cellDel` (a tracked cell deletion); it is dropped when it
+    /// closes, and its grid columns are padded at the row's end.
+    pending_cell_deleted: bool,
+    /// Grid columns of the cells dropped from the open row, padded in when the row closes.
+    pending_deleted_cell_columns: u32,
     /// `PageBreakState::text_since_break` when the open deleted row began, restored when it is
     /// dropped so its discarded text cannot make a later live hint look new.
     text_since_break_before_deleted_row: bool,
+    /// The same restore point for an open deleted cell.
+    text_since_break_before_deleted_cell: bool,
     /// Note references read in this table's cells, in reading order.
     note_refs: Vec<NoteRef>,
 }
 
 impl TableContext {
+    /// The open row or cell is a tracked deletion, so what it holds is not kept.
+    fn in_deleted_content(&self) -> bool {
+        self.pending_row_deleted || self.pending_cell_deleted
+    }
+
     fn new() -> Self {
         Self {
             table: Table::new(),
@@ -1941,7 +1953,10 @@ impl TableContext {
             cell_ordinal: 0,
             pending_grid_after: 0,
             pending_row_deleted: false,
+            pending_cell_deleted: false,
+            pending_deleted_cell_columns: 0,
             text_since_break_before_deleted_row: false,
+            text_since_break_before_deleted_cell: false,
             note_refs: Vec::new(),
         }
     }
@@ -2768,7 +2783,7 @@ fn push_or_defer_page_break(
     page_breaks: &mut PageBreakState,
     is_hint: bool,
 ) {
-    if table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+    if table_stack.iter().any(TableContext::in_deleted_content) {
         return;
     }
     if let Some(row_context) = table_stack.last() {
@@ -2831,7 +2846,7 @@ fn apply_break(
     }
 
     if is_page_break {
-        if table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+        if table_stack.iter().any(TableContext::in_deleted_content) {
             return;
         }
         push_or_defer_page_break(
@@ -2885,7 +2900,7 @@ fn apply_last_rendered_page_break(
     elements: &mut Vec<DocumentElement>,
     page_breaks: &mut PageBreakState,
 ) {
-    if !page_breaks.text_since_break || table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+    if !page_breaks.text_since_break || table_stack.iter().any(TableContext::in_deleted_content) {
         return;
     }
     push_or_defer_page_break(
@@ -3533,13 +3548,24 @@ impl<R: Read + Seek> DocxParser<R> {
                             if let Some(ctx) = table_stack.last_mut() {
                                 ctx.current_cell = Some(TableCell::default());
                                 ctx.cell_ordinal += 1;
+                                if std::mem::take(&mut ctx.pending_cell_deleted) {
+                                    move_from_depth = move_from_depth.saturating_sub(1);
+                                }
                             }
                         }
                         "w:tcPr" => {
                             if let Some(ctx) = table_stack.last_mut()
                                 && let Some(ref mut cell) = ctx.current_cell
                             {
-                                cell.properties = Some(super::table::parse_cell_properties(reader, budget)?);
+                                let (properties, deleted) = super::table::parse_cell_properties(reader, budget)?;
+                                cell.properties = Some(properties);
+                                // The cell's content follows `w:tcPr`. A deleted cell is read but
+                                // not kept, like a deleted row or a `w:moveFrom`.
+                                if deleted && !ctx.pending_cell_deleted {
+                                    ctx.pending_cell_deleted = true;
+                                    ctx.text_since_break_before_deleted_cell = page_breaks.text_since_break;
+                                    move_from_depth += 1;
+                                }
                             }
                         }
                         "w:b" | "w:i" | "w:u" | "w:strike" | "w:dstrike" | "w:vertAlign" | "w:sz" | "w:color"
@@ -3763,7 +3789,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                             } else {
                                                 id.to_string()
                                             };
-                                            if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                            if table_stack.iter().any(TableContext::in_deleted_content) {
                                                 out.notes_in_deleted_rows.insert((note_type, id.to_string()));
                                             }
                                             let marker_start = run.text.len();
@@ -3793,7 +3819,7 @@ impl<R: Read + Seek> DocxParser<R> {
                             for attr in e.attributes().flatten() {
                                 if attr.key.as_ref() == "w:id" {
                                     let id = attr.value.as_ref();
-                                    if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                    if table_stack.iter().any(TableContext::in_deleted_content) {
                                         out.comments_in_deleted_rows.insert(id.to_string());
                                         continue;
                                     }
@@ -3977,15 +4003,27 @@ impl<R: Read + Seek> DocxParser<R> {
                                 && let Some(cell) = ctx.current_cell.take()
                                 && let Some(ref mut row) = ctx.current_row
                             {
-                                budget.add_cells(1)?;
-                                row.cells.push(cell);
+                                if std::mem::take(&mut ctx.pending_cell_deleted) {
+                                    // Word's final view removes the cell and shifts the cells
+                                    // after it left; the columns it covered are padded at the
+                                    // row's end so every row keeps the table's column count.
+                                    move_from_depth = move_from_depth.saturating_sub(1);
+                                    page_breaks.text_since_break = ctx.text_since_break_before_deleted_cell;
+                                    let span = cell.properties.as_ref().and_then(|p| p.grid_span).unwrap_or(1);
+                                    ctx.pending_deleted_cell_columns =
+                                        ctx.pending_deleted_cell_columns.saturating_add(span);
+                                } else {
+                                    budget.add_cells(1)?;
+                                    row.cells.push(cell);
+                                }
                             }
                         }
                         "w:tr" => {
                             if let Some(ctx) = table_stack.last_mut()
                                 && let Some(mut row) = ctx.current_row.take()
                             {
-                                let grid_after = std::mem::take(&mut ctx.pending_grid_after);
+                                let grid_after = std::mem::take(&mut ctx.pending_grid_after)
+                                    + std::mem::take(&mut ctx.pending_deleted_cell_columns);
                                 // Word hides a row whose deletion is tracked, so no output keeps it.
                                 if std::mem::take(&mut ctx.pending_row_deleted) {
                                     move_from_depth = move_from_depth.saturating_sub(1);
@@ -6130,6 +6168,105 @@ mod tests {
             doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown),
             vec![vec!["Kept"]]
         );
+    }
+
+    /// Cell grid of the first table of a body made of `rows` (each row's `<w:tc>` list).
+    fn deleted_cell_grid(rows: &[&str]) -> Vec<Vec<String>> {
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl>{}</w:tbl></w:body>
+</w:document>"#,
+            rows.iter().map(|r| format!("<w:tr>{r}</w:tr>")).collect::<String>()
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown)
+    }
+
+    fn tc(text: &str) -> String {
+        format!(r#"<w:tc><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:tc>"#)
+    }
+
+    fn deleted_tc(props: &str, text: &str) -> String {
+        format!(
+            r#"<w:tc><w:tcPr><w:cellDel w:id="1" w:author="A"/>{props}</w:tcPr><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:tc>"#
+        )
+    }
+
+    #[test]
+    fn test_deleted_middle_cell_is_dropped_and_later_cells_shift_left() {
+        let row = format!("{}{}{}", tc("A"), deleted_tc("", "B"), tc("C"));
+        let grid = deleted_cell_grid(&[&row, &format!("{}{}{}", tc("D"), tc("E"), tc("F"))]);
+        assert_eq!(grid, vec![vec!["A", "C", ""], vec!["D", "E", "F"]]);
+    }
+
+    #[test]
+    fn test_deleted_first_and_last_cells_are_dropped() {
+        let first = format!("{}{}{}", deleted_tc("", "A"), tc("B"), tc("C"));
+        let last = format!("{}{}{}", tc("D"), tc("E"), deleted_tc("", "F"));
+        let grid = deleted_cell_grid(&[&first, &last]);
+        assert_eq!(grid, vec![vec!["B", "C", ""], vec!["D", "E", ""]]);
+    }
+
+    #[test]
+    fn test_deleted_spanning_cell_pads_every_column_it_covered() {
+        let row = format!("{}{}", deleted_tc(r#"<w:gridSpan w:val="2"/>"#, "Wide"), tc("Kept"));
+        let grid = deleted_cell_grid(&[&row, &format!("{}{}{}", tc("A"), tc("B"), tc("C"))]);
+        assert_eq!(grid, vec![vec!["Kept", "", ""], vec!["A", "B", "C"]]);
+    }
+
+    #[test]
+    fn test_deleted_vmerge_restart_cell_leaves_its_continuation_blank() {
+        let first = format!("{}{}", deleted_tc(r#"<w:vMerge w:val="restart"/>"#, "Top"), tc("R1"));
+        let second = format!(r#"<w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>{}"#, tc("R2"));
+        let grid = deleted_cell_grid(&[&first, &second]);
+        assert_eq!(grid, vec![vec!["R1", ""], vec!["", "R2"]]);
+    }
+
+    #[test]
+    fn test_cell_del_inside_tcprchange_does_not_delete_the_cell() {
+        let changed = r#"<w:tc><w:tcPr><w:gridSpan w:val="2"/><w:tcPrChange w:id="1" w:author="A"><w:tcPr><w:cellDel w:id="2" w:author="A"/><w:gridSpan w:val="1"/></w:tcPr></w:tcPrChange></w:tcPr><w:p><w:r><w:t>Stays</w:t></w:r></w:p></w:tc>"#;
+        let grid = deleted_cell_grid(&[changed]);
+        assert_eq!(grid, vec![vec!["Stays", ""]]);
+    }
+
+    #[test]
+    fn test_inserted_cell_is_kept() {
+        let inserted =
+            r#"<w:tc><w:tcPr><w:cellIns w:id="1" w:author="A"/></w:tcPr><w:p><w:r><w:t>New</w:t></w:r></w:p></w:tc>"#;
+        let grid = deleted_cell_grid(&[&format!("{inserted}{}", tc("Old"))]);
+        assert_eq!(grid, vec![vec!["New", "Old"]]);
+    }
+
+    #[test]
+    fn test_deleted_header_row_cell_is_dropped() {
+        let header = format!(
+            r#"<w:trPr><w:tblHeader/></w:trPr>{}{}{}"#,
+            tc("H1"),
+            deleted_tc("", "H2"),
+            tc("H3")
+        );
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:tbl><w:tr>{header}</w:tr><w:tr>{}{}{}</w:tr></w:tbl></w:body>
+</w:document>"#,
+            tc("a"),
+            tc("b"),
+            tc("c")
+        );
+        let bytes = create_test_docx(&xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let md = doc.tables[0].to_markdown();
+        assert!(!md.contains("H2"), "{md}");
+        let lines: Vec<&str> = md.lines().collect();
+        assert_eq!(lines.len(), 3, "{md}");
+        assert!(lines[0].contains("H1") && lines[0].contains("H3"), "{md}");
+        assert!(lines[1].contains("---"), "{md}");
+        assert_eq!(doc.tables[0].to_plain_text(), "H1\tH3\t\na\tb\tc\n");
     }
 
     #[test]

@@ -186,7 +186,7 @@ fn test_parse_cell_properties_merged() {
     buf.clear();
 
     let mut budget = SecurityBudget::with_defaults();
-    let props = parse_cell_properties(&mut reader, &mut budget).unwrap();
+    let (props, _) = parse_cell_properties(&mut reader, &mut budget).unwrap();
 
     assert_eq!(
         props.width,
@@ -218,7 +218,7 @@ fn test_parse_cell_properties_shading() {
     buf.clear();
 
     let mut budget = SecurityBudget::with_defaults();
-    let props = parse_cell_properties(&mut reader, &mut budget).unwrap();
+    let (props, _) = parse_cell_properties(&mut reader, &mut budget).unwrap();
 
     assert!(props.shading.is_some());
     let shading = props.shading.unwrap();
@@ -287,7 +287,7 @@ fn test_vmerge_continue() {
     buf.clear();
 
     let mut budget = SecurityBudget::with_defaults();
-    let props = parse_cell_properties(&mut reader, &mut budget).unwrap();
+    let (props, _) = parse_cell_properties(&mut reader, &mut budget).unwrap();
 
     assert_eq!(props.v_merge, Some(VerticalMerge::Continue));
 }
