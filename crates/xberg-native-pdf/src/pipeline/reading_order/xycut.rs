@@ -2646,12 +2646,12 @@ impl XYCutStrategy {
             if self.straddling_line_count(all_spans, &body, split_x) > 0 {
                 return None;
             }
-        } else {
+        } else if in_header {
             // A running head above the whole region that the whole-line assignment would send,
             // in part, to the right side is read after every left cell: it heads both. ~keep
             let leading = self.leading_crossing_row_spans(all_spans, indices, split_x);
             let (_, right_side) = self.partition_lines_at(all_spans, indices, lines, split_x);
-            if in_header && leading.iter().any(|i| right_side.contains(i)) {
+            if leading.iter().any(|i| right_side.contains(i)) {
                 header = leading;
             }
         }
