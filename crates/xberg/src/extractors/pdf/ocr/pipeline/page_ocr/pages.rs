@@ -649,11 +649,8 @@ impl PageOcrContext<'_> {
             })
             .and_then(|dimensions| dimensions.get(page_idx).copied())
             .filter(|&(width, height)| width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0);
-        if let Some(document) = ocr_result
-            .ocr_internal_document
-            .as_mut()
-            .filter(|_| ocr_result.document.is_some())
-        {
+        let has_ocr_structure = crate::extraction::derive::has_ocr_structure(&ocr_result);
+        if let Some(document) = ocr_result.ocr_internal_document.as_mut().filter(|_| has_ocr_structure) {
             let (width, height) =
                 resolved_ocr_layout_dimensions(&ocr_result.metadata, encoded_batch[offset].2, encoded_batch[offset].3);
             let outcome =

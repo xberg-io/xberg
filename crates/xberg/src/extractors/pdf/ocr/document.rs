@@ -2730,6 +2730,7 @@ pub(super) fn build_mixed_ocr_page_document(
         element_layout_height,
         margins,
     );
+    let has_structure = crate::extraction::derive::has_ocr_structure(result);
     let mut doc = match result.ocr_internal_document.take() {
         Some(doc) => doc,
         None if backend_tables.is_empty() && backend_elements.is_empty() => return None,
@@ -2758,14 +2759,14 @@ pub(super) fn build_mixed_ocr_page_document(
     let geometry_points_per_pixel = mixed_route_geometry_points_per_pixel(page_height_pt, image_height_px);
     let (mut assembled, paragraphs, outcome) = assemble_mixed_ocr_page_document(
         doc,
-        result.document.is_some(),
+        has_structure,
         page_number,
         page_height_rounded_pt,
         geometry_points_per_pixel,
         margins,
     );
     if outcome.removed {
-        result.content = if result.document.is_some() {
+        result.content = if has_structure {
             crate::rendering::render_plain(&assembled)
         } else {
             ocr_paragraphs_plain_text(&paragraphs)
@@ -5749,3 +5750,30 @@ mod table_grid_geometry_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 #[path = "document/source_strip_frame_tests.rs"]
 mod source_strip_frame_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "liter-llm"))]
+mod vlm_markdown_page_tests {
+    use super::*;
+
+    /// A scanned PDF page read by the VLM backend keeps the structure of its Markdown response:
+    /// the page document carries the heading, the list and the table once, in place (#3474).
+    #[test]
+    fn vlm_markdown_page_keeps_its_structure_on_the_mixed_route() {
+        let text = "# MINUTES\n\n- [X] done\n- [ ] open\n\n| Item | Vote |\n|---|---|\n| 1 | Approved |\n\nClosing.";
+        let mut result = crate::llm::vlm_ocr::build_vlm_result(text.into(), None, &[], vec!["eng".into()], true);
+        assert!(result.tables.is_empty(), "the table travels in the page document");
+        let margins = crate::pdf::native::text::PageMarginFractions::default();
+        let (page, paragraphs) =
+            build_mixed_ocr_page_document(&mut result, &Default::default(), 1, 400, 800, 200.0, 400.0, margins)
+                .expect("page document");
+        assert!(
+            paragraphs.is_empty(),
+            "the parsed structure is kept, not rebuilt from the text"
+        );
+        assert_eq!(page.tables.len(), 1);
+        assert_eq!(
+            crate::rendering::render_markdown(&page),
+            "# MINUTES\n\n- [x] done\n- [ ] open\n\n| Item | Vote |\n| --- | --- |\n| 1 | Approved |\n\nClosing.\n"
+        );
+    }
+}

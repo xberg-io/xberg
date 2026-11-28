@@ -3626,7 +3626,7 @@ impl ImageExtractor {
         ))
         .await?;
         #[cfg(feature = "ocr")]
-        let has_public_ocr_structure = ocr_result.document.is_some();
+        let has_public_ocr_structure = crate::extraction::derive::has_ocr_structure(&ocr_result);
         // Only the GH#1789 numeric repair below mutates this, and that is gated on
         // `ocr` + `pdf`; an unconditional `mut` is a dead `mut` on every narrower leg,
         // which the formula-recognition+pdf clippy gate rejects. Same shape as
@@ -4886,6 +4886,10 @@ mod image_table_grid_metadata_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "liter-llm"))]
+#[path = "image_vlm_markdown_tests.rs"]
+mod image_vlm_markdown_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "ocr"))]
 #[path = "image_pipeline_reduced_tests.rs"]
