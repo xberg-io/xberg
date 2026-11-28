@@ -135,6 +135,28 @@ fn test_parse_row_properties_marks_tracked_deletion_not_insertion() {
     assert!(!inserted.deleted);
 }
 
+#[test]
+fn test_parse_row_properties_ignores_deletion_inside_a_properties_change() {
+    let skips = parse_row_grid_skips(
+        r#"<w:trPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:gridBefore w:val="2"/>
+        <w:trPrChange w:id="1" w:author="A">
+            <w:trPr><w:del w:id="2" w:author="A"/><w:gridAfter w:val="5"/></w:trPr>
+        </w:trPrChange>
+        <w:gridAfter w:val="1"/>
+    </w:trPr>"#,
+    );
+
+    assert_eq!(
+        skips,
+        RowGridSkips {
+            before: 2,
+            after: 1,
+            deleted: false
+        }
+    );
+}
+
 /// `RowProperties` is public, and callers may build it with an exhaustive literal. The grid
 /// skips live in `RowGridSkips` instead, so this literal must keep compiling.
 #[test]

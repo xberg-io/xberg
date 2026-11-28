@@ -46,6 +46,9 @@ pub(crate) struct Document {
     /// The note references of each top-level table, in reading order, by index into `tables`.
     pub(crate) note_refs_by_table: AHashMap<usize, Vec<NoteRef>>,
     pub(crate) note_numbers: NoteNumbers,
+    /// Notes referenced from a tracked-deleted table row. A definition left with no live
+    /// reference is dropped with the row instead of written as an unreferenced note.
+    pub(crate) notes_in_deleted_rows: Vec<(NoteType, String)>,
     pub tables: Vec<Table>,
     pub headers: Vec<HeaderFooter>,
     pub footers: Vec<HeaderFooter>,
@@ -1957,6 +1960,7 @@ struct BodyParseOutputs {
     note_refs_by_paragraph: AHashMap<usize, Vec<NoteRef>>,
     note_refs_by_table: AHashMap<usize, Vec<NoteRef>>,
     note_numbers: NoteNumbers,
+    notes_in_deleted_rows: Vec<(NoteType, String)>,
     tables: Vec<Table>,
     drawings: Vec<super::drawing::Drawing>,
     elements: Vec<DocumentElement>,
@@ -3114,6 +3118,14 @@ impl<R: Read + Seek> DocxParser<R> {
             )?;
         }
 
+        let referenced = &document.note_numbers;
+        let only_in_deleted_rows = |note: &Note| {
+            let key = (note.note_type, note.id.clone());
+            !referenced.by_note.contains_key(&key) && document.notes_in_deleted_rows.contains(&key)
+        };
+        document.footnotes.retain(|note| !only_in_deleted_rows(note));
+        document.endnotes.retain(|note| !only_in_deleted_rows(note));
+
         document.style_catalog = self.styles.take();
         if let Some(catalog) = document.style_catalog.take() {
             apply_style_numbering(&catalog, &mut document);
@@ -3211,6 +3223,7 @@ impl<R: Read + Seek> DocxParser<R> {
         document.note_refs_by_paragraph = out.note_refs_by_paragraph;
         document.note_refs_by_table = out.note_refs_by_table;
         document.note_numbers = out.note_numbers;
+        document.notes_in_deleted_rows = out.notes_in_deleted_rows;
         document.tables = out.tables;
         document.drawings = out.drawings;
         document.elements = out.elements;
@@ -3445,6 +3458,9 @@ impl<R: Read + Seek> DocxParser<R> {
                             if let Some(ctx) = table_stack.last_mut() {
                                 ctx.current_row = Some(TableRow::default());
                                 ctx.row_ordinal += 1;
+                                if std::mem::take(&mut ctx.pending_row_deleted) {
+                                    move_from_depth = move_from_depth.saturating_sub(1);
+                                }
                             }
                         }
                         "w:trPr" => {
@@ -3460,7 +3476,13 @@ impl<R: Read + Seek> DocxParser<R> {
                                     row.cells.push(TableCell::grid_padding(skips.before));
                                 }
                                 ctx.pending_grid_after = skips.after;
-                                ctx.pending_row_deleted = skips.deleted;
+                                // The row's cells follow `w:trPr`. A deleted row is read but not
+                                // kept, like a `w:moveFrom`: no run, drawing, equation or note
+                                // numbering from it reaches the output.
+                                if skips.deleted && !ctx.pending_row_deleted {
+                                    ctx.pending_row_deleted = true;
+                                    move_from_depth += 1;
+                                }
                             }
                         }
                         "w:tc" => {
@@ -3697,6 +3719,9 @@ impl<R: Read + Seek> DocxParser<R> {
                                             } else {
                                                 id.to_string()
                                             };
+                                            if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                                out.notes_in_deleted_rows.push((note_type, id.to_string()));
+                                            }
                                             let marker_start = run.text.len();
                                             run.text.push_str(&format!("[^{label}]"));
                                             page_breaks.text_since_break = true;
@@ -3724,6 +3749,9 @@ impl<R: Read + Seek> DocxParser<R> {
                             for attr in e.attributes().flatten() {
                                 if attr.key.as_ref() == "w:id" {
                                     let id = attr.value.as_ref();
+                                    if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                        continue;
+                                    }
                                     out.comment_ref_ids.push(id.to_string());
                                     if let Some(ref mut run) = current_run {
                                         run.text.push_str(&format!("[cmt:{}]", id));
@@ -3914,7 +3942,9 @@ impl<R: Read + Seek> DocxParser<R> {
                             {
                                 let grid_after = std::mem::take(&mut ctx.pending_grid_after);
                                 // Word hides a row whose deletion is tracked, so no output keeps it.
-                                if !std::mem::take(&mut ctx.pending_row_deleted) {
+                                if std::mem::take(&mut ctx.pending_row_deleted) {
+                                    move_from_depth = move_from_depth.saturating_sub(1);
+                                } else {
                                     if grid_after > 0 {
                                         budget.add_cells(grid_after as usize)?;
                                         row.cells.push(TableCell::grid_padding(grid_after));
@@ -5950,6 +5980,102 @@ mod tests {
         assert_eq!(
             table.to_cell_grid(Paragraph::runs_to_markdown),
             vec![vec!["Name", "Age"], vec!["Alice", "30"]]
+        );
+    }
+
+    #[test]
+    fn test_tracked_properties_change_does_not_delete_a_live_row() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr>
+          <w:tblHeader/>
+          <w:trPrChange w:id="1" w:author="A">
+            <w:trPr><w:del w:id="2" w:author="A"/></w:trPr>
+          </w:trPrChange>
+        </w:trPr>
+        <w:tc><w:p><w:r><w:t>Live</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let table = &doc.tables[0];
+        assert_eq!(table.rows.len(), 1);
+        assert!(table.rows[0].properties.as_ref().is_some_and(|p| p.is_header));
+        assert_eq!(table.to_cell_grid(Paragraph::runs_to_markdown), vec![vec!["Live"]]);
+    }
+
+    #[test]
+    fn test_deleted_vmerge_restart_row_leaves_a_blank_continuation() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="1" w:author="A"/></w:trPr>
+        <w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr><w:p><w:r><w:t>Top</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let table = &doc.tables[0];
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.to_cell_grid(Paragraph::runs_to_markdown), vec![vec![""]]);
+    }
+
+    #[test]
+    fn test_table_with_every_row_deleted_renders_nothing() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr><w:trPr><w:del w:id="1" w:author="A"/></w:trPr><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc></w:tr>
+      <w:tr><w:trPr><w:del w:id="2" w:author="A"/></w:trPr><w:tc><w:p><w:r><w:t>B</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert_eq!(doc.tables[0].rows.len(), 0);
+        assert_eq!(doc.tables[0].to_markdown(), "");
+    }
+
+    #[test]
+    fn test_nested_table_inside_a_deleted_row_is_dropped_with_it() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="1" w:author="A"/></w:trPr>
+        <w:tc>
+          <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Inner</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+          <w:p><w:r><w:t>Outer gone</w:t></w:r></w:p>
+        </w:tc>
+      </w:tr>
+      <w:tr><w:tc><w:p><w:r><w:t>Kept</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        assert_eq!(doc.tables.len(), 1);
+        assert_eq!(
+            doc.tables[0].to_cell_grid(Paragraph::runs_to_markdown),
+            vec![vec!["Kept"]]
         );
     }
 

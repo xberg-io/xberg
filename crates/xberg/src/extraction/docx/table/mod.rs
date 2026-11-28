@@ -278,6 +278,22 @@ pub(crate) fn parse_table_properties(
     Ok(props)
 }
 
+/// Apply one direct child of `w:trPr` to the row's properties.
+fn apply_row_property(local_name: &str, e: &BytesStart, props: &mut RowProperties, skips: &mut RowGridSkips) {
+    match local_name {
+        "trHeight" => {
+            props.height = get_attribute_int(e, "val");
+            props.height_rule = get_attribute(e, "hRule");
+        }
+        "tblHeader" => props.is_header = is_toggle_on(e),
+        "cantSplit" => props.cant_split = is_toggle_on(e),
+        "gridBefore" => skips.before = validate_grid_span(get_attribute_u32(e, "val")).unwrap_or(0),
+        "gridAfter" => skips.after = validate_grid_span(get_attribute_u32(e, "val")).unwrap_or(0),
+        "del" => skips.deleted = true,
+        _ => {}
+    }
+}
+
 /// Parse row-level properties from streaming XML reader, with the row's grid skips.
 ///
 /// Expects the reader to be positioned just after the `<w:trPr>` start tag.
@@ -291,6 +307,9 @@ pub(crate) fn parse_row_properties(
     let mut props = RowProperties::default();
     let mut skips = RowGridSkips::default();
     let mut buf = Vec::new();
+    // Open elements inside `w:trPrChange`, which holds the row's previous properties
+    // (including a nested `w:trPr`); none of them describe the row as it is now.
+    let mut change_depth: usize = 0;
 
     loop {
         budget.step()?;
@@ -298,46 +317,35 @@ pub(crate) fn parse_row_properties(
             Ok(Event::Start(e)) => {
                 budget.enter()?;
                 let local_name = e.local_name();
-                match local_name.as_ref() {
-                    "trHeight" => {
-                        props.height = get_attribute_int(&e, "val");
-                        props.height_rule = get_attribute(&e, "hRule");
-                    }
-                    "tblHeader" => {
-                        props.is_header = is_toggle_on(&e);
-                    }
-                    "cantSplit" => {
-                        props.cant_split = is_toggle_on(&e);
-                    }
-                    "gridBefore" => skips.before = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
-                    "gridAfter" => skips.after = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
-                    "del" => skips.deleted = true,
-                    _ => {}
+                if change_depth > 0 {
+                    change_depth += 1;
+                    buf.clear();
+                    continue;
                 }
+                if local_name.as_ref() == "trPrChange" {
+                    change_depth = 1;
+                    buf.clear();
+                    continue;
+                }
+                apply_row_property(local_name.as_ref(), &e, &mut props, &mut skips);
                 buf.clear();
             }
             Ok(Event::Empty(e)) => {
-                let local_name = e.local_name();
-                match local_name.as_ref() {
-                    "trHeight" => {
-                        props.height = get_attribute_int(&e, "val");
-                        props.height_rule = get_attribute(&e, "hRule");
-                    }
-                    "tblHeader" => {
-                        props.is_header = is_toggle_on(&e);
-                    }
-                    "cantSplit" => {
-                        props.cant_split = is_toggle_on(&e);
-                    }
-                    "gridBefore" => skips.before = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
-                    "gridAfter" => skips.after = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
-                    "del" => skips.deleted = true,
-                    _ => {}
+                if change_depth > 0 {
+                    buf.clear();
+                    continue;
                 }
+                let local_name = e.local_name();
+                apply_row_property(local_name.as_ref(), &e, &mut props, &mut skips);
                 buf.clear();
             }
             Ok(Event::End(e)) => {
                 budget.leave();
+                if change_depth > 0 {
+                    change_depth -= 1;
+                    buf.clear();
+                    continue;
+                }
                 if e.local_name().as_ref() == "trPr" {
                     break;
                 }
