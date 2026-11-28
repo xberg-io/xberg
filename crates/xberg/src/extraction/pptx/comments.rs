@@ -109,8 +109,9 @@ fn load_author_map<R: Read + Seek>(
 fn parse_comment_authors_xml(xml_bytes: &[u8]) -> crate::error::Result<HashMap<u32, String>> {
     let xml_str = crate::text::utf8_validation::from_utf8(xml_bytes)
         .map_err(|e| crate::error::XbergError::parsing(format!("invalid UTF-8 in commentAuthors.xml: {e}")))?;
+    let xml_str = crate::extraction::ooxml_constants::normalize_strict_namespaces(xml_str);
 
-    let doc = roxmltree::Document::parse(xml_str)
+    let doc = roxmltree::Document::parse(&xml_str)
         .map_err(|e| crate::error::XbergError::parsing(format!("failed to parse commentAuthors.xml: {e}")))?;
 
     let mut map = HashMap::new();
@@ -137,8 +138,9 @@ fn parse_comment_xml(
 ) -> crate::error::Result<Vec<DocumentRevision>> {
     let xml_str = crate::text::utf8_validation::from_utf8(xml_bytes)
         .map_err(|e| crate::error::XbergError::parsing(format!("invalid UTF-8 in comment XML: {e}")))?;
+    let xml_str = crate::extraction::ooxml_constants::normalize_strict_namespaces(xml_str);
 
-    let doc = roxmltree::Document::parse(xml_str)
+    let doc = roxmltree::Document::parse(&xml_str)
         .map_err(|e| crate::error::XbergError::parsing(format!("failed to parse comment XML: {e}")))?;
 
     let mut revisions = Vec::new();

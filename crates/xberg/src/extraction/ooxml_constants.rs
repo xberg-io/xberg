@@ -48,3 +48,50 @@ pub const PICTURE_NAMESPACE: &str = "http://schemas.openxmlformats.org/drawingml
 ///
 /// Used in: `<p14:sectionLst>`, `<p14:section>` elements inside `<p:extLst>`
 pub const PRESENTATIONML_2010_NAMESPACE: &str = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+
+/// Strict (ISO 29500) namespace URIs and the transitional URI each one stands for. Element and
+/// attribute names are identical in the two families, so rewriting the URI lets the parsers
+/// match the transitional constants alone.
+const STRICT_TO_TRANSITIONAL: [(&str, &str); 7] = [
+    (
+        "http://purl.oclc.org/ooxml/presentationml/main",
+        PRESENTATIONML_NAMESPACE,
+    ),
+    ("http://purl.oclc.org/ooxml/drawingml/main", DRAWINGML_NAMESPACE),
+    (
+        "http://purl.oclc.org/ooxml/drawingml/chart",
+        "http://schemas.openxmlformats.org/drawingml/2006/chart",
+    ),
+    (
+        "http://purl.oclc.org/ooxml/drawingml/diagram",
+        "http://schemas.openxmlformats.org/drawingml/2006/diagram",
+    ),
+    (
+        "http://purl.oclc.org/ooxml/drawingml/table",
+        "http://schemas.openxmlformats.org/drawingml/2006/table",
+    ),
+    (
+        "http://purl.oclc.org/ooxml/officeDocument/relationships",
+        RELATIONSHIPS_NAMESPACE,
+    ),
+    (
+        "http://purl.oclc.org/ooxml/officeDocument/math",
+        "http://schemas.openxmlformats.org/officeDocument/2006/math",
+    ),
+];
+
+/// Rewrite the strict (ISO 29500) namespace URIs in `xml` to their transitional equivalents.
+///
+/// Returns the input borrowed when it holds no strict URI, which is the common case.
+pub(crate) fn normalize_strict_namespaces(xml: &str) -> std::borrow::Cow<'_, str> {
+    if !xml.contains("purl.oclc.org/ooxml/") {
+        return std::borrow::Cow::Borrowed(xml);
+    }
+    let mut out = xml.to_string();
+    for (strict, transitional) in STRICT_TO_TRANSITIONAL {
+        if out.contains(strict) {
+            out = out.replace(strict, transitional);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
