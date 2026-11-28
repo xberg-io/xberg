@@ -313,6 +313,15 @@ const TABLE_ROW_GAP_RATIO: f32 = 0.5;
 // more than the two column lines a narrow gutter separates.
 const TABLE_ROW_MIN_EXTRA_GAPS: usize = 2;
 
+/// `true` at each span index listed in `members`.
+fn span_mask(len: usize, members: &[usize]) -> Vec<bool> {
+    let mut mask = vec![false; len];
+    for &i in members {
+        mask[i] = true;
+    }
+    mask
+}
+
 /// A column cut: the `header` rows above both columns, then the `left` and `right` columns.
 struct ColumnCut {
     header: Vec<usize>,
@@ -2537,7 +2546,8 @@ impl XYCutStrategy {
         let mut header = Vec::new();
         if straddling >= MIN_PEELED_FULL_WIDTH_LINES {
             header = self.header_band_spans(all_spans, indices, split_x);
-            let body: Vec<usize> = indices.iter().copied().filter(|i| !header.contains(i)).collect();
+            let in_header = span_mask(all_spans.len(), &header);
+            let body: Vec<usize> = indices.iter().copied().filter(|&i| !in_header[i]).collect();
             if self.straddling_line_count(all_spans, &body, split_x) > 0 {
                 return None;
             }
@@ -2561,15 +2571,13 @@ impl XYCutStrategy {
             }
         };
         let (left, right) = self.partition_lines_at(all_spans, indices, lines, split_x);
+        let in_header = span_mask(all_spans.len(), &header);
         let (left, right) = if header.is_empty() {
             (left, right)
         } else {
-            let mut left_with_header: Vec<usize> = indices.iter().copied().filter(|i| header.contains(i)).collect();
-            left_with_header.extend(left.iter().copied().filter(|i| !header.contains(i)));
-            (
-                left_with_header,
-                right.into_iter().filter(|i| !header.contains(i)).collect(),
-            )
+            let mut left_with_header: Vec<usize> = indices.iter().copied().filter(|&i| in_header[i]).collect();
+            left_with_header.extend(left.iter().copied().filter(|&i| !in_header[i]));
+            (left_with_header, right.into_iter().filter(|&i| !in_header[i]).collect())
         };
 
         if left.is_empty() || right.is_empty() {
@@ -2634,7 +2642,7 @@ impl XYCutStrategy {
         let full_width_left_rows = left
             .iter()
             .filter(|&&i| {
-                if header.contains(&i) {
+                if in_header[i] {
                     return false;
                 }
                 let s = &all_spans[i];
@@ -2659,8 +2667,8 @@ impl XYCutStrategy {
             return None;
         }
 
-        let left = left.into_iter().filter(|i| !header.contains(i)).collect();
-        let header = indices.iter().copied().filter(|i| header.contains(i)).collect();
+        let left = left.into_iter().filter(|&i| !in_header[i]).collect();
+        let header = indices.iter().copied().filter(|&i| in_header[i]).collect();
         Some(ColumnCut { header, left, right })
     }
 
@@ -3481,21 +3489,30 @@ mod tests {
     #[test]
     fn column_split_declines_when_prose_crosses_the_gutter_between_column_lines_gh3446() {
         let strategy = XYCutStrategy::new();
-        let mut spans = vec![make_span_text(95.0, 360.0, 200.0, 12.0, &"T".repeat(30), 12.0)];
-        for y in [300.0, 288.0] {
-            spans.push(make_span_text(40.0, y, 150.0, 10.0, &"l".repeat(33), 10.0));
-            spans.push(make_span_text(215.0, y, 135.0, 10.0, &"r".repeat(30), 10.0));
-        }
-        for y in [276.0, 264.0] {
-            spans.push(make_span_text(40.0, y, 310.0, 10.0, &"n".repeat(68), 10.0));
-        }
-        for y in [252.0, 240.0] {
-            spans.push(make_span_text(40.0, y, 150.0, 10.0, &"l".repeat(33), 10.0));
-            spans.push(make_span_text(215.0, y, 135.0, 10.0, &"r".repeat(30), 10.0));
-        }
-        let indices: Vec<usize> = (0..spans.len()).collect();
+        let build = |with_prose: bool| {
+            let mut spans = vec![make_span_text(95.0, 360.0, 200.0, 12.0, &"T".repeat(30), 12.0)];
+            for y in [300.0, 288.0] {
+                spans.push(make_span_text(40.0, y, 150.0, 10.0, &"l".repeat(33), 10.0));
+                spans.push(make_span_text(215.0, y, 135.0, 10.0, &"r".repeat(30), 10.0));
+            }
+            if with_prose {
+                for y in [276.0, 264.0] {
+                    spans.push(make_span_text(40.0, y, 310.0, 10.0, &"n".repeat(68), 10.0));
+                }
+            }
+            for y in [252.0, 240.0] {
+                spans.push(make_span_text(40.0, y, 150.0, 10.0, &"l".repeat(33), 10.0));
+                spans.push(make_span_text(215.0, y, 135.0, 10.0, &"r".repeat(30), 10.0));
+            }
+            spans
+        };
+        let cut = |spans: &[TextSpan]| {
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            strategy.find_horizontal_split_indexed(spans, &indices)
+        };
 
-        assert_eq!(strategy.find_horizontal_split_indexed(&spans, &indices), None);
+        assert_eq!(cut(&build(true)), None);
+        assert!(cut(&build(false)).is_some(), "without the prose the columns are cut");
     }
 
     fn text_of(len: usize, ch: char) -> String {
@@ -3606,20 +3623,32 @@ mod tests {
     #[test]
     fn column_split_declines_a_form_whose_bottom_rows_are_not_columns_gh3446() {
         let strategy = XYCutStrategy::new();
-        let mut spans = Vec::new();
-        for y in [700.0, 688.0] {
-            spans.push(make_span_text(40.0, y, 520.0, 8.0, &text_of(110, 'U'), 8.0));
-        }
-        for y in [660.0, 648.0] {
-            for x in [40.0, 220.0, 400.0] {
-                spans.push(make_span_text(x, y, 100.0, 8.0, &text_of(20, 'c'), 8.0));
+        let build = |with_crossing: bool| {
+            let mut spans = Vec::new();
+            if with_crossing {
+                for y in [700.0, 688.0] {
+                    spans.push(make_span_text(40.0, y, 520.0, 8.0, &text_of(110, 'U'), 8.0));
+                }
             }
-        }
-        spans.push(make_span_text(40.0, 600.0, 180.0, 8.0, &text_of(36, 'n'), 8.0));
-        spans.push(make_span_text(380.0, 600.0, 170.0, 8.0, &text_of(34, 's'), 8.0));
-        let indices: Vec<usize> = (0..spans.len()).collect();
+            for y in [660.0, 648.0] {
+                for x in [40.0, 220.0, 400.0] {
+                    spans.push(make_span_text(x, y, 100.0, 8.0, &text_of(20, 'c'), 8.0));
+                }
+            }
+            spans.push(make_span_text(40.0, 600.0, 180.0, 8.0, &text_of(36, 'n'), 8.0));
+            spans.push(make_span_text(380.0, 600.0, 170.0, 8.0, &text_of(34, 's'), 8.0));
+            spans
+        };
+        let cut = |spans: &[TextSpan]| {
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            strategy.find_horizontal_split_indexed(spans, &indices)
+        };
 
-        assert_eq!(strategy.find_horizontal_split_indexed(&spans, &indices), None);
+        assert_eq!(cut(&build(true)), None);
+        assert!(
+            cut(&build(false)).is_some(),
+            "without the crossing lines the cut stands"
+        );
     }
 
     /// Three columns under a centred title: the cut may fall at either gutter, and the title
@@ -3639,11 +3668,12 @@ mod tests {
         }
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy
-            .find_horizontal_split_indexed(&spans, &indices)
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
             .expect("a gutter between the columns is cut once the title is read first");
-        assert!(left.contains(&0) && left.contains(&1), "title stays together: {left:?}");
-        assert_eq!(left.len() + right.len(), spans.len());
+        assert_eq!(cut.header, Vec::<usize>::new());
+        assert_eq!(cut.left, vec![0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]);
+        assert_eq!(cut.right, vec![4, 7, 10, 13, 16, 19]);
     }
 
     /// A header line as wide as a table row must not trip the table-row guard.
@@ -3677,41 +3707,63 @@ mod tests {
     #[test]
     fn column_split_declines_crossing_lines_below_an_existing_column_start_gh3446() {
         let strategy = XYCutStrategy::new();
-        let mut spans = Vec::new();
-        for y in [400.0, 388.0] {
-            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
-        }
-        for y in [370.0, 358.0] {
-            spans.push(make_span_text(60.0, y, 480.0, 8.4, &text_of(100, 'p'), 8.5));
-        }
-        for row in 0..8 {
-            let y = 330.0 - 11.0 * row as f32;
-            spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
-            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
-        }
-        let indices: Vec<usize> = (0..spans.len()).collect();
+        let build = |with_crossing: bool| {
+            let mut spans = Vec::new();
+            for y in [400.0, 388.0] {
+                spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
+            }
+            if with_crossing {
+                for y in [370.0, 358.0] {
+                    spans.push(make_span_text(60.0, y, 480.0, 8.4, &text_of(100, 'p'), 8.5));
+                }
+            }
+            for row in 0..8 {
+                let y = 330.0 - 11.0 * row as f32;
+                spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
+                spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
+            }
+            spans
+        };
+        let cut = |spans: &[TextSpan]| {
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            strategy.find_column_cut(spans, &indices, None)
+        };
 
-        assert!(strategy.find_column_cut(&spans, &indices, None).is_none());
+        assert!(cut(&build(true)).is_none());
+        assert!(
+            cut(&build(false)).is_some(),
+            "without the crossing lines the cut stands"
+        );
     }
 
     /// Crossing prose between established body columns still refuses the cut (GH#2110).
     #[test]
     fn column_split_declines_crossing_lines_inside_the_body_columns_gh3446() {
         let strategy = XYCutStrategy::new();
-        let mut spans = vec![make_span_text(150.0, 700.0, 300.0, 16.0, &text_of(30, 'T'), 14.0)];
-        spans.push(make_span_text(150.0, 680.0, 300.0, 16.0, &text_of(30, 'T'), 14.0));
-        for row in 0..8 {
-            let y = 640.0 - 11.0 * row as f32;
-            if row == 4 || row == 5 {
-                spans.push(make_span_text(60.0, y, 480.0, 8.4, &text_of(100, 'p'), 8.5));
-                continue;
+        let build = |with_crossing: bool| {
+            let mut spans = vec![make_span_text(150.0, 700.0, 300.0, 16.0, &text_of(30, 'T'), 14.0)];
+            spans.push(make_span_text(150.0, 680.0, 300.0, 16.0, &text_of(30, 'T'), 14.0));
+            for row in 0..8 {
+                let y = 640.0 - 11.0 * row as f32;
+                if with_crossing && (row == 4 || row == 5) {
+                    spans.push(make_span_text(60.0, y, 480.0, 8.4, &text_of(100, 'p'), 8.5));
+                    continue;
+                }
+                spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
+                spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
             }
-            spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
-            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
-        }
-        let indices: Vec<usize> = (0..spans.len()).collect();
+            spans
+        };
+        let cut = |spans: &[TextSpan]| {
+            let indices: Vec<usize> = (0..spans.len()).collect();
+            strategy.find_column_cut(spans, &indices, None)
+        };
 
-        assert!(strategy.find_column_cut(&spans, &indices, None).is_none());
+        assert!(cut(&build(true)).is_none());
+        assert!(
+            cut(&build(false)).is_some(),
+            "without the crossing lines the cut stands"
+        );
     }
 
     /// One author cell per side above a crossing affiliation line is a header, not the body.
@@ -3754,6 +3806,44 @@ mod tests {
         let left: Vec<usize> = std::iter::once(2).chain(left).collect();
         let right: Vec<usize> = std::iter::once(3).chain(right).collect();
         assert_eq!((cut.header, cut.left, cut.right), (vec![0, 1], left, right));
+    }
+
+    fn flattened_partition(strategy: &XYCutStrategy, spans: &[TextSpan]) -> Vec<usize> {
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        strategy
+            .partition_indexed_depth(spans, &indices, 0)
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
+    /// Through the whole recursion, the header band is emitted first, then the left column,
+    /// then the right column.
+    #[test]
+    fn partition_reads_header_then_left_column_then_right_column_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(70.0, 700.0, 460.0, 16.0, &text_of(60, 'T'), 14.0),
+            make_span_text(120.0, 680.0, 360.0, 16.0, &text_of(46, 'T'), 14.0),
+        ];
+        let (left, right) = push_columns(&mut spans, 650.0, 8, 11.0);
+
+        let expected: Vec<usize> = [0, 1].into_iter().chain(left).chain(right).collect();
+        assert_eq!(flattened_partition(&strategy, &spans), expected);
+    }
+
+    /// The IRS shape: a title and a tag row above a worksheet of two columns of rows.
+    #[test]
+    fn partition_reads_a_title_and_tag_row_before_the_worksheet_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(60.0, 720.0, 420.0, 16.0, &text_of(40, 'W'), 14.0),
+            make_span_text(200.0, 698.0, 200.0, 12.0, &text_of(24, 'K'), 10.0),
+        ];
+        let (left, right) = push_columns(&mut spans, 670.0, 8, 11.0);
+
+        let expected: Vec<usize> = [0, 1].into_iter().chain(left).chain(right).collect();
+        assert_eq!(flattened_partition(&strategy, &spans), expected);
     }
 
     #[test]
