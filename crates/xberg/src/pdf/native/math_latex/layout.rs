@@ -142,7 +142,7 @@ fn group_tex_in(pieces: &[&Piece<'_>], depth: usize, script: bool) -> Option<Str
     let rest: Vec<&Piece<'_>> = glyphs.iter().copied().filter(|piece| !contains(&axis, piece)).collect();
     let on_axis = |piece: &Piece<'_>| {
         (piece.base - base).abs() <= size * OFF_AXIS_EM
-            || (piece.is_radical() && covers_axis_radicand(piece, &axis, size))
+            || (piece.is_radical() && covers_axis_radicand(piece, &axis, &glyphs, size))
     };
     let mut items: Vec<Item<'_, '_>> = axis
         .iter()
@@ -185,10 +185,27 @@ fn group_tex_in(pieces: &[&Piece<'_>], depth: usize, script: bool) -> Option<Str
 }
 
 /// Whether the axis row carries the radicand of a radical sign drawn off the axis: a glyph of
-/// the row starts right after it. A radical over a fraction part has its radicand in that part.
-fn covers_axis_radicand(radical: &Piece<'_>, axis: &[&Piece<'_>], size: f32) -> bool {
-    axis.iter()
-        .any(|glyph| glyph.x0 >= radical.x1 - size * AXIS_OVERLAP_EM && glyph.x0 - radical.x1 <= size * CLUSTER_GAP_EM)
+/// the row, or another radical sign that has it in turn, starts right after it. A radical
+/// over a fraction part has its radicand in that part.
+fn covers_axis_radicand(radical: &Piece<'_>, axis: &[&Piece<'_>], glyphs: &[&Piece<'_>], size: f32) -> bool {
+    let reach = |from: &Piece<'_>, to: &Piece<'_>| {
+        to.x0 >= from.x1 - size * AXIS_OVERLAP_EM && to.x0 - from.x1 <= size * CLUSTER_GAP_EM
+    };
+    let mut current = radical;
+    for _ in 0..MAX_DEPTH {
+        if axis.iter().any(|glyph| reach(current, glyph)) {
+            return true;
+        }
+        match glyphs
+            .iter()
+            .copied()
+            .find(|next| next.is_radical() && !std::ptr::eq(*next, current) && reach(current, next))
+        {
+            Some(next) => current = next,
+            None => return false,
+        }
+    }
+    false
 }
 
 /// A nested fraction's lines: two full-size lines over each other with nothing else, an inner
@@ -455,10 +472,15 @@ fn attach_scripts<'p, 'a>(
 
 fn write_items(items: &[Item<'_, '_>], depth: usize, script: bool) -> Option<String> {
     let mut tex = Tex::default();
-    let mut open_radical = false;
+    // Radical signs whose argument is still to come: each takes the item after it, the
+    // innermost last, so the braces of all of them close after that item.
+    let mut pending = 0_usize;
     for item in items {
         let subscript = group_tex_in(&item.subscripts, depth + 1, true)?;
         let superscript = group_tex_in(&item.superscripts, depth + 1, true)?;
+        // `Some(command)` for a radical sign still awaiting its argument.
+        let mut radical_sign = None;
+        let mut body = Tex::default();
         match &item.kind {
             ItemKind::Base(piece) => {
                 let (mut spelled, command) = spell_piece(piece);
@@ -470,46 +492,53 @@ fn write_items(items: &[Item<'_, '_>], depth: usize, script: bool) -> Option<Str
                     if !subscript.is_empty() {
                         return None;
                     }
-                    tex.push(&format!("{spelled}[{superscript}]"), false);
-                    open_radical = true;
-                    continue;
+                    radical_sign = Some(format!("{spelled}[{superscript}]"));
+                } else if radical && !(subscript.is_empty() && superscript.is_empty()) {
+                    body.raw(&format!("{spelled}{{{subscript}{superscript}}}"));
+                } else if radical {
+                    radical_sign = Some(spelled);
+                } else {
+                    body.push(&spelled, command && item.accents.is_empty());
+                    write_scripts(&mut body, &subscript, &superscript);
                 }
-                if radical && !(subscript.is_empty() && superscript.is_empty()) {
-                    tex.push(&format!("{spelled}{{{subscript}{superscript}}}"), false);
-                    continue;
-                }
-                if open_radical {
-                    // The radicand's own scripts are part of the radical's argument.
-                    let mut radicand = Tex::default();
-                    radicand.raw(&spelled);
-                    write_scripts(&mut radicand, &subscript, &superscript);
-                    tex.raw(&format!("{{{}}}", radicand.out));
-                    open_radical = radical;
-                    continue;
-                }
-                tex.push(&spelled, command && item.accents.is_empty());
-                open_radical = radical;
             }
             ItemKind::Fraction(upper, lower) => {
                 let (numerator, denominator) = (
                     group_tex_in(upper, depth + 1, script)?,
                     group_tex_in(lower, depth + 1, script)?,
                 );
-                tex.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
+                body.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
+                write_scripts(&mut body, &subscript, &superscript);
             }
             ItemKind::Limits(upper, lower) => {
                 let (upper, lower) = (
                     group_tex_in(upper, depth + 1, true)?,
                     group_tex_in(lower, depth + 1, true)?,
                 );
-                tex.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
+                body.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
+                write_scripts(&mut body, &subscript, &superscript);
             }
-            ItemKind::Orphan => tex.raw("{}"),
+            ItemKind::Orphan => {
+                body.raw("{}");
+                write_scripts(&mut body, &subscript, &superscript);
+            }
         }
-        write_scripts(&mut tex, &subscript, &superscript);
+        if let Some(sign) = radical_sign {
+            if pending > 0 {
+                tex.raw("{");
+            }
+            tex.push(&sign, false);
+            pending += 1;
+        } else if pending > 0 {
+            tex.raw(&format!("{{{}}}{}", body.out, "}".repeat(pending - 1)));
+            pending = 0;
+        } else {
+            let command = body.after_command;
+            tex.push(&body.out, command);
+        }
     }
-    if open_radical {
-        tex.raw("{}");
+    if pending > 0 {
+        tex.raw(&format!("{{}}{}", "}".repeat(pending - 1)));
     }
     Some(tex.out)
 }

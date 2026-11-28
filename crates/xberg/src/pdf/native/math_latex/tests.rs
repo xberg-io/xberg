@@ -559,6 +559,20 @@ fn should_keep_the_scripts_of_a_radicand_inside_the_radical() {
     assert_eq!(texts(&rewritten), ["$$y=\\sqrt[3]{x^{2}}$$"]);
 }
 
+/// Radical signs in a row: each inner radical stays inside the outer one's argument.
+#[test]
+fn should_nest_consecutive_radicals() {
+    let spans = vec![
+        span("y", MMI, 11.96, 78.27, 5.71, 429.39),
+        span("=", MR, 11.96, 87.73, 9.11, 429.39),
+        span("p", "QTXDXT+CMEX10", 11.96, 100.80, 11.96, 439.37),
+        span("p", "QTXDXT+CMEX10", 11.96, 112.76, 11.96, 439.37),
+        span("x", MMI, 11.96, 124.72, 6.65, 429.39),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$y=\\sqrt{\\sqrt{x}}$$"]);
+}
+
 /// A degree over the left edge of a wide radical is its degree.
 #[test]
 fn should_read_the_degree_of_a_wide_radical_by_its_left_edge() {
