@@ -80,7 +80,7 @@ impl<'doc> TextExtractor<'doc> {
         const MILLIPOINT_FLOOR: i64 = 100;
         let linear = |value: f32| {
             let millipoints = (value * 1000.0).round() as i64;
-            if millipoints.abs() >= MILLIPOINT_FLOOR {
+            if millipoints.unsigned_abs() >= MILLIPOINT_FLOOR as u64 {
                 millipoints
             } else if millipoints == 0 && value.abs() <= magnitude * 1e-5 {
                 0
@@ -113,7 +113,8 @@ impl<'doc> TextExtractor<'doc> {
             mantissa /= 10;
             exponent += 1;
         }
-        // The tag keeps these keys apart from millipoint keys of larger components. ~keep
+        // The tag keeps these keys apart from millipoint keys of larger components; a millipoint key
+        // only reaches 1 << 50 for components near 1e12, far beyond any real CTM. ~keep
         const SIGNIFICANT_TAG: i64 = 1 << 50;
         let key = SIGNIFICANT_TAG | (i64::from(exponent + 64) << 20) | mantissa;
         if value < 0.0 { -key } else { key }

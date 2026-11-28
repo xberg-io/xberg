@@ -493,6 +493,17 @@ fn ctm_key_absorbs_float_noise_at_every_scale() {
     assert_eq!(key(-1.0)[0], -key(1.0)[0]);
 }
 
+#[test]
+fn ctm_key_survives_saturated_negative_components() {
+    let huge = ctm_key(-1.0e30, 0.0, 1.0);
+    assert_eq!(
+        huge[0],
+        i64::MIN,
+        "a saturated component keys as the saturated millipoint value"
+    );
+    assert_eq!(ctm_key(f32::MIN, 0.0, 1.0)[0], i64::MIN);
+}
+
 fn ctm_key(a: f32, b: f32, d: f32) -> [i64; 6] {
     crate::extractors::TextExtractor::quantize_ctm(crate::content::Matrix {
         a,
