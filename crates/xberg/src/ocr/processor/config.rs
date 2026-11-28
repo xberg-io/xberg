@@ -29,11 +29,12 @@ const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 22;
 /// # Returns
 ///
 /// Hexadecimal string representation of the configuration hash
+#[cfg(test)]
 pub(super) fn hash_config(config: &TesseractConfig, resolved_tessdata_path: &str) -> String {
     hash_config_for_schema(config, resolved_tessdata_path, TESSERACT_RESULT_SCHEMA_VERSION)
 }
 
-/// [`hash_config`] for a directory already in its canonical form
+/// The configuration hash `hash_config` gives, for a directory already in its canonical form
 /// ([`super::validation::canonical_tessdata_dir`]).
 pub(super) fn hash_config_in(config: &TesseractConfig, canonical_tessdata_dir: &std::path::Path) -> String {
     hash_config_at(config, canonical_tessdata_dir, TESSERACT_RESULT_SCHEMA_VERSION)
@@ -76,6 +77,7 @@ fn hash_security_limits(hasher: &mut blake3::Hasher, limits: Option<&crate::extr
     }
 }
 
+#[cfg(test)]
 fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str, result_schema_version: u8) -> String {
     let directory = super::validation::canonical_tessdata_dir(resolved_tessdata_path);
     hash_config_at(config, &directory, result_schema_version)
@@ -191,7 +193,7 @@ pub(super) fn apply_tesseract_variables(api: &TesseractAPI, config: &TesseractCo
 /// The full, ordered set of Tesseract engine variables applied for `config`.
 ///
 /// This is the single source of truth consumed by both [`apply_tesseract_variables`] (which
-/// sets them on the engine) and [`hash_config`] (which folds them into the OCR cache key). A
+/// sets them on the engine) and [`hash_config_in`] (which folds them into the OCR cache key). A
 /// variable that changes hOCR/TSV serialization must be added here, and only here — adding it
 /// directly inside `apply_tesseract_variables` instead (as `hocr_font_info` originally was)
 /// reproduces #687: the engine's behaviour changes but the cache key does not, so every
