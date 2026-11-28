@@ -2295,7 +2295,7 @@ impl TjBuffer {
         );
         self.unicode.push_str(&unicode_text);
         Self::note_decode(&self.unicode, &mut self.ligature_len, len_before, || {
-            TextCharIter::new(bytes, font).take(2).count() == 1
+            advance::shown_codes(bytes, font).take(2).count() == 1
         });
 
         Ok(())

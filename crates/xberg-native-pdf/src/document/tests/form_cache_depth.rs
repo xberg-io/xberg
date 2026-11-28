@@ -111,7 +111,8 @@ fn root_form_is_cached(document: &PdfDocument, page_index: usize) -> bool {
         .unwrap();
     let (llx, lly, urx, ury) = document.get_page_media_box(page_index).unwrap();
     let area = ((urx - llx) * (ury - lly)).abs();
-    let key = (root, [1000, 0, 0, 1000, 0, 0], Some(area.to_bits()));
+    let identity = crate::extractors::TextExtractor::quantize_ctm(crate::content::Matrix::identity());
+    let key = (root, identity, Some(area.to_bits()));
     document.xobject_spans_cache.lock().unwrap().get(&key).is_some()
 }
 
@@ -430,4 +431,101 @@ fn cached_parent_uses_exact_caller_transform_for_rounded_child_placements() {
             "the parent must walk with the shifted caller transform: {probe}"
         );
     }
+}
+
+fn scaled_form_pdf(probe: &str) -> Vec<u8> {
+    let form = stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 600 800] /Matrix [10000 0 0 10000 0 0] \
+         /Resources << /Font << /F1 5 0 R >> >>",
+        "BT /F1 12 Tf 20 220 Td (ScaledPaint) Tj ET",
+    );
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (
+                3,
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R \
+                  /Resources << /XObject << /Scaled 6 0 R >> >> >>",
+            ),
+            (4, &stream("", probe)),
+            (5, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+            (6, &form),
+        ],
+    )
+}
+
+#[test]
+fn small_scale_placements_of_one_form_keep_distinct_transforms() {
+    let distinct = "q 0.0001 0 0 0.0001 0 0 cm /Scaled Do Q q 0.0003 0 0 0.0003 0 0 cm /Scaled Do Q";
+    let document = PdfDocument::from_bytes(scaled_form_pdf(distinct)).expect("open small-scale placements");
+    assert_eq!(raw_span_text(&document, 0), "ScaledPaintScaledPaint");
+
+    let duplicate = "q 0.0001 0 0 0.0001 0 0 cm /Scaled Do Q q 0.0001 0 0 0.0001 0 0 cm /Scaled Do Q";
+    let document = PdfDocument::from_bytes(scaled_form_pdf(duplicate)).expect("open duplicate placements");
+    assert_eq!(raw_span_text(&document, 0), "ScaledPaint");
+}
+
+#[test]
+fn ctm_key_absorbs_float_noise_at_every_scale() {
+    use crate::content::Matrix;
+    use crate::extractors::TextExtractor;
+
+    let key = |scale: f32| {
+        TextExtractor::quantize_ctm(Matrix {
+            a: scale,
+            b: 0.0,
+            c: 0.0,
+            d: scale,
+            e: 0.0,
+            f: 0.0,
+        })
+    };
+    for scale in [1.0f32, 0.1, 0.0001, 250.0] {
+        assert_eq!(key(scale), key(scale * (1.0 + 4.0 * f32::EPSILON)), "{scale}");
+        assert_eq!(key(scale), key(scale * (1.0 - 4.0 * f32::EPSILON)), "{scale}");
+    }
+    assert_ne!(key(0.0001), key(0.0003));
+    assert_ne!(key(0.0123), key(0.0124));
+    assert_ne!(key(10000.1), key(10000.3), "large scales keep the millipoint grid");
+    assert_eq!(key(0.5), key(0.5001), "components of 100 millipoints or more keep the millipoint grid");
+    assert_ne!(key(0.0991), key(0.0992));
+    assert_eq!(key(-1.0)[0], -key(1.0)[0]);
+}
+
+#[test]
+fn ctm_key_survives_saturated_negative_components() {
+    let huge = ctm_key(-1.0e30, 0.0, 1.0);
+    assert_eq!(
+        huge[0],
+        i64::MIN,
+        "a saturated component keys as the saturated millipoint value"
+    );
+    assert_eq!(ctm_key(f32::MIN, 0.0, 1.0)[0], i64::MIN);
+}
+
+fn ctm_key(a: f32, b: f32, d: f32) -> [i64; 6] {
+    crate::extractors::TextExtractor::quantize_ctm(crate::content::Matrix {
+        a,
+        b,
+        c: 0.0,
+        d,
+        e: 0.0,
+        f: 0.0,
+    })
+}
+
+#[test]
+fn ctm_key_keeps_small_components_of_mixed_scale_matrices_apart() {
+    assert_ne!(
+        ctm_key(1.0e4, 0.0, 0.05),
+        ctm_key(1.0e4, 0.0, 0.06),
+        "the millipoint key told these placements apart"
+    );
+}
+
+#[test]
+fn ctm_key_folds_rotation_noise_into_zero() {
+    assert_eq!(ctm_key(0.01, 1.0e-9, 0.01), ctm_key(0.01, 0.0, 0.01));
+    assert_eq!(ctm_key(0.01, -1.0e-9, 0.01), ctm_key(0.01, 0.0, 0.01));
 }

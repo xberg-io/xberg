@@ -173,7 +173,7 @@ fn equal_nonempty_font_scopes_reuse_the_same_cached_form_spans() {
     let doc = PdfDocument::from_bytes(inherited_cmap_form_pdf(7)).expect("open shared font scope");
     let key = (
         ObjectRef::new(6, 0),
-        [1000, 0, 0, 1000, 0, 0],
+        crate::extractors::TextExtractor::quantize_ctm(crate::content::Matrix::identity()),
         Some(40_000f32.to_bits()),
     );
     let cached_span_allocation = || {
