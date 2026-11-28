@@ -138,20 +138,24 @@ fn process_xlsx_workbook<RS: Read + Seek>(
         let truncated = skipped.truncated(index);
         let suppressed = skipped.suppressed_formulas(index);
         // A truncated sheet's formula range would be built in full, past the cell budget.
-        let formula_read = (truncated.is_none() && suppressed.is_none()).then(|| read_sheet_formulas(&mut workbook, name));
+        let formula_read =
+            (truncated.is_none() && suppressed.is_none()).then(|| read_sheet_formulas(&mut workbook, name));
         let formula_range = formula_read.as_ref().and_then(|read| read.as_ref().ok());
         let show_formulas = suppressed.is_none();
         let mut formula_metadata = formula_range.and_then(format_sheet_formulas);
         let sheet = match truncated {
-            Some(truncated) => {
-                table_budget::read_truncated_xlsx_sheet(&mut workbook, name, truncated, epoch_1904, show_formulas, warnings)
-                    .map(
-                    |(sheet, kept_formulas)| {
-                        formula_metadata = kept_formulas;
-                        sheet
-                    },
-                )
-            }
+            Some(truncated) => table_budget::read_truncated_xlsx_sheet(
+                &mut workbook,
+                name,
+                truncated,
+                epoch_1904,
+                show_formulas,
+                warnings,
+            )
+            .map(|(sheet, kept_formulas)| {
+                formula_metadata = kept_formulas;
+                sheet
+            }),
             None => process_xlsx_sheet_safe(
                 &mut workbook,
                 name,
