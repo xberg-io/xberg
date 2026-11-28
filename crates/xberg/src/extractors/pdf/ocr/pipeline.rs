@@ -1556,10 +1556,7 @@ impl<'a> MixedOcrContext<'a> {
             content,
             config,
             routing.preprocessing_render_dpi,
-            match routing.effective_pipeline.as_ref() {
-                Some(pipeline) => pipeline_route_recognition_sessions(pipeline),
-                None => direct_route_recognition_sessions(None, routing.backend.as_ref()),
-            },
+            route_recognition_sessions(routing.effective_pipeline.as_ref(), routing.backend.as_ref()),
         )
         .await;
 
@@ -2336,6 +2333,18 @@ pub(super) fn bound_batch_to_recognition(batch_size: usize, recognition_sessions
         "Narrowed the per-page OCR batch to the recognition sessions that read it"
     );
     sessions
+}
+
+/// Recognition sessions that bound the batch width of whichever route reads these pages.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn route_recognition_sessions(
+    effective_pipeline: Option<&crate::core::config::OcrPipelineConfig>,
+    backend: Option<&std::sync::Arc<dyn crate::plugins::OcrBackend>>,
+) -> Option<usize> {
+    match effective_pipeline {
+        Some(pipeline) => pipeline_route_recognition_sessions(pipeline),
+        None => direct_route_recognition_sessions(None, backend),
+    }
 }
 
 /// Recognition sessions that bound this route's batch width, or `None` when nothing does.
