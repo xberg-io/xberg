@@ -372,6 +372,17 @@ pub(crate) fn without_reading_packs<T>(compute: impl FnOnce() -> T) -> Option<T>
     (!missed).then_some(result)
 }
 
+/// Whether a model file must not be read here because [`without_reading_packs`] runs on this
+/// thread. A memo that does not hold the file asks this before reading it; when it is true, the
+/// miss is recorded, so the run's answer is discarded and computed again where reads are allowed.
+pub(crate) fn must_not_read() -> bool {
+    let memo_only = MEMO_ONLY.with(std::cell::Cell::get);
+    if memo_only {
+        MEMO_MISSED.with(|missed| missed.set(true));
+    }
+    memo_only
+}
+
 /// The SHA-256 of the regular file at `path`, read once per (path, [`FileStamp`]) in this
 /// process.
 ///
@@ -390,8 +401,7 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
     {
         return Some(digest.clone());
     }
-    if MEMO_ONLY.with(std::cell::Cell::get) {
-        MEMO_MISSED.with(|missed| missed.set(true));
+    if must_not_read() {
         return None;
     }
     let mut reader = (&file).take(limit.saturating_add(1));

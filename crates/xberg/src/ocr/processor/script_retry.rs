@@ -2,12 +2,13 @@
 //! cannot read (GH#2300), merged per line so every word the first read got right stays.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
 use super::api_pool::{RetryApiPools, RetryStage};
-use super::validation::{SearchDir, TessdataEnv, first_directory_holding, retry_search_dirs};
+use super::validation::{FileStamp, SearchDir, TessdataEnv, first_directory_holding, retry_search_dirs};
 use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::RetainedWordConfidenceStats;
@@ -260,23 +261,72 @@ pub(crate) fn outer_vertical_model_fingerprint(
 }
 
 fn vertical_outer_model_fingerprint(language: &str, directories: &[SearchDir]) -> crate::Result<Option<blake3::Hash>> {
-    let model =
-        observe_vertical_model(directories, language).map_err(|error| crate::XbergError::cache(error.to_string()))?;
+    let model = observe_vertical_model_with(directories, language, memoized_vertical_revision)
+        .map_err(|error| crate::XbergError::cache(error.to_string()))?;
     Ok(model.as_ref().map(vertical_model_identity))
 }
 
 fn observe_vertical_model(directories: &[SearchDir], language: &str) -> Result<Option<ModelSet>, OcrError> {
+    observe_vertical_model_with(directories, language, read_vertical_revision)
+}
+
+fn read_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
+    Ok(hash_language_models(directory, [VERTICAL_JAPANESE_MODEL], crate::cache::blake3_hash_file)?.finalize())
+}
+
+/// [`read_vertical_revision`], read once per (path, [`FileStamp`]) in this process.
+///
+/// The outer cache key asks for it on every request whose OCR may retry vertical Japanese; the
+/// memo lets that key be computed on the async thread
+/// ([`without_reading_packs`](crate::ocr::tessdata_download::without_reading_packs)) once the
+/// model has been read.
+fn memoized_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
+    static SEEN: LazyLock<Mutex<HashMap<PathBuf, (FileStamp, blake3::Hash)>>> = LazyLock::new(Default::default);
+
+    let path = directory.join(format!("{VERTICAL_JAPANESE_MODEL}.traineddata"));
+    let stamp = || {
+        std::fs::metadata(&path)
+            .ok()
+            .filter(std::fs::Metadata::is_file)
+            .as_ref()
+            .and_then(FileStamp::of)
+    };
+    let before = stamp();
+    if let Some(before) = before
+        && let Some((seen, revision)) = SEEN.lock().unwrap_or_else(PoisonError::into_inner).get(&path)
+        && *seen == before
+    {
+        return Ok(*revision);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if crate::ocr::tessdata_download::must_not_read() {
+        return Err(OcrError::ProcessingFailed(
+            "The vertical Japanese model has not been read yet".into(),
+        ));
+    }
+    let revision = read_vertical_revision(directory)?;
+    // ~keep A file that changed while it was read is not remembered under either stamp.
+    if let Some(before) = before
+        && stamp() == Some(before)
+    {
+        SEEN.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(path, (before, revision));
+    }
+    Ok(revision)
+}
+
+fn observe_vertical_model_with(
+    directories: &[SearchDir],
+    language: &str,
+    read_revision: impl FnOnce(&Path) -> Result<blake3::Hash, OcrError>,
+) -> Result<Option<ModelSet>, OcrError> {
     if language != "eng" {
         return Ok(None);
     }
     let model = vertical_japanese_directory(directories)
         .map(|directory| -> Result<ModelSet, OcrError> {
-            let revision = hash_language_models(
-                Path::new(&directory),
-                [VERTICAL_JAPANESE_MODEL],
-                crate::cache::blake3_hash_file,
-            )?
-            .finalize();
+            let revision = read_revision(Path::new(&directory))?;
             Ok(ModelSet::from_revision(
                 directory,
                 VERTICAL_JAPANESE_MODEL.into(),
@@ -339,7 +389,8 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     let first = fingerprint();
     assert!(first.is_some());
     assert_eq!(fingerprint(), first);
-    std::fs::write(&model, b"model two").unwrap();
+    // ~keep A different length: two writes within one clock tick can share a modification time.
+    std::fs::write(&model, b"model two!").unwrap();
     let second = fingerprint();
     assert_ne!(second, first);
     let other = tempfile::tempdir().unwrap();
@@ -351,6 +402,36 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     );
     std::fs::remove_file(model).unwrap();
     assert_eq!(fingerprint(), None);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn outer_vertical_model_identity_is_answered_without_reading_until_the_model_changes() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    let model = root.path().join("jpn_vert.traineddata");
+    std::fs::write(&model, b"model one").unwrap();
+    let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).ok().flatten();
+
+    let first = fingerprint();
+    assert!(first.is_some());
+    assert_eq!(
+        without_reading_packs(fingerprint),
+        Some(first),
+        "a model read before is answered from the memo"
+    );
+    // ~keep A different length: two writes within one clock tick can share a modification time.
+    std::fs::write(&model, b"model one, replaced").unwrap();
+    assert_eq!(
+        without_reading_packs(fingerprint),
+        None,
+        "a changed model must be read again, which the async thread may not do"
+    );
+    let second = fingerprint();
+    assert_ne!(second, first);
+    assert_eq!(without_reading_packs(fingerprint), Some(second));
 }
 
 fn vertical_japanese_directory(directories: &[SearchDir]) -> Option<String> {

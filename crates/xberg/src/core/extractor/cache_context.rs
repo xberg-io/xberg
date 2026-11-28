@@ -100,16 +100,18 @@ async fn fingerprint_with_reader(
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
     let has_paddle_fallback = paddle_fallback_requested(dependencies);
     let has_tessdata = dependencies.iter().any(|dependency| !dependency.tessdata.is_empty());
-    // ~keep Tessdata identities alone are stat calls once the pin-check memo holds the packs'
-    // digests, so they skip the blocking-pool hop every cached PDF and image would pay.
-    if has_tessdata
-        && !(has_orientation_models || has_script_retry || has_paddle_fallback)
+    // ~keep Tessdata identities and the script-retry context are stat calls once the memos hold
+    // the packs' digests and the vertical model's revision, so they skip the blocking-pool hop
+    // every cached PDF and image would pay. Orientation and PaddleOCR models are always read.
+    if (has_tessdata || has_script_retry)
+        && !(has_orientation_models || has_paddle_fallback)
         && let Some(result) =
-            crate::ocr::tessdata_download::without_reading_packs(|| tessdata_context(dependencies, cancel))
+            crate::ocr::tessdata_download::without_reading_packs(|| retry_and_tessdata_context(dependencies, cancel))
     {
         return match result {
-            Ok(Some(context)) => Ok(Some(context)),
-            Ok(None) => Ok(unidentified_model()),
+            Ok(Identified::Context(context)) => Ok(Some(context)),
+            Ok(Identified::Bypass) => Ok(None),
+            Ok(Identified::Unidentified) => Ok(unidentified_model()),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
                 super::cacheability::invalidate_current();
@@ -157,6 +159,32 @@ async fn fingerprint_with_reader(
         };
     }
     Ok(Some(String::new()))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+enum Identified {
+    Context(String),
+    /// The script retry may read models the outer key cannot follow; nothing is cached.
+    Bypass,
+    /// A model file cannot be identified.
+    Unidentified,
+}
+
+/// The context of requests with no orientation or PaddleOCR models: the script-retry context,
+/// then the tessdata identities, as the blocking path joins them.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn retry_and_tessdata_context(
+    dependencies: &[CacheDependency],
+    cancel: Option<&CancellationToken>,
+) -> crate::Result<Identified> {
+    let Some(mut context) = script_retry_cache_context(dependencies, cancel)? else {
+        return Ok(Identified::Bypass);
+    };
+    let Some(tessdata) = tessdata_context(dependencies, cancel)? else {
+        return Ok(Identified::Unidentified);
+    };
+    context.push_str(&tessdata);
+    Ok(Identified::Context(context))
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -1050,6 +1078,51 @@ mod tests {
             panic!("the tessdata context must not queue behind the occupied blocking worker");
         };
         assert!(context.unwrap().unwrap().starts_with(":tessdata-v1:"));
+    }
+
+    #[test]
+    fn an_ordinary_request_does_not_wait_for_the_blocking_pool_once_its_models_were_read() {
+        use std::future::Future;
+        use std::sync::mpsc;
+
+        let dependencies = [CacheDependency::for_config(
+            &ExtractionConfig::default(),
+            Some("application/pdf"),
+        )];
+        assert!(
+            dependencies[0].script_retry.is_some() && !dependencies[0].tessdata.is_empty(),
+            "the default request may retry its script and read the default models"
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let read = runtime.block_on(fingerprint(&dependencies, None)).unwrap();
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let blocker = runtime.spawn_blocking(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        started_rx.recv().unwrap();
+
+        let context = runtime.block_on(async {
+            let mut pending = Box::pin(fingerprint(&dependencies, None));
+            let first_poll =
+                std::future::poll_fn(|context| std::task::Poll::Ready(pending.as_mut().poll(context))).await;
+            release_tx.send(()).unwrap();
+            blocker.await.unwrap();
+            first_poll
+        });
+        let std::task::Poll::Ready(context) = context else {
+            panic!("a request whose models were read before must not queue behind the occupied blocking worker");
+        };
+        assert_eq!(
+            context.unwrap(),
+            read,
+            "the inline context is the one the blocking pool computes"
+        );
     }
 
     #[test]
