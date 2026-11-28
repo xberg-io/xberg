@@ -1433,6 +1433,53 @@ fn should_read_xlsx_file_whose_shared_string_unique_count_overstates_the_entries
 }
 
 #[test]
+fn should_read_xlsx_whose_overstated_unique_count_exceeds_a_tight_budget_but_the_strings_fit_gh3443() {
+    let bytes = xlsx_with_shared_strings(1_000, 1);
+    let limits = SecurityLimits {
+        max_content_size: std::mem::size_of::<String>() * 100,
+        ..Default::default()
+    };
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+}
+
+#[test]
+fn should_rewrite_the_workbook_only_when_the_declared_reservation_does_not_fit_gh3443() {
+    let validate = |bytes: Vec<u8>, limits: &SecurityLimits| {
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        super::table_budget::validate_xlsx_string_parts(&mut archive, limits).unwrap()
+    };
+    let tight = SecurityLimits {
+        max_content_size: std::mem::size_of::<String>() * 100,
+        ..Default::default()
+    };
+    assert!(!validate(xlsx_with_shared_strings(2, 1), &tight));
+    assert!(!validate(xlsx_with_shared_strings(1, 1), &tight));
+    assert!(validate(xlsx_with_shared_strings(1_000, 1), &tight));
+}
+
+#[test]
+fn should_read_xlam_whose_shared_string_unique_count_overstates_the_entries_gh3443() {
+    let bytes = xlsx_with_shared_strings(4_294_967_295, 1);
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlam", &SecurityLimits::default()).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("overstated.xlam");
+    std::fs::write(&path, &bytes).unwrap();
+    let (workbook, _) = read_excel_file(path.to_str().unwrap(), &SecurityLimits::default()).unwrap();
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["x".to_string()]]
+    );
+}
+
+#[test]
 fn should_bound_shared_formula_vector_capacity_before_formula_collection_gh2296() {
     let bytes = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">

@@ -9,14 +9,14 @@ use crate::{Result, XbergError};
 
 /// Validate every shared-strings part against the budget, sizing it by the strings it actually holds.
 ///
-/// With `overstated` set, a declared `uniqueCount` is not trusted: the flag is raised when any part declares more
-/// strings than it contains, so the caller can drop the attribute before calamine reserves that many slots.
-/// Without it, the declared count is charged to the budget up front.
+/// Calamine reserves a vector of `uniqueCount` strings before reading any of them, so a declared count is only
+/// trusted while that reservation fits the budget on top of the strings present. Returns `true` when some part
+/// declares more than fits; the caller must then drop the attribute before handing the workbook to calamine.
 pub(in crate::extraction::excel) fn validate_xlsx_string_parts<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     limits: &SecurityLimits,
-    mut overstated: Option<&mut bool>,
-) -> Result<()> {
+) -> Result<bool> {
+    let mut needs_rewrite = false;
     for index in 0..archive.len() {
         let member = archive.by_index(index).map_err(xml_error)?;
         let name = member.name().map_err(xml_error)?;
@@ -25,12 +25,9 @@ pub(in crate::extraction::excel) fn validate_xlsx_string_parts<R: Read + Seek>(
         }
         drop(name);
         let bounded = member.take((limits.max_archive_size as u64).saturating_add(1));
-        let exceeds_actual = validate_strings(BufReader::new(bounded), limits, overstated.is_none())?;
-        if let Some(flag) = overstated.as_deref_mut() {
-            *flag |= exceeds_actual;
-        }
+        needs_rewrite |= validate_strings(BufReader::new(bounded), limits)?;
     }
-    Ok(())
+    Ok(needs_rewrite)
 }
 
 fn xml_error(error: impl std::fmt::Display) -> XbergError {
@@ -43,8 +40,8 @@ pub(in crate::extraction::excel) fn is_shared_strings_part(name: &str) -> bool {
         .is_some_and(|basename| basename.eq_ignore_ascii_case("sharedStrings.xml"))
 }
 
-/// Returns whether the declared `uniqueCount` exceeds the number of `<si>` elements actually present.
-fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits, charge_declared: bool) -> Result<bool> {
+/// Returns whether the declared `uniqueCount` reservation would not fit the budget left after the actual strings.
+fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits) -> Result<bool> {
     let mut declared = None;
     let mut reader = quick_xml::Reader::from_reader(reader);
     reader.config_mut().expand_empty_elements = true;
@@ -72,9 +69,6 @@ fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits, char
                             .map_err(xml_error)?;
                         if let Ok(value) = value.parse::<usize>() {
                             declared = Some(value);
-                            if charge_declared {
-                                account_capacity(value, &mut capacity_bytes, &mut budget)?;
-                            }
                         }
                     }
                 }
@@ -95,7 +89,11 @@ fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits, char
                 let text = quick_xml::escape::unescape(&escaped).map_err(xml_error)?;
                 budget.account_text(text.len())?;
             }
-            Event::Eof => return Ok(declared.is_some_and(|declared| declared > count)),
+            Event::Eof => {
+                return Ok(declared.is_some_and(|declared| {
+                    declared > count && account_capacity(declared, &mut capacity_bytes, &mut budget).is_err()
+                }));
+            }
             _ => {}
         }
     }
