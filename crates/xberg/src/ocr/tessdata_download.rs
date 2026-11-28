@@ -24,6 +24,11 @@ const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const RETRY_BACKOFF: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
 const MAX_TRAINEDDATA_BYTES: u64 = 64 * 1024 * 1024;
+/// The largest model file that is not a pinned pack still identified by its bytes. Tesseract
+/// loads a whole model into memory and the largest published ones (legacy `chi_tra`, `jpn`) are
+/// tens of MiB, so nothing above this is a usable model, while reading it on every cache lookup
+/// would cost seconds; such a file is unidentified, so results that depend on it are not cached.
+const MAX_UNPINNED_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
 /// How long a failed download is remembered. An offline host otherwise spends the whole retry
 /// budget (about 93 s) per language on every image.
 const FAILURE_TTL: Duration = Duration::from_secs(60);
@@ -440,13 +445,14 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
     Some(digest)
 }
 
-/// The SHA-256 of the regular file at `path`, of any size, as [`memoized_sha256`] reads it.
+/// The SHA-256 of the regular file at `path`, as [`memoized_sha256`] reads it; `None` above
+/// [`MAX_UNPINNED_MODEL_BYTES`].
 ///
 /// The identity of a pack that is no pinned one: unlike a stamp, it survives a chmod, hard link,
 /// restore or remount of the same bytes, and off Unix it sees a replacement that keeps the size
 /// and modification time.
 pub(crate) fn content_sha256(path: &Path) -> Option<String> {
-    memoized_sha256(path, u64::MAX)
+    memoized_sha256(path, MAX_UNPINNED_MODEL_BYTES)
 }
 
 /// The pinned language packs of `model`, sorted by language code.
@@ -1180,6 +1186,24 @@ mod tests {
         assert_eq!(
             pins.pack_identity("eng", &pack),
             PackIdentity::Pinned(VerifiedSet::Fast, fast_digest.as_str())
+        );
+    }
+
+    // ~keep A sparse file costs no disk on Unix file systems; NTFS would allocate the whole length.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_above_the_unpinned_model_ceiling_has_no_content_digest() {
+        let directory = tempfile::tempdir().unwrap();
+        let pack = directory.path().join("custom.traineddata");
+        let file = std::fs::File::create(&pack).unwrap();
+        file.set_len(super::MAX_UNPINNED_MODEL_BYTES + 1).unwrap();
+        drop(file);
+
+        assert_eq!(super::content_sha256(&pack), None);
+        std::fs::write(&pack, b"custom model").unwrap();
+        assert_eq!(
+            super::content_sha256(&pack),
+            Some(hex::encode(Sha256::digest(b"custom model")))
         );
     }
 
