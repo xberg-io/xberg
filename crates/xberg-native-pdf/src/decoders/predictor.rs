@@ -207,19 +207,19 @@ pub fn decode_predictor(data: &[u8], params: &DecodeParams) -> Result<Vec<u8>> {
 
 /// Decode TIFF Predictor 2.
 ///
-/// TIFF Predictor 2 encodes the difference between adjacent samples in the same row.
+/// Each sample is the difference from the same component of the previous pixel in its row
+/// (ISO 32000-1 §7.4.4.3, TIFF 6.0 §14). Arithmetic runs at the real bit depth: bytes for 8-bit
+/// components, big-endian 16-bit values for 16-bit components, and packed samples modulo
+/// 2^bits for 1, 2 and 4-bit components. Rows are independent; padding bits at the end of a
+/// sub-byte row are kept as they are.
 fn decode_tiff_predictor(data: &[u8], params: &DecodeParams) -> Result<Vec<u8>> {
     let bytes_per_row = params.checked_pixel_bytes_per_row()?;
     let colors = params.colors;
+    let bits = params.bits_per_component;
 
-    // Each row starts with `colors` unchanged bytes (see the push loop below),
-    // so a row that is narrower than the declared component count would index
-    // past `row_data`'s end. E.g. `/Colors 4 /BitsPerComponent 1 /Columns 1`
-    // gives bytes_per_row = 1 but colors = 4. ~keep
-    if colors > bytes_per_row {
+    if !matches!(bits, 1 | 2 | 4 | 8 | 16) {
         return Err(Error::Decode(format!(
-            "Predictor /Colors {colors} exceeds the {bytes_per_row}-byte row implied by /Columns and \
-             /BitsPerComponent"
+            "TIFF predictor does not support /BitsPerComponent {bits}"
         )));
     }
 
@@ -231,18 +231,37 @@ fn decode_tiff_predictor(data: &[u8], params: &DecodeParams) -> Result<Vec<u8>> 
         )));
     }
 
-    let mut output = Vec::with_capacity(data.len());
+    let mut output = data.to_vec();
+    // `checked_pixel_bytes_per_row` proved columns * colors does not overflow.
+    let samples_per_row = params.columns * colors;
 
-    for row_data in data.chunks(bytes_per_row) {
-        // First pixel in row is unchanged ~keep
-        for i in 0..colors {
-            output.push(row_data[i]);
-        }
-
-        // Subsequent pixels: add left neighbor ~keep
-        for i in colors..row_data.len() {
-            let left = output[output.len() - colors];
-            output.push(row_data[i].wrapping_add(left));
+    for row in output.chunks_exact_mut(bytes_per_row) {
+        match bits {
+            8 => {
+                for i in colors..samples_per_row {
+                    row[i] = row[i].wrapping_add(row[i - colors]);
+                }
+            }
+            16 => {
+                for i in colors..samples_per_row {
+                    let left = u16::from_be_bytes([row[2 * (i - colors)], row[2 * (i - colors) + 1]]);
+                    let delta = u16::from_be_bytes([row[2 * i], row[2 * i + 1]]);
+                    row[2 * i..2 * i + 2].copy_from_slice(&delta.wrapping_add(left).to_be_bytes());
+                }
+            }
+            _ => {
+                let mask = (1u8 << bits) - 1;
+                let sample = |row: &[u8], index: usize| {
+                    let bit = index * bits;
+                    (row[bit / 8] >> (8 - bits - bit % 8)) & mask
+                };
+                for i in colors..samples_per_row {
+                    let sum = sample(row, i).wrapping_add(sample(row, i - colors)) & mask;
+                    let bit = i * bits;
+                    let shift = 8 - bits - bit % 8;
+                    row[bit / 8] = (row[bit / 8] & !(mask << shift)) | (sum << shift);
+                }
+            }
         }
     }
 
@@ -529,5 +548,110 @@ mod tests {
         // 0xFE (0xFF + 0xFF). The per-row tag=None must suppress that. ~keep
         assert_eq!(result.len(), 710);
         assert!(result.iter().all(|&b| b == 0xFF));
+    }
+
+    fn tiff_params(columns: usize, colors: usize, bits_per_component: usize) -> DecodeParams {
+        DecodeParams {
+            predictor: 2,
+            columns,
+            colors,
+            bits_per_component,
+        }
+    }
+
+    #[test]
+    fn test_tiff_predictor_8bit_rgb_steps_by_component() {
+        // Row 1: (10,20,30) then +(1,2,3), +(255,255,255) wraps. Row 2 starts fresh.
+        let encoded = [10, 20, 30, 1, 2, 3, 255, 255, 255, 5, 6, 7, 1, 1, 1, 1, 1, 1];
+        assert_eq!(
+            decode_predictor(&encoded, &tiff_params(3, 3, 8)).unwrap(),
+            vec![10, 20, 30, 11, 22, 33, 10, 21, 32, 5, 6, 7, 6, 7, 8, 7, 8, 9]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_16bit_gray_carries_across_byte_pair() {
+        // 0x00FF + 0x0001 = 0x0100 (carry into the high byte); 0x0100 + 0xFFFF wraps to 0x00FF.
+        let encoded = [0x00, 0xFF, 0x00, 0x01, 0xFF, 0xFF];
+        assert_eq!(
+            decode_predictor(&encoded, &tiff_params(3, 1, 16)).unwrap(),
+            vec![0x00, 0xFF, 0x01, 0x00, 0x00, 0xFF]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_16bit_rgb_steps_by_component() {
+        let encoded = [
+            0x01, 0x00, 0x02, 0x00, 0x03, 0x00, // pixel 0
+            0x00, 0xFF, 0x00, 0x01, 0xFF, 0xFF, // deltas
+        ];
+        assert_eq!(
+            decode_predictor(&encoded, &tiff_params(2, 3, 16)).unwrap(),
+            vec![0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x01, 0xFF, 0x02, 0x01, 0x02, 0xFF]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_1bit_gray_accumulates_modulo_two() {
+        // Samples 1,1,0,1,1,1,0,1 become running XOR 1,0,0,1,0,1,1,0.
+        assert_eq!(
+            decode_predictor(&[0b1101_1101], &tiff_params(8, 1, 1)).unwrap(),
+            vec![0b1001_0110]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_2bit_gray_accumulates_modulo_four() {
+        // 1,3,2,3 -> 1, (3+1)%4=0, (2+0)%4=2, (3+2)%4=1. ~keep
+        assert_eq!(
+            decode_predictor(&[0b01_11_10_11], &tiff_params(4, 1, 2)).unwrap(),
+            vec![0b01_00_10_01]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_4bit_gray_accumulates_modulo_sixteen() {
+        // 0xF,0x2,0x3 -> 0xF, (2+F)%16=1, (3+1)=4; the padding nibble stays 0. ~keep
+        assert_eq!(
+            decode_predictor(&[0xF2, 0x30], &tiff_params(3, 1, 4)).unwrap(),
+            vec![0xF1, 0x40]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_4bit_two_components_step_by_component() {
+        // Pixels (1,2) (3,4) (F,F): components accumulate independently -> (1,2) (4,6) (3,5). ~keep
+        assert_eq!(
+            decode_predictor(&[0x12, 0x34, 0xFF], &tiff_params(3, 2, 4)).unwrap(),
+            vec![0x12, 0x46, 0x35]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_sub_byte_rows_are_independent() {
+        // 3 columns of 2-bit gray = 6 bits, 2 padding bits per row.
+        assert_eq!(
+            decode_predictor(&[0b01_01_01_00, 0b10_10_10_11], &tiff_params(3, 1, 2)).unwrap(),
+            vec![0b01_10_11_00, 0b10_00_10_11]
+        );
+    }
+
+    #[test]
+    fn test_tiff_predictor_truncated_final_row_fails_closed_without_panic() {
+        for params in [tiff_params(3, 3, 8), tiff_params(2, 1, 16), tiff_params(8, 1, 4)] {
+            let row = params.checked_pixel_bytes_per_row().unwrap();
+            let data = vec![1u8; row + row - 1];
+            assert!(decode_predictor(&data, &params).is_err());
+            assert!(decode_predictor(&data[..1], &params).is_err());
+        }
+    }
+
+    #[test]
+    fn test_tiff_predictor_rejects_degenerate_and_unsupported_params() {
+        assert!(decode_predictor(&[0; 4], &tiff_params(0, 1, 8)).is_err());
+        assert!(decode_predictor(&[0; 4], &tiff_params(4, 0, 8)).is_err());
+        assert!(decode_predictor(&[0; 4], &tiff_params(4, 1, 0)).is_err());
+        assert!(decode_predictor(&[0; 4], &tiff_params(usize::MAX, 2, 8)).is_err());
+        assert!(decode_predictor(&[0; 4], &tiff_params(4, 1, 3)).is_err());
     }
 }
