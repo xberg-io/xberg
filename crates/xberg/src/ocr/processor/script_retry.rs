@@ -97,32 +97,41 @@ pub(crate) fn outer_han_retry_models(
 /// the same value.
 ///
 /// A memo-only run that missed the memo records nothing: its answer is discarded and computed
-/// again where files may be read.
+/// again where files may be read. Any other run that cannot identify a pack makes the operation
+/// uncacheable, since nothing would key a result read with that pack.
 fn observe_han_retry_models(directories: &[SearchDir], language: &str) -> HanRetryModels {
+    observe_han_retry_models_with(directories, language, |hash, directory, models| {
+        super::validation::hash_pack_identities(hash, directory, models.iter().copied())
+    })
+}
+
+fn observe_han_retry_models_with(
+    directories: &[SearchDir],
+    language: &str,
+    identify: impl Fn(&mut blake3::Hasher, &Path, &[&str]) -> bool,
+) -> HanRetryModels {
     if !supports_retry_language(language) {
         return HanRetryModels::Absent;
     }
     let han = retry_list(language, HAN_MODEL);
-    let identity = match retry_directories(directories, &han) {
-        None => None,
-        Some((osd, recognition)) => {
-            // ~keep PSM 0, 1 and 12 also load OSD from the recognition directory.
-            let recognition_models: Vec<&str> = han.iter().map(String::as_str).chain(["osd"]).collect();
-            let mut hash = blake3::Hasher::new();
-            let mut identified = true;
-            for (directory, models) in [(&osd, vec!["osd"]), (&recognition, recognition_models)] {
-                hash.update(&(directory.len() as u64).to_le_bytes());
-                hash.update(directory.as_bytes());
-                identified &= super::validation::hash_pack_identities(&mut hash, Path::new(directory), models);
-            }
-            if !identified {
-                return HanRetryModels::Unidentified;
-            }
-            Some(hash.finalize())
+    let mut identified = true;
+    let identity = retry_directories(directories, &han).map(|(osd, recognition)| {
+        // ~keep PSM 0, 1 and 12 also load OSD from the recognition directory.
+        let recognition_models: Vec<&str> = han.iter().map(String::as_str).chain(["osd"]).collect();
+        let mut hash = blake3::Hasher::new();
+        for (directory, models) in [(&osd, vec!["osd"]), (&recognition, recognition_models)] {
+            hash.update(&(directory.len() as u64).to_le_bytes());
+            hash.update(directory.as_bytes());
+            identified &= identify(&mut hash, Path::new(directory), &models);
         }
-    };
+        hash.finalize()
+    });
     #[cfg(not(target_arch = "wasm32"))]
     if crate::ocr::tessdata_download::memo_only_run_missed() {
+        return HanRetryModels::Unidentified;
+    }
+    if !identified {
+        cacheability::invalidate_current();
         return HanRetryModels::Unidentified;
     }
     let paths: Vec<String> = directories.iter().map(|directory| directory.path.clone()).collect();
@@ -554,6 +563,55 @@ fn outer_han_retry_identity_is_answered_without_reading_until_a_pack_changes() {
     let second = identity();
     assert_ne!(second, first);
     assert_eq!(without_reading_packs(identity), Some(second));
+}
+
+#[tokio::test]
+async fn an_unidentifiable_han_retry_pack_makes_the_operation_uncacheable() {
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    for name in ["eng", "osd", "chi_sim"] {
+        std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+    }
+    cacheability::scope(async {
+        assert!(matches!(
+            observe_han_retry_models(&directories, "eng"),
+            HanRetryModels::Identified(_)
+        ));
+        assert!(cacheability::is_cacheable());
+        assert_eq!(
+            observe_han_retry_models_with(&directories, "eng", |_, _, models| !models.contains(&HAN_MODEL)),
+            HanRetryModels::Unidentified
+        );
+        assert!(
+            !cacheability::is_cacheable(),
+            "nothing would key a result read with that pack"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn a_memo_only_miss_of_a_han_retry_pack_leaves_the_operation_cacheable() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    for name in ["eng", "osd", "chi_sim"] {
+        std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+    }
+
+    cacheability::scope(async {
+        std::fs::write(root.path().join("chi_sim.traineddata"), b"chi_sim, not read yet").unwrap();
+        assert_eq!(
+            without_reading_packs(|| observe_han_retry_models(&directories, "eng")),
+            None
+        );
+        assert!(
+            cacheability::is_cacheable(),
+            "the miss is computed again where reads are allowed"
+        );
+    })
+    .await;
 }
 
 #[test]
