@@ -728,4 +728,11 @@ fn wordperfect_repeated_header_is_emitted_once_and_a_header_table_takes_the_head
         })
         .count();
     assert_eq!(body_tables, 0);
+    let position = |text: &str| internal.elements.iter().position(|e| e.text == text).unwrap();
+    let table_at = internal
+        .elements
+        .iter()
+        .position(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }))
+        .unwrap();
+    assert!(table_at > position("Body text."), "the header table follows the body");
 }

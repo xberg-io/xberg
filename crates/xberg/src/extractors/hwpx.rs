@@ -223,25 +223,33 @@ fn collect_section_furniture<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -
         };
         let mut reader = EntityReader::from_str(&xml);
         let mut layer: Option<ContentLayer> = None;
-        let mut paragraph_depth = 0usize;
         let mut in_text = false;
-        let mut paragraph = String::new();
+        // One buffer per open paragraph, so a paragraph nested in a table cell does not run
+        // into the text around it.
+        let mut open_paragraphs: Vec<String> = Vec::new();
         let mut paragraphs: Vec<String> = Vec::new();
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                     "header" => layer = Some(ContentLayer::Header),
                     "footer" => layer = Some(ContentLayer::Footer),
-                    "p" if layer.is_some() => paragraph_depth += 1,
+                    "p" if layer.is_some() => open_paragraphs.push(String::new()),
                     "t" if layer.is_some() => in_text = true,
+                    "tab" if in_text => open_paragraphs.last_mut().into_iter().for_each(|p| p.push(' ')),
                     _ => {}
                 },
-                Ok(Event::Text(t)) if in_text => paragraph.push_str(&std::borrow::Cow::Borrowed(t.as_ref())),
+                Ok(Event::Empty(e)) if in_text && local_name(e.name().as_ref()) == "tab" => {
+                    open_paragraphs.last_mut().into_iter().for_each(|p| p.push(' '));
+                }
+                Ok(Event::Text(t)) if in_text => {
+                    if let Some(paragraph) = open_paragraphs.last_mut() {
+                        paragraph.push_str(&std::borrow::Cow::Borrowed(t.as_ref()));
+                    }
+                }
                 Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                     "t" => in_text = false,
                     "p" if layer.is_some() => {
-                        paragraph_depth = paragraph_depth.saturating_sub(1);
-                        let text = std::mem::take(&mut paragraph);
+                        let text = open_paragraphs.pop().unwrap_or_default();
                         if !text.trim().is_empty() {
                             paragraphs.push(text.trim().to_string());
                         }
@@ -254,8 +262,7 @@ fn collect_section_furniture<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -
                         }
                         paragraphs.clear();
                         layer = None;
-                        paragraph_depth = 0;
-                        paragraph.clear();
+                        open_paragraphs.clear();
                     }
                     _ => {}
                 },
@@ -1138,6 +1145,26 @@ mod tests {
             .map(|e| e.text.as_str())
             .collect();
         assert_eq!(header, ["Alpha", "Beta", "Alpha"]);
+    }
+
+    #[test]
+    fn hwpx_furniture_scan_turns_a_tab_into_a_space_and_splits_nested_paragraphs() {
+        let xml = r#"<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p><hp:run><hp:ctrl><hp:header id="1"><hp:subList>
+    <hp:p><hp:run><hp:t>Company<hp:tab/>Page 1</hp:t></hp:run></hp:p>
+    <hp:p><hp:run><hp:t>Title</hp:t><hp:tbl><hp:tr><hp:tc><hp:subList><hp:p><hp:run><hp:t>Cell</hp:t></hp:run></hp:p></hp:subList></hp:tc></hp:tr></hp:tbl></hp:run></hp:p>
+  </hp:subList></hp:header></hp:ctrl></hp:run></hp:p>
+</hs:sec>"#;
+        let package = hwpx_package(&[("Contents/section0.xml", xml)]);
+        let mut archive = zip::ZipArchive::new(Cursor::new(package)).unwrap();
+        let found = collect_section_furniture(&mut archive);
+        assert_eq!(
+            found,
+            vec![(
+                ContentLayer::Header,
+                vec!["Company Page 1".to_string(), "Cell".to_string(), "Title".to_string()]
+            )]
+        );
     }
 
     #[test]

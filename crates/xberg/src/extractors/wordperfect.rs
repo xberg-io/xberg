@@ -290,6 +290,8 @@ struct WpdWalker<'a> {
     note_counter: u32,
     /// Header and footer paragraphs, pushed after the body so their text follows it.
     furniture: Vec<(String, Vec<TextAnnotation>, ContentLayer)>,
+    /// Tables completed inside a header or footer, pushed after the body with the paragraphs.
+    furniture_tables: Vec<(TableBuilder, ContentLayer)>,
 }
 
 impl<'a> WpdWalker<'a> {
@@ -305,6 +307,7 @@ impl<'a> WpdWalker<'a> {
             diversions: Vec::new(),
             note_counter: 0,
             furniture: Vec::new(),
+            furniture_tables: Vec::new(),
         }
     }
 
@@ -557,6 +560,9 @@ impl<'a> WpdWalker<'a> {
             let idx = self.builder.push_paragraph(&text, annotations, None, None);
             self.builder.set_layer(idx, layer);
         }
+        for (table, layer) in std::mem::take(&mut self.furniture_tables) {
+            self.push_table(&table, Some(layer));
+        }
     }
 
     /// Handles the table-structure events (`TableStart`..`TableEnd`), returning `true` if
@@ -618,13 +624,20 @@ impl<'a> WpdWalker<'a> {
         if t.rows.is_empty() {
             return;
         }
-        let idx = self.builder.push_table_from_cells(&t.rows, None, None);
         let furniture_layer = self.diversions.iter().rev().find_map(|d| match d.kind {
             DiversionKind::Header => Some(ContentLayer::Header),
             DiversionKind::Footer => Some(ContentLayer::Footer),
             _ => None,
         });
-        if let Some(layer) = furniture_layer {
+        match furniture_layer {
+            Some(layer) => self.furniture_tables.push((t, layer)),
+            None => self.push_table(&t, None),
+        }
+    }
+
+    fn push_table(&mut self, t: &TableBuilder, layer: Option<ContentLayer>) {
+        let idx = self.builder.push_table_from_cells(&t.rows, None, None);
+        if let Some(layer) = layer {
             self.builder.set_layer(idx, layer);
         }
         if !t.header_row_indices.is_empty() {
