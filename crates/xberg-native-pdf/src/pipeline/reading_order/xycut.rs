@@ -2604,6 +2604,9 @@ impl XYCutStrategy {
         let full_width_left_rows = left
             .iter()
             .filter(|&&i| {
+                if header.contains(&i) {
+                    return false;
+                }
                 let s = &all_spans[i];
                 let nonws = s.text.chars().filter(|c| !c.is_whitespace()).count().max(1) as f32;
                 let approx_char_width = (s.font_size * 0.45).max(2.5);
@@ -3611,6 +3614,54 @@ mod tests {
             .expect("a gutter between the columns is cut once the title is read first");
         assert!(left.contains(&0) && left.contains(&1), "title stays together: {left:?}");
         assert_eq!(left.len() + right.len(), spans.len());
+    }
+
+    /// A header line as wide as a table row must not trip the table-row guard.
+    #[test]
+    fn column_split_ignores_wide_header_lines_in_the_table_row_guard_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = Vec::new();
+        let mut header = Vec::new();
+        for y in [700.0, 688.0, 676.0] {
+            header.push(spans.len());
+            spans.push(make_span_text(70.0, y, 250.0, 10.0, &text_of(60, 'T'), 10.0));
+        }
+        let (mut left, mut right) = (Vec::new(), Vec::new());
+        for row in 0..8 {
+            let y = 640.0 - 11.0 * row as f32;
+            left.push(spans.len());
+            spans.push(make_span_text(54.0, y, 140.0, 8.4, &text_of(30, 'l'), 8.5));
+            right.push(spans.len());
+            spans.push(make_span_text(215.0, y, 135.0, 8.4, &text_of(30, 'r'), 8.5));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
+            .expect("header lines are not table rows");
+        assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
+    }
+
+    /// Prose crossing the gutter below the point where one column has started is not a header:
+    /// reading it before the upper right-column lines would reorder the page.
+    #[test]
+    fn column_split_declines_crossing_lines_below_an_existing_column_start_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = Vec::new();
+        for y in [400.0, 388.0] {
+            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
+        }
+        for y in [370.0, 358.0] {
+            spans.push(make_span_text(60.0, y, 480.0, 8.4, &text_of(100, 'p'), 8.5));
+        }
+        for row in 0..8 {
+            let y = 330.0 - 11.0 * row as f32;
+            spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
+            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        assert!(strategy.find_column_cut(&spans, &indices, None).is_none());
     }
 
     #[test]
