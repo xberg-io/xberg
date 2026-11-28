@@ -11,4 +11,5 @@ d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6  onnxruntime-os
 # NuGet fallback when the GitHub release is unavailable: Microsoft.ML.OnnxRuntime packages.
 # https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/<version>/microsoft.ml.onnxruntime.<version>.nupkg
 782564d3d68e87269ea1812cc94710ad06fe014faf093f01a6f89d0bd58719d3  microsoft.ml.onnxruntime.1.24.2.nupkg
+a9150bc2992cbbb6722070da9910e1ffa989a8bfc67bdd5bb8e745ca755641db  microsoft.ml.onnxruntime.1.32.0.nupkg
 25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a  microsoft.ml.onnxruntime.1.23.2.nupkg
