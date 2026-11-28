@@ -49,16 +49,12 @@ const SKIP_DESTINATIONS: &[&str] = &[
     "wgrffmtfilter",
     "fcharset",
     "pgdsctbl",
-    // Running headers and footers are captured separately by the formatting
-    // pass; left in, their text would also print inline in the body.
-    "header",
-    "headerl",
-    "headerr",
-    "headerf",
-    "footer",
-    "footerl",
-    "footerr",
-    "footerf",
+];
+
+/// Running headers and footers. The formatting pass captures them; left in, their text
+/// would also print inline in the body. Nothing inside them is captured either.
+const FURNITURE_DESTINATIONS: &[&str] = &[
+    "header", "headerl", "headerr", "headerf", "footer", "footerl", "footerr", "footerf",
 ];
 
 #[derive(Default)]
@@ -84,6 +80,8 @@ struct TextScope {
     font_charsets: HashMap<u16, u32>,
     group_depth: i32,
     skip_depth: i32,
+    /// Group depth of the header or footer group being skipped, or `0`.
+    furniture_depth: i32,
     expect_destination: bool,
     ignorable_pending: bool,
     picture_groups: Vec<PictureGroupState>,
@@ -289,6 +287,9 @@ impl TextParser {
         pop_scope(&mut self.scope.deleted_stack);
         pop_scope(&mut self.scope.ansi_codepage_stack);
         pop_scope(&mut self.scope.font_id_stack);
+        if self.scope.furniture_depth > 0 && self.scope.group_depth < self.scope.furniture_depth {
+            self.scope.furniture_depth = 0;
+        }
         if self.scope.skip_depth > 0 && self.scope.group_depth < self.scope.skip_depth {
             self.scope.skip_depth = 0;
         }
@@ -778,21 +779,35 @@ impl TextParser {
                 self.fields.fldrslt_depth = self.scope.group_depth;
                 self.fields.fldrslt_start = self.output.result.len();
             }
+            // Inside a group that is already skipped, such as a header or footer, the
+            // text is not captured, so it cannot reach the body.
             "footnote" => {
-                self.destinations.footnote.start(self.scope.group_depth);
+                if self.scope.furniture_depth == 0 {
+                    self.destinations.footnote.start(self.scope.group_depth);
+                }
                 self.start_skip();
             }
             "shptxt" => {
-                self.destinations.shptxt.start(self.scope.group_depth);
+                if self.scope.furniture_depth == 0 {
+                    self.destinations.shptxt.start(self.scope.group_depth);
+                }
                 self.start_skip();
             }
             "annotation" => {
-                self.destinations.annotation.start(self.scope.group_depth);
+                if self.scope.furniture_depth == 0 {
+                    self.destinations.annotation.start(self.scope.group_depth);
+                }
                 self.start_skip();
             }
             "atnid" => {
                 if let Some(id) = param {
                     self.destinations.pending_atnid = Some(id);
+                }
+                self.start_skip();
+            }
+            word if FURNITURE_DESTINATIONS.contains(&word) => {
+                if self.scope.furniture_depth == 0 {
+                    self.scope.furniture_depth = self.scope.group_depth;
                 }
                 self.start_skip();
             }

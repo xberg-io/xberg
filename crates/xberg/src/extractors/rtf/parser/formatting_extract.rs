@@ -461,6 +461,11 @@ impl FormattingParser {
                     *uc = value.max(0) as u8;
                 }
             }
+            "plain" => {
+                if let Some(hidden) = self.scope.hidden_stack.last_mut() {
+                    *hidden = false;
+                }
+            }
             "v" => {
                 if let Some(hidden) = self.scope.hidden_stack.last_mut() {
                     *hidden = param.unwrap_or(1) != 0;

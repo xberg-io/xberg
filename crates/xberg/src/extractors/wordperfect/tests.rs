@@ -679,3 +679,53 @@ fn wordperfect_document_with_no_content_is_an_error() {
     };
     assert!(finish_wordperfect_document(&empty, "application/vnd.wordperfect", &ExtractionConfig::default()).is_err());
 }
+
+#[test]
+fn wordperfect_repeated_header_is_emitted_once_and_a_header_table_takes_the_header_layer() {
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Same".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Same".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::HeaderStart,
+            WpdEvent::TableStart,
+            WpdEvent::RowStart { header: false },
+            WpdEvent::CellStart {
+                column: 0,
+                col_span: 1,
+                row_span: 1,
+            },
+            WpdEvent::Text("Cell".to_string()),
+            WpdEvent::CellEnd,
+            WpdEvent::RowEnd,
+            WpdEvent::TableEnd,
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    let internal = build_wordperfect_internal_document(&doc);
+    let headers: Vec<_> = internal
+        .elements
+        .iter()
+        .filter(|e| e.layer == ContentLayer::Header)
+        .collect();
+    assert_eq!(headers.iter().filter(|e| e.text == "Same").count(), 1);
+    assert!(
+        headers
+            .iter()
+            .any(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }))
+    );
+    let body_tables = internal
+        .elements
+        .iter()
+        .filter(|e| {
+            e.layer == ContentLayer::Body && matches!(e.kind, crate::types::internal::ElementKind::Table { .. })
+        })
+        .count();
+    assert_eq!(body_tables, 0);
+}

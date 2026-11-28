@@ -898,3 +898,16 @@ fn rtf_header_collapses_repeated_spaces_and_drops_hidden_text() {
     let rtf = r"{\rtf1{\header One   two {\v secret}three}Body}";
     assert_eq!(extract_rtf_formatting(rtf).header_texts, vec!["One two three"]);
 }
+
+#[test]
+fn rtf_header_plain_restores_text_hidden_by_v() {
+    let rtf = r"{\rtf1{\header \v secret\plain Visible}Body}";
+    assert_eq!(extract_rtf_formatting(rtf).header_texts, vec!["Visible"]);
+}
+
+#[test]
+fn rtf_text_box_inside_a_header_stays_out_of_the_body() {
+    let (text, ..) = extract_text_from_rtf(r"{\rtf1{\header {\shptxt Header box}}Body}", false);
+    assert!(!text.contains("Header box"), "{text}");
+    assert!(text.contains("Body"), "{text}");
+}

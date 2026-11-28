@@ -549,7 +549,11 @@ impl<'a> WpdWalker<'a> {
         while self.list_stack.pop().is_some() {
             self.builder.end_list();
         }
+        let mut seen: std::collections::HashSet<(bool, String)> = std::collections::HashSet::new();
         for (text, annotations, layer) in std::mem::take(&mut self.furniture) {
+            if !seen.insert((layer == ContentLayer::Header, text.trim().to_string())) {
+                continue;
+            }
             let idx = self.builder.push_paragraph(&text, annotations, None, None);
             self.builder.set_layer(idx, layer);
         }
@@ -615,6 +619,14 @@ impl<'a> WpdWalker<'a> {
             return;
         }
         let idx = self.builder.push_table_from_cells(&t.rows, None, None);
+        let furniture_layer = self.diversions.iter().rev().find_map(|d| match d.kind {
+            DiversionKind::Header => Some(ContentLayer::Header),
+            DiversionKind::Footer => Some(ContentLayer::Footer),
+            _ => None,
+        });
+        if let Some(layer) = furniture_layer {
+            self.builder.set_layer(idx, layer);
+        }
         if !t.header_row_indices.is_empty() {
             let header_rows = t
                 .header_row_indices
