@@ -78,18 +78,10 @@ Modeling of the dynamics of the matter autocorrelator for $(a) S = 1/2$ and $(b)
 
 times, leading to reducible classical dynamics whose sectors correspond to the gauge superselection sectors of the spin-S U(1) QLM (1). This motivates us to investigate whether DFL, well-established for the spin-S U(1) QLM, can also arise in this purely classical setting, in which case we can adjudge whether quantum interference effects are necessary for DFL to arise.
 
-**Localized dynamics from CAC.—** We now focus on the dynamics as calculated through CAC. We prepare an initial string C(0) with a domain-wall structure in the matter degrees of freedom, i.e., `\sigma_{j}(0)=\pm`1 on the left (right) half of the chain, and a uniform random configuration of the electric field variables $s_{j,j+1}$. We then let it evolve and average the observables of interest A over P N such different preparations hAi ≡ A(C(t))/N. {C(t)} The imbalance is then computed as follows X<sup>L</sup> 1
+**Localized dynamics from CAC.—** We now focus on the dynamics as calculated through CAC. We prepare an initial string C(0) with a domain-wall structure in the matter degrees of freedom, i.e., `\sigma_{j}(0)=\pm`1 on the left (right) half of the chain, and a uniform random configuration of the electric field variables $s_{j,j+1}$. We then let it evolve and average the observables of interest A over P N such different preparations hAi ≡ A(C(t))/N. {C(t)} The imbalance is then computed as follows
 
 $$
-I(t) = hσ (0)σ (t)i. (3)
+\mathcal{I}(t)=\frac{1}{L_{j=1}}^{X^{L}}h\sigma_{j}(0)\sigma_{j}(t)i.
 $$
 
-j j
-
-L
-
-$$
-j=1
-$$
-
-The corresponding dynamics is shown in Fig. 1b for a system of $L = 500$ sites and for $N = 8000$ for various values of S. We see that the imbalance settles into a plateau of finite value at intermediate times that persists for all in-
+(3) The corresponding dynamics is shown in Fig. 1b for a system of $L = 500$ sites and for $N = 8000$ for various values of S. We see that the imbalance settles into a plateau of finite value at intermediate times that persists for all in-

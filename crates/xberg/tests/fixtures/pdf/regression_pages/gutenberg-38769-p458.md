@@ -34,9 +34,15 @@ $$
 
 b/a ab
 
-y<sup>2</sup> − ab √ ( ) Z Z b/a
+y<sup>2</sup> − ab
 
-∞
+$$
+{}_{Z}\sqrt{(}
+$$
+
+) Z
+
+b/a ∞
 
 $1 y f(y) dx_{2} = f(y) p − 1$ dy, √
 

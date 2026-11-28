@@ -45,9 +45,9 @@ S~n~ = (4x + 14x<sup>2</sup> + 8x<sup>3</sup> + x<sup>4</sup>)e<sup>x</sup>. 4 n
 
 In particular the last series is equal to zero when $x = −2$. (Math. Trip. 1904.) P P P
 
-9. Prove that (n/n\!) = e, (n<sup>2</sup>/n\!) = 2e, (n<sup>3</sup>/n\!) = 5e, and that P
+9. Prove that (n/n\!) = e, (n<sup>2</sup>/n\!) = 2e, (n<sup>3</sup>/n\!) = 5e, and that
 
-(n<sup>k</sup>/n\!), where k is any positive integer, is a positive integral multiple of e.
+${}^{P}(n^{k}/n$\!), where k is any positive integer, is a positive integral multiple of e.
 
 ∞
 

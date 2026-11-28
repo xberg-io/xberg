@@ -22,37 +22,25 @@ $$
 
 The LS method solves the optimization problem by setting the derivatives of the misfit function for the unknown parameters to zero and then solving the resulting linear algebraic system:
 
-- Fourth-order tri-diagonal TDCCS (
+- Fourth-order tri-diagonal TDCCS
 
-∂E
-
-= 0,
-
-∂a
+${}^{(}\frac{\partial E}{\partial a}=0,$
 
 $$
 1+2\alpha+2\beta=a+b+c,b=0,c=0,\beta=0.
 $$
 
-- Sixth-order tri-diagonal TDCCS (
+- Sixth-order tri-diagonal TDCCS
 
-∂E ∂E
-
-= $0, = 0$,
-
-∂a ∂b
+${}^{(}\frac{\partial E}{\partial a}=0,\frac{\partial E}{\partial b}=0,$
 
 $$
 1+2\alpha+2\beta=a+b+c,c=0,\beta=0.
 $$
 
-- Eighth-order tri-diagonal TDCCS (
+- Eighth-order tri-diagonal TDCCS
 
-∂E ∂E ∂E
-
-= $0, = 0, = 0$,
-
-∂a ∂b ∂c
+${}^{(}\frac{\partial E}{\partial a}=0,\frac{\partial E}{\partial b}=0,\frac{\partial E}{\partial c}=0,$
 
 $$
 1+2\alpha+2\beta=a+b+c,\beta=0.
