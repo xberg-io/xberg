@@ -282,3 +282,8 @@ fn test_sort_text_boxes_single() {
     PaddleOcrEngine::sort_text_boxes(&mut boxes);
     assert_eq!(boxes.len(), 1);
 }
+
+#[test]
+fn an_engine_without_loaded_models_has_no_angle_classifier() {
+    assert!(!PaddleOcrEngine::new().has_angle_classifier());
+}

@@ -203,11 +203,7 @@ impl PaddleOcrEngine {
         dict_path: &str,
         num_thread: usize,
     ) -> Result<(), OcrError> {
-        self.db_net.init_model_on(backend, det_path, num_thread)?;
-        self.angle_net.init_model_on(backend, cls_path, num_thread)?;
-        self.crnn_net
-            .init_model_dict_file_on(backend, rec_path, num_thread, dict_path)?;
-        Ok(())
+        self.init_models_with_optional_classifier_on(backend, det_path, Some(cls_path), rec_path, dict_path, num_thread)
     }
 
     #[cfg(feature = "ort")]
@@ -241,13 +237,14 @@ impl PaddleOcrEngine {
         num_thread: usize,
         builder_fn: Option<fn(SessionBuilder) -> Result<SessionBuilder, ort::Error>>,
     ) -> Result<(), OcrError> {
-        self.db_net
-            .init_model_with_ort_builder(det_path, num_thread, builder_fn)?;
-        self.angle_net
-            .init_model_with_ort_builder(cls_path, num_thread, builder_fn)?;
-        self.crnn_net
-            .init_model_dict_file_with_ort_builder(rec_path, num_thread, builder_fn, dict_path)?;
-        Ok(())
+        self.init_models_with_optional_classifier_custom(
+            det_path,
+            Some(cls_path),
+            rec_path,
+            dict_path,
+            num_thread,
+            builder_fn,
+        )
     }
 
     pub fn init_models_from_memory(
@@ -986,6 +983,9 @@ impl PaddleOcrEngine {
 /// Backward-compatible name for [`PaddleOcrEngine`].
 #[deprecated(note = "use PaddleOcrEngine")]
 pub type OcrLite = PaddleOcrEngine;
+
+#[path = "ocr_lite/classifier.rs"]
+mod classifier;
 
 #[cfg(test)]
 #[path = "ocr_lite/tests.rs"]

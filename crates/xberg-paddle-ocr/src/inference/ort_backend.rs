@@ -4,6 +4,7 @@
 //! rest of the crate speaks only in [`Tensor`]s; `ort` types are referenced only here
 //! and in [`crate::base_net`]'s session-builder customization hook.
 
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
 use ndarray::{ArrayD, IxDyn};
@@ -55,9 +56,32 @@ impl OrtBackend {
         num_thread: usize,
         builder_fn: Option<fn(SessionBuilder) -> Result<SessionBuilder, ort::Error>>,
     ) -> Result<Self, OcrError> {
+        Self::build(num_thread, builder_fn, |builder| {
+            builder.commit_from_memory(model_bytes)
+        })
+    }
+
+    /// Build a session from an ONNX file that ONNX Runtime reads itself.
+    ///
+    /// The same session [`Self::load`] builds from the file's bytes. Parsing a buffer keeps the
+    /// whole file in memory beside ONNX Runtime's own copy of the model until the session is
+    /// built; here the parser streams the file, so the model is never held twice.
+    pub(crate) fn load_file(
+        model_path: &Path,
+        num_thread: usize,
+        builder_fn: Option<fn(SessionBuilder) -> Result<SessionBuilder, ort::Error>>,
+    ) -> Result<Self, OcrError> {
+        Self::build(num_thread, builder_fn, |builder| builder.commit_from_file(model_path))
+    }
+
+    fn build(
+        num_thread: usize,
+        builder_fn: Option<fn(SessionBuilder) -> Result<SessionBuilder, ort::Error>>,
+        commit: impl FnOnce(&mut SessionBuilder) -> Result<Session, ort::Error>,
+    ) -> Result<Self, OcrError> {
         let session = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut builder = Self::session_builder(num_thread, builder_fn)?;
-            builder.commit_from_memory(model_bytes).map_err(OcrError::from)
+            commit(&mut builder).map_err(OcrError::from)
         }))
         .map_err(|_| OcrError::Ort(ort::Error::new("ORT session initialization panicked")))??;
         Ok(Self {
@@ -196,6 +220,35 @@ mod tests {
         APPLIED_THREADS.with(|cell| cell.set(None));
         OrtBackend::session_builder(3, Some(identity_builder)).expect("session builder");
         assert_eq!(APPLIED_THREADS.with(|cell| cell.get()), Some(3));
+    }
+
+    /// A unique scratch path; the crate has no temp-file dev-dependency.
+    fn scratch_model_path(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("xberg-paddle-ocr-{}-{name}.onnx", std::process::id()))
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_model_fails_to_load_like_its_bytes_do() {
+        let path = scratch_model_path("not-a-model");
+        std::fs::write(&path, b"not an ONNX model").expect("write the scratch file");
+
+        let from_file = OrtBackend::load_file(&path, 1, None).err();
+        let from_memory = OrtBackend::load(b"not an ONNX model", 1, None).err();
+        let _ = std::fs::remove_file(&path);
+
+        for error in [from_file, from_memory] {
+            let error = error.expect("garbage is not a model");
+            assert!(matches!(error, OcrError::Ort(_)), "{error:?}");
+        }
+    }
+
+    #[test]
+    fn a_missing_model_file_fails_to_load() {
+        let error = OrtBackend::load_file(&scratch_model_path("missing"), 1, None)
+            .err()
+            .expect("a missing file is not a model");
+
+        assert!(matches!(error, OcrError::Ort(_)), "{error:?}");
     }
 
     #[test]

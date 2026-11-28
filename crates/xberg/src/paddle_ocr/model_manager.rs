@@ -591,7 +591,7 @@ impl ModelManager {
     /// Cache status of every artifact a run with the given version, script
     /// family, and tier would need — WITHOUT downloading.
     ///
-    /// Mirrors the resolution arms of [`Self::ensure_shared_models_versioned`]
+    /// Mirrors the resolution arms of [`Self::ensure_det_model_versioned`]
     /// and [`Self::resolve_rec_model_versioned`] so doctor reports on exactly
     /// the files the runtime would request. Invalid version/tier/family
     /// combinations error the same way the runtime would.
@@ -954,13 +954,6 @@ impl ModelManager {
         self.hf_download(V2_DOC_ORI_MODEL.remote_filename, V2_DOC_ORI_MODEL.sha256_checksum)
     }
 
-    /// Ensures shared models (det + cls) are cached for the given tier.
-    pub(crate) fn ensure_shared_models(&self, tier: &str) -> Result<SharedModelPaths, XbergError> {
-        let det_model = self.ensure_v2_det_model(tier)?;
-        let cls_model = self.ensure_v2_cls_model()?;
-        Ok(SharedModelPaths { det_model, cls_model })
-    }
-
     /// Resolves the recognition model for a script family and tier.
     ///
     /// Returns the model directory, dict file path, and a model key for
@@ -1047,23 +1040,27 @@ impl ModelManager {
         })
     }
 
-    /// Ensures shared models (det + cls) for the given model version and tier.
+    /// Ensures the detection model for the given model version and tier is cached locally.
     ///
-    /// For `pp-ocrv6` the detector comes from the v6 tree (`medium`/`small`/`tiny`) while the
-    /// classifier reuses the PP-LCNet textline-orientation model (v6 ships no dedicated cls).
-    /// Any other version resolves to the PP-OCRv5 shared models.
-    pub(crate) fn ensure_shared_models_versioned(
-        &self,
-        version: &str,
-        tier: &str,
-    ) -> Result<SharedModelPaths, XbergError> {
+    /// For `pp-ocrv6` the detector comes from the v6 tree (`medium`/`small`/`tiny`); any other
+    /// version resolves to the PP-OCRv5 detector. Reads that never run the angle classifier stop
+    /// here, so they neither download nor hash it (see [`Self::ensure_v2_cls_model`]; v6 ships no
+    /// dedicated classifier and reuses the PP-LCNet textline-orientation model).
+    pub(crate) fn ensure_det_model_versioned(&self, version: &str, tier: &str) -> Result<PathBuf, XbergError> {
         if version == "pp-ocrv6" {
-            let det_model = self.ensure_v6_det_model(tier)?;
-            let cls_model = self.ensure_v2_cls_model()?;
-            Ok(SharedModelPaths { det_model, cls_model })
+            self.ensure_v6_det_model(tier)
         } else {
-            self.ensure_shared_models(tier)
+            self.ensure_v2_det_model(tier)
         }
+    }
+
+    /// The pinned SHA-256 of the catalog artifact stored at `path`, found by the logical path the
+    /// artifact has below the Hub snapshot.
+    pub(crate) fn pinned_sha256(path: &std::path::Path) -> Option<String> {
+        Self::manifest()
+            .into_iter()
+            .find(|entry| path.ends_with(&entry.relative_path))
+            .map(|entry| entry.sha256)
     }
 
     /// Resolves the recognition model for a script family, model version, and tier.
@@ -1151,6 +1148,25 @@ mod tests {
             assert!(hit.contains("failed checksum verification"), "{name}: {hit}");
             assert!(hit.contains(&format!("@{revision}")), "{name}: {hit}");
         }
+    }
+
+    #[test]
+    fn a_catalog_artifact_path_resolves_to_its_pinned_checksum() {
+        let det = ModelManager::new(PathBuf::from("/cache")).manifest_cache_path("v6/det/small/model.onnx");
+        assert_eq!(
+            ModelManager::pinned_sha256(&det).as_deref(),
+            Some(
+                V6_DET_MODELS
+                    .iter()
+                    .find(|d| d.tier == "small")
+                    .unwrap()
+                    .sha256_checksum
+            )
+        );
+        assert_eq!(
+            ModelManager::pinned_sha256(Path::new("/cache/unlisted/model.onnx")),
+            None
+        );
     }
 
     #[test]

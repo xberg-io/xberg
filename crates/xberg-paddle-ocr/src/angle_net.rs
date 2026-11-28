@@ -35,6 +35,11 @@ impl BaseNet for AngleNet {
 }
 
 impl AngleNet {
+    /// Whether a classifier model is loaded. Without one, only `do_angle = false` reads succeed.
+    pub fn is_initialized(&self) -> bool {
+        self.backend.is_some()
+    }
+
     pub fn get_angles(
         &self,
         part_imgs: &[image::RgbImage],
@@ -42,6 +47,11 @@ impl AngleNet {
         most_angle: bool,
         cls_thresh: f32,
     ) -> Result<Vec<Angle>, OcrError> {
+        // Checked before the loop so a read with no regions fails the same way as one with text.
+        if do_angle && self.backend.is_none() {
+            return Err(OcrError::SessionNotInitialized);
+        }
+
         let mut angles = Vec::with_capacity(part_imgs.len());
 
         if do_angle {
@@ -107,5 +117,71 @@ impl AngleNet {
         angle.index = angle_index;
         angle.score = max_value;
         angle
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct UprightClassifier;
+
+    impl ModelBackend for UprightClassifier {
+        fn name(&self) -> &str {
+            "stub"
+        }
+
+        fn run(&self, _input: inference::Tensor) -> Result<inference::Tensor, OcrError> {
+            Ok(ndarray::arr2(&[[0.99_f32, 0.01]]).into_dyn())
+        }
+    }
+
+    fn regions() -> Vec<image::RgbImage> {
+        vec![image::RgbImage::new(64, 16), image::RgbImage::new(32, 16)]
+    }
+
+    #[test]
+    fn a_read_without_angle_classification_needs_no_classifier() {
+        let net = AngleNet::new();
+        assert!(!net.is_initialized());
+
+        let angles = net
+            .get_angles(&regions(), false, false, 0.9)
+            .expect("no classifier is consulted");
+
+        assert_eq!(angles.len(), 2);
+        assert!(angles.iter().all(|angle| angle.index == 0 && angle.score == 0.0));
+    }
+
+    #[test]
+    fn angle_classification_without_a_classifier_fails_instead_of_skipping() {
+        let error = AngleNet::new()
+            .get_angles(&regions(), true, false, 0.9)
+            .expect_err("a missing classifier must not read as upright text");
+
+        assert!(matches!(error, OcrError::SessionNotInitialized));
+    }
+
+    #[test]
+    fn angle_classification_without_a_classifier_fails_with_no_regions() {
+        let error = AngleNet::new()
+            .get_angles(&[], true, false, 0.9)
+            .expect_err("a missing classifier fails whatever the page holds");
+
+        assert!(matches!(error, OcrError::SessionNotInitialized));
+    }
+
+    #[test]
+    fn a_loaded_classifier_scores_every_region() {
+        let mut net = AngleNet::new();
+        net.set_backend(Some(Box::new(UprightClassifier)));
+        assert!(net.is_initialized());
+
+        let angles = net
+            .get_angles(&regions(), true, false, 0.9)
+            .expect("the classifier runs");
+
+        assert_eq!(angles.len(), 2);
+        assert!(angles.iter().all(|angle| angle.index == 0 && angle.score == 0.99));
     }
 }
