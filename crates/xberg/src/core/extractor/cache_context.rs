@@ -100,11 +100,11 @@ async fn fingerprint_with_reader(
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
     let has_paddle_fallback = paddle_fallback_requested(dependencies);
     let has_tessdata = dependencies.iter().any(|dependency| !dependency.tessdata.is_empty());
-    // ~keep Tessdata identities and the script-retry context are stat calls once the memos hold
-    // the packs' digests and the vertical model's revision, so they skip the blocking-pool hop
-    // every cached PDF and image would pay. Orientation and PaddleOCR models are always read, and
-    // off Unix so is every pack, since no memo is kept there.
-    if (has_tessdata || has_script_retry)
+    // ~keep Once the pack digests and the vertical model's revision are memoized, the tessdata and
+    // script-retry contexts are stat calls and skip the blocking-pool hop. Orientation and Paddle
+    // models are always read, and off Unix so is every pack (no memo is kept), so it is not tried.
+    if cfg!(unix)
+        && (has_tessdata || has_script_retry)
         && !(has_orientation_models || has_paddle_fallback)
         && let Some(result) =
             crate::ocr::tessdata_download::without_reading_packs(|| retry_and_tessdata_context(dependencies, cancel))
