@@ -436,9 +436,9 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
 
 /// The SHA-256 of the regular file at `path`, of any size, as [`memoized_sha256`] reads it.
 ///
-/// Where a stamp is only the size and modification time, a replacement can keep both, so the
-/// identity of a pack that is no pinned one has to come from its bytes.
-#[cfg(not(unix))]
+/// The identity of a pack that is no pinned one: unlike a stamp, it survives a chmod, hard link,
+/// restore or remount of the same bytes, and off Unix it sees a replacement that keeps the size
+/// and modification time.
 pub(crate) fn content_sha256(path: &Path) -> Option<String> {
     memoized_sha256(path, u64::MAX)
 }

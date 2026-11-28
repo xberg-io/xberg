@@ -980,6 +980,33 @@ fn test_pack_identity_sees_a_replacement_that_keeps_size_and_modification_time()
     assert_ne!(identity(), first);
 }
 
+#[cfg(unix)]
+#[test]
+fn test_pack_identity_survives_a_permission_change_a_hard_link_and_a_restore() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let directory = tempfile::tempdir().unwrap();
+    let pack = directory.path().join("eng.traineddata");
+    std::fs::write(&pack, b"custom model").unwrap();
+    let identity = || {
+        let mut hasher = blake3::Hasher::new();
+        assert!(hash_pack_identities(&mut hasher, directory.path(), ["eng"]));
+        hasher.finalize()
+    };
+
+    let first = identity();
+    std::fs::set_permissions(&pack, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(identity(), first, "a chmod keeps the model");
+    std::fs::hard_link(&pack, directory.path().join("linked")).unwrap();
+    assert_eq!(identity(), first, "a hard link keeps the model");
+    replace_keeping_size_and_time(&pack, b"custom model");
+    assert_eq!(
+        identity(),
+        first,
+        "the same bytes restored to a new inode keep the model"
+    );
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_a_pinned_pack_written_again_with_the_same_bytes_keeps_its_identity() {

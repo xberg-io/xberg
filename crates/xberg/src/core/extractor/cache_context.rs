@@ -1114,6 +1114,8 @@ mod tests {
             .max_blocking_threads(1)
             .build()
             .unwrap();
+        // ~keep The pack's digest is read once, on the pool; later requests are answered from the memo.
+        runtime.block_on(fingerprint(&dependencies, None)).unwrap();
         let (started_tx, started_rx) = mpsc::sync_channel(1);
         let (release_tx, release_rx) = mpsc::sync_channel(1);
         let blocker = runtime.spawn_blocking(move || {

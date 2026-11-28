@@ -299,7 +299,7 @@ impl FileStamp {
         })
     }
 
-    #[cfg(any(unix, target_arch = "wasm32"))]
+    #[cfg(target_arch = "wasm32")]
     fn hash_into(&self, hasher: &mut blake3::Hasher) {
         hasher.update(&self.len.to_le_bytes());
         let (side, offset) = match self.modified.duration_since(std::time::UNIX_EPOCH) {
@@ -308,25 +308,19 @@ impl FileStamp {
         };
         hasher.update(&[side]);
         hasher.update(&offset.as_nanos().to_le_bytes());
-        #[cfg(unix)]
-        {
-            hasher.update(&self.inode.0.to_le_bytes());
-            hasher.update(&self.inode.1.to_le_bytes());
-            hasher.update(&self.changed.0.to_le_bytes());
-            hasher.update(&self.changed.1.to_le_bytes());
-        }
     }
 }
 
 /// Hash what identifies each language's model file in `directory`: the language, then for a
-/// pinned pack its set and pinned SHA-256, for any other file its [`FileStamp`] on Unix and its
-/// SHA-256 elsewhere, or that it is no regular file.
+/// pinned pack its set and pinned SHA-256, for any other file its SHA-256 (its [`FileStamp`] on
+/// WASM, which has no digest), or that it is no regular file. A stamp's device, inode and
+/// status-change time only decide when the bytes are read again, so a chmod, hard link, restore or
+/// remount of the same bytes keeps its keys.
 ///
 /// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
 /// and engines made from the old one, while a pinned pack written again with the same bytes (a
-/// remount, a copy, a re-adoption) keeps them. It costs a `stat` and, for a file of a pinned
-/// size, an `open` per language; a file it reads is read once per version on Unix and on every
-/// call elsewhere, as [`PinTables::classify`] does. Returns false when a file cannot be
+/// remount, a copy, a re-adoption) keeps them. It costs a `stat` and an `open` per language; a
+/// file is read once per version on Unix and on every call elsewhere, as [`PinTables::classify`] does. Returns false when a file cannot be
 /// identified: nothing keyed on it may be stored or reused.
 #[must_use]
 pub(crate) fn hash_pack_identities<'a>(
@@ -372,7 +366,7 @@ fn hash_pack_key(
     hasher: &mut blake3::Hasher,
     lang: &str,
     path: &Path,
-    metadata: &std::fs::Metadata,
+    _metadata: &std::fs::Metadata,
     pins: &PinTables<'_>,
 ) -> bool {
     use crate::ocr::tessdata_download::VerifiedSet;
@@ -388,20 +382,12 @@ fn hash_pack_key(
         hasher.update(digest.as_bytes());
         return true;
     }
-    #[cfg(unix)]
-    {
-        hash_stamp(hasher, metadata)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = metadata;
-        let Some(digest) = crate::ocr::tessdata_download::content_sha256(path) else {
-            return false;
-        };
-        hasher.update(&[4]);
-        hasher.update(digest.as_bytes());
-        true
-    }
+    let Some(digest) = crate::ocr::tessdata_download::content_sha256(path) else {
+        return false;
+    };
+    hasher.update(&[4]);
+    hasher.update(digest.as_bytes());
+    true
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -415,7 +401,7 @@ fn hash_pack_key(
     hash_stamp(hasher, metadata)
 }
 
-#[cfg(any(unix, target_arch = "wasm32"))]
+#[cfg(target_arch = "wasm32")]
 fn hash_stamp(hasher: &mut blake3::Hasher, metadata: &std::fs::Metadata) -> bool {
     let Some(stamp) = FileStamp::of(metadata) else {
         return false;
