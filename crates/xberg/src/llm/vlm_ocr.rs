@@ -91,20 +91,8 @@ impl OcrBackend for VlmOcrBackend {
 
         let (text, usage) = vlm_ocr(image_bytes, mime, lang_str, vlm_config, config.vlm_prompt.as_deref()).await?;
 
-        let formulas = extract_formulas(&text);
-        let tables = extract_gfm_tables(&text);
-        let metadata = build_metadata(image_bytes, tables.len() as u32);
-
-        Ok(crate::ExtractedDocument {
-            content: text,
-            mime_type: Cow::Borrowed("text/plain"),
-            llm_usage: usage.map(|u| vec![u]),
-            formulas,
-            metadata,
-            tables,
-            detected_languages: Some(languages),
-            ..Default::default()
-        })
+        let structure = matches!(config.output_format, Some(crate::core::config::OutputFormat::Markdown));
+        Ok(build_vlm_result(text, usage, image_bytes, languages, structure))
     }
 
     fn supports_language(&self, _lang: &str) -> bool {
@@ -229,6 +217,46 @@ pub(crate) async fn vlm_ocr(
         .ok_or_else(|| crate::XbergError::ocr(format!("VLM OCR returned no content (model={})", config.model)))?;
 
     Ok((text, usage))
+}
+
+/// Turn one VLM response into the OCR result.
+///
+/// With `structure` set (Markdown output) a response that carries Markdown or HTML blocks is
+/// parsed into the page document, tables included, so it renders as the structure it is. The
+/// tables then travel in that document and not in `tables`, which would print each of them a
+/// second time. Any other response keeps its text and its parsed GFM tables as they were.
+pub(crate) fn build_vlm_result(
+    text: String,
+    usage: Option<crate::types::LlmUsage>,
+    image_bytes: &[u8],
+    languages: Vec<String>,
+    structure: bool,
+) -> crate::ExtractedDocument {
+    let formulas = extract_formulas(&text);
+    let ocr_internal_document = structure
+        .then(|| super::vlm_markdown::markdown_ocr_document(&text))
+        .flatten();
+    let tables = if ocr_internal_document.is_some() {
+        Vec::new()
+    } else {
+        extract_gfm_tables(&text)
+    };
+    let table_count = ocr_internal_document
+        .as_ref()
+        .map_or(tables.len(), |document| document.tables.len());
+    let metadata = build_metadata(image_bytes, table_count as u32);
+
+    crate::ExtractedDocument {
+        content: text,
+        mime_type: Cow::Borrowed("text/plain"),
+        llm_usage: usage.map(|u| vec![u]),
+        formulas,
+        metadata,
+        tables,
+        detected_languages: Some(languages),
+        ocr_internal_document,
+        ..Default::default()
+    }
 }
 
 /// Normalize the VLM model id for the target endpoint.

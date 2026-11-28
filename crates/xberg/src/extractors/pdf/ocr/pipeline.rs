@@ -8623,6 +8623,11 @@ async fn run_ocr_pipeline_stages(
         stage_ocr.quality_thresholds = Some(pipeline.quality_thresholds.clone());
         stage_ocr.vlm_config = stage.vlm_config.clone();
         stage_ocr.backend_options = stage.backend_options.clone();
+        // The VLM backend parses its Markdown response into structure only for Markdown output;
+        // the other backends read their output format from their own settings. ~keep
+        if stage.backend == "vlm" {
+            stage_ocr.output_format = Some(config.output_format.clone());
+        }
         #[cfg(all(paddle_ocr, feature = "ocr", not(target_arch = "wasm32")))]
         let stage_ocr = sparse_glyph_read::ocr_config(stage_ocr, sparse_trial);
 

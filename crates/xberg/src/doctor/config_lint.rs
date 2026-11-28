@@ -201,6 +201,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn doctor_accepts_custom_replacement_for_builtin_vlm_name() {
         let registry = crate::plugins::registry::get_ocr_backend_registry();
         let original = registry

@@ -3626,7 +3626,7 @@ impl ImageExtractor {
         ))
         .await?;
         #[cfg(feature = "ocr")]
-        let has_public_ocr_structure = ocr_result.document.is_some();
+        let has_public_ocr_structure = crate::extraction::derive::has_ocr_structure(&ocr_result);
         // Only the GH#1789 numeric repair below mutates this, and that is gated on
         // `ocr` + `pdf`; an unconditional `mut` is a dead `mut` on every narrower leg,
         // which the formula-recognition+pdf clippy gate rejects. Same shape as
@@ -3778,7 +3778,7 @@ impl ImageExtractor {
                 mark_leader_rows(&mut doc);
             }
 
-            let page_tables: Vec<std::sync::Arc<crate::types::Table>> = ocr_tables
+            let mut page_tables: Vec<std::sync::Arc<crate::types::Table>> = ocr_tables
                 .into_iter()
                 .enumerate()
                 .map(|(position, table)| {
@@ -3797,6 +3797,18 @@ impl ImageExtractor {
                     std::sync::Arc::new(table)
                 })
                 .collect();
+            // A backend's own structure (the VLM backend's parsed Markdown) places its tables in the
+            // document, so the page lists those and tags the elements with the page for rendering. ~keep
+            if has_public_ocr_structure && page_tables.is_empty() && !doc.tables.is_empty() {
+                page_tables = doc.tables.iter().cloned().map(std::sync::Arc::new).collect();
+                for element in doc
+                    .elements
+                    .iter_mut()
+                    .filter(|element| !matches!(element.kind, crate::types::internal::ElementKind::Image { .. }))
+                {
+                    element.page.get_or_insert(1);
+                }
+            }
 
             let title_page_confidence = whole_image_ocr_confidence.clone();
             if let Some(pages) = ocr_extraction_result.page_contents {
@@ -4886,6 +4898,10 @@ mod image_table_grid_metadata_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr-pipeline"))]
 #[path = "image_table_tests.rs"]
 mod image_table_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "liter-llm"))]
+#[path = "image_vlm_markdown_tests.rs"]
+mod image_vlm_markdown_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "ocr"))]
 #[path = "image_pipeline_reduced_tests.rs"]

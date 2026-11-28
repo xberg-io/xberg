@@ -59,7 +59,23 @@ pub(crate) use pages::render_plain_selected_pages;
 pub(crate) use pages::source_short_circuits_ocr_page_text;
 
 /// Internal marker consumed by page derivation before publishing metadata. ~keep
-const ADOPTED_OCR_DOCUMENT_KEY: &str = "xberg:internal:adopted-ocr-document";
+pub(crate) const ADOPTED_OCR_DOCUMENT_KEY: &str = "xberg:internal:adopted-ocr-document";
+
+/// Whether a backend contributed its own page structure: a public `DocumentStructure`, or a
+/// crate-built OCR document marked as adopted (the VLM backend's parsed Markdown, whose tables
+/// and lists the public structure cannot express). Such a document is kept as built instead of
+/// being rebuilt from the transcript. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn has_ocr_structure(result: &ExtractedDocument) -> bool {
+    result.document.is_some()
+        || result.ocr_internal_document.as_ref().is_some_and(|document| {
+            document
+                .metadata
+                .additional
+                .get(ADOPTED_OCR_DOCUMENT_KEY)
+                .is_some_and(|value| value.as_bool() == Some(true))
+        })
+}
 
 /// Cap on how many unresolvable keys a single warning names before it summarises
 /// the rest as a count, so a badly broken document cannot produce an unbounded

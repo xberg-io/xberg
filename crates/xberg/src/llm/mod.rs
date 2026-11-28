@@ -20,4 +20,6 @@ pub mod usage;
 #[cfg(feature = "liter-llm")]
 pub mod vlm_embeddings;
 #[cfg(feature = "liter-llm")]
+mod vlm_markdown;
+#[cfg(feature = "liter-llm")]
 pub mod vlm_ocr;
