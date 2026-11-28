@@ -186,3 +186,39 @@ async fn vlm_gfm_table_is_listed_on_its_page() {
     assert_eq!(pages[0].tables.len(), 1);
     assert_eq!(pages[0].tables[0].cells[0], ["Item", "For", "Against", "Decision"]);
 }
+
+/// The single-backend route (no pipeline, no fallback) lists the table on the page too.
+#[cfg(feature = "ocr")]
+#[tokio::test]
+#[serial_test::serial]
+async fn vlm_gfm_table_is_listed_on_its_page_on_the_single_backend_route() {
+    let _ = crate::plugins::unregister_ocr_backend("vlm");
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(CannedVlmBackend {
+        response: GFM_TABLE_PAGE,
+    }))
+    .unwrap();
+    let _registration = BackendRegistration;
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Markdown,
+        ocr: Some(OcrConfig {
+            backend: "vlm".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(16, 16, image::Rgb([255, 255, 255]))
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let document = ImageExtractor::new()
+        .extract_with_ocr_pass(&png.into_inner(), "image/png", &config, false)
+        .await
+        .expect("single-backend image OCR");
+    assert_eq!(document.tables.len(), 1);
+    assert_eq!(document.prebuilt_pages.as_ref().expect("page")[0].tables.len(), 1);
+    assert_eq!(
+        crate::rendering::render_markdown(&document).matches("| Item |").count(),
+        1
+    );
+}

@@ -17,6 +17,9 @@ use crate::types::internal::{ElementKind, InternalDocument, Relationship, Relati
 static TABLE_TAG: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)<(/?)table(?:[\s>/]|$)").expect("table tag regex is valid"));
 
+/// Indentation, in bytes, from which a line is an indented code block and opens no fence or table.
+const CODE_INDENT: usize = 4;
+
 enum Segment<'a> {
     Markdown(&'a str),
     HtmlTable(&'a str),
@@ -91,8 +94,11 @@ fn split_html_tables(text: &str) -> Vec<Segment<'_>> {
     while offset < text.len() {
         let line_end = text[offset..].find('\n').map_or(text.len(), |at| offset + at + 1);
         let line = &text[offset..line_end];
+        let indent = line.len() - line.trim_start().len();
         let trimmed = line.trim_start();
-        if let Some((marker, length)) = fence_marker(trimmed) {
+        if indent < CODE_INDENT
+            && let Some((marker, length)) = fence_marker(trimmed)
+        {
             fence = match fence {
                 Some((open, open_length))
                     if open == marker && length >= open_length && trimmed[length..].trim().is_empty() =>
@@ -132,6 +138,9 @@ fn fence_marker(trimmed: &str) -> Option<(char, usize)> {
 
 fn table_start(line: &str) -> Option<usize> {
     let indent = line.len() - line.trim_start().len();
+    if indent >= CODE_INDENT {
+        return None;
+    }
     let opens = TABLE_TAG.captures(&line[indent..]).filter(|caps| {
         caps.get(0).is_some_and(|tag| tag.start() == 0) && caps.get(1).is_some_and(|slash| slash.as_str().is_empty())
     });
@@ -226,6 +235,12 @@ mod tests {
             "{:?}",
             document.uris
         );
+    }
+
+    #[test]
+    fn an_indented_marker_does_not_close_a_fence() {
+        let text = "```\n    ```\n<table><tr><td>x</td></tr></table>\n```";
+        assert!(matches!(split_html_tables(text).as_slice(), [Segment::Markdown(whole)] if *whole == text));
     }
 
     #[test]
