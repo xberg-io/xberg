@@ -115,8 +115,11 @@ async fn fingerprint_with_reader(
             Ok(Identified::Unidentified) => Ok(unidentified_model()),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
+                static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
                 super::cacheability::invalidate_current();
-                tracing::warn!(%error, "Cannot identify the Tesseract model files; bypassing result cache");
+                if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    tracing::warn!(%error, "Cannot identify the Tesseract model files; bypassing result cache");
+                }
                 Ok(None)
             }
         };
