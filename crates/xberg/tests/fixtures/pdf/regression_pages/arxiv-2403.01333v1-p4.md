@@ -36,17 +36,19 @@ $$-\gamma I$$
 
 which is convex in $Y,V,\omega_{c}$ , and $\kappa_{a}$ , where
 
+**Y A**
+
 $$
 YB_{u}
 $$
 
-$$
-P:={}^{YA}
-$$
+**P**
+
+:= .
 
 **V**
 
-$$-\mathrm{diag}(\omega_{c}){}^{.}$$
+−**diag** (**ω**~c~)
 
 **where** $\lambda_{a}\geq0,\lambda_{\omega_{c}}\geq0$**, and** $\lambda_{x_{F}}\geq0$ are user-defined weights, and $W_{d}$ is a given scaling matrix for d(t). The controller gain can be recovered as $K:=\mathrm{diag}(\omega_{c})^{-1}V.$ Proof.
 
@@ -66,15 +68,25 @@ is given by
 
 $XM_{11}+$ $w_{a}$¯
 
-$$
-M_{11}^{T}X+XM_{i^{12}}\frac{W_{d}^{2}}{0}{}_{W_{a}^{2}}{}^{0}M_{12}^{T}X
-$$
+2
+
+**W**
+
+0
+
+T d T
+
+**M X** + **XM**~12~ **M X**
 
 $$
 \leq
 $$
 
-0, and h
+0, and
+
+11 2 12
+
+0 **W**~a~ h i
 
 $$
 \mathrm{tr}M_{21}X^{-1}M_{21}^{T}
@@ -100,17 +112,13 @@ $$
 \leq0,
 $$
 
-2
+−2
 
 
 
-$$
-{}_{-}W_{d}^{-}
-$$
+**W 0** ~d~
 
-**0**
-
-such that $V^{T}V\leq Q$ and $\mathrm{tr}&#91;Q&#93;\leq\gamma_{x_{F}}$ and **Q** ≥ 0. The ∗
+such that $V^{T}V\leq Q$ and $\mathrm{tr}&#91;Q&#93;\leq\gamma_{x_{F}}$ and **Q** ≥ 0. The ∗ −
 
 **0**
 
@@ -124,21 +132,25 @@ $$
 QC0
 $$
 
+T
+
 $$&#42;^{1}Y^{z}0\geq0,\mathrm{tr}&#91;Q_{1}&#93;\leq\gamma.$$
 
-$$
-{}^{Q}{}^{V^{T}}\geq0.
-$$
+**Q V**
+
+≥ 0.
 
 ∗ ∗
 
-**I V I**
+**I**
 
-h i The actuator noise is maximized by minimizing $k\kappa_{a}k_{2}$, the Similar to theorem 1, $\mathrm{tr}V^{T}V$ $\leq\gamma_{x_{F}}$ is equivalent control rate is minimized by minimizing $k\omega_{c}k_{2}$, and the con-
+## V I
+
+h i The actuator noise is maximized by minimizing $k\kappa_{a}k_{2}$, the Similar to theorem 1, $\mathrm{tr}V^{T}V$ $\leq\gamma_{x_{F}}$ is equivalent control rate is minimized by minimizing kω k~2 c~ , and the con-
 
 $Q_{2}V^{T}$
 
-to ≥ 0 and $\mathrm{tr}&#91;Q_{2}&#93;\leq\gamma_{xF}$ . Maximum actrol magnitude is minimized by minimizing $\gamma_{x_{F}}$ . Therefore, the cost function for the optimization is
+to ≥ 0 and $\mathrm{tr}&#91;Q_{2}&#93;\leq\gamma_{xF}$ . Maximum actrol magnitude is minimized by minimizing γ~**x**~ . Therefore, ~F~ the cost function for the optimization is
 
 $$
 {}_{\kappa_{a},\omega_{c},\gamma_{x}}\min{}_{\geq0,Q\geq0}\lambda_{a}k\kappa_{a}k_{2}+\lambda_{\omega_{c}}k\omega_{c}k_{2}+\lambda_{x_{F}}\gamma_{x_{F}},
@@ -150,9 +162,9 @@ $$
 
 where $\lambda_{a},\lambda_{\omega_{c}}$, and $\lambda_{x_{F}}$ are user-defined weights.
 
-**V I**
+## V I
 
-tuator degradation is achieved by minimizing${}&#95;{\lambda_{x}}\lambda_{a}k\kappa_{a}k_{2}+$ $\lambda_{\omega_{c}}k\omega_{c}k_{2}+\lambda_{x_{F}}\gamma_{x_{F}}$ , where $\lambda_{a},\lambda_{\omega_{c}}$, and are user- F defined weights.
+tuator degradation is achieved by minimizing λ kκ k~2 a a~ + $\lambda_{\omega_{c}}k\omega_{c}k_{2}+\lambda_{x_{F}}\gamma_{x_{F}}$ , where $\lambda_{a},\lambda_{\omega_{c}}$, and λ are user~**x**~~F~ defined weights.
 
 Remark 3. In both theorem 1 and 2, the minimum control rate is given by the elements $\omega_{c}$, the minimum control magnitude
 
@@ -200,17 +212,13 @@ $$
 \leq0
 $$
 
-2
+−2
 
 
 
-$$
-{}_{-}W_{d}^{-}
-$$
+**W 0** ~d~
 
-**0**
-
-∗
+∗ −
 
 **0**
 
@@ -222,9 +230,21 @@ $$
 QC0
 $$
 
-$$&#42;^{1}Y^{z}0\geq0,\frac{Q_{2}}{V}{}^{V^{T}}\geq0,$$
+z
 
-**I**
+1 T
+
+**Q**~2~ **V**
+
+ ∗ 
+
+**Y**
+
+$$
+0 ≥ 0, ≥ 0,
+$$
+
+## V I
 
 ∗ ∗
 
@@ -238,19 +258,19 @@ $$
 V\in\mathbb{R}^{nu\times nx},Y\in\mathbb{S}_{+}^{nx},Q_{1}\in\mathbb{S}_{+}^{nz},Q_{2}\in\mathbb{S}_{+}^{nx},
 $$
 
-**with**
+**with Y A**
 
 $$
 YB_{u}
 $$
 
-$$
-P:={}^{YA}
-$$
+**P**
+
+:= ,
 
 **V**
 
-$$-\mathrm{diag}(\omega_{c}){}^{,}$$
+−diag(**ω**~c~)
 
 **performance in terms of the closed-loop systems** $\mathcal{H}&#95;{2}$ **or** $\mathcal{H}&#95;{\infty}$
 

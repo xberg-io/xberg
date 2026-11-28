@@ -2,11 +2,13 @@ FIRST STEPS IN ALGEBRA.
 
 16
 
-If $a=5,b=2,c=0,x=1,y_{c^{2}y^{2}.}$ = 3, find the value of
+If a = 5, b = 2, c = 0, x = 1, y = 3, find the value of
 
 $$13.4acy^{2}.16.2a^{2}b^{2}$$
 
-**19.** 3abcxy.
+c<sup>2</sup>y<sup>2</sup>.
+
+19. 3abcxy.
 
 $$14.3ax^{5}y^{2}.$$
 
@@ -31,8 +33,6 @@ If a stands for 10, b for 4, and c for 3, find the value of the expression 5$ab-
 | ∴ 5ab − 10c2 − 5b2 |  |
 | = 200 − 90 − 80 |  |
 | = 30 . |  |
-
-${}&#95;{∴5ab-10c^{2}}5\times4=80.$
 
 $$-5b^{2}$$
 

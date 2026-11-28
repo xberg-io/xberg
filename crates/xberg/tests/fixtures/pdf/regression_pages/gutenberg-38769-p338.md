@@ -4,15 +4,13 @@ the corresponding formula for cos(x + h), and similar formulae involving powers 
 
 4. Show that if m is a positive integer, and n a positive integer not greater
 
-m
-
 $$
-(x+h)^{m}=x^{m}+\frac{m}{1}x^{m-1}h+\cdot\cdot\cdot+{}_{n-1}x^{m-n+1}h^{n-1}+\frac{m}{n}(x+\theta_{n}h)^{m-n}h^{n}.
+(x+h)^{m}=x^{m}+\frac{m}{1}x^{m-1}h+\cdot\cdot\cdot+\frac{m}{n-1}x^{m-n+1}h^{n-1}+\frac{m}{n}(x+\theta_{n}h)^{m-n}h^{n}.
 $$
 
 Show also that, if the interval [x, x + h] does not include $x = 0$, the formula holds for all real values of m and all positive integral values of n; and that, even if $x < 0 < x + h$ or $x + h < 0 < x$, the formula still holds if m − n is positive.
 
-5. The formula $f(x+h)=f(x)+hf'(x+\theta_{1_{'}}hf(x)=1/x$) is not true if and x \< 0 \< x + h. [For f(x + h) − f(x) \> 0 and $hf(x+\theta_{1}h)=-h/(x+\theta_{1}h)^{2}<0;$ it is evident that the conditions for the truth of the Mean Value Theorem are not satisfied.]
+5. The formula $f(x+h)=f(x)+hf'(x+\theta hf(x)=1/x$) is not true if and x \< 0 \< x + h. [For `f(x+h)-f(x)>hf^{1_{'}}(x+\theta_{1}h)=-h/(x+\theta_{1}h)^{2}<0;`0 and it is evident that the conditions for the truth of the Mean Value Theorem are not satisfied.]
 6. If $x=-a,h=2a,f(x)=x^{1/3}$, then the equation
 
 $$

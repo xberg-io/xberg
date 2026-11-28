@@ -36,7 +36,11 @@ The solution of (21) can be found by finding the non-negative self-adjoint opera
 
 $$&#91;A^{&#42;}P+PA+C^{&#42;}QC-PBR^{-1}B^{&#42;}P&#93;x=0$$
 
-(22) When (A, B) is exponentially stabilizable and $(Q^{1_{2}}C,A)$ is exponentially detectable (22) has a unique, non-negative solution P and (21) is minimized by the unique control input $u_{opt}$ given by
+(22)
+
+1
+
+When (A, B) is exponentially stabilizable and (Q<sup>2</sup>C, A) is exponentially detectable (22) has a unique, non-negative solution P and (21) is minimized by the unique control input $u_{opt}$ given by
 
 $$
 u_{opt}(t)=K_{0}x(t)
@@ -48,7 +52,11 @@ $$
 K_{0}=-R^{-1}B^{*}P
 $$
 
-(24) The proof that (A, B) is exponentially stabilizable and $(P^{1_{2}}C,A)$ is exponentially detectable given V \< 0 is shown in [23]. Furthermore,
+(24) The proof that (A, B) is exponentially stabilizable and
+
+1 2
+
+(P C, A) is exponentially detectable given $V < 0$ is shown in [23]. Furthermore,
 
 $$
 P:=\Phi(z)I
@@ -76,7 +84,7 @@ $$
 
 - C. **LQ Control Deisgn for LWR Model with VSL**
 
-In order to find Φ(z), we take (14) and transform it into ∂∆ρ ∂∆ρ ${}&#95;{\partial t}=-b_{0}U_{max}1-2\frac{\rho_{0}}{\rho_{max}}$ $\partial z^{-}$ ∂∆b
+In order to find Φ(z), we take (14) and transform it into ∂∆ρ ρ~0~ ∂∆ρ = −b~0~U~max~ 1 − 2 − ∂t ρ~max~ ∂z ∂∆b
 
 $$
 \rho_{0}U_{max}1-\frac{\rho_{0}}{\rho_{max}}
@@ -132,13 +140,13 @@ The left hand side of (31) can be solved by a combination of integration by part
 
 2B~0~ Q~0~ (32) Then, √ √ B~0~Φ + Q~0~
 
-$2B_{0} Q_{0} ln √ = (z + C) B_{0}Φ − Q_{0} V$ √ √
-
 $$
-\frac{B_{0}\Phi+}{B_{0}\Phi-}\sqrt{Q_{0}Q_{0}}=\exp{}^{2B_{0}}{}_{V}{}^{Q_{0}}(z+C)
+2B_{0} Q_{0} ln √ = (z + C) B_{0}Φ − Q_{0} V √ √ B_{0}Φ + Q_{0}
 $$
 
-√ p p
+$$
+2B_{0} Q_{0} √ = exp (z + C) B_{0}Φ − Q_{0} V √ p p
+$$
 
 $2B_{0} Q_{0} B_{0}Φ+ Q_{0} = B_{0}Φ− Q_{0} exp (z+C) V (33)$ The solution to (33) can be either √ p p
 

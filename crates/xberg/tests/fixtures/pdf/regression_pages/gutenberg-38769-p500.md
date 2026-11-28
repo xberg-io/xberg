@@ -39,9 +39,9 @@ powers of 10, calculate log~10~2 and log~10~3 to four places of decimals. (Math.
 
 and observe that 3/( 3 + π) \< 3 \< .6929 \< log 2.] 4 5
 
-3. Show that log${}&#95;{10}n$ cannot be a rational number if n is any positive integer not a power of 10. [If n is not divisible by 10, and log${}&#95;{n}{}&#95;{10}{}&#95;{q}n=p/q$, we
+3. Show that log${}&#95;{10}n$ cannot be a rational number if n is any positive integer not a power of 10. [If n is not divisible by 10, and log~10~n = p/q, we
 
-have 10${}^{p}=n^{q}$, which is impossible, since 10<sup>p</sup> ends with 0 and does not. If $n=10^{a}N$, where N is not divisible by 10, then log${}&#95;{10}N$ and therefore
+have 10${}^{p}=n^{q}$, which is impossible, since 10<sup>p</sup> ends with 0 and n<sup>q</sup> does not. If $n=10^{a}N$, where N is not divisible by 10, then log${}&#95;{10}N$ and therefore
 
 $$
 \log_{10}n=a+\log_{10}N

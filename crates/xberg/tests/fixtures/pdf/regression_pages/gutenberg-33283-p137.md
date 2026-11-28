@@ -10,11 +10,7 @@ $$
 \frac{4(z-1)+1}{z^{3}}=\frac{4z-3}{z^{3}}=\frac{4}{z^{2}}-\frac{3}{z^{3}}.
 $$
 
-The partial fractions are, therefore, 4 3
-
-$$
-(x+1)^{2}{}^{-}(x+1)^{{}_{3}.}
-$$
+The partial fractions are, therefore, 4 3 − . (x + 1)<sup>2</sup> (x + 1)<sup>3</sup>
 
 | Application to differentiation. Let it be required to differentiate |  |
 | --- | --- |
@@ -22,20 +18,10 @@ $$
 | y = | ; we have |
 | 6x2 + 7x − 3 |  |
 
-$y=\frac{5-}{6x^{2}+7x-3}$
+$y=\frac{5-4x}{6x^{2}+7x-3}$
 
-$$
-\frac{dy}{dx}=-\frac{(6x^{2}+7x-3)\times4+(5-4x)(12x+7)}{(6x^{2}+7x-3)^{2}}
-$$
+dy (6x<sup>2</sup> + 7x − 3) × 4 + (5 − 4x)(12x + 7) = − dx (6x<sup>2</sup> + 7x − 3)<sup>2</sup>
 
-$$=\frac{24x^{2}-60x-23}{(6x^{2}+7x-3)^{2}}.$$
+24x<sup>2</sup> − 60x − 23 = . (6x<sup>2</sup> + 7x − 3)<sup>2</sup> If we split the given expression into
 
-If we split the given expression into
-
-$$
-3x-1^{-}2x+3^{,}
-$$
-
-1 2
-
-we get, however, dy 3 4 = − + , dx (3x − 1)<sup>2</sup> (2x + 3)<sup>2</sup>
+3x 1 − 1 − 2x 2 + 3 , we get, however, dy 3 4 = − + , dx (3x − 1)<sup>2</sup> (2x + 3)<sup>2</sup>

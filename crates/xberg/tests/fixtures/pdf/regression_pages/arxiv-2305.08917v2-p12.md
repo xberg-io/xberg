@@ -145,22 +145,36 @@ QMC, $L=8$
 
 *t*
 
-FIG. 8: Comparison of Meron Cluster QMC values with the ED values for χ~EEcorr~ (top), χ~CDW~ (middle), and the ¯ bare ψψ (bottom). tions:
-
-$$
-\chi_{CDW}=\frac{1}{L_{{}^{t}x,y,t}}^{X}(-1)^{x+y}n_{x}-\frac{1}{2}
-$$
+FIG. 8: Comparison of Meron Cluster QMC values with the ED values for χ~EEcorr~ (top), χ~CDW~ (middle), and the ¯ bare ψψ (bottom). tions: X 1 1 x+y χ = (−1) n~x~ −
 
 $$
 n_{y}-\frac{1}{2}
 $$
 
-¯$\psi\psi=\frac{1}{L_{{}^{t}x,y,t}}^{X}(-1)^{x}n_{x}$ (27) TABLE III: Results for the observables χ $,\chi_{CDW}$~EEcorr~ χ =
+CDW L~t~ 2 x,y,t X 1
 
-$$
-\frac{1}{L_{{}^{t}x,y,t}}^{X}s_{x,x+1}^{3}\cdot s_{y,y+1}^{3}.
-$$
+x
 
-EEcorr ¯ and ψψ defined in (27) for the U(1) model in (1 + 1)-d calculated with Meron Clusters (MC) and exact diagonalization (ED).
+¯ψψ = (−1) n~x~ (27) L~t~
+
+x,y,t
+
+X 1
+
+3 3
+
+TABLE III: Results for the observables χ $,\chi_{CDW}$~EEcorr~ χ = s~x,x~
+
+- s~y,y~
+
+.
+
+EEcorr +1 +1
+
+¯ L and ψψ defined in (27) for the U(1) model in (1 + 1)-d
+
+t x,y,t
+
+calculated with Meron Clusters (MC) and exact diagonalization (ED).
 
 Table III and Fig. 8 summarize these results, which are all for the observables in the Gauss law sector $G_{x}=0.$

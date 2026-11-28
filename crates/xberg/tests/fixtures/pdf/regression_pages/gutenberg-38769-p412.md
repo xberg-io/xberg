@@ -2,7 +2,7 @@
 
 396
 
-So far as divergence for s \< 1 is concerned, this result might have been derived at once from comparison with ${}^{P}(1/n)$, which we already know to be divergent. It is however interesting to see how the Integral Test may be applied to the series ${}^{P}(1/n)$, when the preceding analysis fails. In this case Z
+So far as divergence for $s < 1$ is concerned, this result might have beenP derived at once from comparison with (1/n), which we already know to be divergent. It is however interesting to see how the Integral Test may be applied to theP series (1/n), when the preceding analysis fails. In this case Z
 
 ξ
 
@@ -33,16 +33,39 @@ x
 
 1
 
-u and so Φ($\xi)>n^{Z}{}&#95;{1}\frac{{}^{2}du}{u}$, which shows that Φ(ξ) → ∞ as ξ → ∞.
+u Z
 
-**Examples LXXI.** 1. Prove by an argument similar to that used above, ${}^{Z}{}^{\xi}dx$ and without integration, that Φ(ξ) = , where s \< 1, tends to infinity ${}&#95;{1}x^{s}$ with ξ. $P_{n^{-2},}P_{n^{-3/2},}P_{n^{-11/10}}$
+2
 
-2. The series are convergent, and their sums$P_{n^{-1/2},}P_{n^{-10/11}}$ are not greater than 2, 3, 11 respectively. The series are divergent.
-3. The series ${}^{P}n^{s}/(n^{t}+a)$, where a \> 0, is convergent or divergent according as t \> 1 + s or t ≦ 1 + s. [Compare with ${}^{P}n^{s-t}.&#93;$
+du and so $Φ(ξ) > n$ , which shows that $Φ(ξ) → ∞$ as $ξ → ∞. u$
+
+1
+
+**Examples LXXI.** 1. Prove by an argument similar to that used above, Z
+
+ξ
+
+dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity ${}&#95;{1}x^{s}$ with ξ. P P P
+
+−2 −3/2 −11/10
+
+2. The series n , n , n are convergent, and their sumsP P
+
+−1/2 −10/11
+
+are not greater than 2, 3, 11 respectively. The series n , n are divergent. P
+
+3. The series n<sup>s</sup>/(n<sup>t</sup> + a), where a \> 0, is convergent or divergent ac-P
+
+s−t
+
+cording as $t > 1 + s$ or t ≦ 1 + s. [Compare with n .]
+
 4. Discuss the convergence or divergence of the series
 
-$$
-{}^{P}(a_{1}n^{s_{1}}+a_{2}n^{s_{2}}+\cdot\cdot\cdot+a_{k}n^{s_{k}})/(b_{1}n^{t_{1}}+b_{2}n^{t_{2}}+\cdot\cdot\cdot+b_{l}n^{t_{l}}),
-$$
+P ( a 1 n s 1 + a 2 n s 2 +
+
+- \+ a k n s k ) / ( b 1 n t 1 + b 2 n t 2 +
+- \+ b l n t l ) ,
 
 where all the letters denote positive numbers and the s's and t's are rational and arranged in descending order of magnitude.

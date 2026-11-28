@@ -116,9 +116,11 @@
 
 **41**, 65 (2021), arXiv:2101.01021 [hep-ph].
 
-- [48] F.-L. Wang, X.-D. Yang, R. Chen, and X. Liu, Hidden-charm ¯ pentaquarks with triple strangeness due to the Ω${}&#95;{c}{}^{(&#42;)}D_{s}^{(&#42;)}$ interactions, Phys. Rev. D
+- [48] F.-L. Wang, X.-D. Yang, R. Chen, and X. Liu, Hidden-charm
 
-**103**, 054025 (2021), arXiv:2101.11200 [hep-ph].
+(∗)
+
+¯<sup>(</sup>∗) pentaquarks with triple strangeness due to the Ω~c~ D~s~ interactions, Phys. Rev. D **103**, 054025 (2021), arXiv:2101.11200 [hep-ph].
 
 - [49] J.-T. Zhu, L.-Q. Song, and J. He, $P_{cs}$(4459) and other possi- ¯ ¯ ble molecular states from $\Xi_{c}^{(&#42;)}D^{(&#42;)}$ and $\Xi_{c}'D^{(&#42;)}$ interactions, Phys. Rev. D
 

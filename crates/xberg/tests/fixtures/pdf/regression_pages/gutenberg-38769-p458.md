@@ -4,21 +4,27 @@
 
 [In this and the succeeding examples it is of course supposed that the arbitrary functions which occur are such that the integrals considered have a meaning in accordance with the definitions of ?? 177 et seq.]
 
-31. Show that if 2y = ax−(b/x), where a and b are positive, then y increases steadily from −∞ to ∞ as x increases from 0 to ∞. Hence show that
+31. Show that if 2y = ax−(b/x), where a and b are positive, then y increases steadily from −∞ to ∞ as x increases from 0 to ∞. Hence show that Z Z ∞
 
-$$
-{}^{Z}{}_{0}{}^{\infty}f\frac{1}{2}ax+\frac{b}{x}
-$$
+∞
 
-$$
-dx=\frac{1}{a}^{Z}{}_{-\infty}^{\infty}f\{^{p}y^{2}+ab\}1+p_{y^{2}+ab}{}^{y}dy
-$$
+b 1
 
-( )
+1
 
-$$=\frac{2}{a}^{Z}{}&#95;{0}{}^{\infty}f\\{^{p}y^{2}+ab\\}dy.$$
+f ax + dx = 2 x a
 
-32. Show that if 2y = ax+(b/x), where a and b are positive, then two values √ of x correspond to any value of y greater than ab. Denoting the greater of√ these by $x_{1}$ and the less by $x_{2}$, show that, as y increases from towards ∞, p $p{}^{ab}$ $x_{1}$ increases from b/a towards ∞, and $x_{2}$ decreases from b/a to 0. Hence show that ( ) Z Z ∞
+0 −∞
+
+Z
+
+∞
+
+2 ( ) p y f{ y<sup>2</sup> + ab} 1 + p dy y<sup>2</sup> + ab $p = f{ y^{2}$ + ab} dy. a
+
+0
+
+32. Show that if 2y = ax+(b/x), where a and b are positive, then two values √ of x correspond to any value of y greater than ab. Denoting the greater of√ these by $x_{1}$ and the less by $x_{2}$, show that, as y increases from$\sqrt{ab}$ towards ∞, p $x_{1}$ increases from b/a towards ∞, and $x_{2}$ decreases from b/a to 0. Hence show that ( ) Z Z ∞
 
 ∞
 
@@ -28,17 +34,15 @@ $$
 
 b/a ab
 
-y<sup>2</sup> − ab
+y<sup>2</sup> − ab √ ( ) Z Z b/a
 
-$$
-{}_{Z}\sqrt{(}
-$$
-
-) Z
-
-b/a ∞
+∞
 
 $1 y f(y) dx_{2} = f(y) p − 1$ dy, √
+
+0
+
+a
 
 | and that |  |  |  |
 | --- | --- | --- | --- |
@@ -48,14 +52,6 @@ $1 y f(y) dx_{2} = f(y) p − 1$ dy, √
 | 2 | x | a √ y2 − ab | a |
 | 0 |  | ab | 0 |
 
-$$
-{}^{Z}{}_{0}{}^{\infty}f\frac{1}{2}ax+\frac{b}{x}
-$$
-
-0
-
-a
-
 | 33. Prove the formula |  |  |  |
 | --- | --- | --- | --- |
 | Z |  | Z |  |
@@ -64,16 +60,16 @@ a
 | 2 | 2 sin x |  | sin x |
 | 0 |  | 0 |  |
 
-${}^{Z}{}&#95;{0}{}^{\pi}f(\sec\frac{1}{2}x+\tan\frac{1}{2}x)\sqrt{\sin xdx}={}&#95;{0}$
-
-ab
-
-y<sup>2</sup> − ab
-
-$x)\sqrt{\sin xdx}.$
-
 | dx | π = | , x 2 dx | π = . |
 | --- | --- | --- | --- |
 | 34. If a and b are positive, then |  |  |  |
 | Z ∞ |  | Z ∞ |  |
 | 0 (x2 + a2 )( x2 + b 2 ) | 2ab( a + b) | 0 (x2 + a 2 )( x2 + b 2 ) | 2( a + b) |
+
+$$
+{}_{0}\frac{dx}{(x^{2}+a^{2})(x^{2}+b^{2})}=\frac{\pi}{2ab(a+b)},
+$$
+
+ab
+
+y<sup>2</sup> − ab

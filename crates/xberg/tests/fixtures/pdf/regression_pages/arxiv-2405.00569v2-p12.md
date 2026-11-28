@@ -16,7 +16,11 @@
 | TDCCS-TE-2 | 0.407 | 0.1294 | 0.854 | 0.2718 | 1.231 | 0.3917 | 1.585 |  | 0.5046 |
 | TDCCS-TE-3 | 0.407 | 0.1294 | 0.854 | 0.2718 | 1.234 | 0.3928 | 1.515 |  | 0.4823 |
 
-be expressed as ˆ ˆ ˆ (5.1) `\alpha_{F}f_{j-1}+f`${}&#95;{j}+\alpha_{F}f_{j+1}=\frac{X_{a_{n}}^{N}}{n=0}&#95;{2}(f_{j+n}+f_{j-n})$
+be expressed as X<sup>N</sup> a~n~ ˆ ˆ ˆ (5.1) $\alpha_{F}f_{j-1}+f$ + α f = (f~j~ + f ) j F j+1 +n j−n 2
+
+$$
+n=0
+$$
 
 where $f_{j}$ denotes the given value at point j, and $f_{j}$ˆ denotes the value after filtering. The most natural formulation of the problem involves the transfer function associated with the equation (5.1).
 
@@ -44,26 +48,6 @@ Table 7. Coefficients for the filter formula.
 |  | (793+462α | ) (99+314α | ) | 495( − 1+2α | ) 55(1 − 2α | ) | 33( − 1+2α | ) | 3(1 − 2α ) | (-1+2α ) |  |
 | F-12 |  | F | F |  | F | F |  | F | F | F | 12 |
 |  | 1024 |  | 256 | 2048 |  | 512 | 1024 |  | 512 | 2048 |  |
-
-$$
-a_{{}^{0}\alpha_{F})}
-$$
-
-$$
-a_{{}^{1}\alpha_{F})}
-$$
-
-$$
-a_{2}{}_{\alpha_{F})}
-$$
-
-$$
-{}_{(1}a_{{}^{3}\alpha_{F})}
-$$
-
-$$
-{}_{(-}a_{{}^{4}\alpha_{F})}
-$$
 
 $$
 a_{5}
