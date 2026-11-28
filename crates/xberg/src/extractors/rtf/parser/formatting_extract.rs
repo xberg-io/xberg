@@ -295,13 +295,26 @@ impl FormattingParser {
         if self.text_suppressed() {
             return;
         }
-        self.formatting.text_offset += next_ch.len_utf8();
+        self.emit_text(next_ch.encode_utf8(&mut [0; 4]));
+    }
+
+    /// Advance the text offset and append to any open header or footer capture.
+    fn emit_text(&mut self, text: &str) {
+        self.formatting.text_offset += text.len();
         if self.header.active {
-            self.header.text.push(next_ch);
+            self.header.text.push_str(text);
         }
         if self.footer.active {
-            self.footer.text.push(next_ch);
+            self.footer.text.push_str(text);
         }
+    }
+
+    fn start_furniture_capture(capture: &mut TextCapture, depth: i32) {
+        if !capture.text.is_empty() && !capture.text.ends_with('\n') {
+            capture.text.push('\n');
+        }
+        capture.active = true;
+        capture.depth = depth;
     }
 
     fn handle_hex_escape(&mut self, chars: &mut Peekable<Chars<'_>>) {
@@ -321,7 +334,7 @@ impl FormattingParser {
             &self.scope.ansi_codepage_stack,
         );
         let decoded = decode_ansi_bytes(bytes, codepage);
-        self.formatting.text_offset += decoded.len();
+        self.emit_text(&decoded);
     }
 
     fn handle_control_word(&mut self, chars: &mut Peekable<Chars<'_>>) {
@@ -446,12 +459,10 @@ impl FormattingParser {
         }
         match word {
             "header" | "headerl" | "headerr" | "headerf" => {
-                self.header.active = true;
-                self.header.depth = self.scope.group_depth;
+                Self::start_furniture_capture(&mut self.header, self.scope.group_depth);
             }
             "footer" | "footerl" | "footerr" | "footerf" => {
-                self.footer.active = true;
-                self.footer.depth = self.scope.group_depth;
+                Self::start_furniture_capture(&mut self.footer, self.scope.group_depth);
             }
             "par" | "line" => {
                 self.formatting.text_offset += 1;
@@ -462,14 +473,14 @@ impl FormattingParser {
                     self.footer.text.push('\n');
                 }
             }
-            "tab" => self.formatting.text_offset += 1,
-            "bullet" => self.formatting.text_offset += '\u{2022}'.len_utf8(),
-            "lquote" => self.formatting.text_offset += '\u{2018}'.len_utf8(),
-            "rquote" => self.formatting.text_offset += '\u{2019}'.len_utf8(),
-            "ldblquote" => self.formatting.text_offset += '\u{201C}'.len_utf8(),
-            "rdblquote" => self.formatting.text_offset += '\u{201D}'.len_utf8(),
-            "endash" => self.formatting.text_offset += '\u{2013}'.len_utf8(),
-            "emdash" => self.formatting.text_offset += '\u{2014}'.len_utf8(),
+            "tab" => self.emit_text("\t"),
+            "bullet" => self.emit_text("\u{2022}"),
+            "lquote" => self.emit_text("\u{2018}"),
+            "rquote" => self.emit_text("\u{2019}"),
+            "ldblquote" => self.emit_text("\u{201C}"),
+            "rdblquote" => self.emit_text("\u{201D}"),
+            "endash" => self.emit_text("\u{2013}"),
+            "emdash" => self.emit_text("\u{2014}"),
             "u" => self.emit_unicode(param, chars),
             _ => {}
         }
@@ -483,13 +494,7 @@ impl FormattingParser {
                 code_num as u32
             };
             if let Some(character) = char::from_u32(code_u) {
-                self.formatting.text_offset += character.len_utf8();
-                if self.header.active {
-                    self.header.text.push(character);
-                }
-                if self.footer.active {
-                    self.footer.text.push(character);
-                }
+                self.emit_text(character.encode_utf8(&mut [0; 4]));
             }
         }
         if chars.peek().is_some_and(|next| !matches!(next, '\\' | '{' | '}')) {

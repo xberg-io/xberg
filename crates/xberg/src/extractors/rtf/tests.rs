@@ -710,3 +710,11 @@ async fn rtf_header_and_footer_text_is_not_rendered_by_default() {
     assert!(content.contains("Body text"), "{content}");
     assert!(!content.contains("Running"), "{content}");
 }
+
+#[test]
+fn rtf_header_and_footer_keep_decoded_escapes_and_separate_variants() {
+    let rtf = r"{\rtf1{\headerl Caf\'e9\tab one}{\headerr Right \emdash two}{\footerl Left}{\footerr Right}Body}";
+    let formatting = extract_rtf_formatting(rtf);
+    assert_eq!(formatting.header_text.as_deref(), Some("Café\tone\nRight \u{2014}two"));
+    assert_eq!(formatting.footer_text.as_deref(), Some("Left\nRight"));
+}
