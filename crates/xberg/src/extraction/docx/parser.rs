@@ -6984,6 +6984,31 @@ mod tests {
         );
     }
 
+    /// GH#3479: a formula nested far past the converter's cap is dropped without
+    /// overflowing the stack, and the text around it survives.
+    #[test]
+    fn should_keep_surrounding_text_when_omath_is_nested_too_deep() {
+        const LEVELS: usize = 200_000;
+        let body = format!(
+            r#"<w:p><w:r><w:t>before</w:t></w:r><m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">{}<m:r><m:t>x</m:t></m:r>{}</m:oMath><w:r><w:t>after</w:t></w:r></w:p>"#,
+            "<m:sSup><m:e>".repeat(LEVELS),
+            "</m:e></m:sSup>".repeat(LEVELS),
+        );
+        let xml = wrap_body(&body);
+        let document = std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(move || parse_xml(&xml))
+            .unwrap()
+            .join()
+            .expect("deeply nested OMML must not overflow the stack");
+        let text = document.extract_text();
+        assert!(text.contains("before") && text.contains("after"), "got {text:?}");
+        assert!(
+            !text.contains('x'),
+            "dropped formula must leave no residue, got {text:?}"
+        );
+    }
+
     /// GH#1395: the reporter's reproducer — a flat one-column table whose real
     /// nesting depth is small (~8) leaked `2*rows + 3` levels because every row's
     /// `w:tcPr` and `w:trPr` each leaked one level. At 600 rows that is 1203 leaked
