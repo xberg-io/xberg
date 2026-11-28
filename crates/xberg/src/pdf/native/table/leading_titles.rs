@@ -3,9 +3,10 @@
 //! A table's name is set on one or two centred lines over the table, in the same type as the
 //! body. Left in the region they are read as table rows: the line nearest the columns joins
 //! the header band (its words land in the header cells) and the other becomes a data row.
-//! Lines that stand apart from the columns, centred over them and a gap above the first
-//! column header wider than the table's own row pitch, are the table's title and go back to
-//! the page as prose.
+//! Lines centred over the columns, spanning most of the table's width and set off from the
+//! first column header by more than the table's own row pitch, are the table's title and go
+//! back to the page as prose. A region with ruling lines is a ruled table whose spanning
+//! cells are part of it, so it is left as it is.
 
 use crate::pdf::table_reconstruct::HocrWord;
 
@@ -14,38 +15,50 @@ use super::titled_sections::{is_title_words, row_runs, split_titled_region};
 /// Most lines a title may span.
 const MAX_TITLE_ROWS: usize = 3;
 
-/// Fewest rows the table below the title must keep.
+/// Fewest rows the table below the title must keep: a header and three body rows.
 const MIN_TABLE_ROWS: usize = 4;
 
 /// Fewest column runs the table's first row needs to be a header band.
 const MIN_HEADER_RUNS: usize = 2;
 
 /// Farthest, in median word heights, the centre of a title line may sit from the centre of
-/// the table below it.
+/// the table below it. Two heights is a word's width of slack for the uneven word spacing of
+/// a centred line, while a left- or right-aligned caption sits many heights away.
 const CENTRE_TOLERANCE_HEIGHTS: u32 = 2;
 
-/// Least share of the table's width, in percent, each title line spans: a name is set across the
-/// table, where a few words over its first columns are a header label.
+/// Least share of the table's width, in percent, each title line spans. A name is set across
+/// the table; a few words over its first columns are a header label, and half the width is
+/// the line between the two.
 const MIN_TITLE_WIDTH_PERCENT: u32 = 50;
 
 /// Smallest gap between the last title line and the header, as a percentage of the table's
-/// median row pitch.
+/// median row pitch. A title sits visibly apart: at one pitch it is just another row, and a
+/// quarter more is the smallest separation the pages checked (a 30 pt gap over 19 pt rows) and
+/// the rows they must not split (tightly stacked header lines) tell apart.
 const MIN_GAP_PITCH_PERCENT: u32 = 125;
 
-/// Gaps at most this many word heights wide lie inside one text run.
+/// Gaps at most this many word heights wide lie inside one text run: a space of justified
+/// text is under one height, a column gutter several.
 const RUN_GAP_HEIGHTS: u32 = 2;
+
+/// Smallest row-grouping tolerance, in the units of the words, so that a region of tiny words
+/// does not split one line into several rows.
+const MIN_ROW_TOLERANCE: u32 = 3;
 
 /// The region without the words of its leading title lines, or `None` when it has none.
 ///
 /// A region that [`split_titled_region`] splits into titled tables keeps its titles for that
-/// path.
-pub(super) fn without_leading_titles(region: &[HocrWord], page_height: f32) -> Option<Vec<HocrWord>> {
+/// path. Pass `ruled` for a region with ruling lines: it is never trimmed.
+pub(super) fn without_leading_titles(region: &[HocrWord], page_height: f32, ruled: bool) -> Option<Vec<HocrWord>> {
+    if ruled {
+        return None;
+    }
     let median_height = super::median_region_word_height(region).max(1);
-    let rows = super::numeric_rows(region, (median_height / 2).max(3));
+    let rows = super::numeric_rows(region, (median_height / 2).max(MIN_ROW_TOLERANCE));
     if rows.len() < MIN_TABLE_ROWS + 1 {
         return None;
     }
-    let gap_limit = median_height.saturating_mul(RUN_GAP_HEIGHTS).max(3);
+    let gap_limit = median_height.saturating_mul(RUN_GAP_HEIGHTS).max(MIN_ROW_TOLERANCE);
     let title_rows = rows
         .iter()
         .take(MAX_TITLE_ROWS)
@@ -62,29 +75,46 @@ pub(super) fn without_leading_titles(region: &[HocrWord], page_height: f32) -> O
     {
         return None;
     }
-    let left = table.iter().flatten().map(|word| word.left).min()?;
-    let right = table.iter().flatten().map(|word| word.right()).max()?;
+    let (left, right) = extent(table.iter().flatten().copied())?;
+    let (header_left, header_right) = extent(table[0].iter().copied())?;
     let table_centre = (left + right) / 2;
     let table_width = right.saturating_sub(left);
-    let centred = titles.iter().all(|row| {
-        let (start, end) = (
-            row.iter().map(|word| word.left).min().unwrap_or(0),
-            row.iter().map(|word| word.right()).max().unwrap_or(0),
-        );
+    let title_extents: Vec<(u32, u32)> = titles
+        .iter()
+        .map(|row| extent(row.iter().copied()))
+        .collect::<Option<_>>()?;
+    let centred = title_extents.iter().all(|&(start, end)| {
         ((start + end) / 2).abs_diff(table_centre) <= median_height.saturating_mul(CENTRE_TOLERANCE_HEIGHTS)
             && end.saturating_sub(start).saturating_mul(100) >= table_width.saturating_mul(MIN_TITLE_WIDTH_PERCENT)
     });
-    if !centred || !title_stands_apart(titles, table) || split_titled_region(region, page_height).is_some() {
+    // A line that lies within the header's own extent, over two or more of its runs, is a
+    // spanning header ("Fiscal Year 2024" over its columns), part of the table.
+    let spans_columns = title_extents
+        .iter()
+        .all(|&(start, end)| start >= header_left && end <= header_right);
+    if !centred
+        || spans_columns
+        || !title_stands_apart(titles, table)
+        || split_titled_region(region, page_height).is_some()
+    {
         return None;
     }
-    let titled: Vec<*const HocrWord> = titles.iter().flatten().map(|word| std::ptr::from_ref(*word)).collect();
+    let cutoff = titles.iter().flatten().map(|word| word.top + word.height / 2).max()?;
     Some(
         region
             .iter()
-            .filter(|word| !titled.contains(&std::ptr::from_ref(*word)))
+            .filter(|word| word.top + word.height / 2 > cutoff)
             .cloned()
             .collect(),
     )
+}
+
+/// The leftmost and rightmost edge of `words`.
+fn extent<'a>(words: impl Iterator<Item = &'a HocrWord> + Clone) -> Option<(u32, u32)> {
+    Some((
+        words.clone().map(|word| word.left).min()?,
+        words.map(HocrWord::right).max()?,
+    ))
 }
 
 /// Whether the gap from the last title line to the header is wider than the table's row pitch.
@@ -159,7 +189,7 @@ mod tests {
 
     #[test]
     fn centred_title_lines_above_the_header_leave_the_table_region() {
-        let rest = without_leading_titles(&log_table(), 792.0).expect("both title lines are found");
+        let rest = without_leading_titles(&log_table(), 792.0, false).expect("both title lines are found");
         let texts: Vec<&str> = rest.iter().map(|word| word.text.as_str()).collect();
         assert_eq!(rest.len(), log_table().len() - 13);
         assert!(
@@ -175,7 +205,7 @@ mod tests {
         for word in words.iter_mut().filter(|word| word.top >= 157 && word.top < 170) {
             word.top -= 20;
         }
-        assert!(without_leading_titles(&words, 792.0).is_none());
+        assert!(without_leading_titles(&words, 792.0, false).is_none());
     }
 
     #[test]
@@ -184,7 +214,7 @@ mod tests {
         words.retain(|word| word.top >= 140);
         words.push(word("Common", 150, 127, 40));
         words.push(word("label", 194, 127, 30));
-        assert!(without_leading_titles(&words, 792.0).is_none());
+        assert!(without_leading_titles(&words, 792.0, false).is_none());
     }
 
     #[test]
@@ -193,6 +223,32 @@ mod tests {
         for word in words.iter_mut().filter(|word| word.top < 140) {
             word.left -= 60;
         }
-        assert!(without_leading_titles(&words, 792.0).is_none());
+        assert!(without_leading_titles(&words, 792.0, false).is_none());
+    }
+
+    #[test]
+    fn a_ruled_region_is_never_trimmed() {
+        assert!(without_leading_titles(&log_table(), 792.0, true).is_none());
+    }
+
+    #[test]
+    fn a_spanning_header_over_its_own_columns_stays_in_the_table() {
+        let mut words = log_table();
+        words.retain(|word| word.top >= 150);
+        // Centred over the whole header row, which it spans, one pitch-and-a-half above it.
+        words.push(word("Fiscal", 150, 120, 36));
+        words.push(word("Year", 190, 120, 28));
+        words.push(word("Tables", 222, 120, 40));
+        assert!(without_leading_titles(&words, 792.0, false).is_none());
+    }
+
+    #[test]
+    fn a_three_line_centred_title_leaves_the_table_region() {
+        let mut words = log_table();
+        words.push(word("Natural", 150, 89, 40));
+        words.push(word("Logarithms", 194, 89, 60));
+        words.push(word("Table", 258, 89, 40));
+        let rest = without_leading_titles(&words, 792.0, false).expect("three lines are found");
+        assert_eq!(rest.len(), log_table().len() - 13);
     }
 }

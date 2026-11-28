@@ -1082,10 +1082,15 @@ pub(crate) fn extract_tables_heuristic(
 fn without_title_lines(
     regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
     page_height: f32,
+    region_rules: &[usize],
 ) -> Option<Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>> {
     let stripped: Vec<Option<Vec<crate::pdf::table_reconstruct::HocrWord>>> = regions
         .iter()
-        .map(|region| leading_titles::without_leading_titles(region, page_height))
+        .enumerate()
+        .map(|(index, region)| {
+            let ruled = region_rules.get(index).is_some_and(|rules| *rules > 0);
+            leading_titles::without_leading_titles(region, page_height, ruled)
+        })
         .collect();
     if stripped.iter().all(Option::is_none) {
         return None;
@@ -1117,7 +1122,7 @@ fn reconstruct_page_region_tables(
     column_rules: &source_columns::PageRules<'_>,
 ) -> (Vec<RegionTable>, Vec<bool>) {
     let trimmed: Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>;
-    let regions = match without_title_lines(regions, page_height) {
+    let regions = match without_title_lines(regions, page_height, region_rules) {
         Some(titled_out) => {
             trimmed = titled_out;
             &trimmed[..]
