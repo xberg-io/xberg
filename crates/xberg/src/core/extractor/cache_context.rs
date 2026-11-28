@@ -285,8 +285,9 @@ fn unidentified_model() -> Option<String> {
 /// Stats files: it never creates a directory or downloads, and reads a model only to identify it
 /// (a pinned-size pack against its pin, and off Unix any other pack by its bytes), once per file
 /// version, since it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
-/// would download its packs) is keyed on its set, languages and candidate directories instead;
-/// once the packs exist the key changes, so nothing read before is served after.
+/// would download its packs) is keyed on its set, languages, candidate directories and the
+/// identity of the packs already in them instead; once the packs exist the key changes, so
+/// nothing read before is served after.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[must_use]
 fn hash_tessdata_selection(
@@ -320,13 +321,21 @@ fn hash_tessdata_selection(
     let override_path = selection.directory.as_deref();
     let Some(directory) = existing_tessdata_dir_for(&required, override_path, env) else {
         hash.update(&[0]);
+        let mut identified = true;
         for candidate in tessdata_search_dirs(override_path, env) {
             frame(hash, candidate.as_bytes());
+            // ~keep A wrong pack in a verified directory that cannot be moved aside serves no key
+            // here but is read as given, so its identity has to follow the file.
+            identified &= hash_pack_identities(
+                hash,
+                std::path::Path::new(&candidate),
+                required.iter().map(String::as_str),
+            );
         }
         for language in &languages {
             frame(hash, language.as_bytes());
         }
-        return true;
+        return identified;
     };
     let directory = canonical_tessdata_dir(&directory);
     hash.update(&[1]);
@@ -919,6 +928,50 @@ mod tests {
         // ~keep A different length: two writes within one clock tick can share a modification time.
         std::fs::write(&english, b"a replaced model").unwrap();
         assert_ne!(through_prefix, context(prefix(), best), "a pack replaced in place");
+    }
+
+    #[test]
+    fn a_wrong_best_pack_served_as_given_is_part_of_the_tessdata_context() {
+        use crate::core::config::TessdataModel;
+        use crate::ocr::processor::validation::{TessdataEnv, model_cache_dir};
+
+        let cache = tempfile::tempdir().unwrap();
+        let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+        std::fs::create_dir_all(&managed).unwrap();
+        let pack = managed.join("eng.traineddata");
+        std::fs::write(&pack, b"not the pinned best pack").unwrap();
+        let selection = ModelSelection {
+            languages: vec!["eng".into()],
+            directory: None,
+            tessdata_model: TessdataModel::Best,
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        let env = TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().into()),
+            system_paths: false,
+            model: TessdataModel::Best,
+        };
+        assert!(
+            crate::ocr::processor::validation::existing_tessdata_dir_for(&["eng".to_owned()], None, &env).is_none(),
+            "a wrong pack serves no verified directory"
+        );
+        let context = || {
+            let mut hash = blake3::Hasher::new();
+            assert!(hash_tessdata_selection(&mut hash, &selection, &env));
+            hash.finalize()
+        };
+
+        let first = context();
+        assert_eq!(first, context());
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&pack, b"another pack that is not the pinned one").unwrap();
+        assert_ne!(
+            first,
+            context(),
+            "text read from the pack used as given must not be served once it changes"
+        );
     }
 
     #[test]
