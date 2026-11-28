@@ -392,7 +392,7 @@ pub(crate) fn must_not_read() -> bool {
 fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
     let file = std::fs::File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
-    if !metadata.is_file() {
+    if !metadata.is_file() || metadata.len() > limit {
         return None;
     }
     let state = FileStamp::of(&metadata)?;
@@ -1059,6 +1059,19 @@ mod tests {
             pins.classify("eng", &pack),
             VerifiedSet::Unknown,
             "the memo must not vouch for the bytes it read before"
+        );
+    }
+
+    #[test]
+    fn a_file_one_byte_over_the_limit_has_no_digest() {
+        let directory = tempfile::tempdir().unwrap();
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"12345").unwrap();
+
+        assert_eq!(super::memoized_sha256(&pack, 4), None);
+        assert_eq!(
+            super::memoized_sha256(&pack, 5),
+            Some(hex::encode(Sha256::digest(b"12345")))
         );
     }
 
