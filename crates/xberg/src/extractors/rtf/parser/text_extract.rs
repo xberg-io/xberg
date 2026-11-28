@@ -130,8 +130,8 @@ struct TextDestinations {
     footnote_markers: Vec<usize>,
     /// Markers recorded before the previous `\footnote` group closed.
     footnote_markers_claimed: usize,
-    /// `(marker offset, note)` of each non-empty note, paired when its group closes.
-    footnote_pairs: Vec<(usize, String)>,
+    /// `(marker offset if any, note)` of each non-empty note, paired when its group closes.
+    footnote_pairs: Vec<(Option<usize>, String)>,
     pending_atnid: Option<i32>,
 }
 
@@ -329,11 +329,14 @@ impl TextParser {
         if was_open && !footnote.active && self.output.structured_notes {
             let destinations = &mut self.destinations;
             if destinations.footnote.items.len() > notes_before
-                && destinations.footnote_markers.len() > destinations.footnote_markers_claimed
-                && let Some(offset) = destinations.footnote_markers.last().copied()
                 && let Some(note) = destinations.footnote.items.last()
             {
-                destinations.footnote_pairs.push((offset, note.trim().to_string()));
+                // A note anchored by a literal character instead of `\chftn` has no marker; its
+                // body is kept as a definition no reference points at.
+                let anchor = (destinations.footnote_markers.len() > destinations.footnote_markers_claimed)
+                    .then(|| destinations.footnote_markers.last().copied())
+                    .flatten();
+                destinations.footnote_pairs.push((anchor, note.trim().to_string()));
             }
             destinations.footnote_markers_claimed = destinations.footnote_markers.len();
         }
@@ -494,7 +497,7 @@ impl TextParser {
             .destinations
             .footnote_pairs
             .iter()
-            .map(|(offset, note)| (map_offset(&mapping, *offset), note.clone()))
+            .map(|(offset, note)| (offset.map(|offset| map_offset(&mapping, offset)), note.clone()))
             .collect();
         let formatting = RtfFormattingData {
             spans: self.fmt_tracker.spans,

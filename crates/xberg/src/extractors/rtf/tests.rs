@@ -784,3 +784,10 @@ fn should_derive_metadata_word_count_without_footnote_literals() {
         Some(&serde_json::json!(7))
     );
 }
+
+#[test]
+fn should_keep_a_footnote_body_that_has_no_chftn_anchor() {
+    let doc = RtfExtractor::build_internal_document(r"{\rtf1\ansi Text{\super *}{\footnote Note}}", false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert!(rendered.contains("Note"), "{rendered:?}");
+}

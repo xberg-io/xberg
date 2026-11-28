@@ -68,9 +68,9 @@ pub struct RtfFormattingData {
     pub footer_text: Option<String>,
     /// Hyperlink spans: (start_byte, end_byte, url).
     pub hyperlinks: Vec<(usize, usize, String)>,
-    /// `(byte offset of the reference in the text, note body)` per footnote, in reading order
+    /// `(byte offset of the reference in the text if the note has one, note body)` per footnote, in reading order
     /// (document-parts mode).
-    pub footnotes: Vec<(usize, String)>,
+    pub footnotes: Vec<(Option<usize>, String)>,
 }
 
 /// Tracks formatting state during the text extraction pass so that

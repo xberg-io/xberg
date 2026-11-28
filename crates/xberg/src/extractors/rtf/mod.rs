@@ -137,14 +137,14 @@ fn footnote_key(index: usize) -> String {
 /// next paragraph. ~keep
 fn push_footnote_refs_before(
     builder: &mut InternalDocumentBuilder,
-    footnotes: &[(usize, String)],
+    anchors: &[(usize, usize)],
     next: &mut usize,
     limit: usize,
 ) {
-    while let Some(&(offset, _)) = footnotes.get(*next)
+    while let Some(&(offset, index)) = anchors.get(*next)
         && offset < limit
     {
-        builder.push_footnote_ref(&(*next + 1).to_string(), &footnote_key(*next), None);
+        builder.push_footnote_ref(&(index + 1).to_string(), &footnote_key(index), None);
         *next += 1;
     }
 }
@@ -188,10 +188,17 @@ impl RtfExtractor {
         let mut list_depth: u8 = 0;
 
         let mut next_footnote_ref = 0usize;
+        let mut footnote_anchors: Vec<(usize, usize)> = formatting
+            .footnotes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (offset, _))| offset.map(|offset| (offset, index)))
+            .collect();
+        footnote_anchors.sort_by_key(|&(offset, _)| offset);
 
         for paragraph in extracted_text.split("\n\n") {
             if !in_table_rows {
-                push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, byte_offset);
+                push_footnote_refs_before(&mut builder, &footnote_anchors, &mut next_footnote_ref, byte_offset);
             }
             let trimmed = paragraph.trim();
             if trimmed.is_empty() {
@@ -223,7 +230,7 @@ impl RtfExtractor {
                     builder.push_table_from_cells(&tables[table_idx].cells, None, None);
                     table_idx += 1;
                 }
-                push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, byte_offset);
+                push_footnote_refs_before(&mut builder, &footnote_anchors, &mut next_footnote_ref, byte_offset);
             }
 
             let lines: Vec<&str> = trimmed.lines().collect();
@@ -302,7 +309,7 @@ impl RtfExtractor {
 
         let trailing_tables = in_table_rows || table_idx < tables.len();
         if !trailing_tables {
-            push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, usize::MAX);
+            push_footnote_refs_before(&mut builder, &footnote_anchors, &mut next_footnote_ref, usize::MAX);
         }
 
         if in_list {
@@ -321,7 +328,7 @@ impl RtfExtractor {
             table_idx += 1;
         }
 
-        push_footnote_refs_before(&mut builder, &formatting.footnotes, &mut next_footnote_ref, usize::MAX);
+        push_footnote_refs_before(&mut builder, &footnote_anchors, &mut next_footnote_ref, usize::MAX);
 
         for (index, (_, note)) in formatting.footnotes.iter().enumerate() {
             builder.push_footnote_definition(note, &footnote_key(index), None);
