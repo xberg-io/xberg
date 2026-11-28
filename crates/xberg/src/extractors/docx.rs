@@ -2641,13 +2641,57 @@ mod tests {
     #[tokio::test]
     async fn a_section_without_its_own_reference_inherits_the_previous_sections_part() {
         let parts = [
-            ("word/header1.xml", hf_part("hdr", "Inherited Header")),
-            ("word/footer1.xml", hf_part("ftr", "Inherited Footer")),
+            ("word/header1.xml", hf_part("hdr", "Inherited First Header")),
+            ("word/footer1.xml", hf_part("ftr", "Inherited First Footer")),
         ];
-        let first = r#"<w:headerReference w:type="default" r:id="header1"/><w:footerReference w:type="default" r:id="footer1"/>"#;
-        let text = hf_text(&sectioned_body(&[first, ""]), &hf_files(&parts)).await;
-        assert_eq!(text.matches("Inherited Header").count(), 1, "{text}");
-        assert_eq!(text.matches("Inherited Footer").count(), 1, "{text}");
+        let first = r#"<w:headerReference w:type="first" r:id="header1"/><w:footerReference w:type="first" r:id="footer1"/>"#;
+        let body = sectioned_body(&[first, "<w:titlePg/>"]);
+        let text = hf_text(&body, &hf_files(&parts)).await;
+        assert_eq!(text.matches("Inherited First Header").count(), 1, "{text}");
+        assert_eq!(text.matches("Inherited First Footer").count(), 1, "{text}");
+
+        let without_inheritor = hf_text(&sectioned_body(&[first]), &hf_files(&parts)).await;
+        assert!(!without_inheritor.contains("Inherited First Header"), "{without_inheritor}");
+    }
+
+    #[tokio::test]
+    async fn a_previous_section_properties_change_does_not_replace_the_current_part() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Current Header")),
+            ("word/header2.xml", hf_part("hdr", "Historical Header")),
+        ];
+        let sect = r#"<w:headerReference w:type="default" r:id="header1"/><w:sectPrChange w:id="1"><w:sectPr><w:headerReference w:type="default" r:id="header2"/></w:sectPr></w:sectPrChange>"#;
+        let text = hf_text(&sectioned_body(&[sect]), &hf_files(&parts)).await;
+        assert!(text.contains("Current Header"), "{text}");
+        assert!(!text.contains("Historical Header"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_relationship_target_with_dot_segments_still_resolves_its_part() {
+        let part = hf_part("hdr", "Dotted Header");
+        let rels = format!(
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdDot" Type="{REL_NS}/header" Target="./header1.xml"/></Relationships>"#
+        );
+        let sect = r#"<w:headerReference w:type="default" r:id="rIdDot"/>"#;
+        let data = build_test_docx_with_files(
+            &sectioned_body(&[sect]),
+            &[("word/header1.xml", &part), ("word/_rels/document.xml.rels", &rels)],
+        );
+        let config = ExtractionConfig {
+            content_filter: Some(crate::core::config::ContentFilterConfig {
+                include_headers: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = DocxExtractor::new()
+            .extract_content(&data, DOCX_MIME, &config)
+            .await
+            .unwrap();
+        let text =
+            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain)
+                .content;
+        assert!(text.contains("Dotted Header"), "{text}");
     }
 
     #[tokio::test]

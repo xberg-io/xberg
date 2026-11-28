@@ -4319,11 +4319,9 @@ impl<R: Read + Seek> DocxParser<R> {
                             _ => {}
                         }
                     }
-                    if let (Some(target), Some(is_header), Some(rel_id)) = (target, kind, rel_id) {
-                        let resolved = match target.strip_prefix('/') {
-                            Some(stripped) => stripped.to_string(),
-                            None => format!("word/{}", target),
-                        };
+                    if let (Some(target), Some(is_header), Some(rel_id)) = (target, kind, rel_id)
+                        && let Ok(resolved) = crate::extractors::security::resolve_container_entry("word", &target)
+                    {
                         targets.push((is_header, resolved, rel_id));
                     }
                 }

@@ -7,8 +7,8 @@ use super::parser::HeaderFooterType;
 #[cfg(test)]
 use crate::extraction::ooxml_constants::WORDPROCESSINGML_NAMESPACE;
 use crate::extractors::security::{SecurityBudget, SecurityError};
-use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
 
 /// Page orientation.
 #[cfg_attr(alef, alef(skip))]
@@ -210,20 +210,30 @@ pub(crate) fn parse_section_properties_streaming(
 ) -> Result<SectionProperties, SecurityError> {
     let mut props = SectionProperties::default();
     let mut buf = Vec::new();
+    // `w:sectPrChange` wraps the section's previous `w:sectPr`; none of it describes the section as it is now.
+    let mut change_depth: usize = 0;
 
     loop {
         budget.step()?;
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 budget.enter()?;
-                apply_section_element(e, &mut props);
+                if e.name().as_ref() == "w:sectPrChange" {
+                    change_depth += 1;
+                } else if change_depth == 0 {
+                    apply_section_element(e, &mut props);
+                }
             }
             Ok(Event::Empty(ref e)) => {
-                apply_section_element(e, &mut props);
+                if change_depth == 0 {
+                    apply_section_element(e, &mut props);
+                }
             }
             Ok(Event::End(ref e)) => {
                 budget.leave();
-                if e.name().as_ref() == "w:sectPr" {
+                if e.name().as_ref() == "w:sectPrChange" {
+                    change_depth = change_depth.saturating_sub(1);
+                } else if e.name().as_ref() == "w:sectPr" && change_depth == 0 {
                     break;
                 }
             }
