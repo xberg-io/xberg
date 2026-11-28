@@ -124,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **docx:** a table cell whose deletion is tracked (`w:tcPr/w:cellDel`) is dropped with its text, footnotes, comments and drawings, and the cells after it in the row shift left, with empty cells padding the row's end so every row keeps the table's column count; a `w:cellDel` inside `w:tcPrChange` no longer deletes the cell. (#3453)
+- **docx:** a table cell whose deletion is tracked (`w:tcPr/w:cellDel`) is dropped with its text, footnotes, comments and drawings, and the cells after it in the row shift left (a row left short is padded to the table's width, and a row whose cells are all deleted is dropped); a `w:cellDel` inside `w:tcPrChange` no longer deletes the cell. (#3453)
 - **docx:** body text, tables, lists, footnotes, comments and headers/footers are no longer silently dropped when the WordprocessingML namespace is bound to a prefix other than `w` (or to the default namespace), or uses the strict ISO 29500 namespace URI. (#3437)
 - **xlsx:** a workbook whose `sharedStrings.xml` declares a `uniqueCount` larger than the strings it holds is no longer rejected as too large; the content-size limit now applies to the strings actually present. (#3443)
 - **rtf:** adjacent runs with the same formatting, such as `{\b pre}{\b fix}`, merge into one emphasis span, so Markdown output is `**prefix**` instead of `**pre****fix**`. (#3433)
