@@ -350,22 +350,26 @@ pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
     workbook: &mut calamine::Xlsx<R>,
     name: &str,
     sheet: TruncatedSheet,
-    epoch_styles: super::datetime::EpochStyles<'_>,
+    epoch_1904: bool,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> Result<crate::types::ExcelSheet> {
-    let mut reader = workbook
-        .worksheet_cells_reader(name)
-        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
     let mut kept = TruncatedRange::new(sheet);
-    while let Some(cell) = reader
-        .next_cell()
-        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
     {
-        if !kept.push(cell.get_position(), cell.get_value()) {
-            break;
+        let mut reader = workbook
+            .worksheet_cells_reader(name)
+            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
+        while let Some(cell) = reader
+            .next_cell()
+            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+        {
+            if !kept.push(cell.get_position(), cell.get_value()) {
+                break;
+            }
         }
     }
-    super::datetime::resolve_epoch_zero_in_sparse(&mut kept.cells, epoch_styles);
+    if epoch_1904 {
+        super::datetime::resolve_xlsx_epoch_zero_in_sparse(workbook, name, &mut kept.cells);
+    }
     Ok(kept.finish(name, warnings))
 }
 

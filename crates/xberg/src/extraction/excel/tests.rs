@@ -505,7 +505,7 @@ fn should_preserve_dense_xlsx_output_after_position_only_preflight() {
         XlsxSheetShape::Dense
     );
     let mut warnings = Vec::new();
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", None, &mut warnings).unwrap();
+    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", false, &mut warnings).unwrap();
 
     assert_eq!(sheet.row_count, 2);
     assert_eq!(sheet.col_count, 2);
@@ -542,7 +542,7 @@ fn should_preserve_pathological_sparse_xlsx_output_after_reopening_reader() {
         XlsxSheetShape::Sparse
     );
     let mut warnings = Vec::new();
-    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", None, &mut warnings).unwrap();
+    let sheet = process_xlsx_sheet_safe(&mut workbook, "Sheet1", false, &mut warnings).unwrap();
 
     assert_eq!(sheet.row_count, 1_048_575);
     assert_eq!(sheet.col_count, 16_384);

@@ -27,12 +27,21 @@ fn test_format_cell_value_date_in_the_1904_system() {
 }
 
 fn xlsx_with_zero_serials(date1904: bool) -> Vec<u8> {
+    xlsx_with_zero_row(
+        r#"<c r="A1" s="1"><v>0</v></c><c r="B1" s="2"><v>0</v></c><c r="C1" s="2"><v>0.7027777777777777</v></c>"#,
+        date1904,
+    )
+}
+
+fn xlsx_with_styled_zero_row(cells: &str) -> Vec<u8> {
+    xlsx_with_zero_row(cells, true)
+}
+
+fn xlsx_with_zero_row(cells: &str, date1904: bool) -> Vec<u8> {
     use std::io::Write;
-    let original = make_xlsx_with_worksheet(
-        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">
-        <c r="A1" s="1"><v>0</v></c><c r="B1" s="2"><v>0</v></c><c r="C1" s="2"><v>0.7027777777777777</v></c>
-        </row></sheetData></worksheet>"#,
-    );
+    let original = make_xlsx_with_worksheet(&format!(
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">{cells}</row></sheetData></worksheet>"#
+    ));
     let mut archive = zip::ZipArchive::new(Cursor::new(original)).unwrap();
     let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for index in 0..archive.len() {
@@ -92,12 +101,12 @@ fn should_keep_serial_zero_in_the_1900_system_as_midnight_gh3441() {
 fn should_read_every_zero_serial_without_cell_styles_as_the_date_for_xls_and_xlsb_gh3441() {
     let zero = Data::DateTime(ExcelDateTime::new(0.0, ExcelDateTimeType::DateTime, true));
     let mut range = calamine::Range::new((0, 0), (0, 1));
-    range.set_value((0, 0), zero.clone());
+    range.set_value((0, 0), zero);
     range.set_value(
         (0, 1),
         Data::DateTime(ExcelDateTime::new(0.5, ExcelDateTimeType::DateTime, true)),
     );
-    crate::extraction::excel::datetime::resolve_epoch_zero_in_range(&mut range, Some(&calamine::StyleRange::default()));
+    crate::extraction::excel::datetime::resolve_unstyled_epoch_zero_in_range(&mut range);
     assert_eq!(
         range.get_value((0, 0)),
         Some(&Data::DateTimeIso("1904-01-01".to_owned()))
@@ -106,10 +115,17 @@ fn should_read_every_zero_serial_without_cell_styles_as_the_date_for_xls_and_xls
         range.get_value((0, 1)).map(format_cell_to_string).as_deref(),
         Some("12:00:00")
     );
-    let mut untouched = calamine::Range::new((0, 0), (0, 0));
-    untouched.set_value((0, 0), zero.clone());
-    crate::extraction::excel::datetime::resolve_epoch_zero_in_range(&mut untouched, None);
-    assert_eq!(untouched.get_value((0, 0)), Some(&zero));
+}
+
+#[test]
+fn should_resolve_zero_serials_in_a_1904_sheet_with_many_styled_cells_gh3441() {
+    let mut cells = String::from(r#"<c r="A1" s="1"><v>0</v></c><c r="B1" s="2"><v>0</v></c>"#);
+    for column in 0..20_000 {
+        cells.push_str(&format!(r#"<c r="C{}" s="2"/>"#, column + 1));
+    }
+    let bytes = xlsx_with_styled_zero_row(&cells);
+    let row = first_row(&bytes);
+    assert_eq!(&row[..2], ["1904-01-01", "00:00:00"]);
 }
 
 #[test]
@@ -124,4 +140,8 @@ fn should_classify_the_format_section_that_applies_to_zero_gh3441() {
     assert!(!time_only("General", Some(30)));
     assert!(time_only("General", Some(20)));
     assert!(!time_only("\"hours\" yyyy", None));
+    assert!(time_only("[>0]yyyy-mm-dd;hh:mm", None));
+    assert!(!time_only("[=0]yyyy-mm-dd;hh:mm", None));
+    assert!(time_only("General", Some(32)));
+    assert!(time_only("General", Some(33)));
 }
