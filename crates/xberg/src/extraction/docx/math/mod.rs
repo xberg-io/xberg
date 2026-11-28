@@ -95,13 +95,25 @@ enum MathNode {
     },
 }
 
+fn warn_dropped_formula() {
+    tracing::warn!(
+        max_nesting = MAX_MATH_NESTING,
+        "dropping OMML formula nested deeper than the converter limit"
+    );
+}
+
 /// Collect an `m:oMathPara` subtree and convert to LaTeX (display math).
 /// The reader should be positioned right after the `<m:oMathPara>` start tag.
 pub(crate) fn collect_and_convert_omath_para(
     reader: &mut Reader<&[u8]>,
     budget: &mut SecurityBudget,
 ) -> Result<String, SecurityError> {
+    reset_truncated();
     let children = collect_children(reader, "m:oMathPara", budget)?;
+    if was_truncated() {
+        warn_dropped_formula();
+        return Ok(String::new());
+    }
     let mut parts = Vec::new();
     for child in &children {
         if let MathNode::Group { children: inner } = child {
@@ -125,15 +137,30 @@ pub(crate) fn collect_and_convert_omath(
     reader: &mut Reader<&[u8]>,
     budget: &mut SecurityBudget,
 ) -> Result<String, SecurityError> {
+    reset_truncated();
     let children = collect_children(reader, "m:oMath", budget)?;
+    if was_truncated() {
+        warn_dropped_formula();
+        return Ok(String::new());
+    }
     Ok(render_nodes(&children).trim().to_string())
 }
+
+/// Maximum nesting of formula containers (`m:e`, `m:num`, `m:sup`, ...) the converter follows.
+///
+/// Collecting, rendering and dropping the node tree each recurse once per level, so this is
+/// a stack bound, independent of `max_xml_depth` (default 1024, deep enough to overflow a
+/// small thread). Measured per `m:sSup` level: about 11 KiB in a debug build (60 levels
+/// need 704 KiB, 127 need 1408 KiB) and under 1 KiB in release (127 levels fit in 128 KiB).
+/// 64 levels is about 0.7 MiB in debug, under a third of a 2 MiB worker or test thread
+/// stack, and far above the handful of levels real formulas use.
+const MAX_MATH_NESTING: usize = 64;
 
 mod collect;
 mod elements;
 mod render;
 
-use collect::collect_children;
+use collect::{collect_children, reset_truncated, was_truncated};
 use render::render_nodes;
 
 #[cfg(test)]

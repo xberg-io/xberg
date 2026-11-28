@@ -860,3 +860,68 @@ fn should_stack_integral_limits_only_when_lim_loc_is_und_ovr() {
     ));
     assert_eq!(both_hidden, "\\int{x}");
 }
+
+/// `levels` nested `<m:sSup><m:e>` pairs around one run, wrapped in `<m:oMath>`.
+fn nested_ssup_xml(levels: usize) -> String {
+    let mut xml = String::from("<m:oMath>");
+    xml.push_str(&"<m:sSup><m:e>".repeat(levels));
+    xml.push_str("<m:r><m:t>x</m:t></m:r>");
+    xml.push_str(&"</m:e></m:sSup>".repeat(levels));
+    xml.push_str("</m:oMath>");
+    xml
+}
+
+/// Run the converter with default limits on a thread with a small stack, like a
+/// tokio worker or a debug test thread.
+fn convert_on_small_stack(xml: String) -> Result<String, SecurityError> {
+    const SMALL_STACK: usize = 2 * 1024 * 1024;
+    std::thread::Builder::new()
+        .stack_size(SMALL_STACK)
+        .spawn(move || {
+            let mut reader = Reader::from_str(&xml);
+            reader.config_mut().trim_text(false);
+            let mut buf = Vec::new();
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(Event::Start(ref e)) if e.name().as_ref() == "m:oMath" => break,
+                    Ok(Event::Eof) => panic!("no <m:oMath>"),
+                    _ => {}
+                }
+                buf.clear();
+            }
+            let mut budget = SecurityBudget::with_defaults();
+            budget.enter().expect("depth for <m:oMath>");
+            collect_and_convert_omath(&mut reader, &mut budget)
+        })
+        .expect("spawn")
+        .join()
+        .expect("converter must not overflow the stack")
+}
+
+#[test]
+fn should_drop_formula_nested_200000_deep_without_overflowing_the_stack() {
+    assert_eq!(convert_on_small_stack(nested_ssup_xml(200_000)).unwrap(), "");
+}
+
+#[test]
+fn should_drop_formula_just_past_the_nesting_cap() {
+    assert_eq!(convert_on_small_stack(nested_ssup_xml(MAX_MATH_NESTING)).unwrap(), "");
+}
+
+#[test]
+fn should_convert_formula_nested_50_deep() {
+    let latex = convert_on_small_stack(nested_ssup_xml(50)).unwrap();
+    assert_eq!(latex, format!("{{x^{{}}}}{}", "^{}".repeat(49)));
+}
+
+#[test]
+fn should_convert_formula_at_the_nesting_cap() {
+    let latex = convert_on_small_stack(nested_ssup_xml(MAX_MATH_NESTING - 1)).unwrap();
+    assert_eq!(latex, format!("{{x^{{}}}}{}", "^{}".repeat(MAX_MATH_NESTING - 2)));
+}
+
+#[test]
+fn should_keep_converting_after_a_dropped_deep_formula() {
+    assert_eq!(convert_on_small_stack(nested_ssup_xml(MAX_MATH_NESTING)).unwrap(), "");
+    assert_eq!(omml_to_latex("<m:r><m:t>y</m:t></m:r>"), "y");
+}

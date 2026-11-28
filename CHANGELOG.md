@@ -124,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **docx:** a formula nested hundreds of levels deep (OMML `m:sSup`, `m:f`, `m:rad`, ...) overflowed the stack and aborted the process before the XML depth limit fired. The converter now follows at most 64 nested levels and drops a deeper formula with a warning, keeping the text around it; the same limit applies to every OMML caller. (#3479)
 - **docx:** body text, tables, lists, footnotes, comments and headers/footers are no longer silently dropped when the WordprocessingML namespace is bound to a prefix other than `w` (or to the default namespace), or uses the strict ISO 29500 namespace URI. (#3437)
 - **xlsx:** a workbook whose `sharedStrings.xml` declares a `uniqueCount` larger than the strings it holds is no longer rejected as too large; the content-size limit now applies to the strings actually present. (#3443)
 - **rtf:** adjacent runs with the same formatting, such as `{\b pre}{\b fix}`, merge into one emphasis span, so Markdown output is `**prefix**` instead of `**pre****fix**`. (#3433)

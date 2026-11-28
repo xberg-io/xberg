@@ -1,12 +1,62 @@
 use super::elements::*;
 use super::*;
+use std::cell::Cell;
+
+thread_local! {
+    static NESTING: Cell<usize> = const { Cell::new(0) };
+    static TRUNCATED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Holds one level of [`collect_children`] nesting for as long as it lives.
+struct NestingGuard;
+
+impl NestingGuard {
+    /// `None` when entering would exceed [`MAX_MATH_NESTING`].
+    fn enter() -> Option<Self> {
+        NESTING.with(|n| {
+            if n.get() >= MAX_MATH_NESTING {
+                None
+            } else {
+                n.set(n.get() + 1);
+                Some(Self)
+            }
+        })
+    }
+}
+
+impl Drop for NestingGuard {
+    fn drop(&mut self) {
+        NESTING.with(|n| n.set(n.get().saturating_sub(1)));
+    }
+}
+
+/// Clear the "a container was dropped for nesting" flag before converting one formula.
+pub(super) fn reset_truncated() {
+    TRUNCATED.with(|t| t.set(false));
+}
+
+/// Whether the formula being converted had a container dropped for nesting.
+pub(super) fn was_truncated() -> bool {
+    TRUNCATED.with(Cell::get)
+}
 
 /// Recursively collect child nodes until the matching close tag.
+///
+/// Collecting, rendering and dropping the node tree all recurse once per level, so the
+/// depth is capped at [`MAX_MATH_NESTING`] independently of `max_xml_depth`. A container
+/// past the cap is skipped to its end tag (keeping the reader and budget balanced) and
+/// flagged via [`was_truncated`] so the caller can drop the whole formula.
 pub(super) fn collect_children(
     reader: &mut Reader<&[u8]>,
     end_tag: &str,
     budget: &mut SecurityBudget,
 ) -> Result<Vec<MathNode>, SecurityError> {
+    let Some(_guard) = NestingGuard::enter() else {
+        TRUNCATED.with(|t| t.set(true));
+        skip_to_end(reader, end_tag);
+        budget.leave();
+        return Ok(Vec::new());
+    };
     let mut nodes = Vec::new();
     let mut buf = Vec::new();
 
