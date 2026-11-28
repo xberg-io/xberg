@@ -48,7 +48,9 @@ pub(crate) struct Document {
     pub(crate) note_numbers: NoteNumbers,
     /// Notes referenced from a tracked-deleted table row. A definition left with no live
     /// reference is dropped with the row instead of written as an unreferenced note.
-    pub(crate) notes_in_deleted_rows: Vec<(NoteType, String)>,
+    pub(crate) notes_in_deleted_rows: ahash::AHashSet<(NoteType, String)>,
+    /// Comment ids referenced from a tracked-deleted table row; handled like the notes above.
+    pub(crate) comments_in_deleted_rows: ahash::AHashSet<String>,
     pub tables: Vec<Table>,
     pub headers: Vec<HeaderFooter>,
     pub footers: Vec<HeaderFooter>,
@@ -1960,7 +1962,8 @@ struct BodyParseOutputs {
     note_refs_by_paragraph: AHashMap<usize, Vec<NoteRef>>,
     note_refs_by_table: AHashMap<usize, Vec<NoteRef>>,
     note_numbers: NoteNumbers,
-    notes_in_deleted_rows: Vec<(NoteType, String)>,
+    notes_in_deleted_rows: ahash::AHashSet<(NoteType, String)>,
+    comments_in_deleted_rows: ahash::AHashSet<String>,
     tables: Vec<Table>,
     drawings: Vec<super::drawing::Drawing>,
     elements: Vec<DocumentElement>,
@@ -3078,6 +3081,9 @@ impl<R: Read + Seek> DocxParser<R> {
         if let Ok(comments_xml) = self.read_file("word/comments.xml") {
             self.parse_comments(&comments_xml, &mut document.comments, budget, &mut document.warnings)?;
         }
+        document
+            .comments
+            .retain(|c| !document.comments_in_deleted_rows.contains(&c.id) || comment_ref_ids.contains(&c.id));
         if !comment_ref_ids.is_empty() {
             let known_ids: ahash::AHashSet<&str> = document.comments.iter().map(|c| c.id.as_str()).collect();
             for id in &comment_ref_ids {
@@ -3227,6 +3233,7 @@ impl<R: Read + Seek> DocxParser<R> {
         document.note_refs_by_table = out.note_refs_by_table;
         document.note_numbers = out.note_numbers;
         document.notes_in_deleted_rows = out.notes_in_deleted_rows;
+        document.comments_in_deleted_rows = out.comments_in_deleted_rows;
         document.tables = out.tables;
         document.drawings = out.drawings;
         document.elements = out.elements;
@@ -3723,7 +3730,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                                 id.to_string()
                                             };
                                             if table_stack.iter().any(|c| c.pending_row_deleted) {
-                                                out.notes_in_deleted_rows.push((note_type, id.to_string()));
+                                                out.notes_in_deleted_rows.insert((note_type, id.to_string()));
                                             }
                                             let marker_start = run.text.len();
                                             run.text.push_str(&format!("[^{label}]"));
@@ -3753,6 +3760,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                 if attr.key.as_ref() == "w:id" {
                                     let id = attr.value.as_ref();
                                     if table_stack.iter().any(|c| c.pending_row_deleted) {
+                                        out.comments_in_deleted_rows.insert(id.to_string());
                                         continue;
                                     }
                                     out.comment_ref_ids.push(id.to_string());
