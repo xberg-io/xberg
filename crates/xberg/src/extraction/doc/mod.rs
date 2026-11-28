@@ -71,7 +71,7 @@ pub(crate) struct DocTableMark {
     pub cell_end: bool,
     /// The paragraph ends a row.
     pub row_end: bool,
-    /// Table depth, 1 for an outermost table; 0 (absent when serialized) reads as 1.
+    /// Table depth, 1 for an outermost table; 0 (the serde default) reads as 1.
     #[serde(default)]
     pub depth: u8,
 }
