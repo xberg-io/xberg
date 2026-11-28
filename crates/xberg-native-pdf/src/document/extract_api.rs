@@ -342,7 +342,7 @@ impl PdfDocument {
                 .len()
                 .saturating_mul(PAGE_PASS_CACHE_BYTES_PER_SOURCE_BYTE),
         );
-        tracing::debug!(budget_bytes = budget, "page pass cache started");
+        tracing::debug!(target: LOG_TARGET, budget_bytes = budget, "page pass cache started");
         *self.raw_page_spans_cache.lock_or_recover() = Some(crate::cache::AdmissionBudgetCache::new(budget));
         *self.painted_regions_cache.lock_or_recover() = Some(super::BoundedEntryCache::new(
             super::painted::PAINTED_REGIONS_CACHE_PAGES,
@@ -367,6 +367,7 @@ impl PdfDocument {
     pub fn release_page_caches(&self) {
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().take() {
             tracing::debug!(
+                target: LOG_TARGET,
                 entries = cache.len(),
                 used_bytes = cache.used_bytes(),
                 budget_bytes = cache.budget_bytes(),
@@ -464,6 +465,7 @@ impl PdfDocument {
         };
         if let Some(page) = cached.filter(|page| page.serves(capture_cmsy)) {
             tracing::trace!(
+                target: LOG_TARGET,
                 page_index,
                 geometry = ?script_geometry,
                 outcome = "hit",
@@ -529,6 +531,7 @@ impl PdfDocument {
         // The flattened entry is admitted first: the later passes read it more often. ~keep
         let admitted = self.retain_interpretation(key, &page);
         tracing::trace!(
+            target: LOG_TARGET,
             page_index,
             geometry = ?script_geometry,
             outcome = "interpreted",
@@ -562,6 +565,7 @@ impl PdfDocument {
             });
             let preserved_bytes = self.admitted_bytes(&preserved_key, &preserved, paced);
             tracing::trace!(
+                target: LOG_TARGET,
                 page_index,
                 geometry = ?ScriptGeometry::Preserve,
                 outcome = "paired",
@@ -782,6 +786,7 @@ impl PdfDocument {
         #[cfg(test)]
         PAGE_SPAN_INTERPRETATIONS.with(|count| count.set(count.get() + 1));
         let span = tracing::trace_span!(
+            target: LOG_TARGET,
             "xberg_native_pdf::interpret_page",
             page_index,
             caller,
@@ -1195,6 +1200,7 @@ impl PdfDocument {
     ) -> Result<Vec<crate::layout::TextSpan>> {
         if raw.ordered.swap(true, Ordering::Relaxed) {
             tracing::trace!(
+                target: LOG_TARGET,
                 page_index = raw.page,
                 outcome = "reordered",
                 filtered = raw.filtered,
