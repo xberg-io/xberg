@@ -82,16 +82,53 @@ const STRICT_TO_TRANSITIONAL: [(&str, &str); 7] = [
 
 /// Rewrite the strict (ISO 29500) namespace URIs in `xml` to their transitional equivalents.
 ///
-/// Returns the input borrowed when it holds no strict URI, which is the common case.
+/// Only a URI that is a whole quoted attribute value is rewritten (namespace declarations and
+/// `graphicData/@uri`), so element text that happens to mention one is left alone. Returns the
+/// input borrowed when it holds no strict URI, which is the common case.
 pub(crate) fn normalize_strict_namespaces(xml: &str) -> std::borrow::Cow<'_, str> {
     if !xml.contains("purl.oclc.org/ooxml/") {
         return std::borrow::Cow::Borrowed(xml);
     }
     let mut out = xml.to_string();
     for (strict, transitional) in STRICT_TO_TRANSITIONAL {
-        if out.contains(strict) {
-            out = out.replace(strict, transitional);
+        for quote in ['"', '\''] {
+            let from = format!("{quote}{strict}{quote}");
+            if out.contains(&from) {
+                out = out.replace(&from, &format!("{quote}{transitional}{quote}"));
+            }
         }
     }
     std::borrow::Cow::Owned(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strict_uris_in_attribute_values_become_transitional() {
+        let xml = r#"<p:sld xmlns:p="http://purl.oclc.org/ooxml/presentationml/main" xmlns:r='http://purl.oclc.org/ooxml/officeDocument/relationships'/>"#;
+        assert_eq!(
+            normalize_strict_namespaces(xml),
+            r#"<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r='http://schemas.openxmlformats.org/officeDocument/2006/relationships'/>"#
+        );
+    }
+
+    #[test]
+    fn strict_uri_in_element_text_is_left_alone() {
+        let xml = r#"<a:t xmlns:a="http://purl.oclc.org/ooxml/drawingml/main">see http://purl.oclc.org/ooxml/drawingml/main</a:t>"#;
+        assert_eq!(
+            normalize_strict_namespaces(xml),
+            r#"<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">see http://purl.oclc.org/ooxml/drawingml/main</a:t>"#
+        );
+    }
+
+    #[test]
+    fn transitional_input_is_borrowed() {
+        let xml = r#"<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/>"#;
+        assert!(matches!(
+            normalize_strict_namespaces(xml),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
 }
