@@ -386,3 +386,125 @@ fn rebuilt_tex_with_misplaced_scripts_is_not_published() {
         assert!(tex_is_reliable(sound), "{sound}");
     }
 }
+
+const MMI: &str = "RRQMNM+CMMI12";
+const MR: &str = "TRYITZ+CMR12";
+const MSY12: &str = "LKAHCF+CMSY10";
+
+/// Gutenberg 33283 p139: `dy/dx = 1/(dx/dy)`, the inverse function's reciprocal written as a
+/// fraction whose denominator is itself a fraction.
+#[test]
+fn should_write_a_fraction_whose_denominator_is_a_fraction() {
+    let spans = vec![
+        span("dy", MMI, 11.96, 137.59, 11.79, 314.65),
+        span("1", MR, 11.96, 176.74, 5.85, 314.65),
+        span("=", MR, 11.96, 154.58, 9.11, 306.57),
+        span("dx", MMI, 11.96, 137.33, 12.73, 298.36),
+        span("dx", MMI, 11.96, 173.30, 12.73, 299.58),
+        span("dy", MMI, 11.96, 173.56, 11.79, 283.29),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$\\frac{dy}{dx}=\\frac{1}{\\frac{dx}{dy}}$$"]);
+}
+
+/// Gutenberg 33283 p139: a problem number `(15)` printed above a row of full-size text is not
+/// a script of the expression below it.
+#[test]
+fn should_not_script_a_full_size_row_label_onto_a_formula() {
+    let spans = vec![
+        span("(15)", MR, 11.96, 47.71, 20.81, 519.55),
+        span("(", MR, 11.96, 75.57, 4.55, 511.35),
+        span("x", MMI, 11.96, 80.12, 6.65, 511.35),
+        span("+ 2)(", MR, 11.96, 89.43, 26.72, 511.35),
+        span("x", MMI, 11.96, 116.15, 6.65, 511.35),
+        span("2", "PSEHXM+CMR8", 7.97, 122.80, 4.23, 511.35),
+        span("+", MR, 11.96, 130.19, 9.11, 511.35),
+        span("x", MMI, 11.96, 141.95, 6.65, 511.35),
+        span("+ 1)", MR, 11.96, 151.26, 22.16, 511.35),
+        span("2", "PSEHXM+CMR8", 7.97, 173.42, 4.23, 511.35),
+    ];
+    if let Some(rewritten) = rewrite_math_spans(&spans) {
+        for formula in texts(&rewritten) {
+            assert!(!formula.contains("{}_") && !formula.contains("{}^"), "{formula}");
+        }
+    }
+}
+
+/// Gutenberg 33283 p161: `y = ∛x`, a CMEX radical drawn above the axis with its degree over
+/// the radical's left edge.
+#[test]
+fn should_write_the_degree_of_a_radical() {
+    let spans = vec![
+        span("y", MMI, 11.96, 78.27, 5.71, 429.39),
+        span("=", MR, 11.96, 87.73, 9.11, 429.39),
+        span("p", "QTXDXT+CMEX10", 11.96, 100.80, 11.96, 439.37),
+        span("3", "PXXQUV+CMR7", 6.97, 103.47, 3.97, 436.0),
+        span("x", MMI, 11.96, 114.0, 6.65, 429.39),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$y=\\sqrt[3]{x}$$"]);
+}
+
+#[test]
+fn rebuilt_tex_with_scripts_that_are_labels_or_punctuation_is_not_published() {
+    for broken in [
+        "{}_{9.}x^{2}y_{2}^{2}+3xy_{\\times}2c+1_{.}",
+        "{}^{12.}16a^{2}-9b^{2}{}^{\\div}4a-3b^{.}",
+        "4440.3\\pm1.3_{+4^{-}}^{+4.1}{}_{4}{}_{.}{}_{.}{}_{1}",
+        "{}_{(16)}5x^{2}+8x-12",
+    ] {
+        assert!(!tex_is_reliable(broken), "{broken}");
+    }
+}
+
+/// arXiv 2312.13591 p5: a bound-state label and a dagger stacked at script size after a mass are
+/// that mass's scripts, not a fraction `B / †`.
+#[test]
+fn should_not_write_two_script_size_marks_over_each_other_as_a_fraction() {
+    let spans = vec![
+        span("[4486.6, 4517.3]", "YBENFD+CMR10", 9.96, 100.0, 70.0, 500.0),
+        span("B", "VAYNGT+CMR7", 6.97, 171.0, 4.5, 497.0),
+        span("\u{2020}", "PJJXZJ+CMSY7", 6.97, 171.0, 4.5, 503.5),
+    ];
+    if let Some(rewritten) = rewrite_math_spans(&spans) {
+        assert!(
+            !texts(&rewritten).iter().any(|tex| tex.contains("\\frac")),
+            "{:?}",
+            texts(&rewritten)
+        );
+    }
+}
+
+/// Gutenberg 36670 p140, exercise 10: two fractions joined by a `×` on the middle line, with
+/// no relation to anchor the axis. The line of operators between the numerators and the
+/// denominators is the axis, not the widest line.
+#[test]
+fn should_take_the_operator_line_between_two_fraction_rows_as_the_axis() {
+    let cmr8 = "GFCZPI+CMR8";
+    let cmr12 = "FQBHCU+CMR12";
+    let mmi = "PDPVDU+CMMI12";
+    let spans = vec![
+        span("a", mmi, 11.96, 210.34, 6.14, 416.54),
+        span("2", cmr8, 7.97, 216.49, 4.23, 420.1),
+        span("\u{2212}", MSY12, 11.96, 223.88, 9.30, 416.54),
+        span(" 100", cmr12, 11.96, 233.18, 20.21, 416.54),
+        span("10.", "XULGOR+CMBX12", 11.96, 184.16, 17.19, 408.45),
+        span("a", mmi, 11.96, 273.32, 6.14, 416.54),
+        span(" \u{2212}", MSY12, 11.96, 279.47, 11.95, 416.54),
+        span(" 3", cmr12, 11.96, 291.42, 8.51, 416.54),
+        span("\u{d7}", MSY12, 11.96, 257.24, 9.30, 408.45),
+        span(".", cmr12, 11.96, 304.05, 3.25, 408.45),
+        span("a", mmi, 11.96, 216.20, 6.14, 400.25),
+        span("2", cmr8, 7.97, 222.34, 4.23, 403.8),
+        span("\u{2212}", MSY12, 11.96, 229.73, 9.30, 400.25),
+        span(" 9", cmr12, 11.96, 239.03, 8.51, 400.25),
+        span("a", mmi, 11.96, 270.39, 6.14, 400.25),
+        span(" \u{2212}", MSY12, 11.96, 276.54, 11.95, 400.25),
+        span(" 10", cmr12, 11.96, 288.49, 14.36, 400.25),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the exercise is rewritten");
+    assert_eq!(
+        texts(&rewritten),
+        ["$$10.\\frac{a^{2}-100}{a^{2}-9}\\times\\frac{a-3}{a-10}.$$"]
+    );
+}

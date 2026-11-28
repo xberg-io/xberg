@@ -13,12 +13,14 @@
 
 mod glyphs;
 mod layout;
+mod reliability;
 pub(crate) mod sentinels;
 #[cfg(test)]
 mod tests;
 
-use glyphs::{MathFont, accent_command, is_mark, is_operator, is_relation, is_unmapped, math_font};
+use glyphs::{MathFont, accent_command, is_mark, is_operator, is_radical_glyph, is_relation, is_unmapped, math_font};
 use layout::group_tex;
+use reliability::tex_is_reliable;
 use xberg_native_pdf::layout::TextSpan;
 
 /// A glyph below this fraction of the formula's largest size is a script or limit.
@@ -77,10 +79,20 @@ const MAX_COMPONENT_PIECES: usize = 256;
 const MAX_NUMERIC_RUNS: usize = 3;
 /// Nesting depth past which a group is spelled flat.
 const MAX_DEPTH: usize = 6;
+/// Largest distance, in ems, between the centres of the numerator and denominator of a fraction.
+const NESTED_CENTRE_EM: f32 = 0.3;
+/// Share of the wider part's width that the narrower part of a nested fraction has at least.
+const NESTED_WIDTH_SHARE: f32 = 0.6;
+/// Smallest baseline distance, in ems, between a nested fraction's numerator and denominator:
+/// the bar's clearance, which two lines of an aligned equation do not keep.
+const NESTED_BAR_EM: f32 = 1.2;
 /// Share of the narrower of two axis glyphs they overlap by when one is drawn over the other.
 const COLLISION_SHARE: f32 = 0.5;
 /// Distance, in ems, within which a glyph run with the same text is an overdraw of another.
 const OVERDRAW_EM: f32 = 0.1;
+
+/// The text a radical sign of a TeX extension font is read as.
+const RADICAL: &str = "√";
 
 /// How a rewritten formula is delimited in its span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -313,12 +325,15 @@ struct Piece<'a> {
     base: f32,
     size: f32,
     class: Class,
+    /// A radical sign of a TeX extension font, drawn off the axis of the radicand it covers.
+    radical: bool,
 }
 
 impl<'a> Piece<'a> {
     fn new(span: usize, source: &'a TextSpan, baseline: f32) -> Option<Self> {
         let upright = source.rotation_degrees == 0.0 && !source.mirrored && source.wmode == 0;
-        let text = source.text.as_str();
+        let radical = is_radical_glyph(&source.font_name, &source.text);
+        let text = if radical { RADICAL } else { source.text.as_str() };
         let geometry_ok = source.font_size.is_finite()
             && source.font_size > 0.0
             && source.bbox.x.is_finite()
@@ -336,6 +351,7 @@ impl<'a> Piece<'a> {
             base: baseline + source.text_rise * source.font_size,
             size: source.font_size,
             class: classify(text, &source.font_name),
+            radical,
         })
     }
 
@@ -353,6 +369,10 @@ impl<'a> Piece<'a> {
     /// A glyph that decoded to nothing (an unmapped big delimiter or operator).
     fn is_blank(&self) -> bool {
         self.text.trim().chars().all(is_unmapped)
+    }
+
+    fn is_radical(&self) -> bool {
+        self.radical
     }
 
     fn accent(&self) -> Option<&'static str> {
@@ -476,39 +496,6 @@ impl Formula<'_> {
     }
 }
 
-/// Whether rebuilt TeX is well formed enough to publish. Wrong math is worse than the plain prose
-/// reading, so a formula the layout pass could not structure is left as its source spans: an
-/// empty group that scripts nothing (`{}` outside `{}^{14}C`), a script after an operator
-/// (`=_{2}`, a leading `^{`) or unbalanced braces mark a base or fraction part that landed in the
-/// wrong place.
-fn tex_is_reliable(tex: &str) -> bool {
-    if tex
-        .match_indices("{}")
-        .any(|(at, group)| !tex[at + group.len()..].starts_with(['^', '_']))
-    {
-        return false;
-    }
-    let mut depth = 0i32;
-    let mut previous: Option<char> = None;
-    for ch in tex.chars() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth < 0 {
-                    return false;
-                }
-            }
-            '^' | '_' if previous.is_none_or(|before| matches!(before, '=' | '+' | '-' | ',' | ';' | '(' | '[')) => {
-                return false;
-            }
-            _ => {}
-        }
-        previous = Some(ch);
-    }
-    depth == 0
-}
-
 fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
     let mut prose: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class == Class::Prose).collect();
     prose.sort_by(|a, b| a.base.total_cmp(&b.base));
@@ -604,6 +591,8 @@ fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, prose: &[&Piece<'_
         gap <= size * ROW_GAP_EM && !prose_adjacent
     } else if rise <= size * LIMIT_EM && a.size.min(b.size) <= size * SCRIPT_SIZE_RATIO {
         gap <= size * STACK_GAP_EM && !prose_adjacent
+    } else if rise <= size * LIMIT_EM {
+        !prose_adjacent && are_nested_fraction_lines(a, b)
     } else {
         false
     }
@@ -674,6 +663,9 @@ fn hangs_off(piece: &Piece<'_>, unit: &[&Piece<'_>], base: f32, size: f32) -> bo
     if rise <= size * STACK_EM {
         return near(LIMIT_EM);
     }
+    if unit.iter().any(|member| stacks_on_part(piece, member, base, size)) {
+        return true;
+    }
     let scripts_member = unit.iter().any(|member| {
         !member.is_blank()
             && (piece.base - member.base).abs() <= member.size * SAME_ROW_EM
@@ -689,30 +681,75 @@ fn hangs_off(piece: &Piece<'_>, unit: &[&Piece<'_>], base: f32, size: f32) -> bo
         })
 }
 
+/// Whether `piece` is a full-size line stacked on `part`, a full-size line of the same side of
+/// the axis: the inner numerator over the inner denominator of a nested fraction.
+fn stacks_on_part(piece: &Piece<'_>, part: &Piece<'_>, base: f32, size: f32) -> bool {
+    let side = |p: &Piece<'_>| (p.base - base).signum();
+    !part.is_blank()
+        && (part.base - base).abs() > size * FRACTION_OFFSET_EM
+        && side(piece) == side(part)
+        && are_nested_fraction_lines(piece, part)
+}
+
+/// Whether two full-size pieces are the numerator and denominator of a fraction nested in
+/// another: centred on each other, as wide as each other and a bar apart, which sets them
+/// further from each other than two lines of an aligned equation, whose denominators and
+/// numerators merely overlap in x.
+fn are_nested_fraction_lines(a: &Piece<'_>, b: &Piece<'_>) -> bool {
+    let size = a.size.max(b.size);
+    let centred = ((a.x0 + a.x1) - (b.x0 + b.x1)).abs() / 2.0 <= size * NESTED_CENTRE_EM;
+    let (narrow, wide) = (a.width().min(b.width()), a.width().max(b.width()));
+    let rise = (a.base - b.base).abs();
+    a.size.min(b.size) >= size * SCRIPT_SIZE_RATIO
+        && centred
+        && narrow >= wide * NESTED_WIDTH_SHARE
+        && rise >= size * NESTED_BAR_EM
+        && rise <= size * LIMIT_EM
+}
+
 /// The row a formula is built around: one holding a relation, else the widest.
 fn axis_row<'p, 'a>(pieces: &[&'p Piece<'a>]) -> Option<Vec<&'p Piece<'a>>> {
+    let on_axis = |piece: &Piece<'_>| !piece.is_blank() && !piece.is_radical();
     let size = pieces
         .iter()
-        .filter(|piece| !piece.is_blank())
+        .filter(|piece| on_axis(piece))
         .map(|piece| piece.size)
         .fold(0.0_f32, f32::max);
     let full: Vec<&'p Piece<'a>> = pieces
         .iter()
         .copied()
-        .filter(|piece| !piece.is_blank() && piece.size >= size * SCRIPT_SIZE_RATIO)
+        .filter(|piece| on_axis(piece) && piece.size >= size * SCRIPT_SIZE_RATIO)
         .collect();
-    rows(&full, size).into_iter().max_by(|a, b| {
-        row_rank(a)
-            .partial_cmp(&row_rank(b))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
+    let lines = rows(&full, size);
+    let ranks: Vec<(bool, bool, f32)> = (0..lines.len()).map(|index| row_rank(&lines, index, size)).collect();
+    let best =
+        (0..lines.len()).max_by(|&a, &b| ranks[a].partial_cmp(&ranks[b]).unwrap_or(std::cmp::Ordering::Equal))?;
+    lines.into_iter().nth(best)
 }
 
-fn row_rank(row: &[&Piece<'_>]) -> (bool, f32) {
+/// How well a row anchors a formula: whether it holds a relation, whether it is the line of
+/// operators between two lines of fractions, and its width.
+fn row_rank(lines: &[Vec<&Piece<'_>>], index: usize, size: f32) -> (bool, bool, f32) {
+    let row = &lines[index];
     let relation = row
         .iter()
         .any(|piece| piece.accent().is_none() && piece.text.chars().any(is_relation));
-    (relation, row.iter().map(|piece| piece.width()).sum())
+    let (x0, x1) = (
+        row.iter().map(|piece| piece.x0).fold(f32::INFINITY, f32::min),
+        row.iter().map(|piece| piece.x1).fold(f32::NEG_INFINITY, f32::max),
+    );
+    let neighbour = |other: Option<&Vec<&Piece<'_>>>| {
+        other.is_some_and(|other| {
+            (other[0].base - row[0].base).abs() <= size * LIMIT_EM
+                && other.iter().any(|piece| piece.overlap(x0, x1) > 0.0)
+        })
+    };
+    let joins_fractions = row
+        .iter()
+        .any(|piece| piece.is_math() && piece.text.trim().chars().all(|c| matches!(c, '×' | '÷')))
+        && neighbour(index.checked_sub(1).and_then(|below| lines.get(below)))
+        && neighbour(lines.get(index + 1));
+    (relation, joins_fractions, row.iter().map(|piece| piece.width()).sum())
 }
 
 /// Group pieces into rows of one baseline, bottom to top.

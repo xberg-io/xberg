@@ -28,17 +28,38 @@ const SCRIPT_FAMILIES: &[&str] = &["RSFS", "EUSM", "EUSB"];
 /// Length of a PDF subset tag (`ABCDEF+`), ISO 32000-1 §9.6.4.
 const SUBSET_TAG_LEN: usize = 6;
 
+/// The family of a PDF font name: without its subset tag and its style suffix.
+fn font_family(font_name: &str) -> &[u8] {
+    let name = match font_name.split_once('+') {
+        Some((tag, rest)) if tag.len() == SUBSET_TAG_LEN && tag.bytes().all(|b| b.is_ascii_uppercase()) => rest,
+        _ => font_name,
+    };
+    name.split(['-', ',']).next().unwrap_or_default().trim().as_bytes()
+}
+
+/// TeX extension fonts whose `p`..`t` slots draw the radical signs of growing size.
+const RADICAL_FAMILIES: &[&str] = &["CMEX", "LMEX"];
+/// The first and last slot of a radical sign in those fonts.
+const RADICAL_SLOTS: std::ops::RangeInclusive<char> = 'p'..='t';
+
+/// Whether `text` set in `font_name` is a radical sign: the extension fonts hold no ToUnicode
+/// entry for it, so it reads as the letter of its slot.
+pub(crate) fn is_radical_glyph(font_name: &str, text: &str) -> bool {
+    let family = font_family(font_name);
+    let mut chars = text.trim().chars();
+    matches!((chars.next(), chars.next()), (Some(c), None) if RADICAL_SLOTS.contains(&c))
+        && RADICAL_FAMILIES.iter().any(|prefix| {
+            family.len() >= prefix.len() && family[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes())
+        })
+}
+
 /// Classify a PDF font name as a math font, or `None` for a text font.
 ///
 /// Text fonts of the same families (CMR, CMTI, CMBX, ...) are not math fonts: their glyphs
 /// are prose unless geometry puts them inside a math run.
 pub(crate) fn math_font(font_name: &str) -> Option<MathFont> {
-    let name = match font_name.split_once('+') {
-        Some((tag, rest)) if tag.len() == SUBSET_TAG_LEN && tag.bytes().all(|b| b.is_ascii_uppercase()) => rest,
-        _ => font_name,
-    };
     // Called for every span of every page, so the family is compared in place. ~keep
-    let family = name.split(['-', ',']).next().unwrap_or_default().trim().as_bytes();
+    let family = font_family(font_name);
     let starts_with =
         |prefix: &str| family.len() >= prefix.len() && family[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes());
     let has = |families: &[&str]| families.iter().any(|prefix| starts_with(prefix));
