@@ -280,34 +280,6 @@ fn rename_aside(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::rename(from, to)
 }
 
-/// Directories in which moving a pack aside fails in tests, as on a read-only cache.
-///
-/// Permissions cannot stop root from renaming, so tests of a cache that cannot be written
-/// register its directory here instead and run the same for every user.
-#[cfg(test)]
-pub(crate) mod read_only_for_tests {
-    use std::collections::HashSet;
-    use std::path::{Path, PathBuf};
-    use std::sync::{LazyLock, Mutex, PoisonError};
-
-    static READ_ONLY: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
-
-    /// Make every later move aside of a pack in `directory` fail with permission denied.
-    pub(crate) fn insert(directory: &Path) {
-        READ_ONLY
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(directory.to_path_buf());
-    }
-
-    pub(super) fn contains(directory: &Path) -> bool {
-        READ_ONLY
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains(directory)
-    }
-}
-
 /// `<lang>.traineddata.unverified` in `output_dir`, or, when an earlier set-aside file holds that
 /// name, one made unique by the time and process.
 fn unused_unverified_path(output_dir: &Path, lang: &str) -> PathBuf {
@@ -781,6 +753,34 @@ pub(crate) fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool>
         Ok(_) => Ok(true),
         Err(error) if error.error.kind() == ErrorKind::AlreadyExists && output_path.is_file() => Ok(false),
         Err(error) => Err(error.error),
+    }
+}
+
+/// Directories in which moving a pack aside fails in tests, as on a read-only cache.
+///
+/// Permissions cannot stop root from renaming, so tests of a cache that cannot be written
+/// register its directory here instead and run the same for every user.
+#[cfg(test)]
+pub(crate) mod read_only_for_tests {
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    static READ_ONLY: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
+
+    /// Make every later move aside of a pack in `directory` fail with permission denied.
+    pub(crate) fn insert(directory: &Path) {
+        READ_ONLY
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(directory.to_path_buf());
+    }
+
+    pub(super) fn contains(directory: &Path) -> bool {
+        READ_ONLY
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(directory)
     }
 }
 
