@@ -346,7 +346,7 @@ fn recurring_edge_clusters(rows: &[&Vec<&SpanBox>], edge: fn(&SpanBox) -> f32) -
 fn page_signals(doc: &PdfDocument, page_index: usize) -> Option<PageGateSignals> {
     let page_text = super::native::guard_native_panic(
         || {
-            doc.extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
+            doc.extract_page_spans_with_options(page_index, ReadingOrder::ColumnAware)
                 .map_err(|error| error.to_string())
         },
         |message| message,

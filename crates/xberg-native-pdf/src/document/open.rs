@@ -318,7 +318,7 @@ impl PdfDocument {
             font_identity_hashed_bytes: AtomicUsize::new(0),
             font_identity_shared_cache_enabled: AtomicBool::new(true),
             structure_tree_cache: Mutex::new(None),
-            structure_content_cache: Mutex::new(None),
+            structure_content_cache: std::sync::OnceLock::new(),
             actualtext_index_cache: Mutex::new(None),
             mc_actualtext_mcids: Mutex::new(HashMap::new()),
             script_baselines: Mutex::new(HashMap::new()),

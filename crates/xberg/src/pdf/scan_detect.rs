@@ -220,7 +220,7 @@ pub(crate) fn full_page_raster_density(doc: &PdfDocument, page_index: usize) -> 
     // Detection is advisory: a page that panics must not abort the extraction. ~keep
     let page_text = super::native::guard_native_panic(
         || {
-            doc.extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
+            doc.extract_page_spans_with_options(page_index, ReadingOrder::ColumnAware)
                 .map_err(|error| error.to_string())
         },
         |message| message,
@@ -448,7 +448,7 @@ fn counts_meet_fabricated_threshold(fabricated: usize, total: usize, min_ratio: 
 fn page_has_fabricated_text(doc: &PdfDocument, page_index: usize, min_ratio: f64, min_chars: usize) -> bool {
     let page_text = match super::native::guard_native_panic(
         || {
-            doc.extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
+            doc.extract_page_spans_with_options(page_index, ReadingOrder::ColumnAware)
                 .map_err(|error| error.to_string())
         },
         |message| message,

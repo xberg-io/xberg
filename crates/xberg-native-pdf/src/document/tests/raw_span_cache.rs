@@ -297,24 +297,32 @@ fn preserved_geometry_is_paired_only_when_announced_while_the_passes_run() {
     assert_eq!(page_span_interpretations() - before, 1, "release ends the pairing");
 }
 
-/// A budget that holds every page's flattened entry and nothing more still holds them all with
-/// preserved reads paired: a preserved entry only takes its page's share of the budget.
-#[test]
-fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
-    const PAGES: usize = 4;
-    let pdf = many_pages_pdf(PAGES);
-    let unpaired = PdfDocument::from_bytes(pdf.clone()).unwrap();
+/// The page-pass cache bytes of the flattened entries of pages `0..pages` as a paired read stores
+/// them: an unpaired read's entry plus the shared, empty CMSY witness list a paired read captures.
+fn paired_flattened_bytes(pdf: &[u8], pages: usize) -> usize {
+    let unpaired = PdfDocument::from_bytes(pdf.to_vec()).unwrap();
     unpaired.begin_page_passes();
-    for page in 0..PAGES {
+    for page in 0..pages {
         drop(unpaired.extract_spans_raw(page).unwrap());
     }
-    let flattened_bytes = unpaired
+    let unpaired_bytes = unpaired
         .raw_page_spans_cache
         .lock()
         .unwrap()
         .as_ref()
         .unwrap()
         .used_bytes();
+    let witness_block = 2 * size_of::<usize>() + size_of::<Vec<crate::layout::TextSpan>>();
+    unpaired_bytes + pages * witness_block
+}
+
+/// A budget that holds every page's flattened entry and nothing more still holds them all with
+/// preserved reads paired: a preserved entry only takes its page's share of the budget.
+#[test]
+fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
+    const PAGES: usize = 4;
+    let pdf = many_pages_pdf(PAGES);
+    let flattened_bytes = paired_flattened_bytes(&pdf, PAGES);
 
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     doc.begin_page_passes();
@@ -340,18 +348,7 @@ fn paired_preserved_entries_leave_the_flattened_entries_their_room() {
 fn a_flattened_read_skips_the_preserved_finish_the_budget_would_refuse() {
     const PAGES: usize = 4;
     let pdf = many_pages_pdf(PAGES);
-    let unpaired = PdfDocument::from_bytes(pdf.clone()).unwrap();
-    unpaired.begin_page_passes();
-    for page in 0..2 {
-        drop(unpaired.extract_spans_raw(page).unwrap());
-    }
-    let two_pages_bytes = unpaired
-        .raw_page_spans_cache
-        .lock()
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .used_bytes();
+    let two_pages_bytes = paired_flattened_bytes(&pdf, 2);
 
     let doc = PdfDocument::from_bytes(pdf.clone()).unwrap();
     doc.begin_page_passes();
@@ -841,4 +838,136 @@ fn a_cached_page_holds_no_spare_char_capacity() {
     let chars = doc.cached_page_chars(0).unwrap();
     assert!(!chars.is_empty());
     assert_eq!(chars.capacity(), chars.len());
+}
+
+/// What two orderings of one page give and leave behind: the spans, the page's MC-scope
+/// /ActualText entry, its flattened script baselines, the warnings pushed and the recoveries
+/// charged. `raw_once` orders one raw read twice instead of reading the page for each ordering.
+fn two_orderings(pdf: &[u8], page: usize, excluded: &HashSet<String>, passes: bool, raw_once: bool) -> Vec<String> {
+    let doc = PdfDocument::from_bytes(pdf.to_vec()).expect("open document");
+    if passes {
+        doc.begin_page_passes();
+    }
+    drop(doc.take_structured_warnings());
+    let start = doc.recovery_counts().snapshot();
+    let orders = [ReadingOrder::ColumnAware, ReadingOrder::TopToBottom];
+    let spans: Vec<Vec<crate::layout::TextSpan>> = if raw_once {
+        let raw = doc
+            .raw_page_spans(page, excluded.clone(), HashSet::new())
+            .expect("raw spans");
+        let before = page_span_interpretations();
+        let spans = orders
+            .iter()
+            .map(|&order| doc.order_raw_page_spans(&raw, order).expect("ordered raw spans"))
+            .collect();
+        assert_eq!(
+            page_span_interpretations(),
+            before,
+            "page {page}: ordering reads nothing"
+        );
+        spans
+    } else {
+        orders
+            .iter()
+            .map(|&order| {
+                doc.extract_spans_filtered_with_reading_order(page, order, excluded.clone(), HashSet::new())
+                    .expect("ordered read")
+            })
+            .collect()
+    };
+    vec![
+        format!("{spans:?}"),
+        format!("{:?}", doc.mc_actualtext_mcids.lock().unwrap().get(&page)),
+        format!("{:?}", doc.flattened_script_baselines(page)),
+        format!("{:?}", doc.take_structured_warnings()),
+        format!("{:?}", doc.recovery_counts().snapshot().since(&start)),
+    ]
+}
+
+#[test]
+fn ordering_one_raw_read_twice_equals_two_ordered_reads() {
+    let hidden = HashSet::from(["Hidden".to_string()]);
+    let cases = [
+        (option_set_pdf(), 0..5),
+        (warning_pdf(), 0..1),
+        (cmsy_witness_pdf(), 0..1),
+        (super::span_cache_actual_text::tagged_layered_pdf(), 0..1),
+    ];
+    let no_recoveries = format!("{:?}", crate::extractors::recovery_tally::RecoverySnapshot::default());
+    let (mut actual_text, mut baselines, mut warnings, mut recoveries) = (false, false, false, false);
+    for (pdf, pages) in &cases {
+        for page in pages.clone() {
+            for excluded in [HashSet::new(), hidden.clone()] {
+                for passes in [false, true] {
+                    let reads = two_orderings(pdf, page, &excluded, passes, false);
+                    let raw_once = two_orderings(pdf, page, &excluded, passes, true);
+                    assert_eq!(raw_once, reads, "page {page}, excluded {excluded:?}, passes {passes}");
+                    actual_text |= reads[1] != "None";
+                    baselines |= reads[2] != "[]";
+                    warnings |= reads[3] != "[]";
+                    recoveries |= reads[4] != no_recoveries;
+                }
+            }
+        }
+    }
+    assert!(actual_text, "a fixture must record an MC-scope /ActualText entry");
+    assert!(baselines, "a fixture must record flattened script baselines");
+    assert!(warnings, "a fixture must push warnings");
+    assert!(
+        recoveries,
+        "a fixture must charge recoveries, which only a repeated read charges twice"
+    );
+}
+
+/// Every ordering of a raw read puts back the MC-scope /ActualText entry its read recorded,
+/// which a read with other exclusions may have replaced since.
+#[test]
+fn ordering_a_raw_read_restores_its_actual_text_entry() {
+    let pdf = option_set_pdf();
+    let expected = PdfDocument::from_bytes(pdf.clone())
+        .unwrap()
+        .extract_spans_with_reading_order(3, ReadingOrder::TopToBottom)
+        .unwrap();
+    let doc = PdfDocument::from_bytes(pdf).unwrap();
+    let raw = doc.raw_page_spans(3, HashSet::new(), HashSet::new()).unwrap();
+    for _ in 0..2 {
+        doc.mc_actualtext_mcids.lock().unwrap().insert(3, HashSet::from([99]));
+        let ordered = doc.order_raw_page_spans(&raw, ReadingOrder::TopToBottom).unwrap();
+        assert_eq!(format!("{ordered:?}"), format!("{expected:?}"));
+        assert_eq!(
+            doc.mc_actualtext_mcids.lock().unwrap().get(&3),
+            Some(&HashSet::from([5]))
+        );
+    }
+}
+
+const OFF_PAGE: &str = "BT /F1 12 Tf 72 700 Td (On the page) Tj ET\n\
+     BT /F1 12 Tf 72 1200 Td (Above the page) Tj ET\n\
+     BT /F1 12 Tf -400 300 Td (Left of the page) Tj ET\n\
+     BT /F1 12 Tf 72 795 Td (Across the top edge) Tj ET\n\
+     BT /F1 12 Tf 72 -30 Td (Below the page) Tj ET\n";
+
+/// Ordering a raw read keeps exactly the spans `drop_offpage_spans` keeps, also on a page whose
+/// box is written with swapped corners.
+#[test]
+fn ordering_a_raw_read_drops_exactly_the_off_page_spans() {
+    for media_box in ["[0 0 600 800]", "[0 800 600 0]"] {
+        let doc = PdfDocument::from_bytes(build_pages_pdf(&[(media_box, OFF_PAGE)], &[], "", "")).unwrap();
+        let mut kept = doc.extract_spans_raw(0).unwrap();
+        let read = kept.len();
+        doc.drop_offpage_spans(0, &mut kept);
+        assert!(!kept.is_empty() && kept.len() < read, "{media_box}: {kept:?}");
+        let raw = doc.raw_page_spans(0, HashSet::new(), HashSet::new()).unwrap();
+        assert_eq!(raw.spans().len(), read, "{media_box}");
+        let mut ordered: Vec<String> = doc
+            .order_raw_page_spans(&raw, ReadingOrder::TopToBottom)
+            .unwrap()
+            .iter()
+            .map(|span| format!("{span:?}"))
+            .collect();
+        let mut kept: Vec<String> = kept.iter().map(|span| format!("{span:?}")).collect();
+        ordered.sort();
+        kept.sort();
+        assert_eq!(ordered, kept, "{media_box}");
+    }
 }

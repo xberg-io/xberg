@@ -28,7 +28,7 @@ struct OrderedPage {
     page_width: u32,
     page_height: u32,
     input: SpansFingerprint,
-    ordered: StoredOrder,
+    ordered: Arc<StoredOrder>,
     bytes: usize,
 }
 
@@ -187,26 +187,25 @@ pub(super) fn reorder(
 ) {
     let (width, height) = (page_width.to_bits(), page_height.to_bits());
     let shared = MEMO.with(|slot| slot.borrow().clone());
-    let (served, input) = shared.as_ref().map_or((false, None), |shared| {
+    // A stored entry pairs an input with its order and is never mutated, so a snapshot taken under
+    // the lock still serves exactly that input after it is released; fingerprinting and serving run
+    // unlocked, and an insert racing them costs only a miss. ~keep
+    let (stored, keys) = shared.as_ref().map_or((None, None), |shared| {
         let memo = lock(shared);
         let stored = memo
             .pages
             .get(&page_index)
-            .filter(|page| page.page_width == width && page.page_height == height);
-        let admits = memo.used < memo.budget;
-        let input = (stored.is_some() || admits).then(|| fingerprint(spans));
-        if let Some(page) = stored.filter(|page| Some(page.input) == input) {
-            page.ordered.serve(spans);
-            return (true, None);
-        }
-        (
-            false,
-            input.filter(|_| admits).map(|print| (print, memo.span_keys.clone())),
-        )
+            .filter(|page| page.page_width == width && page.page_height == height)
+            .map(|page| (page.input, Arc::clone(&page.ordered)));
+        let keys = (memo.used < memo.budget).then(|| memo.span_keys.clone());
+        (stored, keys)
     });
-    if served {
+    let input = (stored.is_some() || keys.is_some()).then(|| fingerprint(spans));
+    if let Some((_, ordered)) = stored.filter(|(stored_input, _)| Some(*stored_input) == input) {
+        ordered.serve(spans);
         return;
     }
+    let input = input.zip(keys);
     // Encoded only on a page the memo will keep, so a served page pays for the fingerprint alone. ~keep
     let input_encodings = input.as_ref().map(|_| SpanEncodings::of(spans));
     order(spans);
@@ -236,7 +235,7 @@ pub(super) fn reorder(
                 page_width: width,
                 page_height: height,
                 input,
-                ordered,
+                ordered: Arc::new(ordered),
                 bytes,
             },
         );
@@ -433,7 +432,7 @@ fn stored_positions(page_index: usize) -> Option<bool> {
     let shared = MEMO.with(|slot| slot.borrow().clone())?;
     let memo = lock(&shared);
     let page = memo.pages.get(&page_index)?;
-    Some(matches!(page.ordered, StoredOrder::Positions(_)))
+    Some(matches!(*page.ordered, StoredOrder::Positions(_)))
 }
 
 fn hash_span(out: &mut Digest, span: &TextSpan) {
