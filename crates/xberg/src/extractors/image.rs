@@ -4387,6 +4387,22 @@ fn push_image_placeholder(builder: &mut InternalDocumentBuilder) {
     });
 }
 
+/// Dimensions and format of the first readable frame of a multi-frame TIFF whose first frame
+/// cannot be decoded, so the frames after it are still read instead of the whole file failing.
+#[cfg(feature = "ocr")]
+fn metadata_from_a_later_tiff_frame(
+    content: &[u8],
+    walk: Option<&FrameWalk>,
+    limits: &crate::extractors::security::SecurityLimits,
+    config: &ExtractionConfig,
+) -> Option<crate::extraction::image::ExtractedImageMetadata> {
+    let walk = walk.filter(|walk| image_tiff_frames::reads_by_frame(walk))?;
+    walk.offsets.iter().skip(1).find_map(|offset| {
+        let frame = crate::extraction::image_tiff::single_frame_tiff(content, *offset)?;
+        metadata_for_ocr_route(&frame, limits, config).ok()
+    })
+}
+
 fn metadata_for_ocr_route(
     content: &[u8],
     limits: &crate::extractors::security::SecurityLimits,
@@ -4671,7 +4687,15 @@ impl InternalDocumentExtractor for ImageExtractor {
         };
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-        let extraction_metadata = metadata_for_ocr_route(content, security_limits, config)?;
+        let extraction_metadata = match metadata_for_ocr_route(content, security_limits, config) {
+            Ok(metadata) => metadata,
+            #[cfg(feature = "ocr")]
+            Err(error) => {
+                metadata_from_a_later_tiff_frame(content, tiff_walk.as_ref(), security_limits, config).ok_or(error)?
+            }
+            #[cfg(not(feature = "ocr"))]
+            Err(error) => return Err(error),
+        };
         // Computed against the original bytes (before any HEIC->PNG rebinding
         // below) so it reflects the same input `extract_image_metadata` saw. ~keep
         let exif_warning = crate::extraction::exif::extract_exif_warning(content);

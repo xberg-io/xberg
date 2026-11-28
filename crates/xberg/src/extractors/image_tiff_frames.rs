@@ -72,7 +72,7 @@ impl ImageExtractor {
             };
             let frame = match read {
                 Ok(frame) => frame,
-                Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                Err(error @ (crate::XbergError::Cancelled | crate::XbergError::Io(_))) => return Err(error),
                 Err(error) => {
                     tracing::warn!(page = page_number, %error, "TIFF frame OCR failed; continuing with the next frame");
                     doc.ocr_page_failures.push(OcrPageFailure {
@@ -204,9 +204,7 @@ fn append_frame(
         }
         target.push_relationship(relationship);
     }
-    for table in &mut frame.tables {
-        table.page_number = page_number;
-    }
+    let table_ids = renumber_tables(&mut frame.tables, page_number, target.tables.len());
     target.tables.append(&mut frame.tables);
     target.images.append(&mut frame.images);
     for formula in &mut frame.formulas {
@@ -230,7 +228,25 @@ fn append_frame(
         .prebuilt_pages
         .and_then(|frame_pages| frame_pages.into_iter().next());
     let image_offset = if frame_has_images { image_base } else { 0 };
-    finish_page(frame_page, fallback_content, page_number, image_offset)
+    finish_page(frame_page, fallback_content, (page_number, image_offset), &table_ids)
+}
+
+/// Moves a frame's tables onto its page and gives them document-wide ids in merged order, since
+/// each frame numbers its own tables from `table-1`. Returns the frame's old id to new id map.
+fn renumber_tables(
+    tables: &mut [crate::types::Table],
+    page_number: u32,
+    tables_before: usize,
+) -> std::collections::HashMap<String, String> {
+    let mut ids = std::collections::HashMap::new();
+    for table in tables {
+        table.page_number = page_number;
+        if let Some(old) = table.table_id.take() {
+            let next = format!("table-{}", tables_before + ids.len() + 1);
+            table.table_id = Some(ids.entry(old).or_insert(next).clone());
+        }
+    }
+    ids
 }
 
 /// The frame's page: its own prebuilt page, or one rendered from its elements, with its tables
@@ -238,8 +254,8 @@ fn append_frame(
 fn finish_page(
     frame_page: Option<crate::types::PageContent>,
     fallback_content: Option<String>,
-    page_number: u32,
-    image_offset: u32,
+    (page_number, image_offset): (u32, u32),
+    table_ids: &std::collections::HashMap<String, String>,
 ) -> crate::types::PageContent {
     let mut page = match (frame_page, fallback_content) {
         (Some(page), _) => page,
@@ -257,6 +273,7 @@ fn finish_page(
         .map(|table| {
             let mut table = crate::types::Table::clone(table);
             table.page_number = page_number;
+            table.table_id = table.table_id.as_ref().and_then(|id| table_ids.get(id).cloned());
             std::sync::Arc::new(table)
         })
         .collect();

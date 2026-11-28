@@ -118,3 +118,23 @@ fn a_frame_without_a_prebuilt_page_gets_its_text_from_its_elements() {
     assert_eq!(page.is_blank, Some(false));
     assert_eq!(target.formulas[0].page, Some(2));
 }
+
+#[test]
+fn table_ids_are_unique_across_frames_and_match_their_page_copies() {
+    let with_id = |text: &str| {
+        let mut frame = frame_with_table_and_image(text);
+        frame.tables[0].table_id = Some("table-1".to_string());
+        let mut page = frame.prebuilt_pages.take().unwrap();
+        page[0].tables = vec![Arc::new(frame.tables[0].clone())];
+        frame.prebuilt_pages = Some(page);
+        frame
+    };
+    let mut target = InternalDocument::new("image");
+    let mut ocr_elements = Vec::new();
+    let first = append_frame(&mut target, with_id("one"), 1, &mut ocr_elements);
+    let second = append_frame(&mut target, with_id("two"), 2, &mut ocr_elements);
+    let ids: Vec<Option<String>> = target.tables.iter().map(|table| table.table_id.clone()).collect();
+    assert_eq!(ids, vec![Some("table-1".to_string()), Some("table-2".to_string())]);
+    assert_eq!(first.tables[0].table_id.as_deref(), Some("table-1"));
+    assert_eq!(second.tables[0].table_id.as_deref(), Some("table-2"));
+}

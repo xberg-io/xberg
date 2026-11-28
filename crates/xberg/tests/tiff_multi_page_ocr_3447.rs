@@ -250,3 +250,24 @@ fn chunks_report_the_frame_pages_they_span() {
     assert_eq!(hello.metadata.first_page, Some(1));
     assert_eq!(espresso.metadata.last_page, Some(3));
 }
+
+#[test]
+fn an_undecodable_first_frame_does_not_fail_the_frames_after_it() {
+    let mut tiff = multi_page_tiff(3);
+    let first = ifd_offsets(&tiff)[0];
+    let entries = usize::from(tiff[first]) | (usize::from(tiff[first + 1]) << 8);
+    let compression = (0..entries)
+        .map(|entry| first + 2 + entry * 12)
+        .find(|at| tiff[*at] == 0x03 && tiff[*at + 1] == 0x01)
+        .expect("compression tag");
+    tiff[compression + 8..compression + 10].copy_from_slice(&9999u16.to_le_bytes());
+
+    let result = extract_bytes_document_blocking(&tiff, "image/tiff", &ocr_config(None)).expect("OCR must not error");
+    let pages = result.pages.as_ref().expect("pages");
+    assert_eq!(pages.len(), 3);
+    assert!(pages[0].content.is_empty());
+    assert!(pages[1].content.contains("1172"));
+    assert!(pages[2].content.to_ascii_uppercase().contains("ESPRESSO"));
+    let failures = result.ocr_page_failures.as_ref().expect("failure recorded");
+    assert_eq!(failures.iter().map(|failure| failure.page).collect::<Vec<_>>(), vec![1]);
+}

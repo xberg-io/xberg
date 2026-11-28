@@ -129,12 +129,13 @@ pub(crate) fn walk_tiff_ifds(bytes: &[u8], max_frames: usize) -> Option<TiffIfdW
                 TiffWalkEnd::Complete
             };
         }
+        if seen.contains(&next) {
+            break TiffWalkEnd::Broken("directory links form a cycle");
+        }
         if offsets.len() >= max_frames {
             break TiffWalkEnd::CapReached;
         }
-        if !seen.insert(next) {
-            break TiffWalkEnd::Broken("directory links form a cycle");
-        }
+        seen.insert(next);
         let Ok(ifd) = usize::try_from(next) else {
             break TiffWalkEnd::Broken("directory offset is not addressable");
         };

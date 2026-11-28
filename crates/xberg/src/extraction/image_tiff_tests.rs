@@ -215,3 +215,16 @@ fn single_frame_tiff_decodes_the_chosen_encoder_frame() {
         }
     }
 }
+
+#[test]
+fn a_cycle_is_reported_even_when_the_cap_is_reached_at_the_same_directory() {
+    for kind in KINDS {
+        let mut bytes = build(kind, 2, 1);
+        let first = directory_offsets(kind, 2, 1)[0];
+        let at = link_at(kind, 1, 2, 1);
+        overwrite(&mut bytes, kind, at, first);
+        let walk = walk_tiff_ifds(&bytes, 2).unwrap();
+        assert_eq!(walk.offsets.len(), 2);
+        assert_eq!(walk.end, TiffWalkEnd::Broken("directory links form a cycle"));
+    }
+}
