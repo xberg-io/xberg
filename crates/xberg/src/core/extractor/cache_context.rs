@@ -1176,6 +1176,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn an_ordinary_request_does_not_wait_for_the_blocking_pool_once_its_models_were_read() {
+        use crate::ocr::tessdata_download::without_reading_packs;
         use std::future::Future;
         use std::sync::mpsc;
 
@@ -1187,8 +1188,13 @@ mod tests {
         }
         let mut dependency = CacheDependency::for_config(&ExtractionConfig::default(), Some("application/pdf"));
         assert!(
-            dependency.model.is_none() && dependency.script_retry.is_some() && !dependency.tessdata.is_empty(),
-            "the default request may retry its script and read the default models"
+            dependency.model.is_none()
+                && dependency
+                    .script_retry
+                    .as_ref()
+                    .is_some_and(|retry| retry.vertical_japanese_retry)
+                && !dependency.tessdata.is_empty(),
+            "the default request may retry its script, vertical Japanese included, and read the default models"
         );
         // ~keep The host's tessdata may hold no pack at all, which would leave the memo unused.
         if let Some(retry) = dependency.script_retry.as_mut() {
@@ -1204,6 +1210,13 @@ mod tests {
             .build()
             .unwrap();
         let read = runtime.block_on(fingerprint(&dependencies, None)).unwrap();
+        // ~keep The retry context searches the host's tessdata directories from the process env: a
+        // host with `osd` and a Han model there bypasses the cache and fails here, not vacuously.
+        assert!(
+            read.as_deref()
+                .is_some_and(|context| context.starts_with(":script-retry-outer-v2:")),
+            "the request is cacheable: {read:?}"
+        );
         assert!(
             tessdata_context(&dependencies, None)
                 .unwrap()
@@ -1212,10 +1225,10 @@ mod tests {
         );
         assert!(
             matches!(
-                crate::ocr::tessdata_download::without_reading_packs(|| tessdata_context(&dependencies, None)),
-                Some(Ok(Some(_)))
+                without_reading_packs(|| retry_and_tessdata_context(&dependencies, None)),
+                Some(Ok(Identified::Context(_)))
             ),
-            "the pack read before is answered from the memo"
+            "the pack and the vertical model read before are answered from the memos"
         );
         let (started_tx, started_rx) = mpsc::sync_channel(1);
         let (release_tx, release_rx) = mpsc::sync_channel(1);
