@@ -7,11 +7,13 @@ use crate::extractors::security::SecurityBudget;
 pub(super) struct PieceTable<'a> {
     pub(super) plc_pcd: &'a [u8],
     pub(super) scripts: Vec<chpx::ScriptProperty>,
+    pub(super) deleted: Vec<Option<bool>>,
 }
 
 pub(super) fn read_piece_table<'a>(clx: &'a [u8], budget: &mut SecurityBudget) -> Result<Option<PieceTable<'a>>> {
     let mut pos = 0;
     let mut scripts = Vec::new();
+    let mut deleted = Vec::new();
     while let Some(&kind) = clx.get(pos) {
         budget
             .step()
@@ -22,11 +24,16 @@ pub(super) fn read_piece_table<'a>(clx: &'a [u8], budget: &mut SecurityBudget) -
                 let plc_pcd = remaining
                     .get(5..)
                     .ok_or_else(|| XbergError::parsing("Pcdt truncated at lcb"))?;
-                return Ok(Some(PieceTable { plc_pcd, scripts }));
+                return Ok(Some(PieceTable {
+                    plc_pcd,
+                    scripts,
+                    deleted,
+                }));
             }
             1 => {
-                let (end, script) = read_piece_property(&clx[pos..], budget)?;
+                let (end, script, mark_del) = read_piece_property(&clx[pos..], budget)?;
                 scripts.push(script);
+                deleted.push(mark_del);
                 pos += end;
             }
             _ => break,
@@ -38,7 +45,10 @@ pub(super) fn read_piece_table<'a>(clx: &'a [u8], budget: &mut SecurityBudget) -
     Ok(None)
 }
 
-fn read_piece_property(remaining: &[u8], budget: &mut SecurityBudget) -> Result<(usize, chpx::ScriptProperty)> {
+fn read_piece_property(
+    remaining: &[u8],
+    budget: &mut SecurityBudget,
+) -> Result<(usize, chpx::ScriptProperty, Option<bool>)> {
     const MAX_GROUP_BYTES: i16 = 0x3fa2;
     let header = remaining
         .get(1..3)
@@ -53,5 +63,9 @@ fn read_piece_property(remaining: &[u8], budget: &mut SecurityBudget) -> Result<
     let properties = remaining
         .get(3..end)
         .ok_or_else(|| XbergError::parsing("DOC property group is truncated"))?;
-    Ok((end, chpx::piece_script_property(properties, budget)?))
+    Ok((
+        end,
+        chpx::piece_script_property(properties, budget)?,
+        chpx::piece_deleted_property(properties),
+    ))
 }

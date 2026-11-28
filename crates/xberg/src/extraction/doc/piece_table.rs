@@ -5,6 +5,7 @@ use super::*;
 
 #[path = "clx.rs"]
 mod clx;
+mod deletions;
 
 /// Read a little-endian `u16` at `offset`, or an error naming `what` when `data` is too
 /// short to contain it.
@@ -105,6 +106,7 @@ pub(super) fn extract_text_word97(
             picture_limits,
             scripts,
             piece_scripts: piece_table.scripts,
+            piece_deleted: piece_table.deleted,
             ranges: &fib.ranges,
             total_cp: fib.total_cp,
         };
@@ -164,6 +166,19 @@ struct DecodedPiece {
 impl DecodedPiece {
     fn is_empty(&self) -> bool {
         self.chars.is_empty()
+    }
+
+    /// Drop tracked-deleted characters. `cp_offsets` keeps the surviving characters'
+    /// source positions so story and picture boundaries stay CP-addressed. ~keep
+    fn retain(&mut self, keep: &[bool]) {
+        fn filter<T: Copy>(values: &mut Vec<T>, keep: &[bool]) {
+            let mut flags = keep.iter();
+            values.retain(|_| flags.next().copied().unwrap_or(true));
+        }
+        filter(&mut self.chars, keep);
+        filter(&mut self.fc_ends, keep);
+        filter(&mut self.cp_offsets, keep);
+        filter(&mut self.scripts, keep);
     }
 }
 
@@ -292,6 +307,10 @@ struct PieceTableContext<'a> {
     ranges: &'a SubdocRanges,
     scripts: &'a chpx::ScriptIndex,
     piece_scripts: &'a [chpx::ScriptProperty],
+    piece_deleted: &'a [Option<bool>],
+    lists: &'a papx::ListTables,
+    /// A character of the table row being read survived deletion; reset by each row-end mark. ~keep
+    row_has_content: std::cell::Cell<bool>,
 }
 
 /// Process one entry of the piece table (`PlcPcd`), appending its decoded characters to
@@ -351,6 +370,20 @@ fn process_piece(
         .iter()
         .map(|&fc| override_script.unwrap_or_else(|| ctx.scripts.at(fc)))
         .collect();
+    let piece_deleted = chpx::piece_deleted_override(prm, ctx.piece_deleted);
+    let keep: Vec<bool> = piece
+        .chars
+        .iter()
+        .zip(&piece.fc_ends)
+        .map(|(&character, &fc)| {
+            let deleted = piece_deleted.or_else(|| ctx.scripts.is_deleted(fc)).unwrap_or(false);
+            ctx.keeps(character, fc, deleted)
+        })
+        .collect();
+    piece.retain(&keep);
+    if piece.is_empty() {
+        return true;
+    }
     append_piece_to_stories(&piece, cp_start, ctx.ranges, text);
     true
 }
@@ -471,6 +504,9 @@ fn extract_text_from_piece_table(
         ranges,
         scripts: &tables.scripts,
         piece_scripts: &tables.piece_scripts,
+        piece_deleted: &tables.piece_deleted,
+        lists: &tables.lists,
+        row_has_content: std::cell::Cell::new(false),
     };
 
     for i in 0..n {
@@ -550,6 +586,7 @@ struct DocTables<'a> {
     stories: StoryTables,
     scripts: chpx::ScriptIndex,
     piece_scripts: Vec<chpx::ScriptProperty>,
+    piece_deleted: Vec<Option<bool>>,
     ranges: &'a SubdocRanges,
     total_cp: usize,
 }

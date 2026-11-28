@@ -162,7 +162,7 @@ const TEST_CSW: usize = 14;
 const TEST_CSLW: usize = 22;
 const TEST_FIB_BASE: usize = 32;
 
-fn write_u16(buf: &mut [u8], offset: usize, val: u16) {
+pub(super) fn write_u16(buf: &mut [u8], offset: usize, val: u16) {
     buf[offset..offset + 2].copy_from_slice(&val.to_le_bytes());
 }
 

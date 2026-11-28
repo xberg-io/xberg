@@ -12,6 +12,8 @@ const TEXT_OFFSET: usize = 1024;
 const FKP_OFFSET: usize = 1536;
 const FKP_SIZE: usize = 512;
 const PROPERTY_OFFSET: usize = 256;
+/// Run marker for a tracked deletion (`sprmCFRMarkDel`) in [`script_doc`] fixtures.
+pub(super) const DELETED: u8 = 0xd0;
 const SCRIPT_RUNS: &[(&str, u8)] = &[("7,2 x 10", 0), ("9", 1), ("/l; H", 0), ("2", 2), ("O\r", 0)];
 
 pub(super) fn script_doc(runs: &[(&str, u8)], compressed: bool) -> Vec<u8> {
@@ -98,7 +100,12 @@ fn add_script_fkp(word: &mut [u8], table: &mut Vec<u8>, runs: &[(&str, u8)], com
         write_u32(fkp, (index + 1) * 4, fc);
         let property = PROPERTY_OFFSET + index * 4;
         fkp[4 * (runs.len() + 1) + index] = (property / 2) as u8;
-        fkp[property..property + 4].copy_from_slice(&[3, 0x48, 0x2a, *script]);
+        let sprm = if *script == DELETED {
+            [3, 0x00, 0x08, 1]
+        } else {
+            [3, 0x48, 0x2a, *script]
+        };
+        fkp[property..property + 4].copy_from_slice(&sprm);
     }
     fkp[FKP_SIZE - 1] = runs.len() as u8;
 }
@@ -335,6 +342,49 @@ async fn assert_subdocument_script_output(bytes: &[u8], prefix: &str, config: &E
     assert!(plain.errors.is_empty());
     assert!(!plain.results[0].content.contains(['^', '~']));
     assert!(plain.results[0].content.contains(&format!("{prefix}109/l")));
+}
+
+#[test]
+fn should_drop_tracked_deleted_runs_and_keep_inserted_text_gh3435() {
+    for compressed in [false, true] {
+        let bytes = script_doc(
+            &[
+                ("TRACKED: ", 0),
+                ("DELETED_OLD_VALUE", DELETED),
+                ("INSERTED_FINAL_VALUE\r", 0),
+            ],
+            compressed,
+        );
+        let result = super::extract_doc_text(&bytes).expect("DOC with tracked deletion");
+        assert_eq!(
+            result.content, "TRACKED: INSERTED_FINAL_VALUE",
+            "compressed={compressed}"
+        );
+        assert_eq!(result.paragraphs.len(), 1);
+        assert_eq!(result.paragraphs[0].content, "TRACKED: INSERTED_FINAL_VALUE");
+        assert!(result.processing_warnings.is_empty());
+    }
+}
+
+#[test]
+fn should_keep_deleted_runs_text_when_chpx_is_malformed_gh3435() {
+    let mut bytes = script_doc(&[("old", DELETED), ("new\r", 0)], false);
+    let mut compound = cfb::CompoundFile::open(Cursor::new(&mut bytes[..])).expect("fixture CFB");
+    let mut word = Vec::new();
+    compound
+        .open_stream("/WordDocument")
+        .unwrap()
+        .read_to_end(&mut word)
+        .unwrap();
+    drop(compound);
+    // Corrupt the FKP run count so the CHPX page cannot be read.
+    word[FKP_OFFSET + FKP_SIZE - 1] = 255;
+    let mut compound = cfb::CompoundFile::open(Cursor::new(&mut bytes[..])).expect("fixture CFB");
+    std::io::Write::write_all(&mut compound.open_stream("/WordDocument").unwrap(), &word).unwrap();
+    drop(compound);
+    let result = super::extract_doc_text(&bytes).expect("DOC with unreadable CHPX");
+    assert_eq!(result.content, "oldnew");
+    assert_eq!(result.processing_warnings.len(), 1);
 }
 
 #[path = "test_style_scripts.rs"]

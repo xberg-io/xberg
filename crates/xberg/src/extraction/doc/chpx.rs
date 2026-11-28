@@ -14,6 +14,7 @@ const PAGE_MASK: u32 = 0x003f_ffff;
 const SPRM_C_ISS: u16 = 0x2a48;
 const SPRM_C_ISTD: u16 = 0x4a30;
 const SPRM_C_PLAIN: u16 = 0x2a33;
+const SPRM_C_F_RMARK_DEL: u16 = 0x0800;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Script {
@@ -38,6 +39,24 @@ pub(super) fn compact_prm_script(prm: u16) -> Option<Script> {
     }
 }
 
+/// `sprmCFRMarkDel` carried by a compact `Prm0` (`isprm` 0x41, [MS-DOC] 2.9.215), whose
+/// `val` byte is the Bool8 operand. ~keep
+pub(super) fn compact_prm_deleted(prm: u16) -> Option<bool> {
+    const ISPRM_C_F_RMARK_DEL: u16 = 0x41;
+    if prm & 1 != 0 || (prm >> 1) & 0x7f != ISPRM_C_F_RMARK_DEL {
+        return None;
+    }
+    decode_deleted((prm >> 8) as u8)
+}
+
+/// The deletion a piece's `Prm` sets: compact (`Prm0`) or an index into the CLX property groups.
+pub(super) fn piece_deleted_override(prm: u16, groups: &[Option<bool>]) -> Option<bool> {
+    if prm & 1 == 0 {
+        return compact_prm_deleted(prm);
+    }
+    groups.get(usize::from(prm >> 1)).copied().flatten()
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ScriptProperty {
     Unchanged,
@@ -55,6 +74,8 @@ struct ScriptRun {
 struct ScriptEffect {
     character_style: Option<u16>,
     script: Option<Script>,
+    /// `sprmCFRMarkDel`: the run is a tracked deletion. ~keep
+    deleted: Option<bool>,
 }
 
 #[derive(Default)]
@@ -158,7 +179,8 @@ impl ScriptIndex {
                 effect
             };
             let (start, end) = (start.max(first), end.min(last));
-            if start < end && (effect.script.is_some() || effect.character_style.is_some()) {
+            if start < end && (effect.script.is_some() || effect.character_style.is_some() || effect.deleted.is_some())
+            {
                 step(budget)?;
                 self.runs.push(ScriptRun { start, end, effect });
             }
@@ -166,23 +188,31 @@ impl ScriptIndex {
         Ok(true)
     }
 
+    fn effect_at(&self, fc_end: u32) -> ScriptEffect {
+        let next = self.runs.partition_point(|run| run.start < fc_end);
+        next.checked_sub(1)
+            .and_then(|row| self.runs.get(row))
+            .filter(|run| fc_end <= run.end)
+            .map_or(ScriptEffect::default(), |run| run.effect)
+    }
+
     pub(super) fn at(&self, fc_end: u32) -> Script {
         let paragraph = self
             .styles
             .at(self.paragraphs.style_for_character_end(fc_end))
             .unwrap_or_default();
-        let next = self.runs.partition_point(|run| run.start < fc_end);
-        let effect = next
-            .checked_sub(1)
-            .and_then(|row| self.runs.get(row))
-            .filter(|run| fc_end <= run.end)
-            .map_or(ScriptEffect::default(), |run| run.effect);
+        let effect = self.effect_at(fc_end);
         effect.script.unwrap_or_else(|| {
             effect
                 .character_style
                 .and_then(|style| self.styles.at(style))
                 .unwrap_or(paragraph)
         })
+    }
+
+    /// Whether the character ending at `fc_end` is a tracked deletion in its CHPX run.
+    pub(super) fn is_deleted(&self, fc_end: u32) -> Option<bool> {
+        self.effect_at(fc_end).deleted
     }
 }
 
@@ -219,19 +249,49 @@ fn script_effect(mut properties: &[u8], budget: &mut SecurityBudget) -> Result<O
                 effect = ScriptEffect {
                     character_style: Some(u16::from_le_bytes([operand[0], operand[1]])),
                     script: None,
+                    deleted: effect.deleted,
                 }
             }
             SPRM_C_PLAIN => {
                 effect = ScriptEffect {
                     character_style: None,
                     script: None,
+                    deleted: effect.deleted,
                 }
             }
+            SPRM_C_F_RMARK_DEL => effect.deleted = decode_deleted(operand[0]),
             _ => {}
         }
         properties = &properties[length..];
     }
     Ok(Some(effect))
+}
+
+/// Bool8 operand: 0 and 1 are explicit; 0x80 (style value) and 0x81 (negated style
+/// value) leave a tracked deletion off and on respectively since styles never delete. ~keep
+fn decode_deleted(value: u8) -> Option<bool> {
+    match value {
+        0 | 0x80 => Some(false),
+        1 | 0x81 => Some(true),
+        _ => None,
+    }
+}
+
+/// The last `sprmCFRMarkDel` in a piece's property group, if any. Malformed groups
+/// are reported by [`piece_script_property`] and yield `None` here.
+pub(super) fn piece_deleted_property(mut properties: &[u8]) -> Option<bool> {
+    let mut deleted = None;
+    while !properties.is_empty() {
+        let opcode = u16::from_le_bytes([*properties.first()?, *properties.get(1)?]);
+        properties = &properties[2..];
+        let length = papx::sprm_operand_length(opcode, properties)?;
+        let operand = properties.get(..length)?;
+        if opcode == SPRM_C_F_RMARK_DEL {
+            deleted = decode_deleted(operand[0]).or(deleted);
+        }
+        properties = &properties[length..];
+    }
+    deleted
 }
 
 fn decode_script(value: u8) -> Script {

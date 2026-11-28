@@ -31,6 +31,8 @@ pub(crate) mod test_images;
 mod test_prm_scripts;
 #[cfg(all(test, feature = "tokio-runtime"))]
 mod test_scripts;
+#[cfg(all(test, feature = "tokio-runtime"))]
+mod test_tracked_deletions;
 
 /// Warning source tag for `.doc` extraction diagnostics (#171 convention).
 const DOC_WARNING_SOURCE: &str = "doc";
