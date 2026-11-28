@@ -153,7 +153,8 @@ impl TessdataManager {
     /// Skips files that already exist and copies verified ones from local directories (see
     /// [`Self::for_model`]). Entries are trimmed and empty ones ignored; every language is checked
     /// against the pins before anything is written, and one with no pinned pack is an error.
-    /// Returns the count of newly published files.
+    /// Returns the count of newly published files, or an error naming the languages whose wrong
+    /// file in a `best` directory could not be replaced because the directory cannot be written.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn ensure_languages(&self, languages: &[&str]) -> Result<usize, OcrError> {
         let languages: Vec<&str> = languages
@@ -182,6 +183,7 @@ impl TessdataManager {
 
         let total = languages.len();
         let mut downloaded = 0;
+        let mut blocked = Vec::new();
 
         for (i, &lang) in languages.iter().enumerate() {
             if self.is_language_cached(lang) {
@@ -201,6 +203,7 @@ impl TessdataManager {
                 // ~keep The directory cannot be written, so nothing can be fetched into it either;
                 // set_aside_unverified has warned that the file stays.
                 if set_aside == super::tessdata_download::SetAside::Blocked {
+                    blocked.push(lang);
                     continue;
                 }
             }
@@ -220,6 +223,15 @@ impl TessdataManager {
 
         tracing::info!(downloaded, total, model = %self.model, "Tessdata download complete");
 
+        if !blocked.is_empty() {
+            return Err(OcrError::TesseractInitializationFailed(format!(
+                "{} holds files that are not the pinned {} language packs and cannot be written: {}. \
+                 Replace them with the pinned packs or make the directory writable",
+                self.cache_dir.display(),
+                self.model.repository(),
+                blocked.join(", ")
+            )));
+        }
         Ok(downloaded)
     }
 }
@@ -366,6 +378,21 @@ mod tests {
                 .is_empty(),
             "the directory of the other set is not a best set directory"
         );
+    }
+
+    #[test]
+    fn ensure_languages_fails_when_a_wrong_best_pack_cannot_be_replaced() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = TessdataManager::for_model(Some(temp_dir.path().to_path_buf()), TessdataModel::Best);
+        let pack = temp_dir.path().join("eng.traineddata");
+        std::fs::write(&pack, "not the pinned best pack").unwrap();
+        super::super::tessdata_download::read_only_for_tests::insert(temp_dir.path());
+
+        let error = manager
+            .ensure_languages(&["eng"])
+            .expect_err("a pack that stays wrong must not be reported as warmed");
+        assert!(error.to_string().contains("written: eng."), "{error}");
+        assert_eq!(std::fs::read(&pack).unwrap(), b"not the pinned best pack");
     }
 
     #[test]
