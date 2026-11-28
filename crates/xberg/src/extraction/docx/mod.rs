@@ -8,6 +8,7 @@
 
 pub mod drawing;
 pub mod math;
+pub(crate) mod namespace;
 pub mod parser;
 pub mod section;
 pub mod styles;

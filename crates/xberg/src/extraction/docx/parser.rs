@@ -3028,6 +3028,8 @@ struct DocxParser<R: Read + Seek> {
     relationships: AHashMap<String, String>,
     styles: Option<super::styles::StyleCatalog>,
     theme: Option<super::theme::Theme>,
+    /// Parts whose non-conventional namespace prefixes could not be canonicalized.
+    namespace_failures: Vec<String>,
 }
 
 impl<R: Read + Seek> DocxParser<R> {
@@ -3046,7 +3048,8 @@ impl<R: Read + Seek> DocxParser<R> {
                     .read_to_string(&mut xml)
                     .is_ok()
                 {
-                    styles_result = super::styles::parse_styles_xml(&xml).ok();
+                    styles_result =
+                        super::styles::parse_styles_xml(&super::namespace::strict_to_transitional(&xml)).ok();
                 }
             }
             styles_result
@@ -3061,7 +3064,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     .read_to_string(&mut xml)
                     .is_ok()
                 {
-                    theme_result = super::theme::parse_theme_xml(&xml).ok();
+                    theme_result = super::theme::parse_theme_xml(&super::namespace::strict_to_transitional(&xml)).ok();
                 }
             }
             theme_result
@@ -3072,6 +3075,7 @@ impl<R: Read + Seek> DocxParser<R> {
             relationships: AHashMap::new(),
             styles,
             theme,
+            namespace_failures: Vec::new(),
         })
     }
 
@@ -3159,6 +3163,16 @@ impl<R: Read + Seek> DocxParser<R> {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
+        for part in std::mem::take(&mut self.namespace_failures) {
+            crate::core::diagnostics::push_warning(
+                &mut document.warnings,
+                "docx",
+                format!(
+                    "{part} binds the WordprocessingML namespace to a non-standard prefix and is not well-formed XML; its content could not be read"
+                ),
+            );
+        }
+
         Ok((document, hyperlinks))
     }
 
@@ -3212,7 +3226,16 @@ impl<R: Read + Seek> DocxParser<R> {
 
         let mut contents = String::new();
         file.take(read_limit).read_to_string(&mut contents)?;
-        Ok(contents)
+        let canonical = super::namespace::canonicalize_prefixes(&contents);
+        if canonical.gave_up {
+            self.namespace_failures.push(path.to_string());
+        }
+        let rewritten = match canonical.xml {
+            std::borrow::Cow::Owned(rewritten) => Some(rewritten),
+            // Nothing to rewrite: keep the original allocation.
+            std::borrow::Cow::Borrowed(_) => None,
+        };
+        Ok(rewritten.unwrap_or(contents))
     }
 
     /// Parse `word/document.xml`'s body content and populate `document` from it.
@@ -4766,6 +4789,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut budget = SecurityBudget::with_defaults();
         let defs = parser.parse_numbering(&xml, &mut budget).unwrap().list_types;
@@ -5007,6 +5031,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut budget = SecurityBudget::with_defaults();
         let numbering = parser.parse_numbering(xml, &mut budget).unwrap();
@@ -5071,6 +5096,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         parser.parse_numbering(&xml, &mut SecurityBudget::from_limits(limits))
     }
@@ -5383,6 +5409,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -5420,6 +5447,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -5460,6 +5488,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -5484,6 +5513,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut notes = Vec::new();
         let mut budget = crate::extractors::security::SecurityBudget::with_defaults();
@@ -6291,6 +6321,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
@@ -6311,6 +6342,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         parser_struct.parse_document_xml(xml, &mut document, budget).unwrap();
@@ -6326,6 +6358,7 @@ mod tests {
             relationships: AHashMap::new(),
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         parser_struct.parse_document_xml(xml, &mut document, budget)?;
@@ -6925,6 +6958,7 @@ mod tests {
             relationships: rels,
             styles: None,
             theme: None,
+            namespace_failures: Vec::new(),
         };
         let mut document = Document::new();
         {
