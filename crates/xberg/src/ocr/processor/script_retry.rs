@@ -391,7 +391,7 @@ async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
         assert!(before.is_some());
         assert!(cacheability::can_publish_outer_result());
         cacheability::with_ocr_cancellation(None, async {
-            std::fs::write(&path, b"model two").unwrap();
+            std::fs::write(&path, b"model two, longer").unwrap();
             let observed = RetryModels::resolve_vertical(&directories, "eng", 3).unwrap().unwrap();
             assert_eq!(
                 observed.revision,

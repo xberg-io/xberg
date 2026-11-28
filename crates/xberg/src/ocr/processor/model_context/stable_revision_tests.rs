@@ -127,7 +127,7 @@ async fn assert_primary_revision_misses(route: Route) {
             Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await
         );
         assert_eq!(backend.calls.load(Ordering::SeqCst), 1);
-        std::fs::write(&english, b"two").unwrap();
+        std::fs::write(&english, b"two, longer").unwrap();
         let next = Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await;
         assert_ne!(first, next);
         assert_eq!(next, Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await);
