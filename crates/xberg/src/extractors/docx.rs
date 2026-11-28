@@ -2364,8 +2364,11 @@ mod tests {
             .extract_content(&data, DOCX_MIME, &config)
             .await
             .unwrap();
-        let result =
-            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain);
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
         assert_eq!(result.tables.len(), 1, "{:?}", result.tables);
         assert_eq!(result.tables[0].cells, vec![vec!["X".to_string()]]);
     }
