@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf:** a page tag set beside a title ("Keep for Your Records") is read with the title ahead of the worksheet rows below it, and a running head above a table is read before the table's cells, instead of after the left-hand cells. (#3465)
 - **docx:** a table cell whose deletion is tracked (`w:tcPr/w:cellDel`) is dropped with its text, footnotes, comments and drawings, and the cells after it in the row shift left (a row left short is padded to the table's width, and a row whose cells are all deleted is dropped); a `w:cellDel` inside `w:tcPrChange` no longer deletes the cell. (#3453)
 - **pptx:** slides, charts, SmartArt and comments now resolve PresentationML, DrawingML, relationship and math elements by namespace URI, so equations and image or hyperlink relationships survive a prefix other than `m`/`r` or a default namespace, and strict (ISO 29500) namespaces extract like transitional ones. (#3467)
 - **docx:** body text, tables, lists, footnotes, comments and headers/footers are no longer silently dropped when the WordprocessingML namespace is bound to a prefix other than `w` (or to the default namespace), or uses the strict ISO 29500 namespace URI. (#3437)
