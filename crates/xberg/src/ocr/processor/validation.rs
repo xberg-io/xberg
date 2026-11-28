@@ -363,8 +363,9 @@ impl FileStamp {
 /// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
 /// and engines made from the old one, while a pinned pack written again with the same bytes (a
 /// remount, a copy, a re-adoption) keeps them. It costs a `stat` and an `open` per language; a
-/// file is read once per version on Unix and on every call elsewhere, as [`PinTables::classify`] does. Returns false when a file cannot be
-/// identified: nothing keyed on it may be stored or reused.
+/// file is read once per call, and on Unix only once per settled version, as
+/// [`PinTables::classify`] does. Returns false when a file cannot be identified: nothing keyed on
+/// it may be stored or reused.
 #[must_use]
 pub(crate) fn hash_pack_identities<'a>(
     hasher: &mut blake3::Hasher,
@@ -412,21 +413,25 @@ fn hash_pack_key(
     _metadata: &std::fs::Metadata,
     pins: &PinTables<'_>,
 ) -> bool {
-    use crate::ocr::tessdata_download::VerifiedSet;
+    use crate::ocr::tessdata_download::{PackIdentity, VerifiedSet};
 
-    if let Some((set, digest)) = pins.pinned_identity(lang, path) {
-        let set = match set {
-            VerifiedSet::Fast => 1,
-            VerifiedSet::Best => 2,
-            VerifiedSet::Shared => 3,
-            VerifiedSet::Unknown => 0,
-        };
-        hasher.update(&[3, set]);
-        hasher.update(digest.as_bytes());
-        return true;
-    }
-    let Some(digest) = crate::ocr::tessdata_download::content_sha256(path) else {
-        return false;
+    let digest = match pins.pack_identity(lang, path) {
+        PackIdentity::Pinned(set, digest) => {
+            let set = match set {
+                VerifiedSet::Fast => 1,
+                VerifiedSet::Best => 2,
+                VerifiedSet::Shared => 3,
+                VerifiedSet::Unknown => 0,
+            };
+            hasher.update(&[3, set]);
+            hasher.update(digest.as_bytes());
+            return true;
+        }
+        PackIdentity::Unpinned(Some(digest)) => digest,
+        PackIdentity::Unpinned(None) => match crate::ocr::tessdata_download::content_sha256(path) {
+            Some(digest) => digest,
+            None => return false,
+        },
     };
     hasher.update(&[4]);
     hasher.update(digest.as_bytes());

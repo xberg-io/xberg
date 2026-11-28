@@ -60,6 +60,16 @@ impl DownloadError {
 /// One pinned pack: language, SHA-256 and byte size.
 pub(crate) type Pin<'a> = (&'a str, &'a str, u64);
 
+/// What [`PinTables::pack_identity`] found a model file to be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PackIdentity<'a> {
+    /// The pinned pack of this set, with its pinned SHA-256.
+    Pinned(VerifiedSet, &'a str),
+    /// No pinned pack of the language, with the file's SHA-256 when it was read to tell: only a
+    /// file of a pinned size is.
+    Unpinned(Option<String>),
+}
+
 /// The pinned pack a `.traineddata` file was verified to be, by size and SHA-256.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VerifiedSet {
@@ -129,8 +139,13 @@ impl<'a> PinTables<'a> {
     /// is never read; a file of a pinned size is hashed as [`memoized_sha256`] does: once per
     /// (path, [`FileStamp`]) on Unix, on every call elsewhere.
     pub(crate) fn classify(&self, lang: &str, path: &Path) -> VerifiedSet {
+        self.classify_reading(lang, path).0
+    }
+
+    /// [`Self::classify`], with the SHA-256 of the file when it was read to tell.
+    fn classify_reading(&self, lang: &str, path: &Path) -> (VerifiedSet, Option<String>) {
         let Ok(metadata) = std::fs::metadata(path) else {
-            return VerifiedSet::Unknown;
+            return (VerifiedSet::Unknown, None);
         };
         let sized = |model| {
             self.pin(lang, model)
@@ -138,12 +153,12 @@ impl<'a> PinTables<'a> {
         };
         let (fast, best) = (sized(TessdataModel::Fast), sized(TessdataModel::Best));
         if fast.is_none() && best.is_none() {
-            return VerifiedSet::Unknown;
+            return (VerifiedSet::Unknown, None);
         }
         let Some(digest) = memoized_sha256(path, MAX_TRAINEDDATA_BYTES) else {
-            return VerifiedSet::Unknown;
+            return (VerifiedSet::Unknown, None);
         };
-        match (
+        let set = match (
             fast.is_some_and(|pin| pin.1 == digest),
             best.is_some_and(|pin| pin.1 == digest),
         ) {
@@ -151,22 +166,26 @@ impl<'a> PinTables<'a> {
             (true, false) => VerifiedSet::Fast,
             (false, true) => VerifiedSet::Best,
             (false, false) => VerifiedSet::Unknown,
-        }
+        };
+        (set, Some(digest))
     }
 
-    /// The set and pinned SHA-256 of the pack the file at `path` is, by [`Self::classify`];
-    /// `None` when it is no pinned pack of `lang`.
+    /// Which pinned pack of `lang` the file at `path` is, by [`Self::classify`], or the SHA-256
+    /// read to find it is none, so the caller need not read the file again.
     ///
     /// The same bytes give the same answer wherever and however they were written, so cache keys
     /// built from it survive a pack copied, restored or re-adopted unchanged.
-    pub(crate) fn pinned_identity(&self, lang: &str, path: &Path) -> Option<(VerifiedSet, &'a str)> {
-        let set = self.classify(lang, path);
+    pub(crate) fn pack_identity(&self, lang: &str, path: &Path) -> PackIdentity<'a> {
+        let (set, digest) = self.classify_reading(lang, path);
         let model = match set {
             VerifiedSet::Fast | VerifiedSet::Shared => TessdataModel::Fast,
             VerifiedSet::Best => TessdataModel::Best,
-            VerifiedSet::Unknown => return None,
+            VerifiedSet::Unknown => return PackIdentity::Unpinned(digest),
         };
-        self.pin(lang, model).map(|pin| (set, pin.1))
+        match self.pin(lang, model) {
+            Some(pin) => PackIdentity::Pinned(set, pin.1),
+            None => PackIdentity::Unpinned(digest),
+        }
     }
 
     /// The set every one of `languages` in `directory` was verified to be, ignoring the packs
@@ -1133,6 +1152,34 @@ mod tests {
             without_reading_packs(|| super::memoized_sha256(&pack, 64)),
             Some(digest),
             "a settled file is remembered"
+        );
+    }
+
+    #[test]
+    fn a_pinned_size_file_that_is_no_pinned_pack_carries_the_digest_read_to_tell() {
+        use super::{PackIdentity, PinTables, VerifiedSet};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+
+        std::fs::write(&pack, b"user english").unwrap();
+        assert_eq!(
+            pins.pack_identity("eng", &pack),
+            PackIdentity::Unpinned(Some(hex::encode(Sha256::digest(b"user english"))))
+        );
+        std::fs::write(&pack, b"a user-trained model of another size").unwrap();
+        assert_eq!(
+            pins.pack_identity("eng", &pack),
+            PackIdentity::Unpinned(None),
+            "a file of no pinned size is not read"
+        );
+        std::fs::write(&pack, b"fast english").unwrap();
+        assert_eq!(
+            pins.pack_identity("eng", &pack),
+            PackIdentity::Pinned(VerifiedSet::Fast, fast_digest.as_str())
         );
     }
 
