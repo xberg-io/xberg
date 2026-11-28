@@ -6769,9 +6769,7 @@ mod tests {
         let captured = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
         assert!(captured.vertical_retry_is_current(&config));
         std::fs::write(&vertical, b"drifted snapshot").unwrap();
-        if !super::super::model_context::make_unreadable(&vertical) {
-            return;
-        }
+        super::super::model_context::make_unreadable(&vertical);
         let fresh = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
         let pool = TesseractApiPool::new();
         for models in [captured, fresh] {

@@ -458,17 +458,11 @@ fn model_read_error(path: &std::path::Path, error: impl std::fmt::Display) -> Oc
     ))
 }
 
-/// Make the file at `path` unreadable while it stays a regular file, or return false (the caller
-/// skips) where that cannot be arranged: off Unix, or for a user whose reads ignore permissions.
+/// Make every model read of the file at `path` fail while it stays a regular file, on every
+/// platform and for every user, root included.
 #[cfg(test)]
-pub(super) fn make_unreadable(path: &std::path::Path) -> bool {
-    #[cfg(unix)]
-    std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
-    let unreadable = cfg!(unix) && std::fs::File::open(path).is_err();
-    if !unreadable {
-        eprintln!("SKIP: cannot make {} unreadable", path.display());
-    }
-    unreadable
+pub(super) fn make_unreadable(path: &std::path::Path) {
+    crate::cache::unreadable_for_tests::insert(path);
 }
 
 #[cfg(test)]
@@ -624,9 +618,7 @@ mod tests {
             for name in ["eng", "osd", "chi_sim", "khm"] {
                 std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
             }
-            if !make_unreadable(&root.path().join("khm.traineddata")) {
-                return;
-            }
+            make_unreadable(&root.path().join("khm.traineddata"));
             script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
                 let config = TesseractConfig {
                     psm: 3,
@@ -718,8 +710,8 @@ mod tests {
                 std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
             }
             std::fs::write(&han, b"Han revision one").unwrap();
-            if fail_at_selection && !make_unreadable(&han) {
-                return;
+            if fail_at_selection {
+                make_unreadable(&han);
             }
             script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
                 let config = TesseractConfig {

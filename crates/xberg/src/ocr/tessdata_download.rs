@@ -204,7 +204,7 @@ impl<'a> PinTables<'a> {
             return Ok(SetAside::Untouched);
         }
         let aside = unused_unverified_path(output_dir, lang);
-        match std::fs::rename(&path, &aside) {
+        match rename_aside(&path, &aside) {
             Ok(()) => {}
             // ~keep Another process moved it first.
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(SetAside::Untouched),
@@ -258,6 +258,42 @@ pub(crate) enum SetAside {
     /// The file is not the pinned pack, but the directory cannot be written, so it stays and is
     /// used as given.
     Blocked,
+}
+
+fn rename_aside(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if from.parent().is_some_and(read_only_for_tests::contains) {
+        return Err(std::io::Error::from(ErrorKind::PermissionDenied));
+    }
+    std::fs::rename(from, to)
+}
+
+/// Directories in which moving a pack aside fails in tests, as on a read-only cache.
+///
+/// Permissions cannot stop root from renaming, so tests of a cache that cannot be written
+/// register its directory here instead and run the same for every user.
+#[cfg(test)]
+pub(crate) mod read_only_for_tests {
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    static READ_ONLY: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
+
+    /// Make every later move aside of a pack in `directory` fail with permission denied.
+    pub(crate) fn insert(directory: &Path) {
+        READ_ONLY
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(directory.to_path_buf());
+    }
+
+    pub(super) fn contains(directory: &Path) -> bool {
+        READ_ONLY
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(directory)
+    }
 }
 
 /// `<lang>.traineddata.unverified` in `output_dir`, or, when an earlier set-aside file holds that
@@ -1117,11 +1153,9 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_wrong_file_in_a_directory_that_cannot_be_written_stays() {
         use super::{PinTables, SetAside, TessdataModel};
-        use std::os::unix::fs::PermissionsExt as _;
 
         let directory = tempfile::tempdir().unwrap();
         let best_pack = hex::encode(Sha256::digest(b"best!"));
@@ -1129,15 +1163,9 @@ mod tests {
         let pins = PinTables { fast: &[], best: &best };
         let pack = directory.path().join("eng.traineddata");
         std::fs::write(&pack, b"fast").unwrap();
-        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
-        let writable = std::fs::write(directory.path().join("probe"), b"").is_ok();
+        super::read_only_for_tests::insert(directory.path());
 
         let outcome = pins.set_aside_unverified("eng", TessdataModel::Best, directory.path());
-        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
-        if writable {
-            eprintln!("SKIP: permissions do not restrict this user");
-            return;
-        }
         assert_eq!(outcome.unwrap(), SetAside::Blocked);
         assert_eq!(std::fs::read(&pack).unwrap(), b"fast");
     }
