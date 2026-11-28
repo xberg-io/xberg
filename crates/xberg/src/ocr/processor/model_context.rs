@@ -23,7 +23,8 @@ pub(super) struct ModelContext {
     pub(super) osd_revision: Option<blake3::Hash>,
     /// The identity of each primary language's model file
     /// ([`hash_pack_identities`](super::validation::hash_pack_identities)), for cache and pool
-    /// keys. Unlike `primary` it is taken for every PSM and reads a file at most once per version.
+    /// keys. Unlike `primary` it is taken for every PSM; on Unix it reads a file at most once per
+    /// version.
     identity: Option<PackIdentity>,
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,

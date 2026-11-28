@@ -325,9 +325,9 @@ impl FileStamp {
 /// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
 /// and engines made from the old one, while a pinned pack written again with the same bytes (a
 /// remount, a copy, a re-adoption) keeps them. It costs a `stat` and, for a file of a pinned
-/// size, an `open` per language; a file is read once per version, as [`PinTables::classify`]
-/// does. Returns false when a file cannot be identified: nothing keyed on it may be stored or
-/// reused.
+/// size, an `open` per language; a file it reads is read once per version on Unix and on every
+/// call elsewhere, as [`PinTables::classify`] does. Returns false when a file cannot be
+/// identified: nothing keyed on it may be stored or reused.
 #[must_use]
 pub(crate) fn hash_pack_identities<'a>(
     hasher: &mut blake3::Hasher,

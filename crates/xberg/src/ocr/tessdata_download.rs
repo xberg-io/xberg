@@ -126,8 +126,8 @@ impl<'a> PinTables<'a> {
     /// Which pinned pack of `lang` the file at `path` is.
     ///
     /// The size is compared first, so a file that is no pinned size (every user-trained model)
-    /// is never read; a file of a pinned size is hashed once per (path, [`FileStamp`]) in this
-    /// process.
+    /// is never read; a file of a pinned size is hashed as [`memoized_sha256`] does: once per
+    /// (path, [`FileStamp`]) on Unix, on every call elsewhere.
     pub(crate) fn classify(&self, lang: &str, path: &Path) -> VerifiedSet {
         let Ok(metadata) = std::fs::metadata(path) else {
             return VerifiedSet::Unknown;
@@ -234,9 +234,6 @@ impl<'a> PinTables<'a> {
             }
             Err(error) => return Err(error),
         }
-        // ~keep Where the platform has no inode, the pack published next can share the size and
-        // modification time of the file just moved, which is all the digest memo tells apart there.
-        DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).remove(&path);
         tracing::warn!(
             path = %path.display(),
             moved_to = %aside.display(),
@@ -344,7 +341,9 @@ fn warn_blocked_once(path: &Path, model: TessdataModel, error: &std::io::Error) 
 }
 
 /// Stamp and SHA-256 of the files [`memoized_sha256`] has read.
+#[cfg(unix)]
 type SeenDigest = (FileStamp, String);
+#[cfg(unix)]
 static DIGESTS: LazyLock<Mutex<HashMap<PathBuf, SeenDigest>>> = LazyLock::new(Default::default);
 
 std::thread_local! {
@@ -383,8 +382,9 @@ pub(crate) fn must_not_read() -> bool {
     memo_only
 }
 
-/// The SHA-256 of the regular file at `path`, read once per (path, [`FileStamp`]) in this
-/// process.
+/// The SHA-256 of the regular file at `path`: on Unix read once per (path, [`FileStamp`]) in this
+/// process, elsewhere read on every call, since a stamp there is only the size and modification
+/// time, which a replacement (`cp -p`, robocopy, an extracted archive) can keep.
 ///
 /// The stamp is taken from the opened file, not from an earlier `stat` of the path, so a file
 /// replaced between the two is never remembered under the stamp of the one it replaced.
@@ -396,6 +396,7 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
         return None;
     }
     let state = FileStamp::of(&metadata)?;
+    #[cfg(unix)]
     if let Some((seen, digest)) = DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).get(path)
         && *seen == state
     {
@@ -425,6 +426,7 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
         return None;
     }
     let digest = hex::encode(hasher.finalize());
+    #[cfg(unix)]
     DIGESTS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -432,7 +434,7 @@ fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
     Some(digest)
 }
 
-/// The SHA-256 of the regular file at `path`, of any size, read once per (path, [`FileStamp`]).
+/// The SHA-256 of the regular file at `path`, of any size, as [`memoized_sha256`] reads it.
 ///
 /// Where a stamp is only the size and modification time, a replacement can keep both, so the
 /// identity of a pack that is no pinned one has to come from its bytes.
@@ -1028,7 +1030,6 @@ mod tests {
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_replacement_that_keeps_size_and_modification_time_is_classified_again() {
         use super::{PinTables, VerifiedSet};
@@ -1083,10 +1084,17 @@ mod tests {
             VerifiedSet::Fast,
             "outside, the file is read"
         );
+        #[cfg(unix)]
         assert_eq!(
             without_reading_packs(|| pins.classify("eng", &pack)),
             Some(VerifiedSet::Fast),
             "warm memo"
+        );
+        #[cfg(not(unix))]
+        assert_eq!(
+            without_reading_packs(|| pins.classify("eng", &pack)),
+            None,
+            "off Unix a size-and-time stamp cannot vouch for bytes read before"
         );
     }
 

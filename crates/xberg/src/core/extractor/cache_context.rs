@@ -102,7 +102,8 @@ async fn fingerprint_with_reader(
     let has_tessdata = dependencies.iter().any(|dependency| !dependency.tessdata.is_empty());
     // ~keep Tessdata identities and the script-retry context are stat calls once the memos hold
     // the packs' digests and the vertical model's revision, so they skip the blocking-pool hop
-    // every cached PDF and image would pay. Orientation and PaddleOCR models are always read.
+    // every cached PDF and image would pay. Orientation and PaddleOCR models are always read, and
+    // off Unix so is every pack, since no memo is kept there.
     if (has_tessdata || has_script_retry)
         && !(has_orientation_models || has_paddle_fallback)
         && let Some(result) =
@@ -283,8 +284,8 @@ fn unidentified_model() -> Option<String> {
 /// be trusted.
 ///
 /// Stats files: it never creates a directory or downloads, and reads a model only to identify it
-/// (a pinned-size pack against its pin, and off Unix any other pack by its bytes), once per file
-/// version, since it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
+/// (a pinned-size pack against its pin, and off Unix any other pack by its bytes), on Unix once
+/// per file version, since it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
 /// would download its packs) is keyed on its set, languages, candidate directories and the
 /// identity of the packs already in them instead; once the packs exist the key changes, so
 /// nothing read before is served after.
@@ -1089,6 +1090,8 @@ mod tests {
             "a new snapshot must re-read changed model bytes"
         );
     }
+    // ~keep Off Unix no pack digest is memoized, so a pack that exists is always read on the pool.
+    #[cfg(unix)]
     #[test]
     fn tessdata_identities_alone_do_not_wait_for_the_blocking_pool() {
         use std::future::Future;
@@ -1133,6 +1136,8 @@ mod tests {
         assert!(context.unwrap().unwrap().starts_with(":tessdata-v1:"));
     }
 
+    // ~keep Off Unix no pack digest is memoized, so a pack that exists is always read on the pool.
+    #[cfg(unix)]
     #[test]
     fn an_ordinary_request_does_not_wait_for_the_blocking_pool_once_its_models_were_read() {
         use std::future::Future;
