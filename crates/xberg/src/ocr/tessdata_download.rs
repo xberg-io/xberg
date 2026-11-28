@@ -140,7 +140,7 @@ impl<'a> PinTables<'a> {
         if fast.is_none() && best.is_none() {
             return VerifiedSet::Unknown;
         }
-        let Some(digest) = memoized_sha256(path, &metadata) else {
+        let Some(digest) = memoized_sha256(path) else {
             return VerifiedSet::Unknown;
         };
         match (
@@ -358,9 +358,17 @@ pub(crate) fn without_reading_packs<T>(compute: impl FnOnce() -> T) -> Option<T>
 }
 
 /// The SHA-256 of the regular file at `path`, read once per (path, [`FileStamp`]) in this
-/// process. `metadata` is what the caller just read for `path`.
-fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> {
-    let state = FileStamp::of(metadata)?;
+/// process.
+///
+/// The stamp is taken from the opened file, not from an earlier `stat` of the path, so a file
+/// replaced between the two is never remembered under the stamp of the one it replaced.
+fn memoized_sha256(path: &Path) -> Option<String> {
+    let file = std::fs::File::open(path).ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    let state = FileStamp::of(&metadata)?;
     if let Some((seen, digest)) = DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).get(path)
         && *seen == state
     {
@@ -370,11 +378,7 @@ fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> 
         MEMO_MISSED.with(|missed| missed.set(true));
         return None;
     }
-    let file = std::fs::File::open(path).ok()?;
-    if !file.metadata().ok()?.is_file() {
-        return None;
-    }
-    let mut reader = file.take(MAX_TRAINEDDATA_BYTES.saturating_add(1));
+    let mut reader = (&file).take(MAX_TRAINEDDATA_BYTES.saturating_add(1));
     let mut hasher = Sha256::new();
     let mut buffer = vec![0_u8; 64 * 1024];
     let mut read = 0_u64;
@@ -390,8 +394,8 @@ fn memoized_sha256(path: &Path, metadata: &std::fs::Metadata) -> Option<String> 
         }
     }
     // ~keep A file that changed while it was read has no digest worth remembering under the
-    // size and time read before it.
-    if read != metadata.len() {
+    // stamp taken before it.
+    if read != metadata.len() || file.metadata().ok().as_ref().and_then(FileStamp::of) != Some(state) {
         return None;
     }
     let digest = hex::encode(hasher.finalize());
