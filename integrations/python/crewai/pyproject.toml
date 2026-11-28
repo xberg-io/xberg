@@ -56,10 +56,5 @@ ini_options.asyncio_mode = "auto"
 run.source = ["crewai_xberg"]
 report.fail_under = 80
 
-[tool.uv]
-# xberg ships as a pre-release (1.0.0rcN) until the 1.0.0 GA; persist prerelease
-# resolution so the lockfile is authoritative and `uv run` does not re-resolve. ~keep
-prerelease = "allow"
-
 [tool.uv.sources]
 xberg = { path = "../../../packages/python", editable = true }

@@ -5,8 +5,6 @@
 # shellcheck disable=SC2154 # usage_* are set by mise from the #USAGE lines
 set -euo pipefail
 
-# --prerelease=allow is required because the pinned xberg is a pre-release (1.0.0rcNN) until the
-# 1.0.0 GA. ~keep
 # shellcheck source=mise-tasks/integrations/.lib/packages.sh
 . "$MISE_CONFIG_ROOT/mise-tasks/integrations/.lib/packages.sh"
 case "$usage_mode" in
@@ -19,7 +17,7 @@ upgrade) uv_flags=(--upgrade) maven_goal=versions:use-latest-releases ;;
   ;;
 esac
 for dir in "${uv_dirs[@]}"; do
-  (cd "$dir" && uv sync --all-extras ${uv_flags[@]+"${uv_flags[@]}"} --prerelease=allow)
+  (cd "$dir" && uv sync --all-extras ${uv_flags[@]+"${uv_flags[@]}"})
 done
 [ -n "$maven_goal" ] || exit 0
 (cd "$spring_ai" && command -v mvn >/dev/null 2>&1 &&
