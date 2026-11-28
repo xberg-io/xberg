@@ -40,6 +40,24 @@ pub(super) fn was_truncated() -> bool {
     TRUNCATED.with(Cell::get)
 }
 
+/// Skip to the end tag matching the container just opened, charging every event to the
+/// iteration budget so a dropped subtree cannot be scanned for free.
+fn skip_container(reader: &mut Reader<&[u8]>, budget: &mut SecurityBudget) -> Result<(), SecurityError> {
+    let mut depth = 1usize;
+    let mut buf = Vec::new();
+    while depth > 0 {
+        budget.step()?;
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(_)) => depth += 1,
+            Ok(Event::End(_)) => depth -= 1,
+            Ok(Event::Eof) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(())
+}
+
 /// Recursively collect child nodes until the matching close tag.
 ///
 /// Collecting, rendering and dropping the node tree all recurse once per level, so the
@@ -53,7 +71,7 @@ pub(super) fn collect_children(
 ) -> Result<Vec<MathNode>, SecurityError> {
     let Some(_guard) = NestingGuard::enter() else {
         TRUNCATED.with(|t| t.set(true));
-        skip_to_end(reader, end_tag);
+        skip_container(reader, budget)?;
         budget.leave();
         return Ok(Vec::new());
     };
