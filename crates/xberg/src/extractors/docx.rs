@@ -2367,6 +2367,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn footnote_in_a_tracked_deleted_row_is_dropped_and_does_not_shift_numbering() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="9" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Removed cell</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Kept cell</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>After table</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let footnotes_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="1"><w:p><w:r><w:t>Removed note text.</w:t></w:r></w:p></w:footnote>
+  <w:footnote w:id="2"><w:p><w:r><w:t>Kept note text.</w:t></w:r></w:p></w:footnote>
+</w:footnotes>"#;
+        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None, None);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(!plain.contains("Removed"), "deleted row and its note are gone: {plain}");
+        assert!(plain.contains("Kept cell"), "{plain}");
+        assert!(plain.contains("After table[^1]"), "later note is numbered 1: {plain}");
+        assert!(plain.contains("Kept note text."), "{plain}");
+        assert!(!plain.contains("[^2]"), "numbering did not skip: {plain}");
+    }
+
+    #[tokio::test]
+    async fn comment_only_referenced_in_a_tracked_deleted_row_is_dropped() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="9" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Removed cell</w:t></w:r><w:r><w:commentReference w:id="0"/></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>Live text</w:t></w:r><w:r><w:commentReference w:id="1"/></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let comments_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:comment w:id="0" w:author="A"><w:p><w:r><w:t>Removed comment text.</w:t></w:r></w:p></w:comment>
+  <w:comment w:id="1" w:author="A"><w:p><w:r><w:t>Live comment text.</w:t></w:r></w:p></w:comment>
+</w:comments>"#;
+        let data = build_test_docx_with_files(document_xml, &[("word/comments.xml", comments_xml)]);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(!plain.contains("Removed"), "{plain}");
+        assert!(plain.contains("Live comment text."), "{plain}");
+    }
+
+    #[tokio::test]
     async fn test_footnote_and_endnote_with_the_same_id_stay_apart() {
         // Word numbers footnotes and endnotes independently. Keyed `fn1` alike,
         // endnote 1 replaced footnote 1 in every rendered list of notes.
