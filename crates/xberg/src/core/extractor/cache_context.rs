@@ -1148,20 +1148,41 @@ mod tests {
         use std::future::Future;
         use std::sync::mpsc;
 
-        let dependencies = [CacheDependency::for_config(
-            &ExtractionConfig::default(),
-            Some("application/pdf"),
-        )];
+        let models = tempfile::tempdir().unwrap();
+        std::fs::write(models.path().join("eng.traineddata"), b"english model fixture").unwrap();
+        std::fs::write(models.path().join("jpn_vert.traineddata"), b"vertical model fixture").unwrap();
+        let mut dependency = CacheDependency::for_config(&ExtractionConfig::default(), Some("application/pdf"));
         assert!(
-            dependencies[0].script_retry.is_some() && !dependencies[0].tessdata.is_empty(),
+            dependency.model.is_none() && dependency.script_retry.is_some() && !dependency.tessdata.is_empty(),
             "the default request may retry its script and read the default models"
         );
+        // ~keep The host's tessdata may hold no pack at all, which would leave the memo unused.
+        if let Some(retry) = dependency.script_retry.as_mut() {
+            retry.directory = Some(models.path().into());
+        }
+        for selection in &mut dependency.tessdata {
+            selection.directory = Some(models.path().into());
+        }
+        let dependencies = [dependency];
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .max_blocking_threads(1)
             .build()
             .unwrap();
         let read = runtime.block_on(fingerprint(&dependencies, None)).unwrap();
+        assert!(
+            tessdata_context(&dependencies, None)
+                .unwrap()
+                .is_some_and(|context| context.starts_with(":tessdata-v1:")),
+            "the pinned directory serves the pack"
+        );
+        assert!(
+            matches!(
+                crate::ocr::tessdata_download::without_reading_packs(|| tessdata_context(&dependencies, None)),
+                Some(Ok(Some(_)))
+            ),
+            "the pack read before is answered from the memo"
+        );
         let (started_tx, started_rx) = mpsc::sync_channel(1);
         let (release_tx, release_rx) = mpsc::sync_channel(1);
         let blocker = runtime.spawn_blocking(move || {
