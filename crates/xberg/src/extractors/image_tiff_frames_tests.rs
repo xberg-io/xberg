@@ -102,3 +102,19 @@ fn a_walk_with_one_frame_reads_by_frame_only_when_the_chain_is_broken() {
     assert!(warning.message.contains("frame 2"), "{}", warning.message);
     assert!(walk_warning(&one(TiffWalkEnd::Complete)).is_none());
 }
+
+#[test]
+fn a_frame_without_a_prebuilt_page_gets_its_text_from_its_elements() {
+    let mut frame = InternalDocument::new("image");
+    frame.push_element(InternalElement::text(ElementKind::Paragraph, "region text", 0));
+    frame.formulas.push(crate::types::Formula {
+        latex: "x".into(),
+        bbox: None,
+        page: Some(1),
+    });
+    let mut target = InternalDocument::new("image");
+    let page = append_frame(&mut target, frame, 2, &mut Vec::new());
+    assert_eq!(page.content, "region text");
+    assert_eq!(page.is_blank, Some(false));
+    assert_eq!(target.formulas[0].page, Some(2));
+}

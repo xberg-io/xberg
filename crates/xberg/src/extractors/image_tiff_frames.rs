@@ -179,6 +179,11 @@ fn append_frame(
     let table_base = target.tables.len() as u32;
     let image_base = target.images.len() as u32;
     let frame_has_images = !frame.images.is_empty();
+    // Region-only layout OCR frames carry text elements but no prebuilt page.
+    let fallback_content = frame
+        .prebuilt_pages
+        .is_none()
+        .then(|| crate::rendering::render_plain(&frame));
 
     for mut element in frame.elements {
         element.page = Some(page_number);
@@ -204,6 +209,9 @@ fn append_frame(
     }
     target.tables.append(&mut frame.tables);
     target.images.append(&mut frame.images);
+    for formula in &mut frame.formulas {
+        formula.page = Some(page_number);
+    }
     target.formulas.append(&mut frame.formulas);
     target.processing_warnings.append(&mut frame.processing_warnings);
     for mut failure in frame.ocr_page_failures {
@@ -221,7 +229,16 @@ fn append_frame(
     let frame_page = frame
         .prebuilt_pages
         .and_then(|frame_pages| frame_pages.into_iter().next());
-    let mut page = frame_page.unwrap_or_else(|| blank_page(page_number));
+    let mut page = match (frame_page, fallback_content) {
+        (Some(page), _) => page,
+        (None, Some(content)) => {
+            let mut page = blank_page(page_number);
+            page.is_blank = Some(content.trim().is_empty());
+            page.content = content;
+            page
+        }
+        (None, None) => blank_page(page_number),
+    };
     page.tables = page
         .tables
         .iter()
