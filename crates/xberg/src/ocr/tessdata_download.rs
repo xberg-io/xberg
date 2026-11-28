@@ -367,7 +367,12 @@ pub(crate) fn without_reading_packs<T>(compute: impl FnOnce() -> T) -> Option<T>
     let _restore = Restore(MEMO_ONLY.with(|memo_only| memo_only.replace(true)));
     let missed_outside = MEMO_MISSED.with(|missed| missed.replace(false));
     let result = compute();
-    let missed = MEMO_MISSED.with(|missed| missed.replace(missed_outside));
+    // ~keep An enclosing run must see this miss too, or it keeps an answer computed from ours.
+    let missed = MEMO_MISSED.with(|missed| {
+        let inner = missed.get();
+        missed.set(missed_outside || inner);
+        inner
+    });
     (!missed).then_some(result)
 }
 
@@ -1059,6 +1064,25 @@ mod tests {
             pins.classify("eng", &pack),
             VerifiedSet::Unknown,
             "the memo must not vouch for the bytes it read before"
+        );
+    }
+
+    #[test]
+    fn a_miss_in_a_nested_memo_only_pass_discards_the_enclosing_answer() {
+        use super::{PinTables, VerifiedSet, without_reading_packs};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+
+        assert_eq!(
+            without_reading_packs(
+                || without_reading_packs(|| pins.classify("eng", &pack)).unwrap_or(VerifiedSet::Unknown)
+            ),
+            None
         );
     }
 
