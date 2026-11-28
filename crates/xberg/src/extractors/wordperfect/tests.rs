@@ -557,3 +557,216 @@ async fn test_extract_content_empty_document_errors() {
         .await;
     assert!(result.is_err());
 }
+
+#[test]
+fn wordperfect_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+            WpdEvent::FooterStart,
+            WpdEvent::Text("Running footer".to_string()),
+            WpdEvent::FooterEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+        for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+            let mut internal = build_wordperfect_internal_document(&doc);
+            internal.apply_furniture_filter(&ContentFilterConfig {
+                include_headers: headers,
+                include_footers: footers,
+                ..Default::default()
+            });
+            let content = crate::extraction::derive::derive_extraction_result(internal, false, format.clone()).content;
+            assert!(content.contains("Body text."), "{content}");
+            assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+            assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+            if let Some(at) = content.find("Running header") {
+                assert!(at > content.find("Body text.").unwrap(), "{content}");
+            }
+        }
+    }
+}
+
+#[test]
+fn wordperfect_header_and_footer_text_is_not_rendered_by_default() {
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    let content = crate::extraction::derive::derive_extraction_result(
+        build_wordperfect_internal_document(&doc),
+        false,
+        crate::core::config::OutputFormat::Plain,
+    )
+    .content;
+    assert_eq!(content.trim(), "Body text.");
+}
+
+fn header_only_document() -> WpdDocument {
+    WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    }
+}
+
+#[test]
+fn wordperfect_finish_applies_the_content_filter_through_the_extraction_config() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    for headers in [true, false] {
+        let config = ExtractionConfig {
+            content_filter: Some(ContentFilterConfig {
+                include_headers: headers,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = finish_wordperfect_document(&doc, "application/vnd.wordperfect", &config).unwrap();
+        let content = crate::extraction::derive::derive_extraction_result(internal, false, OutputFormat::Plain).content;
+        assert_eq!(content.contains("Running header"), headers, "{content}");
+        assert!(content.contains("Body text."), "{content}");
+    }
+}
+
+#[test]
+fn wordperfect_header_only_document_is_returned_even_when_the_filter_drops_it() {
+    let internal = finish_wordperfect_document(
+        &header_only_document(),
+        "application/vnd.wordperfect",
+        &ExtractionConfig::default(),
+    )
+    .unwrap();
+    assert_eq!(internal.elements.len(), 1);
+    let config = ExtractionConfig {
+        content_filter: Some(crate::core::config::ContentFilterConfig::default()),
+        ..Default::default()
+    };
+    let filtered =
+        finish_wordperfect_document(&header_only_document(), "application/vnd.wordperfect", &config).unwrap();
+    assert!(filtered.elements.is_empty());
+}
+
+#[test]
+fn wordperfect_document_with_no_content_is_an_error() {
+    let empty = WpdDocument {
+        events: vec![],
+        metadata: WpdMetadata::default(),
+    };
+    assert!(finish_wordperfect_document(&empty, "application/vnd.wordperfect", &ExtractionConfig::default()).is_err());
+}
+
+#[test]
+fn wordperfect_repeated_header_is_emitted_once_and_a_header_table_takes_the_header_layer() {
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Same".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Same".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::HeaderStart,
+            WpdEvent::TableStart,
+            WpdEvent::RowStart { header: false },
+            WpdEvent::CellStart {
+                column: 0,
+                col_span: 1,
+                row_span: 1,
+            },
+            WpdEvent::Text("Cell".to_string()),
+            WpdEvent::CellEnd,
+            WpdEvent::RowEnd,
+            WpdEvent::TableEnd,
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    let internal = build_wordperfect_internal_document(&doc);
+    let headers: Vec<_> = internal
+        .elements
+        .iter()
+        .filter(|e| e.layer == ContentLayer::Header)
+        .collect();
+    assert_eq!(headers.iter().filter(|e| e.text == "Same").count(), 1);
+    assert!(
+        headers
+            .iter()
+            .any(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }))
+    );
+    let body_tables = internal
+        .elements
+        .iter()
+        .filter(|e| {
+            e.layer == ContentLayer::Body && matches!(e.kind, crate::types::internal::ElementKind::Table { .. })
+        })
+        .count();
+    assert_eq!(body_tables, 0);
+    let position = |text: &str| internal.elements.iter().position(|e| e.text == text).unwrap();
+    let table_at = internal
+        .elements
+        .iter()
+        .position(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }))
+        .unwrap();
+    assert!(table_at > position("Body text."), "the header table follows the body");
+}
+
+#[test]
+fn wordperfect_header_table_keeps_its_place_among_the_header_paragraphs() {
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::TableStart,
+            WpdEvent::RowStart { header: false },
+            WpdEvent::CellStart {
+                column: 0,
+                col_span: 1,
+                row_span: 1,
+            },
+            WpdEvent::Text("Cell".to_string()),
+            WpdEvent::CellEnd,
+            WpdEvent::RowEnd,
+            WpdEvent::TableEnd,
+            WpdEvent::Text("Caption".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    let internal = build_wordperfect_internal_document(&doc);
+    let order: Vec<bool> = internal
+        .elements
+        .iter()
+        .map(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }))
+        .collect();
+    let caption = internal.elements.iter().position(|e| e.text == "Caption").unwrap();
+    let table = order.iter().position(|is_table| *is_table).unwrap();
+    assert!(table < caption, "table before the caption that follows it");
+}

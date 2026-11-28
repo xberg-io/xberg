@@ -166,8 +166,8 @@ impl RtfExtractor {
 
         let (extracted_text, tables, rtf_images, para_metas, mut formatting) = parts;
         let legacy_formatting = extract_rtf_formatting(rtf_content);
-        formatting.header_text = legacy_formatting.header_text;
-        formatting.footer_text = legacy_formatting.footer_text;
+        formatting.header_texts = legacy_formatting.header_texts;
+        formatting.footer_texts = legacy_formatting.footer_texts;
 
         let mut builder = InternalDocumentBuilder::new("rtf");
 
@@ -370,11 +370,11 @@ impl RtfExtractor {
             builder.push_image(None, image, None, None);
         }
 
-        if let Some(ref header) = formatting.header_text {
+        for header in &formatting.header_texts {
             let idx = builder.push_paragraph(header, vec![], None, None);
             builder.set_layer(idx, ContentLayer::Header);
         }
-        if let Some(ref footer) = formatting.footer_text {
+        for footer in &formatting.footer_texts {
             let idx = builder.push_paragraph(footer, vec![], None, None);
             builder.set_layer(idx, ContentLayer::Footer);
         }
@@ -474,12 +474,7 @@ impl InternalDocumentExtractor for RtfExtractor {
         }
 
         if let Some(ref filter) = config.content_filter {
-            use crate::types::document_structure::ContentLayer;
-            doc.elements.retain(|elem| match elem.layer {
-                ContentLayer::Header => filter.include_headers,
-                ContentLayer::Footer => filter.include_footers,
-                _ => true,
-            });
+            doc.apply_furniture_filter(filter);
         }
 
         doc.mime_type = mime_type.to_string();
