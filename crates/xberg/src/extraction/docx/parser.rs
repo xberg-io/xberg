@@ -4377,7 +4377,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     let (mut target, mut is_settings) = (None, false);
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            "Target" => target = Some(attr.value.to_string()),
+                            "Target" => target = Some(super::section::unescape_attribute(&attr.value)),
                             "Type" => is_settings = attr.value.ends_with("/settings"),
                             _ => {}
                         }
@@ -4432,7 +4432,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     let mut rel_id: Option<String> = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            "Target" => target = Some(attr.value.to_string()),
+                            "Target" => target = Some(super::section::unescape_attribute(&attr.value)),
                             "Id" => rel_id = Some(super::section::unescape_attribute(&attr.value)),
                             "Type" => {
                                 kind = if attr.value.ends_with("/header") {
