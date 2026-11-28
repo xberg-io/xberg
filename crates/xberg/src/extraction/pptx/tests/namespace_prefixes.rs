@@ -171,3 +171,27 @@ fn test_namespace_spelling_does_not_change_extraction() {
     let strict_alias = extract_summary(&prefixed_slide("pml", "dml", "rel", "mth", &STRICT), strict_rel_base);
     assert_eq!(strict_alias, conventional, "strict namespaces under alias prefixes");
 }
+
+/// Math nested far deeper than any equation is dropped by the converter's budget; it must not
+/// exhaust the stack while the subtree is re-serialized, and the rest of the slide survives.
+#[test]
+fn test_deeply_nested_math_is_dropped_without_exhausting_the_stack() {
+    let depth = 200_000;
+    let slide_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:a="{DML}" xmlns:p="{PML}" xmlns:m="{MATH}">
+  <p:cSld><p:spTree><p:sp><p:txBody>
+    <a:p><a:r><a:t>Survives</a:t></a:r><m:oMath>{open}<m:r><m:t>x</m:t></m:r>{close}</m:oMath></a:p>
+  </p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>"#,
+        open = "<m:e>".repeat(depth),
+        close = "</m:e>".repeat(depth),
+    );
+    let pptx = build_single_slide_pptx(&slide_xml, None, &[]);
+    let extraction =
+        super::extract_pptx_from_bytes_with_slide_contents(&pptx, &PptxExtractionOptions::default(), &mut Vec::new())
+            .unwrap();
+
+    assert!(extraction.formulas.is_empty(), "over-deep math is not converted");
+    assert!(extraction.result.content.contains("Survives"));
+}
