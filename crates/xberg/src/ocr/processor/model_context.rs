@@ -174,17 +174,23 @@ impl ModelContext {
     /// Whether the primary model files are still the ones this context was resolved against and
     /// could be identified at all: a pack replaced between resolution and use must not have the
     /// text or engine read from it kept under the old key.
+    ///
+    /// Either failure also invalidates the enclosing operation: a pack restored before the outer
+    /// result is published would otherwise let text read from the other pack be stored under the
+    /// key computed for the restored one.
     fn packs_are_current(&self) -> bool {
         let Some(identity) = &self.identity else {
             return true;
         };
         if !identity.known {
+            crate::core::extractor::cacheability::invalidate_current();
             return false;
         }
         if identify_packs(&self.directory, &identity.languages) == (identity.hash, true) {
             return true;
         }
         self.invalidated.store(true, Ordering::Release);
+        crate::core::extractor::cacheability::invalidate_current();
         tracing::warn!("Tesseract model files changed during use; skipping cache reuse and discarding native state");
         false
     }
@@ -980,6 +986,27 @@ mod tests {
         .await;
 
         assert_eq!(snapshot().if_current(|| 7), Some(7));
+    }
+
+    #[tokio::test]
+    async fn a_pack_replaced_and_restored_before_publication_invalidates_the_request() {
+        use crate::core::extractor::cacheability;
+
+        let root = tempfile::tempdir().unwrap();
+        let pack = root.path().join("eng.traineddata");
+        std::fs::write(&pack, b"first model").unwrap();
+
+        cacheability::scope(async {
+            let before = ModelContext::for_config(root.path().to_str().unwrap().into(), 3, vec!["eng".into()]).unwrap();
+            assert!(cacheability::can_publish_outer_result());
+            // ~keep Different lengths: two writes within one clock tick can share a modification time.
+            std::fs::write(&pack, b"a replaced model").unwrap();
+            assert!(before.if_current(|| ()).is_none());
+            std::fs::write(&pack, b"first model").unwrap();
+
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
     }
 
     #[test]
