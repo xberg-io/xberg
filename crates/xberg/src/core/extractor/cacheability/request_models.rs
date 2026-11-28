@@ -75,7 +75,8 @@ impl RequestModels {
             if writes.outer.len() < MAX_PENDING_OUTER_WRITES {
                 writes.outer.push(Box::new(write));
             } else {
-                tracing::debug!(
+                // ~keep One extraction write per request is normal; reaching the bound is a bug.
+                tracing::warn!(
                     bound = MAX_PENDING_OUTER_WRITES,
                     "Extraction cache write over the per-request bound was not queued"
                 );
@@ -262,4 +263,25 @@ async fn extraction_write_survives_more_ocr_writes_than_the_queue_holds() {
         *ran, expected,
         "the OCR write over the bound is dropped, the extraction write is not"
     );
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn extraction_writes_over_their_own_bound_are_not_queued() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    let ran = Arc::new(AtomicUsize::new(0));
+    super::with_ocr_cancellation(None, async {
+        for _ in 0..=MAX_PENDING_OUTER_WRITES {
+            let ran = Arc::clone(&ran);
+            super::defer_outer_cache_write(move || {
+                ran.fetch_add(1, Ordering::Relaxed);
+            });
+        }
+    })
+    .await;
+    assert_eq!(ran.load(Ordering::Relaxed), MAX_PENDING_OUTER_WRITES);
 }
