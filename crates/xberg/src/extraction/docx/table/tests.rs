@@ -97,7 +97,14 @@ fn test_parse_row_properties_grid_before_and_after() {
     </w:trPr>"#,
     );
 
-    assert_eq!(skips, RowGridSkips { before: 2, after: 1 });
+    assert_eq!(
+        skips,
+        RowGridSkips {
+            before: 2,
+            after: 1,
+            deleted: false
+        }
+    );
 }
 
 #[test]
@@ -109,6 +116,23 @@ fn test_parse_row_properties_drops_an_implausible_grid_skip() {
     );
 
     assert_eq!(skips.before, 0);
+}
+
+#[test]
+fn test_parse_row_properties_marks_tracked_deletion_not_insertion() {
+    let deleted = parse_row_grid_skips(
+        r#"<w:trPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:del w:id="1" w:author="A"/>
+    </w:trPr>"#,
+    );
+    assert!(deleted.deleted);
+
+    let inserted = parse_row_grid_skips(
+        r#"<w:trPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:ins w:id="1" w:author="A"/>
+    </w:trPr>"#,
+    );
+    assert!(!inserted.deleted);
 }
 
 /// `RowProperties` is public, and callers may build it with an exhaustive literal. The grid

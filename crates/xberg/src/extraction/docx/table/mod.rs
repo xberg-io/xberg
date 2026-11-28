@@ -122,11 +122,13 @@ pub struct RowProperties {
 
 /// Grid columns a row leaves empty before its first cell (`w:gridBefore`) and after its
 /// last (`w:gridAfter`). Kept out of [`RowProperties`] so its public shape stays as is;
-/// the parser turns these into padding cells.
+/// the parser turns these into padding cells. Also carries the tracked-deletion mark
+/// (`w:trPr/w:del`), which makes the parser drop the row.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct RowGridSkips {
     pub(crate) before: u32,
     pub(crate) after: u32,
+    pub(crate) deleted: bool,
 }
 
 /// Cell-level properties from `<w:tcPr>`.
@@ -309,6 +311,7 @@ pub(crate) fn parse_row_properties(
                     }
                     "gridBefore" => skips.before = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
                     "gridAfter" => skips.after = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
+                    "del" => skips.deleted = true,
                     _ => {}
                 }
                 buf.clear();
@@ -328,6 +331,7 @@ pub(crate) fn parse_row_properties(
                     }
                     "gridBefore" => skips.before = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
                     "gridAfter" => skips.after = validate_grid_span(get_attribute_u32(&e, "val")).unwrap_or(0),
+                    "del" => skips.deleted = true,
                     _ => {}
                 }
                 buf.clear();

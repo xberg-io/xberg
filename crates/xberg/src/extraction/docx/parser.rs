@@ -1916,6 +1916,8 @@ struct TableContext {
     cell_ordinal: u32,
     /// `w:gridAfter` of the open row, padded in when the row closes.
     pending_grid_after: u32,
+    /// The open row carries `w:trPr/w:del` (a tracked row deletion); it is dropped when it closes.
+    pending_row_deleted: bool,
     /// Note references read in this table's cells, in reading order.
     note_refs: Vec<NoteRef>,
 }
@@ -1930,6 +1932,7 @@ impl TableContext {
             row_ordinal: 0,
             cell_ordinal: 0,
             pending_grid_after: 0,
+            pending_row_deleted: false,
             note_refs: Vec::new(),
         }
     }
@@ -3457,6 +3460,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                     row.cells.push(TableCell::grid_padding(skips.before));
                                 }
                                 ctx.pending_grid_after = skips.after;
+                                ctx.pending_row_deleted = skips.deleted;
                             }
                         }
                         "w:tc" => {
@@ -3909,11 +3913,14 @@ impl<R: Read + Seek> DocxParser<R> {
                                 && let Some(mut row) = ctx.current_row.take()
                             {
                                 let grid_after = std::mem::take(&mut ctx.pending_grid_after);
-                                if grid_after > 0 {
-                                    budget.add_cells(grid_after as usize)?;
-                                    row.cells.push(TableCell::grid_padding(grid_after));
+                                // Word hides a row whose deletion is tracked, so no output keeps it.
+                                if !std::mem::take(&mut ctx.pending_row_deleted) {
+                                    if grid_after > 0 {
+                                        budget.add_cells(grid_after as usize)?;
+                                        row.cells.push(TableCell::grid_padding(grid_after));
+                                    }
+                                    ctx.table.rows.push(row);
                                 }
-                                ctx.table.rows.push(row);
                             }
                         }
                         "w:tbl" => {
@@ -5900,6 +5907,49 @@ mod tests {
         assert_eq!(
             cell10_props.v_merge,
             Some(crate::extraction::docx::table::VerticalMerge::Restart)
+        );
+    }
+
+    #[test]
+    fn test_tracked_deleted_table_row_is_dropped_and_inserted_row_kept() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="1" w:author="A" w:date="2024-01-01T00:00:00Z"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>GoneHead</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>GoneHead2</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:trPr><w:tblHeader/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Name</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Age</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:trPr><w:del w:id="2" w:author="A" w:date="2024-01-01T00:00:00Z"></w:del></w:trPr>
+        <w:tc><w:p><w:r><w:t>Bob</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>99</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:trPr><w:ins w:id="3" w:author="A" w:date="2024-01-01T00:00:00Z"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Alice</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>30</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+
+        let table = &doc.tables[0];
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.to_markdown(), "| Name  | Age |\n| ----- | --- |\n| Alice | 30  |");
+        assert_eq!(
+            table.to_cell_grid(Paragraph::runs_to_markdown),
+            vec![vec!["Name", "Age"], vec!["Alice", "30"]]
         );
     }
 
