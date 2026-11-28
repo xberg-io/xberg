@@ -80,24 +80,61 @@ const STRICT_TO_TRANSITIONAL: [(&str, &str); 7] = [
     ),
 ];
 
+fn transitional_uri(strict: &str) -> Option<&'static str> {
+    STRICT_TO_TRANSITIONAL
+        .iter()
+        .find_map(|(known, transitional)| (*known == strict).then_some(*transitional))
+}
+
 /// Rewrite the strict (ISO 29500) namespace URIs in `xml` to their transitional equivalents.
 ///
-/// Only a URI that is a whole quoted attribute value is rewritten (namespace declarations and
-/// `graphicData/@uri`), so element text that happens to mention one is left alone. Returns the
-/// input borrowed when it holds no strict URI, which is the common case.
+/// Only an attribute value inside a tag that is exactly a strict URI is rewritten (namespace
+/// declarations and `graphicData/@uri`); element text, comments and CDATA are left alone.
+/// Returns the input borrowed when it holds no strict URI, which is the common case.
 pub(crate) fn normalize_strict_namespaces(xml: &str) -> std::borrow::Cow<'_, str> {
     if !xml.contains("purl.oclc.org/ooxml/") {
         return std::borrow::Cow::Borrowed(xml);
     }
-    let mut out = xml.to_string();
-    for (strict, transitional) in STRICT_TO_TRANSITIONAL {
-        for quote in ['"', '\''] {
-            let from = format!("{quote}{strict}{quote}");
-            if out.contains(&from) {
-                out = out.replace(&from, &format!("{quote}{transitional}{quote}"));
-            }
+    let bytes = xml.as_bytes();
+    let mut out = String::with_capacity(xml.len());
+    let mut copied = 0;
+    let mut i = 0;
+    while let Some(offset) = xml.get(i..).and_then(|rest| rest.find('<')) {
+        let start = i + offset;
+        let rest = &xml[start..];
+        let skip_to = if rest.starts_with("<!--") {
+            Some("-->")
+        } else if rest.starts_with("<![CDATA[") {
+            Some("]]>")
+        } else {
+            None
+        };
+        if let Some(terminator) = skip_to {
+            i = rest
+                .find(terminator)
+                .map_or(xml.len(), |end| start + end + terminator.len());
+            continue;
         }
+        let mut j = start + 1;
+        while j < bytes.len() && bytes[j] != b'>' {
+            if matches!(bytes[j], b'"' | b'\'') {
+                let Some(len) = xml[j + 1..].find(bytes[j] as char) else {
+                    j = bytes.len();
+                    break;
+                };
+                let (value_start, value_end) = (j + 1, j + 1 + len);
+                if let Some(transitional) = transitional_uri(&xml[value_start..value_end]) {
+                    out.push_str(&xml[copied..value_start]);
+                    out.push_str(transitional);
+                    copied = value_end;
+                }
+                j = value_end;
+            }
+            j += 1;
+        }
+        i = j + 1;
     }
+    out.push_str(&xml[copied.min(xml.len())..]);
     std::borrow::Cow::Owned(out)
 }
 
@@ -120,6 +157,24 @@ mod tests {
         assert_eq!(
             normalize_strict_namespaces(xml),
             r#"<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">see http://purl.oclc.org/ooxml/drawingml/main</a:t>"#
+        );
+    }
+
+    #[test]
+    fn quoted_strict_uri_in_element_text_and_comments_is_left_alone() {
+        let xml = r#"<a:t xmlns:a="http://purl.oclc.org/ooxml/drawingml/main">"http://purl.oclc.org/ooxml/drawingml/main" 'http://purl.oclc.org/ooxml/drawingml/main'<!-- "http://purl.oclc.org/ooxml/drawingml/main" --></a:t>"#;
+        assert_eq!(
+            normalize_strict_namespaces(xml),
+            r#"<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">"http://purl.oclc.org/ooxml/drawingml/main" 'http://purl.oclc.org/ooxml/drawingml/main'<!-- "http://purl.oclc.org/ooxml/drawingml/main" --></a:t>"#
+        );
+    }
+
+    #[test]
+    fn truncated_tag_does_not_panic() {
+        let xml = r#"<a:t xmlns:a="http://purl.oclc.org/ooxml/drawingml/main" b="unterminated"#;
+        assert_eq!(
+            normalize_strict_namespaces(xml),
+            r#"<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" b="unterminated"#
         );
     }
 
