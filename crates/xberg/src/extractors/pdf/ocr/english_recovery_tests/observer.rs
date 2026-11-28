@@ -81,7 +81,7 @@ pub(super) fn install() -> Records {
         .get("tesseract")
         .expect("real compiled-in Tesseract, not a mock");
     assert!(matches!(backend.backend_type(), OcrBackendType::Tesseract));
-    assert_eq!(backend.version(), "5.5.4");
+    assert_eq!(backend.version(), "5.5.5");
     crate::plugins::unregister_ocr_backend("tesseract").unwrap();
     let records = Arc::new(Mutex::new(Vec::new()));
     crate::plugins::register_ocr_backend(Arc::new(Observer {

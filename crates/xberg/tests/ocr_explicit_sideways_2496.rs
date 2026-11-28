@@ -939,7 +939,7 @@ fn read_engine(
 }
 
 fn private_tessdata(root: &std::path::Path) -> std::path::PathBuf {
-    assert_eq!(xberg_tesseract::TesseractAPI::version(), "5.5.4");
+    assert_eq!(xberg_tesseract::TesseractAPI::version(), "5.5.5");
     let tessdata = root.join("tessdata");
     seed_english(&tessdata);
     std::fs::write(tessdata.join("osd.traineddata"), osd_model()).unwrap();

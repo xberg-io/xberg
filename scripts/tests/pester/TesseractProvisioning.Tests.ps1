@@ -5,10 +5,10 @@ BeforeAll {
 
 Describe 'Tesseract provisioning' {
     BeforeEach {
-        Mock Get-TesseractVersion { [version]'5.5.4' }
+        Mock Get-TesseractVersion { [version]'5.5.5' }
         Mock Invoke-WebRequest {}
-        Mock Get-Item { @{ Length = 2603004 } }
-        Mock Get-FileHash { @{ Hash = 'EF082FA5B1DDF469E8E5174298242AFDC7605B278470693BADF2DBF50E17721B' } }
+        Mock Get-Item { @{ Length = 2752925 } }
+        Mock Get-FileHash { @{ Hash = 'D590AC276138238EB80E4D5833F65CB057CB90D02088D78A05027190A5318E41' } }
         Mock Build-TesseractSource {}
         Mock Assert-TesseractRuntime {}
         $script:Archive = Join-Path $TestDrive 'source.zip'
@@ -25,11 +25,11 @@ Describe 'Tesseract provisioning' {
         Mock Get-TesseractVersion {
             $script:VersionCalls++
             if ($script:VersionCalls -eq 1) { return [version]'5.5.3' }
-            return [version]'5.5.4'
+            return [version]'5.5.5'
         }
         Ensure-Tesseract -Executable (Join-Path $TestDrive 'fixture.exe') -SourceArchive $script:Archive -VcpkgRoot $TestDrive
         Should -Invoke Invoke-WebRequest -Exactly -Times 1 -ParameterFilter {
-            $Uri -eq 'https://codeload.github.com/tesseract-ocr/tesseract/zip/7e548e6eff172f38f97664afe7f7ce40db36c8d6'
+            $Uri -eq 'https://codeload.github.com/tesseract-ocr/tesseract/zip/4292f6890aa86ef64eba32090358f40f69dd6d28'
         }
         Should -Invoke Build-TesseractSource -Exactly -Times 1
         $script:VersionCalls | Should -BeExactly 2
@@ -61,7 +61,7 @@ Describe 'Tesseract provisioning' {
     It 'should reject a stale binary after reported source installation success' {
         Mock Get-TesseractVersion { [version]'5.5.3' }
         { Ensure-Tesseract -Executable 'fixture.exe' -SourceArchive $script:Archive -VcpkgRoot $TestDrive } |
-            Should -Throw '*below required 5.5.4*'
+            Should -Throw '*below required 5.5.5*'
     }
 }
 
@@ -101,7 +101,7 @@ Describe 'Published Tesseract source build orchestration' {
         }
         Mock Expand-Archive {
             param($LiteralPath, $DestinationPath)
-            $source = Join-Path $DestinationPath 'tesseract-7e548e6eff172f38f97664afe7f7ce40db36c8d6'
+            $source = Join-Path $DestinationPath 'tesseract-4292f6890aa86ef64eba32090358f40f69dd6d28'
             New-Item -ItemType Directory -Path $source -Force | Out-Null
             foreach ($name in @('CMakeLists.txt', 'LICENSE', 'AUTHORS')) {
                 Set-Content -LiteralPath (Join-Path $source $name) -Value "controlled $name"
@@ -122,7 +122,7 @@ Describe 'Published Tesseract source build orchestration' {
         $script:Commands[2].Arguments[-2] | Should -BeExactly '--parallel'
         $script:Commands[2].Arguments[-1] | Should -BeExactly '1'
         Test-Path -LiteralPath (Join-Path $script:InstallRoot 'tesseract.exe') | Should -BeTrue
-        Get-Content -LiteralPath (Join-Path $script:InstallRoot 'share/licenses/xberg-system-ocr/tesseract-5.5.4/AUTHORS') |
+        Get-Content -LiteralPath (Join-Path $script:InstallRoot 'share/licenses/xberg-system-ocr/tesseract-5.5.5/AUTHORS') |
             Should -BeExactly 'controlled AUTHORS'
         Get-Content -LiteralPath (Join-Path $script:InstallRoot 'share/licenses/xberg-system-ocr/leptonica-1.87.0/leptonica-license.txt') |
             Should -BeExactly 'controlled Leptonica notice'
@@ -181,22 +181,22 @@ Describe 'Tesseract executable version detection' {
 
     BeforeEach {
         $script:ProbeExitCode = 0
-        $script:ProbeOutput = @('tesseract 5.5.4', ' leptonica-1.87.0')
+        $script:ProbeOutput = @('tesseract 5.5.5', ' leptonica-1.87.0')
         Mock Test-Path { $true }
     }
 
     It 'should parse the native banner <Banner>' -ForEach @(
-        @{ Banner = 'tesseract 5.5.4' }
-        @{ Banner = 'tesseract v5.5.4.20261028' }
+        @{ Banner = 'tesseract 5.5.5' }
+        @{ Banner = 'tesseract v5.5.5.20261028' }
         @{ Banner = 'tesseract v5.5.0.20241111' }
     ) {
         $script:ProbeOutput = @($Banner, ' leptonica-1.87.0')
-        $expected = if ($Banner -like '*5.5.0*') { [version]'5.5.0' } else { [version]'5.5.4' }
+        $expected = if ($Banner -like '*5.5.0*') { [version]'5.5.0' } else { [version]'5.5.5' }
         Get-TesseractVersion -Executable 'Invoke-TesseractVersionFixture' | Should -BeExactly $expected
     }
 
     It 'should reject a successful unrecognized banner' {
-        $script:ProbeOutput = @('not tesseract 5.5.4')
+        $script:ProbeOutput = @('not tesseract 5.5.5')
         { Get-TesseractVersion -Executable 'Invoke-TesseractVersionFixture' } |
             Should -Throw '*no recognized version*'
     }
@@ -217,13 +217,13 @@ Describe 'Actual Windows OCR runtime versions' {
     }
     BeforeEach {
         $script:RuntimeExit = 0
-        $script:RuntimeLines = @('tesseract 5.5.4', ' leptonica-1.87.0')
+        $script:RuntimeLines = @('tesseract 5.5.5', ' leptonica-1.87.0')
     }
     It 'should verify the actual selected Tesseract and Leptonica pair' {
         { Assert-TesseractRuntime -Executable 'Invoke-TesseractRuntimeFixture' } | Should -Not -Throw
     }
     It 'should reject current Tesseract linked to stale Leptonica' {
-        $script:RuntimeLines = @('tesseract 5.5.4', ' leptonica-1.86.0')
+        $script:RuntimeLines = @('tesseract 5.5.5', ' leptonica-1.86.0')
         { Assert-TesseractRuntime -Executable 'Invoke-TesseractRuntimeFixture' } | Should -Throw '*actual Tesseract*'
     }
     It 'should reject a runtime command failure despite a valid banner' {

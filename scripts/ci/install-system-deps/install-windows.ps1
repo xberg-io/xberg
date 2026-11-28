@@ -258,7 +258,7 @@ catch {
 Ensure-BuildTool -Package 'cmake' -Executable 'C:\Program Files\CMake\bin\cmake.exe' -Version '4.4.4'
 
 Ensure-Tesseract -Executable 'C:\Program Files\Tesseract-OCR\tesseract.exe' `
-  -SourceArchive (Join-Path $env:TEMP 'xberg-tesseract-5.5.4.zip') -VcpkgRoot $vcpkgRoot
+  -SourceArchive (Join-Path $env:TEMP 'xberg-tesseract-5.5.5.zip') -VcpkgRoot $vcpkgRoot
 Ensure-TesseractData -Directory 'C:\Program Files\Tesseract-OCR\tessdata'
 
 Write-Host "Configuring PATH and environment variables..."

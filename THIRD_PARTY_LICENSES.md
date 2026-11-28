@@ -55,7 +55,7 @@ platforms). The Rust crate texts are collected from the same graphs `cargo deny`
 | ONNX Runtime inference engine (`onnxruntime`) | MIT | 1.24.2 — [pinned source](https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg) |  |
 | ONNX Runtime inference engine (`onnxruntime`) | MIT | Alpine 3.24.3 package `onnxruntime` |  |
 | PDF rendering engine (`pdfium`) | BSD-3-Clause | 7678 — [pinned source](https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7678/pdfium-linux-arm64.tgz) | `T-1fe9dea718fb` |
-| OCR engine (`tesseract`) | Apache-2.0 | 5.5.4 — [pinned source](https://codeload.github.com/tesseract-ocr/tesseract/zip/7e548e6eff172f38f97664afe7f7ce40db36c8d6) | `T-cfc7749b96f6` |
+| OCR engine (`tesseract`) | Apache-2.0 | 5.5.5 — [pinned source](https://codeload.github.com/tesseract-ocr/tesseract/zip/4292f6890aa86ef64eba32090358f40f69dd6d28) | `T-cfc7749b96f6` |
 | OCR engine (`tesseract`) | Apache-2.0 | Debian trixie-20261027-slim package `tesseract-ocr` | `T-cfc7749b96f6` |
 | HEVC encoder (`x265`) | GPL-2.0-or-later | 4.3 — [pinned source](https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz) | `T-d8afb1bcc7a2` |
 
@@ -246,7 +246,7 @@ notices carried in those crates' license texts, reproduced below under the Rust 
 
 ## Tesseract OCR + Leptonica
 
-- **Feature:** `xberg-tesseract` builds Tesseract 5.5.4 and Leptonica
+- **Feature:** `xberg-tesseract` builds Tesseract 5.5.5 and Leptonica
   1.87.0 from checksum-verified source archives when `build-tesseract` or
   `build-tesseract-wasm` is enabled; the `core`/`full` images build the same versions through
   `scripts/ci/install-system-deps/build-ocr-linux.sh`. The Debian trixie-20261027-slim package is also
