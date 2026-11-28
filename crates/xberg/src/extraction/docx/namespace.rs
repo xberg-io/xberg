@@ -6,10 +6,9 @@
 //! dropped. [`canonicalize_prefixes`] rewrites element and attribute names whose namespace is one
 //! of the known ones to the conventional prefix, once per part, before any parser sees it.
 //!
-//! Parts that already use the conventional prefixes (the overwhelming majority) take a
-//! zero-allocation fast path and are returned borrowed.
+//! Parts whose namespace declarations are all conventional (the overwhelming majority, drawings
+//! with inline `xmlns:a` included) take a scan-only fast path and are returned borrowed.
 
-use crate::extractors::security::{DepthValidator, SecurityError};
 use quick_xml::Reader;
 use quick_xml::XmlVersion;
 use quick_xml::events::attributes::Attribute;
@@ -19,6 +18,8 @@ use std::collections::HashMap;
 
 const TRANSITIONAL_WORDPROCESSINGML: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const STRICT_WORDPROCESSINGML: &str = "http://purl.oclc.org/ooxml/wordprocessingml/main";
+const TRANSITIONAL_DRAWINGML: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const STRICT_DRAWINGML: &str = "http://purl.oclc.org/ooxml/drawingml/main";
 
 /// Known namespace URIs and the prefix the parsers expect for each. Both the transitional and the
 /// strict (ISO 29500 `purl.oclc.org`) URIs map to the same prefix.
@@ -45,57 +46,107 @@ fn canonical_prefix(uri: &str) -> Option<&'static str> {
         .find_map(|(known, prefix)| (*known == uri).then_some(*prefix))
 }
 
+/// Result of [`canonicalize_prefixes`].
+pub(crate) struct Canonicalized<'a> {
+    pub(crate) xml: Cow<'a, str>,
+    /// The part declares a WordprocessingML namespace under a non-conventional prefix but could
+    /// not be rewritten (malformed XML), so the parsers will see names they do not match.
+    pub(crate) gave_up: bool,
+}
+
 /// Rewrite namespace prefixes in `xml` to the conventional `w`/`r`/`m`/`mc` set.
 ///
-/// Returns the input borrowed when it needs no rewriting. Malformed XML is returned unchanged so
-/// the downstream parser reports or tolerates it exactly as before.
-///
-/// `max_depth` is the caller's XML nesting limit. The rewrite pass rejects a part that nests
-/// deeper with the same error the body parser would raise, so the work done here stays bounded by
-/// the limit instead of preceding it.
-pub(crate) fn canonicalize_prefixes(xml: &str, max_depth: usize) -> Result<Cow<'_, str>, SecurityError> {
-    if !needs_rewrite(xml) {
-        return Ok(Cow::Borrowed(xml));
+/// Returns the input borrowed when nothing needs rewriting. Malformed XML is returned unchanged
+/// so the downstream parser reports or tolerates it as before; `gave_up` flags the case where
+/// that loses content. Nesting depth is not limited here: the body parsers enforce the shared
+/// budget identically whatever the prefix, and the pass is linear in the part size.
+pub(crate) fn canonicalize_prefixes(xml: &str) -> Canonicalized<'_> {
+    let Some(scan) = scan_declarations(xml) else {
+        return Canonicalized {
+            xml: Cow::Borrowed(xml),
+            gave_up: false,
+        };
+    };
+    match rewrite(xml) {
+        Some(Some(rewritten)) => Canonicalized {
+            xml: Cow::Owned(rewritten),
+            gave_up: false,
+        },
+        Some(None) => Canonicalized {
+            xml: Cow::Borrowed(xml),
+            gave_up: false,
+        },
+        None => Canonicalized {
+            xml: Cow::Borrowed(xml),
+            gave_up: scan.binds_wordprocessingml,
+        },
     }
-    Ok(rewrite(xml, max_depth)?.map_or(Cow::Borrowed(xml), Cow::Owned))
 }
 
-/// Point the strict ISO 29500 WordprocessingML URI at the transitional one.
+/// Point the strict ISO 29500 WordprocessingML and DrawingML URIs at the transitional ones.
 ///
 /// For parts read with `roxmltree`, which resolves namespaces itself and compares them against the
-/// transitional URI, so only the URI needs to change.
+/// transitional URIs, so only the URIs need to change.
 pub(crate) fn strict_to_transitional(xml: &str) -> Cow<'_, str> {
-    if xml.contains(STRICT_WORDPROCESSINGML) {
-        Cow::Owned(xml.replace(STRICT_WORDPROCESSINGML, TRANSITIONAL_WORDPROCESSINGML))
-    } else {
-        Cow::Borrowed(xml)
+    let mut out = Cow::Borrowed(xml);
+    for (strict, transitional) in [
+        (STRICT_WORDPROCESSINGML, TRANSITIONAL_WORDPROCESSINGML),
+        (STRICT_DRAWINGML, TRANSITIONAL_DRAWINGML),
+    ] {
+        if out.contains(strict) {
+            out = Cow::Owned(out.replace(strict, transitional));
+        }
     }
+    out
 }
 
-/// Fast check: only the root element's declarations are inspected, plus a count of `xmlns`
-/// occurrences to prove nothing is redeclared further down.
-fn needs_rewrite(xml: &str) -> bool {
-    let mut reader = Reader::from_str(xml);
-    let root_declarations = loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let mut declarations = 0usize;
-                for attr in e.attributes().flatten() {
-                    let Some(prefix) = declared_prefix(attr.key.as_ref()) else {
-                        continue;
-                    };
-                    declarations += 1;
-                    if !declaration_is_canonical(prefix, &declared_uri(&attr)) {
-                        return true;
-                    }
-                }
-                break declarations;
-            }
-            Ok(Event::Eof) | Err(_) => return false,
-            _ => {}
+struct DeclarationScan {
+    binds_wordprocessingml: bool,
+}
+
+/// Textual scan of every `xmlns` declaration in the part, without building a tree. `Some` when at
+/// least one declaration (or anything that looks like one but cannot be read) is not conventional,
+/// so a rewrite pass is needed. A declaration is conventional when a known URI is bound to its
+/// conventional prefix, or an unknown URI to a prefix the parsers do not reserve; since every
+/// declaration is checked, scoping cannot change that answer.
+fn scan_declarations(xml: &str) -> Option<DeclarationScan> {
+    let mut needs_rewrite = false;
+    let mut binds_wordprocessingml = false;
+    for (index, _) in xml.match_indices("xmlns") {
+        let Some((prefix, uri)) = read_declaration(&xml[index + "xmlns".len()..]) else {
+            needs_rewrite = true;
+            continue;
+        };
+        if !declaration_is_canonical(prefix, &uri) {
+            needs_rewrite = true;
+            binds_wordprocessingml |= matches!(canonical_prefix(&uri), Some("w"));
         }
+    }
+    needs_rewrite.then_some(DeclarationScan { binds_wordprocessingml })
+}
+
+/// Parse `[:prefix] = "uri"` following an `xmlns` token.
+fn read_declaration(rest: &str) -> Option<(&str, String)> {
+    let (prefix, rest) = match rest.strip_prefix(':') {
+        Some(after) => {
+            let end = after.find(|c: char| c == '=' || c.is_ascii_whitespace())?;
+            (&after[..end], &after[end..])
+        }
+        None => ("", rest),
     };
-    xml.matches("xmlns").count() != root_declarations
+    let rest = rest.trim_start().strip_prefix('=')?.trim_start();
+    let quote = rest.chars().next().filter(|c| matches!(c, '"' | '\''))?;
+    let value = &rest[1..];
+    let value = &value[..value.find(quote)?];
+    Some((prefix, decode_references(value)))
+}
+
+/// Resolve character and entity references in a declared URI.
+fn decode_references(raw: &str) -> String {
+    if !raw.contains('&') {
+        return raw.to_string();
+    }
+    quick_xml::escape::unescape(raw).map_or_else(|_| raw.to_string(), Cow::into_owned)
 }
 
 /// `Some(prefix)` for an `xmlns` / `xmlns:prefix` attribute key, `""` for the default namespace.
@@ -157,8 +208,8 @@ impl Scope {
         self.bindings.get(prefix)?.last().map(String::as_str)
     }
 
-    /// The name to emit for `name`, or `None` when it is already canonical. Unprefixed attributes
-    /// belong to no namespace and are never rewritten.
+    /// The name to emit for `name`, or `None` when it is already canonical (no allocation then).
+    /// Unprefixed attributes belong to no namespace and are never rewritten.
     fn canonical_name(&self, name: &str, is_attribute: bool) -> Option<String> {
         let (prefix, local) = match name.split_once(':') {
             Some((prefix, local)) => (prefix, local),
@@ -168,106 +219,130 @@ impl Scope {
         if prefix == "xmlns" || prefix == "xml" {
             return None;
         }
-        let uri = self.resolve(prefix)?;
-        let target = match canonical_prefix(uri) {
-            Some(canonical) => canonical.to_string(),
-            None if RESERVED_PREFIXES.contains(&prefix) => format!("xberg_ns_{prefix}"),
+        let target: Cow<'static, str> = match canonical_prefix(self.resolve(prefix)?) {
+            Some(canonical) => Cow::Borrowed(canonical),
+            None if RESERVED_PREFIXES.contains(&prefix) => Cow::Owned(format!("xberg_ns_{prefix}")),
             None => return None,
         };
         (target != prefix).then(|| format!("{target}:{local}"))
     }
 }
 
-/// Registers the element's namespace declarations in `scope`, then returns the rewritten tag text,
-/// `Ok(None)` when nothing in it needs renaming, or `None` when its attributes cannot be read.
-fn rewrite_start_tag(scope: &mut Scope, e: &BytesStart, is_empty: bool) -> Option<Option<String>> {
-    let mut attributes = Vec::new();
-    for attr in e.attributes() {
-        let attr = attr.ok()?;
-        let key = attr.key.as_ref();
-        if let Some(prefix) = declared_prefix(key) {
-            scope.declare(prefix, declared_uri(&attr));
-        }
-        attributes.push((key.to_string(), attr.value.into_owned()));
-    }
-    let original_name = e.name().as_ref().to_string();
-    let new_name = scope.canonical_name(&original_name, false);
-    let mut changed = new_name.is_some();
-    for (key, _) in &mut attributes {
-        if let Some(renamed) = scope.canonical_name(key, true) {
-            *key = renamed;
-            changed = true;
-        }
-    }
-    if !changed {
-        return Some(None);
-    }
-    let mut tag = format!("<{}", new_name.as_deref().unwrap_or(&original_name));
-    for (key, value) in &attributes {
-        let quote = if value.contains('"') { '\'' } else { '"' };
-        tag.push_str(&format!(" {key}={quote}{value}{quote}"));
-    }
-    tag.push_str(if is_empty { "/>" } else { ">" });
-    Some(Some(tag))
+/// Edits are copied into `out` lazily: nothing is allocated until the first rename is found.
+struct Rewriter<'a> {
+    xml: &'a str,
+    scope: Scope,
+    out: Option<String>,
+    copied: usize,
 }
 
-fn rewrite(xml: &str, max_depth: usize) -> Result<Option<String>, SecurityError> {
-    let mut depth = DepthValidator::new(max_depth);
-    let mut reader = Reader::from_str(xml);
-    let mut scope = Scope::new();
-    let mut out = String::with_capacity(xml.len() + xml.len() / 16);
-    let mut copied = 0usize;
+impl<'a> Rewriter<'a> {
+    fn replace(&mut self, before: usize, after: usize, text: &str) {
+        let xml = self.xml;
+        let out = self
+            .out
+            .get_or_insert_with(|| String::with_capacity(xml.len() + xml.len() / 16));
+        out.push_str(&xml[self.copied..before]);
+        out.push_str(text);
+        self.copied = after;
+    }
 
+    /// Registers the element's declarations, then replaces the tag when anything in it needs a
+    /// new name. `None` when its attributes cannot be read.
+    fn start_tag(&mut self, e: &BytesStart, is_empty: bool, before: usize, after: usize) -> Option<()> {
+        let mark = self.scope.log.len();
+        for attr in e.attributes() {
+            let attr = attr.ok()?;
+            if let Some(prefix) = declared_prefix(attr.key.as_ref()) {
+                self.scope.declare(prefix, declared_uri(&attr));
+            }
+        }
+        let new_name = self.scope.canonical_name(e.name().as_ref(), false);
+        let mut attribute_renamed = false;
+        for attr in e.attributes() {
+            let attr = attr.ok()?;
+            if self.scope.canonical_name(attr.key.as_ref(), true).is_some() {
+                attribute_renamed = true;
+                break;
+            }
+        }
+        if new_name.is_some() || attribute_renamed {
+            let tag = self.tag_text(e, new_name, is_empty)?;
+            self.replace(before, after, &tag);
+        }
+        if is_empty {
+            self.scope.rewind(mark);
+        } else {
+            self.scope.frames.push(mark);
+        }
+        Some(())
+    }
+
+    /// The tag with renamed element and attributes. When renaming makes two attributes share a
+    /// name, the first is kept and the later ones are dropped.
+    fn tag_text(&self, e: &BytesStart, new_name: Option<String>, is_empty: bool) -> Option<String> {
+        let mut tag = String::from("<");
+        tag.push_str(new_name.as_deref().unwrap_or(e.name().as_ref()));
+        let mut seen: Vec<String> = Vec::new();
+        for attr in e.attributes() {
+            let attr = attr.ok()?;
+            let key = self
+                .scope
+                .canonical_name(attr.key.as_ref(), true)
+                .unwrap_or_else(|| attr.key.as_ref().to_string());
+            if seen.contains(&key) {
+                continue;
+            }
+            let value = attr.value.as_ref();
+            let quote = if value.contains('"') { '\'' } else { '"' };
+            tag.push(' ');
+            tag.push_str(&key);
+            tag.push('=');
+            tag.push(quote);
+            tag.push_str(value);
+            tag.push(quote);
+            seen.push(key);
+        }
+        tag.push_str(if is_empty { "/>" } else { ">" });
+        Some(tag)
+    }
+
+    fn end_tag(&mut self, name: &str, before: usize, after: usize) {
+        if let Some(new_name) = self.scope.canonical_name(name, false) {
+            self.replace(before, after, &format!("</{new_name}>"));
+        }
+        if let Some(mark) = self.scope.frames.pop() {
+            self.scope.rewind(mark);
+        }
+    }
+}
+
+/// `Some(None)` when nothing needed renaming, `None` when the XML could not be read.
+fn rewrite(xml: &str) -> Option<Option<String>> {
+    let mut reader = Reader::from_str(xml);
+    let mut rewriter = Rewriter {
+        xml,
+        scope: Scope::new(),
+        out: None,
+        copied: 0,
+    };
     loop {
-        let Ok(before) = usize::try_from(reader.buffer_position()) else {
-            return Ok(None);
-        };
-        let Ok(event) = reader.read_event() else {
-            return Ok(None);
-        };
-        let Ok(after) = usize::try_from(reader.buffer_position()) else {
-            return Ok(None);
-        };
+        let before = usize::try_from(reader.buffer_position()).ok()?;
+        let event = reader.read_event().ok()?;
+        let after = usize::try_from(reader.buffer_position()).ok()?;
         match event {
-            Event::Start(e) | Event::Empty(e) => {
-                let is_empty = xml.as_bytes().get(after.wrapping_sub(2)) == Some(&b'/');
-                if !is_empty {
-                    depth.push()?;
-                }
-                let mark = scope.log.len();
-                let Some(rewritten) = rewrite_start_tag(&mut scope, &e, is_empty) else {
-                    return Ok(None);
-                };
-                if let Some(tag) = rewritten {
-                    out.push_str(&xml[copied..before]);
-                    out.push_str(&tag);
-                    copied = after;
-                }
-                if is_empty {
-                    scope.rewind(mark);
-                } else {
-                    scope.frames.push(mark);
-                }
-            }
-            Event::End(e) => {
-                if let Some(new_name) = scope.canonical_name(e.name().as_ref(), false) {
-                    out.push_str(&xml[copied..before]);
-                    out.push_str("</");
-                    out.push_str(&new_name);
-                    out.push('>');
-                    copied = after;
-                }
-                depth.pop();
-                if let Some(mark) = scope.frames.pop() {
-                    scope.rewind(mark);
-                }
-            }
+            Event::Start(e) => rewriter.start_tag(&e, false, before, after)?,
+            Event::Empty(e) => rewriter.start_tag(&e, true, before, after)?,
+            Event::End(e) => rewriter.end_tag(e.name().as_ref(), before, after),
             Event::Eof => break,
             _ => {}
         }
     }
-    out.push_str(&xml[copied..]);
-    Ok(Some(out))
+    let Rewriter { out, copied, .. } = rewriter;
+    Some(out.map(|mut out| {
+        out.push_str(&xml[copied..]);
+        out
+    }))
 }
 
 #[cfg(test)]
@@ -277,7 +352,7 @@ mod tests {
     const WML: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     fn canon(xml: &str) -> Cow<'_, str> {
-        canonicalize_prefixes(xml, 1024).expect("within depth limit")
+        canonicalize_prefixes(xml).xml
     }
 
     #[test]
@@ -347,6 +422,10 @@ mod tests {
 
     const STRICT_WML: &str = "http://purl.oclc.org/ooxml/wordprocessingml/main";
     const REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const STRICT_REL: &str = "http://purl.oclc.org/ooxml/officeDocument/relationships";
+    const MATH: &str = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+    const STRICT_MATH: &str = "http://purl.oclc.org/ooxml/officeDocument/math";
+    const MC: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
     /// Turn a template written with `w:`/`r:` into `flavor`, declaring the namespaces on the root.
     fn render(template: &str, flavor: Flavor) -> String {
@@ -356,17 +435,29 @@ mod tests {
             Flavor::DefaultNamespace => ("", "w:", format!(r#"xmlns="{WML}" xmlns:w="{WML}""#)),
             Flavor::Strict => ("s:", "s:", format!(r#"xmlns:s="{STRICT_WML}""#)),
         };
-        let relationship_prefix = if matches!(flavor, Flavor::Conventional) {
-            "r"
+        let conventional = matches!(flavor, Flavor::Conventional);
+        let (relationship, markup, math) = if conventional {
+            ("r", "mc", "m")
         } else {
-            "rel"
+            ("rel", "mcx", "mth")
         };
+        let (rel_uri, math_uri) = if matches!(flavor, Flavor::Strict) {
+            (STRICT_REL, STRICT_MATH)
+        } else {
+            (REL, MATH)
+        };
+        let declarations =
+            format!(r#"{root_decl} xmlns:{relationship}="{rel_uri}" xmlns:{markup}="{MC}" xmlns:{math}="{math_uri}""#);
         template
-            .replace("@NS@", &format!(r#"{root_decl} xmlns:{relationship_prefix}="{REL}""#))
+            .replace("@NS@", &declarations)
             .replace("<w:", &format!("<{element}"))
             .replace("</w:", &format!("</{element}"))
             .replace(" w:", &format!(" {attribute}"))
-            .replace(" r:id", &format!(" {relationship_prefix}:id"))
+            .replace(" r:id", &format!(" {relationship}:id"))
+            .replace("<mc:", &format!("<{markup}:"))
+            .replace("</mc:", &format!("</{markup}:"))
+            .replace("<m:", &format!("<{math}:"))
+            .replace("</m:", &format!("</{math}:"))
     }
 
     const DOCUMENT: &str = r#"<w:document @NS@><w:body>
@@ -379,6 +470,8 @@ mod tests {
         <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>second item</w:t></w:r></w:p>
         <w:tbl><w:tr><w:tc><w:p><w:r><w:t>kept</w:t></w:r></w:p></w:tc></w:tr>
           <w:tr><w:trPr><w:del w:id="1" w:author="A"/></w:trPr><w:tc><w:p><w:r><w:t>removed row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+        <w:p><mc:AlternateContent><mc:Choice Requires="wps"><w:r><w:t>choice text</w:t></w:r></mc:Choice><mc:Fallback><w:r><w:t>fallback text</w:t></w:r></mc:Fallback></mc:AlternateContent></w:p>
+        <w:p><m:oMath><m:r><m:t>xy</m:t></m:r></m:oMath></w:p>
         <w:p><w:ins w:id="3" w:author="B"><w:r><w:t>inserted</w:t></w:r></w:ins></w:p>
         <w:sectPr><w:pgSz w:w="12240" w:h="15840" w:orient="portrait"/><w:headerReference r:id="rId9"/></w:sectPr>
       </w:body></w:document>"#;
@@ -401,31 +494,39 @@ mod tests {
         <Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
         </Relationships>"#;
 
-    fn build_package(flavors: [Flavor; 5]) -> Vec<u8> {
+    fn zip_of(parts: &[(&str, String)]) -> Vec<u8> {
         use std::io::Write;
         let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         let options: zip::write::FileOptions<()> = zip::write::FileOptions::default();
-        let parts = [
+        for (path, content) in parts {
+            zip.start_file(*path, options).unwrap();
+            zip.write_all(content.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap().into_inner()
+    }
+
+    fn build_package(flavors: [Flavor; 5], rels: &str) -> Vec<u8> {
+        let templates = [
             ("word/document.xml", DOCUMENT),
             ("word/numbering.xml", NUMBERING),
             ("word/footnotes.xml", FOOTNOTES),
             ("word/comments.xml", COMMENTS),
             ("word/header1.xml", HEADER),
         ];
-        for ((path, template), flavor) in parts.into_iter().zip(flavors) {
-            zip.start_file(path, options).unwrap();
-            zip.write_all(render(template, flavor).as_bytes()).unwrap();
-        }
-        zip.start_file("word/_rels/document.xml.rels", options).unwrap();
-        zip.write_all(RELS.as_bytes()).unwrap();
-        zip.finish().unwrap().into_inner()
+        let mut parts: Vec<(&str, String)> = templates
+            .into_iter()
+            .zip(flavors)
+            .map(|((path, template), flavor)| (path, render(template, flavor)))
+            .collect();
+        parts.push(("word/_rels/document.xml.rels", rels.to_string()));
+        zip_of(&parts)
     }
 
-    fn parse(flavors: [Flavor; 5]) -> String {
+    fn parse_with_rels(flavors: [Flavor; 5], rels: &str) -> String {
         use crate::extractors::security::{SecurityBudget, SecurityLimits};
         let mut budget = SecurityBudget::with_defaults();
         let document = crate::extraction::docx::parser::parse_document(
-            &build_package(flavors),
+            &build_package(flavors, rels),
             &mut budget,
             &SecurityLimits::default(),
         )
@@ -447,6 +548,10 @@ mod tests {
         )
     }
 
+    fn parse(flavors: [Flavor; 5]) -> String {
+        parse_with_rels(flavors, RELS)
+    }
+
     #[test]
     fn conventional_package_extracts_every_part() {
         let output = parse([Flavor::Conventional; 5]);
@@ -462,6 +567,8 @@ mod tests {
             "the footnote",
             "the comment",
             "the header",
+            "choice text",
+            "xy",
         ] {
             assert!(output.contains(expected), "{expected:?} missing from {output}");
         }
@@ -512,20 +619,6 @@ mod tests {
     }
 
     #[test]
-    fn nesting_beyond_the_limit_is_rejected_not_passed_through() {
-        let depth = 5000;
-        let xml = format!(
-            r#"<x:d xmlns:x="{WML}">{}{}</x:d>"#,
-            r#"<x:p xmlns:n="urn:n">"#.repeat(depth),
-            "</x:p>".repeat(depth)
-        );
-        assert!(matches!(
-            canonicalize_prefixes(&xml, 1024),
-            Err(SecurityError::NestingTooDeep { max: 1024, .. })
-        ));
-    }
-
-    #[test]
     fn strict_styles_namespace_is_pointed_at_the_transitional_uri() {
         let strict = format!(
             r#"<w:styles xmlns:w="{STRICT_WORDPROCESSINGML}"><w:style w:type="paragraph" w:styleId="H1"/></w:styles>"#
@@ -535,6 +628,141 @@ mod tests {
         let unconverted = crate::extraction::docx::styles::parse_styles_xml(&strict).unwrap();
         assert!(
             unconverted.styles.is_empty(),
+            "control: strict URI alone must not match"
+        );
+    }
+
+    const DRAWINGML: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+    #[test]
+    fn inline_declarations_of_unrelated_prefixes_keep_the_fast_path() {
+        let xml = format!(
+            r#"<w:document xmlns:w="{WML}" xmlns:r="{REL}"><w:body><w:p><w:r><w:drawing><a:graphic xmlns:a="{DRAWINGML}"><a:graphicData xmlns:pic="urn:pic"><pic:pic/></a:graphicData></a:graphic></w:drawing></w:r></w:p><w:p xmlns:w="{WML}"/></w:body></w:document>"#
+        );
+        assert!(matches!(canon(&xml), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn rewrite_pass_that_changes_nothing_does_not_copy_the_part() {
+        let xml = format!(r#"<w:document xmlns:w="{WML}" xmlns:w2="urn:other"><w:p/></w:document>"#);
+        assert!(matches!(rewrite(&xml), Some(None)));
+        let unreadable = format!(r#"<x:d xmlns:x="{WML}"><x:p x:a=></x:d>"#);
+        assert!(rewrite(&unreadable).is_none());
+    }
+
+    #[test]
+    fn tags_are_told_apart_by_event_not_by_trailing_slash() {
+        let xml = format!(r#"<x:p xmlns:x="{WML}" x:v="a/"><x:q x:v='/'>t/</x:q><x:r x:v="b/"/></x:p>"#);
+        assert_eq!(
+            canon(&xml),
+            format!(r#"<w:p xmlns:x="{WML}" w:v="a/"><w:q w:v="/">t/</w:q><w:r w:v="b/"/></w:p>"#)
+        );
+    }
+
+    #[test]
+    fn attributes_that_collide_after_renaming_keep_the_first() {
+        let xml = format!(r#"<x:b x:val="1" w:val="2" xmlns:w="{WML}" xmlns:x="{WML}"/>"#);
+        assert_eq!(
+            canon(&xml),
+            format!(r#"<w:b w:val="1" xmlns:w="{WML}" xmlns:x="{WML}"/>"#)
+        );
+    }
+
+    #[test]
+    fn everything_but_names_is_preserved_byte_for_byte() {
+        let xml = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE d>\n<?pi some data?>\n<!-- <x:p> stays -->\n\
+             <x:d xmlns:x=\"{WML}\" x:a=\"&amp;\" x:b=\"&quot;\" x:c='say \"hi\"' x:d=\"it's\">\
+             <![CDATA[ <x:p> & ]]>  <x:t>a &lt; b</x:t>\n</x:d>"
+        );
+        assert_eq!(
+            canon(&xml),
+            format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE d>\n<?pi some data?>\n<!-- <x:p> stays -->\n\
+                 <w:d xmlns:x=\"{WML}\" w:a=\"&amp;\" w:b=\"&quot;\" w:c='say \"hi\"' w:d=\"it's\">\
+                 <![CDATA[ <x:p> & ]]>  <w:t>a &lt; b</w:t>\n</w:d>"
+            )
+        );
+    }
+
+    #[test]
+    fn two_foreign_namespaces_on_one_reserved_prefix_are_both_renamed() {
+        let xml =
+            format!(r#"<x:p xmlns:x="{WML}" xmlns:w="urn:1"><w:a/><w:b xmlns:w="urn:2"><w:c/></w:b><w:d/></x:p>"#);
+        assert_eq!(
+            canon(&xml),
+            format!(
+                r#"<w:p xmlns:x="{WML}" xmlns:w="urn:1"><xberg_ns_w:a/><xberg_ns_w:b xmlns:w="urn:2"><xberg_ns_w:c/></xberg_ns_w:b><xberg_ns_w:d/></w:p>"#
+            )
+        );
+    }
+
+    #[test]
+    fn giving_up_is_reported_only_when_wordprocessingml_is_bound_to_another_prefix() {
+        let alias = format!(r#"<x:d xmlns:x="{WML}"><x:p></y:q>"#);
+        assert!(canonicalize_prefixes(&alias).gave_up);
+        let conventional = format!(r#"<w:d xmlns:w="{WML}" xmlns:w2="urn:o"><w:p></y:q>"#);
+        assert!(!canonicalize_prefixes(&conventional).gave_up);
+        let unrelated = r#"<d xmlns:w="urn:o"><p></y:q>"#;
+        assert!(!canonicalize_prefixes(unrelated).gave_up);
+    }
+
+    #[test]
+    fn unreadable_alias_part_surfaces_a_warning() {
+        use crate::extractors::security::{SecurityBudget, SecurityLimits};
+        let document = format!(
+            r#"<x:document xmlns:x="{WML}"><x:body><x:p><x:r><x:t a=b>lost</x:t></x:r></x:p></x:body></x:document>"#
+        );
+        let bytes = zip_of(&[("word/document.xml", document)]);
+        let mut budget = SecurityBudget::with_defaults();
+        let parsed =
+            crate::extraction::docx::parser::parse_document(&bytes, &mut budget, &SecurityLimits::default()).unwrap();
+        assert!(
+            parsed.warnings.iter().any(|w| w.message.contains("word/document.xml")),
+            "{:?}",
+            parsed.warnings
+        );
+    }
+
+    #[test]
+    fn too_deep_part_has_the_same_outcome_whatever_the_prefix() {
+        use crate::extractors::security::{SecurityBudget, SecurityLimits};
+        let outcome = |prefix: &str| {
+            let open = format!("<{prefix}:p xmlns:n=\"urn:n\">").repeat(5000);
+            let close = format!("</{prefix}:p>").repeat(5000);
+            let footnotes = format!(
+                r#"<{prefix}:footnotes xmlns:{prefix}="{WML}"><{prefix}:footnote {prefix}:id="2">{open}{close}</{prefix}:footnote></{prefix}:footnotes>"#
+            );
+            let document = format!(r#"<{prefix}:document xmlns:{prefix}="{WML}"><{prefix}:body/></{prefix}:document>"#);
+            let bytes = zip_of(&[("word/document.xml", document), ("word/footnotes.xml", footnotes)]);
+            let mut budget = SecurityBudget::with_defaults();
+            crate::extraction::docx::parser::parse_document(&bytes, &mut budget, &SecurityLimits::default())
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        };
+        let conventional = outcome("w");
+        assert!(conventional.is_err(), "control: the body parser must reject this");
+        assert_eq!(outcome("x"), conventional);
+    }
+
+    #[test]
+    fn strict_relationships_resolve_the_same_targets() {
+        let strict_rels = RELS.replace(REL, STRICT_REL);
+        assert_ne!(strict_rels, RELS, "control: the fixture must actually change");
+        assert_eq!(
+            parse_with_rels([Flavor::Strict; 5], &strict_rels),
+            parse([Flavor::Conventional; 5])
+        );
+    }
+
+    #[test]
+    fn strict_drawingml_theme_is_read() {
+        let strict = r#"<a:theme xmlns:a="http://purl.oclc.org/ooxml/drawingml/main" name="T"><a:themeElements><a:clrScheme name="c"><a:dk1><a:srgbClr val="000000"/></a:dk1></a:clrScheme></a:themeElements></a:theme>"#;
+        let theme = crate::extraction::docx::theme::parse_theme_xml(&strict_to_transitional(strict)).unwrap();
+        assert!(theme.color_scheme.is_some());
+        let unconverted = crate::extraction::docx::theme::parse_theme_xml(strict).unwrap();
+        assert!(
+            unconverted.color_scheme.is_none(),
             "control: strict URI alone must not match"
         );
     }
