@@ -113,6 +113,8 @@ fn account_cell(sheet: &mut Sheet, cell: Cell, budget: &mut SecurityBudget) -> R
         if cell.formula_populated {
             sheet.bounds.formula(start, budget)?;
             sheet.bounds.formula(end, budget)?;
+            sheet.bounds.unavailable_formula(start, budget)?;
+            sheet.bounds.unavailable_formula(end, budget)?;
         }
         let copies = u64::from(cell.repeats) * u64::from(sheet.row_repeats);
         let length = u64::try_from(cell.text_bytes)

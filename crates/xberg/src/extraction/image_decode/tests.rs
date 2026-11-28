@@ -628,7 +628,6 @@ fn approved_decoder_guard(relative: &str, function: &str, path: &str) -> Option<
         }
         ("extraction/image.rs", "extract_image_metadata_with_security_limits", _)
         | ("extraction/image.rs", "extract_image_metadata_for_processing", _) => Some("method::validate"),
-        ("extraction/image.rs", "detect_tiff_frame_count", _) => Some("header-only"),
         ("extraction/heif.rs", "decode_heic_to_png", "xberg_libheif::HeifContext::read_from_bytes") => {
             Some("validate_heif_encoded_input_budget")
         }
