@@ -668,3 +668,30 @@ fn test_listtext_ignorable_ordered_detection() {
         metas
     );
 }
+
+#[test]
+fn should_render_footnote_as_unescaped_markdown_reference_and_definition() {
+    let rtf_content = r"{\rtf1\ansi Text\chftn{\footnote\chftn Note}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert_eq!(rendered.trim(), "Text[^1]\n\n[^1]:\n    Note");
+}
+
+#[test]
+fn should_number_each_rtf_footnote_in_reading_order() {
+    let rtf_content = r"{\rtf1\ansi One\chftn{\footnote\chftn First}\par Two\chftn{\footnote\chftn Second}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, false);
+    let rendered = crate::rendering::render_markdown(&doc);
+    assert_eq!(
+        rendered.trim(),
+        "One[^1]\n\nTwo[^2]\n\n[^1]:\n    First\n\n[^2]:\n    Second"
+    );
+}
+
+#[test]
+fn should_render_footnote_as_plain_text_reference_and_definition() {
+    let rtf_content = r"{\rtf1\ansi Text\chftn{\footnote\chftn Note}}";
+    let doc = RtfExtractor::build_internal_document(rtf_content, true);
+    let rendered = crate::rendering::render_plain(&doc);
+    assert_eq!(rendered.trim(), "Text[^1]\n\n\n[^1]: Note");
+}

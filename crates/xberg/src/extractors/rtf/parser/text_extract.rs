@@ -58,6 +58,8 @@ struct TextOutput {
     tables: Vec<Table>,
     images: Vec<RtfImage>,
     plain: bool,
+    /// Footnote references and definitions are returned as data, not written into the text.
+    structured_notes: bool,
 }
 
 #[derive(Default)]
@@ -124,6 +126,7 @@ struct TextDestinations {
     shptxt: CapturedText,
     annotation: CapturedText,
     footnote_count: usize,
+    footnote_markers: Vec<usize>,
     pending_atnid: Option<i32>,
 }
 
@@ -189,10 +192,11 @@ fn close_picture_group(
 }
 
 impl TextParser {
-    fn new(content: &str, plain: bool) -> Self {
+    fn new(content: &str, plain: bool, structured_notes: bool) -> Self {
         Self {
             output: TextOutput {
                 plain,
+                structured_notes,
                 ..Default::default()
             },
             scope: TextScope {
@@ -434,7 +438,7 @@ impl TextParser {
     }
 
     fn append_captured_text(&self, result: &mut String) {
-        if !self.destinations.footnote.items.is_empty() {
+        if !self.output.structured_notes && !self.destinations.footnote.items.is_empty() {
             ensure_capture_separator(result);
             for (index, note) in self.destinations.footnote.items.iter().enumerate() {
                 result.push_str(&format!("[^{}]: {}", index + 1, note.trim()));
@@ -468,12 +472,30 @@ impl TextParser {
             link.1 = map_offset(&mapping, link.1);
         }
         self.fields.hyperlinks.retain(|link| link.0 < link.1);
+        let footnote_markers = self
+            .destinations
+            .footnote_markers
+            .iter()
+            .map(|offset| map_offset(&mapping, *offset))
+            .collect();
+        let footnotes = if self.output.structured_notes {
+            self.destinations
+                .footnote
+                .items
+                .iter()
+                .map(|note| note.trim().to_string())
+                .collect()
+        } else {
+            Vec::new()
+        };
         let formatting = RtfFormattingData {
             spans: self.fmt_tracker.spans,
             color_table: parse_rtf_color_table(content),
             header_text: None,
             footer_text: None,
             hyperlinks: self.fields.hyperlinks,
+            footnote_markers,
+            footnotes,
         };
         (
             final_result,
@@ -509,6 +531,8 @@ impl TextParser {
             uc_stack: &mut self.scope.uc_stack,
             ansi_codepage_stack: &mut self.scope.ansi_codepage_stack,
             footnote_count: &mut self.destinations.footnote_count,
+            structured_notes: self.output.structured_notes,
+            footnote_markers: &mut self.destinations.footnote_markers,
             hidden_stack: &mut self.scope.hidden_stack,
             fmt_tracker: &mut self.fmt_tracker,
             font_id_stack: &mut self.scope.font_id_stack,
@@ -893,7 +917,19 @@ pub(crate) fn extract_text_from_rtf(
     content: &str,
     plain: bool,
 ) -> (String, Vec<Table>, Vec<RtfImage>, Vec<ParagraphMeta>, RtfFormattingData) {
-    let mut parser = TextParser::new(content, plain);
+    let mut parser = TextParser::new(content, plain, false);
+    parser.parse(content);
+    parser.finish(content)
+}
+
+/// Like [`extract_text_from_rtf`], but footnote references (`\chftn` in the body) and
+/// definitions come back in [`RtfFormattingData`] instead of as `[^N]` text, so the document
+/// builder can emit them as footnote elements. ~keep
+pub(crate) fn extract_document_parts_from_rtf(
+    content: &str,
+    plain: bool,
+) -> (String, Vec<Table>, Vec<RtfImage>, Vec<ParagraphMeta>, RtfFormattingData) {
+    let mut parser = TextParser::new(content, plain, true);
     parser.parse(content);
     parser.finish(content)
 }

@@ -18,7 +18,9 @@ mod tables;
 
 pub use formatting::normalize_whitespace;
 pub(crate) use metadata::extract_rtf_metadata;
-pub(crate) use parser::{extract_rtf_formatting, extract_text_from_rtf, spans_to_annotations};
+pub(crate) use parser::{
+    extract_document_parts_from_rtf, extract_rtf_formatting, extract_text_from_rtf, spans_to_annotations,
+};
 
 use crate::Result;
 use crate::core::config::ExtractionConfig;
@@ -118,6 +120,22 @@ impl Default for RtfExtractor {
     }
 }
 
+fn footnote_key(index: usize) -> String {
+    format!("rtf-footnote-{}", index + 1)
+}
+
+/// Emit a `FootnoteRef` for every pending marker that sits before byte `limit` of the text.
+/// Renderers attach a reference to the block it follows, so the callers pass the start of the
+/// next paragraph. ~keep
+fn push_footnote_refs_before(builder: &mut InternalDocumentBuilder, markers: &[usize], next: &mut usize, limit: usize) {
+    while let Some(&offset) = markers.get(*next)
+        && offset < limit
+    {
+        builder.push_footnote_ref(&(*next + 1).to_string(), &footnote_key(*next), None);
+        *next += 1;
+    }
+}
+
 impl RtfExtractor {
     /// Build an `InternalDocument` from RTF content.
     ///
@@ -127,7 +145,7 @@ impl RtfExtractor {
         use crate::types::document_structure::ContentLayer;
 
         let (extracted_text, tables, rtf_images, para_metas, mut formatting) =
-            extract_text_from_rtf(rtf_content, plain);
+            extract_document_parts_from_rtf(rtf_content, plain);
         let legacy_formatting = extract_rtf_formatting(rtf_content);
         formatting.header_text = legacy_formatting.header_text;
         formatting.footer_text = legacy_formatting.footer_text;
@@ -150,7 +168,15 @@ impl RtfExtractor {
         let mut list_id: Option<u16> = None;
         let mut list_depth: u8 = 0;
 
+        let mut next_footnote_ref = 0usize;
+
         for paragraph in extracted_text.split("\n\n") {
+            push_footnote_refs_before(
+                &mut builder,
+                &formatting.footnote_markers,
+                &mut next_footnote_ref,
+                byte_offset,
+            );
             let trimmed = paragraph.trim();
             if trimmed.is_empty() {
                 byte_offset += paragraph.len() + 2;
@@ -257,6 +283,13 @@ impl RtfExtractor {
             byte_offset += paragraph.len() + 2;
         }
 
+        push_footnote_refs_before(
+            &mut builder,
+            &formatting.footnote_markers,
+            &mut next_footnote_ref,
+            usize::MAX,
+        );
+
         if in_list {
             for _ in 0..=list_depth {
                 builder.end_list();
@@ -271,6 +304,10 @@ impl RtfExtractor {
         while table_idx < tables.len() {
             builder.push_table_from_cells(&tables[table_idx].cells, None, None);
             table_idx += 1;
+        }
+
+        for (index, note) in formatting.footnotes.iter().enumerate() {
+            builder.push_footnote_definition(note, &footnote_key(index), None);
         }
 
         for (i, rtf_img) in rtf_images.into_iter().enumerate() {
