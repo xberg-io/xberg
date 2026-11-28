@@ -578,12 +578,23 @@ impl PdfDocument {
 
     /// Share `page` with the page-pass cache when the passes run and its budget
     /// admits it. The first admission check runs without walking the spans.
-    fn retain_interpretation(&self, key: RawSpanKey, page: &Arc<InterpretedPage>) {
+    fn retain_interpretation(&self, key: RawSpanKey, page: &InterpretedPage) {
         let Some(bytes) = self.admitted_bytes(&key, page, usize::MAX) else {
             return;
         };
+        // ~keep A fresh read's vectors and strings keep their growth slack; the caller consumes that
+        // read, and the cache holds an exact-capacity copy instead, as many bytes fewer as the slack.
+        let copy = InterpretedPage {
+            spans: Arc::new(Vec::clone(&page.spans)),
+            mc_actualtext: page.mc_actualtext.clone(),
+            cmsy: page.cmsy.as_deref().map(|witnesses| Arc::new(witnesses.clone())),
+            warnings: Arc::clone(&page.warnings),
+            recovered: page.recovered,
+            script_baselines: page.script_baselines.clone(),
+            preserved: None,
+        };
         if let Some(cache) = self.raw_page_spans_cache.lock_or_recover().as_mut() {
-            cache.insert(key, Arc::clone(page), bytes);
+            cache.insert(key, Arc::new(copy), bytes);
         }
     }
 
