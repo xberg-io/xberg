@@ -4,7 +4,7 @@ inputs:
   ort-version:
     description: ONNX Runtime version to download
     required: false
-    default: "1.24.2"
+    default: "1.32.0"
   verify-linux-archive:
     description: Stage freshly verified Linux bytes instead of reusing the extracted-tree cache
     required: false

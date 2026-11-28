@@ -1764,8 +1764,8 @@ def test_csharp_native_build_leaves_rpath_to_generated_ffi_package() -> None:
     assert re.findall(r'(?m)^          add-macos-rpath: "false"$', setup[0]) == [
         '          add-macos-rpath: "false"',
     ]
-    assert re.findall(r'(?m)^          ort-version: "1\.24\.2"$', setup[0]) == [
-        '          ort-version: "1.24.2"',
+    assert re.findall(r'(?m)^          ort-version: "1\.32\.0"$', setup[0]) == [
+        '          ort-version: "1.32.0"',
     ]
 
 
@@ -1907,7 +1907,7 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     version = re.findall(r"(?m)^  ort-version:\n((?:^    [^\n]*\n)+)", action)
     assert len(version) == 1, "one actual runtime version input must exist"
     assert re.findall(r"(?m)^    required: ([^\n]+)$", version[0]) == ["false"]
-    assert re.findall(r'(?m)^    default: "([^"\n]+)"$', version[0]) == ["1.24.2"], (
+    assert re.findall(r'(?m)^    default: "([^"\n]+)"$', version[0]) == ["1.32.0"], (
         "standalone Sceptre ORT must use the supported shared runtime version"
     )
     assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]

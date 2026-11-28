@@ -84,7 +84,7 @@ RUN cd /tmp && \
 # surfaces as MissingDependency via the 446-symbol probe, but a symbol whose signature or
 # struct layout changed is undetected (build.rs sets layout_tests(false)). ~keep
 ARG PDFIUM_VERSION=7678
-ARG ONNXRUNTIME_VERSION=1.24.2
+ARG ONNXRUNTIME_VERSION=1.32.0
 ARG TARGETARCH
 ENV PDFIUM_VERSION=${PDFIUM_VERSION}
 ENV ONNXRUNTIME_VERSION=${ONNXRUNTIME_VERSION}

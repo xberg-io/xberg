@@ -77,7 +77,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-onnx-runtime
         with:
-          ort-version: "1.24.2"
+          ort-version: "1.32.0"
           dest-dir: crates/xberg-py
 
       - name: Build wheels
@@ -105,7 +105,7 @@ jobs:
             export CC="gcc ${CFLAGS}"
             export CXX="g++ ${CXXFLAGS}"
             # Link Microsoft's glibc-clean ONNX Runtime, not the pyke prebuilt; auditwheel bundles it (#1284).
-            ort_version=1.24.2
+            ort_version=1.32.0
             case "$(uname -m)" in aarch64 | arm64) ort_rid=linux-arm64 ;; *) ort_rid=linux-x64 ;; esac
             ort_integrity="{project}/scripts/ci/actions/setup-onnx-runtime"
             ort_tmp=$(mktemp -d)

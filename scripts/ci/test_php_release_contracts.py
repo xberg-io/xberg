@@ -328,7 +328,7 @@ def run_php_stage_fixture(
 
 
 def test_php_stage_script_adds_the_needed_onnxruntime_beside_the_extension() -> None:
-    result, members, _ = run_php_stage_fixture("safe", ("libonnxruntime.so.1.24.2", "libonnxruntime.so"))
+    result, members, _ = run_php_stage_fixture("safe", ("libonnxruntime.so.1.32.0", "libonnxruntime.so"))
     assert result.returncode == 0, result.stderr
     assert members == ["libonnxruntime.so.1", "xberg.so"]
 
