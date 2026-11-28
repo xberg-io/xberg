@@ -108,7 +108,8 @@ async fn fingerprint_with_reader(
             crate::ocr::tessdata_download::without_reading_packs(|| tessdata_context(dependencies, cancel))
     {
         return match result {
-            Ok(context) => Ok(Some(context)),
+            Ok(Some(context)) => Ok(Some(context)),
+            Ok(None) => Ok(unidentified_model()),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
                 super::cacheability::invalidate_current();
@@ -133,7 +134,10 @@ async fn fingerprint_with_reader(
             };
             context.push_str(&retry_context);
             context.push_str(&paddle_fallback_context(&dependencies));
-            context.push_str(&tessdata_context(&dependencies, worker_cancel.as_ref())?);
+            let Some(tessdata) = tessdata_context(&dependencies, worker_cancel.as_ref())? else {
+                return Ok(unidentified_model());
+            };
+            context.push_str(&tessdata);
             Ok(Some(context))
         }))
         .await;
@@ -199,9 +203,12 @@ fn paddle_fallback_context(dependencies: &[CacheDependency]) -> String {
 }
 
 /// The resolved directory and model-file identity of every Tesseract selection the requests may
-/// run OCR with, or nothing when none may.
+/// run OCR with, or nothing when none may. `None` when a model file cannot be identified.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn tessdata_context(dependencies: &[CacheDependency], cancel: Option<&CancellationToken>) -> crate::Result<String> {
+fn tessdata_context(
+    dependencies: &[CacheDependency],
+    cancel: Option<&CancellationToken>,
+) -> crate::Result<Option<String>> {
     use crate::ocr::processor::validation::TessdataEnv;
 
     let mut hash = blake3::Hasher::new();
@@ -213,17 +220,33 @@ fn tessdata_context(dependencies: &[CacheDependency], cancel: Option<&Cancellati
             hash.update(&(index as u64).to_le_bytes());
             let env = TessdataEnv::from_process().for_model(selection.tessdata_model);
             if !hash_tessdata_selection(&mut hash, selection, &env) {
-                return Err(crate::XbergError::cache(
-                    "Cannot identify a Tesseract model file: the platform reports no modification time",
-                ));
+                return Ok(None);
             }
         }
     }
-    Ok(if any {
+    Ok(Some(if any {
         format!(":tessdata-v1:{}", hash.finalize().to_hex())
     } else {
         String::new()
-    })
+    }))
+}
+
+/// Make the operation uncacheable because a model file cannot be identified, and return the
+/// context that says so.
+///
+/// A platform that reports no modification time does so for every file and request, so the
+/// warning is given once per process; the results stay uncached every time.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn unidentified_model() -> Option<String> {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    super::cacheability::invalidate_current();
+    if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        tracing::warn!(
+            "Cannot identify a Tesseract model file (no modification time, or unreadable); results that \
+             may read it are not cached"
+        );
+    }
+    None
 }
 
 /// Hash the model set of `selection`, the directory that serves it and the identity
