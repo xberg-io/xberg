@@ -74,6 +74,11 @@ const LIST_ITEM_SOURCE_LABEL_ATTRIBUTE: &str = "list_marker";
 /// unusable from a bare `pdf` build.
 const MEASURED_FONT_SIZE_ATTRIBUTE: &str = "xberg:internal:font-size-pt";
 
+/// JSON `{table, row, col}` on a table a legacy `.doc` nests in a cell: the
+/// `InternalDocument::tables` index of the table holding it and the cell. The
+/// words are also in that cell's text.
+pub(crate) const DOC_NESTED_TABLE_PARENT_ATTRIBUTE: &str = "xberg:internal:doc-nested-table-parent";
+
 pub(crate) const NATIVE_TABLE_GRID_ATTRIBUTE: &str = "xberg:internal:native-table-grid";
 pub(crate) const NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE: &str = "xberg:internal:native-pdf-headerless-table";
 
@@ -854,6 +859,7 @@ fn is_internal_only_attribute(key: &str) -> bool {
         || key == IMAGE_OCR_TEXT_ANCHOR_ATTRIBUTE
         || key == MEASURED_FONT_SIZE_ATTRIBUTE
         || key == NATIVE_TABLE_GRID_ATTRIBUTE
+        || key == DOC_NESTED_TABLE_PARENT_ATTRIBUTE
         || key == NATIVE_PDF_HEADERLESS_TABLE_ATTRIBUTE
         || key == crate::rendering::table_math::TABLE_CELL_MATH_ATTRIBUTE
         || key == crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE
