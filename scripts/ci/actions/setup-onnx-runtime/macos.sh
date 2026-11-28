@@ -57,24 +57,12 @@ ort_root="$extract_dir/onnxruntime-osx-${ort_arch}-${ort_version}"
 
 if [ ! -d "$ort_root" ]; then
   echo "Cache miss: Downloading ONNX Runtime ${ort_version} for macOS ${ort_arch}"
-  archive="onnxruntime-osx-${ort_arch}-${ort_version}.tgz"
   script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-  # A custom version needs a trusted manifest with its archive's digest. ~keep
+  # A custom version needs a trusted manifest with its NuGet package and PyPI wheel digests. ~keep
   checksums="${ORT_CHECKSUMS_FILE:-$script_dir/checksums.sha256}"
-  archive_path="$RUNNER_TEMP/$archive"
-  bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums" --known
-  if curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$archive_path" \
-    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"; then
-    bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"
-    mkdir -p "$extract_dir"
-    tar -xzf "$archive_path" -C "$extract_dir"
-  else
-    rm -f "$archive_path"
-    echo "::warning::GitHub release download of $archive failed; using the NuGet package" >&2
-    bash "$script_dir/nuget-fallback.sh" "$ort_version" "$nuget_rid" "$ort_root" "$checksums"
-  fi
+  bash "$script_dir/stage-runtime.sh" "$ort_version" "$nuget_rid" "$ort_root" "$checksums"
 else
-  # The extracted-tree cache does not retain the archive for re-verification. ~keep
+  # The extracted-tree cache does not retain the package for re-verification. ~keep
   echo "Cache hit: Using cached ONNX Runtime ${ort_version}"
 fi
 

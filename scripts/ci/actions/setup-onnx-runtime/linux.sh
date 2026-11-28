@@ -7,7 +7,7 @@ arch_id="${3:-}"
 strategy="${4:-system}"
 verify_archive="${5:-false}"
 script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-# A custom version needs a trusted manifest with its archive's digest. ~keep
+# A custom version needs a trusted manifest with its NuGet package and PyPI wheel digests. ~keep
 checksums="${ORT_CHECKSUMS_FILE:-$script_dir/checksums.sha256}"
 case "$verify_archive" in
 true | false) ;;
@@ -38,12 +38,10 @@ fi
 case "$arch_id" in
 x64)
   ort_dir_name="onnxruntime-linux-x64-${ort_version}"
-  archive="onnxruntime-linux-x64-${ort_version}.tgz"
   nuget_rid="linux-x64"
   ;;
 arm64)
   ort_dir_name="onnxruntime-linux-aarch64-${ort_version}"
-  archive="onnxruntime-linux-aarch64-${ort_version}.tgz"
   nuget_rid="linux-arm64"
   ;;
 *)
@@ -52,49 +50,23 @@ arm64)
   ;;
 esac
 
-# Fails only when GitHub cannot serve the archive; an unpinned or mismatched archive exits. ~keep
-download_ort_archive() {
-  local path="$1"
-  bash "$script_dir/verify-archive.sh" "$path" "$checksums" --known || exit 1
-  if ! curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$path" \
-    "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/$archive"; then
-    rm -f "$path"
-    echo "::warning::GitHub release download of $archive failed; using the NuGet package" >&2
-    return 1
-  fi
-  bash "$script_dir/verify-archive.sh" "$path" "$checksums" || exit 1
-}
-
-stage_from_nuget() {
-  bash "$script_dir/nuget-fallback.sh" "$ort_version" "$nuget_rid" "$1/$ort_dir_name" "$checksums"
+stage_runtime() {
+  bash "$script_dir/stage-runtime.sh" "$ort_version" "$nuget_rid" "$1/$ort_dir_name" "$checksums"
 }
 
 if [ "$verify_archive" = true ]; then
-  archive_path="$extract_dir/$archive"
-  if [ -f "$archive_path" ] && ! bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"; then
-    echo "Removing invalid cached ONNX Runtime archive: $archive" >&2
-    rm -f "$archive_path"
-  fi
-  if [ ! -f "$archive_path" ] && download_ort_archive "$RUNNER_TEMP/$archive"; then
-    mkdir -p "$extract_dir"
-    mv "$RUNNER_TEMP/$archive" "$archive_path"
-  fi
+  # The extracted-tree cache keeps no package to re-verify, so stage freshly verified bytes. ~keep
   extract_dir="$(mktemp -d "$RUNNER_TEMP/onnxruntime-verified.XXXXXX")"
-  if [ -f "$archive_path" ]; then
-    tar -xzf "$archive_path" -C "$extract_dir"
-  else
-    stage_from_nuget "$extract_dir"
-  fi
+  stage_runtime "$extract_dir" || {
+    status=$?
+    rm -rf "$extract_dir"
+    exit "$status"
+  }
 elif [ ! -d "$extract_dir/$ort_dir_name" ]; then
   echo "Cache miss: Downloading ONNX Runtime ${ort_version}"
-  if download_ort_archive "$RUNNER_TEMP/$archive"; then
-    mkdir -p "$extract_dir"
-    tar -xzf "$RUNNER_TEMP/$archive" -C "$extract_dir"
-  else
-    stage_from_nuget "$extract_dir"
-  fi
+  stage_runtime "$extract_dir"
 else
-  # The extracted-tree cache does not retain the archive for re-verification. ~keep
+  # The extracted-tree cache does not retain the package for re-verification. ~keep
   echo "Cache hit: Using cached ONNX Runtime ${ort_version}"
 fi
 

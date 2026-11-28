@@ -7,7 +7,7 @@ env:
   ITERATIONS: "1"
   ENABLE_PROFILING: "true"
   PROFILING_FIXTURES: "pdf_small,pdf_medium,docx_simple,html_simple,image_table,markdown_technical"
-  ORT_VERSION: "1.24.2"
+  ORT_VERSION: "1.32.0"
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "-g"

@@ -264,7 +264,7 @@ summary = "ONNX Runtime inference engine"
 
 [[component.texts]]
 name = "LICENSE"
-path = "scripts/ci/notices/vendored/onnxruntime/1.24.2/LICENSE"
+path = "scripts/ci/notices/vendored/onnxruntime/1.32.0/LICENSE"
 sha256 = "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
 
 [[component.pin]]
@@ -278,13 +278,13 @@ path = "scripts/ci/notices/vendored/onnxruntime/1.23.2/LICENSE"
 sha256 = "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
 
 [[component.pin]]
-version = "1.24.2"
-url = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg"
-sha256 = "782564d3d68e87269ea1812cc94710ad06fe014faf093f01a6f89d0bd58719d3"
+version = "1.32.0"
+url = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.32.0/microsoft.ml.onnxruntime.1.32.0.nupkg"
+sha256 = "a9150bc2992cbbb6722070da9910e1ffa989a8bfc67bdd5bb8e745ca755641db"
 
 [[component.pin.texts]]
 name = "LICENSE"
-path = "scripts/ci/notices/vendored/onnxruntime/1.24.2/LICENSE"
+path = "scripts/ci/notices/vendored/onnxruntime/1.32.0/LICENSE"
 sha256 = "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
 
 [[component]]

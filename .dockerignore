@@ -35,7 +35,7 @@
 !scripts/ci/verify_no_gpl_codecs.py
 !scripts/ci/actions/setup-onnx-runtime/checksums.sha256
 !scripts/ci/actions/setup-onnx-runtime/verify-archive.sh
-!scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh
+!scripts/ci/actions/setup-onnx-runtime/stage-runtime.sh
 !scripts/pdfium-runtime-checksums.sha256
 !scripts/ci/install-system-deps/build-ocr-linux.sh
 !scripts/ci/install-system-deps/verify-ocr-linux.py

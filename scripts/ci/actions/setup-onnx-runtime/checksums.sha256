@@ -1,14 +1,13 @@
-# Source: GitHub release asset digest fields, microsoft/onnxruntime v1.24.2.
-# https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.24.2
-43725474ba5663642e17684717946693850e2005efbd724ac72da278fead25e6  onnxruntime-linux-x64-1.24.2.tgz
-6715b3d19965a2a6981e78ed4ba24f17a8c30d2d26420dbed10aac7ceca0085e  onnxruntime-linux-aarch64-1.24.2.tgz
-0af4fa503e8ea285245b47ee42d0a7461b8156a81270857da0c1d4ecf858abde  onnxruntime-osx-arm64-1.24.2.tgz
-8e3e9c826375352e29cb2614fe44f3d7a4b0ff7b8028ad7a456af9d949a7e8b0  onnxruntime-win-x64-1.24.2.zip
-dd8180d98e5a0ead7ead99029acc80b86a8b905b9aba4cc978e388039bb5823b  onnxruntime-win-arm64-1.24.2.zip
-# Intel macOS uses the last published x86_64 archive.
-# https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.23.2
-d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6  onnxruntime-osx-x86_64-1.23.2.tgz
-# NuGet fallback when the GitHub release is unavailable: Microsoft.ML.OnnxRuntime packages.
-# https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/<version>/microsoft.ml.onnxruntime.<version>.nupkg
-782564d3d68e87269ea1812cc94710ad06fe014faf093f01a6f89d0bd58719d3  microsoft.ml.onnxruntime.1.24.2.nupkg
+# First source: Microsoft.ML.OnnxRuntime NuGet packages. Each digest is the SHA-256 of the package
+# whose SHA-512 matches packageHash in its NuGet catalog entry, reached from
+# https://api.nuget.org/v3/registration5-gz-semver2/microsoft.ml.onnxruntime/<version>.json
+a9150bc2992cbbb6722070da9910e1ffa989a8bfc67bdd5bb8e745ca755641db  microsoft.ml.onnxruntime.1.32.0.nupkg
+# Intel macOS uses the last release Microsoft published for x86_64 macOS.
 25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a  microsoft.ml.onnxruntime.1.23.2.nupkg
+# Fallback: onnxruntime PyPI wheels (Linux and macOS; the Windows wheels ship no import library).
+# Columns: digest, wheel, NuGet runtime identifier, file URL. Digests are digests.sha256 from
+# https://pypi.org/pypi/onnxruntime/<version>/json
+99e1074c4b2197accd5073052a465361be17b89c093b8ffb6e6bd8f986c52df8  onnxruntime-1.32.0-cp312-cp312-manylinux_2_28_x86_64.whl  linux-x64  https://files.pythonhosted.org/packages/a3/81/55845186c20cba59f614991f4065dea148e48eeb9749893768c85ce64327/onnxruntime-1.32.0-cp312-cp312-manylinux_2_28_x86_64.whl
+e36c187006e7a7c8b8d6d57f1a209dd63f52430dca6c282b177718ad6b841054  onnxruntime-1.32.0-cp312-cp312-manylinux_2_28_aarch64.whl  linux-arm64  https://files.pythonhosted.org/packages/4a/8f/1e43fb994513c7c7a9c6965272ef89d963c1bd4080993a6267bf913701d1/onnxruntime-1.32.0-cp312-cp312-manylinux_2_28_aarch64.whl
+d52510bbbcc880c13b826f7d75cdf33ac5cf0bb864d960000fc29ce73f0cb83e  onnxruntime-1.32.0-cp312-cp312-macosx_14_0_arm64.whl  osx-arm64  https://files.pythonhosted.org/packages/6f/a4/480cd367bc135dd9951c89d461cc6af6be9302cd2ce91e231f6cb0e7ee1b/onnxruntime-1.32.0-cp312-cp312-macosx_14_0_arm64.whl
+218295a8acae83905f6f1aed8cacb8e3eb3bd7513a13fe4ba3b2664a19fc4a6b  onnxruntime-1.23.2-cp312-cp312-macosx_13_0_x86_64.whl  osx-x64  https://files.pythonhosted.org/packages/91/9d/a81aafd899b900101988ead7fb14974c8a58695338ab6a0f3d6b0100f30b/onnxruntime-1.23.2-cp312-cp312-macosx_13_0_x86_64.whl

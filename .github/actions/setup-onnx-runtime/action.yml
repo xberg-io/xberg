@@ -4,9 +4,9 @@ inputs:
   ort-version:
     description: ONNX Runtime version to download
     required: false
-    default: "1.24.2"
+    default: "1.32.0"
   verify-linux-archive:
-    description: Verify a supported Linux archive against the committed checksum manifest before extraction
+    description: Stage freshly verified Linux bytes instead of reusing the extracted-tree cache
     required: false
     default: "false"
   dest-dir:
@@ -34,10 +34,10 @@ runs:
       with:
         path: |
           ${{ runner.temp }}/onnxruntime
-        key: onnx-v4-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-${{ inputs.ort-version }}
+        key: onnx-v5-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-${{ inputs.ort-version }}
         restore-keys: |
-          onnx-v4-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-
-          onnx-v4-${{ runner.os }}-
+          onnx-v5-${{ runner.os }}-${{ inputs.arch-id != '' && inputs.arch-id || runner.arch }}-
+          onnx-v5-${{ runner.os }}-
 
     - name: Prepare ONNX Runtime (Linux)
       if: runner.os == 'Linux'
