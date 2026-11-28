@@ -110,9 +110,7 @@ async fn fingerprint_with_reader(
             crate::ocr::tessdata_download::without_reading_packs(|| retry_and_tessdata_context(dependencies, cancel))
     {
         return match result {
-            Ok(Identified::Context(context)) => Ok(Some(context)),
-            Ok(Identified::Bypass) => Ok(None),
-            Ok(Identified::Unidentified) => Ok(unidentified_model()),
+            Ok(identified) => Ok(identified.into_context()),
             Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
             Err(error) => {
                 static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -130,7 +128,8 @@ async fn fingerprint_with_reader(
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
             check_cancelled(worker_cancel.as_ref())?;
             // Retry models can appear or change during extraction; check again before an outer write. ~keep
-            let Some(retry_context) = script_retry_cache_context(&dependencies, worker_cancel.as_ref())? else {
+            let Some(retry_context) = script_retry_cache_context(&dependencies, worker_cancel.as_ref())?.into_context()
+            else {
                 return Ok(None);
             };
             let mut context = if has_orientation_models {
@@ -168,10 +167,23 @@ async fn fingerprint_with_reader(
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 enum Identified {
     Context(String),
-    /// The script retry may read models the outer key cannot follow; nothing is cached.
+    /// The script retry may read models the outer key cannot follow (a wildcard list, Khmer);
+    /// nothing is cached.
     Bypass,
     /// A model file cannot be identified.
     Unidentified,
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+impl Identified {
+    /// The context, or nothing when the operation must not be cached.
+    fn into_context(self) -> Option<String> {
+        match self {
+            Self::Context(context) => Some(context),
+            Self::Bypass => None,
+            Self::Unidentified => unidentified_model(),
+        }
+    }
 }
 
 /// The context of requests with no orientation or PaddleOCR models: the script-retry context,
@@ -181,8 +193,9 @@ fn retry_and_tessdata_context(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
 ) -> crate::Result<Identified> {
-    let Some(mut context) = script_retry_cache_context(dependencies, cancel)? else {
-        return Ok(Identified::Bypass);
+    let mut context = match script_retry_cache_context(dependencies, cancel)? {
+        Identified::Context(context) => context,
+        other => return Ok(other),
     };
     let Some(tessdata) = tessdata_context(dependencies, cancel)? else {
         return Ok(Identified::Unidentified);
@@ -360,15 +373,19 @@ fn hash_tessdata_selection(
     }
 }
 
+/// The vertical Japanese and Han retry models of every request, as the outer key follows them.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn script_retry_cache_context(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
-) -> crate::Result<Option<String>> {
-    use crate::ocr::processor::{script_retry, validation::TessdataEnv};
+) -> crate::Result<Identified> {
+    use crate::ocr::processor::{
+        script_retry::{self, HanRetryModels},
+        validation::TessdataEnv,
+    };
 
     let mut checked = std::collections::HashSet::new();
-    let mut vertical = blake3::Hasher::new();
+    let mut retry = blake3::Hasher::new();
     for model in dependencies
         .iter()
         .filter_map(|dependency| dependency.script_retry.as_ref())
@@ -381,10 +398,10 @@ fn script_retry_cache_context(
         let languages = model.languages.join("+");
         let directory = model.directory.as_deref();
         if checked.len() > MAX_MODEL_SELECTIONS
-            || script_retry::requires_outer_cache_bypass(&languages, directory, &env)
+            || script_retry::requires_outer_cache_bypass(&languages)
             || (model.mixed_pdf_khmer && script_retry::requires_khmer_outer_cache_bypass(&languages, directory, &env))
         {
-            return Ok(None);
+            return Ok(Identified::Bypass);
         }
         let revision = if model.vertical_japanese_retry {
             script_retry::outer_vertical_model_fingerprint(&languages, directory, &env)?
@@ -392,16 +409,29 @@ fn script_retry_cache_context(
             None
         };
         if let Some(revision) = revision {
-            vertical.update(&[1]);
-            vertical.update(revision.as_bytes());
+            retry.update(&[1]);
+            retry.update(revision.as_bytes());
         } else {
-            vertical.update(&[0]);
+            retry.update(&[0]);
+        }
+        match script_retry::outer_han_retry_models(&languages, directory, &env) {
+            HanRetryModels::Absent => {
+                retry.update(&[0]);
+            }
+            HanRetryModels::Identified(identity) => {
+                retry.update(&[1]);
+                retry.update(identity.as_bytes());
+            }
+            HanRetryModels::Unidentified => return Ok(Identified::Unidentified),
         }
     }
     if checked.is_empty() {
-        return Ok(Some(String::new()));
+        return Ok(Identified::Context(String::new()));
     }
-    Ok(Some(format!(":script-retry-outer-v2:{}", vertical.finalize().to_hex())))
+    Ok(Identified::Context(format!(
+        ":script-retry-outer-v3:{}",
+        retry.finalize().to_hex()
+    )))
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -1209,6 +1239,44 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn han_retry_models_key_a_default_pdf_request_instead_of_bypassing_it() {
+        let models = tempfile::tempdir().unwrap();
+        let pack = |name: &str| models.path().join(format!("{name}.traineddata"));
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(pack(name), format!("{name} fixture")).unwrap();
+        }
+        let mut dependency = CacheDependency::for_config(&ExtractionConfig::default(), Some("application/pdf"));
+        assert!(
+            dependency.model.is_none() && dependency.script_retry.is_some(),
+            "a default PDF request may retry its script and reads no orientation model"
+        );
+        // ~keep The override is searched first, so the host's tessdata cannot serve the retry set.
+        if let Some(retry) = dependency.script_retry.as_mut() {
+            retry.directory = Some(models.path().into());
+        }
+        for selection in &mut dependency.tessdata {
+            selection.directory = Some(models.path().into());
+        }
+        let dependencies = [dependency];
+        let context = || fingerprint(&dependencies, None);
+
+        let present = context()
+            .await
+            .unwrap()
+            .expect("a complete Han retry set is keyed, not bypassed");
+        assert!(present.contains(":script-retry-outer-v3:"), "{present}");
+        assert_eq!(context().await.unwrap().as_deref(), Some(present.as_str()));
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(pack("chi_sim"), b"chi_sim fixture, replaced").unwrap();
+        let han_changed = context().await.unwrap().expect("a changed Han pack is keyed");
+        assert_ne!(han_changed, present);
+        std::fs::remove_file(pack("osd")).unwrap();
+        let without_osd = context().await.unwrap().expect("a missing OSD pack is keyed");
+        assert_ne!(without_osd, han_changed);
+        assert_ne!(without_osd, present);
+    }
+
     #[test]
     fn cancellation_while_queued_prevents_the_model_job_and_all_stream_reads() {
         use std::future::Future;
@@ -1350,10 +1418,16 @@ mod explicit_mode_tests {
         cache.set_default(legacy_key, legacy_result.clone(), None).unwrap();
 
         let han = root.path().join("chi_sim.traineddata");
-        for bytes in [b"han-v1", b"han-v2"] {
+        let missing_key = apply_context(Some(legacy_key.into()), &missing).expect("no retry set is keyed");
+        let mut keys = Vec::new();
+        for bytes in [b"han-v1".as_slice(), b"han-v2, longer"] {
             std::fs::write(&han, bytes).unwrap();
             super::super::cacheability::scope(async {
-                assert!(apply_context(Some("warm".into()), &context().await.unwrap()).is_none());
+                let key = apply_context(Some(legacy_key.into()), &context().await.unwrap())
+                    .expect("a complete retry set is keyed on its models");
+                assert_ne!(key, legacy_key);
+                assert_ne!(key, missing_key);
+                keys.push(key);
                 let plain_context = fingerprint(std::slice::from_ref(&plain), None).await.unwrap();
                 assert_eq!(
                     apply_context(Some("warm".into()), &plain_context).as_deref(),
@@ -1366,6 +1440,7 @@ mod explicit_mode_tests {
             })
             .await;
         }
+        assert_ne!(keys[0], keys[1], "the Han pack's bytes are part of the key");
 
         let mut no_retry = config.clone();
         no_retry.ocr.as_mut().unwrap().language = vec!["chi_sim".into()];

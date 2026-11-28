@@ -44,6 +44,9 @@ enum ModelObservation {
     Osd(PathBuf),
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     VerticalJapanese(Vec<String>),
+    /// The candidate directories and the `+`-joined list the Han retry reads with.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    HanRetry(Vec<String>, String),
 }
 
 #[derive(Default)]
@@ -311,6 +314,16 @@ pub(crate) fn observe_vertical_model(directories: &[String], revision: Option<bl
         context.observe_model(
             ModelObservation::VerticalJapanese(directories.to_vec()),
             revision.unwrap_or_else(|| blake3::hash(b"missing-vertical-japanese")),
+        );
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn observe_han_retry_models(directories: &[String], languages: &str, revision: Option<blake3::Hash>) {
+    if let Some(context) = current() {
+        context.observe_model(
+            ModelObservation::HanRetry(directories.to_vec(), languages.to_owned()),
+            revision.unwrap_or_else(|| blake3::hash(b"missing-han-retry")),
         );
     }
 }

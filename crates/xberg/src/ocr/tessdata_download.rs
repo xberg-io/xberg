@@ -359,6 +359,13 @@ pub(crate) fn must_not_read() -> bool {
     memo_only
 }
 
+/// Whether the [`without_reading_packs`] run on this thread has already missed the memo, so its
+/// answer will be discarded. False outside such a run. Lets a caller skip recording a side effect
+/// computed from a file it could not identify.
+pub(crate) fn memo_only_run_missed() -> bool {
+    MEMO_ONLY.with(std::cell::Cell::get) && MEMO_MISSED.with(std::cell::Cell::get)
+}
+
 /// The SHA-256 of the regular file at `path`: on Unix read once per (path, [`FileStamp`]) in this
 /// process, elsewhere read on every call, since a stamp there is only the size and modification
 /// time, which a replacement (`cp -p`, robocopy, an extracted archive) can keep.
