@@ -289,7 +289,7 @@ fn title_runs(row: &[&HocrWord], rows: &[Vec<&HocrWord>], index: usize, gap_limi
 
 /// A title reads as a name, not as values: a short run of words with real
 /// letters in it. Values, notes and body rows fail on one of the two.
-fn is_title_words(row: &[&HocrWord]) -> bool {
+pub(super) fn is_title_words(row: &[&HocrWord]) -> bool {
     if !(2..=TITLE_MAX_WORDS).contains(&row.len()) {
         return false;
     }
@@ -515,7 +515,7 @@ fn is_header_row(row: &[&HocrWord], gap_limit: u32) -> bool {
     labelled * 100 >= runs.len() * HEADER_MIN_LABEL_PERCENT
 }
 
-fn row_runs(row: &[&HocrWord], gap_limit: u32) -> Vec<(u32, u32)> {
+pub(super) fn row_runs(row: &[&HocrWord], gap_limit: u32) -> Vec<(u32, u32)> {
     let mut intervals: Vec<(u32, u32)> = row
         .iter()
         .map(|word| (word.left, word.left.saturating_add(word.width)))

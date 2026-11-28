@@ -22,6 +22,7 @@ use std::mem::size_of;
 use xberg_native_pdf::elements::{PathContent, PathOperation};
 
 mod definition_grid;
+mod leading_titles;
 mod open_columns;
 pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
@@ -1076,6 +1077,28 @@ pub(crate) fn extract_tables_heuristic(
     })
 }
 
+/// The regions with each leading title line taken out of its table, or `None` when no region
+/// has one.
+fn without_title_lines(
+    regions: &[Vec<crate::pdf::table_reconstruct::HocrWord>],
+    page_height: f32,
+) -> Option<Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>> {
+    let stripped: Vec<Option<Vec<crate::pdf::table_reconstruct::HocrWord>>> = regions
+        .iter()
+        .map(|region| leading_titles::without_leading_titles(region, page_height))
+        .collect();
+    if stripped.iter().all(Option::is_none) {
+        return None;
+    }
+    Some(
+        stripped
+            .into_iter()
+            .zip(regions)
+            .map(|(stripped, region)| stripped.unwrap_or_else(|| region.clone()))
+            .collect(),
+    )
+}
+
 /// A reconstructed table, its grid, and whether the definition-grid path produced it.
 type RegionTable = (Table, Option<crate::types::TableGrid>, bool);
 
@@ -1093,6 +1116,14 @@ fn reconstruct_page_region_tables(
     region_rules: &[usize],
     column_rules: &source_columns::PageRules<'_>,
 ) -> (Vec<RegionTable>, Vec<bool>) {
+    let trimmed: Vec<Vec<crate::pdf::table_reconstruct::HocrWord>>;
+    let regions = match without_title_lines(regions, page_height) {
+        Some(titled_out) => {
+            trimmed = titled_out;
+            &trimmed[..]
+        }
+        None => regions,
+    };
     let ruling_paths = column_rules.paths();
     let mut tables = Vec::new();
     let mut definition_tables = Vec::new();
