@@ -2587,9 +2587,9 @@ dependencies = [
 
 [[package]]
 name = "encodify"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e95d6e27686e1d6991a3077f4dbec9d33d18903466d234165ad86cd08c3ebc79"
+checksum = "ab7f638cb35e10aa08efd439d11ddcbeef7d52dd987c4956a6ff2cc1061020f3"
 dependencies = [
  "memchr",
  "simdutf8",
@@ -3469,9 +3469,9 @@ dependencies = [
 
 [[package]]
 name = "geo-types"
-version = "0.7.20"
+version = "0.7.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "777d18aa0f12f8b285331cd867133ee14422b3f023f6d388034c47d43e28786a"
+checksum = "c180387602f8ab649c98dd5e9540e42cdb40a62455fc4790f4d80e15d31daac5"
 dependencies = [
  "approx",
  "num-traits",
@@ -3696,9 +3696,9 @@ dependencies = [
 
 [[package]]
 name = "harfrust"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0690f8c81dfeca8987d8518cf1c861d7b58d43ad0cedae9184d41af236effb9c"
+checksum = "d29463af2039b1bd7ccf60cb9f11fafbfe14b18ab6fb1790dab57aba456e155f"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -4807,9 +4807,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.63.1"
+version = "0.63.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f048e101172edb2c5f0351d7e3bc3796ac89b7f150e64b0cbd20dd82215b2160"
+checksum = "b0802aebc749a4ef12e76aee083622b100249be0dc6d2103d84bbb2f7936a1ae"
 dependencies = [
  "ahash",
  "bytecount",
@@ -4838,18 +4838,18 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
-version = "0.63.1"
+version = "0.63.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3ef369677a99a8c7381196491eb4e0a718c337756cf82bdb91303933789f181"
+checksum = "ba1527289dfcb1400df61b5c591218e8e30031376671f611faecb5b9a1ff4987"
 dependencies = [
  "regex-syntax",
 ]
 
 [[package]]
 name = "jsonschema-value"
-version = "0.63.1"
+version = "0.63.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d698d83c2661d1e6f289b567a73e95d5549ec155775260e93165110a583296f4"
+checksum = "a95285ab129d630f01cf2f1345c28662116340fac1a35eb0795e5dbbf0ef990d"
 dependencies = [
  "ahash",
  "bytecount",
@@ -5250,9 +5250,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.19.1"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83be4da409554841af087163ad187608824ad8ca8713d8e124c8e0f704a2f92f"
+checksum = "d4e2a1b977b42ee8b53a2a4adbd1183431c493f1d1960b7ccd893e2f0b9407ba"
 dependencies = [
  "hashbrown 0.17.2",
 ]
@@ -5548,9 +5548,9 @@ dependencies = [
 
 [[package]]
 name = "model2vec-rs"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bc5d349da0f38c0289eb1a0bf97732b82855d7ce2d35001c18dad52df933e1d"
+checksum = "38960779ee134c9011df6201b4da7e8223aecff2b76b2cf47f40abaee933027d"
 dependencies = [
  "anyhow",
  "half",
@@ -5558,7 +5558,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokenizers 0.21.4",
- "unicode-normalization",
+ "unicode-normalization-alignments",
  "unicode_categories",
 ]
 
@@ -7288,9 +7288,9 @@ dependencies = [
 
 [[package]]
 name = "rangemap"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a611d15b50743feb4c76b7d03edcb0e64f399c26961e4efe6975bc398be6aa3d"
+checksum = "f2d43a8c8c74056248124068fde0df374d1ddf9039e747d190f01c36faeaab08"
 
 [[package]]
 name = "rapidhash"
@@ -7496,9 +7496,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.63.1"
+version = "0.63.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f768339da7ef756decd99f3c6ada0c0ffdc0a7522c37032916bed80db94d0b5c"
+checksum = "858eb92e3a3c1d120695a04d5c6e8861915ee4394b8f77c90adbf686d6ddbf6e"
 dependencies = [
  "ahash",
  "fluent-uri",
@@ -8476,12 +8476,9 @@ dependencies = [
 
 [[package]]
 name = "simd_helpers"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6"
-dependencies = [
- "quote",
-]
+checksum = "f48ea32978b7ad365bd1ecce83827746d5d50dc006a8c85112b7acc3c716e3e7"
 
 [[package]]
 name = "simdutf8"
@@ -11361,7 +11358,7 @@ dependencies = [
  "log",
  "lopdf 0.45.0",
  "lopdf 0.47.0",
- "lru 0.19.1",
+ "lru 0.19.2",
  "mail-parser",
  "mathemascii",
  "mel_spec",
