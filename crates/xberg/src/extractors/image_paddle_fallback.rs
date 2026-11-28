@@ -437,7 +437,8 @@ async fn retry_with(
         return Ok((primary, None));
     }
     let thresholds = original.effective_thresholds();
-    let span = tracing::debug_span!(target: "xberg::ocr", "xberg::ocr::paddle_fallback", adopted = tracing::field::Empty);
+    let span =
+        tracing::debug_span!(target: "xberg::ocr", "xberg::ocr::paddle_fallback", adopted = tracing::field::Empty);
     let (selected, adopted) = tracing::Instrument::instrument(
         read_if_better(
             cancel,
