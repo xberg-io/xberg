@@ -1353,6 +1353,13 @@ fn should_keep_xlsx_cell_guards_when_a_file_is_renamed_gh2296() {
 }
 
 fn xlsx_with_shared_strings(unique_count: usize, actual_strings: usize) -> Vec<u8> {
+    let items = "<si><t>x</t></si>".repeat(actual_strings);
+    xlsx_with_shared_strings_part(&format!(
+        r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" uniqueCount="{unique_count}">{items}</sst>"#
+    ))
+}
+
+fn xlsx_with_shared_strings_part(shared_strings_xml: &str) -> Vec<u8> {
     use std::io::Write;
     let original = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -1378,15 +1385,7 @@ fn xlsx_with_shared_strings(unique_count: usize, actual_strings: usize) -> Vec<u
     writer
         .start_file("xl/sharedStrings.xml", zip::write::SimpleFileOptions::default())
         .unwrap();
-    write!(
-        writer,
-        r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" uniqueCount="{unique_count}">"#
-    )
-    .unwrap();
-    for _ in 0..actual_strings {
-        write!(writer, "<si><t>x</t></si>").unwrap();
-    }
-    write!(writer, "</sst>").unwrap();
+    writer.write_all(shared_strings_xml.as_bytes()).unwrap();
     writer.finish().unwrap().into_inner()
 }
 
@@ -1477,6 +1476,21 @@ fn should_read_xlam_whose_shared_string_unique_count_overstates_the_entries_gh34
         workbook.sheets[0].table_cells.as_ref().unwrap(),
         &[vec!["x".to_string()]]
     );
+}
+
+#[test]
+fn should_charge_cdata_shared_string_text_to_the_content_budget_gh3443() {
+    let text = "y".repeat(4096);
+    let bytes = xlsx_with_shared_strings_part(&format!(
+        r#"<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" uniqueCount="1"><si><t><![CDATA[{text}]]></t></si></sst>"#
+    ));
+    let limits = SecurityLimits {
+        max_content_size: 1024,
+        ..Default::default()
+    };
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let error = super::table_budget::validate_xlsx_string_parts(&mut archive, &limits).unwrap_err();
+    assert!(error.to_string().contains("Content too large"), "{error}");
 }
 
 #[test]

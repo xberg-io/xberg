@@ -89,6 +89,9 @@ fn validate_strings(reader: impl std::io::BufRead, limits: &SecurityLimits) -> R
                 let text = quick_xml::escape::unescape(&escaped).map_err(xml_error)?;
                 budget.account_text(text.len())?;
             }
+            Event::CData(text) if string_depth > 0 => {
+                budget.account_text(text.xml10_content().len())?;
+            }
             Event::Eof => {
                 return Ok(declared.is_some_and(|declared| {
                     declared > count && account_capacity(declared, &mut capacity_bytes, &mut budget).is_err()
