@@ -125,7 +125,7 @@ use crate::types::{ExtractedDocument, FormatMetadata, Metadata, OcrElement, OcrE
 #[cfg(test)]
 use super::config::DEFAULT_RECOGNITION_BATCH_SIZE;
 use super::config::{MAX_RECOGNITION_BATCH_SIZE, MIN_RECOGNITION_BATCH_SIZE, PaddleInferenceBackend, PaddleOcrConfig};
-use super::model_manager::{ModelManager, ResolvedRecModel, SharedModelPaths};
+use super::model_manager::{ModelManager, ResolvedRecModel};
 use super::{is_language_supported, language_to_script_family, map_language_code};
 
 use xberg_paddle_ocr::PaddleOcrEngine;
@@ -221,7 +221,7 @@ pub(crate) fn clear_paddle_engine_caches() -> usize {
 struct PaddleModelContext {
     cache_dir: PathBuf,
     model_manager: ModelManager,
-    shared_paths: InitPool<SharedModelPaths>,
+    shared_paths: InitPool<SharedEngineModels>,
     engine_pool: InitPool<Arc<PaddleOcrEngine>>,
     doc_ori_detectors: BoundedInitPool<crate::doc_orientation::DocOrientationDetector>,
 }
@@ -367,6 +367,37 @@ fn classifier_pool_key(engine_key: String, angle_classifier: bool) -> String {
     }
 }
 
+/// The detection model every engine of a model version and tier loads, and the angle classifier
+/// when the reads of that pool entry run one. A read without angle classification never resolves
+/// the classifier, so it neither downloads nor hashes it.
+#[derive(Clone)]
+struct SharedEngineModels {
+    det_model: PathBuf,
+    cls_model: Option<PathBuf>,
+}
+
+/// The pool key of the shared models a read resolves.
+fn shared_models_key(config: &PaddleOcrConfig, angle_classifier: bool) -> String {
+    let key = format!("{}/{}", config.model_version, config.model_tier);
+    if angle_classifier { key + "/cls" } else { key }
+}
+
+/// Resolves the shared models of one read, asking for the classifier only when it runs.
+fn resolve_shared_models(
+    angle_classifier: bool,
+    ensure_det_model: impl FnOnce() -> Result<PathBuf>,
+    ensure_cls_model: impl FnOnce() -> Result<PathBuf>,
+) -> Result<SharedEngineModels> {
+    Ok(SharedEngineModels {
+        det_model: ensure_det_model()?,
+        cls_model: if angle_classifier {
+            Some(ensure_cls_model()?)
+        } else {
+            None
+        },
+    })
+}
+
 /// The model files one engine loads. `cls_model` is `None` for an engine whose reads skip angle
 /// classification, which then loads no textline-orientation classifier.
 struct EngineModels<'a> {
@@ -389,6 +420,35 @@ fn confirm_models_unchanged(loaded: &[VerifiedSnapshot]) -> Result<()> {
     }
 }
 
+/// Confirms the models an engine just loaded are the verified ones. When one changed, the shared
+/// paths cached under `shared_key` are forgotten: they would fail the same way on every retry,
+/// where a fresh resolution re-hashes the changed file and downloads it again if it is bad.
+fn confirm_models_or_forget_shared(
+    loaded: &[VerifiedSnapshot],
+    shared_paths: &InitPool<SharedEngineModels>,
+    shared_key: &str,
+) -> Result<()> {
+    let outcome = confirm_models_unchanged(loaded);
+    if outcome.is_err() {
+        shared_paths
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(shared_key);
+    }
+    outcome
+}
+
+/// A snapshot of a model file for the load check: the file's verification record, or a fresh
+/// hash against its pinned checksum when it has none.
+fn snapshot_verified_model(path: &Path) -> Result<VerifiedSnapshot> {
+    let expected = ModelManager::pinned_sha256(path).ok_or_else(|| crate::XbergError::Ocr {
+        message: format!("PaddleOCR model {} has no pinned checksum", path.display()),
+        source: None,
+    })?;
+    VerifiedSnapshot::take_verified(path, &expected, &path.display().to_string())
+        .map_err(|message| crate::XbergError::Ocr { message, source: None })
+}
+
 /// The engine a read uses: its pool key and the models it loads, both decided by the read's
 /// `use_angle_cls`, so the classifier is loaded exactly for the engines whose key says so.
 struct EnginePlan {
@@ -405,10 +465,10 @@ impl EnginePlan {
         }
     }
 
-    fn models<'a>(&self, shared: &'a SharedModelPaths, rec: &'a ResolvedRecModel) -> EngineModels<'a> {
+    fn models<'a>(&self, shared: &'a SharedEngineModels, rec: &'a ResolvedRecModel) -> EngineModels<'a> {
         EngineModels {
             det_model: &shared.det_model,
-            cls_model: self.angle_classifier.then_some(shared.cls_model.as_path()),
+            cls_model: shared.cls_model.as_deref().filter(|_| self.angle_classifier),
             rec,
         }
     }
@@ -841,24 +901,31 @@ impl PaddleOcrBackend {
         request_accel.cloned().or_else(|| self.acceleration.clone())
     }
 
-    /// Get or initialize shared model paths (det + cls) for the given config's
-    /// version and tier.
+    /// Get or initialize the shared model paths for the given config's version and tier: the
+    /// detector, and the angle classifier only when the read runs it.
     ///
-    /// Keyed by `"{model_version}/{model_tier}"` so a per-request override
-    /// (`OcrConfig.paddle_ocr_config`) resolves a detection model matching its
-    /// recognition model rather than the backend default (issue #1279).
+    /// Keyed by `"{model_version}/{model_tier}"` (plus `/cls` for reads with angle classification)
+    /// so a per-request override (`OcrConfig.paddle_ocr_config`) resolves a detection model
+    /// matching its recognition model rather than the backend default (issue #1279).
     fn get_or_init_shared_paths(
         model_manager: &ModelManager,
-        shared_paths: &InitPool<SharedModelPaths>,
+        shared_paths: &InitPool<SharedEngineModels>,
         config: &PaddleOcrConfig,
-    ) -> Result<SharedModelPaths> {
-        let key = format!("{}/{}", config.model_version, config.model_tier);
+        angle_classifier: bool,
+    ) -> Result<SharedEngineModels> {
+        let key = shared_models_key(config, angle_classifier);
         let init_cell = init_cell_for_key(shared_paths, &key).map_err(|error| crate::XbergError::Plugin {
             message: format!("Failed to acquire shared paths lock: {error}"),
             plugin_name: "paddle-ocr".to_string(),
         })?;
         init_cell
-            .get_or_try_init(|| model_manager.ensure_shared_models_versioned(&config.model_version, &config.model_tier))
+            .get_or_try_init(|| {
+                resolve_shared_models(
+                    angle_classifier,
+                    || model_manager.ensure_det_model_versioned(&config.model_version, &config.model_tier),
+                    || model_manager.ensure_v2_cls_model(),
+                )
+            })
             .cloned()
     }
 
@@ -900,7 +967,7 @@ impl PaddleOcrBackend {
 
     fn get_or_init_engine_for_family_blocking(
         model_manager: &ModelManager,
-        shared_paths: &InitPool<SharedModelPaths>,
+        shared_paths: &InitPool<SharedEngineModels>,
         engine_pool: &InitPool<Arc<PaddleOcrEngine>>,
         family: &str,
         config: &PaddleOcrConfig,
@@ -921,10 +988,15 @@ impl PaddleOcrBackend {
             plugin_name: "paddle-ocr".to_string(),
         })?;
         let engine = init_cell.get_or_try_init(|| -> Result<Arc<PaddleOcrEngine>> {
-            let shared = Self::get_or_init_shared_paths(model_manager, shared_paths, config)?;
+            let shared = Self::get_or_init_shared_paths(model_manager, shared_paths, config, plan.angle_classifier)?;
             #[cfg(feature = "paddle-ocr-ort")]
             let _options_guard = PaddleOptionsGuard::set(options);
-            Self::initialize_engine(family, tier, plan.models(&shared, &resolved), accel.cloned(), backend)
+            let (engine, loaded) =
+                Self::initialize_engine(family, tier, plan.models(&shared, &resolved), accel.cloned(), backend)?;
+            // The engines open the model files by path, after the checksum was verified.
+            confirm_models_or_forget_shared(&loaded, shared_paths, &shared_models_key(config, plan.angle_classifier))?;
+            tracing::info!(family, model_key = %resolved.model_key, "PaddleOCR engine initialized successfully");
+            Ok(engine)
         })?;
 
         Ok(Arc::clone(engine))
@@ -975,7 +1047,7 @@ impl PaddleOcrBackend {
         models: EngineModels<'_>,
         accel: Option<crate::core::config::acceleration::AccelerationConfig>,
         backend: PaddleInferenceBackend,
-    ) -> Result<Arc<PaddleOcrEngine>> {
+    ) -> Result<(Arc<PaddleOcrEngine>, Vec<VerifiedSnapshot>)> {
         let resolved = models.rec;
         tracing::info!(
             family,
@@ -998,8 +1070,8 @@ impl PaddleOcrBackend {
         ]
         .into_iter()
         .flatten()
-        .map(VerifiedSnapshot::take)
-        .collect();
+        .map(snapshot_verified_model)
+        .collect::<Result<_>>()?;
         let det_model_path = det_model_path.to_str().ok_or_else(|| crate::XbergError::Ocr {
             message: "Invalid detection model path".to_string(),
             source: None,
@@ -1070,11 +1142,7 @@ impl PaddleOcrBackend {
             }
         }
 
-        // The engines open the model files by path, after the checksum was verified.
-        confirm_models_unchanged(&loading)?;
-
-        tracing::info!(family, model_key = %resolved.model_key, "PaddleOCR engine initialized successfully");
-        Ok(Arc::new(ocr_engine))
+        Ok((Arc::new(ocr_engine), loading))
     }
 
     /// Load models onto the native ONNX Runtime backend, applying the acceleration/EP
@@ -2739,9 +2807,9 @@ mod tests {
 
     #[test]
     fn an_engine_loads_the_angle_classifier_exactly_when_its_pool_key_says_so() {
-        let shared = SharedModelPaths {
+        let shared = SharedEngineModels {
             det_model: PathBuf::from("det/model.onnx"),
-            cls_model: PathBuf::from("cls/model.onnx"),
+            cls_model: Some(PathBuf::from("cls/model.onnx")),
         };
         let rec = ResolvedRecModel {
             model_dir: PathBuf::from("rec/model.onnx"),
@@ -2770,24 +2838,119 @@ mod tests {
         assert_eq!(classified_models.det_model, Path::new("det/model.onnx"));
     }
 
+    fn sha256_hex(payload: &[u8]) -> String {
+        hex::encode(<sha2::Sha256 as sha2::Digest>::digest(payload))
+    }
+
+    /// Writes and verifies a det and a rec model, returning their paths and a loader that
+    /// snapshots both.
+    fn verified_models(dir: &Path) -> (PathBuf, PathBuf) {
+        let det = dir.join("det.onnx");
+        let rec = dir.join("rec.onnx");
+        for (path, payload) in [(&det, b"det weights".as_slice()), (&rec, b"rec weights".as_slice())] {
+            std::fs::write(path, payload).unwrap();
+            crate::model_download::verify_sha256(path, &sha256_hex(payload), "model").unwrap();
+        }
+        (det, rec)
+    }
+
+    fn loading(det: &Path, rec: &Path) -> [VerifiedSnapshot; 2] {
+        [
+            VerifiedSnapshot::take_verified(det, &sha256_hex(b"det weights"), "det").unwrap(),
+            VerifiedSnapshot::take_verified(rec, &sha256_hex(b"rec weights"), "rec").unwrap(),
+        ]
+    }
+
     #[test]
     fn a_model_changed_after_verification_fails_engine_initialization() {
         let dir = tempfile::tempdir().unwrap();
-        let det = dir.path().join("det.onnx");
-        let rec = dir.path().join("rec.onnx");
-        for (path, payload) in [(&det, b"det weights".as_slice()), (&rec, b"rec weights".as_slice())] {
-            std::fs::write(path, payload).unwrap();
-            let sha256 = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(payload));
-            crate::model_download::verify_sha256(path, &sha256, "model").unwrap();
-        }
-        let loading = || [VerifiedSnapshot::take(&det), VerifiedSnapshot::take(&rec)];
-        confirm_models_unchanged(&loading()).expect("unchanged models pass");
+        let (det, rec) = verified_models(dir.path());
+        confirm_models_unchanged(&loading(&det, &rec)).expect("unchanged models pass");
 
         std::fs::write(&rec, b"tampered rec weights").unwrap();
 
-        let error = confirm_models_unchanged(&loading()).unwrap_err().to_string();
+        let error = confirm_models_unchanged(&loading(&det, &rec)).unwrap_err().to_string();
         assert!(error.contains("changed while it was loaded"), "{error}");
         assert!(error.contains("rec.onnx"), "{error}");
+    }
+
+    fn pool_holding(key: &str) -> InitPool<SharedEngineModels> {
+        let pool: InitPool<SharedEngineModels> = Mutex::new(AHashMap::new());
+        let cell = init_cell_for_key(&pool, key).unwrap();
+        cell.set(SharedEngineModels {
+            det_model: PathBuf::from("det/model.onnx"),
+            cls_model: None,
+        })
+        .ok()
+        .expect("fresh cell");
+        pool
+    }
+
+    #[test]
+    fn a_changed_shared_model_is_forgotten_so_the_next_start_resolves_it_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let (det, rec) = verified_models(dir.path());
+        let pool = pool_holding("v6/small");
+        let other = init_cell_for_key(&pool, "v6/medium").unwrap();
+
+        confirm_models_or_forget_shared(&loading(&det, &rec), &pool, "v6/small").expect("unchanged models pass");
+        assert_eq!(
+            pool.lock().unwrap().len(),
+            2,
+            "an unchanged load keeps the cached paths"
+        );
+
+        std::fs::write(&det, b"tampered det weights").unwrap();
+        let error = confirm_models_or_forget_shared(&loading(&det, &rec), &pool, "v6/small").unwrap_err();
+
+        assert!(error.to_string().contains("changed while it was loaded"), "{error}");
+        let pool = pool.lock().unwrap();
+        assert!(!pool.contains_key("v6/small"), "the cached paths are evicted");
+        assert!(pool.get("v6/medium").is_some_and(|cell| Arc::ptr_eq(cell, &other)));
+    }
+
+    #[test]
+    fn an_engine_start_resolves_the_classifier_only_for_reads_that_run_it() {
+        let det = || Ok(PathBuf::from("det/model.onnx"));
+        let unexpected_cls =
+            || -> Result<PathBuf> { panic!("a read without angle classification resolved the classifier") };
+
+        let plain = resolve_shared_models(false, det, unexpected_cls).unwrap();
+        assert_eq!(plain.det_model, Path::new("det/model.onnx"));
+        assert_eq!(plain.cls_model, None);
+
+        let classified = resolve_shared_models(true, det, || Ok(PathBuf::from("cls/model.onnx"))).unwrap();
+        assert_eq!(classified.cls_model.as_deref(), Some(Path::new("cls/model.onnx")));
+
+        let config = PaddleOcrConfig {
+            model_version: "pp-ocrv6".to_string(),
+            model_tier: "small".to_string(),
+            ..PaddleOcrConfig::default()
+        };
+        assert_eq!(shared_models_key(&config, false), "pp-ocrv6/small");
+        assert_eq!(shared_models_key(&config, true), "pp-ocrv6/small/cls");
+    }
+
+    #[test]
+    fn a_model_without_a_verification_record_is_hashed_before_the_engine_loads_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v6/rec/small/dict.txt");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"not the pinned dictionary").unwrap();
+
+        let error = snapshot_verified_model(&path)
+            .err()
+            .expect("a mismatching file is refused")
+            .to_string();
+        assert!(error.contains("Checksum mismatch"), "{error}");
+
+        let unpinned = dir.path().join("unpinned.onnx");
+        std::fs::write(&unpinned, b"weights").unwrap();
+        let error = snapshot_verified_model(&unpinned)
+            .err()
+            .expect("an unpinned file is refused")
+            .to_string();
+        assert!(error.contains("no pinned checksum"), "{error}");
     }
 
     #[cfg(feature = "paddle-ocr-ort")]

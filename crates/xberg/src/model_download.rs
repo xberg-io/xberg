@@ -1332,10 +1332,28 @@ impl VerifiedStamp {
         cfg!(unix) && self.settled()
     }
 
-    /// Whether the modification time is at least [`VERIFIED_STAMP_SETTLE`] in the past, so a
-    /// later write in place cannot land in the same timestamp tick and keep the stamp.
+    /// Whether the modification time, and on Unix the change time, are at least
+    /// [`VERIFIED_STAMP_SETTLE`] in the past, so a later write in place cannot land in the same
+    /// timestamp tick and keep the stamp. The change time is what a restored modification time
+    /// cannot hide, so it must have settled too.
     fn settled(&self) -> bool {
-        self.modified.elapsed().is_ok_and(|age| age >= VERIFIED_STAMP_SETTLE)
+        self.modified.elapsed().is_ok_and(|age| age >= VERIFIED_STAMP_SETTLE) && self.change_settled()
+    }
+
+    #[cfg(unix)]
+    fn change_settled(&self) -> bool {
+        let (seconds, nanos) = self.changed;
+        let (Ok(seconds), Ok(nanos)) = (u64::try_from(seconds), u32::try_from(nanos)) else {
+            return false;
+        };
+        std::time::UNIX_EPOCH
+            .checked_add(Duration::new(seconds, nanos))
+            .is_some_and(|changed| changed.elapsed().is_ok_and(|age| age >= VERIFIED_STAMP_SETTLE))
+    }
+
+    #[cfg(not(unix))]
+    fn change_settled(&self) -> bool {
+        true
     }
 }
 
@@ -1398,8 +1416,8 @@ fn insert_verified(files: &mut std::collections::HashMap<PathBuf, Verified>, pat
 /// The stamp recorded at verification exposes a change at any point since: on Unix through the
 /// device, inode and change time, elsewhere through size and modification time only, which a
 /// same-size rewrite restoring the modification time keeps. A file with no record (never
-/// verified, or forgotten when the memo was cleared) is stamped as it is now, which covers the
-/// load alone.
+/// verified, or forgotten when the memo was cleared) is hashed again by
+/// [`VerifiedSnapshot::take_verified`] and fails the load if that leaves no record.
 #[cfg(model_download)]
 #[cfg_attr(not(paddle_ocr), allow(dead_code))]
 pub(crate) struct VerifiedSnapshot {
@@ -1410,17 +1428,29 @@ pub(crate) struct VerifiedSnapshot {
 #[cfg(model_download)]
 #[cfg_attr(not(paddle_ocr), allow(dead_code))]
 impl VerifiedSnapshot {
-    pub(crate) fn take(path: &Path) -> Self {
-        let recorded = VERIFIED_FILES
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(path)
-            .map(|verified| verified.stamp.clone());
-        let stamp = recorded.or_else(|| current_stamp(path));
-        Self {
+    /// The stamp [`verify_sha256`] recorded for `path`; a file with no record is hashed against
+    /// `expected` first. A file that cannot be hashed to `expected` is an error, and one that
+    /// changed while it was hashed (or that has no checksum to hash against) keeps no record, so
+    /// its snapshot fails [`Self::unchanged_since_verified`].
+    pub(crate) fn take_verified(path: &Path, expected: &str, label: &str) -> Result<Self, String> {
+        let recorded = || {
+            VERIFIED_FILES
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(path)
+                .map(|verified| verified.stamp.clone())
+        };
+        let stamp = match recorded() {
+            Some(stamp) => Some(stamp),
+            None => {
+                verify_sha256(path, expected, label)?;
+                recorded()
+            }
+        };
+        Ok(Self {
             path: path.to_path_buf(),
             stamp,
-        }
+        })
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -1577,12 +1607,23 @@ mod verified_memo_tests {
         hex::encode(Sha256::digest(payload))
     }
 
+    fn snapshot(path: &Path, payload: &[u8]) -> VerifiedSnapshot {
+        VerifiedSnapshot::take_verified(path, &sha256(payload), "model").unwrap()
+    }
+
     fn hashed() -> usize {
         HASHED_FILES.with(std::cell::Cell::get)
     }
 
-    /// Writes `payload` with a modification time `age` in the past.
+    /// Writes `payload` with a modification time `age` in the past, then waits out the settle
+    /// time, since the change time of the write cannot be backdated.
     fn write_aged(path: &Path, payload: &[u8], age: Duration) {
+        write_unsettled(path, payload, age);
+        std::thread::sleep(VERIFIED_STAMP_SETTLE + Duration::from_millis(100));
+    }
+
+    /// As [`write_aged`], without waiting: the change time is that of the write.
+    fn write_unsettled(path: &Path, payload: &[u8], age: Duration) {
         std::fs::write(path, payload).unwrap();
         std::fs::File::options()
             .write(true)
@@ -1776,7 +1817,7 @@ mod verified_memo_tests {
         write_aged(&path, b"weights", HOUR);
         verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
 
-        assert!(VerifiedSnapshot::take(&path).unchanged_since_verified());
+        assert!(snapshot(&path, b"weights").unchanged_since_verified());
     }
 
     #[test]
@@ -1786,7 +1827,7 @@ mod verified_memo_tests {
         std::fs::write(&path, b"weights").unwrap();
         verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
 
-        assert!(VerifiedSnapshot::take(&path).unchanged_since_verified());
+        assert!(snapshot(&path, b"weights").unchanged_since_verified());
     }
 
     #[test]
@@ -1797,7 +1838,7 @@ mod verified_memo_tests {
         verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
 
         write_aged(&path, b"other weights", HOUR);
-        let snapshot = VerifiedSnapshot::take(&path);
+        let snapshot = snapshot(&path, b"weights");
 
         assert!(!snapshot.unchanged_since_verified());
     }
@@ -1808,7 +1849,7 @@ mod verified_memo_tests {
         let path = dir.path().join("model.onnx");
         write_aged(&path, b"weights", HOUR);
         verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
-        let snapshot = VerifiedSnapshot::take(&path);
+        let snapshot = snapshot(&path, b"weights");
 
         write_aged(&path, b"other weights", HOUR);
 
@@ -1823,7 +1864,7 @@ mod verified_memo_tests {
         write_aged(&path, b"verified weights", HOUR);
         let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
         verify_sha256(&path, &sha256(b"verified weights"), "model").unwrap();
-        let snapshot = VerifiedSnapshot::take(&path);
+        let snapshot = snapshot(&path, b"verified weights");
 
         let sibling = dir.path().join("model.onnx.partial");
         std::fs::write(&sibling, b"tampered weights").unwrap();
@@ -1839,14 +1880,40 @@ mod verified_memo_tests {
     }
 
     #[test]
-    fn an_unrecorded_file_is_checked_from_when_its_load_began() {
+    fn an_unrecorded_file_is_hashed_before_its_load_and_then_checked() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("model.onnx");
         write_aged(&path, b"weights", HOUR);
-        let snapshot = VerifiedSnapshot::take(&path);
-        assert!(snapshot.unchanged_since_verified());
+        let before = hashed();
 
+        let snapshot = snapshot(&path, b"weights");
+
+        assert_eq!(hashed() - before, 1, "no record, so the file was hashed");
+        assert!(snapshot.unchanged_since_verified());
         write_aged(&path, b"other weights", HOUR);
+        assert!(!snapshot.unchanged_since_verified());
+    }
+
+    #[test]
+    fn an_unrecorded_file_of_the_wrong_checksum_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"tampered weights", HOUR);
+
+        let error = VerifiedSnapshot::take_verified(&path, &sha256(b"weights"), "model")
+            .err()
+            .expect("a file that does not hash to the checksum is refused");
+
+        assert!(error.contains("Checksum mismatch"), "{error}");
+    }
+
+    #[test]
+    fn an_unrecorded_file_with_no_checksum_to_hash_against_fails_the_load_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        write_aged(&path, b"weights", HOUR);
+
+        let snapshot = VerifiedSnapshot::take_verified(&path, "", "model").unwrap();
 
         assert!(!snapshot.unchanged_since_verified());
     }
@@ -1856,7 +1923,22 @@ mod verified_memo_tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("model.onnx");
 
-        assert!(!VerifiedSnapshot::take(&path).unchanged_since_verified());
+        assert!(VerifiedSnapshot::take_verified(&path, &sha256(b"weights"), "model").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_whose_change_time_is_recent_is_hashed_every_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.onnx");
+        // The modification time is old, but the write just changed the file.
+        write_unsettled(&path, b"weights", HOUR);
+        let before = hashed();
+
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+        verify_sha256(&path, &sha256(b"weights"), "model").unwrap();
+
+        assert_eq!(hashed() - before, 2);
     }
 
     #[cfg(not(unix))]
