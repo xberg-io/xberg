@@ -3,6 +3,7 @@
 //! Parses page size, margins, orientation, columns, and other
 //! section-level properties from OOXML documents.
 
+use super::parser::HeaderFooterType;
 #[cfg(test)]
 use crate::extraction::ooxml_constants::WORDPROCESSINGML_NAMESPACE;
 use crate::extractors::security::{SecurityBudget, SecurityError};
@@ -87,6 +88,12 @@ pub struct SectionProperties {
     pub columns: ColumnLayout,
     /// Document grid line pitch in twips (from `w:docGrid w:linePitch`).
     pub doc_grid_line_pitch: Option<i32>,
+    /// `w:headerReference` entries: the page set each covers and the relationship id of its part.
+    pub header_refs: Vec<(HeaderFooterType, String)>,
+    /// `w:footerReference` entries, shaped like `header_refs`.
+    pub footer_refs: Vec<(HeaderFooterType, String)>,
+    /// `w:titlePg`: the section's first page uses its first-page header and footer.
+    pub title_page: bool,
 }
 
 /// Get a namespaced integer attribute.
@@ -102,6 +109,28 @@ fn get_w_attr_i32(element: &BytesStart, local_name: &str) -> Option<i32> {
         }
     }
     None
+}
+
+/// The unescaped value of the attribute spelled exactly `key`. Namespace prefixes are canonical by
+/// now, so an unrelated `x:id` or `x:type` is not mistaken for `r:id` or `w:type`.
+fn exact_attr(element: &BytesStart, key: &str) -> Option<String> {
+    element
+        .attributes()
+        .flatten()
+        .find(|attr| attr.key.as_ref() == key)
+        .map(|attr| unescape_attribute(&attr.value))
+}
+
+/// An attribute value with its XML escapes resolved, so `rId&#49;` equals `rId1`.
+pub(crate) fn unescape_attribute(value: &str) -> String {
+    quick_xml::escape::unescape(value).map_or_else(|_| value.to_string(), std::borrow::Cow::into_owned)
+}
+
+/// Whether an on/off element is enabled: present without `w:val`, or with a true value.
+fn on_off_attr_enabled(element: &BytesStart) -> bool {
+    !element.attributes().flatten().any(|attr| {
+        attr.key.as_ref() == "w:val" && matches!(unescape_attribute(&attr.value).as_str(), "0" | "false" | "off")
+    })
 }
 
 /// Get a namespaced string attribute.
@@ -195,20 +224,30 @@ pub(crate) fn parse_section_properties_streaming(
 ) -> Result<SectionProperties, SecurityError> {
     let mut props = SectionProperties::default();
     let mut buf = Vec::new();
+    // `w:sectPrChange` wraps the section's previous `w:sectPr`; none of it describes the section as it is now.
+    let mut change_depth: usize = 0;
 
     loop {
         budget.step()?;
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 budget.enter()?;
-                apply_section_element(e, &mut props);
+                if e.name().as_ref() == "w:sectPrChange" {
+                    change_depth += 1;
+                } else if change_depth == 0 {
+                    apply_section_element(e, &mut props);
+                }
             }
             Ok(Event::Empty(ref e)) => {
-                apply_section_element(e, &mut props);
+                if change_depth == 0 {
+                    apply_section_element(e, &mut props);
+                }
             }
             Ok(Event::End(ref e)) => {
                 budget.leave();
-                if e.name().as_ref() == "w:sectPr" {
+                if e.name().as_ref() == "w:sectPrChange" {
+                    change_depth = change_depth.saturating_sub(1);
+                } else if e.name().as_ref() == "w:sectPr" && change_depth == 0 {
                     break;
                 }
             }
@@ -260,6 +299,24 @@ fn apply_section_element(e: &BytesStart, props: &mut SectionProperties) {
         }
         "w:docGrid" => {
             props.doc_grid_line_pitch = get_w_attr_i32(e, "linePitch");
+        }
+        "w:headerReference" | "w:footerReference" => {
+            if let Some(id) = exact_attr(e, "r:id") {
+                let kind = match exact_attr(e, "w:type").as_deref() {
+                    Some("first") => HeaderFooterType::First,
+                    Some("even") => HeaderFooterType::Even,
+                    _ => HeaderFooterType::Default,
+                };
+                let refs = if e.name().as_ref() == "w:headerReference" {
+                    &mut props.header_refs
+                } else {
+                    &mut props.footer_refs
+                };
+                refs.push((kind, id));
+            }
+        }
+        "w:titlePg" => {
+            props.title_page = on_off_attr_enabled(e);
         }
         _ => {}
     }
