@@ -57,9 +57,13 @@ fn format_sections(code: &str) -> Vec<FormatSection> {
                     if content.chars().all(|c| matches!(c, 'h' | 'H' | 'm' | 'M' | 's' | 'S')) {
                         // Elapsed-time tokens such as [h] or [mm] are always time components, unlike colors and
                         // locales, and [mm] must not be read as a month.
-                        section
-                            .text
-                            .push(if content.starts_with(['h', 'H']) { 'H' } else { 'T' });
+                        // H, T and U mark elapsed hours, minutes and seconds; only H and U give an adjacent mm
+                        // its minute meaning.
+                        section.text.push(match content.to_ascii_lowercase().chars().next() {
+                            Some('h') => 'H',
+                            Some('s') => 'U',
+                            _ => 'T',
+                        });
                     }
                     bracket = None;
                 }
@@ -123,7 +127,7 @@ pub(super) fn is_time_only_format(code: &str, format_id: Option<u32>) -> bool {
     let meridiem = text.contains("AM/PM") || text.contains("A/P");
     let letters = text.replace("AM/PM", "").replace("A/P", "");
     let date = letters.contains(['D', 'Y']) || has_month_token(&letters);
-    let time = letters.contains(['H', 'S', 'T']) || meridiem;
+    let time = letters.contains(['H', 'S', 'T', 'U']) || meridiem;
     time && !date
 }
 
@@ -142,7 +146,7 @@ fn has_month_token(text: &str) -> bool {
         }
         let minute_width = index - start <= 2;
         let after_hour = start > 0 && letters[start - 1] == 'H';
-        let before_second = letters.get(index) == Some(&'S');
+        let before_second = matches!(letters.get(index), Some('S' | 'U'));
         if !(minute_width && (after_hour || before_second)) {
             return true;
         }
