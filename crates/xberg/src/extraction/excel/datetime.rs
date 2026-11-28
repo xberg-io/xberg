@@ -59,7 +59,7 @@ fn format_sections(code: &str) -> Vec<FormatSection> {
                         // locales, and [mm] must not be read as a month.
                         section
                             .text
-                            .push(if content.starts_with(['h', 'H']) { 'H' } else { 'S' });
+                            .push(if content.starts_with(['h', 'H']) { 'H' } else { 'T' });
                     }
                     bracket = None;
                 }
@@ -123,7 +123,7 @@ pub(super) fn is_time_only_format(code: &str, format_id: Option<u32>) -> bool {
     let meridiem = text.contains("AM/PM") || text.contains("A/P");
     let letters = text.replace("AM/PM", "").replace("A/P", "");
     let date = letters.contains(['D', 'Y']) || has_month_token(&letters);
-    let time = letters.contains(['H', 'S']) || meridiem;
+    let time = letters.contains(['H', 'S', 'T']) || meridiem;
     time && !date
 }
 
