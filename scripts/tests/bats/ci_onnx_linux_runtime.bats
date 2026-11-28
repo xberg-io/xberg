@@ -23,11 +23,11 @@ assert action.count("id: cache-onnx") == 1
 block = action.split("id: cache-onnx", 1)[1].split("\n    - name:", 1)[0]
 key = re.findall(r"(?m)^\s+key: (onnx-v\d+-)", block)
 restores = re.findall(r"(?m)^\s+(onnx-v\d+-)", block.split("restore-keys: |", 1)[1])
-assert key == ["onnx-v4-"] and restores == ["onnx-v4-", "onnx-v4-"], (key, restores)
+assert key == ["onnx-v5-"] and restores == ["onnx-v5-", "onnx-v5-"], (key, restores)
 PYTHON
 }
 
-@test "ORT setup should pin the release archives selected by action callers" {
+@test "ORT setup should pin a NuGet package and a PyPI wheel for every runtime callers select" {
 	python3 - "$REPOSITORY_ROOT" <<'PYTHON'
 from collections import Counter
 from pathlib import Path
@@ -42,6 +42,7 @@ default, = re.findall(r'(?m)^  ort-version:\n(?:    [^\n]*\n)*?    default: "([^
 intel, = re.findall(r'(?m)^  ort_version="([^"]+)"$', (scripts / "macos.sh").read_text())
 versions = {default}
 callers = 0
+inline = 0
 for workflow in (root / ".github/workflows").glob("*.y*ml"):
     text = workflow.read_text()
     env = re.findall(r"(?m)^\s+ORT_VERSION:[ \t]*([^\n]+)$", text)
@@ -64,40 +65,55 @@ for workflow in (root / ".github/workflows").glob("*.y*ml"):
             elif not (pin == intel and "matrix.target == 'x86_64-apple-darwin'" in step):
                 versions.add(pin)
     assert remaining == 0, (workflow, remaining)
-assert callers > 1, callers
+    for pin in re.findall(r"(?m)^\s+ort_version=([^\s]+)$", text):
+        inline += 1
+        versions.add(pin)
+for dockerfile in (root / "docker").glob("Dockerfile*"):
+    versions.update(re.findall(r"(?m)^ARG ONNXRUNTIME_VERSION=([^\s]+)$", dockerfile.read_text()))
+assert callers > 1 and inline == 2, (callers, inline)
 assert all(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) for version in versions), versions
 
-manifest = Counter()
+names = Counter()
+wheels = []
 for line in (scripts / "checksums.sha256").read_text().splitlines():
-    if line.strip() and not line.lstrip().startswith("#"):
-        digest, name = line.split()
-        assert re.fullmatch(r"[a-f0-9]{64}", digest), name
-        manifest[name] += 1
-expected = {f"onnxruntime-osx-x86_64-{intel}.tgz"}
-for version in versions:
-    for asset in ("linux-x64", "linux-aarch64", "osx-arm64", "win-x64", "win-arm64"):
-        ext = "zip" if asset.startswith("win-") else "tgz"
-        expected.add(f"onnxruntime-{asset}-{version}.{ext}")
+    if not line.strip() or line.lstrip().startswith("#"):
+        continue
+    fields = line.split()
+    assert len(fields) in (2, 4), line
+    assert re.fullmatch(r"[a-f0-9]{64}", fields[0]), line
+    names[fields[1]] += 1
+    if len(fields) == 4:
+        _, name, rid, url = fields
+        assert name.startswith("onnxruntime-") and name.endswith(".whl"), line
+        assert url.startswith("https://files.pythonhosted.org/packages/") and url.endswith("/" + name), line
+        wheels.append((name, rid))
+    else:
+        assert re.fullmatch(r"microsoft\.ml\.onnxruntime\.[0-9.]+\.nupkg", fields[1]), line
+assert all(count == 1 for count in names.values()), names
 for version in versions | {intel}:
-    expected.add(f"microsoft.ml.onnxruntime.{version}.nupkg")
-assert all(manifest[name] == 1 for name in expected), {name: manifest[name] for name in expected if manifest[name] != 1}
-print(f"{len(expected)} pinned archives checked across {callers} action call sites")
+    assert names[f"microsoft.ml.onnxruntime.{version}.nupkg"] == 1, version
+wanted = [(version, rid) for version in versions for rid in ("linux-x64", "linux-arm64", "osx-arm64")]
+wanted.append((intel, "osx-x64"))
+for version, rid in wanted:
+    matching = [name for name, row_rid in wheels if row_rid == rid and name.startswith(f"onnxruntime-{version}-")]
+    assert len(matching) == 1, (version, rid, matching)
+print(f"{len(names)} pins checked across {callers} action call sites and {inline} inline stages")
 PYTHON
 }
 
 runtime_root() {
-	printf '%s/onnxruntime/onnxruntime-linux-%s-1.24.2' "$RUNNER_TEMP" "$1"
+	printf '%s/onnxruntime/onnxruntime-linux-%s-1.32.0' "$RUNNER_TEMP" "$1"
 }
 
 @test "Linux ORT setup should copy cached shared libraries and preserve ambient system flags" {
 	root="$(runtime_root x64)"
 	mkdir -p "$root/lib"
-	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so.1.24.2"
-	ln -s libonnxruntime.so.1.24.2 "$root/lib/libonnxruntime.so.1"
+	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so.1.32.0"
+	ln -s libonnxruntime.so.1.32.0 "$root/lib/libonnxruntime.so.1"
 	ln -s libonnxruntime.so.1 "$root/lib/libonnxruntime.so"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 'node output' x64 system
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 'node output' x64 system
 	xberg_assert_status 0
-	xberg_assert_file "$GITHUB_WORKSPACE/node output/libonnxruntime.so.1.24.2" 'runtime bytes'
+	xberg_assert_file "$GITHUB_WORKSPACE/node output/libonnxruntime.so.1.32.0" 'runtime bytes'
 	xberg_assert_github_env "ORT_LIB_LOCATION=$root/lib
 ORT_PREFER_DYNAMIC_LINK=1
 ORT_SKIP_DOWNLOAD=1
@@ -114,7 +130,7 @@ RUSTFLAGS=-C debuginfo=1 -L $root/lib -C link-arg=-Wl,-rpath,\$ORIGIN"
 	mkdir -p "$root/lib"
 	printf 'providers bytes\n' >"$root/lib/libonnxruntime_providers_shared.so"
 	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64 system
 	xberg_assert_status 0
 	[ "$(sed -n 's/^ORT_DYLIB_PATH=//p' "$GITHUB_ENV")" = "$root/lib/libonnxruntime.so" ]
 }
@@ -123,8 +139,8 @@ RUSTFLAGS=-C debuginfo=1 -L $root/lib -C link-arg=-Wl,-rpath,\$ORIGIN"
 	root="$(runtime_root x64)"
 	mkdir -p "$root/lib"
 	printf 'providers bytes\n' >"$root/lib/libonnxruntime_providers_shared.so"
-	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so.1.24.2"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system
+	printf 'runtime bytes\n' >"$root/lib/libonnxruntime.so.1.32.0"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64 system
 	xberg_assert_status 1
 	xberg_assert_output_contains 'libonnxruntime.so missing from the staged ONNX Runtime'
 	xberg_assert_github_env ''
@@ -134,7 +150,7 @@ RUSTFLAGS=-C debuginfo=1 -L $root/lib -C link-arg=-Wl,-rpath,\$ORIGIN"
 	root="$(runtime_root aarch64)"
 	mkdir -p "$root/lib"
 	printf 'arm runtime\n' >"$root/lib/libonnxruntime.so"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 bindings arm64 bundled
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 bindings arm64 bundled
 	xberg_assert_status 0
 	xberg_assert_file "$GITHUB_WORKSPACE/bindings/libonnxruntime.so" 'arm runtime'
 	xberg_assert_github_env "LD_LIBRARY_PATH=$root/lib:$GITHUB_WORKSPACE/bindings:ambient-loader
@@ -144,110 +160,8 @@ LIBRARY_PATH=$root/lib:$GITHUB_WORKSPACE/bindings:ambient-linker"
 	[ ! -e "$XBERG_TRACE" ]
 }
 
-prepare_ort_archive() {
-	local arch="$1" version="$2" checksum
-	local name="onnxruntime-linux-$arch-$version"
-	mkdir -p "$BATS_TEST_TMPDIR/archive/$name/lib"
-	printf 'downloaded runtime\n' >"$BATS_TEST_TMPDIR/archive/$name/lib/libonnxruntime.so"
-	export ORT_FIXTURE_ARCHIVE="$BATS_TEST_TMPDIR/runtime.tgz"
-	export ORT_CHECKSUMS_FILE="$BATS_TEST_TMPDIR/trusted.sha256"
-	tar -czf "$ORT_FIXTURE_ARCHIVE" -C "$BATS_TEST_TMPDIR/archive" "$name"
-	checksum="$(shasum -a 256 "$ORT_FIXTURE_ARCHIVE")"
-	printf '%s  %s.tgz\n' "${checksum%% *}" "$name" >"$ORT_CHECKSUMS_FILE"
-	xberg_stub curl \
-		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
-		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_ARCHIVE" "$2"; exit; fi; shift; done' \
-		'exit 91'
-}
-
-@test "Linux ORT setup should download and extract the requested aarch64 release layout" {
-	root="$(runtime_root aarch64)"
-	prepare_ort_archive aarch64 1.24.2
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 downloaded arm64
-	xberg_assert_status 0
-	xberg_assert_file "$GITHUB_WORKSPACE/downloaded/libonnxruntime.so" 'downloaded runtime'
-	xberg_assert_file "$root/lib/libonnxruntime.so" 'downloaded runtime'
-	xberg_assert_output_contains 'onnxruntime-linux-aarch64-1.24.2.tgz: SHA-256 verified'
-	grep -Fq 'releases/download/v1.24.2/onnxruntime-linux-aarch64-1.24.2.tgz' "$XBERG_TRACE"
-}
-
-@test "Linux ORT setup should reject an unpinned fresh version before curl" {
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64
-	xberg_assert_status 1
-	xberg_assert_output_contains 'Expected exactly one pinned SHA-256 for onnxruntime-linux-x64-9.9.9.tgz'
-	xberg_assert_trace_empty
-	xberg_assert_github_env ''
-	[ ! -e "$RUNNER_TEMP/onnxruntime" ]
-	[ ! -e "$GITHUB_WORKSPACE/output" ]
-}
-
-@test "Linux ORT setup should reject tampered fresh bytes without extraction in either cache mode" {
-	prepare_ort_archive x64 1.24.2
-	printf 'tampered runtime\n' >"$ORT_FIXTURE_ARCHIVE"
-	xberg_stub_exit tar 94
-	for mode in false true; do
-		run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system "$mode"
-		xberg_assert_status 1
-		xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-linux-x64-1.24.2.tgz'
-		xberg_assert_github_env ''
-		[ ! -e "$RUNNER_TEMP/onnxruntime" ]
-		[ ! -e "$GITHUB_WORKSPACE/output" ]
-	done
-}
-
-@test "Linux ORT verified archive mode should use a trusted custom pin and recheck cache hits" {
-	prepare_ort_archive x64 9.9.9
-	cached_archive="$RUNNER_TEMP/onnxruntime/onnxruntime-linux-x64-9.9.9.tgz"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
-	xberg_assert_status 0
-	xberg_assert_output_contains 'onnxruntime-linux-x64-9.9.9.tgz: SHA-256 verified'
-	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'downloaded runtime'
-	cmp "$ORT_FIXTURE_ARCHIVE" "$cached_archive"
-	grep -Fq 'releases/download/v9.9.9/onnxruntime-linux-x64-9.9.9.tgz' "$XBERG_TRACE"
-	first_root="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
-	[[ "$first_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-9.9.9/lib ]]
-
-	: >"$GITHUB_ENV"
-	rm "$XBERG_TRACE"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
-	xberg_assert_status 0
-	xberg_assert_output_contains 'onnxruntime-linux-x64-9.9.9.tgz: SHA-256 verified'
-	second_root="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
-	[[ "$second_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-9.9.9/lib ]]
-	[ "$second_root" != "$first_root" ]
-	xberg_assert_trace_empty
-}
-
-@test "Linux ORT verified archive mode should replace a corrupt cache with freshly verified bytes" {
-	prepare_ort_archive x64 9.9.9
-	cached_archive="$RUNNER_TEMP/onnxruntime/onnxruntime-linux-x64-9.9.9.tgz"
-	mkdir -p "$(dirname "$cached_archive")"
-	printf 'corrupt cache\n' >"$cached_archive"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
-	xberg_assert_status 0
-	xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-linux-x64-9.9.9.tgz'
-	xberg_assert_output_contains 'onnxruntime-linux-x64-9.9.9.tgz: SHA-256 verified'
-	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
-	grep -Fq 'releases/download/v9.9.9/onnxruntime-linux-x64-9.9.9.tgz' "$XBERG_TRACE"
-	cmp "$ORT_FIXTURE_ARCHIVE" "$cached_archive"
-	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'downloaded runtime'
-
-	printf 'corrupt cache\n' >"$cached_archive"
-	printf 'tampered download\n' >"$ORT_FIXTURE_ARCHIVE"
-	xberg_stub_exit tar 94
-	: >"$GITHUB_ENV"
-	rm "$XBERG_TRACE"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 rejected x64 system true
-	xberg_assert_status 1
-	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
-	[ "$(grep -Fc 'SHA-256 mismatch for onnxruntime-linux-x64-9.9.9.tgz' <<<"$output")" = 2 ]
-	xberg_assert_github_env ''
-	[ ! -e "$cached_archive" ]
-	[ ! -e "$GITHUB_WORKSPACE/rejected" ]
-}
-
 @test "Linux ORT setup should reject unsupported architecture before downloading or exporting" {
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output riscv64
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output riscv64
 	xberg_assert_status 1
 	xberg_assert_output_contains 'Unsupported Linux arch-id: riscv64'
 	xberg_assert_github_env ''
@@ -257,7 +171,7 @@ prepare_ort_archive() {
 
 @test "Linux ORT setup should reject a cached archive directory with no lib directory" {
 	mkdir -p "$(runtime_root x64)"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
 	xberg_assert_status 1
 	xberg_assert_output_contains 'ONNX Runtime lib directory missing'
 	xberg_assert_github_env ''
@@ -267,123 +181,224 @@ prepare_ort_archive() {
 @test "Linux ORT setup should reject a cached lib directory containing no shared libraries" {
 	mkdir -p "$(runtime_root x64)/lib"
 	printf 'unrelated\n' >"$(runtime_root x64)/lib/README"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
 	xberg_assert_status 1
 	xberg_assert_output_contains 'No ONNX Runtime libraries found'
 	xberg_assert_github_env ''
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
 }
 
-@test "Linux ORT setup should fail without exports when both GitHub and NuGet downloads fail" {
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64
-	xberg_assert_status 93
-	xberg_assert_github_env ''
-	[ ! -e "$GITHUB_WORKSPACE/output" ]
-	[ ! -e "$(runtime_root x64)" ]
-	[ "$(grep -vc -e '--version' "$XBERG_TRACE")" = 2 ]
-	grep -v -e '--version' "$XBERG_TRACE" | sed -n 1p | grep -Fq 'github.com/microsoft/onnxruntime/releases/download/v1.24.2/'
-	grep -v -e '--version' "$XBERG_TRACE" | sed -n 2p | grep -Fq 'api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.24.2/microsoft.ml.onnxruntime.1.24.2.nupkg'
-}
-
-prepare_nuget_package() {
-	local rid="$1" version="$2" checksum
+# Writes a NuGet package and a PyPI wheel fixture, a manifest pinning both, and a curl that serves
+# them. ORT_NUGET_MODE and ORT_PYPI_MODE pick ok, fail (exit 22) or tamper for each source.
+prepare_sources() {
+	local rid="$1" version="$2" platform="$3" package_sum wheel_sum
 	export ORT_FIXTURE_PACKAGE="$BATS_TEST_TMPDIR/package.nupkg"
+	export ORT_FIXTURE_WHEEL="$BATS_TEST_TMPDIR/runtime.whl"
 	export ORT_CHECKSUMS_FILE="$BATS_TEST_TMPDIR/trusted.sha256"
-	python3 - "$ORT_FIXTURE_PACKAGE" "$rid" <<'PYTHON'
+	export ORT_NUGET_MODE=ok ORT_PYPI_MODE=ok
+	ORT_WHEEL="onnxruntime-$version-cp312-cp312-manylinux_2_28_$platform.whl"
+	python3 - "$ORT_FIXTURE_PACKAGE" "$ORT_FIXTURE_WHEEL" "$rid" "$version" <<'PYTHON'
 import sys
 import zipfile
 
-with zipfile.ZipFile(sys.argv[1], "w") as package:
-    package.writestr(f"runtimes/{sys.argv[2]}/native/libonnxruntime.so", "nuget runtime\n")
-    package.writestr(f"runtimes/{sys.argv[2]}/native/libonnxruntime_providers_shared.so", "nuget providers\n")
-    package.writestr("runtimes/linux-other/native/libonnxruntime.so", "wrong runtime\n")
-    package.writestr("build/native/include/onnxruntime_c_api.h", "header\n")
+package, wheel, rid, version = sys.argv[1:]
+with zipfile.ZipFile(package, "w") as archive:
+    archive.writestr(f"runtimes/{rid}/native/libonnxruntime.so", "nuget runtime\n")
+    archive.writestr(f"runtimes/{rid}/native/libonnxruntime_providers_shared.so", "nuget providers\n")
+    archive.writestr("runtimes/linux-other/native/libonnxruntime.so", "wrong runtime\n")
+    archive.writestr("build/native/include/onnxruntime_c_api.h", "header\n")
+with zipfile.ZipFile(wheel, "w") as archive:
+    archive.writestr(f"onnxruntime/capi/libonnxruntime.so.{version}", "pypi runtime\n")
+    archive.writestr("onnxruntime/capi/libonnxruntime_providers_shared.so", "pypi providers\n")
+    archive.writestr("onnxruntime/capi/onnxruntime_pybind11_state.so", "python extension\n")
 PYTHON
-	checksum="$(shasum -a 256 "$ORT_FIXTURE_PACKAGE")"
+	package_sum="$(shasum -a 256 "$ORT_FIXTURE_PACKAGE")"
+	wheel_sum="$(shasum -a 256 "$ORT_FIXTURE_WHEEL")"
 	{
-		printf '%s  onnxruntime-linux-x64-%s.tgz\n' "$(printf 'a%.0s' {1..64})" "$version"
-		printf '%s  onnxruntime-linux-aarch64-%s.tgz\n' "$(printf 'a%.0s' {1..64})" "$version"
-		printf '%s  microsoft.ml.onnxruntime.%s.nupkg\n' "${checksum%% *}" "$version"
+		printf '%s  microsoft.ml.onnxruntime.%s.nupkg\n' "${package_sum%% *}" "$version"
+		printf '%s  %s  %s  https://files.pythonhosted.org/packages/aa/bb/%s\n' "${wheel_sum%% *}" "$ORT_WHEEL" "$rid" "$ORT_WHEEL"
 	} >"$ORT_CHECKSUMS_FILE"
 	xberg_stub curl \
 		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
-		'case "$*" in *github.com*) exit 22 ;; esac' \
-		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
+		'case "$*" in *--version*) exit 91 ;; *api.nuget.org*) mode="$ORT_NUGET_MODE" fixture="$ORT_FIXTURE_PACKAGE" ;; *files.pythonhosted.org*) mode="$ORT_PYPI_MODE" fixture="$ORT_FIXTURE_WHEEL" ;; *) exit 92 ;; esac' \
+		'[ "$mode" != fail ] || exit 22' \
+		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then if [ "$mode" = tamper ]; then printf "tampered\n" >"$2"; else cp "$fixture" "$2"; fi; exit; fi; shift; done' \
 		'exit 91'
 }
 
-@test "Linux ORT setup should rebuild the release layout from the pinned NuGet package when GitHub fails" {
+downloads() {
+	grep -v -e '--version' "$XBERG_TRACE"
+}
+
+@test "Linux ORT setup should stage the verified NuGet package as the release layout" {
 	root="$(runtime_root aarch64)"
-	prepare_nuget_package linux-arm64 1.24.2
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output arm64
+	prepare_sources linux-arm64 1.32.0 aarch64
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output arm64
 	xberg_assert_status 0
-	xberg_assert_output_contains 'GitHub release download of onnxruntime-linux-aarch64-1.24.2.tgz failed'
-	xberg_assert_output_contains 'microsoft.ml.onnxruntime.1.24.2.nupkg: SHA-256 verified'
-	xberg_assert_file "$root/lib/libonnxruntime.so.1.24.2" 'nuget runtime'
-	[ "$(readlink "$root/lib/libonnxruntime.so.1")" = libonnxruntime.so.1.24.2 ]
+	xberg_assert_output_contains 'microsoft.ml.onnxruntime.1.32.0.nupkg: SHA-256 verified'
+	xberg_assert_output_contains 'Staged ONNX Runtime 1.32.0 (linux-arm64) from NuGet'
+	xberg_assert_file "$root/lib/libonnxruntime.so.1.32.0" 'nuget runtime'
+	[ "$(readlink "$root/lib/libonnxruntime.so.1")" = libonnxruntime.so.1.32.0 ]
 	[ "$(readlink "$root/lib/libonnxruntime.so")" = libonnxruntime.so.1 ]
 	xberg_assert_file "$root/include/onnxruntime_c_api.h" 'header'
 	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so.1" 'nuget runtime'
 	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime_providers_shared.so" 'nuget providers'
 	grep -Fxq "ORT_LIB_LOCATION=$root/lib" "$GITHUB_ENV"
-	[ "$(grep -vc -e '--version' "$XBERG_TRACE")" = 2 ]
+	[ "$(downloads | wc -l | tr -d '[:space:]')" = 1 ]
+	downloads | grep -Fq 'api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.32.0/microsoft.ml.onnxruntime.1.32.0.nupkg'
 }
 
-@test "Linux ORT verified archive mode should fall back to NuGet without caching a release archive" {
-	prepare_nuget_package linux-x64 1.24.2
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64 system true
+@test "Linux ORT setup should fall back to the verified PyPI wheel when the NuGet download fails" {
+	root="$(runtime_root x64)"
+	prepare_sources linux-x64 1.32.0 x86_64
+	export ORT_NUGET_MODE=fail
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
 	xberg_assert_status 0
-	xberg_assert_output_contains 'microsoft.ml.onnxruntime.1.24.2.nupkg: SHA-256 verified'
-	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so.1.24.2" 'nuget runtime'
-	location="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
-	[[ "$location" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-1.24.2/lib ]]
-	[ ! -e "$RUNNER_TEMP/onnxruntime/onnxruntime-linux-x64-1.24.2.tgz" ]
+	xberg_assert_output_contains 'NuGet download of microsoft.ml.onnxruntime.1.32.0.nupkg failed; using the PyPI wheel'
+	xberg_assert_output_contains "$ORT_WHEEL: SHA-256 verified"
+	xberg_assert_output_contains 'Staged ONNX Runtime 1.32.0 (linux-x64) from PyPI'
+	xberg_assert_file "$root/lib/libonnxruntime.so.1.32.0" 'pypi runtime'
+	xberg_assert_file "$root/lib/libonnxruntime_providers_shared.so" 'pypi providers'
+	[ "$(readlink "$root/lib/libonnxruntime.so.1")" = libonnxruntime.so.1.32.0 ]
+	[ "$(readlink "$root/lib/libonnxruntime.so")" = libonnxruntime.so.1 ]
+	[ ! -e "$root/lib/onnxruntime_pybind11_state.so" ]
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'pypi runtime'
+	[ "$(sed -n 's/^ORT_DYLIB_PATH=//p' "$GITHUB_ENV")" = "$root/lib/libonnxruntime.so" ]
+	[ "$(downloads | wc -l | tr -d '[:space:]')" = 2 ]
+	downloads | sed -n 1p | grep -Fq 'api.nuget.org/'
+	downloads | sed -n 2p | grep -Fq "https://files.pythonhosted.org/packages/aa/bb/$ORT_WHEEL"
 }
 
-@test "Linux ORT NuGet fallback should reject tampered package bytes without staging" {
-	prepare_nuget_package linux-x64 1.24.2
-	printf 'tampered package\n' >"$ORT_FIXTURE_PACKAGE"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.24.2 output x64
-	xberg_assert_status 1
-	xberg_assert_output_contains 'SHA-256 mismatch for microsoft.ml.onnxruntime.1.24.2.nupkg'
+@test "Linux ORT setup should fall back to the PyPI wheel when the NuGet package fails verification" {
+	root="$(runtime_root x64)"
+	prepare_sources linux-x64 1.32.0 x86_64
+	export ORT_NUGET_MODE=tamper
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
+	xberg_assert_status 0
+	xberg_assert_output_contains 'SHA-256 mismatch for microsoft.ml.onnxruntime.1.32.0.nupkg'
+	xberg_assert_output_contains 'failed verification; using the PyPI wheel'
+	xberg_assert_file "$root/lib/libonnxruntime.so.1.32.0" 'pypi runtime'
+	[ "$(downloads | wc -l | tr -d '[:space:]')" = 2 ]
+}
+
+@test "Linux ORT setup should fail without staging when the PyPI wheel fails verification in either cache mode" {
+	prepare_sources linux-x64 1.32.0 x86_64
+	export ORT_NUGET_MODE=fail ORT_PYPI_MODE=tamper
+	for mode in false true; do
+		run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64 system "$mode"
+		xberg_assert_status 1
+		xberg_assert_output_contains "SHA-256 mismatch for $ORT_WHEEL"
+		xberg_assert_github_env ''
+		[ ! -e "$(runtime_root x64)" ]
+		[ ! -e "$GITHUB_WORKSPACE/output" ]
+		[ -z "$(compgen -G "$RUNNER_TEMP/onnxruntime-verified.*" || true)" ]
+	done
+}
+
+@test "Linux ORT setup should fail without exports when both downloads fail" {
+	prepare_sources linux-x64 1.32.0 x86_64
+	export ORT_NUGET_MODE=fail ORT_PYPI_MODE=fail
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
+	xberg_assert_status 22
 	xberg_assert_github_env ''
+	[ ! -e "$GITHUB_WORKSPACE/output" ]
 	[ ! -e "$(runtime_root x64)" ]
+	[ "$(downloads | wc -l | tr -d '[:space:]')" = 2 ]
+	[ "$(downloads | grep -c 'github.com' || true)" = 0 ]
+}
+
+@test "Linux ORT setup should refuse a version without NuGet or PyPI pins before any download" {
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64
+	xberg_assert_status 1
+	xberg_assert_output_contains 'Expected exactly one pinned SHA-256 for microsoft.ml.onnxruntime.9.9.9.nupkg'
+	xberg_assert_trace_empty
+	xberg_assert_github_env ''
+	[ ! -e "$RUNNER_TEMP/onnxruntime" ]
 	[ ! -e "$GITHUB_WORKSPACE/output" ]
 }
 
-run_nuget_fallback() {
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh" \
-		1.24.2 linux-x64 "$BATS_TEST_TMPDIR/ort-root" "$ORT_CHECKSUMS_FILE"
+@test "Linux ORT setup should refuse a pinned NuGet package without a pinned wheel before any download" {
+	prepare_sources linux-x64 1.32.0 x86_64
+	sed -i.bak '/\.whl/d' "$ORT_CHECKSUMS_FILE"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
+	xberg_assert_status 1
+	xberg_assert_output_contains 'Expected exactly one pinned PyPI wheel for ONNX Runtime 1.32.0 (linux-x64)'
+	xberg_assert_trace_empty
+	[ ! -e "$RUNNER_TEMP/onnxruntime" ]
 }
 
-@test "NuGet fallback should force HTTPS and omit --retry-all-errors when curl predates it" {
-	prepare_nuget_package linux-x64 1.24.2
+@test "Linux ORT setup should refuse a pinned wheel without a pinned NuGet package before any download" {
+	prepare_sources linux-x64 1.32.0 x86_64
+	sed -i.bak '/\.nupkg/d' "$ORT_CHECKSUMS_FILE"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
+	xberg_assert_status 1
+	xberg_assert_output_contains 'Expected exactly one pinned SHA-256 for microsoft.ml.onnxruntime.1.32.0.nupkg'
+	xberg_assert_trace_empty
+}
+
+@test "Linux ORT setup should refuse a wheel pinned to a URL outside PyPI before any download" {
+	prepare_sources linux-x64 1.32.0 x86_64
+	sed -i.bak "s#https://files.pythonhosted.org/packages/aa/bb/#https://mirror.invalid/#" "$ORT_CHECKSUMS_FILE"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64
+	xberg_assert_status 1
+	xberg_assert_output_contains "Pinned PyPI wheel $ORT_WHEEL has an unexpected URL"
+	xberg_assert_trace_empty
+}
+
+@test "Linux ORT verified mode should ignore the extracted-tree cache and stage fresh verified bytes" {
+	root="$(runtime_root x64)"
+	mkdir -p "$root/lib"
+	printf 'stale cache\n' >"$root/lib/libonnxruntime.so"
+	prepare_sources linux-x64 1.32.0 x86_64
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64 system true
+	xberg_assert_status 0
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'nuget runtime'
+	first_root="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
+	[[ "$first_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-1.32.0/lib ]]
+
+	: >"$GITHUB_ENV"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 1.32.0 output x64 system true
+	xberg_assert_status 0
+	second_root="$(sed -n 's/^ORT_LIB_LOCATION=//p' "$GITHUB_ENV")"
+	[[ "$second_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-1.32.0/lib ]]
+	[ "$second_root" != "$first_root" ]
+	[ "$(downloads | wc -l | tr -d '[:space:]')" = 2 ]
+	xberg_assert_file "$root/lib/libonnxruntime.so" 'stale cache'
+}
+
+run_stage_runtime() {
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/stage-runtime.sh" \
+		1.32.0 linux-x64 "$BATS_TEST_TMPDIR/ort-root" "$ORT_CHECKSUMS_FILE"
+}
+
+@test "ORT staging should force HTTPS and omit --retry-all-errors when curl predates it" {
+	prepare_sources linux-x64 1.32.0 x86_64
 	xberg_stub curl \
 		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
 		'case "$*" in *--version*) exit 2 ;; esac' \
 		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
 		'exit 91'
-	run_nuget_fallback
+	run_stage_runtime
 	xberg_assert_status 0
-	download="$(grep -v -e '--version' "$XBERG_TRACE")"
+	download="$(downloads)"
 	[[ "$download" == '--proto =https --proto-redir =https --retry 5 --retry-delay 5 -fsSL -o '* ]]
 	[[ "$download" != *--retry-all-errors* ]]
 }
 
-@test "NuGet fallback should retry all errors when curl supports it" {
-	prepare_nuget_package linux-x64 1.24.2
+@test "ORT staging should retry all errors when curl supports it" {
+	prepare_sources linux-x64 1.32.0 x86_64
 	xberg_stub curl \
 		'printf "%s\n" "$*" >>"$XBERG_TRACE"' \
 		'case "$*" in *--version*) exit 0 ;; esac' \
 		'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then cp "$ORT_FIXTURE_PACKAGE" "$2"; exit; fi; shift; done' \
 		'exit 91'
-	run_nuget_fallback
+	run_stage_runtime
 	xberg_assert_status 0
-	grep -v -e '--version' "$XBERG_TRACE" | grep -Fq -e '--proto =https --proto-redir =https --retry 5 --retry-delay 5 --retry-all-errors -fsSL'
+	downloads | grep -Fq -e '--proto =https --proto-redir =https --retry 5 --retry-delay 5 --retry-all-errors -fsSL'
 }
 
-@test "NuGet fallback should extract with python3 when unzip is missing" {
-	prepare_nuget_package linux-x64 1.24.2
+@test "ORT staging should extract the NuGet package and the wheel with python3 when unzip is missing" {
+	prepare_sources linux-x64 1.32.0 x86_64
 	bin="$BATS_TEST_TMPDIR/no-unzip-bin"
 	mkdir -p "$bin"
 	for tool in bash env dirname mktemp mkdir cp mv ln rm cat sed grep awk tr cut head tail wc basename sort uname shasum sha256sum python3 chmod readlink; do
@@ -392,10 +407,17 @@ run_nuget_fallback() {
 	done
 	cp "$XBERG_STUB_BIN/curl" "$bin/curl"
 	PATH="$bin"
-	! command -v unzip
-	run_nuget_fallback
+	[ -z "$(command -v unzip || true)" ]
+	run_stage_runtime
 	xberg_assert_status 0
-	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime.so.1.24.2" 'nuget runtime'
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime.so.1.32.0" 'nuget runtime'
 	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/include/onnxruntime_c_api.h" 'header'
 	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime_providers_shared.so" 'nuget providers'
+
+	export ORT_NUGET_MODE=fail
+	run_stage_runtime
+	xberg_assert_status 0
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime.so.1.32.0" 'pypi runtime'
+	xberg_assert_file "$BATS_TEST_TMPDIR/ort-root/lib/libonnxruntime_providers_shared.so" 'pypi providers'
+	[ ! -e "$BATS_TEST_TMPDIR/ort-root/include" ]
 }

@@ -22,8 +22,7 @@ $OrtLib = Join-Path $OrtRoot 'lib'
 
 if (-Not (Test-Path $OrtRoot)) {
   Write-Host "Cache miss: Downloading ONNX Runtime $OrtVersion"
-  $Archive = "onnxruntime-win-$ArchId-$OrtVersion.zip"
-  # A custom version needs a trusted manifest with its archive's digest.
+  # A custom version needs a trusted manifest with its NuGet package digest.
   $Checksums = if ($env:ORT_CHECKSUMS_FILE) { $env:ORT_CHECKSUMS_FILE } else { Join-Path $PSScriptRoot 'checksums.sha256' }
   function Get-OrtPin([string]$Name) {
     $Pins = @(foreach ($Line in Get-Content -LiteralPath $Checksums -ErrorAction Stop) {
@@ -37,36 +36,24 @@ if (-Not (Test-Path $OrtRoot)) {
     }
     $Pins[0]
   }
-  function Assert-OrtDigest([string]$Path, [string]$Name, [string]$Pin) {
-    $ActualDigest = (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
-    if ($ActualDigest -cne $Pin) {
-      throw "SHA-256 mismatch for ${Name}: expected $Pin, observed $ActualDigest"
-    }
-    Write-Host "${Name}: SHA-256 verified"
-  }
-  $Pin = Get-OrtPin $Archive
-  $DownloadPath = Join-Path $env:TEMP $Archive
-  $Downloaded = $true
+  # github.com/microsoft/onnxruntime has returned 404 since 2026-11-18, and the onnxruntime PyPI
+  # wheel ships no onnxruntime.lib import library, which Windows linking needs: NuGet is the only source.
+  $Package = "microsoft.ml.onnxruntime.$OrtVersion.nupkg"
+  $PackagePin = Get-OrtPin $Package
+  $Work = Join-Path $env:TEMP "onnxruntime-nuget-$([guid]::NewGuid().ToString('N'))"
+  New-Item -ItemType Directory -Path $Work -Force | Out-Null
   try {
-    Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$OrtVersion/$Archive" -OutFile $DownloadPath -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 5 -ErrorAction Stop
-  } catch {
-    Write-Host "::warning::GitHub release download of $Archive failed; using the NuGet package ($($_.Exception.Message))"
-    Remove-Item -LiteralPath $DownloadPath -Force -ErrorAction SilentlyContinue
-    $Downloaded = $false
-  }
-  if ($Downloaded) {
-    Assert-OrtDigest $DownloadPath $Archive $Pin
-    New-Item -ItemType Directory -Path $ExtractRoot -Force | Out-Null
-    Expand-Archive -LiteralPath $DownloadPath -DestinationPath $ExtractRoot -Force -ErrorAction Stop
-  } else {
-    # The NuGet package carries the same binaries; rebuild the release layout from it.
-    $Package = "microsoft.ml.onnxruntime.$OrtVersion.nupkg"
-    $PackagePin = Get-OrtPin $Package
-    $Work = Join-Path $env:TEMP "onnxruntime-nuget-$([guid]::NewGuid().ToString('N'))"
-    New-Item -ItemType Directory -Path $Work -Force | Out-Null
     $PackageZip = Join-Path $Work "$Package.zip"
-    Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/$OrtVersion/$Package" -OutFile $PackageZip -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 5 -ErrorAction Stop
-    Assert-OrtDigest $PackageZip $Package $PackagePin
+    try {
+      Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/$OrtVersion/$Package" -OutFile $PackageZip -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 5 -ErrorAction Stop
+    } catch {
+      throw "NuGet download of $Package failed and the PyPI wheel has no import library to link against: $($_.Exception.Message)"
+    }
+    $ActualDigest = (Get-FileHash -LiteralPath $PackageZip -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+    if ($ActualDigest -cne $PackagePin) {
+      throw "SHA-256 mismatch for ${Package}: expected $PackagePin, observed $ActualDigest"
+    }
+    Write-Host "${Package}: SHA-256 verified"
     $Unpacked = Join-Path $Work 'package'
     Expand-Archive -LiteralPath $PackageZip -DestinationPath $Unpacked -Force -ErrorAction Stop
     $Tree = Join-Path $Work 'tree'
@@ -75,11 +62,12 @@ if (-Not (Test-Path $OrtRoot)) {
     Copy-Item -Path (Join-Path $Unpacked 'build/native/include/*') -Destination (Join-Path $Tree 'include') -Force -ErrorAction Stop
     New-Item -ItemType Directory -Path $ExtractRoot -Force | Out-Null
     Move-Item -LiteralPath $Tree -Destination $OrtRoot -Force -ErrorAction Stop
+  } finally {
     Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "Staged ONNX Runtime $OrtVersion (win-$ArchId) from NuGet"
   }
+  Write-Host "Staged ONNX Runtime $OrtVersion (win-$ArchId) from NuGet"
 } else {
-  # The extracted-tree cache does not retain the archive for re-verification.
+  # The extracted-tree cache does not retain the package for re-verification.
   Write-Host "Cache hit: Using cached ONNX Runtime $OrtVersion"
 }
 

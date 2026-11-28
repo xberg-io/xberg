@@ -1,5 +1,4 @@
 import ast
-import hashlib
 import itertools
 import os
 import re
@@ -1390,14 +1389,13 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
     project = tmp_path / "staged project"
     integrity = project / integrity_path
     integrity.mkdir(parents=True)
-    shutil.copyfile(repo_root / integrity_path / "verify-archive.sh", integrity / "verify-archive.sh")
-    assert (repo_root / integrity_path / "nuget-fallback.sh").is_file()
-    (integrity / "nuget-fallback.sh").write_text(
-        '#!/usr/bin/env bash\nprintf "nuget %s\\n" "$*"\nprintf "runner_temp %s\\n" "${RUNNER_TEMP##*/}"\n'
-        'exit "${TEST_NUGET_STATUS:-0}"\n'
+    assert (repo_root / integrity_path / "stage-runtime.sh").is_file()
+    (integrity / "stage-runtime.sh").write_text(
+        '#!/usr/bin/env bash\nprintf "stage %s\\n" "$*"\nprintf "runner_temp %s\\n" "${RUNNER_TEMP##*/}"\n'
+        'exit "${TEST_STAGE_STATUS:-0}"\n'
     )
-    pinned_manifest = (repo_root / integrity_path / "checksums.sha256").read_text()
-    fixture_manifest = integrity / "checksums.sha256"
+    action = (repo_root / ".github/actions/setup-onnx-runtime/action.yml").read_text()
+    [default] = re.findall(r'(?m)^  ort-version:\n(?:    [^\n]*\n)*?    default: "([^"]+)"$', action)
     stub = r"""
         uname() { printf '%s\n' "$TEST_ARCH"; }
         mktemp() {
@@ -1405,25 +1403,8 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
           command mkdir "$TMPDIR/ort-download"
           printf '%s\n' "$TMPDIR/ort-download"
         }
-        mkdir() { [[ "$*" == '-p /opt/msort' ]]; }
-        curl() {
-          if [[ "$*" == '--retry-all-errors --version' ]]; then
-            return "${TEST_CURL_PROBE_STATUS:-0}"
-          fi
-          expected='--proto =https --proto-redir =https --retry 5 --retry-delay 5'
-          if [[ "${TEST_CURL_PROBE_STATUS:-0}" == 0 ]]; then
-            expected+=' --retry-all-errors'
-          fi
-          [[ "${*:1:$#-3}" == "$expected -fsSL" ]]
-          [[ "${@: -3:1}" == -o ]]
-          printf 'curl %s\n' "${@: -1}"
-          printf '%s' "$TEST_PAYLOAD" > "${@: -2:1}"
-          return "${TEST_CURL_STATUS:-0}"
-        }
-        tar() {
-          [[ "$*" == "-xzf $ort_archive -C /opt/msort --strip-components=1" ]]
-          printf 'tar %s\n' "${ort_archive##*/}"
-        }
+        curl() { echo "unexpected curl $*" >&2; return 99; }
+        tar() { echo "unexpected tar $*" >&2; return 99; }
     """
     original_entries = set(tmp_path.iterdir())
     for filename, job_name in (("publish.yaml", "python-wheels"), ("ci-python-wheel-smoke.yaml", "python-wheel-smoke")):
@@ -1433,63 +1414,21 @@ def _check_python_manylinux_onnx_runtime_verification(tmp_path: Path) -> None:
         assert hook.startswith("set -euo pipefail\n"), filename
         prefix, boundary, stage = hook.partition("\nort_version=")
         assert boundary and "curl " not in prefix and "tar " not in prefix, filename
-        assert stage.count("nuget-fallback.sh") == 1, filename
+        assert stage.count("stage-runtime.sh") == 1 and "curl " not in stage and "tar " not in stage, filename
+        assert stage.startswith(f"{default}\n"), (filename, "inline ONNX Runtime must match the action default")
         assert f'ort_integrity="{{project}}/{integrity_path}"' in stage, filename
         script = textwrap.dedent(stub) + boundary + stage.replace("{project}", str(project))
-        for uname, asset_arch in (("x86_64", "x64"), ("aarch64", "aarch64")):
-            archive = f"onnxruntime-linux-{asset_arch}-1.24.2.tgz"
-            assert len(re.findall(rf"(?m)^[a-f0-9]{{64}}\s+{re.escape(archive)}$", pinned_manifest)) == 1
-            url = f"https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/{archive}"
-            payload = f"fixture for {archive}"
-            digest = hashlib.sha256(payload.encode()).hexdigest()
-            env = {**os.environ, "TEST_ARCH": uname, "TEST_PAYLOAD": payload, "TMPDIR": str(tmp_path)}
+        for uname, rid in (("x86_64", "linux-x64"), ("aarch64", "linux-arm64")):
+            env = {**os.environ, "TEST_ARCH": uname, "TMPDIR": str(tmp_path)}
+            expected = [f"stage {default} {rid} /opt/msort {integrity}/checksums.sha256", "runner_temp ort-download"]
 
-            fixture_manifest.write_text("")
-            unpinned = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
-            assert unpinned.returncode == 1 and unpinned.stdout == "", (filename, uname, unpinned)
-            assert f"Expected exactly one pinned SHA-256 for {archive}" in unpinned.stderr
+            staged = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, env)
+            assert staged.returncode == 0, (filename, uname, staged.stderr)
+            assert staged.stdout.splitlines() == expected, (filename, uname, staged)
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
-            fixture_manifest.write_text(f"{digest}  {archive}\n")
-            for curl_probe_status in ("0", "2"):
-                verified = run(
-                    ["bash", "-euo", "pipefail", "-c", script],
-                    tmp_path,
-                    {**env, "TEST_CURL_PROBE_STATUS": curl_probe_status},
-                )
-                assert verified.returncode == 0, (filename, uname, curl_probe_status, verified.stderr)
-                assert verified.stdout.splitlines() == [f"curl {url}", f"{archive}: SHA-256 verified", f"tar {archive}"]
-                assert set(tmp_path.iterdir()) == original_entries, (filename, uname, curl_probe_status)
-
-            tampered = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_PAYLOAD": "tampered"})
-            assert tampered.returncode == 1 and tampered.stdout.splitlines() == [f"curl {url}"], (
-                filename,
-                uname,
-                tampered,
-            )
-            assert f"SHA-256 mismatch for {archive}" in tampered.stderr
-            assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
-
-            rid = "linux-arm64" if asset_arch == "aarch64" else "linux-x64"
-            nuget = f"nuget 1.24.2 {rid} /opt/msort {integrity}/checksums.sha256"
-            for curl_status in ("18", "22"):
-                fell_back = run(
-                    ["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_CURL_STATUS": curl_status}
-                )
-                assert fell_back.returncode == 0, (filename, uname, curl_status, fell_back.stderr)
-                assert fell_back.stdout.splitlines() == [f"curl {url}", nuget, "runner_temp ort-download"], (
-                    filename,
-                    uname,
-                    fell_back,
-                )
-                assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
-
-            rejected = run(
-                ["bash", "-euo", "pipefail", "-c", script],
-                tmp_path,
-                {**env, "TEST_CURL_STATUS": "22", "TEST_NUGET_STATUS": "7"},
-            )
-            assert rejected.returncode == 7 and rejected.stdout.splitlines()[:2] == [f"curl {url}", nuget], rejected
+            rejected = run(["bash", "-euo", "pipefail", "-c", script], tmp_path, {**env, "TEST_STAGE_STATUS": "7"})
+            assert rejected.returncode == 7 and rejected.stdout.splitlines() == expected, (filename, uname, rejected)
             assert set(tmp_path.iterdir()) == original_entries, (filename, uname)
 
 

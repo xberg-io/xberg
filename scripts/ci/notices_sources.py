@@ -449,9 +449,9 @@ def _pdfium_pin(root: Path, inputs: BuildInputs) -> None:
 
 
 def _onnxruntime_pins(root: Path, inputs: BuildInputs) -> None:
-    # The NuGet fallback the release jobs verify is the artifact whose digest covers every
-    # platform, so it is the pin that carries the license text; the release archives are listed
-    # in the same checksum file.
+    # The NuGet package the release jobs verify first is the artifact whose digest covers every
+    # platform, so it is the pin that carries the license text; the PyPI fallback wheels are
+    # listed in the same checksum file.
     for line in (root / ONNX_CHECKSUMS).read_text(encoding="utf-8").splitlines():
         match = HEX_DIGEST.match(line.strip())
         if not match or not match.group("name").startswith("microsoft.ml.onnxruntime."):

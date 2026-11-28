@@ -12,6 +12,7 @@ on:
       - "scripts/pdfium-runtime-checksums.sha256"
       - "scripts/ci/actions/setup-onnx-runtime/checksums.sha256"
       - "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
+      - "scripts/ci/actions/setup-onnx-runtime/stage-runtime.sh"
       - "scripts/ci/docker/**"
       - "scripts/ci/tessdata/**"
       - "scripts/test/test-docker-config-local.sh"

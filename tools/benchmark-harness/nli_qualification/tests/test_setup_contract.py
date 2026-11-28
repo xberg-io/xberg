@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import shutil
+import zipfile
 import re
 import unittest
 
@@ -43,8 +44,8 @@ class SetupContract(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "single native action default"):  # noqa: PT027 -- Setup runs with stdlib only.
                 version_sources(bad_action, bad_workflow)
 
-    def test_each_nli_linux_archive_has_exactly_one_digest(self):
-        """Require one actual checksum for each supported Linux architecture."""
+    def test_each_nli_linux_runtime_has_one_package_and_one_wheel_digest(self):
+        """Require one NuGet package pin and one PyPI wheel pin for each supported Linux architecture."""
         action = (ROOT / ".github/actions/setup-onnx-runtime/action.yml").read_text()
         workflow = (ROOT / ".github/workflows/ci-rust.yaml").read_text()
         version = version_sources(action, workflow)
@@ -53,11 +54,16 @@ class SetupContract(unittest.TestCase):
             for line in (SCRIPTS / "checksums.sha256").read_text().splitlines()
             if line and not line.startswith("#")
         ]
-        for arch in ["x64", "aarch64"]:
-            archive = f"onnxruntime-linux-{arch}-{version}.tgz"
-            matching = [row for row in lines if len(row) >= 2 and row[1] == archive]
-            assert len(matching) == 1, (archive, matching)
-            assert re.fullmatch(r"[0-9a-f]{64}", matching[0][0])
+        package = f"microsoft.ml.onnxruntime.{version}.nupkg"
+        matching = [row for row in lines if len(row) >= 2 and row[1] == package]
+        assert len(matching) == 1, (package, matching)
+        assert re.fullmatch(r"[0-9a-f]{64}", matching[0][0])
+        for rid in ["linux-x64", "linux-arm64"]:
+            wheels = [
+                row for row in lines if len(row) == 4 and row[2] == rid and row[1].startswith(f"onnxruntime-{version}-")
+            ]
+            assert len(wheels) == 1, (rid, wheels)
+            assert re.fullmatch(r"[0-9a-f]{64}", wheels[0][0])
 
     def test_verifier_checks_bytes_and_rejects_zero_or_duplicate_pins(self):
         """Verify actual bytes and reject missing, duplicate or corrupted pins."""
@@ -80,13 +86,13 @@ class SetupContract(unittest.TestCase):
             archive.write_bytes(b"changed archive bytes")
             assert subprocess.run(command, capture_output=True, check=False).returncode != 0
 
-    def test_corrupt_cache_is_replaced_by_verified_archive(self):
-        """Use only verified replacement bytes, even with an older extracted tree."""
-        self._check_corrupt_cache(tampered=False)
+    def test_verified_mode_stages_the_package_and_ignores_the_cache(self):
+        """Use only freshly verified package bytes, even with an older extracted tree."""
+        self._check_verified_staging(tampered=False)
 
-    def test_corrupt_cache_with_tampered_replacement_is_refused_before_tar(self):
-        """Refuse a tampered replacement before creating any extraction tree."""
-        self._check_corrupt_cache(tampered=True)
+    def test_tampered_package_and_wheel_are_refused_before_staging(self):
+        """Refuse a tampered package and a tampered wheel before creating any staged tree."""
+        self._check_verified_staging(tampered=True)
 
     def test_unknown_version_is_refused_before_download(self):
         """Reject unsupported version requests before any provisioning."""
@@ -100,46 +106,46 @@ class SetupContract(unittest.TestCase):
             assert not (root / "env").exists()
             assert not list(root.glob("onnxruntime-verified.*"))
 
-    def _check_corrupt_cache(self, *, tampered: bool) -> None:
-        version = "1.24.2"
+    def _check_verified_staging(self, *, tampered: bool) -> None:
+        version = "1.32.0"
         dirname = f"onnxruntime-linux-x64-{version}"
+        package_name = f"microsoft.ml.onnxruntime.{version}.nupkg"
+        wheel_name = f"onnxruntime-{version}-cp312-cp312-manylinux_2_28_x86_64.whl"
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            cache = root / "onnxruntime"
-            old = cache / dirname / "lib"
+            old = root / "onnxruntime" / dirname / "lib"
             old.mkdir(parents=True)
             (old / "libonnxruntime.so").write_bytes(b"unverified cached library")
-            archive = cache / f"{dirname}.tgz"
-            archive.write_bytes(b"corrupt archive")
 
-            fixture_root = root / "fixture"
-            lib = fixture_root / dirname / "lib"
-            lib.mkdir(parents=True)
-            (lib / "libonnxruntime.so").write_bytes(b"verified replacement library")
-            replacement = Path(shutil.make_archive(str(root / "replacement"), "gztar", root_dir=fixture_root))
-            digest = hashlib.sha256(replacement.read_bytes()).hexdigest()
-            (root / "checksums").write_text(f"{digest}  {archive.name}\n")
+            package = root / "replacement"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("runtimes/linux-x64/native/libonnxruntime.so", b"verified replacement library")
+                archive.writestr("build/native/include/onnxruntime_c_api.h", b"header")
+            digest = hashlib.sha256(package.read_bytes()).hexdigest()
+            (root / "checksums").write_text(
+                f"{digest}  {package_name}\n"
+                f"{'0' * 64}  {wheel_name}  linux-x64  https://files.pythonhosted.org/packages/aa/bb/{wheel_name}\n"
+            )
             if tampered:
-                replacement.write_bytes(b"tampered replacement")
+                package.write_bytes(b"tampered replacement")
             result = self._run_linux_setup(root, version)
             trace = (root / "trace").read_text().splitlines()
             error = result.stdout + result.stderr
             installed = root / "workspace/libs/libonnxruntime.so"
             if tampered:
                 assert result.returncode == 1, error
-                assert result.stderr.count(f"SHA-256 mismatch for {archive.name}") == 2, error
-                assert trace == ["curl"], trace
+                assert f"SHA-256 mismatch for {package_name}" in result.stderr, error
+                assert f"SHA-256 mismatch for {wheel_name}" in result.stderr, error
+                assert trace == ["curl", "curl"], trace
                 assert not installed.exists()
                 assert not (root / "env").exists()
-                assert not archive.exists()
                 assert not list(root.glob("onnxruntime-verified.*"))
             else:
                 assert result.returncode == 0, error
-                assert f"SHA-256 mismatch for {archive.name}" in result.stderr
-                assert f"{archive.name}: SHA-256 verified" in result.stdout
-                assert trace == ["curl", "tar"], trace
-                assert archive.read_bytes() == replacement.read_bytes()
+                assert f"{package_name}: SHA-256 verified" in result.stdout, error
+                assert trace == ["curl"], trace
                 assert installed.read_bytes() == b"verified replacement library"
+                assert (old / "libonnxruntime.so").read_bytes() == b"unverified cached library"
 
     def _run_linux_setup(self, root: Path, version: str) -> subprocess.CompletedProcess[str]:
         tools = root / "bin"
@@ -148,6 +154,7 @@ class SetupContract(unittest.TestCase):
         curl.write_text(
             """#!/bin/sh
 set -eu
+case "$*" in *--version*) exit 2 ;; esac
 echo curl >> "$TEST_TRACE"
 while [ "$1" != "-o" ]; do shift; done
 cp "$TEST_REPLACEMENT" "$2"
@@ -172,7 +179,7 @@ exec "$TEST_REAL_TAR" "$@"
             "GITHUB_WORKSPACE": str(root / "workspace"),
             "GITHUB_ENV": str(root / "env"),
             "TEST_TRACE": str(root / "trace"),
-            "TEST_REPLACEMENT": str(root / "replacement.tar.gz"),
+            "TEST_REPLACEMENT": str(root / "replacement"),
             "TEST_REAL_TAR": real_tar,
         }
         if (root / "checksums").exists():

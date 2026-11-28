@@ -91,7 +91,7 @@ ENV ONNXRUNTIME_VERSION=${ONNXRUNTIME_VERSION}
 
 # The manifests bind each version override to a trusted digest for the target architecture. ~keep
 COPY scripts/ci/actions/setup-onnx-runtime/verify-archive.sh scripts/pdfium-runtime-checksums.sha256 /opt/xberg-integrity/
-COPY scripts/ci/actions/setup-onnx-runtime/nuget-fallback.sh /opt/xberg-integrity/nuget-fallback.sh
+COPY scripts/ci/actions/setup-onnx-runtime/stage-runtime.sh /opt/xberg-integrity/stage-runtime.sh
 COPY scripts/ci/actions/setup-onnx-runtime/checksums.sha256 /opt/xberg-integrity/onnxruntime-checksums.sha256
 
 RUN mkdir -p /build/pdfium && \
@@ -111,27 +111,13 @@ RUN mkdir -p /build/pdfium && \
     tar -xzf "$PDFIUM_ARCHIVE" -C /build/pdfium && \
     rm "$PDFIUM_ARCHIVE"
 
-RUN mkdir -p /build/onnxruntime && \
-    case "$ONNXRUNTIME_VERSION" in ''|*[!A-Za-z0-9._-]*) echo "Invalid ONNX Runtime version: $ONNXRUNTIME_VERSION" >&2; exit 1 ;; esac && \
+RUN case "$ONNXRUNTIME_VERSION" in ''|*[!A-Za-z0-9._-]*) echo "Invalid ONNX Runtime version: $ONNXRUNTIME_VERSION" >&2; exit 1 ;; esac && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        ORT_ARCH="aarch64"; \
         ORT_RID="linux-arm64"; \
     else \
-        ORT_ARCH="x64"; \
         ORT_RID="linux-x64"; \
     fi && \
-    ORT_ASSET="onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" && \
-    ORT_ARCHIVE="/build/$ORT_ASSET" && \
-    bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 --known && \
-    if curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ORT_ASSET}" \
-        -o "$ORT_ARCHIVE"; then \
-        bash /opt/xberg-integrity/verify-archive.sh "$ORT_ARCHIVE" /opt/xberg-integrity/onnxruntime-checksums.sha256 && \
-        tar -xzf "$ORT_ARCHIVE" -C /build/onnxruntime --strip-components=1; \
-    else \
-        rm -f "$ORT_ARCHIVE" && \
-        RUNNER_TEMP=/tmp bash /opt/xberg-integrity/nuget-fallback.sh "$ONNXRUNTIME_VERSION" "$ORT_RID" /build/onnxruntime /opt/xberg-integrity/onnxruntime-checksums.sha256; \
-    fi && \
-    rm -f "$ORT_ARCHIVE"
+    RUNNER_TEMP=/tmp bash /opt/xberg-integrity/stage-runtime.sh "$ONNXRUNTIME_VERSION" "$ORT_RID" /build/onnxruntime /opt/xberg-integrity/onnxruntime-checksums.sha256
 
 COPY Cargo.toml Cargo.lock ./
 COPY vendored/sysinfo/ vendored/sysinfo/

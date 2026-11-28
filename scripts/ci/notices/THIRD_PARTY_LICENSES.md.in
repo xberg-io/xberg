@@ -180,7 +180,8 @@ upstream tarballs untouched.
   `auto-rotate`, transcription). License: MIT. Linked dynamically (system
   `libonnxruntime.so`) in the musl/container builds; bundled per the `ort-bundled` feature
   (official Microsoft binaries) otherwise.
-- **Redistribution:** the official release archives at {{versions.onnxruntime}} are pinned by
+- **Redistribution:** Microsoft's official NuGet packages at {{versions.onnxruntime}}, and the
+  official PyPI wheels the build falls back to, are pinned by
   SHA-256 in `scripts/ci/actions/setup-onnx-runtime/checksums.sha256`; the {{providers.onnxruntime}}
   CLI image installs its distribution package instead. The upstream MIT text is reproduced below.
 
