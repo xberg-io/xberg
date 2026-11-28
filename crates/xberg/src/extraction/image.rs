@@ -14,8 +14,6 @@ use crate::extraction::image_decode::{
 };
 use crate::extractors::security::SecurityLimits;
 use std::collections::HashMap;
-#[cfg(feature = "ocr")]
-use std::io::Cursor;
 
 #[cfg(feature = "ocr")]
 mod bounded_jpeg;
@@ -870,29 +868,6 @@ pub struct ImageOcrResult {
     pub page_contents: Option<Vec<crate::types::PageContent>>,
 }
 
-/// Detects the number of frames in a TIFF file.
-///
-/// Returns the count of image frames/pages in a TIFF. Single-frame TIFFs return 1.
-/// Invalid or non-TIFF data returns an error.
-///
-/// # Arguments
-/// * `bytes` - Raw TIFF file bytes
-///
-/// # Returns
-/// Frame count if valid TIFF, error otherwise.
-#[cfg(feature = "ocr")]
-pub(crate) fn detect_tiff_frame_count(bytes: &[u8]) -> Result<usize> {
-    use tiff::decoder::Decoder;
-    let mut decoder =
-        Decoder::new(Cursor::new(bytes)).map_err(|e| XbergError::parsing(format!("TIFF decode: {}", e)))?;
-
-    let mut count = 1;
-    while decoder.next_image().is_ok() {
-        count += 1;
-    }
-    Ok(count)
-}
-
 /// Extract text from image bytes using OCR with optional page tracking for multi-frame TIFFs.
 ///
 /// This function:
@@ -927,7 +902,7 @@ pub(crate) fn extract_text_from_image_with_ocr(
         });
     }
 
-    let frame_count = detect_tiff_frame_count(bytes)?;
+    let frame_count = super::image_tiff::frame_count(bytes)?;
 
     if frame_count <= 1 {
         return Ok(ImageOcrResult {

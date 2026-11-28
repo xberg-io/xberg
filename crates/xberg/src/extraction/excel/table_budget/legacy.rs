@@ -435,6 +435,43 @@ mod tests {
         file.into_inner().into_inner()
     }
 
+    /// A FORMULA record `=1` at `(row, col)` whose cached result is a string that no STRING record follows.
+    fn formula_without_result(row: u16, col: u16) -> Vec<u8> {
+        let mut data = vec![0; 25];
+        data[..2].copy_from_slice(&row.to_le_bytes());
+        data[2..4].copy_from_slice(&col.to_le_bytes());
+        data[12] = 0xff;
+        data[13] = 0xff;
+        data[20..22].copy_from_slice(&3u16.to_le_bytes());
+        data[22..].copy_from_slice(&[0x1e, 0x01, 0x00]);
+        record(0x0006, &data)
+    }
+
+    #[test]
+    fn should_show_an_xls_formula_without_a_saved_result_beside_a_value_gh3442() {
+        let sheet = [
+            bof(0x0010),
+            dimensions((0, 1), (0, 2)),
+            formula_without_result(0, 0),
+            number(0, 1, 5.0),
+            record(BIFF_EOF, &[]),
+        ]
+        .concat();
+        let bytes = compound(&workbook(&sheet, 1));
+        let limits = SecurityLimits {
+            max_table_cells: 2,
+            ..Default::default()
+        };
+
+        let (result, warnings) = crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &limits).unwrap();
+
+        assert_eq!(
+            result.sheets[0].table_cells,
+            Some(vec![vec!["=1".to_owned(), "5".to_owned()]]),
+            "{warnings:?}"
+        );
+    }
+
     #[test]
     fn should_reject_xls_dimensions_before_the_backend_reserves_cells_gh2296() {
         let sheet = [bof(0x0010), dimensions((0, 0), (1999, 1000)), record(BIFF_EOF, &[])].concat();

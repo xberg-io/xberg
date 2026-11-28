@@ -205,14 +205,22 @@ fn test_rtf_color_table_extraction() {
 fn test_rtf_header_footer_extraction() {
     let rtf_content = r#"{\rtf1{\header My Header Text}{\footer My Footer Text}Body text}"#;
     let formatting = extract_rtf_formatting(rtf_content);
-    assert!(formatting.header_text.is_some(), "Should extract header text");
-    assert!(formatting.footer_text.is_some(), "Should extract footer text");
+    assert!(!formatting.header_texts.is_empty(), "Should extract header text");
+    assert!(!formatting.footer_texts.is_empty(), "Should extract footer text");
     assert!(
-        formatting.header_text.as_deref().unwrap_or("").contains("Header"),
+        formatting
+            .header_texts
+            .first()
+            .map_or("", String::as_str)
+            .contains("Header"),
         "Header text should contain 'Header'"
     );
     assert!(
-        formatting.footer_text.as_deref().unwrap_or("").contains("Footer"),
+        formatting
+            .footer_texts
+            .first()
+            .map_or("", String::as_str)
+            .contains("Footer"),
         "Footer text should contain 'Footer'"
     );
 }
@@ -810,4 +818,96 @@ fn should_keep_a_footnote_body_that_has_no_chftn_anchor() {
     let doc = RtfExtractor::build_internal_document(r"{\rtf1\ansi Text{\super *}{\footnote Note}}", false);
     let rendered = crate::rendering::render_markdown(&doc);
     assert!(rendered.contains("Note"), "{rendered:?}");
+}
+
+#[tokio::test]
+async fn rtf_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    let rtf = br"{\rtf1{\header Running header}{\footer Running footer}Body text}";
+    for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+        for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+            let config = ExtractionConfig {
+                content_filter: Some(ContentFilterConfig {
+                    include_headers: headers,
+                    include_footers: footers,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let doc = RtfExtractor::new()
+                .extract_content(rtf, "application/rtf", &config)
+                .await
+                .unwrap();
+            let content = crate::extraction::derive::derive_extraction_result(doc, false, format.clone()).content;
+            assert!(content.contains("Body text"), "{content}");
+            assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+            assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+            if let Some(at) = content.find("Running header") {
+                assert!(at > content.find("Body text").unwrap(), "{content}");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn rtf_header_and_footer_text_is_not_rendered_by_default() {
+    use crate::core::config::OutputFormat;
+    let rtf = br"{\rtf1{\header Running header}{\footer Running footer}Body text}";
+    let doc = RtfExtractor::new()
+        .extract_content(rtf, "application/rtf", &ExtractionConfig::default())
+        .await
+        .unwrap();
+    let content = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Plain).content;
+    assert!(content.contains("Body text"), "{content}");
+    assert!(!content.contains("Running"), "{content}");
+}
+
+#[test]
+fn rtf_header_and_footer_keep_decoded_escapes_and_one_element_per_distinct_variant() {
+    let rtf = r"{\rtf1{\headerl Caf\'e9\tab one}{\headerr Right \emdash two}{\footerl Same}{\footerr Same}{\footerf Same}Body}";
+    let formatting = extract_rtf_formatting(rtf);
+    assert_eq!(formatting.header_texts, vec!["Café\tone", "Right \u{2014}two"]);
+    assert_eq!(formatting.footer_texts, vec!["Same"]);
+}
+
+#[test]
+fn rtf_header_unicode_escape_skips_exactly_its_fallback() {
+    for (rtf, expected) in [
+        (r"{\rtf1{\header Caf\uc1\u233\'e9 x}Body}", "Café x"),
+        (r"{\rtf1{\header Caf\uc2\u233\'e9\'e9 x}Body}", "Café x"),
+        (r"{\rtf1{\header Caf\uc2\u233??x}Body}", "Caféx"),
+        (r"{\rtf1{\header Caf\uc0\u233 x}Body}", "Caféx"),
+        (r"{\rtf1{\header Caf\u233\par x}Body}", "Café\nx"),
+    ] {
+        assert_eq!(extract_rtf_formatting(rtf).header_texts, vec![expected], "{rtf}");
+    }
+}
+
+#[test]
+fn rtf_header_table_layout_separates_cells_and_rows() {
+    let rtf =
+        r"{\rtf1{\header \trowd\cellx3000\cellx6000\cellx9000\intbl Acme\cell Confidential\cell Page 1\cell\row}Body}";
+    assert_eq!(
+        extract_rtf_formatting(rtf).header_texts,
+        vec!["Acme\tConfidential\tPage 1"]
+    );
+}
+
+#[test]
+fn rtf_header_collapses_repeated_spaces_and_drops_hidden_text() {
+    let rtf = r"{\rtf1{\header One   two {\v secret}three}Body}";
+    assert_eq!(extract_rtf_formatting(rtf).header_texts, vec!["One two three"]);
+}
+
+#[test]
+fn rtf_header_plain_restores_text_hidden_by_v() {
+    let rtf = r"{\rtf1{\header \v secret\plain Visible}Body}";
+    assert_eq!(extract_rtf_formatting(rtf).header_texts, vec!["Visible"]);
+}
+
+#[test]
+fn rtf_text_box_inside_a_header_stays_out_of_the_body() {
+    let (text, ..) = extract_text_from_rtf(r"{\rtf1{\header {\shptxt Header box}}Body}", false);
+    assert!(!text.contains("Header box"), "{text}");
+    assert!(text.contains("Body"), "{text}");
 }
