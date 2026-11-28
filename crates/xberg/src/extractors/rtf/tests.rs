@@ -668,3 +668,45 @@ fn test_listtext_ignorable_ordered_detection() {
         metas
     );
 }
+
+#[tokio::test]
+async fn rtf_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    let rtf = br"{\rtf1{\header Running header}{\footer Running footer}Body text}";
+    for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+        for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+            let config = ExtractionConfig {
+                content_filter: Some(ContentFilterConfig {
+                    include_headers: headers,
+                    include_footers: footers,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let doc = RtfExtractor::new()
+                .extract_content(rtf, "application/rtf", &config)
+                .await
+                .unwrap();
+            let content = crate::extraction::derive::derive_extraction_result(doc, false, format.clone()).content;
+            assert!(content.contains("Body text"), "{content}");
+            assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+            assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+            if let Some(at) = content.find("Running header") {
+                assert!(at > content.find("Body text").unwrap(), "{content}");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn rtf_header_and_footer_text_is_not_rendered_by_default() {
+    use crate::core::config::OutputFormat;
+    let rtf = br"{\rtf1{\header Running header}{\footer Running footer}Body text}";
+    let doc = RtfExtractor::new()
+        .extract_content(rtf, "application/rtf", &ExtractionConfig::default())
+        .await
+        .unwrap();
+    let content = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Plain).content;
+    assert!(content.contains("Body text"), "{content}");
+    assert!(!content.contains("Running"), "{content}");
+}

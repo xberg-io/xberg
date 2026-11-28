@@ -557,3 +557,59 @@ async fn test_extract_content_empty_document_errors() {
         .await;
     assert!(result.is_err());
 }
+
+#[test]
+fn wordperfect_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+    use crate::core::config::{ContentFilterConfig, OutputFormat};
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+            WpdEvent::FooterStart,
+            WpdEvent::Text("Running footer".to_string()),
+            WpdEvent::FooterEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+        for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+            let mut internal = build_wordperfect_internal_document(&doc);
+            internal.apply_furniture_filter(&ContentFilterConfig {
+                include_headers: headers,
+                include_footers: footers,
+                ..Default::default()
+            });
+            let content = crate::extraction::derive::derive_extraction_result(internal, false, format.clone()).content;
+            assert!(content.contains("Body text."), "{content}");
+            assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+            assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+            if let Some(at) = content.find("Running header") {
+                assert!(at > content.find("Body text.").unwrap(), "{content}");
+            }
+        }
+    }
+}
+
+#[test]
+fn wordperfect_header_and_footer_text_is_not_rendered_by_default() {
+    let doc = WpdDocument {
+        events: vec![
+            WpdEvent::HeaderStart,
+            WpdEvent::Text("Running header".to_string()),
+            WpdEvent::HeaderEnd,
+            WpdEvent::Text("Body text.".to_string()),
+            WpdEvent::ParagraphEnd,
+        ],
+        metadata: WpdMetadata::default(),
+    };
+    let content = crate::extraction::derive::derive_extraction_result(
+        build_wordperfect_internal_document(&doc),
+        false,
+        crate::core::config::OutputFormat::Plain,
+    )
+    .content;
+    assert_eq!(content.trim(), "Body text.");
+}

@@ -288,6 +288,8 @@ struct WpdWalker<'a> {
     diversions: Vec<Diversion>,
     /// Shared counter for footnote and endnote anchor keys.
     note_counter: u32,
+    /// Header and footer paragraphs, pushed after the body so their text follows it.
+    furniture: Vec<(String, Vec<TextAnnotation>, ContentLayer)>,
 }
 
 impl<'a> WpdWalker<'a> {
@@ -302,6 +304,7 @@ impl<'a> WpdWalker<'a> {
             table_depth: 0,
             diversions: Vec::new(),
             note_counter: 0,
+            furniture: Vec::new(),
         }
     }
 
@@ -460,14 +463,12 @@ impl<'a> WpdWalker<'a> {
         match diversion.kind {
             DiversionKind::Header => {
                 if !text.trim().is_empty() {
-                    let idx = self.builder.push_paragraph(&text, annotations, None, None);
-                    self.builder.set_layer(idx, ContentLayer::Header);
+                    self.furniture.push((text, annotations, ContentLayer::Header));
                 }
             }
             DiversionKind::Footer => {
                 if !text.trim().is_empty() {
-                    let idx = self.builder.push_paragraph(&text, annotations, None, None);
-                    self.builder.set_layer(idx, ContentLayer::Footer);
+                    self.furniture.push((text, annotations, ContentLayer::Footer));
                 }
             }
             DiversionKind::Aside { kind } => {
@@ -547,6 +548,10 @@ impl<'a> WpdWalker<'a> {
         self.flush_paragraph();
         while self.list_stack.pop().is_some() {
             self.builder.end_list();
+        }
+        for (text, annotations, layer) in std::mem::take(&mut self.furniture) {
+            let idx = self.builder.push_paragraph(&text, annotations, None, None);
+            self.builder.set_layer(idx, layer);
         }
     }
 
@@ -799,6 +804,9 @@ impl InternalDocumentExtractor for WordPerfectExtractor {
             ));
         }
         internal_doc.mime_type = mime_type.to_string();
+        if let Some(filter) = &config.content_filter {
+            internal_doc.apply_furniture_filter(filter);
+        }
         Ok(internal_doc)
     }
 

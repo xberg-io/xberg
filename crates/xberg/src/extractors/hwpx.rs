@@ -262,6 +262,7 @@ fn build_hwpx_internal_document(
     let mut image_index: usize = 0;
     let mut footnote_counter: u32 = 0;
     let image_resources = ImageResourceLookup::new(&doc.resources);
+    let mut furniture: Vec<(&[unhwp::model::Paragraph], ContentLayer)> = Vec::new();
 
     for section in &doc.sections {
         // Key on the section's own index. `unhwp` drops a section it cannot
@@ -270,22 +271,13 @@ fn build_hwpx_internal_document(
         let mut next_formula = 0usize;
         let mut paragraph_ordinal = 0usize;
         // Section headers/footers (`unhwp::model::Section::header`/`footer`) previously
-        // went unread entirely — only `section.content` was visited (#96). ~keep
+        // went unread entirely — only `section.content` was visited (#96). They are
+        // pushed after the last section so the text follows the body. ~keep
         if let Some(header_paragraphs) = &section.header {
-            push_header_footer_paragraphs(
-                &mut builder,
-                header_paragraphs,
-                ContentLayer::Header,
-                &mut footnote_counter,
-            );
+            furniture.push((header_paragraphs, ContentLayer::Header));
         }
         if let Some(footer_paragraphs) = &section.footer {
-            push_header_footer_paragraphs(
-                &mut builder,
-                footer_paragraphs,
-                ContentLayer::Footer,
-                &mut footnote_counter,
-            );
+            furniture.push((footer_paragraphs, ContentLayer::Footer));
         }
 
         for block in &section.content {
@@ -411,6 +403,10 @@ fn build_hwpx_internal_document(
         for (_, latex) in scanned.into_iter().flatten().skip(next_formula) {
             builder.push_formula(latex, None, None);
         }
+    }
+
+    for (paragraphs, layer) in furniture {
+        push_header_footer_paragraphs(&mut builder, paragraphs, layer, &mut footnote_counter);
     }
 
     builder.build()
@@ -633,7 +629,11 @@ impl InternalDocumentExtractor for HwpxExtractor {
 
         let doc = unhwp::parse_bytes(content)
             .map_err(|e| crate::XbergError::parsing(format!("Failed to parse HWPX: {e}")))?;
-        Ok(build_hwpx_internal_document(doc, mime_type, &section_formulas))
+        let mut internal = build_hwpx_internal_document(doc, mime_type, &section_formulas);
+        if let Some(filter) = &config.content_filter {
+            internal.apply_furniture_filter(filter);
+        }
+        Ok(internal)
     }
 
     fn supported_mime_types(&self) -> &[&str] {
@@ -855,6 +855,59 @@ mod tests {
             .find(|e| e.layer == ContentLayer::Footer)
             .expect("footer element must be present");
         assert_eq!(footer.text, "Page footer text");
+    }
+
+    fn hwpx_document_with_furniture() -> Document {
+        let mut doc = Document::new();
+        let mut section = Section::new(0);
+        section.header = Some(vec![Paragraph::text("Running header")]);
+        section.footer = Some(vec![Paragraph::text("Running footer")]);
+        section.content.push(Block::Paragraph(Paragraph::text("Body text")));
+        doc.sections.push(section);
+        doc
+    }
+
+    #[test]
+    fn hwpx_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+                let mut internal = build_hwpx_internal_document(
+                    hwpx_document_with_furniture(),
+                    "application/haansofthwpx",
+                    &AHashMap::new(),
+                );
+                internal.apply_furniture_filter(&ContentFilterConfig {
+                    include_headers: headers,
+                    include_footers: footers,
+                    ..Default::default()
+                });
+                let content =
+                    crate::extraction::derive::derive_extraction_result(internal, false, format.clone()).content;
+                assert!(content.contains("Body text"), "{content}");
+                assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+                assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+                if let Some(at) = content.find("Running header") {
+                    assert!(at > content.find("Body text").unwrap(), "{content}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hwpx_header_and_footer_text_is_not_rendered_by_default() {
+        let internal = build_hwpx_internal_document(
+            hwpx_document_with_furniture(),
+            "application/haansofthwpx",
+            &AHashMap::new(),
+        );
+        let content = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        )
+        .content;
+        assert_eq!(content.trim(), "Body text");
     }
 
     #[test]

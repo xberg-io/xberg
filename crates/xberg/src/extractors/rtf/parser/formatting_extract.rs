@@ -238,6 +238,12 @@ impl FormattingParser {
         if self.formatting.text_offset > 0 {
             self.formatting.text_offset += 1;
         }
+        if self.header.active {
+            self.header.text.push(' ');
+        }
+        if self.footer.active {
+            self.footer.text.push(' ');
+        }
     }
 
     fn handle_text(&mut self, character: char) {

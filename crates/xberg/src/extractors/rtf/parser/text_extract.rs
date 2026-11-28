@@ -49,6 +49,16 @@ const SKIP_DESTINATIONS: &[&str] = &[
     "wgrffmtfilter",
     "fcharset",
     "pgdsctbl",
+    // Running headers and footers are captured separately by the formatting
+    // pass; left in, their text would also print inline in the body.
+    "header",
+    "headerl",
+    "headerr",
+    "headerf",
+    "footer",
+    "footerl",
+    "footerr",
+    "footerf",
 ];
 
 #[derive(Default)]
