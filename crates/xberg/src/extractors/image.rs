@@ -3283,11 +3283,19 @@ impl ImageExtractor {
 
     /// OCR an image; a TIFF with several frames is read frame by frame, one page per frame (#3447).
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
-    async fn ocr_image(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
+    async fn ocr_image(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+        walk: Option<&FrameWalk>,
+    ) -> Result<InternalDocument> {
         #[cfg(feature = "ocr")]
-        if let Some(offsets) = image_tiff_frames::multi_frame_offsets(content, mime_type) {
-            return self.ocr_tiff_frames(content, mime_type, config, &offsets).await;
+        if let Some(walk) = walk.filter(|walk| image_tiff_frames::reads_by_frame(walk)) {
+            return self.ocr_tiff_frames(content, mime_type, config, walk).await;
         }
+        #[cfg(not(feature = "ocr"))]
+        let _ = walk;
         Box::pin(self.ocr_one_image(content, mime_type, config)).await
     }
 
@@ -4540,35 +4548,44 @@ impl Plugin for ImageExtractor {
     }
 }
 
-/// Reject a multi-frame TIFF whose frame count exceeds `security_limits.max_pages`
-/// before per-frame OCR begins (#1451).
-///
-/// TIFF is the only image container this crate treats as multi-page: frames are
-/// OCR'd and their text tracked per page (see
-/// `crate::extraction::image::extract_text_from_image_with_ocr`), while an
-/// animated PNG/WebP/JPEG is always OCR'd as one whole image regardless of frame
-/// count. Counting is only possible under the `ocr` feature, the sole feature
-/// that pulls in the `tiff` crate `detect_tiff_frame_count` needs to walk IFDs
-/// without decoding any raster data; other OCR feature combinations
-/// (`ocr-wasm`, `ocr-pipeline` alone) have no way to count frames cheaply, so
-/// this is a no-op there and `max_pages` goes unenforced on TIFF in those
-/// builds.
+/// The frame directories of a TIFF, walked once per extraction.
 #[cfg(feature = "ocr")]
-fn enforce_image_page_limit(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<()> {
-    let max_pages = config.security_limits.as_ref().and_then(|limits| limits.max_pages);
-    let Some(max_pages) = max_pages else {
-        return Ok(());
-    };
+type FrameWalk = crate::extraction::image_tiff::TiffIfdWalk;
+#[cfg(not(feature = "ocr"))]
+type FrameWalk = ();
+
+/// Walk the frames of a TIFF once and reject it when it holds more than
+/// `security_limits.max_pages` frames, or more than
+/// [`DEFAULT_MAX_TIFF_FRAMES`](crate::extraction::image_tiff::DEFAULT_MAX_TIFF_FRAMES) when no
+/// limit is set (#1451, #3447). Each frame costs a full OCR pass and a crafted file can hold
+/// tens of thousands of tiny directories, so the walk stops once past the ceiling.
+///
+/// TIFF is the only image container this crate treats as multi-page; an animated PNG/WebP/JPEG
+/// is OCR'd as one whole image. The walk reads only directory structure, never pixels, and only
+/// the `ocr` feature builds it; other OCR feature combinations (`ocr-wasm`, `ocr-pipeline`
+/// alone) cannot count frames, so `max_pages` goes unenforced on TIFF there.
+///
+/// Returns `None` for anything that is not a TIFF with a readable header.
+#[cfg(feature = "ocr")]
+fn tiff_frame_walk(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<Option<FrameWalk>> {
+    use crate::extraction::image_tiff::{DEFAULT_MAX_TIFF_FRAMES, TiffWalkEnd, walk_tiff_ifds};
     if !mime_type.to_lowercase().contains("tiff") {
-        return Ok(());
+        return Ok(None);
     }
-    let Ok(frame_count) = crate::extraction::image::detect_tiff_frame_count(content) else {
-        return Ok(());
+    let max_pages = config.security_limits.as_ref().and_then(|limits| limits.max_pages);
+    let ceiling = max_pages.unwrap_or(DEFAULT_MAX_TIFF_FRAMES);
+    let Some(walk) = walk_tiff_ifds(content, ceiling) else {
+        return Ok(None);
     };
-    Ok(crate::extractors::security::enforce_page_count(
-        frame_count,
-        Some(max_pages),
-    )?)
+    if walk.end == TiffWalkEnd::CapReached {
+        crate::extractors::security::enforce_page_count(ceiling.saturating_add(1), Some(ceiling))?;
+    }
+    Ok(Some(walk))
+}
+
+#[cfg(all(test, feature = "ocr"))]
+fn enforce_image_page_limit(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<()> {
+    tiff_frame_walk(content, mime_type, config).map(|_| ())
 }
 
 /// Guards the one-time "max_pages is unenforced for TIFF" warning so it fires
@@ -4645,7 +4662,13 @@ impl InternalDocumentExtractor for ImageExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         tracing::debug!(format = "image", size_bytes = content.len(), "extraction starting");
-        enforce_image_page_limit(content, mime_type, config)?;
+        #[cfg(feature = "ocr")]
+        let tiff_walk = tiff_frame_walk(content, mime_type, config)?;
+        #[cfg(not(feature = "ocr"))]
+        let tiff_walk: Option<FrameWalk> = {
+            enforce_image_page_limit(content, mime_type, config)?;
+            None
+        };
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
         let extraction_metadata = metadata_for_ocr_route(content, security_limits, config)?;
@@ -4663,6 +4686,8 @@ impl InternalDocumentExtractor for ImageExtractor {
             (content, mime_type)
         };
 
+        #[allow(unused_variables)]
+        let tiff_walk = tiff_walk.filter(|_| mime_type.to_lowercase().contains("tiff"));
         let format_str = extraction_metadata.format;
         let image_metadata = crate::types::ImageMetadata {
             width: extraction_metadata.width,
@@ -4717,8 +4742,12 @@ impl InternalDocumentExtractor for ImageExtractor {
             };
             doc.mime_type = mime_type.to_string();
             #[cfg(feature = "ocr")]
-            if let Some(offsets) = image_tiff_frames::multi_frame_offsets(content, mime_type) {
-                doc.metadata.pages = Some(image_tiff_frames::page_count_metadata(offsets.len()));
+            if let Some(walk) = tiff_walk
+                .as_ref()
+                .filter(|walk| image_tiff_frames::reads_by_frame(walk))
+            {
+                doc.metadata.pages = Some(image_tiff_frames::page_count_metadata(walk.offsets.len()));
+                doc.processing_warnings.extend(image_tiff_frames::walk_warning(walk));
             }
             if let Some(warning) = exif_warning.clone() {
                 doc.processing_warnings.push(warning);
@@ -4733,7 +4762,7 @@ impl InternalDocumentExtractor for ImageExtractor {
         {
             #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
             {
-                let mut doc = Box::pin(self.ocr_image(content, mime_type, config)).await?;
+                let mut doc = Box::pin(self.ocr_image(content, mime_type, config, tiff_walk.as_ref())).await?;
                 if let Some(ocr_config) = config.ocr.as_ref() {
                     apply_public_image_ocr_element_policy(&mut doc, ocr_config);
                 }
@@ -4754,7 +4783,7 @@ impl InternalDocumentExtractor for ImageExtractor {
                 not(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))
             ))]
             {
-                let mut doc = Box::pin(self.ocr_image(content, mime_type, config)).await?;
+                let mut doc = Box::pin(self.ocr_image(content, mime_type, config, tiff_walk.as_ref())).await?;
                 if let Some(ocr_config) = config.ocr.as_ref() {
                     apply_public_image_ocr_element_policy(&mut doc, ocr_config);
                 }

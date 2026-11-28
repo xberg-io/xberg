@@ -3,17 +3,32 @@
 use super::ImageExtractor;
 use crate::Result;
 use crate::core::config::ExtractionConfig;
-use crate::types::internal::{ElementKind, InternalDocument, RelationshipTarget};
+use crate::extraction::image_tiff::{TiffIfdWalk, TiffWalkEnd, single_frame_tiff};
+use crate::types::internal::{ElementKind, InternalDocument, InternalElementId, RelationshipTarget};
 use crate::types::page::{PageStructure, PageUnitType};
+use crate::types::{OcrPageFailure, ProcessingWarning};
 
-/// The directory offsets of a TIFF's frames when it holds more than one, `None` otherwise.
-pub(super) fn multi_frame_offsets(content: &[u8], mime_type: &str) -> Option<Vec<u64>> {
-    if !mime_type.to_lowercase().contains("tiff") {
+const WARNING_SOURCE: &str = "tiff_frames";
+
+/// Whether the file is read frame by frame: it holds several frames, or one frame followed by a
+/// directory that could not be read (which must be reported rather than dropped).
+pub(super) fn reads_by_frame(walk: &TiffIfdWalk) -> bool {
+    walk.offsets.len() > 1 || (walk.offsets.len() == 1 && matches!(walk.end, TiffWalkEnd::Broken(_)))
+}
+
+/// The warning for a frame chain that ends at an unreadable directory.
+pub(super) fn walk_warning(walk: &TiffIfdWalk) -> Option<ProcessingWarning> {
+    let TiffWalkEnd::Broken(reason) = &walk.end else {
         return None;
-    }
-    crate::extraction::image::tiff_frame_ifd_offsets(content)
-        .ok()
-        .filter(|offsets| offsets.len() > 1)
+    };
+    Some(ProcessingWarning {
+        source: std::borrow::Cow::Borrowed(WARNING_SOURCE),
+        message: std::borrow::Cow::Owned(format!(
+            "TIFF frame {} and any frames after it were not read: {reason}; {} frames were read",
+            walk.offsets.len() + 1,
+            walk.offsets.len()
+        )),
+    })
 }
 
 /// A page count without byte ranges, for a document whose units are all pages.
@@ -28,49 +43,128 @@ pub(super) fn page_count_metadata(total: usize) -> PageStructure {
 
 impl ImageExtractor {
     /// OCR each frame as its own single-frame TIFF and join the results in frame order, tagging
-    /// every element, page and OCR element with its frame number.
+    /// every element, table, page and OCR element with its frame number.
+    ///
+    /// Frames are read one at a time: each holds a full copy of the file and a decoded raster,
+    /// so reading them concurrently would multiply the peak by the thread budget. A frame whose
+    /// OCR fails is recorded in `ocr_page_failures` and leaves a blank page; the remaining
+    /// frames are still read. When every frame fails, the last error is returned.
     pub(super) async fn ocr_tiff_frames(
         &self,
         content: &[u8],
         mime_type: &str,
         config: &ExtractionConfig,
-        offsets: &[u64],
+        walk: &TiffIfdWalk,
     ) -> Result<InternalDocument> {
-        let mut merged: Option<InternalDocument> = None;
-        let mut pages = Vec::with_capacity(offsets.len());
+        let mut doc = InternalDocument::new("image");
+        let mut pages = Vec::with_capacity(walk.offsets.len());
         let mut text_pages = Vec::new();
         let mut ocr_elements = Vec::new();
-        for (index, offset) in offsets.iter().enumerate() {
+        let mut stats = OcrStats::default();
+        let mut last_error = None;
+        for (index, offset) in walk.offsets.iter().enumerate() {
             let page_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-            if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-                return Err(crate::XbergError::Cancelled);
+            let read = match single_frame_tiff(content, *offset) {
+                Some(frame_bytes) => Box::pin(self.ocr_one_image(&frame_bytes, mime_type, config)).await,
+                None => Err(crate::XbergError::parsing(format!(
+                    "TIFF frame {page_number} has an unreadable directory"
+                ))),
+            };
+            let frame = match read {
+                Ok(frame) => frame,
+                Err(error @ crate::XbergError::Cancelled) => return Err(error),
+                Err(error) => {
+                    tracing::warn!(page = page_number, %error, "TIFF frame OCR failed; continuing with the next frame");
+                    doc.ocr_page_failures.push(OcrPageFailure {
+                        page: page_number,
+                        error: error.to_string(),
+                        recovered: false,
+                    });
+                    doc.processing_warnings.push(ProcessingWarning {
+                        source: std::borrow::Cow::Borrowed(WARNING_SOURCE),
+                        message: std::borrow::Cow::Owned(format!(
+                            "TIFF frame {page_number} could not be read: {error}"
+                        )),
+                    });
+                    last_error = Some(error);
+                    pages.push(blank_page(page_number));
+                    continue;
+                }
+            };
+            stats.add(&frame.metadata);
+            if stats.frames == 1 {
+                doc.metadata = frame.metadata.clone();
             }
-            let frame_bytes = crate::extraction::image::single_frame_tiff(content, *offset).ok_or_else(|| {
-                crate::XbergError::parsing(format!("TIFF frame {page_number} has an unreadable directory"))
-            })?;
-            let mut frame = Box::pin(self.ocr_one_image(&frame_bytes, mime_type, config)).await?;
-            drop(frame_bytes);
-
-            let target = merged.get_or_insert_with(|| {
-                let mut base = InternalDocument::new("image");
-                base.metadata = std::mem::take(&mut frame.metadata);
-                base
-            });
-            let mut page = append_frame(target, frame, page_number, &mut ocr_elements);
+            let mut page = append_frame(&mut doc, frame, page_number, &mut ocr_elements);
             page.page_number = page_number;
             if !page.content.trim().is_empty() {
                 text_pages.push(page_number);
             }
             pages.push(page);
         }
+        if stats.frames == 0
+            && let Some(error) = last_error
+        {
+            return Err(error);
+        }
 
-        let mut doc = merged.unwrap_or_else(|| InternalDocument::new("image"));
+        stats.write_into(&mut doc.metadata);
+        doc.processing_warnings.extend(walk_warning(walk));
         doc.metadata.pages = Some(page_count_metadata(pages.len()));
         doc.prebuilt_pages = Some(pages);
         doc.ocr_text_pages = text_pages;
         doc.prebuilt_ocr_elements = (!ocr_elements.is_empty()).then_some(ocr_elements);
         doc.mime_type = mime_type.to_string();
         Ok(doc)
+    }
+}
+
+/// Word-weighted OCR figures across the frames that were read.
+#[derive(Default)]
+struct OcrStats {
+    frames: usize,
+    words: u64,
+    confidence_weight: f64,
+    confidence_sum: f64,
+}
+
+impl OcrStats {
+    fn add(&mut self, metadata: &crate::types::Metadata) {
+        self.frames += 1;
+        let words = metadata
+            .additional
+            .get("word_count")
+            .and_then(serde_json::Value::as_u64);
+        self.words += words.unwrap_or(0);
+        // -1 is Tesseract's "no confidence available" sentinel.
+        let confidence = metadata
+            .additional
+            .get("mean_text_conf")
+            .and_then(serde_json::Value::as_f64)
+            .filter(|confidence| *confidence >= 0.0);
+        if let Some(confidence) = confidence {
+            let weight = words.unwrap_or(1).max(1) as f64;
+            self.confidence_weight += weight;
+            self.confidence_sum += confidence * weight;
+        }
+    }
+
+    /// Replace the first frame's word count and mean confidence with the whole document's.
+    fn write_into(&self, metadata: &mut crate::types::Metadata) {
+        if metadata.additional.contains_key("word_count") {
+            metadata
+                .additional
+                .insert("word_count".into(), serde_json::Value::from(self.words));
+        }
+        if self.confidence_weight > 0.0 && metadata.additional.contains_key("mean_text_conf") {
+            metadata.additional.insert(
+                "mean_text_conf".into(),
+                serde_json::Value::from(self.confidence_sum / self.confidence_weight),
+            );
+        }
+        metadata
+            .additional
+            .insert("ocr_frames_read".into(), serde_json::Value::from(self.frames as u64));
     }
 }
 
@@ -93,6 +187,9 @@ fn append_frame(
             ElementKind::Image { image_index } if frame_has_images => *image_index += image_base,
             _ => {}
         }
+        let merged_index = target.elements.len() as u32;
+        element.id =
+            InternalElementId::generate(element.kind.discriminant(), &element.text, element.page, merged_index);
         target.push_element(element);
     }
     for mut relationship in frame.relationships {
@@ -101,6 +198,9 @@ fn append_frame(
             *target_index += element_base;
         }
         target.push_relationship(relationship);
+    }
+    for table in &mut frame.tables {
+        table.page_number = page_number;
     }
     target.tables.append(&mut frame.tables);
     target.images.append(&mut frame.images);
@@ -121,7 +221,22 @@ fn append_frame(
     let frame_page = frame
         .prebuilt_pages
         .and_then(|frame_pages| frame_pages.into_iter().next());
-    frame_page.unwrap_or_else(|| blank_page(page_number))
+    let mut page = frame_page.unwrap_or_else(|| blank_page(page_number));
+    page.tables = page
+        .tables
+        .iter()
+        .map(|table| {
+            let mut table = crate::types::Table::clone(table);
+            table.page_number = page_number;
+            std::sync::Arc::new(table)
+        })
+        .collect();
+    if frame_has_images {
+        for index in &mut page.image_indices {
+            *index += image_base;
+        }
+    }
+    page
 }
 
 fn blank_page(page_number: u32) -> crate::types::PageContent {
@@ -143,3 +258,7 @@ fn blank_page(page_number: u32) -> crate::types::PageContent {
         viewports: None,
     }
 }
+
+#[cfg(test)]
+#[path = "image_tiff_frames_tests.rs"]
+mod tests;
