@@ -308,6 +308,20 @@ pub(crate) fn defer_ocr_cache_write(write: impl FnOnce() + Send + 'static) {
     }
 }
 
+/// Like [`defer_ocr_cache_write`], for a whole-extraction write: it runs after the request's
+/// OCR writes and is never displaced by them.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn defer_outer_cache_write(write: impl FnOnce() + Send + 'static) {
+    if ocr_stop_requested() {
+        return;
+    }
+    if let Some(models) = current().and_then(|context| context.2) {
+        models.defer_outer(write);
+    } else {
+        write();
+    }
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn observe_vertical_model(directories: &[String], revision: Option<blake3::Hash>) {
     if let Some(context) = current() {

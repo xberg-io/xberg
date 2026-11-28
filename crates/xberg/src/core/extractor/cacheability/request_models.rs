@@ -6,8 +6,18 @@ use super::{current, invalidate_current, is_cacheable, ocr_stop_requested};
 use crate::cache::blake3_hash_file;
 
 const MAX_PENDING_OCR_WRITES: usize = 64;
+/// Whole-extraction writes are bounded apart from the per-page OCR writes, so a document with
+/// more OCR'd pages than [`MAX_PENDING_OCR_WRITES`] still publishes its extraction.
+const MAX_PENDING_OUTER_WRITES: usize = 8;
 
-type PendingWrites = Vec<Box<dyn FnOnce() + Send>>;
+type PendingWrite = Box<dyn FnOnce() + Send>;
+
+#[derive(Default)]
+struct PendingWrites {
+    ocr: Vec<PendingWrite>,
+    outer: Vec<PendingWrite>,
+    dropped_ocr: usize,
+}
 
 pub(super) struct RequestModels {
     digests: Mutex<HashMap<PathBuf, String>>,
@@ -19,7 +29,7 @@ impl RequestModels {
     pub(super) fn new(result_cache_disabled: bool) -> Self {
         Self {
             digests: Mutex::default(),
-            writes: Mutex::new(Some(Vec::new())),
+            writes: Mutex::new(Some(PendingWrites::default())),
             result_cache_disabled,
         }
     }
@@ -50,8 +60,26 @@ impl RequestModels {
 
     pub(super) fn defer(&self, write: impl FnOnce() + Send + 'static) {
         let mut writes = self.writes.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(writes) = writes.as_mut().filter(|writes| writes.len() < MAX_PENDING_OCR_WRITES) {
-            writes.push(Box::new(write));
+        if let Some(writes) = writes.as_mut() {
+            if writes.ocr.len() < MAX_PENDING_OCR_WRITES {
+                writes.ocr.push(Box::new(write));
+            } else {
+                writes.dropped_ocr += 1;
+            }
+        }
+    }
+
+    pub(super) fn defer_outer(&self, write: impl FnOnce() + Send + 'static) {
+        let mut writes = self.writes.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(writes) = writes.as_mut() {
+            if writes.outer.len() < MAX_PENDING_OUTER_WRITES {
+                writes.outer.push(Box::new(write));
+            } else {
+                tracing::debug!(
+                    bound = MAX_PENDING_OUTER_WRITES,
+                    "Extraction cache write over the per-request bound was not queued"
+                );
+            }
         }
     }
 
@@ -64,6 +92,13 @@ impl RequestModels {
         else {
             return;
         };
+        if writes.dropped_ocr > 0 {
+            tracing::debug!(
+                dropped = writes.dropped_ocr,
+                bound = MAX_PENDING_OCR_WRITES,
+                "OCR cache writes over the per-request bound were not queued; those pages are not cached"
+            );
+        }
         if ocr_stop_requested() || !is_cacheable() {
             return;
         }
@@ -84,7 +119,7 @@ impl RequestModels {
             }
         }
         drop(digests);
-        for write in writes {
+        for write in writes.ocr.into_iter().chain(writes.outer) {
             if ocr_stop_requested() {
                 break;
             }
@@ -202,4 +237,29 @@ async fn worker_cannot_enqueue_after_deferred_ocr_queue_is_drained() {
     })
     .await;
     worker.await.unwrap();
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn extraction_write_survives_more_ocr_writes_than_the_queue_holds() {
+    use std::sync::{Arc, Mutex};
+
+    let ran = Arc::new(Mutex::new(Vec::new()));
+    super::with_ocr_cancellation(None, async {
+        for page in 0..=MAX_PENDING_OCR_WRITES {
+            let ran = Arc::clone(&ran);
+            super::defer_ocr_cache_write(move || ran.lock().unwrap().push(page));
+        }
+        let outer = Arc::clone(&ran);
+        super::defer_outer_cache_write(move || outer.lock().unwrap().push(usize::MAX));
+        assert!(ran.lock().unwrap().is_empty(), "writes wait for the request boundary");
+    })
+    .await;
+    let ran = ran.lock().unwrap();
+    let mut expected: Vec<usize> = (0..MAX_PENDING_OCR_WRITES).collect();
+    expected.push(usize::MAX);
+    assert_eq!(
+        *ran, expected,
+        "the OCR write over the bound is dropped, the extraction write is not"
+    );
 }

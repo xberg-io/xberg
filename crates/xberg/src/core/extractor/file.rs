@@ -413,7 +413,7 @@ fn publish_file_cache_when_validated(write: impl FnOnce() + Send + 'static) {
         }
     };
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    super::cacheability::defer_ocr_cache_write(publish);
+    super::cacheability::defer_outer_cache_write(publish);
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
     publish();
 }
