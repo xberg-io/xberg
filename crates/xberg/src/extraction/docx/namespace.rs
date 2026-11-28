@@ -86,18 +86,32 @@ pub(crate) fn canonicalize_prefixes(xml: &str) -> Canonicalized<'_> {
 /// Point the strict ISO 29500 WordprocessingML and DrawingML URIs at the transitional ones.
 ///
 /// For parts read with `roxmltree`, which resolves namespaces itself and compares them against the
-/// transitional URIs, so only the URIs need to change.
+/// transitional URIs. Only namespace declarations are edited, so attribute values and text that
+/// happen to contain a strict URI (a style ID, say) are left alone.
 pub(crate) fn strict_to_transitional(xml: &str) -> Cow<'_, str> {
-    let mut out = Cow::Borrowed(xml);
-    for (strict, transitional) in [
-        (STRICT_WORDPROCESSINGML, TRANSITIONAL_WORDPROCESSINGML),
-        (STRICT_DRAWINGML, TRANSITIONAL_DRAWINGML),
-    ] {
-        if out.contains(strict) {
-            out = Cow::Owned(out.replace(strict, transitional));
-        }
+    let mut out: Option<String> = None;
+    let mut copied = 0usize;
+    for (index, _) in xml.match_indices("xmlns") {
+        let Some((_, range)) = read_declaration(xml, index + "xmlns".len()) else {
+            continue;
+        };
+        let transitional = match decode_references(&xml[range.clone()]).as_str() {
+            STRICT_WORDPROCESSINGML => TRANSITIONAL_WORDPROCESSINGML,
+            STRICT_DRAWINGML => TRANSITIONAL_DRAWINGML,
+            _ => continue,
+        };
+        let out = out.get_or_insert_with(|| String::with_capacity(xml.len()));
+        out.push_str(&xml[copied..range.start]);
+        out.push_str(transitional);
+        copied = range.end;
     }
-    out
+    match out {
+        Some(mut out) => {
+            out.push_str(&xml[copied..]);
+            Cow::Owned(out)
+        }
+        None => Cow::Borrowed(xml),
+    }
 }
 
 struct DeclarationScan {
@@ -113,10 +127,11 @@ fn scan_declarations(xml: &str) -> Option<DeclarationScan> {
     let mut needs_rewrite = false;
     let mut binds_wordprocessingml = false;
     for (index, _) in xml.match_indices("xmlns") {
-        let Some((prefix, uri)) = read_declaration(&xml[index + "xmlns".len()..]) else {
+        let Some((prefix, range)) = read_declaration(xml, index + "xmlns".len()) else {
             needs_rewrite = true;
             continue;
         };
+        let uri = decode_references(&xml[range]);
         if !declaration_is_canonical(prefix, &uri) {
             needs_rewrite = true;
             binds_wordprocessingml |= matches!(canonical_prefix(&uri), Some("w"));
@@ -125,20 +140,47 @@ fn scan_declarations(xml: &str) -> Option<DeclarationScan> {
     needs_rewrite.then_some(DeclarationScan { binds_wordprocessingml })
 }
 
-/// Parse `[:prefix] = "uri"` following an `xmlns` token.
-fn read_declaration(rest: &str) -> Option<(&str, String)> {
-    let (prefix, rest) = match rest.strip_prefix(':') {
-        Some(after) => {
-            let end = after.find(|c: char| c == '=' || c.is_ascii_whitespace())?;
-            (&after[..end], &after[end..])
+/// How far past an `xmlns` token a declaration may extend. Bounds every search so that text which
+/// merely repeats `xmlns` cannot make the scan quadratic; real declarations are far shorter.
+const DECLARATION_WINDOW: usize = 1024;
+
+/// Parse `[:prefix] = "uri"` after the `xmlns` token that ends at `start`, returning the prefix
+/// and the byte range of the raw URI text.
+fn read_declaration(xml: &str, start: usize) -> Option<(&str, std::ops::Range<usize>)> {
+    let bytes = xml.as_bytes();
+    let window_end = bytes.len().min(start + DECLARATION_WINDOW);
+    let mut at = start;
+    let mut prefix = "";
+    if bytes.get(at) == Some(&b':') {
+        let name_start = at + 1;
+        at = name_start;
+        while at < window_end && is_name_byte(bytes[at]) {
+            at += 1;
         }
-        None => ("", rest),
-    };
-    let rest = rest.trim_start().strip_prefix('=')?.trim_start();
-    let quote = rest.chars().next().filter(|c| matches!(c, '"' | '\''))?;
-    let value = &rest[1..];
-    let value = &value[..value.find(quote)?];
-    Some((prefix, decode_references(value)))
+        if at >= window_end {
+            return None;
+        }
+        prefix = &xml[name_start..at];
+    }
+    while at < window_end && bytes[at].is_ascii_whitespace() {
+        at += 1;
+    }
+    if bytes.get(at) != Some(&b'=') {
+        return None;
+    }
+    at += 1;
+    while at < window_end && bytes[at].is_ascii_whitespace() {
+        at += 1;
+    }
+    let quote = *bytes.get(at).filter(|b| matches!(b, b'"' | b'\''))?;
+    let value_start = at + 1;
+    let length = bytes.get(value_start..window_end)?.iter().position(|b| *b == quote)?;
+    Some((prefix, value_start..value_start + length))
+}
+
+/// Bytes allowed in a namespace prefix (an XML NCName; every non-ASCII byte is part of one).
+fn is_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.') || byte >= 0x80
 }
 
 /// Resolve character and entity references in a declared URI.
@@ -765,5 +807,40 @@ mod tests {
             unconverted.color_scheme.is_none(),
             "control: strict URI alone must not match"
         );
+    }
+
+    #[test]
+    fn strict_conversion_edits_declarations_only() {
+        let styles = format!(
+            r#"<w:styles xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/ma&#105;n"><w:style w:type="paragraph" w:styleId="{STRICT_WML}"/></w:styles>"#
+        );
+        let converted = strict_to_transitional(&styles);
+        assert!(converted.contains(&format!(r#"xmlns:w="{WML}""#)));
+        assert!(
+            converted.contains(&format!(r#"w:styleId="{STRICT_WML}""#)),
+            "{converted}"
+        );
+        let catalog = crate::extraction::docx::styles::parse_styles_xml(&converted).unwrap();
+        assert!(catalog.styles.contains_key(STRICT_WML));
+        assert!(matches!(strict_to_transitional("<a/>"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn repeated_xmlns_text_is_scanned_in_linear_time() {
+        let hostile = format!(r#"<w:d xmlns:w="{WML}"><w:t>{}</w:t></w:d>"#, "xmlns:".repeat(200_000));
+        let started = std::time::Instant::now();
+        let _ = canonicalize_prefixes(&hostile);
+        let _ = strict_to_transitional(&hostile);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn declaration_cut_by_the_window_inside_a_multibyte_name_is_unreadable_not_a_panic() {
+        let xml = format!("<d xmlns:{}=\"u\"/>", "é".repeat(1000));
+        assert!(read_declaration(&xml, "<d xmlns".len()).is_none());
     }
 }
