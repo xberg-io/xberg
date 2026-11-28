@@ -11,7 +11,7 @@ native build scripts, the Dockerfiles, the OCR build scripts, the vendored sourc
 the pinned asset checksum manifests — so this file describes the release it ships with rather
 than a hand-maintained snapshot.
 
-It covers 16 non-Rust components and 905 Rust crates
+It covers 16 non-Rust components and 887 Rust crates
 resolved from 13 shipped dependency graphs (normal and build dependencies, all
 platforms). The Rust crate texts are collected from the same graphs `cargo deny` audits:
 
@@ -284,7 +284,7 @@ with their digests:
 
 ## Rust crate dependencies
 
-905 crates from 13 shipped dependency graphs, 518 distinct license texts. Each crate
+887 crates from 13 shipped dependency graphs, 518 distinct license texts. Each crate
 appears under every distinct license text it ships, and a crate that ships no license file of its
 own is covered by the canonical SPDX text for its declared expression. Build-only dependencies are
 listed because they are part of the audited graph, not because their code is redistributed.
@@ -682,7 +682,7 @@ Applies to: axum-core 0.5.6
 
 ### T-00fcc7a934dd
 
-Source: `LICENSE_A2`. Applies to 2 entries.
+Source: `LICENSE_A2`. Applies to 1 entry.
 
 ```text
 
@@ -889,7 +889,7 @@ Source: `LICENSE_A2`. Applies to 2 entries.
    limitations under the License.
 ```
 
-Applies to: blake3 1.8.7, blake3 1.8.8
+Applies to: blake3 1.8.8
 
 ### T-010492e490b9
 
@@ -1130,7 +1130,7 @@ Applies to: zopfli 0.8.4
 
 ### T-01c266bced4a
 
-Source: `COPYING`. Applies to 12 entries.
+Source: `COPYING`. Applies to 11 entries.
 
 ```text
 This project is dual-licensed under the Unlicense and MIT licenses.
@@ -1138,7 +1138,7 @@ This project is dual-licensed under the Unlicense and MIT licenses.
 You may use this code under the terms of either license.
 ```
 
-Applies to: aho-corasick 1.1.5, byteorder 1.5.0, globset 0.4.21, globset 0.4.22, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
+Applies to: aho-corasick 1.1.5, byteorder 1.5.0, globset 0.4.22, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
 
 ### T-0218327e7a48
 
@@ -2731,7 +2731,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: ahash 0.8.14
+Applies to: ahash 0.8.15
 
 ### T-0462c81f010f
 
@@ -3239,7 +3239,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: lru 0.18.5, lru 0.19.1
+Applies to: lru 0.18.5, lru 0.19.2
 
 ### T-0621878e61f0
 
@@ -3383,7 +3383,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: `droid-sans-fallback`, candle-nn 0.11.1, candle-transformers 0.11.1, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, gloo-timers 0.4.1, hf-hub 1.0.0, hf-xet 1.8.1, jni 0.22.4, lofty 0.25.5, mail-parser 1.0.2, mathemascii 0.4.0, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, opentelemetry 0.33.1, opentelemetry-semantic-conventions 0.33.1, opentelemetry_sdk 0.33.1, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tract-extra 0.23.11, typst-syntax 0.15.1, typst-timing 0.15.1, typst-utils 0.15.1, wasite 1.0.2, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, xet-client 1.8.1, xet-core-structures 1.8.1, xet-data 1.8.1, xet-runtime 1.8.1, zune-inflate 0.2.54
+Applies to: `droid-sans-fallback`, candle-nn 0.11.1, candle-transformers 0.11.1, dart-sys 4.1.5, encodify 1.0.3, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, gloo-timers 0.4.1, hf-hub 1.0.0, hf-xet 1.8.1, jni 0.22.4, lofty 0.25.5, mail-parser 1.0.2, mathemascii 0.4.0, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, opentelemetry 0.33.1, opentelemetry-semantic-conventions 0.33.1, opentelemetry_sdk 0.33.1, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tract-extra 0.23.11, typst-syntax 0.15.1, typst-timing 0.15.1, typst-utils 0.15.1, wasite 1.0.2, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, xet-client 1.8.1, xet-core-structures 1.8.1, xet-data 1.8.1, xet-runtime 1.8.1, zune-inflate 0.2.54
 
 ### T-077d138387dd
 
@@ -3503,7 +3503,7 @@ Applies to: fallible-iterator 0.3.0
 
 ### T-090a294a492a
 
-Source: `LICENSE-MIT`. Applies to 1 entry.
+Source: `LICENSE-MIT`. Applies to 2 entries.
 
 ```text
 Copyright (c) 2019 Embark Studios
@@ -3533,7 +3533,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: cfg-expr 0.17.2
+Applies to: cfg-expr 0.17.2, cfg-expr 0.20.11
 
 ### T-0982c3339015
 
@@ -3566,7 +3566,7 @@ Applies to: lz4_flex 0.13.2
 
 ### T-09e8a9bcec80
 
-Source: `LICENSE`. Applies to 8 entries.
+Source: `LICENSE`. Applies to 6 entries.
 
 ```text
 
@@ -3746,7 +3746,7 @@ Source: `LICENSE`. Applies to 8 entries.
       of your accepting any such warranty or additional liability.
 ```
 
-Applies to: aws-credential-types 1.3.1, aws-sigv4 1.6.6, aws-smithy-async 1.3.1, aws-smithy-http 0.64.3, aws-smithy-runtime-api 1.22.0, aws-smithy-runtime-api 1.22.1, aws-smithy-types 1.9.4, aws-smithy-types 1.9.5
+Applies to: aws-credential-types 1.3.1, aws-sigv4 1.6.6, aws-smithy-async 1.3.1, aws-smithy-http 0.64.3, aws-smithy-runtime-api 1.22.1, aws-smithy-types 1.9.5
 
 ### T-0a54e647fe54
 
@@ -4607,7 +4607,7 @@ Applies to: base64 0.13.1, base64 0.22.1
 
 ### T-0f96a83840e1
 
-Source: `LICENSE-MIT`. Applies to 11 entries.
+Source: `LICENSE-MIT`. Applies to 10 entries.
 
 ```text
 The MIT License (MIT)
@@ -4633,7 +4633,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.21, globset 0.4.22, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, walkdir 2.5.1
+Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.22, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, walkdir 2.5.1
 
 ### T-10f96b27ddb4
 
@@ -4890,7 +4890,7 @@ Applies to: string-interner 0.20.0
 
 ### T-117829c3ca21
 
-Source: `LICENSE`. Applies to 4 entries.
+Source: `LICENSE`. Applies to 2 entries.
 
 ```text
 MIT License
@@ -4916,7 +4916,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: jsonschema 0.63.0, jsonschema 0.63.1, referencing 0.63.0, referencing 0.63.1
+Applies to: jsonschema 0.63.2, referencing 0.63.2
 
 ### T-11a7964ccc0d
 
@@ -5683,7 +5683,7 @@ Applies to: schemars 1.2.3
 
 ### T-1a2f5c12ddc9
 
-Source: `LICENSE-MIT`. Applies to 2 entries.
+Source: `LICENSE-MIT`. Applies to 1 entry.
 
 ```text
 Copyright 2023 The Fuchsia Authors
@@ -5713,7 +5713,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: zerocopy 0.8.64, zerocopy 0.8.66
+Applies to: zerocopy 0.8.66
 
 ### T-1bc7e6f475b3
 
@@ -5976,7 +5976,7 @@ Source: `LICENSE-APACHE`. Applies to 1 entry.
    limitations under the License.
 ```
 
-Applies to: rangemap 1.8.0
+Applies to: rangemap 1.9.0
 
 ### T-1c7cf76689c8
 
@@ -7326,7 +7326,7 @@ Applies to: gcp_auth 0.13.0
 
 ### T-23c23145f6ea
 
-Source: `LICENSE-MIT`. Applies to 4 entries.
+Source: `LICENSE-MIT`. Applies to 3 entries.
 
 ```text
 Copyright (c) 2018 Raph Levien
@@ -7356,11 +7356,11 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: fearless_simd 1.2.0, fearless_simd 1.3.0, kurbo 0.13.1, polycool 0.4.0
+Applies to: fearless_simd 1.3.0, kurbo 0.13.1, polycool 0.4.0
 
 ### T-23f18e03dc49
 
-Source: `LICENSE-MIT`. Applies to 75 entries.
+Source: `LICENSE-MIT`. Applies to 73 entries.
 
 ```text
 Permission is hereby granted, free of charge, to any
@@ -7388,7 +7388,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: adler2 2.0.1, allocator-api2 0.2.21, allocator-api2 0.2.22, anyhow 1.0.104, anyhow 1.0.105, atomic-waker 1.1.2, biblatex 0.12.0, biblib 0.10.0, camino 1.2.6, cargo-platform 0.1.9, cargo_metadata 0.15.4, daachorse 3.0.3, dary_heap 0.3.9, derive_utils 0.16.0, dyn-clone 1.0.20, dyn-hash 1.0.0, erased-serde 0.4.11, fast-float2 0.2.4, fastrand 2.5.0, finl_unicode 1.5.1, hermit-abi 0.5.3, inventory 0.3.25, itoa 1.0.19, lazy_static 1.5.1, libyaml-rs 0.3.0, linux-raw-sys 0.12.1, mel_spec 0.5.0, minimal-lexical 0.2.1, monostate 0.1.18, once_cell 1.21.4, oneshot 0.1.13, pathdiff 0.2.3, pin-project 1.2.0, pin-project-lite 0.2.18, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, rustix 1.1.6, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, simd_cesu8 1.2.0, smol_str 0.3.7, swift-bridge 0.1.59, syn 1.0.109, syn 2.0.119, syn 3.0.10, system-deps 9.0.1, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, tract-core 0.23.11, tract-data 0.23.11, tract-hir 0.23.11, tract-linalg 0.23.11, tract-nnef 0.23.11, tract-onnx 0.23.11, tract-onnx-opl 0.23.11, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, utf8-zero 0.8.1, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wasm-streams 0.5.0, wit-bindgen 0.57.1, yaml_serde 0.10.7, zmij 1.0.23
+Applies to: adler2 2.0.1, allocator-api2 0.2.22, anyhow 1.0.105, atomic-waker 1.1.2, biblatex 0.12.0, biblib 0.10.0, camino 1.2.6, cargo-platform 0.1.9, cargo_metadata 0.15.4, daachorse 3.0.3, dary_heap 0.3.9, derive_utils 0.16.0, dyn-clone 1.0.20, dyn-hash 1.0.0, erased-serde 0.4.11, fast-float2 0.2.4, fastrand 2.5.0, finl_unicode 1.5.1, hermit-abi 0.5.3, inventory 0.3.25, itoa 1.0.19, lazy_static 1.5.1, libyaml-rs 0.3.0, linux-raw-sys 0.12.1, mel_spec 0.5.0, minimal-lexical 0.2.1, monostate 0.1.18, once_cell 1.21.4, oneshot 0.1.13, pathdiff 0.2.3, pin-project 1.2.0, pin-project-lite 0.2.18, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, rustix 1.1.6, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, simd_cesu8 1.2.0, smol_str 0.3.7, swift-bridge 0.1.59, syn 1.0.109, syn 2.0.119, syn 3.0.10, system-deps 9.0.1, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, tract-core 0.23.11, tract-data 0.23.11, tract-hir 0.23.11, tract-linalg 0.23.11, tract-nnef 0.23.11, tract-onnx 0.23.11, tract-onnx-opl 0.23.11, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, utf8-zero 0.8.1, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wasm-streams 0.5.0, wit-bindgen 0.57.1, yaml_serde 0.10.7, zmij 1.0.23
 
 ### T-248378d0a338
 
@@ -7997,7 +7997,7 @@ Applies to: aes 0.9.4
 
 ### T-268872b9816f
 
-Source: `LICENSE-Apache-2.0_WITH_LLVM-exception`. Applies to 8 entries.
+Source: `LICENSE-Apache-2.0_WITH_LLVM-exception`. Applies to 9 entries.
 
 ```text
 
@@ -8221,7 +8221,7 @@ the License, but only in their entirety and only with respect to the Combined
 Software.
 ```
 
-Applies to: linux-raw-sys 0.12.1, rustix 1.1.6, target-lexicon 0.12.16, target-lexicon 0.13.6, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wit-bindgen 0.57.1
+Applies to: linux-raw-sys 0.12.1, rustix 1.1.6, target-lexicon 0.12.16, target-lexicon 0.13.5, target-lexicon 0.13.6, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wit-bindgen 0.57.1
 
 ### T-270b0d81891a
 
@@ -8712,7 +8712,7 @@ Applies to: futures 0.3.34, futures-channel 0.3.34, futures-core 0.3.34, futures
 
 ### T-2773e20df8f4
 
-Source: `LICENSE-APACHE`. Applies to 2 entries.
+Source: `LICENSE-APACHE`. Applies to 1 entry.
 
 ```text
                               Apache License
@@ -8919,7 +8919,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: cookie 0.18.2, cookie 0.18.3
+Applies to: cookie 0.18.3
 
 ### T-27995d58ad5c
 
@@ -8969,7 +8969,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: rangemap 1.8.0
+Applies to: rangemap 1.9.0
 
 ### T-29e9fe5074bd
 
@@ -9283,7 +9283,7 @@ Applies to: xmlwriter 0.1.0
 
 ### T-2d0189041449
 
-Source: `LICENSE`. Applies to 2 entries.
+Source: `LICENSE`. Applies to 1 entry.
 
 ```text
 Copyright (c) 2014-2026 Sean McArthur
@@ -9307,7 +9307,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-Applies to: hyper 1.12.0, hyper 1.13.0
+Applies to: hyper 1.13.0
 
 ### T-2d1c57bff283
 
@@ -9406,7 +9406,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: geo-types 0.7.20
+Applies to: geo-types 0.7.21
 
 ### T-2fb01e6708ea
 
@@ -11795,7 +11795,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: harfrust 0.16.1
+Applies to: harfrust 0.16.2
 
 ### T-3bb1e548250b
 
@@ -15183,7 +15183,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: zip 9.8.2
+Applies to: zip 9.9.0
 
 ### T-592dc80f1a86
 
@@ -15970,7 +15970,7 @@ Applies to: crc-fast 1.10.0
 
 ### T-61d383b05b87
 
-Source: `LICENSE-MIT`. Applies to 2 entries.
+Source: `LICENSE-MIT`. Applies to 1 entry.
 
 ```text
 MIT License
@@ -15996,7 +15996,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: crc32fast 1.5.5, crc32fast 1.5.6
+Applies to: crc32fast 1.5.6
 
 ### T-62065228e42c
 
@@ -16088,7 +16088,7 @@ Applies to: atomic-waker 1.1.2
 
 ### T-62c7a1e35f56
 
-Source: `LICENSE-APACHE`. Applies to 52 entries.
+Source: `LICENSE-APACHE`. Applies to 47 entries.
 
 ```text
                               Apache License
@@ -16269,7 +16269,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 ```
 
-Applies to: allocator-api2 0.2.21, allocator-api2 0.2.22, anyhow 1.0.104, anyhow 1.0.105, bon 3.10.3, constant_time_eq 0.4.2, constant_time_eq 0.6.1, constant_time_eq 0.6.2, daachorse 3.0.3, dary_heap 0.3.9, dyn-clone 1.0.20, dyn-hash 1.0.0, ecow 0.2.6, erased-serde 0.4.11, finl_unicode 1.5.1, heapify 0.2.0, inventory 0.3.25, itoa 1.0.19, libc 0.2.191, litrs 1.0.1, litrs 1.1.0, monostate 0.1.18, oneshot 0.1.13, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, reqwest-middleware 0.5.2, ryu 1.0.23, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, serde_urlencoded 0.7.1, subsetter 0.2.6, syn 2.0.119, syn 3.0.10, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, unicode-math-class 0.1.0, unscanny 0.1.0, utf8-zero 0.8.1, utf8parse 0.2.2, wasm-streams 0.5.0, whoami 2.1.3, yaml_serde 0.10.7
+Applies to: allocator-api2 0.2.22, anyhow 1.0.105, bon 3.10.3, constant_time_eq 0.6.2, daachorse 3.0.3, dary_heap 0.3.9, dyn-clone 1.0.20, dyn-hash 1.0.0, ecow 0.2.6, erased-serde 0.4.11, finl_unicode 1.5.1, heapify 0.2.0, inventory 0.3.25, itoa 1.0.19, libc 0.2.191, litrs 1.1.0, monostate 0.1.18, oneshot 0.1.13, prettyplease 0.3.0, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, reqwest-middleware 0.5.2, ryu 1.0.23, semver 1.0.28, serde 1.0.229, serde_core 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.154, serde_path_to_error 0.1.20, serde_urlencoded 0.7.1, subsetter 0.2.6, syn 2.0.119, syn 3.0.10, thin-vec 0.2.21, thiserror 1.0.69, thiserror 2.0.21, typed-path 0.13.0, typeid 1.0.3, unicode-ident 1.0.27, unicode-math-class 0.1.0, unscanny 0.1.0, utf8-zero 0.8.1, utf8parse 0.2.2, wasm-streams 0.5.0, whoami 2.1.3, yaml_serde 0.10.7
 
 ### T-62f78cf02422
 
@@ -17076,7 +17076,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: model2vec-rs 0.5.0
+Applies to: model2vec-rs 0.5.1
 
 ### T-6919f1acec82
 
@@ -20331,7 +20331,7 @@ Applies to: hyper-rustls 0.27.10, rustls 0.23.46, rustls-native-certs 0.8.5
 
 ### T-7dc1552e88f4
 
-Source: `LICENSE-MIT`. Applies to 2 entries.
+Source: `LICENSE-MIT`. Applies to 1 entry.
 
 ```text
 Copyright (c) 2020 Project Developers
@@ -20361,11 +20361,11 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: litrs 1.0.1, litrs 1.1.0
+Applies to: litrs 1.1.0
 
 ### T-7e12e5df4bae
 
-Source: `UNLICENSE`. Applies to 13 entries.
+Source: `UNLICENSE`. Applies to 12 entries.
 
 ```text
 This is free and unencumbered software released into the public domain.
@@ -20394,7 +20394,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 ```
 
-Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.21, globset 0.4.22, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
+Applies to: aho-corasick 1.1.5, byteorder 1.5.0, byteorder-lite 0.1.0, globset 0.4.22, jiff 1.0.3, jiff-core 1.0.2, jiff-tzdb 1.0.0, jiff-tzdb-platform 1.0.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.1, winapi-util 0.1.11
 
 ### T-7e5886959f67
 
@@ -20569,7 +20569,7 @@ Applies to: astral-html 0.0.4
 
 ### T-8173d5c29b4f
 
-Source: `LICENSE-APACHE`. Applies to 8 entries.
+Source: `LICENSE-APACHE`. Applies to 9 entries.
 
 ```text
                               Apache License
@@ -20775,7 +20775,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: bit-set 0.11.1, bit-set 0.8.0, bit-vec 0.10.2, bit-vec 0.8.0, cfg-expr 0.17.2, downcast-rs 2.0.2, minimal-lexical 0.2.1, qoi 0.4.1
+Applies to: bit-set 0.11.1, bit-set 0.8.0, bit-vec 0.10.2, bit-vec 0.8.0, cfg-expr 0.17.2, cfg-expr 0.20.11, downcast-rs 2.0.2, minimal-lexical 0.2.1, qoi 0.4.1
 
 ### T-81c54baa1c7b
 
@@ -21264,7 +21264,7 @@ Applies to: utoipa 6.0.0
 
 ### T-831e0f43ad0b
 
-Source: `LICENSE-MIT`. Applies to 4 entries.
+Source: `LICENSE-MIT`. Applies to 3 entries.
 
 ```text
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -21297,7 +21297,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: md-5 0.11.0, sha1 0.11.0, sha2 0.11.1, sha2 0.11.2
+Applies to: md-5 0.11.0, sha1 0.11.0, sha2 0.11.2
 
 ### T-838118388fe5
 
@@ -21366,7 +21366,7 @@ Applies to: gearhash 0.1.4
 
 ### T-83c1763356e8
 
-Source: `LICENSE-BSD`. Applies to 2 entries.
+Source: `LICENSE-BSD`. Applies to 1 entry.
 
 ```text
 Copyright 2019 The Fuchsia Authors.
@@ -21395,7 +21395,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Applies to: zerocopy 0.8.64, zerocopy 0.8.66
+Applies to: zerocopy 0.8.66
 
 ### T-848d7bf14c61
 
@@ -22075,7 +22075,7 @@ Applies to: os_str_bytes 6.6.1
 
 ### T-88d1e3160df4
 
-Source: `LICENSE-MIT`. Applies to 5 entries.
+Source: `LICENSE-MIT`. Applies to 3 entries.
 
 ```text
 The MIT License (MIT)
@@ -22101,7 +22101,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: async-compression 0.4.52, async-compression 0.4.54, compression-codecs 0.4.48, compression-codecs 0.4.49, compression-core 0.4.34
+Applies to: async-compression 0.4.54, compression-codecs 0.4.49, compression-core 0.4.34
 
 ### T-898b1ae9821e
 
@@ -23988,7 +23988,7 @@ Applies to: block-buffer 0.12.1, block-padding 0.4.2
 
 ### T-982cd76c8a6b
 
-Source: `LICENSE.BSD-2-Clause`. Applies to 2 entries.
+Source: `LICENSE.BSD-2-Clause`. Applies to 1 entry.
 
 ```text
 The decoders for legacy formats, in zstd/lib/legacy/, include code under the
@@ -24022,7 +24022,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Applies to: zstd-sys 2.1.3+zstd.1.5.7, zstd-sys 2.2.0+zstd.1.6.0
+Applies to: zstd-sys 2.2.0+zstd.1.6.0
 
 ### T-98a817e7b85e
 
@@ -24295,7 +24295,7 @@ Applies to: caseless 0.2.2
 
 ### T-9a3aeb3f6365
 
-Source: `LICENSE-MIT0`. Applies to 3 entries.
+Source: `LICENSE-MIT0`. Applies to 1 entry.
 
 ```text
 Permission is hereby granted, free of charge, to any person obtaining a
@@ -24314,7 +24314,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: constant_time_eq 0.4.2, constant_time_eq 0.6.1, constant_time_eq 0.6.2
+Applies to: constant_time_eq 0.6.2
 
 ### T-9aa4f92bfcde
 
@@ -24442,7 +24442,7 @@ Applies to: nom-exif 3.8.0
 
 ### T-9d185ac6703c
 
-Source: `LICENSE-APACHE`. Applies to 2 entries.
+Source: `LICENSE-APACHE`. Applies to 1 entry.
 
 ```text
                                  Apache License
@@ -24648,7 +24648,7 @@ Source: `LICENSE-APACHE`. Applies to 2 entries.
    limitations under the License.
 ```
 
-Applies to: zerocopy 0.8.64, zerocopy 0.8.66
+Applies to: zerocopy 0.8.66
 
 ### T-9dc47584f810
 
@@ -25005,7 +25005,7 @@ Applies to: libmimalloc-sys 0.1.49, mimalloc 0.1.52
 
 ### T-a2010f343487
 
-Source: `LICENSE_CC0`. Applies to 9 entries.
+Source: `LICENSE_CC0`. Applies to 6 entries.
 
 ```text
 Creative Commons Legal Code
@@ -25131,7 +25131,7 @@ express Statement of Purpose.
     this CC0 or use of the Work.
 ```
 
-Applies to: blake3 1.8.7, blake3 1.8.8, constant_time_eq 0.4.2, constant_time_eq 0.6.1, constant_time_eq 0.6.2, dunce 1.0.5, more-asserts 0.3.1, roman-numerals-rs 3.1.0, tiny-keccak 2.0.2
+Applies to: blake3 1.8.8, constant_time_eq 0.6.2, dunce 1.0.5, more-asserts 0.3.1, roman-numerals-rs 3.1.0, tiny-keccak 2.0.2
 
 ### T-a2b15e1e9004
 
@@ -25185,7 +25185,7 @@ Applies to: matchers 0.2.0
 
 ### T-a5695f57ea0c
 
-Source: `LICENSE_A2LLVM`. Applies to 2 entries.
+Source: `LICENSE_A2LLVM`. Applies to 1 entry.
 
 ```text
                                  Apache License
@@ -25408,7 +25408,7 @@ the License, but only in their entirety and only with respect to the Combined
 Software.
 ```
 
-Applies to: blake3 1.8.7, blake3 1.8.8
+Applies to: blake3 1.8.8
 
 ### T-a56b293d9135
 
@@ -25476,7 +25476,7 @@ Applies to: bytecount 0.6.9
 
 ### T-a60eea817514
 
-Source: `LICENSE-APACHE`. Applies to 182 entries.
+Source: `LICENSE-APACHE`. Applies to 179 entries.
 
 ```text
                               Apache License
@@ -25682,7 +25682,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: addr2line 0.27.1, ahash 0.8.14, arc-swap 1.9.5, arrayvec 0.7.8, async-compression 0.4.52, async-compression 0.4.54, atomic 0.5.3, atomic-waker 1.1.2, autocfg 1.5.1, backtrace 0.3.77, base64 0.13.1, base64 0.22.1, base64 0.23.1, bitflags 1.3.2, bitflags 2.13.2, bstr 1.14.0, bumpalo 3.20.4, bytes-utils 0.1.4, bzip2 0.6.1, camino 1.2.6, cc 1.12.0, cexpr 0.6.0, cfg-if 1.0.5, cmake 0.1.58, compression-codecs 0.4.48, compression-codecs 0.4.49, compression-core 0.4.34, const-random 0.1.18, const-random 0.1.20, core-foundation 0.10.1, core-foundation 0.9.4, core-foundation-sys 0.8.7, crossbeam-channel 0.5.17, crossbeam-deque 0.8.8, crossbeam-epoch 0.9.21, crossbeam-utils 0.8.23, data-url 0.3.2, either 1.19.0, equivalent 1.0.3, errno 0.3.15, fastrand 2.5.0, filetime 0.2.30, find-msvc-tools 0.1.16, flate2 1.1.11, fnv 1.0.7, form_urlencoded 1.2.3, four-cc 0.4.0, fraction 0.17.0, fs2 0.4.3, geo-types 0.7.20, getopts 0.2.24, gimli 0.34.0, glob 0.3.4, hashbrown 0.14.5, hashbrown 0.15.5, hashbrown 0.16.1, hashbrown 0.17.2, heck 0.5.0, hermit-abi 0.5.3, html5ever 0.40.1, httparse 1.10.1, hyper-rustls 0.27.10, hyper-tls 0.6.0, idna 1.1.0, idna_adapter 1.2.2, indexmap 2.14.2, itertools 0.13.0, itertools 0.14.0, itertools 0.15.0, jobserver 0.1.35, jpeg-decoder 0.3.2, js-sys 0.3.107, lazy_static 1.5.1, libz-sys 1.1.33, linux-raw-sys 0.12.1, lock_api 0.4.14, lock_api 0.5.0, log 0.4.35, maplit 1.0.2, markup5ever 0.40.0, matrixmultiply 0.3.11, mime 0.3.18, minijinja 3.1.0, ndarray 0.16.1, ndarray 0.17.2, num 0.4.3, num-bigint 0.4.8, num-complex 0.4.6, num-integer 0.1.47, num-iter 0.1.46, num-rational 0.4.2, num-traits 0.2.19, num_cpus 1.17.0, object 0.40.0, once_cell 1.21.4, openssl-probe 0.2.2, parking_lot 0.12.5, parking_lot 0.13.0, parking_lot_core 0.10.0, parking_lot_core 0.9.12, percent-encoding 2.3.2, pkg-config 0.3.34, png 0.17.16, png 0.18.1, primal-check 0.3.4, prost 0.14.6, psl-types 2.0.11, publicsuffix 2.3.0, rake 0.3.6, rawpointer 0.2.1, rayon 1.12.0, rayon-cond 0.4.0, rayon-core 1.13.0, regex 1.13.2, regex-automata 0.4.19, regex-lite 0.1.9, regex-syntax 0.8.12, roxmltree 0.20.0, roxmltree 0.21.2, rustc-demangle 0.1.28, rustc_version 0.4.1, rustix 1.1.6, rustls 0.23.46, rustls-native-certs 0.8.5, scopeguard 1.2.0, security-framework 3.7.0, security-framework-sys 2.17.0, serde_plain 1.0.2, serde_with 3.25.0, shellexpand 3.1.2, signal-hook-registry 1.4.8, simd_cesu8 1.2.0, similar 3.2.1, simplecss 0.2.2, skeptic 0.14.2, smallvec 1.16.6, smol_str 0.3.7, socket2 0.6.5, stable_deref_trait 1.2.1, string_cache 0.11.0, string_cache_codegen 0.11.2, svgtypes 0.16.2, swift-bridge 0.1.59, symlink 0.1.0, syn 1.0.109, system-configuration 0.7.0, system-configuration-sys 0.6.0, system-deps 9.0.1, tar 0.4.46, tempfile 3.27.0, tendril 0.5.1, thread_local 1.1.10, threadpool 1.8.1, tract-core 0.23.11, tract-data 0.23.11, tract-hir 0.23.11, tract-linalg 0.23.11, tract-nnef 0.23.11, tract-onnx 0.23.11, tract-onnx-opl 0.23.11, unicase 2.10.0, unicode-bidi 0.3.18, unicode-normalization 0.1.26, unicode-normalization-alignments 0.1.12, unicode-properties 0.1.5, unicode-segmentation 1.13.3, unicode-width 0.2.3, url 2.5.9, utf16string 0.2.0, uuid 1.29.3, version_check 0.9.5, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wasm-bindgen 0.2.130, wasm-bindgen-futures 0.4.80, wasm-bindgen-macro-support 0.2.130, wasm-bindgen-shared 0.2.130, web-sys 0.3.107, web_atoms 0.3.0, wit-bindgen 0.57.1, xattr 1.7.0
+Applies to: addr2line 0.27.1, ahash 0.8.15, arc-swap 1.9.5, arrayvec 0.7.8, async-compression 0.4.54, atomic 0.5.3, atomic-waker 1.1.2, autocfg 1.5.1, backtrace 0.3.77, base64 0.13.1, base64 0.22.1, base64 0.23.1, bitflags 1.3.2, bitflags 2.13.2, bstr 1.14.0, bumpalo 3.20.4, bytes-utils 0.1.4, bzip2 0.6.1, camino 1.2.6, cc 1.12.0, cexpr 0.6.0, cfg-if 1.0.5, cmake 0.1.58, compression-codecs 0.4.49, compression-core 0.4.34, const-random 0.1.20, core-foundation 0.10.1, core-foundation 0.9.4, core-foundation-sys 0.8.7, crossbeam-channel 0.5.17, crossbeam-deque 0.8.8, crossbeam-epoch 0.9.21, crossbeam-utils 0.8.23, data-url 0.3.2, either 1.19.0, equivalent 1.0.3, errno 0.3.15, fastrand 2.5.0, filetime 0.2.30, find-msvc-tools 0.1.16, flate2 1.1.11, fnv 1.0.7, form_urlencoded 1.2.3, four-cc 0.4.0, fraction 0.17.0, fs2 0.4.3, geo-types 0.7.21, getopts 0.2.24, gimli 0.34.0, glob 0.3.4, hashbrown 0.14.5, hashbrown 0.15.5, hashbrown 0.16.1, hashbrown 0.17.2, heck 0.5.0, hermit-abi 0.5.3, html5ever 0.40.1, httparse 1.10.1, hyper-rustls 0.27.10, hyper-tls 0.6.0, idna 1.1.0, idna_adapter 1.2.2, indexmap 2.14.2, itertools 0.13.0, itertools 0.14.0, itertools 0.15.0, jobserver 0.1.35, jpeg-decoder 0.3.2, js-sys 0.3.107, lazy_static 1.5.1, libz-sys 1.1.33, linux-raw-sys 0.12.1, lock_api 0.4.14, lock_api 0.5.0, log 0.4.35, maplit 1.0.2, markup5ever 0.40.0, matrixmultiply 0.3.11, mime 0.3.18, minijinja 3.1.0, ndarray 0.16.1, ndarray 0.17.2, num 0.4.3, num-bigint 0.4.8, num-complex 0.4.6, num-integer 0.1.47, num-iter 0.1.46, num-rational 0.4.2, num-traits 0.2.19, num_cpus 1.17.0, object 0.40.0, once_cell 1.21.4, openssl-probe 0.2.2, parking_lot 0.12.5, parking_lot 0.13.0, parking_lot_core 0.10.0, parking_lot_core 0.9.12, percent-encoding 2.3.2, pkg-config 0.3.34, png 0.17.16, png 0.18.1, primal-check 0.3.4, prost 0.14.6, psl-types 2.0.11, publicsuffix 2.3.0, rake 0.3.6, rawpointer 0.2.1, rayon 1.12.0, rayon-cond 0.4.0, rayon-core 1.13.0, regex 1.13.2, regex-automata 0.4.19, regex-lite 0.1.9, regex-syntax 0.8.12, roxmltree 0.20.0, roxmltree 0.21.2, rustc-demangle 0.1.28, rustc_version 0.4.1, rustix 1.1.6, rustls 0.23.46, rustls-native-certs 0.8.5, scopeguard 1.2.0, security-framework 3.7.0, security-framework-sys 2.17.0, serde_plain 1.0.2, serde_with 3.25.0, shellexpand 3.1.2, signal-hook-registry 1.4.8, simd_cesu8 1.2.0, similar 3.2.1, simplecss 0.2.2, skeptic 0.14.2, smallvec 1.16.6, smol_str 0.3.7, socket2 0.6.5, stable_deref_trait 1.2.1, string_cache 0.11.0, string_cache_codegen 0.11.2, svgtypes 0.16.2, swift-bridge 0.1.59, symlink 0.1.0, syn 1.0.109, system-configuration 0.7.0, system-configuration-sys 0.6.0, system-deps 9.0.1, tar 0.4.46, tempfile 3.27.0, tendril 0.5.1, thread_local 1.1.10, threadpool 1.8.1, tract-core 0.23.11, tract-data 0.23.11, tract-hir 0.23.11, tract-linalg 0.23.11, tract-nnef 0.23.11, tract-onnx 0.23.11, tract-onnx-opl 0.23.11, unicase 2.10.0, unicode-bidi 0.3.18, unicode-normalization 0.1.26, unicode-normalization-alignments 0.1.12, unicode-properties 0.1.5, unicode-segmentation 1.13.3, unicode-width 0.2.3, url 2.5.9, utf16string 0.2.0, uuid 1.29.3, version_check 0.9.5, wasi 0.11.1+wasi-snapshot-preview1, wasi 0.14.7+wasi-0.2.4, wasip2 1.0.4+wasi-0.2.12, wasm-bindgen 0.2.130, wasm-bindgen-futures 0.4.80, wasm-bindgen-macro-support 0.2.130, wasm-bindgen-shared 0.2.130, web-sys 0.3.107, web_atoms 0.3.0, wit-bindgen 0.57.1, xattr 1.7.0
 
 ### T-a65f5d0a945d
 
@@ -25744,7 +25744,7 @@ Applies to: org 0.3.1
 
 ### T-a6cba85bc92e
 
-Source: `LICENSE-APACHE`. Applies to 6 entries.
+Source: `LICENSE-APACHE`. Applies to 5 entries.
 
 ```text
                                  Apache License
@@ -25925,7 +25925,7 @@ Source: `LICENSE-APACHE`. Applies to 6 entries.
    END OF TERMS AND CONDITIONS
 ```
 
-Applies to: fearless_simd 1.2.0, fearless_simd 1.3.0, half 2.7.1, os_str_bytes 6.6.1, resvg 0.50.0, usvg 0.50.0
+Applies to: fearless_simd 1.3.0, half 2.7.1, os_str_bytes 6.6.1, resvg 0.50.0, usvg 0.50.0
 
 ### T-a70ef3ea0329
 
@@ -26261,7 +26261,7 @@ Applies to: ctor 1.0.14, link-section 0.19.4
 
 ### T-a9040321c371
 
-Source: `LICENSE-APACHE`. Applies to 36 entries.
+Source: `LICENSE-APACHE`. Applies to 35 entries.
 
 ```text
                               Apache License
@@ -26467,7 +26467,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-Applies to: aes 0.9.4, aes-gcm 0.11.1, base64ct 1.8.3, block-buffer 0.10.4, block-buffer 0.12.1, block-padding 0.4.2, cbc 0.2.1, chacha20 0.10.2, cipher 0.5.2, const-oid 0.10.3, cpubits 0.1.1, cpufeatures 0.3.1, crypto-common 0.1.7, crypto-common 0.2.2, ctr 0.10.1, der 0.8.3, digest 0.10.7, digest 0.11.3, ecb 0.2.1, ghash 0.6.0, hmac 0.13.0, hybrid-array 0.4.15, inout 0.2.6, kdf 0.1.0, md-5 0.10.6, md-5 0.11.0, pbkdf2 0.13.0, pem-rfc7468 1.0.0, polyval 0.7.3, salsa20 0.11.0, scrypt 0.12.0, sha1 0.11.0, sha2 0.11.1, sha2 0.11.2, signature 3.0.0, universal-hash 0.6.1
+Applies to: aes 0.9.4, aes-gcm 0.11.1, base64ct 1.8.3, block-buffer 0.10.4, block-buffer 0.12.1, block-padding 0.4.2, cbc 0.2.1, chacha20 0.10.2, cipher 0.5.2, const-oid 0.10.3, cpubits 0.1.1, cpufeatures 0.3.1, crypto-common 0.1.7, crypto-common 0.2.2, ctr 0.10.1, der 0.8.3, digest 0.10.7, digest 0.11.3, ecb 0.2.1, ghash 0.6.0, hmac 0.13.0, hybrid-array 0.4.15, inout 0.2.6, kdf 0.1.0, md-5 0.10.6, md-5 0.11.0, pbkdf2 0.13.0, pem-rfc7468 1.0.0, polyval 0.7.3, salsa20 0.11.0, scrypt 0.12.0, sha1 0.11.0, sha2 0.11.2, signature 3.0.0, universal-hash 0.6.1
 
 ### T-aa72991ac35b
 
@@ -27295,7 +27295,7 @@ Applies to: fd-lock 4.0.4
 
 ### T-b05785f9f18e
 
-Source: `MIT.txt`. Applies to 55 entries.
+Source: `MIT.txt`. Applies to 53 entries.
 
 ```text
 MIT License
@@ -27318,7 +27318,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: base64-simd 0.8.0, candle-nn 0.11.1, candle-transformers 0.11.1, crawlberg 1.13.6, crawlberg-robots 1.13.6, dart-sys 4.1.5, encodify 1.0.2, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, flutter_rust_bridge 2.13.0, gloo-timers 0.4.1, html-to-markdown-rs 3.23.5, include_dir 0.7.4, jni 0.22.4, jsonschema-regex 0.63.0, jsonschema-regex 0.63.1, jsonschema-value 0.63.0, jsonschema-value 0.63.1, liter-llm 2.7.7, lofty 0.25.5, mail-parser 1.0.2, napi 3.16.3, napi-build 2.7.0, napi-derive-backend 8.0.0, napi-sys 3.4.1, nom-language 0.1.0, objc2 0.6.5, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, outlook-pst 1.2.0, pulp-wasm-simd-flag 0.1.1, qcms 0.3.0, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, sceptre 0.10.5, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tokio_with_wasm 0.8.8, tract-extra 0.23.11, tree-sitter-language-pack 1.28.0, uuid-simd 0.8.0, vsimd 0.8.0, wasite 1.0.2, whatlang 0.18.0, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, zune-inflate 0.2.54
+Applies to: base64-simd 0.8.0, candle-nn 0.11.1, candle-transformers 0.11.1, crawlberg 1.13.6, crawlberg-robots 1.13.6, dart-sys 4.1.5, encodify 1.0.3, ext-php-rs-build 0.2.1, ext-php-rs-introspection 0.2.1, flutter_rust_bridge 2.13.0, gloo-timers 0.4.1, html-to-markdown-rs 3.23.5, include_dir 0.7.4, jni 0.22.4, jsonschema-regex 0.63.2, jsonschema-value 0.63.2, liter-llm 2.7.7, lofty 0.25.5, mail-parser 1.0.2, napi 3.16.3, napi-build 2.7.0, napi-derive-backend 8.0.0, napi-sys 3.4.1, nom-language 0.1.0, objc2 0.6.5, objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-io-kit 0.3.2, objc2-open-directory 0.3.2, objc2-system-configuration 0.3.2, ogg_pager 0.8.0, outlook-pst 1.2.0, pulp-wasm-simd-flag 0.1.1, qcms 0.3.0, r-efi 5.3.0, r-efi 6.0.0, rustler 0.39.0, rustls-platform-verifier-android 0.2.0, sceptre 0.10.5, swift-bridge-build 0.1.59, swift-bridge-ir 0.1.59, tokio_with_wasm 0.8.8, tract-extra 0.23.11, tree-sitter-language-pack 1.28.0, uuid-simd 0.8.0, vsimd 0.8.0, wasite 1.0.2, whatlang 0.18.0, winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0, zune-inflate 0.2.54
 
 ### T-b1181a40b2a7
 
@@ -28162,7 +28162,7 @@ Applies to: aead 0.6.1
 
 ### T-b21623012e6c
 
-Source: `LICENSE`. Applies to 2 entries.
+Source: `LICENSE`. Applies to 1 entry.
 
 ```text
 Copyright (c) 2017 h2 authors
@@ -28192,7 +28192,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: h2 0.4.20, h2 0.4.21
+Applies to: h2 0.4.21
 
 ### T-b29f8b014523
 
@@ -29378,7 +29378,7 @@ Applies to: dyn-stack 0.13.2, reborrow 0.5.5
 
 ### T-bf7017a73a95
 
-Source: `LICENSE.BSD-3-Clause`. Applies to 2 entries.
+Source: `LICENSE.BSD-3-Clause`. Applies to 1 entry.
 
 ```text
 The auto-generated bindings are under the 3-clause BSD license:
@@ -29415,7 +29415,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Applies to: zstd-sys 2.1.3+zstd.1.5.7, zstd-sys 2.2.0+zstd.1.6.0
+Applies to: zstd-sys 2.2.0+zstd.1.6.0
 
 ### T-bfb1112d49db
 
@@ -29439,7 +29439,7 @@ Applies to: objc2-core-foundation 0.3.2, objc2-core-services 0.3.2, objc2-io-kit
 
 ### T-c0c56f26d9c0
 
-Source: `LICENSE`. Applies to 6 entries.
+Source: `LICENSE`. Applies to 5 entries.
 
 ```text
 Copyright (c) 2016 Dropbox, Inc.
@@ -29456,7 +29456,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Applies to: alloc-no-stdlib 2.0.4, alloc-no-stdlib 3.0.0, brotli 9.1.3, brotli-decompressor 5.0.3, brotli-decompressor 6.3.2, brotli-decompressor 6.4.0
+Applies to: alloc-no-stdlib 2.0.4, alloc-no-stdlib 3.0.0, brotli 9.1.3, brotli-decompressor 5.0.3, brotli-decompressor 6.4.0
 
 ### T-c10c1f273375
 
@@ -29488,7 +29488,7 @@ Applies to: libsqlite3-sys 0.40.0, rusqlite 0.43.0
 
 ### T-c16f8dcf1a36
 
-Source: `license-apache-2.0`. Applies to 22 entries.
+Source: `license-apache-2.0`. Applies to 31 entries.
 
 ```text
                                  Apache License
@@ -29694,7 +29694,7 @@ Source: `license-apache-2.0`. Applies to 22 entries.
    limitations under the License.
 ```
 
-Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.52.6
+Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.48.0, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.48.5, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.48.5, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.48.5, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.48.5, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.48.5, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.48.5, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.48.5, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.48.5, windows_x86_64_msvc 0.52.6
 
 ### T-c1d06dd041ab
 
@@ -29878,7 +29878,7 @@ Applies to: ppmd-rust 1.5.2
 
 ### T-c2cfccb812fe
 
-Source: `license-mit`. Applies to 22 entries.
+Source: `license-mit`. Applies to 31 entries.
 
 ```text
     MIT License
@@ -29904,7 +29904,7 @@ Source: `license-mit`. Applies to 22 entries.
     SOFTWARE
 ```
 
-Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.52.6
+Applies to: windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-link 0.2.1, windows-numerics 0.3.1, windows-registry 0.6.1, windows-result 0.4.1, windows-strings 0.5.1, windows-sys 0.48.0, windows-sys 0.52.0, windows-sys 0.59.0, windows-sys 0.61.2, windows-targets 0.48.5, windows-targets 0.52.6, windows-threading 0.2.1, windows_aarch64_gnullvm 0.48.5, windows_aarch64_gnullvm 0.52.6, windows_aarch64_msvc 0.48.5, windows_aarch64_msvc 0.52.6, windows_i686_gnu 0.48.5, windows_i686_gnu 0.52.6, windows_i686_gnullvm 0.52.6, windows_i686_msvc 0.48.5, windows_i686_msvc 0.52.6, windows_x86_64_gnu 0.48.5, windows_x86_64_gnu 0.52.6, windows_x86_64_gnullvm 0.48.5, windows_x86_64_gnullvm 0.52.6, windows_x86_64_msvc 0.48.5, windows_x86_64_msvc 0.52.6
 
 ### T-c3fbe6b3ba4f
 
@@ -30018,7 +30018,7 @@ Applies to: tree-sitter 0.27.2, tree-sitter-language 0.1.9
 
 ### T-c6596eb7be85
 
-Source: `LICENSE-APACHE`. Applies to 36 entries.
+Source: `LICENSE-APACHE`. Applies to 35 entries.
 
 ```text
                                  Apache License
@@ -30224,7 +30224,7 @@ Source: `LICENSE-APACHE`. Applies to 36 entries.
    limitations under the License.
 ```
 
-Applies to: anstream 1.0.0, anstyle 1.0.14, anstyle-parse 1.0.0, anstyle-query 1.1.5, anstyle-wincon 3.0.11, colorchoice 1.0.5, crc32fast 1.5.5, crc32fast 1.5.6, derive_builder 0.20.2, derive_builder_core 0.20.2, env_filter 0.1.4, fallible-iterator 0.3.0, fallible-streaming-iterator 0.1.9, foreign-types 0.3.2, foreign-types-shared 0.1.1, gearhash 0.1.4, hex 0.4.3, humantime 2.4.0, is_terminal_polyfill 1.70.2, jni-sys 0.4.1, native-tls 0.2.18, once_cell_polyfill 1.70.2, openssl 0.10.82, quick-error 2.0.1, rustfft 6.4.1, serde_spanned 0.6.9, streaming-iterator 0.1.9, strength_reduce 0.2.4, stringprep 0.1.5, toml 0.8.23, toml 0.9.12+spec-1.1.0, toml_datetime 0.6.11, toml_datetime 0.7.5+spec-1.1.0, toml_edit 0.22.27, toml_write 0.1.2, unicode_categories 0.1.1
+Applies to: anstream 1.0.0, anstyle 1.0.14, anstyle-parse 1.0.0, anstyle-query 1.1.5, anstyle-wincon 3.0.11, colorchoice 1.0.5, crc32fast 1.5.6, derive_builder 0.20.2, derive_builder_core 0.20.2, env_filter 0.1.4, fallible-iterator 0.3.0, fallible-streaming-iterator 0.1.9, foreign-types 0.3.2, foreign-types-shared 0.1.1, gearhash 0.1.4, hex 0.4.3, humantime 2.4.0, is_terminal_polyfill 1.70.2, jni-sys 0.4.1, native-tls 0.2.18, once_cell_polyfill 1.70.2, openssl 0.10.82, quick-error 2.0.1, rustfft 6.4.1, serde_spanned 0.6.9, streaming-iterator 0.1.9, strength_reduce 0.2.4, stringprep 0.1.5, toml 0.8.23, toml 0.9.12+spec-1.1.0, toml_datetime 0.6.11, toml_datetime 0.7.5+spec-1.1.0, toml_edit 0.22.27, toml_write 0.1.2, unicode_categories 0.1.1
 
 ### T-c6cf22786bec
 
@@ -31687,7 +31687,7 @@ Applies to: raw-cpuid 11.6.0
 
 ### T-ce4868c8e4eb
 
-Source: `LICENSE`. Applies to 6 entries.
+Source: `LICENSE`. Applies to 3 entries.
 
 ```text
 BSD 3-Clause License
@@ -31720,7 +31720,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Applies to: zstd 0.14.4, zstd 0.14.5, zstd-safe 8.3.0, zstd-safe 8.4.0, zstd-sys 2.1.3+zstd.1.5.7, zstd-sys 2.2.0+zstd.1.6.0
+Applies to: zstd 0.14.5, zstd-safe 8.4.0, zstd-sys 2.2.0+zstd.1.6.0
 
 ### T-ce688e08d045
 
@@ -32841,7 +32841,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: unhwp 0.24.0
+Applies to: unhwp 0.24.1
 
 ### T-d4fffe07c625
 
@@ -34996,7 +34996,7 @@ Applies to: redox_users 0.5.3
 
 ### T-e72111c52b7d
 
-Source: `LICENSE`. Applies to 2 entries.
+Source: `LICENSE`. Applies to 1 entry.
 
 ```text
 (C) 2024 Trifecta Tech Foundation 
@@ -35020,11 +35020,11 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-Applies to: zlib-rs 0.6.8, zlib-rs 0.6.9
+Applies to: zlib-rs 0.6.9
 
 ### T-e7a93b009565
 
-Source: `LICENSE-UNICODE`. Applies to 1 entry.
+Source: `LICENSE-UNICODE`. Applies to 2 entries.
 
 ```text
 UNICODE LICENSE V3
@@ -35068,7 +35068,7 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ```
 
-Applies to: unicode-properties 0.1.5
+Applies to: harfrust 0.16.2, unicode-properties 0.1.5
 
 ### T-e99d88d232bf
 
@@ -35747,7 +35747,7 @@ Applies to: simple_asn1 0.6.4
 
 ### T-f09adf500d35
 
-Source: `LICENSE`. Applies to 3 entries.
+Source: `LICENSE`. Applies to 2 entries.
 
 ```text
 MIT License
@@ -35773,7 +35773,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Applies to: psl 2.1.261, psl 2.1.265, publicsuffix 2.3.0
+Applies to: psl 2.1.265, publicsuffix 2.3.0
 
 ### T-f0cf9b1c62bb
 
@@ -35843,7 +35843,7 @@ Applies to: atoi_simd 0.18.1
 
 ### T-f28420c1906a
 
-Source: `LICENSE-MIT`. Applies to 2 entries.
+Source: `LICENSE-MIT`. Applies to 1 entry.
 
 ```text
 Copyright (c) 2017 Sergio Benitez
@@ -35874,7 +35874,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: cookie 0.18.2, cookie 0.18.3
+Applies to: cookie 0.18.3
 
 ### T-f2ad7982ddbf
 
@@ -38116,7 +38116,7 @@ Applies to: vcpkg 0.2.15
 
 ### T-ff8f68cb076c
 
-Source: `LICENSE-MIT`. Applies to 6 entries.
+Source: `LICENSE-MIT`. Applies to 5 entries.
 
 ```text
 Copyright (c) 2016 Amanieu d'Antras
@@ -38146,7 +38146,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-Applies to: const-random 0.1.18, const-random 0.1.20, hashbrown 0.14.5, hashbrown 0.15.5, hashbrown 0.16.1, hashbrown 0.17.2
+Applies to: const-random 0.1.20, hashbrown 0.14.5, hashbrown 0.15.5, hashbrown 0.16.1, hashbrown 0.17.2
 
 ### T-fffe218c1e34
 

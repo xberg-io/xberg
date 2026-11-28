@@ -57,7 +57,7 @@ print_stderr = "deny"
 dbg_macro = "deny"
 
 [workspace.dependencies]
-ahash = { version = "0.8.14", features = ["serde"] }
+ahash = { version = "0.8.15", features = ["serde"] }
 anyhow = "1.0"
 async-trait = "0.1.92"
 base64 = "0.23.1"

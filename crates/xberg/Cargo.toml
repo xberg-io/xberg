@@ -1570,7 +1570,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["s
 tract-onnx = { workspace = true, optional = true }
 # Typst's own parser, used to convert Typst math to LaTeX.
 typst-syntax = { version = "0.15.1", optional = true }
-unhwp = { version = "0.24.0", default-features = false, features = ["hwpx"], optional = true }
+unhwp = { version = "0.24.1", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.26", optional = true }
 unicode-width = { version = "0.2", optional = true }
 url = { workspace = true }
@@ -1601,7 +1601,7 @@ xberg-native-pdf = { workspace = true, optional = true }
 xberg-tesseract = { path = "../xberg-tesseract", optional = true }
 yaml_serde = "0.10.7"
 zeroize = { version = "1", optional = true }
-zip = { version = "9.8.2", optional = true, default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.9.0", optional = true, default-features = false, features = ["deflate-flate2"] }
 
 # `tower` (GH#1381) unlocks the `cache`/`budget`/`rate_limit`/`cost_tracking`/`tracing`/
 # `cooldown_secs`/`health_check_secs` fields on liter-llm's `client::ClientConfigBuilder` —
@@ -1846,7 +1846,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = "1"
 wiremock = "0.6"
 xberg-child-test = { workspace = true }
-zip = { version = "9.8.2", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.9.0", default-features = false, features = ["deflate-flate2"] }
 
 [[test]]
 name = "bounded_jpeg_peak"
