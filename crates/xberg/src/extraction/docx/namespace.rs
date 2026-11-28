@@ -140,41 +140,44 @@ fn scan_declarations(xml: &str) -> Option<DeclarationScan> {
     needs_rewrite.then_some(DeclarationScan { binds_wordprocessingml })
 }
 
-/// How far past an `xmlns` token a declaration may extend. Bounds every search so that text which
-/// merely repeats `xmlns` cannot make the scan quadratic; real declarations are far shorter.
+/// How far a prefix name or a URI may extend. Bounds those searches so that text which merely
+/// repeats `xmlns` cannot make the scan quadratic; real ones are far shorter. Whitespace runs are
+/// skipped without a bound: each ends at the next token, so they cost linear time in total.
 const DECLARATION_WINDOW: usize = 1024;
 
 /// Parse `[:prefix] = "uri"` after the `xmlns` token that ends at `start`, returning the prefix
 /// and the byte range of the raw URI text.
 fn read_declaration(xml: &str, start: usize) -> Option<(&str, std::ops::Range<usize>)> {
     let bytes = xml.as_bytes();
-    let window_end = bytes.len().min(start + DECLARATION_WINDOW);
+    let skip_whitespace = |mut at: usize| {
+        while bytes.get(at).is_some_and(u8::is_ascii_whitespace) {
+            at += 1;
+        }
+        at
+    };
     let mut at = start;
     let mut prefix = "";
     if bytes.get(at) == Some(&b':') {
         let name_start = at + 1;
+        let name_limit = bytes.len().min(name_start + DECLARATION_WINDOW);
         at = name_start;
-        while at < window_end && is_name_byte(bytes[at]) {
+        while at < name_limit && is_name_byte(bytes[at]) {
             at += 1;
         }
-        if at >= window_end {
+        if at >= name_limit {
             return None;
         }
         prefix = &xml[name_start..at];
     }
-    while at < window_end && bytes[at].is_ascii_whitespace() {
-        at += 1;
-    }
+    at = skip_whitespace(at);
     if bytes.get(at) != Some(&b'=') {
         return None;
     }
-    at += 1;
-    while at < window_end && bytes[at].is_ascii_whitespace() {
-        at += 1;
-    }
+    at = skip_whitespace(at + 1);
     let quote = *bytes.get(at).filter(|b| matches!(b, b'"' | b'\''))?;
     let value_start = at + 1;
-    let length = bytes.get(value_start..window_end)?.iter().position(|b| *b == quote)?;
+    let value_limit = bytes.len().min(value_start + DECLARATION_WINDOW);
+    let length = bytes.get(value_start..value_limit)?.iter().position(|b| *b == quote)?;
     Some((prefix, value_start..value_start + length))
 }
 
@@ -842,5 +845,19 @@ mod tests {
     fn declaration_cut_by_the_window_inside_a_multibyte_name_is_unreadable_not_a_panic() {
         let xml = format!("<d xmlns:{}=\"u\"/>", "é".repeat(1000));
         assert!(read_declaration(&xml, "<d xmlns".len()).is_none());
+    }
+
+    #[test]
+    fn declarations_with_long_whitespace_runs_are_still_read() {
+        let gap = " ".repeat(2000);
+        let strict = format!(
+            r#"<w:styles xmlns:w{gap}={gap}"{STRICT_WML}"><w:style w:type="paragraph" w:styleId="H1"/></w:styles>"#
+        );
+        let converted = strict_to_transitional(&strict);
+        let catalog = crate::extraction::docx::styles::parse_styles_xml(&converted).unwrap();
+        assert!(catalog.styles.contains_key("H1"));
+
+        let alias = format!(r#"<x:p xmlns:x{gap}={gap}'{WML}'/>"#);
+        assert_eq!(canon(&alias), format!(r#"<w:p xmlns:x="{WML}"/>"#));
     }
 }
