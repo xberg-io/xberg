@@ -118,12 +118,9 @@ pub(crate) fn unescape_attribute(value: &str) -> String {
 
 /// Whether an on/off element is enabled: present without `w:val`, or with a true value.
 fn on_off_attr_enabled(element: &BytesStart) -> bool {
-    !matches!(
-        get_w_attr_string(element, "val")
-            .map(|v| unescape_attribute(&v))
-            .as_deref(),
-        Some("0" | "false" | "off")
-    )
+    !element.attributes().flatten().any(|attr| {
+        attr.key.as_ref() == "w:val" && matches!(unescape_attribute(&attr.value).as_str(), "0" | "false" | "off")
+    })
 }
 
 /// Get a namespaced string attribute.
