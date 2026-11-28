@@ -350,6 +350,7 @@ pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
     workbook: &mut calamine::Xlsx<R>,
     name: &str,
     sheet: TruncatedSheet,
+    epoch_styles: super::datetime::EpochStyles<'_>,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> Result<crate::types::ExcelSheet> {
     let mut reader = workbook
@@ -364,6 +365,7 @@ pub(super) fn read_truncated_xlsx_sheet<R: Read + Seek>(
             break;
         }
     }
+    super::datetime::resolve_epoch_zero_in_sparse(&mut kept.cells, epoch_styles);
     Ok(kept.finish(name, warnings))
 }
 
