@@ -110,6 +110,13 @@ impl<'p, 'a> Item<'p, 'a> {
 /// source text for those left whole display formulas (arXiv 1602.03238's, whose integral
 /// signs and limits sit off the axis with no base) as a scatter of loose glyphs. ~keep
 pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
+    group_tex_in(pieces, depth, false)
+}
+
+/// [`group_tex`] for a group that is `script`-size content (a subscript or superscript, or a
+/// part of a fraction in one): its pieces are small only against the formula, so two of them
+/// over each other are a script pair, never a nested fraction.
+fn group_tex_in(pieces: &[&Piece<'_>], depth: usize, script: bool) -> Option<String> {
     let visible: Vec<&Piece<'_>> = pieces.iter().copied().filter(|piece| !piece.is_blank()).collect();
     if visible.is_empty() {
         return Some(String::new());
@@ -119,6 +126,7 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
     }
     let size = visible.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
     if depth > 0
+        && !script
         && let Some(fraction) = stacked_fraction(&visible, size, depth)
     {
         return fraction;
@@ -132,7 +140,10 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
     }
     let base = axis[0].base;
     let rest: Vec<&Piece<'_>> = glyphs.iter().copied().filter(|piece| !contains(&axis, piece)).collect();
-    let on_axis = |piece: &Piece<'_>| piece.is_radical() || (piece.base - base).abs() <= size * OFF_AXIS_EM;
+    let on_axis = |piece: &Piece<'_>| {
+        (piece.base - base).abs() <= size * OFF_AXIS_EM
+            || (piece.is_radical() && covers_axis_radicand(piece, &axis, size))
+    };
     let mut items: Vec<Item<'_, '_>> = axis
         .iter()
         .copied()
@@ -149,6 +160,7 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
         }
     }
     let above = merge_stacked_lines(
+        script,
         clusters(
             rest.iter()
                 .copied()
@@ -158,6 +170,7 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
         size,
     );
     let below = merge_stacked_lines(
+        script,
         clusters(
             rest.iter()
                 .copied()
@@ -167,8 +180,15 @@ pub(super) fn group_tex(pieces: &[&Piece<'_>], depth: usize) -> Option<String> {
         size,
     );
     let (above, below) = pair_stacks(&mut items, above, below, &axis, base, size);
-    attach_scripts(&mut items, above, below, size)?;
-    write_items(&items, depth)
+    attach_scripts(&mut items, above, below, size, script)?;
+    write_items(&items, depth, script)
+}
+
+/// Whether the axis row carries the radicand of a radical sign drawn off the axis: a glyph of
+/// the row starts right after it. A radical over a fraction part has its radicand in that part.
+fn covers_axis_radicand(radical: &Piece<'_>, axis: &[&Piece<'_>], size: f32) -> bool {
+    axis.iter()
+        .any(|glyph| glyph.x0 >= radical.x1 - size * AXIS_OVERLAP_EM && glyph.x0 - radical.x1 <= size * CLUSTER_GAP_EM)
 }
 
 /// A nested fraction's lines: two full-size lines over each other with nothing else, an inner
@@ -192,7 +212,10 @@ fn stacked_fraction(visible: &[&Piece<'_>], size: f32, depth: usize) -> Option<O
 
 /// Join the lines of one side of the axis that stand over each other at full size: the parts
 /// of a fraction nested in a numerator or a denominator, which a script never is.
-fn merge_stacked_lines<'p, 'a>(lines: Clusters<'p, 'a>, size: f32) -> Clusters<'p, 'a> {
+fn merge_stacked_lines<'p, 'a>(script: bool, lines: Clusters<'p, 'a>, size: f32) -> Clusters<'p, 'a> {
+    if script {
+        return lines;
+    }
     let stacked = |a: &[&Piece<'_>], b: &[&Piece<'_>]| {
         a.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
             && b.iter().all(|piece| piece.size >= size * SCRIPT_SIZE_RATIO)
@@ -368,12 +391,14 @@ fn stacks_with(
 /// Hang each unpaired cluster on the item it scripts; a cluster with no base in reach gets an
 /// [`ItemKind::Orphan`] base at its own position. `None` when a cluster is a full-size line
 /// (a problem number over an expression, a line of a stack that is no fraction): no script
-/// is as large as its base, so the group is not one formula.
+/// is as large as its base, so the group is not one formula. A script group is sized against
+/// its own largest glyph, so its lines are not compared.
 fn attach_scripts<'p, 'a>(
     items: &mut Vec<Item<'p, 'a>>,
     above: Clusters<'p, 'a>,
     below: Clusters<'p, 'a>,
     size: f32,
+    script: bool,
 ) -> Option<()> {
     let is_line = |cluster: &[&Piece<'_>]| {
         cluster.iter().any(|piece| piece.size > size * SCRIPT_SIZE_RATIO)
@@ -381,7 +406,7 @@ fn attach_scripts<'p, 'a>(
                 .iter()
                 .all(|piece| piece.text.trim().chars().all(|c| matches!(c, '\'' | '′' | '″')))
     };
-    if above.iter().chain(&below).any(|cluster| is_line(cluster)) {
+    if !script && above.iter().chain(&below).any(|cluster| is_line(cluster)) {
         return None;
     }
     let mut orphans = Vec::new();
@@ -423,12 +448,12 @@ fn attach_scripts<'p, 'a>(
     Some(())
 }
 
-fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
+fn write_items(items: &[Item<'_, '_>], depth: usize, script: bool) -> Option<String> {
     let mut tex = Tex::default();
     let mut open_radical = false;
     for item in items {
-        let subscript = group_tex(&item.subscripts, depth + 1)?;
-        let superscript = group_tex(&item.superscripts, depth + 1)?;
+        let subscript = group_tex_in(&item.subscripts, depth + 1, true)?;
+        let superscript = group_tex_in(&item.superscripts, depth + 1, true)?;
         match &item.kind {
             ItemKind::Base(piece) => {
                 let (mut spelled, command) = spell_piece(piece);
@@ -456,11 +481,17 @@ fn write_items(items: &[Item<'_, '_>], depth: usize) -> Option<String> {
                 open_radical = radical;
             }
             ItemKind::Fraction(upper, lower) => {
-                let (numerator, denominator) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
+                let (numerator, denominator) = (
+                    group_tex_in(upper, depth + 1, script)?,
+                    group_tex_in(lower, depth + 1, script)?,
+                );
                 tex.raw(&format!("\\frac{{{numerator}}}{{{denominator}}}"));
             }
             ItemKind::Limits(upper, lower) => {
-                let (upper, lower) = (group_tex(upper, depth + 1)?, group_tex(lower, depth + 1)?);
+                let (upper, lower) = (
+                    group_tex_in(upper, depth + 1, true)?,
+                    group_tex_in(lower, depth + 1, true)?,
+                );
                 tex.raw(&format!("{{}}_{{{lower}}}^{{{upper}}}"));
             }
             ItemKind::Orphan => tex.raw("{}"),

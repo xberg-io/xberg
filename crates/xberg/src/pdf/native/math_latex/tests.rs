@@ -382,6 +382,13 @@ fn rebuilt_tex_with_misplaced_scripts_is_not_published() {
         "{}^{14}\\mathrm{C}",
         "x_{1}^{2}",
         "(a+b)^{2}",
+        "f^{(3)}(x)",
+        "x^{(1)}+y_{(2)}",
+        "E_{i,h}^{(1)}",
+        "\\pi^{\\pm}",
+        "W^{\\pm}",
+        "K^{\\times}",
+        "A^{\\cdot}",
     ] {
         assert!(tex_is_reliable(sound), "{sound}");
     }
@@ -408,7 +415,7 @@ fn should_write_a_fraction_whose_denominator_is_a_fraction() {
 }
 
 /// Gutenberg 33283 p139: a problem number `(15)` printed above a row of full-size text is not
-/// a script of the expression below it.
+/// a script of the expression below it, so no formula is written and every span is kept.
 #[test]
 fn should_not_script_a_full_size_row_label_onto_a_formula() {
     let spans = vec![
@@ -417,17 +424,13 @@ fn should_not_script_a_full_size_row_label_onto_a_formula() {
         span("x", MMI, 11.96, 80.12, 6.65, 511.35),
         span("+ 2)(", MR, 11.96, 89.43, 26.72, 511.35),
         span("x", MMI, 11.96, 116.15, 6.65, 511.35),
-        span("2", "PSEHXM+CMR8", 7.97, 122.80, 4.23, 511.35),
+        span("2", "PSEHXM+CMR8", 7.97, 122.80, 4.23, 514.9),
         span("+", MR, 11.96, 130.19, 9.11, 511.35),
         span("x", MMI, 11.96, 141.95, 6.65, 511.35),
         span("+ 1)", MR, 11.96, 151.26, 22.16, 511.35),
-        span("2", "PSEHXM+CMR8", 7.97, 173.42, 4.23, 511.35),
+        span("2", "PSEHXM+CMR8", 7.97, 173.42, 4.23, 514.9),
     ];
-    if let Some(rewritten) = rewrite_math_spans(&spans) {
-        for formula in texts(&rewritten) {
-            assert!(!formula.contains("{}_") && !formula.contains("{}^"), "{formula}");
-        }
-    }
+    assert!(rewrite_math_spans(&spans).is_none());
 }
 
 /// Gutenberg 33283 p161: `y = ∛x`, a CMEX radical drawn above the axis with its degree over
@@ -457,22 +460,135 @@ fn rebuilt_tex_with_scripts_that_are_labels_or_punctuation_is_not_published() {
     }
 }
 
-/// arXiv 2312.13591 p5: a bound-state label and a dagger stacked at script size after a mass are
-/// that mass's scripts, not a fraction `B / †`.
+/// arXiv 2312.13591 p5, `[∼4526.5]` with its virtual-state label `V` and mark `♯` after it: the
+/// mark is raised and the label lowered at script size, a pair of scripts and no fraction.
 #[test]
-fn should_not_write_two_script_size_marks_over_each_other_as_a_fraction() {
+fn should_write_a_raised_mark_and_a_lowered_label_as_scripts() {
+    let (cmr, mmi6) = ("MOKZDY+CMR9", "AUZUOL+CMMI6");
     let spans = vec![
-        span("[4486.6, 4517.3]", "YBENFD+CMR10", 9.96, 100.0, 70.0, 500.0),
-        span("B", "VAYNGT+CMR7", 6.97, 171.0, 4.5, 497.0),
-        span("\u{2020}", "PJJXZJ+CMSY7", 6.97, 171.0, 4.5, 503.5),
+        span("[", cmr, 8.97, 394.07, 2.56, 270.73),
+        span("\u{223c}", "SHHUPL+CMSY9", 8.97, 396.63, 7.17, 270.73),
+        span("4526", cmr, 8.97, 406.36, 18.43, 270.73),
+        span(".", "PCOKUM+CMMI9", 8.97, 424.79, 2.56, 270.73),
+        span("5]", cmr, 8.97, 427.35, 7.17, 270.73),
+        span("\u{266f}", mmi6, 5.98, 434.51, 3.04, 270.73),
+        span("V", mmi6, 5.98, 434.51, 4.36, 267.98),
     ];
-    if let Some(rewritten) = rewrite_math_spans(&spans) {
-        assert!(
-            !texts(&rewritten).iter().any(|tex| tex.contains("\\frac")),
-            "{:?}",
-            texts(&rewritten)
-        );
+    let recorded = [(434.51, 5.98, 270.73, 274.99)];
+    let (rewritten, _) =
+        super::rewrite_with_baselines(&spans, Delimiters::Dollars, &super::RawBaselines::new(&recorded))
+            .expect("the mass is rewritten");
+    assert_eq!(texts(&rewritten), ["$$[\\sim4526.5]_{V}^{\\sharp}$$"]);
+}
+
+/// arXiv 2312.13591 p5, `[4486.6, 4517.3]` with a lowered label `B` and a lower mark `†`: two
+/// script-size marks over each other are one script inside the other, not `\frac{B}{\dagger}`.
+#[test]
+fn should_write_two_stacked_script_size_marks_as_nested_scripts() {
+    let cmr = "MOKZDY+CMR9";
+    let spans = vec![
+        span("[4486", cmr, 8.97, 384.13, 20.99, 480.49),
+        span(".", "PCOKUM+CMMI9", 8.97, 405.12, 2.56, 480.49),
+        span("6", cmr, 8.97, 407.68, 4.61, 480.49),
+        span(",", "PCOKUM+CMMI9", 8.97, 412.29, 2.56, 480.49),
+        span("4517", cmr, 8.97, 416.38, 18.43, 480.49),
+        span(".", "PCOKUM+CMMI9", 8.97, 434.81, 2.56, 480.49),
+        span("3]", cmr, 8.97, 437.37, 7.17, 480.49),
+        span("B", "AUZUOL+CMMI6", 5.98, 444.54, 5.54, 477.75),
+        span("\u{2020}", "YKEMEI+CMSY6", 5.98, 444.50, 3.43, 465.62),
+    ];
+    let recorded = [(444.5, 5.98, 465.62, 469.88)];
+    let (rewritten, _) =
+        super::rewrite_with_baselines(&spans, Delimiters::Dollars, &super::RawBaselines::new(&recorded))
+            .expect("the mass is rewritten");
+    assert_eq!(texts(&rewritten), ["$$[4486.6,4517.3]_{B_{\\dagger}}$$"]);
+}
+
+/// Gutenberg 38769 p412: a sum sign drawn between two lines of prose that no formula claims
+/// stays as source text but is set apart from the words beside it.
+#[test]
+fn should_set_a_refused_math_glyph_apart_from_the_prose_beside_it() {
+    let spans = vec![
+        span(
+            "this result might have been",
+            "NWIADI+CMR10",
+            10.91,
+            172.91,
+            214.09,
+            522.28,
+        ),
+        span("P", "XXJGHY+CMEX10", 10.91, 198.77, 11.52, 516.91),
+        span("n", MMI, 10.91, 210.0, 6.0, 505.0),
+        span("s", MMI, 10.91, 216.5, 5.0, 512.0),
+        span("derived at once", "NWIADI+CMR10", 10.91, 9.0, 185.29, 508.73),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the page has refused math");
+    let glyph = rewritten
+        .iter()
+        .find(|span| span.text.trim() == "P")
+        .expect("the glyph is kept");
+    assert_eq!(glyph.text, " P ");
+}
+
+/// A radical in a numerator is that fraction's, not the axis row's.
+#[test]
+fn should_write_a_radical_inside_a_numerator() {
+    let spans = vec![
+        span("y", MMI, 11.96, 78.27, 5.71, 429.39),
+        span("=", MR, 11.96, 87.73, 9.11, 429.39),
+        span("p", "QTXDXT+CMEX10", 11.96, 102.0, 11.96, 440.0),
+        span("x", MMI, 11.96, 114.0, 6.65, 437.0),
+        span("2", MR, 11.96, 105.0, 5.85, 421.0),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$y=\\frac{\\sqrt{x}}{2}$$"]);
+}
+
+/// A degree over the left edge of a wide radical is its degree.
+#[test]
+fn should_read_the_degree_of_a_wide_radical_by_its_left_edge() {
+    let spans = vec![
+        span("y", MMI, 11.96, 78.27, 5.71, 429.39),
+        span("=", MR, 11.96, 87.73, 9.11, 429.39),
+        span("s", "QTXDXT+CMEX10", 11.96, 100.8, 20.0, 439.37),
+        span("3", "PXXQUV+CMR7", 6.97, 103.47, 3.97, 436.0),
+        span("x", MMI, 11.96, 122.0, 6.65, 429.39),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the equation is rewritten");
+    assert_eq!(texts(&rewritten), ["$$y=\\sqrt[3]{x}$$"]);
+}
+
+#[test]
+fn should_take_a_radical_sign_only_from_the_extension_fonts() {
+    use super::glyphs::is_radical_glyph;
+    for font in ["QTXDXT+CMEX10", "CMEX7", "LMEX10", "ABCDEF+LMEX10-Regular"] {
+        assert!(is_radical_glyph(font, "p"), "{font}");
     }
+    for (font, text) in [
+        ("RRQMNM+CMMI12", "p"),
+        ("MSBM10", "p"),
+        ("CMR10", "p"),
+        ("CMEX10", "P"),
+        ("CMEX10", "pq"),
+        ("CMEX10", "u"),
+    ] {
+        assert!(!is_radical_glyph(font, text), "{font} {text}");
+    }
+}
+
+/// Two centred display equations at ordinary leading (1.2 em) are two formulas, not a fraction.
+#[test]
+fn should_keep_two_centred_lines_at_ordinary_leading_apart() {
+    let spans = vec![
+        span("ab", MMI, 12.0, 200.0, 12.0, 700.0),
+        span("=", MR, 12.0, 215.0, 9.0, 700.0),
+        span("cd", MMI, 12.0, 227.0, 12.0, 700.0),
+        span("ef", MMI, 12.0, 200.0, 12.0, 685.6),
+        span("=", MR, 12.0, 215.0, 9.0, 685.6),
+        span("gh", MMI, 12.0, 227.0, 12.0, 685.6),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("both rows are rewritten");
+    assert_eq!(texts(&rewritten), ["$$ab=cd$$", "$$ef=gh$$"]);
 }
 
 /// Gutenberg 36670 p140, exercise 10: two fractions joined by a `×` on the middle line, with
@@ -506,5 +622,47 @@ fn should_take_the_operator_line_between_two_fraction_rows_as_the_axis() {
     assert_eq!(
         texts(&rewritten),
         ["$$10.\\frac{a^{2}-100}{a^{2}-9}\\times\\frac{a-3}{a-10}.$$"]
+    );
+}
+
+/// Gutenberg 36670 p133: `2a − 8b − 8c` over a line of prose that opens `or 2(a − 4b − 4c)`,
+/// 1.4 em below it with letters at the same x: two lines of text, not the parts of a fraction.
+#[test]
+fn should_not_take_two_lines_of_text_with_aligned_letters_for_a_fraction() {
+    let (cmr, mmi, msy) = ("DPBTON+CMR10", "ZTFHJE+CMMI10", "LKAHCF+CMSY10");
+    let spans = vec![
+        span("2", cmr, 10.91, 114.32, 5.45, 199.81),
+        span("a", mmi, 10.91, 119.77, 5.77, 199.81),
+        span(" \u{2212}", msy, 10.91, 125.54, 12.47, 199.81),
+        span("8", cmr, 10.91, 147.45, 5.45, 199.81),
+        span("b", mmi, 10.91, 152.90, 4.68, 199.81),
+        span(" \u{2212}", msy, 10.91, 157.59, 12.47, 199.81),
+        span("8", cmr, 10.91, 178.28, 5.45, 199.81),
+        span("c", mmi, 10.91, 183.73, 4.72, 199.81),
+        span("or 2(", cmr, 10.91, 97.60, 22.16, 184.27),
+        span("a", mmi, 10.91, 119.76, 5.77, 184.27),
+        span(" \u{2212}", msy, 10.91, 125.53, 12.48, 184.27),
+        span("4", cmr, 10.91, 147.45, 5.45, 184.27),
+        span("b", mmi, 10.91, 152.90, 4.68, 184.27),
+        span(" \u{2212}", msy, 10.91, 157.58, 12.47, 184.27),
+        span(" 4", cmr, 10.91, 170.05, 9.45, 184.27),
+        span("c", mmi, 10.91, 179.50, 4.72, 184.27),
+        span(") = the sum of the numerators.", cmr, 10.91, 184.22, 150.58, 184.27),
+    ];
+    let rewritten = rewrite_math_spans(&spans).expect("the lines are rewritten");
+    assert_eq!(
+        texts(&rewritten),
+        [
+            "$$2a-8b-8c$$",
+            "or 2(",
+            "a",
+            " \u{2212}",
+            "4",
+            "b",
+            " \u{2212}",
+            " 4",
+            "c",
+            ") = the sum of the numerators."
+        ]
     );
 }

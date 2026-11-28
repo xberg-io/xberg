@@ -37,8 +37,15 @@ pub(super) fn tex_is_reliable(tex: &str) -> bool {
     depth == 0
 }
 
-/// The content of every `_{...}` and `^{...}` group of `tex`, nested groups included.
-fn script_groups(tex: &str) -> Vec<&str> {
+/// A script group of `tex`: its content, and whether it hangs on an empty base `{}` or on
+/// nothing, so that no glyph of the formula carries it.
+struct Script<'a> {
+    content: &'a str,
+    base_less: bool,
+}
+
+/// Every `_{...}` and `^{...}` group of `tex`, nested groups included.
+fn script_groups(tex: &str) -> Vec<Script<'_>> {
     let mut groups = Vec::new();
     for (at, _) in tex.match_indices(['_', '^']) {
         let rest = &tex[at + 1..];
@@ -52,7 +59,10 @@ fn script_groups(tex: &str) -> Vec<&str> {
                 '}' => {
                     depth -= 1;
                     if depth == 0 {
-                        groups.push(&rest[1..offset]);
+                        groups.push(Script {
+                            content: &rest[1..offset],
+                            base_less: at == 0 || tex[..at].ends_with("{}"),
+                        });
                         break;
                     }
                 }
@@ -63,15 +73,20 @@ fn script_groups(tex: &str) -> Vec<&str> {
     groups
 }
 
-/// A script that is no exponent or index: an operator, punctuation or a list label such as
-/// `9.` or `(16)` printed beside a formula and hung on it by position.
-fn is_stray_script(script: &str) -> bool {
+/// A script that is no exponent or index. Punctuation alone never is one. An operator
+/// (`\\times`, `\\pm`) or a list label such as `9.` or `(16)` is a stray only on no base: a
+/// printed problem number or sign hung on the formula by position, where `K^{\\times}`,
+/// `W^{\\pm}` and `f^{(3)}` are scripts of the glyph before them.
+fn is_stray_script(script: &Script<'_>) -> bool {
     const OPERATOR_COMMANDS: &[&str] = &["\\times", "\\div", "\\pm", "\\mp", "\\cdot", "="];
-    let script = script.trim();
-    let number = script.trim_start_matches('(').trim_end_matches([')', '.']);
-    script.chars().all(|c| matches!(c, '.' | ',' | ';' | ':'))
-        || OPERATOR_COMMANDS.contains(&script)
-        || (!number.is_empty()
-            && number.bytes().all(|b| b.is_ascii_digit())
-            && (script.ends_with('.') || script.starts_with('(') || script.ends_with(')')))
+    let content = script.content.trim();
+    if content.chars().all(|c| matches!(c, '.' | ',' | ';' | ':')) {
+        return true;
+    }
+    let number = content.trim_start_matches('(').trim_end_matches([')', '.']);
+    script.base_less
+        && (OPERATOR_COMMANDS.contains(&content)
+            || (!number.is_empty()
+                && number.bytes().all(|b| b.is_ascii_digit())
+                && (content.ends_with('.') || content.starts_with('(') || content.ends_with(')'))))
 }

@@ -11,6 +11,7 @@
 //! math-font span and at least one formula is rewritten; text fonts alone (CMR included)
 //! never start a formula.
 
+mod evidence;
 mod glyphs;
 mod layout;
 mod reliability;
@@ -18,6 +19,10 @@ pub(crate) mod sentinels;
 #[cfg(test)]
 mod tests;
 
+use evidence::{
+    has_math_evidence, has_structure, is_trailing_note_mark, missing_closers, only_operator_glyphs,
+    reads_as_numeric_row,
+};
 use glyphs::{MathFont, accent_command, is_mark, is_operator, is_radical_glyph, is_relation, is_unmapped, math_font};
 use layout::group_tex;
 use reliability::tex_is_reliable;
@@ -84,8 +89,9 @@ const NESTED_CENTRE_EM: f32 = 0.3;
 /// Share of the wider part's width that the narrower part of a nested fraction has at least.
 const NESTED_WIDTH_SHARE: f32 = 0.6;
 /// Smallest baseline distance, in ems, between a nested fraction's numerator and denominator:
-/// the bar's clearance, which two lines of an aligned equation do not keep.
-const NESTED_BAR_EM: f32 = 1.2;
+/// the bar's clearance. Ordinary leading of 10 pt type on 12 pt lines is 1.2 em, so the margin
+/// keeps two stacked lines of text from reading as parts of a fraction.
+const NESTED_BAR_EM: f32 = 1.3;
 /// Share of the narrower of two axis glyphs they overlap by when one is drawn over the other.
 const COLLISION_SHARE: f32 = 0.5;
 /// Distance, in ems, within which a glyph run with the same text is an overdraw of another.
@@ -245,8 +251,8 @@ fn rewrite_with_baselines(
         .filter_map(|(i, span)| Piece::new(i, span, baselines.of(span)))
         .collect();
     let (pieces, overdraws) = without_overdraws(all);
-    let mut formulas = find_formulas(&pieces);
-    if formulas.is_empty() {
+    let (mut formulas, refused) = find_formulas(&pieces);
+    if formulas.is_empty() && refused.is_empty() {
         return None;
     }
     let mut replacement: Vec<Option<TextSpan>> = vec![None; spans.len()];
@@ -270,6 +276,17 @@ fn rewrite_with_baselines(
         }
         replacement[formula.anchor_span] = Some(formula.to_span(&spans[formula.anchor_span], delimiters));
     }
+    for &index in &refused {
+        if replacement[index].is_none()
+            && !removed[index]
+            && let Some(piece) = pieces.iter().find(|piece| piece.span == index)
+        {
+            replacement[index] = set_apart(&spans[index], piece, &pieces);
+        }
+    }
+    if formulas.is_empty() && replacement.iter().all(Option::is_none) {
+        return None;
+    }
     let mut rewritten = Vec::with_capacity(spans.len());
     let mut index_map = Vec::with_capacity(spans.len());
     for (i, span) in spans.iter().enumerate() {
@@ -284,6 +301,38 @@ fn rewrite_with_baselines(
         }));
     }
     Some((rewritten, index_map))
+}
+
+/// `span` with a space on each side where prose reaches it, so a math glyph kept as source
+/// text is never read as part of the word beside it; `None` when no side needs one. Prose
+/// runs under the glyph on its line: a span that covers it, as a line of prose does a sum sign
+/// drawn between two lines.
+fn set_apart(span: &TextSpan, piece: &Piece<'_>, pieces: &[Piece<'_>]) -> Option<TextSpan> {
+    let same_line =
+        |other: &&Piece<'_>| other.class == Class::Prose && (other.base - piece.base).abs() <= piece.size * SAME_ROW_EM;
+    let prose_before = pieces
+        .iter()
+        .filter(same_line)
+        .any(|other| other.x0 < piece.x0 && other.x1 > piece.x0);
+    let prose_after = pieces
+        .iter()
+        .filter(same_line)
+        .any(|other| other.x1 > piece.x1 && other.x0 < piece.x1);
+    let lead = prose_before && !span.text.starts_with(char::is_whitespace);
+    let trail = prose_after && !span.text.ends_with(char::is_whitespace);
+    if !lead && !trail {
+        return None;
+    }
+    let mut apart = span.clone();
+    apart.text = format!(
+        "{}{}{}",
+        if lead { " " } else { "" },
+        span.text,
+        if trail { " " } else { "" }
+    );
+    apart.char_widths.clear();
+    apart.char_x_offsets.clear();
+    Some(apart)
 }
 
 /// `span` without its first `count` characters, its left edge moved to the next glyph;
@@ -496,27 +545,45 @@ impl Formula<'_> {
     }
 }
 
-fn find_formulas<'a>(pieces: &[Piece<'a>]) -> Vec<Formula<'a>> {
+/// The formulas rebuilt from `pieces`, and the spans of the math glyphs of each group whose
+/// rebuild was refused: they stay as the source's plain reading, set apart from the prose
+/// around them.
+fn find_formulas<'a>(pieces: &[Piece<'a>]) -> (Vec<Formula<'a>>, Vec<usize>) {
     let mut prose: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class == Class::Prose).collect();
     prose.sort_by(|a, b| a.base.total_cmp(&b.base));
     let candidates: Vec<&Piece<'a>> = pieces.iter().filter(|piece| piece.class != Class::Prose).collect();
     let mut formulas = Vec::new();
+    let mut refused = Vec::new();
     for component in connected_components(&candidates, &prose) {
         for unit in split_rows(component) {
-            if let Some(formula) = build_formula(unit, &prose)
-                && tex_is_reliable(&formula.tex)
-            {
-                formulas.push(formula);
+            let math_spans: Vec<usize> = unit
+                .iter()
+                .filter(|piece| piece.is_math())
+                .map(|piece| piece.span)
+                .collect();
+            match build_formula(unit, &prose) {
+                Built::Formula(formula) if tex_is_reliable(&formula.tex) => formulas.push(*formula),
+                Built::Formula(_) | Built::Refused => refused.extend(math_spans),
+                Built::NotMath => {}
             }
         }
     }
-    formulas
+    (formulas, refused)
+}
+
+/// What a group of pieces came to.
+enum Built<'a> {
+    Formula(Box<Formula<'a>>),
+    /// A structured group whose geometry cannot be spelled as one formula.
+    Refused,
+    NotMath,
 }
 
 /// Group candidate pieces that sit on one formula row or stack into one formula. A component
 /// of more than [`MAX_COMPONENT_PIECES`] is left out.
 fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a>]) -> Vec<Vec<&'p Piece<'a>>> {
     let adjacent: Vec<bool> = candidates.iter().map(|piece| is_prose_adjacent(piece, prose)).collect();
+    let crowded = crowded_pieces(candidates);
     let mut parent: Vec<usize> = (0..candidates.len()).collect();
     let mut order: Vec<usize> = (0..candidates.len()).collect();
     order.sort_by(|&a, &b| candidates[a].base.total_cmp(&candidates[b].base));
@@ -533,7 +600,13 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
             if candidates[j].base - candidates[i].base > reach {
                 break;
             }
-            if linked(candidates[i], candidates[j], adjacent[i] || adjacent[j], prose) {
+            if linked(
+                candidates[i],
+                candidates[j],
+                adjacent[i] || adjacent[j],
+                crowded[i] || crowded[j],
+                prose,
+            ) {
                 let (root_i, root_j) = (find(&mut parent, i), find(&mut parent, j));
                 parent[root_i] = root_j;
             }
@@ -554,6 +627,27 @@ fn connected_components<'p, 'a>(candidates: &[&'p Piece<'a>], prose: &[&Piece<'a
         .into_values()
         .filter(|group| group.iter().any(|piece| piece.is_math()))
         .collect()
+}
+
+/// Whether each candidate has another on its own baseline within a size of it: a piece of a
+/// line of text. The parts of a nested fraction stand alone on their baseline, so two lines
+/// of text whose letters happen to align are not taken for them.
+fn crowded_pieces(candidates: &[&Piece<'_>]) -> Vec<bool> {
+    let mut order: Vec<usize> = (0..candidates.len()).collect();
+    order.sort_by(|&a, &b| candidates[a].base.total_cmp(&candidates[b].base));
+    let mut crowded = vec![false; candidates.len()];
+    for (position, &i) in order.iter().enumerate() {
+        for &j in &order[position + 1..] {
+            if candidates[j].base - candidates[i].base > candidates[i].size * ROW_TOLERANCE_EM {
+                break;
+            }
+            if candidates[i].gap(candidates[j]) <= candidates[i].size.max(candidates[j].size) {
+                crowded[i] = true;
+                crowded[j] = true;
+            }
+        }
+    }
+    crowded
 }
 
 fn find(parent: &mut [usize], mut i: usize) -> usize {
@@ -581,7 +675,7 @@ fn is_prose_adjacent(piece: &Piece<'_>, prose: &[&Piece<'_>]) -> bool {
         })
 }
 
-fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, prose: &[&Piece<'_>]) -> bool {
+fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, crowded: bool, prose: &[&Piece<'_>]) -> bool {
     let size = a.size.max(b.size);
     let rise = (a.base - b.base).abs();
     let gap = a.gap(b);
@@ -592,7 +686,7 @@ fn linked(a: &Piece<'_>, b: &Piece<'_>, prose_adjacent: bool, prose: &[&Piece<'_
     } else if rise <= size * LIMIT_EM && a.size.min(b.size) <= size * SCRIPT_SIZE_RATIO {
         gap <= size * STACK_GAP_EM && !prose_adjacent
     } else if rise <= size * LIMIT_EM {
-        !prose_adjacent && are_nested_fraction_lines(a, b)
+        !prose_adjacent && !crowded && are_nested_fraction_lines(a, b)
     } else {
         false
     }
@@ -769,7 +863,14 @@ fn rows<'p, 'a>(pieces: &[&'p Piece<'a>], size: f32) -> Vec<Vec<&'p Piece<'a>>> 
     rows
 }
 
-fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Option<Formula<'a>> {
+fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Built<'a> {
+    match build_formula_inner(&mut members, prose) {
+        Ok(formula) => formula.map_or(Built::NotMath, |formula| Built::Formula(Box::new(formula))),
+        Err(()) => Built::Refused,
+    }
+}
+
+fn build_formula_inner<'a>(members: &mut Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Result<Option<Formula<'a>>, ()> {
     members.sort_by(|a, b| a.x0.total_cmp(&b.x0));
     while members
         .last()
@@ -777,11 +878,11 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
     {
         members.pop();
     }
-    while is_trailing_note_mark(&members) {
+    while is_trailing_note_mark(members) {
         members.pop();
     }
-    if !has_math_evidence(&members) {
-        return None;
+    if !has_math_evidence(members) {
+        return Ok(None);
     }
     let size = members.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
     let x0 = members.iter().map(|piece| piece.x0).fold(f32::INFINITY, f32::min);
@@ -795,135 +896,39 @@ fn build_formula<'a>(mut members: Vec<&Piece<'a>>, prose: &[&Piece<'a>]) -> Opti
     let display = !prose_near(prose, bottom - band, top + band).iter().any(|other| {
         other.bottom() < top && other.top() > bottom && other.x0.max(x0) - other.x1.min(x1) < size * PROSE_DISTANCE_EM
     });
-    let structured = has_structure(&members, size);
+    let structured = has_structure(members, size);
     let related = members.iter().any(|piece| piece.text.chars().any(is_relation));
     let operated = related || members.iter().any(|piece| piece.text.chars().any(is_operator));
     if !structured && !(display && operated) {
-        return None;
+        return Ok(None);
     }
-    if !structured && !related && (only_operator_glyphs(&members) || reads_as_numeric_row(&members)) {
-        return None;
+    if !structured && !related && (only_operator_glyphs(members) || reads_as_numeric_row(members)) {
+        return Ok(None);
     }
-    let axis = axis_row(&members)?;
-    let anchor = axis.iter().min_by(|a, b| a.x0.total_cmp(&b.x0))?;
-    let tex = group_tex(&members, 0)?;
+    let (Some(axis), tex) = (axis_row(members), group_tex(members, 0)) else {
+        return Ok(None);
+    };
+    let Some(tex) = tex else {
+        return Err(());
+    };
+    let Some(anchor) = axis.iter().min_by(|a, b| a.x0.total_cmp(&b.x0)) else {
+        return Ok(None);
+    };
     if tex.is_empty() {
-        return None;
+        return Ok(None);
     }
     let closers = (!display)
-        .then(|| missing_closers(&members, prose, x1, anchor.base, size))
+        .then(|| missing_closers(members, prose, x1, anchor.base, size))
         .flatten();
-    Some(Formula {
+    Ok(Some(Formula {
         closers,
         anchor_span: anchor.span,
         base: anchor.base,
-        members: members.into_iter().copied().collect(),
+        members: members.iter().map(|piece| **piece).collect(),
         display,
         tex,
         x0,
         x1,
         size,
-    })
-}
-
-/// A raised script-size number right after sentence punctuation: a footnote mark that
-/// follows the formula, not its exponent.
-fn is_trailing_note_mark(members: &[&Piece<'_>]) -> bool {
-    let [.., before, last] = members else {
-        return false;
-    };
-    let size = members.iter().map(|piece| piece.size).fold(0.0_f32, f32::max);
-    let digits = last.text.trim();
-    !digits.is_empty()
-        && digits.bytes().all(|byte| byte.is_ascii_digit())
-        && last.size < size * SCRIPT_SIZE_RATIO
-        && last.base > before.base + size * STRUCTURE_OFFSET_EM
-        && before.text.trim_end().ends_with(['.', ',', ';', ':'])
-}
-
-/// The prose span right after an inline formula that opens with the closing brackets the
-/// formula is missing, and how many of them it lends: (span, count).
-fn missing_closers(
-    members: &[&Piece<'_>],
-    prose: &[&Piece<'_>],
-    x1: f32,
-    base: f32,
-    size: f32,
-) -> Option<(usize, usize)> {
-    let balance = |open: char, close: char| {
-        members
-            .iter()
-            .flat_map(|piece| piece.text.chars())
-            .fold(0_isize, |depth, c| {
-                depth + isize::from(c == open) - isize::from(c == close)
-            })
-    };
-    let (mut parens, mut brackets) = (balance('(', ')'), balance('[', ']'));
-    if parens <= 0 && brackets <= 0 {
-        return None;
-    }
-    let reach = size * STRUCTURE_OFFSET_EM;
-    let next = prose_near(prose, base - reach, base + reach)
-        .iter()
-        .filter(|piece| piece.x0 >= x1 - size * AXIS_OVERLAP_EM && piece.x0 - x1 <= size * CLUSTER_GAP_EM)
-        .min_by(|a, b| a.x0.total_cmp(&b.x0))?;
-    let mut count = 0;
-    for c in next.text.chars() {
-        match c {
-            ')' if parens > 0 => parens -= 1,
-            ']' if brackets > 0 => brackets -= 1,
-            _ => break,
-        }
-        count += 1;
-    }
-    (count > 0).then_some((next.span, count))
-}
-
-/// Whether every math-font glyph is a binary operator, as a LaTeX table's `$-$3.4` minus is.
-fn only_operator_glyphs(members: &[&Piece<'_>]) -> bool {
-    members
-        .iter()
-        .filter(|piece| piece.is_math())
-        .flat_map(|piece| piece.text.chars())
-        .filter(|&c| !c.is_whitespace() && !is_unmapped(c))
-        .all(is_operator)
-}
-
-/// Several text runs that are all signed numbers: table cells, not a formula.
-fn reads_as_numeric_row(members: &[&Piece<'_>]) -> bool {
-    let numeric = |text: &str| {
-        let text = text.trim();
-        text.chars().any(|c| c.is_ascii_digit())
-            && text
-                .chars()
-                .all(|c| c.is_ascii_digit() || c.is_whitespace() || matches!(c, '.' | ',' | '%' | '−' | '-' | '+'))
-    };
-    let neutral: Vec<&&Piece<'_>> = members.iter().filter(|piece| piece.class == Class::Neutral).collect();
-    neutral.len() > MAX_NUMERIC_RUNS && neutral.iter().all(|piece| numeric(piece.text))
-}
-
-/// A math-font glyph that is more than a footnote or list mark.
-fn has_math_evidence(members: &[&Piece<'_>]) -> bool {
-    members.iter().filter(|piece| piece.is_math()).any(|piece| {
-        piece.text.chars().any(|c| {
-            !c.is_whitespace()
-                && !is_unmapped(c)
-                && !is_mark(c)
-                && (c.is_alphanumeric()
-                    || glyphs::greek_command(c).is_some()
-                    || glyphs::symbol_command(c).is_some()
-                    || is_relation(c)
-                    || is_operator(c))
-        })
-    })
-}
-
-/// Scripts, stacked parts or accents: what prose assembly breaks apart.
-fn has_structure(members: &[&Piece<'_>], size: f32) -> bool {
-    let first = members[0].base;
-    members.iter().any(|piece| {
-        (piece.base - first).abs() > size * STRUCTURE_OFFSET_EM
-            || piece.size < size * SCRIPT_SIZE_RATIO
-            || piece.accent().is_some()
-    })
+    }))
 }
