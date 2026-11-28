@@ -140,7 +140,7 @@ impl<'a> PinTables<'a> {
         if fast.is_none() && best.is_none() {
             return VerifiedSet::Unknown;
         }
-        let Some(digest) = memoized_sha256(path) else {
+        let Some(digest) = memoized_sha256(path, MAX_TRAINEDDATA_BYTES) else {
             return VerifiedSet::Unknown;
         };
         match (
@@ -152,6 +152,21 @@ impl<'a> PinTables<'a> {
             (false, true) => VerifiedSet::Best,
             (false, false) => VerifiedSet::Unknown,
         }
+    }
+
+    /// The set and pinned SHA-256 of the pack the file at `path` is, by [`Self::classify`];
+    /// `None` when it is no pinned pack of `lang`.
+    ///
+    /// The same bytes give the same answer wherever and however they were written, so cache keys
+    /// built from it survive a pack copied, restored or re-adopted unchanged.
+    pub(crate) fn pinned_identity(&self, lang: &str, path: &Path) -> Option<(VerifiedSet, &'a str)> {
+        let set = self.classify(lang, path);
+        let model = match set {
+            VerifiedSet::Fast | VerifiedSet::Shared => TessdataModel::Fast,
+            VerifiedSet::Best => TessdataModel::Best,
+            VerifiedSet::Unknown => return None,
+        };
+        self.pin(lang, model).map(|pin| (set, pin.1))
     }
 
     /// The set every one of `languages` in `directory` was verified to be, ignoring the packs
@@ -362,7 +377,8 @@ pub(crate) fn without_reading_packs<T>(compute: impl FnOnce() -> T) -> Option<T>
 ///
 /// The stamp is taken from the opened file, not from an earlier `stat` of the path, so a file
 /// replaced between the two is never remembered under the stamp of the one it replaced.
-fn memoized_sha256(path: &Path) -> Option<String> {
+/// A file longer than `limit` bytes has no digest.
+fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
     let file = std::fs::File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
     if !metadata.is_file() {
@@ -378,7 +394,7 @@ fn memoized_sha256(path: &Path) -> Option<String> {
         MEMO_MISSED.with(|missed| missed.set(true));
         return None;
     }
-    let mut reader = (&file).take(MAX_TRAINEDDATA_BYTES.saturating_add(1));
+    let mut reader = (&file).take(limit.saturating_add(1));
     let mut hasher = Sha256::new();
     let mut buffer = vec![0_u8; 64 * 1024];
     let mut read = 0_u64;
@@ -404,6 +420,15 @@ fn memoized_sha256(path: &Path) -> Option<String> {
         .unwrap_or_else(PoisonError::into_inner)
         .insert(path.to_path_buf(), (state, digest.clone()));
     Some(digest)
+}
+
+/// The SHA-256 of the regular file at `path`, of any size, read once per (path, [`FileStamp`]).
+///
+/// Where a stamp is only the size and modification time, a replacement can keep both, so the
+/// identity of a pack that is no pinned one has to come from its bytes.
+#[cfg(not(unix))]
+pub(crate) fn content_sha256(path: &Path) -> Option<String> {
+    memoized_sha256(path, u64::MAX)
 }
 
 /// The pinned language packs of `model`, sorted by language code.

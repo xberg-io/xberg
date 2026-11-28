@@ -942,7 +942,7 @@ fn test_strip_control_characters_delete_char() {
 
 /// Replace `path` with `bytes`, keeping its size and modification time, the way a copy tool that
 /// preserves times does: through a new file renamed over it.
-#[cfg(unix)]
+#[cfg(not(target_arch = "wasm32"))]
 fn replace_keeping_size_and_time(path: &Path, bytes: &[u8]) {
     let before = std::fs::metadata(path).unwrap();
     assert_eq!(before.len(), bytes.len() as u64, "the replacement must keep the size");
@@ -962,7 +962,7 @@ fn replace_keeping_size_and_time(path: &Path, bytes: &[u8]) {
     );
 }
 
-#[cfg(unix)]
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_pack_identity_sees_a_replacement_that_keeps_size_and_modification_time() {
     let directory = tempfile::tempdir().unwrap();
@@ -978,6 +978,43 @@ fn test_pack_identity_sees_a_replacement_that_keeps_size_and_modification_time()
     assert_eq!(identity(), first);
     replace_keeping_size_and_time(&pack, b"other model");
     assert_ne!(identity(), first);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_a_pinned_pack_written_again_with_the_same_bytes_keeps_its_identity() {
+    let fast_pack = sha256_hex(b"fast");
+    let fast = [("eng", fast_pack.as_str(), 4)];
+    let pins = PinTables { fast: &fast, best: &[] };
+    let directory = tempfile::tempdir().unwrap();
+    let pack = directory.path().join("eng.traineddata");
+    let identity = || {
+        let mut hasher = blake3::Hasher::new();
+        assert!(hash_pack_identities_with(&mut hasher, directory.path(), ["eng"], &pins));
+        hasher.finalize()
+    };
+    // ~keep A new file with another modification time, as a restore or copy that keeps no times
+    // writes it: everything a stamp sees differs, only the bytes are the same.
+    let write_again = |bytes: &[u8], seconds: u64| {
+        let staged = directory.path().join("staged");
+        std::fs::write(&staged, bytes).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&staged)
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds))
+            .unwrap();
+        std::fs::rename(&staged, &pack).unwrap();
+    };
+
+    write_again(b"fast", 1_000_000);
+    let pinned = identity();
+    write_again(b"fast", 2_000_000);
+    assert_eq!(identity(), pinned, "the same pinned bytes keep their cache keys");
+    write_again(b"fasT", 3_000_000);
+    assert_ne!(identity(), pinned, "other bytes are another pack");
+    write_again(b"fast", 4_000_000);
+    assert_eq!(identity(), pinned, "the pinned bytes are recognised again");
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -299,6 +299,7 @@ impl FileStamp {
         })
     }
 
+    #[cfg(any(unix, target_arch = "wasm32"))]
     fn hash_into(&self, hasher: &mut blake3::Hasher) {
         hasher.update(&self.len.to_le_bytes());
         let (side, offset) = match self.modified.duration_since(std::time::UNIX_EPOCH) {
@@ -317,41 +318,111 @@ impl FileStamp {
     }
 }
 
-/// Hash what identifies each language's model file in `directory` without reading it: the
-/// language, then the file's [`FileStamp`], or that it is no regular file.
+/// Hash what identifies each language's model file in `directory`: the language, then for a
+/// pinned pack its set and pinned SHA-256, for any other file its [`FileStamp`] on Unix and its
+/// SHA-256 elsewhere, or that it is no regular file.
 ///
 /// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
-/// and engines made from the old one. It costs one `stat` per language. Returns false when a
-/// file has no stamp: the hash cannot tell it from a replacement of the same size, so nothing
-/// keyed on it may be stored or reused.
+/// and engines made from the old one, while a pinned pack written again with the same bytes (a
+/// remount, a copy, a re-adoption) keeps them. It costs a `stat` and, for a file of a pinned
+/// size, an `open` per language; a file is read once per version, as [`PinTables::classify`]
+/// does. Returns false when a file cannot be identified: nothing keyed on it may be stored or
+/// reused.
 #[must_use]
 pub(crate) fn hash_pack_identities<'a>(
     hasher: &mut blake3::Hasher,
     directory: &Path,
     languages: impl IntoIterator<Item = &'a str>,
 ) -> bool {
+    hash_pack_identities_with(hasher, directory, languages, &PINNED)
+}
+
+#[must_use]
+fn hash_pack_identities_with<'a>(
+    hasher: &mut blake3::Hasher,
+    directory: &Path,
+    languages: impl IntoIterator<Item = &'a str>,
+    pins: &PinTables<'_>,
+) -> bool {
     let mut identified = true;
     for lang in languages {
         hasher.update(&(lang.len() as u64).to_le_bytes());
         hasher.update(lang.as_bytes());
-        match std::fs::metadata(directory.join(format!("{lang}.traineddata"))) {
-            Ok(metadata) if metadata.is_file() => match FileStamp::of(&metadata) {
-                Some(stamp) => {
-                    hasher.update(&[1]);
-                    stamp.hash_into(hasher);
-                }
-                None => {
+        let path = directory.join(format!("{lang}.traineddata"));
+        match std::fs::metadata(&path) {
+            Ok(metadata) if metadata.is_file() => {
+                if !hash_pack_key(hasher, lang, &path, &metadata, pins) {
                     identified = false;
                     hasher.update(&[2]);
                     hasher.update(&metadata.len().to_le_bytes());
                 }
-            },
+            }
             _ => {
                 hasher.update(&[0]);
             }
         }
     }
     identified
+}
+
+/// Hash what tells the regular file at `path` from every other version of it, or return false
+/// when nothing can.
+#[cfg(not(target_arch = "wasm32"))]
+fn hash_pack_key(
+    hasher: &mut blake3::Hasher,
+    lang: &str,
+    path: &Path,
+    metadata: &std::fs::Metadata,
+    pins: &PinTables<'_>,
+) -> bool {
+    use crate::ocr::tessdata_download::VerifiedSet;
+
+    if let Some((set, digest)) = pins.pinned_identity(lang, path) {
+        let set = match set {
+            VerifiedSet::Fast => 1,
+            VerifiedSet::Best => 2,
+            VerifiedSet::Shared => 3,
+            VerifiedSet::Unknown => 0,
+        };
+        hasher.update(&[3, set]);
+        hasher.update(digest.as_bytes());
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        hash_stamp(hasher, metadata)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        let Some(digest) = crate::ocr::tessdata_download::content_sha256(path) else {
+            return false;
+        };
+        hasher.update(&[4]);
+        hasher.update(digest.as_bytes());
+        true
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn hash_pack_key(
+    hasher: &mut blake3::Hasher,
+    _lang: &str,
+    _path: &Path,
+    metadata: &std::fs::Metadata,
+    _pins: &PinTables<'_>,
+) -> bool {
+    hash_stamp(hasher, metadata)
+}
+
+#[cfg(any(unix, target_arch = "wasm32"))]
+fn hash_stamp(hasher: &mut blake3::Hasher, metadata: &std::fs::Metadata) -> bool {
+    let Some(stamp) = FileStamp::of(metadata) else {
+        return false;
+    };
+    hasher.update(&[1]);
+    stamp.hash_into(hasher);
+    true
 }
 
 /// Refuse a language that is not a model name before it is joined into a file path.

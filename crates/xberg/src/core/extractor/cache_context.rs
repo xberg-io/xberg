@@ -227,12 +227,13 @@ fn tessdata_context(dependencies: &[CacheDependency], cancel: Option<&Cancellati
 }
 
 /// Hash the model set of `selection`, the directory that serves it and the identity
-/// ([`FileStamp`](crate::ocr::processor::validation::FileStamp)) of each of its model files there.
-/// Returns false when a model file cannot be identified, so the key cannot be trusted.
+/// ([`hash_pack_identities`](crate::ocr::processor::validation::hash_pack_identities)) of each of
+/// its model files there. Returns false when a model file cannot be identified, so the key cannot
+/// be trusted.
 ///
-/// Stats files: it never creates a directory or downloads, and reads a model only to check a
-/// pinned-size pack in a verified `best` directory against its pin, once per file version, since
-/// it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
+/// Stats files: it never creates a directory or downloads, and reads a model only to identify it
+/// (a pinned-size pack against its pin, and off Unix any other pack by its bytes), once per file
+/// version, since it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
 /// would download its packs) is keyed on its set, languages and candidate directories instead;
 /// once the packs exist the key changes, so nothing read before is served after.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

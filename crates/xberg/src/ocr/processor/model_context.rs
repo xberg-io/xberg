@@ -19,9 +19,9 @@ fn invalidate_script_cache(invalidated: &AtomicBool, script: &str, error: &OcrEr
 pub(super) struct ModelContext {
     pub(super) directory: String,
     pub(super) osd_revision: Option<blake3::Hash>,
-    /// The [`FileStamp`](super::validation::FileStamp) of each primary language's model file,
-    /// for cache and pool keys. Unlike `primary` it is taken for every PSM and never reads the
-    /// files.
+    /// The identity of each primary language's model file
+    /// ([`hash_pack_identities`](super::validation::hash_pack_identities)), for cache and pool
+    /// keys. Unlike `primary` it is taken for every PSM and reads a file at most once per version.
     identity: Option<PackIdentity>,
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
