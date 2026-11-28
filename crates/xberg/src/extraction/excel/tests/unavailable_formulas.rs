@@ -330,3 +330,68 @@ fn should_show_unavailable_formulas_beside_ods_values_gh3442() {
         Some(vec![vec!["=1+1".to_owned(), "4".to_owned()]])
     );
 }
+
+fn long_formula(length: usize) -> String {
+    "1+".repeat(length / 2) + "1"
+}
+
+#[test]
+fn should_not_charge_a_suppressed_sheets_formula_text_to_the_next_sheet_gh3442() {
+    let limits = SecurityLimits {
+        max_content_size: 8192,
+        ..Default::default()
+    };
+    let long = long_formula(5000);
+    let first = format!(
+        r#"<worksheet {SHEET_NS}><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><f>{long}</f></c></row><row r="2"><c r="B2"><f>{long}</f></c></row></sheetData></worksheet>"#
+    );
+    let second = format!(
+        r#"<worksheet {SHEET_NS}><sheetData><row r="1"><c r="A1"><f>1+1</f></c><c r="B1"><v>4</v></c></row></sheetData></worksheet>"#
+    );
+    let bytes = make_xlsx(
+        r#"<sheets><sheet name="Long" sheetId="1" r:id="rId1"/><sheet name="Short" sheetId="2" r:id="rId2"/></sheets>"#,
+        &format!(
+            r#"{WORKSHEET_REL}<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>"#
+        ),
+        &[
+            ("xl/worksheets/sheet1.xml", first.into_bytes()),
+            ("xl/worksheets/sheet2.xml", second.into_bytes()),
+        ],
+    );
+
+    let (workbook, warnings) = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap();
+
+    assert_eq!(workbook.sheets[0].table_cells, Some(vec![vec!["1".to_owned()]]));
+    assert_eq!(
+        workbook.sheets[1].table_cells,
+        Some(vec![vec!["=1+1".to_owned(), "4".to_owned()]]),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn should_not_charge_the_cells_of_suppressed_formulas_to_the_table_budget_gh3442() {
+    let limits = SecurityLimits {
+        max_content_size: 8192,
+        max_table_cells: 3,
+        ..Default::default()
+    };
+    let long = long_formula(5000);
+    let (workbook, warnings) = read(
+        &format!(
+            r#"<row r="1"><c r="A1"><v>1</v></c><c r="B1"><f>{long}</f></c></row>
+               <row r="2"><c r="B2"><f>{long}</f></c></row>
+               <row r="3"><c r="A3"><v>3</v></c></row>"#
+        ),
+        ".xlsx",
+        &limits,
+    );
+
+    assert_eq!(
+        workbook.sheets[0].table_cells,
+        Some(vec![vec!["1".to_owned()], vec![String::new()], vec!["3".to_owned()]]),
+        "{warnings:?}"
+    );
+    assert!(warning_for(&warnings, "were left empty").is_some(), "{warnings:?}");
+    assert!(warning_for(&warnings, "was truncated").is_none(), "{warnings:?}");
+}

@@ -67,6 +67,13 @@ impl SkippedSheets {
         }
     }
 
+    /// Forget how sheet `index` was preflighted, before it is preflighted again.
+    fn forget(&mut self, index: usize) {
+        self.indices.remove(&index);
+        self.truncated.remove(&index);
+        self.cell_limit_errors.remove(&index);
+    }
+
     pub(super) fn suppressed_formulas(&self, index: usize) -> Option<usize> {
         self.suppressed_formulas.get(&index).copied()
     }
@@ -510,8 +517,13 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
 ) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
-    let mut formula_text = SecurityBudget::from_limits(limits);
+    let mut formula_text = FormulaText {
+        used: 0,
+        max: limits.max_content_size,
+    };
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
+        let text_before = formula_text.used;
+        let charges_before = Charges::of(&budget);
         let mut unavailable = UnavailableFormulas::default();
         preflight_sheet_rows(index, &mut budget, &mut skipped, |budget, progress| {
             validate_xlsx_sheet(
@@ -525,10 +537,50 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
             )
         })?;
         if unavailable.suppressed {
-            skipped.suppressed_formulas.insert(index, unavailable.count);
+            // The formula text cannot be shown, so the cells it would have occupied are not charged either:
+            // read the sheet again from the start without them.
+            formula_text.used = text_before;
+            charges_before.restore(&mut budget);
+            skipped.forget(index);
+            let count = unavailable.count;
+            let mut unavailable = UnavailableFormulas {
+                count: 0,
+                suppressed: true,
+            };
+            preflight_sheet_rows(index, &mut budget, &mut skipped, |budget, progress| {
+                validate_xlsx_sheet(
+                    workbook,
+                    &name,
+                    limits,
+                    budget,
+                    progress,
+                    &mut formula_text,
+                    &mut unavailable,
+                )
+            })?;
+            skipped.suppressed_formulas.insert(index, count.max(unavailable.count));
         }
     }
     Ok(skipped)
+}
+
+/// Bytes of formula text, output for cells without a saved result, charged against `max_content_size`
+/// across a workbook. A charge that does not fit is not added.
+struct FormulaText {
+    used: usize,
+    max: usize,
+}
+
+impl FormulaText {
+    fn try_add(&mut self, length: usize) -> bool {
+        match self.used.checked_add(length) {
+            Some(total) if total <= self.max => {
+                self.used = total;
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 fn validate_xlsx_sheet<R: Read + Seek>(
@@ -537,7 +589,7 @@ fn validate_xlsx_sheet<R: Read + Seek>(
     limits: &SecurityLimits,
     budget: &mut SecurityBudget,
     progress: &mut RowProgress,
-    formula_text: &mut SecurityBudget,
+    formula_text: &mut FormulaText,
     unavailable: &mut UnavailableFormulas,
 ) -> Result<()> {
     let mut bounds = SheetAllocation::default();
@@ -586,7 +638,7 @@ fn validate_xlsx_sheet<R: Read + Seek>(
             // leaves such cells empty (and uncharged) instead of failing the workbook.
             unavailable.count += 1;
             if !unavailable.suppressed {
-                if formula_text.account_text(length).is_ok() {
+                if formula_text.try_add(length) {
                     bounds.unavailable_formula(cell.pos, budget)?;
                 } else {
                     unavailable.suppressed = true;
