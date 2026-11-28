@@ -98,6 +98,7 @@ impl ModelContext {
     }
 
     fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<SearchDir>, noisy_below: f64) {
+        RetryModels::observe_horizontal(&directories, &config.language);
         let horizontal =
             RetryModels::resolve_horizontal(&directories, &config.language, config.psm).unwrap_or_else(|error| {
                 self.invalidate_han_cache(&error);
@@ -745,6 +746,84 @@ mod tests {
     #[tokio::test]
     async fn han_pre_read_drift_keeps_khmer_and_blocks_cache() {
         assert_han_snapshot_failure_keeps_khmer(false).await;
+    }
+
+    fn han_retry_fixture() -> (tempfile::TempDir, String) {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(
+                root.path().join(format!("{name}.traineddata")),
+                format!("{name} fixture"),
+            )
+            .unwrap();
+        }
+        let directory = root.path().to_str().unwrap().to_owned();
+        (root, directory)
+    }
+
+    fn select_han_retry(directory: &str, config: &TesseractConfig) -> ModelContext {
+        let mut context = ModelContext::for_path(directory.to_owned(), config.psm).unwrap();
+        context.select_retry(config, vec![SearchDir::as_given(directory)], 75.0);
+        context
+    }
+
+    #[test]
+    fn han_retry_rechecks_do_not_hash_the_packs_again() {
+        use crate::ocr::tessdata_download::without_reading_packs;
+
+        let (root, directory) = han_retry_fixture();
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+        let context = select_han_retry(&directory, &config);
+        // ~keep A new stamp, so a pack identity could only come from reading the file, which the
+        // memo-only run refuses; off Unix no identity is ever memoized.
+        std::fs::write(root.path().join("chi_sim.traineddata"), b"chi_sim fixture, replaced").unwrap();
+        assert_eq!(
+            without_reading_packs(|| context.han_retry_is_current(&config)),
+            Some(false),
+            "the recheck compares snapshots, sees the change, and never hashes a pack identity"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn han_retry_model_rollback_between_key_and_ocr_cannot_publish() {
+        use crate::core::extractor::cacheability;
+        use script_retry::HanRetryModels;
+
+        let (root, directory) = han_retry_fixture();
+        let directories = [SearchDir::as_given(directory.clone())];
+        let han = root.path().join("chi_sim.traineddata");
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+
+        cacheability::scope(async {
+            let before = RetryModels::observe_horizontal(&directories, "eng");
+            assert!(matches!(before, HanRetryModels::Identified(_)));
+            assert!(cacheability::can_publish_outer_result());
+            std::fs::write(&han, b"chi_sim fixture, replaced").unwrap();
+            // ~keep Outside an OCR request scope, so only the observation can notice the rollback.
+            select_han_retry(&directory, &config);
+            std::fs::write(&han, b"chi_sim fixture").unwrap();
+
+            assert_eq!(RetryModels::observe_horizontal(&directories, "eng"), before);
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
+
+        cacheability::scope(async {
+            RetryModels::observe_horizontal(&directories, "eng");
+            select_han_retry(&directory, &config);
+            assert!(
+                cacheability::can_publish_outer_result(),
+                "unchanged models still publish"
+            );
+        })
+        .await;
     }
 
     #[cfg(not(target_arch = "wasm32"))]

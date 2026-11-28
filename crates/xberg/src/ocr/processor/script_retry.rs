@@ -93,7 +93,7 @@ pub(crate) fn outer_han_retry_models(
 /// The identity ([`hash_pack_identities`](super::validation::hash_pack_identities)) of the OSD
 /// pack and the Han list the retry would load from `directories`, recorded as an observation of
 /// the current operation so a change between the outer key and the OCR that reads the models
-/// (and back) blocks publication. The outer key and [`RetryModels::resolve_horizontal`] observe
+/// (and back) blocks publication. The outer key and [`RetryModels::observe_horizontal`] observe
 /// the same value.
 ///
 /// A memo-only run that missed the memo records nothing: its answer is discarded and computed
@@ -556,48 +556,6 @@ fn outer_han_retry_identity_is_answered_without_reading_until_a_pack_changes() {
     assert_eq!(without_reading_packs(identity), Some(second));
 }
 
-#[tokio::test]
-async fn han_retry_model_rollback_between_key_and_ocr_cannot_publish() {
-    let root = tempfile::tempdir().unwrap();
-    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
-    let han = root.path().join("chi_sim.traineddata");
-    for name in ["eng", "osd", "chi_sim"] {
-        std::fs::write(
-            root.path().join(format!("{name}.traineddata")),
-            format!("{name} fixture"),
-        )
-        .unwrap();
-    }
-
-    cacheability::scope(async {
-        let before = observe_han_retry_models(&directories, "eng");
-        assert!(matches!(before, HanRetryModels::Identified(_)));
-        assert!(cacheability::can_publish_outer_result());
-        std::fs::write(&han, b"chi_sim fixture, replaced").unwrap();
-        // ~keep Outside an OCR request scope, so only the observation can notice the rollback.
-        assert!(
-            RetryModels::resolve_horizontal(&directories, "eng", 3)
-                .unwrap()
-                .is_some()
-        );
-        std::fs::write(&han, b"chi_sim fixture").unwrap();
-
-        assert_eq!(observe_han_retry_models(&directories, "eng"), before);
-        assert!(!cacheability::can_publish_outer_result());
-    })
-    .await;
-
-    cacheability::scope(async {
-        observe_han_retry_models(&directories, "eng");
-        RetryModels::resolve_horizontal(&directories, "eng", 3).unwrap();
-        assert!(
-            cacheability::can_publish_outer_result(),
-            "unchanged models still publish"
-        );
-    })
-    .await;
-}
-
 #[test]
 fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     let root = tempfile::tempdir().unwrap();
@@ -723,6 +681,14 @@ impl RetryModels {
         Ok(HanModels::from_snapshots(horizontal, vertical_japanese))
     }
 
+    /// Record the Han retry models' identity for the operation ([`observe_han_retry_models`]).
+    /// Taken once per model context, when its retry models are selected: the later checks
+    /// compare [`ModelSet`] snapshots, whose digests the request freezes, so a page never hashes
+    /// the packs again.
+    pub(super) fn observe_horizontal(directories: &[SearchDir], language: &str) -> HanRetryModels {
+        observe_han_retry_models(directories, language)
+    }
+
     pub(super) fn resolve_horizontal(
         directories: &[SearchDir],
         language: &str,
@@ -731,7 +697,6 @@ impl RetryModels {
         if !supports_retry_language(language) {
             return Ok(None);
         }
-        observe_han_retry_models(directories, language);
         let han = retry_list(language, HAN_MODEL);
         let Some((osd, recognition)) = retry_directories(directories, &han) else {
             return Ok(None);
