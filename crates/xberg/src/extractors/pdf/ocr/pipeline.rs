@@ -2373,11 +2373,6 @@ pub(super) fn direct_route_recognition_sessions(
     }
 }
 
-/// Recognition sessions to report for any direct-route backend instead of asking whether it is
-/// the built-in Tesseract one, so a test can drive the batch bound with a probe backend. The
-/// process-wide limit itself is latched by the first extraction and cannot be set per test.
-///
-/// Zero means "not set". Process-wide, so every test that sets it is `#[serial]`.
 /// Recognition sessions that bound the pipeline route's batch width, or `None` when nothing does.
 ///
 /// Every stage must be the built-in Tesseract backend, so every read of every page waits on the
@@ -2411,6 +2406,11 @@ pub(super) fn pipeline_stages_all_match(
     !pipeline.stages.is_empty() && pipeline.stages.iter().all(|stage| is_tesseract(&stage.backend))
 }
 
+/// Recognition sessions to report for any direct-route backend instead of asking whether it is
+/// the built-in Tesseract one, so a test can drive the batch bound with a probe backend. The
+/// process-wide limit itself is latched by the first extraction and cannot be set per test.
+///
+/// Zero means "not set". Process-wide, so every test that sets it is `#[serial]`.
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) static TEST_RECOGNITION_SESSIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
