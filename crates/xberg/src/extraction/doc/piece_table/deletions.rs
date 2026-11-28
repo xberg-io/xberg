@@ -15,7 +15,7 @@ impl PieceTableContext<'_> {
             return keep;
         }
         let keep = !deleted || matches!(character, FIELD_BEGIN | FIELD_SEPARATOR | FIELD_END);
-        if keep && in_table.is_some() {
+        if !deleted && in_table.is_some() {
             self.row_has_content.set(true);
         }
         keep

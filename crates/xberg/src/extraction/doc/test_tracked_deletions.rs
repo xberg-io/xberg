@@ -279,6 +279,33 @@ fn should_keep_rows_apart_when_only_a_row_end_mark_with_surviving_cells_is_delet
     );
 }
 
+#[test]
+fn should_remove_a_deleted_row_whose_cell_holds_a_field() {
+    let text = "Intro\rA1\x07\x07\x13 F\x14r\x15\x07\x07After\r";
+    let runs: Papx<'static> = &[
+        (0..6, &[]),
+        (6..9, IN_TABLE),
+        (9..10, ROW_END),
+        (10..17, IN_TABLE),
+        (17..18, ROW_END),
+        (18..24, &[]),
+    ];
+    let spec = Spec {
+        papx: runs,
+        deleted: &[(10, 18)],
+        ..Spec::new(text)
+    };
+    assert_eq!(
+        table_marks(&extract(&spec)),
+        [
+            ("Intro", None),
+            ("A1", Some((true, false))),
+            ("", Some((false, true))),
+            ("After", None)
+        ]
+    );
+}
+
 const FIELD: &str = "A\x13 HYPERLINK x\x14link\x15B\r";
 
 #[test]
