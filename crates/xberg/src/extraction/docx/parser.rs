@@ -2827,6 +2827,9 @@ fn apply_break(
     }
 
     if is_page_break {
+        if table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
+            return;
+        }
         push_or_defer_page_break(
             table_stack,
             current_run.as_ref(),
@@ -2878,7 +2881,7 @@ fn apply_last_rendered_page_break(
     elements: &mut Vec<DocumentElement>,
     page_breaks: &mut PageBreakState,
 ) {
-    if !page_breaks.text_since_break {
+    if !page_breaks.text_since_break || table_stack.iter().any(|ctx| ctx.pending_row_deleted) {
         return;
     }
     push_or_defer_page_break(
@@ -6112,6 +6115,31 @@ mod tests {
             "elements: {:?}",
             doc.elements
         );
+    }
+
+    #[test]
+    fn test_deleted_row_page_break_does_not_suppress_the_next_live_hint() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:trPr><w:del w:id="1" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Gone</w:t><w:br w:type="page"/></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr><w:tc><w:p><w:r><w:lastRenderedPageBreak/><w:t>Kept</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let breaks = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e, DocumentElement::PageBreak))
+            .count();
+        assert_eq!(breaks, 1, "elements: {:?}", doc.elements);
     }
 
     #[test]
