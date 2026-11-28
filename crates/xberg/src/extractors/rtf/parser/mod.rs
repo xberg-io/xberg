@@ -62,10 +62,10 @@ pub struct RtfFormattingData {
     pub spans: Vec<RtfFormattingSpan>,
     /// Color table entries (index 0 is auto/default).
     pub color_table: Vec<String>,
-    /// Header text content (from \header groups).
-    pub header_text: Option<String>,
-    /// Footer text content (from \footer groups).
-    pub footer_text: Option<String>,
+    /// Distinct header texts (from \header groups), one per variant.
+    pub header_texts: Vec<String>,
+    /// Distinct footer texts (from \footer groups), one per variant.
+    pub footer_texts: Vec<String>,
     /// Hyperlink spans: (start_byte, end_byte, url).
     pub hyperlinks: Vec<(usize, usize, String)>,
     /// `(byte offset of the reference in the text if the note has one, note body)` per footnote, in reading order
