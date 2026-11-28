@@ -127,6 +127,9 @@ pub struct RawPageSpans {
     filtered: bool,
     /// Set by the first ordering; every later one replays the read's document effects.
     ordered: AtomicBool,
+    /// Address of the document that read the page; ordering through another document would
+    /// replay this read's effects into the wrong one.
+    document: usize,
 }
 
 impl RawPageSpans {
@@ -1121,6 +1124,7 @@ impl PdfDocument {
             read,
             filtered,
             ordered: AtomicBool::new(false),
+            document: std::ptr::from_ref(self) as usize,
         })
     }
 
@@ -1141,6 +1145,11 @@ impl PdfDocument {
         raw: &RawPageSpans,
         reading_order: ReadingOrder,
     ) -> Result<Vec<crate::layout::TextSpan>> {
+        debug_assert_eq!(
+            raw.document,
+            std::ptr::from_ref(self) as usize,
+            "RawPageSpans ordered through a document other than the one that read it"
+        );
         if raw.ordered.swap(true, Ordering::Relaxed) {
             let script_geometry = (!raw.filtered).then_some(ScriptGeometry::Flatten);
             self.replay_read_effects(raw.page, script_geometry, &raw.read);
