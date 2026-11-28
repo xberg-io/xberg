@@ -292,17 +292,44 @@ const MIN_LABEL_VALUE_ROWS: usize = 3;
 // cut is prose running across the gutter, not column content. Matches the minimum column
 // width a cut must leave on each side. ~keep
 const MIN_STRADDLING_INK_PTS: f32 = 60.0;
-// GH#3446: a line beside the gutter with less ink than this on a side (a raised dagger or
-// footnote mark) does not show that column has started.
-const MIN_COLUMN_LINE_INK_PTS: f32 = 20.0;
-// Lines whose tops are within this many ems of each other sit on one row.
-const HEADER_ROW_MATE_EM: f32 = 0.5;
+// GH#3446: a column row's line on a side inks at least this fraction of that side's width; a
+// shorter one is a heading or a cell of an author row, not body text running down a column.
+const COLUMN_ROW_MIN_INK_FRACTION: f32 = 0.3;
+// A side needs this many column rows before it is a column; a form's label rows and caption
+// are fewer.
+const MIN_COLUMN_ROWS: usize = 3;
+// The shorter side's column rows span at least this fraction of the taller side's height.
+const COLUMN_EXTENT_RATIO: f32 = 0.5;
+// A line inking less than this many ems of its own font on a side is a raised dagger or
+// footnote mark, not a line: a mark is about one em wide and a word at least two.
+const MARK_MAX_INK_EM: f32 = 2.0;
+// Lines join one row when their vertical extents overlap by this fraction of the shorter line:
+// a raised mark overlaps its line, the next line of body text does not.
+const ROW_OVERLAP_FRACTION: f32 = 0.5;
 // A within-line gap at least this fraction of the line's widest gap is another cell boundary,
 // not word spacing inside a column line.
 const TABLE_ROW_GAP_RATIO: f32 = 0.5;
 // Gaps beyond the widest that make a line a table row: three comparable gaps are four cells,
 // more than the two column lines a narrow gutter separates.
 const TABLE_ROW_MIN_EXTRA_GAPS: usize = 2;
+
+/// A column cut: the `header` rows above both columns, then the `left` and `right` columns.
+struct ColumnCut {
+    header: Vec<usize>,
+    left: Vec<usize>,
+    right: Vec<usize>,
+}
+
+/// The ink of `line` on each side of `split_x`: the summed widths of its spans clipped to the side.
+fn line_ink(all_spans: &[TextSpan], line: &[usize], split_x: f32) -> (f32, f32) {
+    line.iter().fold((0.0f32, 0.0f32), |(left, right), &i| {
+        let bbox = &all_spans[i].bbox;
+        (
+            left + (bbox.right().min(split_x) - bbox.left()).max(0.0),
+            right + (bbox.right() - bbox.left().max(split_x)).max(0.0),
+        )
+    })
+}
 
 /// Group `indices` into visual lines: anchored (not chained) on `y`, top to bottom, and
 /// further split on `x` wherever consecutive items are more than `MAX_INTRA_LINE_GAP_EM`
@@ -1275,24 +1302,30 @@ impl XYCutStrategy {
             return result;
         }
 
-        let split = |horizontal: bool| {
+        let split = |horizontal: bool| -> Option<Vec<Vec<usize>>> {
             if horizontal {
-                self.find_horizontal_split_with_lines(all_spans, indices, Some(&lines))
+                let cut = self.find_column_cut(all_spans, indices, Some(&lines))?;
+                // A header band is its own region, read before the columns it crosses. ~keep
+                Some(
+                    [cut.header, cut.left, cut.right]
+                        .into_iter()
+                        .filter(|part| !part.is_empty())
+                        .collect(),
+                )
             } else {
                 self.find_vertical_split_indexed(all_spans, indices)
+                    .map(|(top, bottom)| vec![top, bottom])
             }
         };
 
-        if let Some((a, b)) = split(self.prefer_horizontal) {
-            let mut result = self.partition_indexed_depth(all_spans, &a, depth + 1);
-            result.extend(self.partition_indexed_depth(all_spans, &b, depth + 1));
-            return result;
-        }
-
-        if let Some((a, b)) = split(!self.prefer_horizontal) {
-            let mut result = self.partition_indexed_depth(all_spans, &a, depth + 1);
-            result.extend(self.partition_indexed_depth(all_spans, &b, depth + 1));
-            return result;
+        for horizontal in [self.prefer_horizontal, !self.prefer_horizontal] {
+            if let Some(parts) = split(horizontal) {
+                let mut result = Vec::new();
+                for part in &parts {
+                    result.extend(self.partition_indexed_depth(all_spans, part, depth + 1));
+                }
+                return result;
+            }
         }
 
         vec![self.sort_indices(all_spans, indices)]
@@ -2061,66 +2094,125 @@ impl XYCutStrategy {
         group_lines(all_spans, indices, true)
             .iter()
             .filter(|line| {
-                let (left_ink, right_ink) = line.iter().fold((0.0f32, 0.0f32), |(left, right), &i| {
-                    let bbox = &all_spans[i].bbox;
-                    (
-                        left + (bbox.right().min(split_x) - bbox.left()).max(0.0),
-                        right + (bbox.right() - bbox.left().max(split_x)).max(0.0),
-                    )
-                });
+                let (left_ink, right_ink) = line_ink(all_spans, line, split_x);
                 left_ink >= MIN_STRADDLING_INK_PTS && right_ink >= MIN_STRADDLING_INK_PTS
             })
             .count()
     }
 
-    /// GH#3446: the spans of the lines that cross `split_x` above the point where both columns
-    /// have started -- a centred title, author or affiliation block. It is a header band, not
-    /// prose running across the gutter, so it must not make the column cut refuse. Empty when
-    /// either side has no column line.
+    /// GH#3446: the spans of the rows above both columns -- a centred title, an author and
+    /// affiliation block, an abstract set across the page -- when `split_x` really has a column
+    /// on each side below them. They are a header, read first, not prose running across the
+    /// gutter, so they must not make the column cut refuse. Empty when either side lacks a
+    /// column or no row above the columns crosses the gutter.
+    ///
+    /// A column row holds at most one line of real ink on each side (a raised dagger or footnote
+    /// mark is no line); a row of author or affiliation cells holds several on one side, so it
+    /// never starts a column. Each side needs `MIN_COLUMN_ROWS` column rows, each inking
+    /// `COLUMN_ROW_MIN_INK_FRACTION` of that side's width, over comparable heights: a form's few
+    /// label rows beside a lone caption are not columns. The header is every row above the
+    /// first column row, provided one of them crosses the gutter.
     fn header_band_spans(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> Vec<usize> {
+        struct Row {
+            lines: Vec<usize>,
+            top: f32,
+            bottom: f32,
+        }
         let lines = group_lines(all_spans, indices, true);
-        let line_top = |line: &[usize]| line.iter().map(|&i| all_spans[i].bbox.y).fold(f32::MIN, f32::max);
-        let crosses = |line: &[usize]| {
-            line.iter().any(|&i| {
-                let bbox = &all_spans[i].bbox;
-                bbox.left() < split_x && bbox.right() > split_x
-            })
+        let interval = |line: &[usize]| {
+            let top = line
+                .iter()
+                .map(|&i| all_spans[i].bbox.y + all_spans[i].bbox.height.abs())
+                .fold(f32::MIN, f32::max);
+            let bottom = line.iter().map(|&i| all_spans[i].bbox.y).fold(f32::MAX, f32::min);
+            (top, bottom)
         };
-        let mut column_top = [f32::MIN; 2];
-        for line in lines.iter().filter(|line| !crosses(line)) {
-            for (side, top) in column_top.iter_mut().enumerate() {
-                let ink: f32 = line
-                    .iter()
-                    .filter(|&&i| (all_spans[i].bbox.left() >= split_x) == (side == 1))
-                    .map(|&i| all_spans[i].bbox.width.max(0.0))
-                    .sum();
-                if ink >= MIN_COLUMN_LINE_INK_PTS {
-                    *top = top.max(line_top(line));
+        let mut order: Vec<usize> = (0..lines.len()).collect();
+        order.sort_by(|&a, &b| interval(&lines[b]).0.total_cmp(&interval(&lines[a]).0));
+        // A line joins the row whose first line it overlaps by half the shorter of the two: a
+        // raised mark overlaps its line's height, adjacent lines of text do not.
+        let mut rows: Vec<Row> = Vec::new();
+        for index in order {
+            let (top, bottom) = interval(&lines[index]);
+            if let Some(row) = rows.last_mut() {
+                let overlap = row.top.min(top) - row.bottom.max(bottom);
+                if overlap >= ROW_OVERLAP_FRACTION * (row.top - row.bottom).min(top - bottom) {
+                    row.lines.push(index);
+                    continue;
+                }
+            }
+            rows.push(Row {
+                lines: vec![index],
+                top,
+                bottom,
+            });
+        }
+
+        let left_edge = indices
+            .iter()
+            .map(|&i| all_spans[i].bbox.left())
+            .fold(f32::MAX, f32::min);
+        let right_edge = indices
+            .iter()
+            .map(|&i| all_spans[i].bbox.right())
+            .fold(f32::MIN, f32::max);
+        let side_width = [split_x - left_edge, right_edge - split_x];
+
+        let mut column_rows: [Vec<(f32, f32)>; 2] = [Vec::new(), Vec::new()];
+        let mut first_column_row = None;
+        let mut crosses_above_columns = false;
+        for (row_index, row) in rows.iter().enumerate() {
+            let mut line_count = [0usize; 2];
+            let mut ink = [0.0f32; 2];
+            let mut crosses = false;
+            for &line_index in &row.lines {
+                let line = &lines[line_index];
+                let (left_ink, right_ink) = line_ink(all_spans, line, split_x);
+                if left_ink >= MIN_STRADDLING_INK_PTS && right_ink >= MIN_STRADDLING_INK_PTS {
+                    crosses = true;
+                    continue;
+                }
+                let font = line.iter().map(|&i| all_spans[i].font_size).fold(0.0f32, f32::max);
+                let side = usize::from(right_ink > left_ink);
+                if left_ink.max(right_ink) >= font * MARK_MAX_INK_EM {
+                    line_count[side] += 1;
+                    ink[side] += left_ink.max(right_ink);
+                }
+            }
+            if crosses {
+                crosses_above_columns |= first_column_row.is_none();
+            } else if line_count.iter().all(|&count| count <= 1) {
+                for side in 0..2 {
+                    if line_count[side] == 1 && ink[side] >= COLUMN_ROW_MIN_INK_FRACTION * side_width[side] {
+                        column_rows[side].push((row.top, row.bottom));
+                        first_column_row.get_or_insert(row_index);
+                    }
                 }
             }
         }
-        let both_started_at = column_top[0].min(column_top[1]);
-        if both_started_at == f32::MIN {
+        if column_rows.iter().any(|side| side.len() < MIN_COLUMN_ROWS) {
             return Vec::new();
         }
-        let header: Vec<&Vec<usize>> = lines
-            .iter()
-            .filter(|line| {
-                line_top(line) > both_started_at && self.straddling_line_count(all_spans, line, split_x) == 1
-            })
-            .collect();
-        // A header line with another line on its own row is a running head or foot: a page number
-        // or label set at the margin. Cutting would send it to the right column, away from its line.
-        let shares_row = |line: &Vec<usize>| {
-            let font = line.iter().map(|&i| all_spans[i].font_size).fold(0.0f32, f32::max);
-            lines.iter().any(|other| {
-                !std::ptr::eq(other, line) && (line_top(other) - line_top(line)).abs() <= font * HEADER_ROW_MATE_EM
-            })
+        let extent = |side: &[(f32, f32)]| {
+            let top = side.iter().map(|row| row.0).fold(f32::MIN, f32::max);
+            let bottom = side.iter().map(|row| row.1).fold(f32::MAX, f32::min);
+            top - bottom
         };
-        if header.iter().any(|line| shares_row(line)) {
+        let (left_extent, right_extent) = (extent(&column_rows[0]), extent(&column_rows[1]));
+        if left_extent.min(right_extent) < COLUMN_EXTENT_RATIO * left_extent.max(right_extent) {
             return Vec::new();
         }
-        header.into_iter().flatten().copied().collect()
+        let Some(first_column_row) = first_column_row.filter(|_| crosses_above_columns) else {
+            return Vec::new();
+        };
+        rows[..first_column_row]
+            .iter()
+            .flat_map(|row| {
+                row.lines
+                    .iter()
+                    .flat_map(|&line_index| lines[line_index].iter().copied())
+            })
+            .collect()
     }
 
     fn is_single_column_region(&self, all_spans: &[TextSpan], indices: &[usize]) -> bool {
@@ -2336,6 +2428,18 @@ impl XYCutStrategy {
         indices: &[usize],
         lines: Option<&[Vec<usize>]>,
     ) -> Option<(Vec<usize>, Vec<usize>)> {
+        self.find_column_cut(all_spans, indices, lines)
+            .map(|cut| (cut.header.into_iter().chain(cut.left).collect(), cut.right))
+    }
+
+    /// The column cut of `find_horizontal_split_with_lines`, with the header band (GH#3446)
+    /// kept apart: the rows above both columns, read before either.
+    fn find_column_cut(
+        &self,
+        all_spans: &[TextSpan],
+        indices: &[usize],
+        lines: Option<&[Vec<usize>]>,
+    ) -> Option<ColumnCut> {
         let profile = self.horizontal_projection_indexed(all_spans, indices)?;
 
         let split_x = if let Some((vs, ve, vw)) = self.find_valley(&profile) {
@@ -2522,7 +2626,9 @@ impl XYCutStrategy {
             return None;
         }
 
-        Some((left, right))
+        let left = left.into_iter().filter(|i| !header.contains(i)).collect();
+        let header = indices.iter().copied().filter(|i| header.contains(i)).collect();
+        Some(ColumnCut { header, left, right })
     }
 
     /// True when the lowest y of the right side is at or above the highest y of the left side
@@ -3357,6 +3463,154 @@ mod tests {
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         assert_eq!(strategy.find_horizontal_split_indexed(&spans, &indices), None);
+    }
+
+    fn text_of(len: usize, ch: char) -> String {
+        ch.to_string().repeat(len)
+    }
+
+    /// Two body columns of `rows` lines each, tops at `first_y` stepping down by `pitch`:
+    /// the left at x 54..290, the right at x 322..558. Returns (left span ids, right span ids).
+    fn push_columns(spans: &mut Vec<TextSpan>, first_y: f32, rows: usize, pitch: f32) -> (Vec<usize>, Vec<usize>) {
+        let (mut left, mut right) = (Vec::new(), Vec::new());
+        for row in 0..rows {
+            let y = first_y - pitch * row as f32;
+            left.push(spans.len());
+            spans.push(make_span_text(54.0, y, 236.0, 8.4, &text_of(52, 'l'), 8.5));
+            right.push(spans.len());
+            spans.push(make_span_text(322.0, y, 236.0, 8.4, &text_of(51, 'r'), 8.5));
+        }
+        (left, right)
+    }
+
+    /// The p5753 shape of GH#3446: a title over four author columns, affiliation rows of cells
+    /// and an email row, then two body columns. The header rows cross no gutter except the
+    /// title and the first email line, and no row but those is a column row.
+    #[test]
+    fn column_split_reads_four_author_columns_before_the_body_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(57.0, 690.0, 498.0, 22.0, &text_of(60, 'T'), 19.9),
+            make_span_text(129.0, 670.0, 356.0, 22.0, &text_of(44, 'T'), 19.9),
+        ];
+        let mut header: Vec<usize> = vec![0, 1];
+        let rows: [(f32, &[(f32, f32)]); 4] = [
+            (645.0, &[(93.0, 57.0), (216.0, 58.0), (348.0, 41.0), (471.0, 39.0)]),
+            (630.0, &[(72.0, 100.0), (198.0, 93.0), (322.0, 93.0), (453.0, 76.0)]),
+            (618.0, &[(72.0, 100.0), (196.0, 98.0), (319.0, 98.0), (467.0, 48.0)]),
+            (606.0, &[(189.0, 227.0), (450.0, 82.0)]),
+        ];
+        for (y, cells) in rows {
+            for &(x, width) in cells {
+                header.push(spans.len());
+                spans.push(make_span_text(x, y, width, 13.7, &text_of(14, 'h'), 11.5));
+            }
+        }
+        let (left, right) = push_columns(&mut spans, 575.0, 6, 11.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
+            .expect("the columns are cut below the header");
+        assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
+    }
+
+    /// The p1166 shape of GH#3446: author and affiliation lines carry raised dagger marks, set
+    /// as spans of their own a few points above the baseline.
+    #[test]
+    fn column_split_reads_a_daggered_author_block_before_the_body_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(69.0, 690.0, 475.0, 16.0, &text_of(60, 'T'), 14.3),
+            make_span_text(169.0, 670.0, 276.0, 16.0, &text_of(40, 'T'), 14.3),
+        ];
+        let mut header: Vec<usize> = vec![0, 1];
+        let lines: [(f32, f32, f32); 3] = [(137.0, 340.0, 250.0), (221.0, 170.0, 330.0), (133.0, 350.0, 389.0)];
+        for (index, &(x, width, dagger_x)) in lines.iter().enumerate() {
+            let y = 640.0 - 14.0 * index as f32;
+            header.push(spans.len());
+            spans.push(make_span_text(x, y, width, 11.2, &text_of(50, 'a'), 11.96));
+            header.push(spans.len());
+            spans.push(make_span_text(dagger_x, y + 2.2, 4.4, 7.5, "\u{2020}", 11.96));
+        }
+        let (left, right) = push_columns(&mut spans, 600.0, 16, 11.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
+            .expect("the columns are cut below the header");
+        assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
+    }
+
+    /// An abstract set across the page above two columns is a header too: read first, whole.
+    #[test]
+    fn column_split_reads_a_page_wide_abstract_before_the_body_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![make_span_text(150.0, 700.0, 300.0, 14.0, &text_of(30, 'T'), 14.0)];
+        let mut header = vec![0];
+        for row in 0..3 {
+            header.push(spans.len());
+            spans.push(make_span_text(
+                54.0,
+                680.0 - 10.0 * row as f32,
+                504.0,
+                8.4,
+                &text_of(105, 'a'),
+                8.5,
+            ));
+        }
+        let (left, right) = push_columns(&mut spans, 640.0, 6, 11.0);
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let cut = strategy
+            .find_column_cut(&spans, &indices, None)
+            .expect("the columns are cut below the header");
+        assert_eq!((cut.header, cut.left, cut.right), (header, left, right));
+    }
+
+    /// The SF298 shape: label rows of cells and two unrelated captions at the bottom of a form
+    /// are not columns, so lines crossing the gutter above them keep the cut refused.
+    #[test]
+    fn column_split_declines_a_form_whose_bottom_rows_are_not_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = Vec::new();
+        for y in [700.0, 688.0] {
+            spans.push(make_span_text(40.0, y, 520.0, 8.0, &text_of(110, 'U'), 8.0));
+        }
+        for y in [660.0, 648.0] {
+            for x in [40.0, 220.0, 400.0] {
+                spans.push(make_span_text(x, y, 100.0, 8.0, &text_of(20, 'c'), 8.0));
+            }
+        }
+        spans.push(make_span_text(40.0, 600.0, 180.0, 8.0, &text_of(36, 'n'), 8.0));
+        spans.push(make_span_text(380.0, 600.0, 170.0, 8.0, &text_of(34, 's'), 8.0));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        assert_eq!(strategy.find_horizontal_split_indexed(&spans, &indices), None);
+    }
+
+    /// Three columns under a centred title: the cut may fall at either gutter, and the title
+    /// stays with the columns it crosses rather than being torn from them.
+    #[test]
+    fn column_split_keeps_a_centred_title_with_three_columns_gh3446() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = vec![
+            make_span_text(150.0, 700.0, 300.0, 16.0, &text_of(30, 'T'), 14.0),
+            make_span_text(200.0, 680.0, 200.0, 12.0, &text_of(24, 'a'), 10.0),
+        ];
+        for row in 0..6 {
+            let y = 640.0 - 11.0 * row as f32;
+            for x in [40.0, 235.0, 430.0] {
+                spans.push(make_span_text(x, y, 150.0, 8.4, &text_of(40, 'c'), 8.5));
+            }
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+
+        let (left, right) = strategy
+            .find_horizontal_split_indexed(&spans, &indices)
+            .expect("a gutter between the columns is cut once the title is read first");
+        assert!(left.contains(&0) && left.contains(&1), "title stays together: {left:?}");
+        assert_eq!(left.len() + right.len(), spans.len());
     }
 
     #[test]
