@@ -1923,6 +1923,9 @@ struct TableContext {
     pending_grid_after: u32,
     /// The open row carries `w:trPr/w:del` (a tracked row deletion); it is dropped when it closes.
     pending_row_deleted: bool,
+    /// `PageBreakState::text_since_break` when the open deleted row began, restored when it is
+    /// dropped so its discarded text cannot make a later live hint look new.
+    text_since_break_before_deleted_row: bool,
     /// Note references read in this table's cells, in reading order.
     note_refs: Vec<NoteRef>,
 }
@@ -1938,6 +1941,7 @@ impl TableContext {
             cell_ordinal: 0,
             pending_grid_after: 0,
             pending_row_deleted: false,
+            text_since_break_before_deleted_row: false,
             note_refs: Vec::new(),
         }
     }
@@ -3497,6 +3501,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                 // numbering from it reaches the output.
                                 if skips.deleted && !ctx.pending_row_deleted {
                                     ctx.pending_row_deleted = true;
+                                    ctx.text_since_break_before_deleted_row = page_breaks.text_since_break;
                                     move_from_depth += 1;
                                 }
                             }
@@ -3961,6 +3966,7 @@ impl<R: Read + Seek> DocxParser<R> {
                                 // Word hides a row whose deletion is tracked, so no output keeps it.
                                 if std::mem::take(&mut ctx.pending_row_deleted) {
                                     move_from_depth = move_from_depth.saturating_sub(1);
+                                    page_breaks.text_since_break = ctx.text_since_break_before_deleted_row;
                                 } else {
                                     if grid_after > 0 {
                                         budget.add_cells(grid_after as usize)?;
@@ -6118,6 +6124,32 @@ mod tests {
             "elements: {:?}",
             doc.elements
         );
+    }
+
+    #[test]
+    fn test_deleted_row_text_does_not_make_the_next_live_hint_look_new() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr><w:tc><w:p><w:r><w:t>Live</w:t><w:br w:type="page"/></w:r></w:p></w:tc></w:tr>
+      <w:tr>
+        <w:trPr><w:del w:id="1" w:author="A"/></w:trPr>
+        <w:tc><w:p><w:r><w:t>Gone</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr><w:tc><w:p><w:r><w:lastRenderedPageBreak/><w:t>Kept</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let bytes = create_test_docx(xml);
+        let mut budget = SecurityBudget::with_defaults();
+        let doc = parse_document(&bytes, &mut budget, &default_limits()).expect("parse should succeed");
+        let breaks = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e, DocumentElement::PageBreak))
+            .count();
+        assert_eq!(breaks, 1, "elements: {:?}", doc.elements);
     }
 
     #[test]
