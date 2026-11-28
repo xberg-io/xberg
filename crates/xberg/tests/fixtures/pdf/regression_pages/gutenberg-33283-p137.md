@@ -10,7 +10,11 @@ $$
 \frac{4(z-1)+1}{z^{3}}=\frac{4z-3}{z^{3}}=\frac{4}{z^{2}}-\frac{3}{z^{3}}.
 $$
 
-The partial fractions are, therefore, 4 3 − . (x + 1)<sup>2</sup> (x + 1)<sup>3</sup>
+The partial fractions are, therefore, 4 3
+
+$$
+(x+1)^{2}{}^{-}(x+1)^{{}_{3}.}
+$$
 
 | Application to differentiation. Let it be required to differentiate |  |
 | --- | --- |
@@ -28,4 +32,10 @@ $$=\frac{24x^{2}-60x-23}{(6x^{2}+7x-3)^{2}}.$$
 
 If we split the given expression into
 
-3x 1 − 1 − 2x 2 + 3 , we get, however, dy 3 4 = − + , dx (3x − 1)<sup>2</sup> (2x + 3)<sup>2</sup>
+$$
+3x-1^{-}2x+3^{,}
+$$
+
+1 2
+
+we get, however, dy 3 4 = − + , dx (3x − 1)<sup>2</sup> (2x + 3)<sup>2</sup>

@@ -24,13 +24,17 @@ $$
 x=\frac{17}{6}-\frac{19}{6}=-\frac{2}{6}=-\frac{1}{3}.
 $$
 
-The roots are 6 and $-\frac{1}{3}.$ Verify by putting these numbers for x in the original equation. x = 6.
+The roots are 6 and $-\frac{1}{3}.$ Verify by putting these numbers for x in the original equation.
+
+$$
+x=6._{-3}
+$$
 
 $$
 x=-\frac{1}{3}
 $$
 
-− 3 1 4
+1 4
 
 $$
 \frac{6+1}{6-1}=\frac{24}{6+9}.

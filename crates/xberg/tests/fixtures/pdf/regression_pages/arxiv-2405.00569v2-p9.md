@@ -1,12 +1,12 @@
 Central compact schemes for third derivatives 9
 
-W(ω) is [1 + 2$\alpha\cos(\omega)+2\beta\cos(2\omega)&#93;^{2}.$ In this work, we opt for r = 1 to establish the finite difference coefficients. (3.9) Z
+W(ω) is [1 + 2$\alpha\cos(\omega)+2\beta\cos(2\omega)&#93;^{2}.$ In this work, we opt for r = 1 to establish the finite difference coefficients. (3.9)
 
-rπ ω 2b 3ω 2c 5ω
+$$
+{}^{Z}{}^{r\pi}2a[8\sin(\frac{\omega}{2})-4\sin(\omega)]+\frac{2b}{5}[12\sin(\omega)-8\sin(\frac{3\omega}{2})]+\frac{2c}{35}[20\sin(\omega)-8\sin(\frac{5\omega}{2})]_{-\omega^{3}}
+$$
 
-2a[8 sin( ) − 4 sin(ω)] + [12 sin(ω) − 8 sin( )] + [20 sin(ω) − 8 sin( )] 2 5 2 35 2
-
-$min E = −ω^{3}$
+min E =
 
 $$
 {}^{2}W(\omega)d\omega.
@@ -58,9 +58,11 @@ a 13b 29c
 
 The main incentive behind developing TDCCS schemes is to precisely resolve small scales in multiscale physical problems. Consequently, Fourier analysis is conducted on these optimal schemes to evaluate their spectral characteristics. In this section, we investigate the dispersion and dissipation properties of TDCCS through Fourier analysis. TDCCS, being a central difference, eliminates numerically dissipative errors. The Fourier transformation, a frequently employed tool in finite difference scheme analysis, is applied to equation (2.5), and by utilizing Euler's formula, the modified wavenumber $\omega'''$ of TDCCS can be derived. It is:
 
-ω 2b 3ω 2c 5ω
+$$
+2a[8\sin(\frac{\omega}{2})-4\sin(\omega)]+\frac{2b}{5}[12\sin(\omega)-8\sin(\frac{3\omega}{2})]+\frac{2c}{35}[20\sin(\omega)-8\sin(\frac{5\omega}{2})]_{.}
+$$
 
-2a[8 sin( ) − 4 sin(ω)] + [12 sin(ω) − 8 sin( )] + [20 sin(ω) − 8 sin( )] 2 5 2 35 2 (4.1) ω<sup>′′′</sup> ~TDCCS~ = .
+(4.1) ω<sup>′′′</sup> ~TDCCS~ =
 
 $$
 1+2\alpha\cos(\omega)+2\beta\cos(2\omega)

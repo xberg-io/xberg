@@ -25,6 +25,10 @@
 |  | 0 1 0 0 0 | 10 |
 
 $$
+A:={}^{-32.1699}{}^{-0.0358}{}^{-131.646}\frac{-3.1099}{0.9281},
+$$
+
+$$
 B_{u}:=\frac{0.0016}{-0.0}
 $$
 
@@ -34,7 +38,9 @@ $$
 
 $V_{t}$ $V_{t}$
 
-**C D**~d~
+$$
+C_{z}:=W_{z}\frac{1}{0}\frac{0}{1}{}^{-1}\frac{0}{0},D_{d}:=\frac{0}{0},
+$$
 
 where $W_{z}:=\mathrm{diag}11.460.1$ , scales **z** such that the desired closed-loop performance, defined by the $\mathcal{H}&#95;{2}$ or $\mathcal{H}&#95;{\infty}$
 

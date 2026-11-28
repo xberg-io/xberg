@@ -42,17 +42,7 @@ $$
 
 $$-ts_{xy,f}^{3}(n_{y,f}-n_{x,f})+\frac{t}{4}$$
 
-These terms serve a similar role as the V = 2t term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric V ≥ 0 term can be added to the models here in a signproblem-free way. In the $\mathbb{Z}&#95;{2}$ gauge theory, the gauge field $s^{1}=\sigma^{1}/2$ couples to fermions, and the local $\mathbb{Z}&#95;{2}$ symmetry is manifest via the commutation [Q~x~, H<sup>Z</sup>~2~] = 0, P Q n~x,f~ 3
-
-f
-
-where Q = (−1) ${}&#95;{f,\alpha}s_{x,x}^{3}$ s~x~${}&#95;{-\alpha,x,f},\alpha$ˆ are the x ˆ +ˆ α,f ˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~ , which commutes Q<sup>(1)</sup>
-
-with is given by V~U~ = e<sup>iθxGx</sup> (1) , with G~x~ = x i$P_{f}\frac{{}&#95;{h}H}{n_{x,f}}\frac{U(1)}{-}P$
-
-3
-
-${}&#95;{\alpha}s_{x,x}^{3}$ − s~x~${}&#95;{-\alpha,x,f}+((-1)^{x}-1)/2.$ˆ +ˆα,f ~ˆ~ In the terminology of gauge fields, our microscopic models are quantum link models [63], which realize the continuous gauge invariance using finite-dimensional quantum degrees of freedom. The identification with usual gauge field operators is $U_{xy,f}=s_{xy,f}^{+},U_{xy,f}^{\dagger}=s_{xy,f}^{-},E=s_{xy,f}^{3}.$ We note that a straightforward application of the meron idea necessitates the introduction of an equivalent flavor index for gauge links as fermion flavors. Naively, the total Gauss law can be expressed through a product $(\mathbb{Z}&#95;{2})$ or sum (U(1)) of the Gauss law of individual flavors degrees of freedom, and the resulting theories have $\mathbb{Z}&#95;{2}^{\otimes N_{f}}$ and $U(1)^{\otimes N_{f}}$ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material),
+These terms serve a similar role as the V = 2t term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric V ≥ 0 term can be added to the models here in a signproblem-free way. In the $\mathbb{Z}&#95;{2}$ gauge theory, the gauge field $s^{1}=\sigma^{1}/2$ couples to fermions, and the local $\mathbb{Z}&#95;{2}$ symmetry is manifest via the commutation${}&#95;{{}&#95;{\alpha,f}s}{}&#95;{3}{}&#95;{x}&#91;Q_{x},H^{\mathbb{Z}&#95;{2}}&#93;=0,$ where `Q_{x}=(-1)^{P}{}^{{}_{{}_{f}n_{x,f}}Q}`${}&#95;{f,\alpha}s_{x,x}^{3}$ ${}&#95;{-\alpha,x,f},\alpha$ˆ are the ~ˆ~ +ˆ ˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~ , which commutes Q<sup>(1)</sup> with is given by V~U~ = e<sup>iθxGx</sup> (1) , with G~x~ = x i$P_{f}\frac{{}&#95;{h}H}{n_{x,f}}\frac{U(1)}{-}P$ 3${}&#95;{\alpha}s_{x,x}^{3}$ − s~x~${}&#95;{-\alpha,x,f}+((-1)^{x}-1)/2.$ˆ +ˆα,f ~ˆ~ In the terminology of gauge fields, our microscopic models are quantum link models [63], which realize the continuous gauge invariance using finite-dimensional quantum degrees of freedom. The identification with usual gauge field operators is $U_{xy,f}=s_{xy,f}^{+},U_{xy,f}^{\dagger}=s_{xy,f}^{-},E=s_{xy,f}^{3}.$ We note that a straightforward application of the meron idea necessitates the introduction of an equivalent flavor index for gauge links as fermion flavors. Naively, the total Gauss law can be expressed through a product $(\mathbb{Z}&#95;{2})$ or sum (U(1)) of the Gauss law of individual flavors degrees of freedom, and the resulting theories have $\mathbb{Z}&#95;{2}^{\otimes N_{f}}$ and $U(1)^{\otimes N_{f}}$ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material),
 
 $$
 H_{N_{f}=2}^{U(1)}\rightarrow H_{N_{f}=2}^{U(1)}+J\frac{X}{\langle xy\rangle}s_{xy,1}^{3}s_{xy,2}^{3},

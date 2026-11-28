@@ -24,20 +24,10 @@ $$
 \frac{dy}{dx}=nx^{(n-1)}.
 $$
 
-For example, let n = 8, then $y=x^{8}$; and differentiating it would give $\frac{dy}{dx}=8x^{7}.$ And, indeed, the rule that differentiating $x^{n}$ gives as the result $nx^{n-1}$ is true for all cases where n is a whole number and positive. [Expanding $(x+dx)^{n}$ by the binomial theorem will at once show this.] But the question whether it is true for cases where n has negative or fractional values requires further consideration.
-
-Case of a negative power.
-
-Let $y=x^{-2}$. Then proceed as before:
+For example, let n = 8, then $y=x^{8}$; and differentiating it would give $\frac{dy}{dx}=8x^{7}.$ And, indeed, the rule that differentiating $x^{n}$ gives as the result $nx^{n-1}$ is true for all cases where n is a whole number and positive. [Expanding $(x+dx)^{n}$ by the binomial theorem will at once show this.] But the question whether it is true for cases where n has negative or fractional values requires further consideration. Case of a negative power. Let $y=x^{-2}$. Then proceed as before:
 
 $$
 y+dy=(x+dx)^{-2}
 $$
 
-−2
-
-dx
-
-−2
-
-= x 1 + . x
+$$=x^{-2}1+\frac{dx}{x}{}^{-2}.$$

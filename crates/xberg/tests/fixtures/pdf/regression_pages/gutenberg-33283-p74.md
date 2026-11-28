@@ -14,11 +14,9 @@ The velocity is reversed. The wheel is evidently at rest between these two insta
 
 θ 2π = 3 + 2 × 2.58 − 6.28 0.1 × 2.58<sup>3</sup> = 1.025 revolutions.
 
-Exercises V. (See page 255 for Answers.)
+Exercises V. (See page 255 for Answers.) dy $d^{2}y_{.}$
 
-dy d<sup>2</sup>y
-
-- (1) If $y=a+bt^{2}+ct^{4}$; find and . dt $dt^{2}$
+- (1) If $y=a+bt^{2}+ct^{4}$; find and dt $dt^{2}$
 
 Ans. $\frac{dy}{dt}=2bt+4ct^{3};\frac{d^{2}y}{dt^{2}}=2b+12ct^{2}.$
 

@@ -30,4 +30,12 @@ if 3 is added to its denominator.
 | and | = . |
 |  | y + 3 3 |
 
+$$
+{}^{x+2}=\frac{1}{2},
+$$
+
+$$
+{}_{y+3}=\frac{1}{3}.
+$$
+
 The solution of these equations gives 7 for x, and 18 for y.

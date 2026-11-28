@@ -33,28 +33,11 @@ x
 
 1
 
-u Z
+u and so Φ($\xi)>n^{Z}{}&#95;{1}\frac{{}^{2}du}{u}$, which shows that Φ(ξ) → ∞ as ξ → ∞.
 
-2
+**Examples LXXI.** 1. Prove by an argument similar to that used above, ${}^{Z}{}^{\xi}dx$ and without integration, that Φ(ξ) = , where s \< 1, tends to infinity ${}&#95;{1}x^{s}$ with ξ. $P_{n^{-2},}P_{n^{-3/2},}P_{n^{-11/10}}$
 
-du and so $Φ( ξ) > n$ , which shows that $Φ(ξ) → ∞$ as $ξ → ∞. u$
-
-1
-
-**Examples LXXI.** 1. Prove by an argument similar to that used above, Z
-
-ξ
-
-dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity ${}&#95;{1}x^{s}$ with ξ. P P P
-
-−2 −3/2 −11/10
-
-2. The series n , n , n are convergent, and their sums P P
-
-−1/2 −10/11
-
-are not greater than 2, 3, 11 respectively. The series n , n are divergent.
-
+2. The series are convergent, and their sums$P_{n^{-1/2},}P_{n^{-10/11}}$ are not greater than 2, 3, 11 respectively. The series are divergent.
 3. The series ${}^{P}n^{s}/(n^{t}+a)$, where a \> 0, is convergent or divergent according as t \> 1 + s or t ≦ 1 + s. [Compare with ${}^{P}n^{s-t}.&#93;$
 4. Discuss the convergence or divergence of the series
 

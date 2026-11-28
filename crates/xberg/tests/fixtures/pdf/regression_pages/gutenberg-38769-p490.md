@@ -15,31 +15,23 @@ $$
 | 0 |  | 0 | 1 | r |
 |  | = (A 0 + A 1 x + A2 x2 + · · · + Ar xr ) ex. ] |  |  |  |
 
-P
+$$
+{}^{X^{\infty}}P_{r}(n)\frac{x^{n}}{n!}=A_{0}\frac{X_{x}^{\infty}{}^{n}}{n!}+A_{1}{}^{X^{\infty}}{}_{(n-1)!}+\cdot\cdot\cdot+A_{r}^{X^{\infty}}
+$$
 
 8. Show that
 
-∞ ∞
-
-X X n<sup>3</sup> n<sup>4</sup> x
-
-x
-
-x<sup>n</sup> = (x + 3x<sup>2</sup> + x<sup>3</sup>)e , x<sup>n</sup> = (x + 7x<sup>2</sup> + 6x<sup>3</sup> + x<sup>4</sup>)e ; n\! n\!
+$$
+\frac{X_{n}^{\infty}{}^{3}}{n!}x^{n}=(x+3x^{2}+x^{3})e^{x},\frac{X_{n}^{\infty}{}^{4}}{n!}x^{n}=(x+7x^{2}+6x^{3}+x^{4})e^{x};
+$$
 
 1 1
 
 and that if $S_{n}=1^{3}+2^{3}+\cdot\cdot\cdot+n^{3}$ then
 
-∞
-
-X
-
-x<sup>n</sup>
-
-1
-
-S~n~ = (4x + 14x<sup>2</sup> + 8x<sup>3</sup> + x<sup>4</sup>)e<sup>x</sup>. 4 n\!
+$$
+{}^{X^{\infty}}S_{{}^{n}n!}{}^{x^{n}}=\frac{1}{4}(4x+14x^{2}+8x^{3}+x^{4})e^{x}.
+$$
 
 1
 
@@ -49,35 +41,13 @@ In particular the last series is equal to zero when $x = −2$. (Math. Trip. 190
 
 ${}^{P}(n^{k}/n$\!), where k is any positive integer, is a positive integral multiple of e.
 
-∞
-
-P (n − 1)x<sup>n</sup>
-
-1 2
-
-10. Prove that = (x<sup>2</sup> − 3x + 3)e<sup>x</sup> + x<sup>2</sup> − 3 /x . 2 (n + 2)n\!
-
-1
+10. Prove that $\frac{P^{\infty}(n-1)x^{n}}{1}&#95;{(n+2)n!}=(x^{2}-3x+3)e^{x}+\frac{1}{2}x^{2}-3/x^{2}.$
 
 [Multiply numerator and denominator by n + 1, and proceed as in Ex. 7.]
 
-11. Determine a, b, c so that $\\{(x+a)e^{x}+(bx+c)\\}/x^{3}$ tends to a limit as bx + c
-
-x
-
-$x → 0$, evaluate the limit, and draw the graph of the function e + .
-
-$$
-x+a
-$$
-
+11. Determine a, b, c so that $\\{(x+a)e^{x}+(bx+c)\\}/x^{3}$ tends to a limit as ${}&#95;{e^{x}+}bx+c_{.}$ x → 0, evaluate the limit, and draw the graph of the function $$x+a$$
 12. Draw the graphs of 1 $+x,1+x+\frac{1}{2}x^{2},1+x+\frac{1}{2}x^{2}+\frac{1}{6}x^{3}$, and compare them with that of $e^{x}.$
-
-x<sup>n</sup> x<sup>n</sup>
-
-−x n
-
-13. Prove that e − 1 + x − + · · · − (−1) is positive or negative 2\! n\! according as n is odd or even. Deduce the exponential theorem.
+13. Prove that $e^{-x}-1+x-\frac{x^{n}}{2!}+\cdot\cdot\cdot-(-1)^{{}&#95;{n}x}\frac{n}{n!}$ is positive or negative according as n is odd or even. Deduce the exponential theorem.
 14. If
 
 $$

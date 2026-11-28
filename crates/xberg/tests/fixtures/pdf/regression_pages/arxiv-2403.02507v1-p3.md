@@ -76,7 +76,7 @@ $$
 
 - C. **LQ Control Deisgn for LWR Model with VSL**
 
-In order to find Φ(z), we take (14) and transform it into ∂∆ρ ρ~0~ ∂∆ρ = −b~0~U~max~ 1 − 2 − ∂t ρ~max~ ∂z ∂∆b
+In order to find Φ(z), we take (14) and transform it into ∂∆ρ ∂∆ρ ${}&#95;{\partial t}=-b_{0}U_{max}1-2\frac{\rho_{0}}{\rho_{max}}$ $\partial z^{-}$ ∂∆b
 
 $$
 \rho_{0}U_{max}1-\frac{\rho_{0}}{\rho_{max}}
@@ -132,13 +132,13 @@ The left hand side of (31) can be solved by a combination of integration by part
 
 2B~0~ Q~0~ (32) Then, √ √ B~0~Φ + Q~0~
 
-$$
-2B_{0} Q_{0} ln √ = (z + C) B_{0}Φ − Q_{0} V √ √ B_{0}Φ + Q_{0}
-$$
+$2B_{0} Q_{0} ln √ = (z + C) B_{0}Φ − Q_{0} V$ √ √
 
 $$
-2B_{0} Q_{0} √ = exp (z + C) B_{0}Φ − Q_{0} V √ p p
+\frac{B_{0}\Phi+}{B_{0}\Phi-}\sqrt{Q_{0}Q_{0}}=\exp{}^{2B_{0}}{}_{V}{}^{Q_{0}}(z+C)
 $$
+
+√ p p
 
 $2B_{0} Q_{0} B_{0}Φ+ Q_{0} = B_{0}Φ− Q_{0} exp (z+C) V (33)$ The solution to (33) can be either √ p p
 

@@ -1,4 +1,26 @@
-2πnb . a Then sin ϕ = √ and cos ϕ = √ Substituting these, we get: $y = g$ which may be written
+$$
+2\pi nb_{.}
+$$
+
+a Then
+
+$$
+\sin\phi=\sqrt{a^{2}+4\pi^{2}n^{2}b^{2}}{}^{2\pi nb},
+$$
+
+and
+
+$$
+\cos\phi=\sqrt{a^{2}+4\pi^{2}n^{2}b^{2}}.
+$$
+
+Substituting these, we get:
+
+$$
+y=g^{\cos\phi\cdot}\sqrt{a^{2}+4\pi^{2}n^{2}b^{2}\pi nt-\sin\phi\cdot\cos2\pi nt},
+$$
+
+which may be written
 
 which is the solution desired.
 
@@ -6,12 +28,15 @@ which is the solution desired.
 
 239
 
-2πnb , a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup> a . a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup> cos ϕ
+a
 
-- sin 2 πnt − sin ϕ
-- cos 2 πnt √ , a 2 + 4 π 2 n 2 b 2
+sin 2
 
-$sin(2πnt − ϕ) y = g√$ , a<sup>2</sup> + 4π<sup>2</sup>n<sup>2</sup>b<sup>2</sup>
+sin(2
+
+$$
+y=g\sqrt{a^{2}+4\pi^{2}n^{2}b^{2}}{}^{\pi nt-\phi)},
+$$
 
 This is indeed none other than the equation of an alternating electric current, where g represents the amplitude of the electromotive force, n the frequency, a the resistance, b the coefficient of self-induction of
 

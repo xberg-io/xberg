@@ -4,17 +4,19 @@
 
 [In this and the succeeding examples it is of course supposed that the arbitrary functions which occur are such that the integrals considered have a meaning in accordance with the definitions of ?? 177 et seq.]
 
-31. Show that if 2y = ax−(b/x), where a and b are positive, then y increases steadily from −∞ to ∞ as x increases from 0 to ∞. Hence show that Z Z ∞
+31. Show that if 2y = ax−(b/x), where a and b are positive, then y increases steadily from −∞ to ∞ as x increases from 0 to ∞. Hence show that Z
 
 ∞
 
-b 1
-
 1
 
-f ax + dx = 2 x a
+$$
+{}^{Z}{}_{0}{}^{\infty}f\frac{1}{2}ax+\frac{b}{x}
+$$
 
-0 −∞
+dx = a
+
+−∞
 
 Z
 
@@ -46,14 +48,6 @@ b/a ∞
 
 $1 y f(y) dx_{2} = f(y) p − 1$ dy, √
 
-0
-
-a
-
-ab
-
-y<sup>2</sup> − ab
-
 | and that |  |  |  |
 | --- | --- | --- | --- |
 | Z ∞ |  | Z ∞ | Z ∞ p |
@@ -62,6 +56,14 @@ y<sup>2</sup> − ab
 | 2 | x | a √ y2 − ab | a |
 | 0 |  | ab | 0 |
 
+$$
+{}^{Z}{}_{0}{}^{\infty}f\frac{1}{2}ax+\frac{b}{x}
+$$
+
+0
+
+a
+
 | 33. Prove the formula |  |  |  |
 | --- | --- | --- | --- |
 | Z |  | Z |  |
@@ -69,6 +71,14 @@ y<sup>2</sup> − ab
 | f (sec 1 x + tan 1 x) √ |  | = f (cosec x) √ | . |
 | 2 | 2 sin x |  | sin x |
 | 0 |  | 0 |  |
+
+${}^{Z}{}&#95;{0}{}^{\pi}f(\sec\frac{1}{2}x+\tan\frac{1}{2}x)\sqrt{\sin xdx}={}&#95;{0}$
+
+ab
+
+y<sup>2</sup> − ab
+
+$x)\sqrt{\sin xdx}.$
 
 | dx | π = | , x 2 dx | π = . |
 | --- | --- | --- | --- |
