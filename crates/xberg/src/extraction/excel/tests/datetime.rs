@@ -111,3 +111,17 @@ fn should_read_every_zero_serial_without_cell_styles_as_the_date_for_xls_and_xls
     crate::extraction::excel::datetime::resolve_epoch_zero_in_range(&mut untouched, None);
     assert_eq!(untouched.get_value((0, 0)), Some(&zero));
 }
+
+#[test]
+fn should_classify_the_format_section_that_applies_to_zero_gh3441() {
+    use crate::extraction::excel::datetime::is_time_only_format as time_only;
+    assert!(time_only("h:mm", None));
+    assert!(time_only("hh:mm:ss AM/PM", None));
+    assert!(time_only("yyyy-mm-dd;yyyy-mm-dd;hh:mm", None));
+    assert!(!time_only("hh:mm;hh:mm;yyyy-mm-dd", None));
+    assert!(!time_only("dd/mm/yyyy", None));
+    assert!(!time_only("[$-409]d-mmm-yy", None));
+    assert!(!time_only("General", Some(30)));
+    assert!(time_only("General", Some(20)));
+    assert!(!time_only("\"hours\" yyyy", None));
+}

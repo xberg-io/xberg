@@ -27,8 +27,10 @@ pub(super) fn format_excel_datetime(dt: &ExcelDateTime) -> String {
 /// XLS/XLSB workbook therefore shows as 1904-01-01.
 pub(super) type EpochStyles<'a> = Option<&'a StyleRange>;
 
-fn is_time_only_format(code: &str) -> bool {
-    let (mut date, mut time, mut quoted, mut escaped, mut bracketed) = (false, false, false, false, false);
+/// The format sections' literal-free text: quoted text, escaped characters and `[...]` conditions removed.
+fn format_sections(code: &str) -> Vec<String> {
+    let mut sections = vec![String::new()];
+    let (mut quoted, mut escaped, mut bracketed) = (false, false, false);
     for symbol in code.chars() {
         if escaped {
             escaped = false;
@@ -40,13 +42,32 @@ fn is_time_only_format(code: &str) -> bool {
                 '"' => quoted = true,
                 '[' => bracketed = true,
                 ']' => bracketed = false,
-                ';' => break,
-                'd' | 'D' | 'y' | 'Y' if !bracketed => date = true,
-                'h' | 'H' | 's' | 'S' | 'a' | 'A' if !bracketed => time = true,
+                ';' if !bracketed => sections.push(String::new()),
+                _ if !bracketed => sections
+                    .last_mut()
+                    .expect("one section")
+                    .push(symbol.to_ascii_uppercase()),
                 _ => {}
             }
         }
     }
+    sections
+}
+
+pub(super) fn is_time_only_format(code: &str, format_id: Option<u32>) -> bool {
+    if code == "General" {
+        // Calamine reports "General" for built-in ids it has no code for; 18-21 and 45-47 are the clock-time ones.
+        return matches!(format_id, Some(18..=21 | 45..=47));
+    }
+    let sections = format_sections(code);
+    // Zero uses the third section of a three-section format and the first otherwise.
+    let section = if sections.len() >= 3 {
+        &sections[2]
+    } else {
+        &sections[0]
+    };
+    let date = section.contains(['D', 'Y']);
+    let time = section.contains(['H', 'S']) || section.contains("AM/PM") || section.contains("A/P");
     time && !date
 }
 
@@ -58,7 +79,7 @@ fn resolve_epoch_zero(value: &Data, position: (u32, u32), styles: &StyleRange) -
     let time_only = styles
         .get(position)
         .and_then(|style| style.number_format.as_ref())
-        .is_some_and(|format| is_time_only_format(&format.format_code));
+        .is_some_and(|format| is_time_only_format(&format.format_code, format.format_id));
     let text = if time_only { "00:00:00" } else { "1904-01-01" };
     Some(Data::DateTimeIso(text.to_owned()))
 }
