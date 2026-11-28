@@ -66,12 +66,14 @@ impl<'doc> TextExtractor<'doc> {
     /// millipoints or more. A smaller one keeps five significant digits instead: a
     /// millipoint grid sent every scale below 0.0005 to zero, so two distinct
     /// small-scale placements of one Form shared a key and the second was
-    /// dropped as a duplicate or replayed the first one's cached spans. Either
-    /// grid is at least as fine as the millipoint one wherever it applies, so no
-    /// two placements the millipoint key told apart share a key. A component
-    /// below 1e-5 of the matrix magnitude is rotation noise and keys as zero,
-    /// but only when it also rounds to zero millipoints, which keeps that claim
-    /// for mixed-scale matrices such as `a = 1e4, d = 0.05`.
+    /// dropped as a duplicate or replayed the first one's cached spans. The
+    /// significant digits are finer than the millipoint grid but do not refine
+    /// its boundaries: scales 0.0124996 and 0.0125004 keyed 12 and 13
+    /// millipoints and now share a key, a position difference under 0.001 pt
+    /// at form coordinates near 1000. A component below 1e-5 of the matrix
+    /// magnitude is rotation noise and keys as zero, but only when it also
+    /// rounds to zero millipoints, so a mixed-scale matrix such as
+    /// `a = 1e4, d = 0.05` keeps its small component.
     /// Rounding (not truncating) keeps float noise around decimal values such
     /// as 0.99999... / 1.00001... in one bucket. ~keep
     pub(crate) fn quantize_ctm(ctm: Matrix) -> [i64; 6] {
