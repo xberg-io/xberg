@@ -1627,16 +1627,58 @@ fn validate_languages(languages: &[String]) -> Result<(), XbergError> {
     Ok(())
 }
 
+/// Whether `name` can name a Tesseract model: one or two `/`-separated components of ASCII
+/// letters, digits, `_` and `-`, none starting with `-` (`eng`, `chi_sim`, `jpn_vert`, a
+/// user-trained `my_font`, upstream's `script/Latin`), or the `*` wildcard.
+///
+/// The name is joined onto a tessdata directory as `<name>.traineddata`, so `..`, an absolute
+/// path, a drive prefix or a backslash must never reach that join. ~keep
+pub(crate) fn is_tesseract_language_name(name: &str) -> bool {
+    name == "*"
+        || (name.split('/').count() <= 2
+            && name.split('/').all(|component| {
+                !component.is_empty()
+                    && !component.starts_with('-')
+                    && component
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            }))
+}
+
+/// Validate every non-blank, `+`-separated entry of `tesseract_config.language` as a model name.
+///
+/// Unlike `ocr.language` these are not limited to the known codes, so a user-trained model keeps
+/// working; they only have to be names, never paths.
+fn validate_tesseract_languages(languages: &[String]) -> Result<(), XbergError> {
+    for name in languages
+        .iter()
+        .flat_map(|entry| entry.split('+'))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        if !is_tesseract_language_name(name) {
+            return Err(XbergError::validation(format!(
+                "Invalid Tesseract language '{name}' in tesseract_config.language: a language is a model \
+                 name of letters, digits, '_' and '-' (for example 'eng' or 'chi_sim'), not a path. \
+                 Set ocr.tessdata_path to use models from another directory."
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Validate the Tesseract tuning knobs that are plain integers and strings rather than enums.
 ///
 /// `psm`, `oem`, `thresholding_method` and `binarization_method` are the only OCR fields whose
 /// type does not already constrain them at deserialization time, so an out-of-range mode
 /// reaches the backend and fails there — far from the config that caused it. Validating here
-/// keeps the error next to the input.
+/// keeps the error next to the input. `language` is validated as model names because it is
+/// joined into file paths.
 fn validate_tesseract_tuning(tesseract_config: Option<&crate::types::TesseractConfig>) -> Result<(), XbergError> {
     let Some(tesseract_config) = tesseract_config else {
         return Ok(());
     };
+    validate_tesseract_languages(&tesseract_config.language)?;
     if let Some(psm) = tesseract_config.psm {
         crate::core::config_validation::validate_tesseract_psm(psm)?;
     }
@@ -1816,6 +1858,69 @@ mod tests {
         };
 
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn should_reject_tesseract_languages_that_are_paths() {
+        let with_language = |language: &str| OcrConfig {
+            tesseract_config: Some(crate::types::TesseractConfig {
+                language: vec![language.to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        for language in [
+            "../x",
+            "/etc/passwd",
+            "eng/../../x",
+            "eng+../x",
+            r"..\x",
+            r"C:\tessdata\eng",
+            "eng.traineddata",
+            "/eng",
+            "eng/",
+            "-eng",
+            "script/-Latin",
+            "script/Latin/x",
+        ] {
+            let message = with_language(language)
+                .validate()
+                .expect_err("a path must not be accepted as a Tesseract language")
+                .to_string();
+            assert!(message.contains("tesseract_config.language"), "{language}: {message}");
+        }
+        for language in [
+            "eng",
+            "eng+deu",
+            " eng + deu ",
+            "chi_sim",
+            "jpn_vert",
+            "deu_latf",
+            "my_custom-font2",
+            "script/Latin",
+            "all",
+            "*",
+            "",
+        ] {
+            assert!(with_language(language).validate().is_ok(), "{language}");
+        }
+    }
+
+    #[test]
+    fn should_reject_a_path_as_a_pipeline_stage_tesseract_language() {
+        let config: OcrConfig = serde_json::from_value(serde_json::json!({
+            "pipeline": {"stages": [
+                {"backend": "tesseract", "tesseract_config": {"language": ["../x"]}}
+            ]}
+        }))
+        .unwrap();
+
+        let message = config
+            .validate()
+            .expect_err("stage languages are validated too")
+            .to_string();
+        assert!(message.contains("'../x'"), "{message}");
     }
 
     #[test]

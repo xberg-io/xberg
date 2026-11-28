@@ -27,6 +27,10 @@ pub fn resolve_cache_base_dir() -> std::path::PathBuf {
 #[cfg(feature = "ocr")]
 pub(crate) use utilities::blake3_hash_bytes;
 pub(crate) use utilities::blake3_hash_file;
+#[cfg(feature = "ocr")]
+pub(crate) use utilities::blake3_hash_opened;
+#[cfg(all(test, feature = "ocr"))]
+pub(crate) use utilities::unreadable_for_tests;
 #[cfg(test)]
 pub(crate) use utilities::{fast_hash, generate_cache_key, validate_cache_key};
 

@@ -720,12 +720,12 @@ enum CacheCommands {
         classification_backend: Option<String>,
 
         /// Tesseract model sets to download (comma-separated: fast,best); default: the default set
-        #[cfg(feature = "paddle-ocr")]
+        #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
         #[arg(long, value_name = "SETS", value_delimiter = ',')]
         tessdata_model: Vec<commands::overrides::TessdataModelArg>,
 
         /// Tesseract languages to download (comma-separated, e.g. eng,deu); default: all 126 pinned
-        #[cfg(feature = "paddle-ocr")]
+        #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
         #[arg(long, value_name = "LANGUAGES", value_delimiter = ',')]
         tessdata_languages: Vec<String>,
     },
@@ -1194,9 +1194,9 @@ fn main() -> Result<()> {
                 classification_precision,
                 #[cfg(feature = "classification-onnx")]
                 classification_backend,
-                #[cfg(feature = "paddle-ocr")]
+                #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
                 tessdata_model,
-                #[cfg(feature = "paddle-ocr")]
+                #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
                 tessdata_languages,
             } => {
                 let options = WarmOptions {
@@ -1235,9 +1235,9 @@ fn main() -> Result<()> {
                         #[cfg(feature = "classification-onnx")]
                         classification_backend,
                     },
-                    #[cfg(feature = "paddle-ocr")]
+                    #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
                     tessdata_models: tessdata_model.into_iter().map(Into::into).collect(),
-                    #[cfg(feature = "paddle-ocr")]
+                    #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
                     tessdata_languages,
                 };
                 warm_command(cache_dir.clone(), format, options)?;

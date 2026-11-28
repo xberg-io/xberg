@@ -48,6 +48,7 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
             if lang.is_empty() {
                 continue;
             }
+            require_language_names(&[lang])?;
             let traineddata_path = Path::new(tessdata_path).join(format!("{}.traineddata", lang));
             if !traineddata_path.exists() {
                 return Err(OcrError::TesseractInitializationFailed(format!(
@@ -79,7 +80,10 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 ///    pinned, SHA-256 verified download from the model's GitHub repository.
 ///
 /// The override and `TESSDATA_PREFIX` are the caller's choice and are used whichever model set
-/// they hold; `model` applies only to the directories xberg manages.
+/// they hold; `model` applies only to the directories xberg manages. In the managed and built-in
+/// `best` directories a pinned language counts as present only when its file is the pinned
+/// `tessdata_best` pack; in the managed one a wrong file is moved aside and the pack fetched, or,
+/// when the directory cannot be written, used as given with a warning.
 ///
 /// # Arguments
 ///
@@ -189,21 +193,20 @@ fn resolve_tessdata_path_with(
     tessdata_env: &TessdataEnv,
     provision: &Provision<'_>,
 ) -> Result<String, OcrError> {
+    require_language_names(languages)?;
     let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
     let managed = model_cache_dir(&cache_base, tessdata_env.model);
     let flat = cache_base.join("tessdata");
-    let sources = adoption_sources(&cache_base, tessdata_env, provision.system);
+    let sources = adoption_sources(&flat, tessdata_env.model, tessdata_env.system_paths, provision.system);
     let xberg_owned =
         |dir: &Path| dir == managed.as_path() || (tessdata_env.model == TessdataModel::Fast && dir == flat);
 
-    for dir in tessdata_search_dirs_with(override_path, tessdata_env, provision.system) {
-        if all_languages_exist(&dir, languages)? {
-            if xberg_owned(Path::new(&dir)) {
-                adopt_shared_packs(Path::new(&dir), tessdata_env.model, &sources, provision.pins);
-            }
-            log_resolved(&dir, override_path, tessdata_env);
-            return Ok(dir);
+    if let Some(dir) = first_serving_dir(languages, override_path, tessdata_env, provision.system, provision.pins) {
+        if xberg_owned(Path::new(&dir)) {
+            adopt_shared_packs(Path::new(&dir), tessdata_env.model, &sources, provision.pins);
         }
+        log_resolved(&dir, languages, override_path, tessdata_env, provision.pins);
+        return Ok(dir);
     }
 
     // ~keep A flat cache that already serves some of the requested languages stays the fast
@@ -222,21 +225,254 @@ fn resolve_tessdata_path_with(
         ))
     })?;
 
-    materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, provision)?;
+    // ~keep A best request is only ever filled into the managed best directory, whose packs are
+    // held to their pins.
+    let destination_is_verified = tessdata_env.model == TessdataModel::Best;
+    let used_as_given =
+        materialize_missing_languages(&destination, languages, tessdata_env.model, &sources, provision)?;
     adopt_shared_packs(&destination, tessdata_env.model, &sources, provision.pins);
 
     let dest_str = destination
         .to_str()
         .ok_or_else(|| OcrError::TesseractInitializationFailed("Tessdata path is not valid UTF-8".to_string()))?;
 
-    if all_languages_exist(dest_str, languages)? {
-        log_resolved(dest_str, override_path, tessdata_env);
+    // ~keep A wrong pack that cannot be moved aside is served as given, with the warning
+    // set_aside_unverified gave, rather than failing every request on a read-only cache.
+    let held_to_pins: Vec<String> = languages
+        .iter()
+        .filter(|lang| !used_as_given.contains(*lang))
+        .cloned()
+        .collect();
+    let serves_as_given = used_as_given
+        .iter()
+        .all(|lang| destination.join(format!("{lang}.traineddata")).is_file());
+    if serves_as_given
+        && (held_to_pins.is_empty()
+            || directory_serves(dest_str, &held_to_pins, destination_is_verified, provision.pins))
+    {
+        log_resolved(dest_str, languages, override_path, tessdata_env, provision.pins);
         Ok(dest_str.to_string())
     } else {
         Err(OcrError::TesseractInitializationFailed(format!(
             "Failed to resolve all requested languages: {:?}",
             languages
         )))
+    }
+}
+
+/// The directory as caches key it: symlinks, `.` and `..` resolved when it exists, trailing
+/// separators dropped otherwise, so `/a/b` and `/a/b/` name one directory.
+pub(crate) fn canonical_tessdata_dir(directory: &str) -> PathBuf {
+    std::fs::canonicalize(directory).unwrap_or_else(|_| {
+        let trimmed = directory.trim_end_matches(['/', std::path::MAIN_SEPARATOR]);
+        PathBuf::from(if trimmed.is_empty() { directory } else { trimmed })
+    })
+}
+
+/// How close to a file's last modification or status change a read may be and still be
+/// remembered ([`FileStamp::settled_at`]). Covers the coarsest timestamps a tessdata directory is
+/// likely to sit on: one second on HFS+ and many network file systems, two on FAT.
+#[cfg(unix)]
+const RACY_WINDOW: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Wait until the file at `path` is old enough for its digest to be remembered
+/// ([`FileStamp::settled_at`]). A status-change time cannot be set back, so a test that needs a
+/// file it just wrote answered from a memo waits out [`RACY_WINDOW`].
+#[cfg(all(test, unix))]
+pub(crate) fn wait_until_settled(path: &Path) {
+    let deadline = std::time::Instant::now() + RACY_WINDOW * 5;
+    while !std::fs::metadata(path)
+        .ok()
+        .as_ref()
+        .and_then(FileStamp::of)
+        .is_some_and(|stamp| stamp.settled_at(std::time::SystemTime::now()))
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{} did not settle; is its timestamp in the future?",
+            path.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+/// What tells one version of a file from another without reading it: its size and modification
+/// time and, on Unix, its device, inode and status-change time, which replacing the file changes
+/// even when the size and modification time are kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileStamp {
+    len: u64,
+    modified: std::time::SystemTime,
+    #[cfg(unix)]
+    inode: (u64, u64),
+    #[cfg(unix)]
+    changed: (i64, i64),
+}
+
+impl FileStamp {
+    /// The stamp of the file `metadata` describes, or `None` when the platform reports no
+    /// modification time: such a file cannot be told from a replacement of the same size.
+    pub(crate) fn of(metadata: &std::fs::Metadata) -> Option<Self> {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt as _;
+
+        Some(Self {
+            len: metadata.len(),
+            modified: metadata.modified().ok()?,
+            #[cfg(unix)]
+            inode: (metadata.dev(), metadata.ino()),
+            #[cfg(unix)]
+            changed: (metadata.ctime(), metadata.ctime_nsec()),
+        })
+    }
+
+    /// Whether bytes read from this version by `read_at` may be remembered under this stamp:
+    /// false while its modification or status-change time is less than [`RACY_WINDOW`] before
+    /// `read_at`, or after it. A write landing in the same timestamp tick as the one stamped keeps
+    /// every field, so a digest taken that close to it could be served for other bytes until the
+    /// file changes again; such a file is read again next time instead (git's racy-clean rule).
+    #[cfg(unix)]
+    pub(crate) fn settled_at(&self, read_at: std::time::SystemTime) -> bool {
+        let settled = |time: std::time::SystemTime| read_at.duration_since(time).is_ok_and(|age| age >= RACY_WINDOW);
+        let changed = match (u64::try_from(self.changed.0), u32::try_from(self.changed.1)) {
+            (Ok(seconds), Ok(nanos)) => std::time::UNIX_EPOCH.checked_add(std::time::Duration::new(seconds, nanos)),
+            (Err(_), _) => Some(std::time::UNIX_EPOCH),
+            (Ok(_), Err(_)) => None,
+        };
+        settled(self.modified) && changed.is_some_and(settled)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn hash_into(&self, hasher: &mut blake3::Hasher) {
+        hasher.update(&self.len.to_le_bytes());
+        let (side, offset) = match self.modified.duration_since(std::time::UNIX_EPOCH) {
+            Ok(after) => (1_u8, after),
+            Err(before) => (2, before.duration()),
+        };
+        hasher.update(&[side]);
+        hasher.update(&offset.as_nanos().to_le_bytes());
+    }
+}
+
+/// Hash what identifies each language's model file in `directory`: the language, then for a
+/// pinned pack its set and pinned SHA-256, for any other file its SHA-256 (its [`FileStamp`] on
+/// WASM, which has no digest), or that it is no regular file. A stamp's device, inode and
+/// status-change time only decide when the bytes are read again, so a chmod, hard link, restore or
+/// remount of the same bytes keeps its keys.
+///
+/// Cache keys carry this beside the directory so a pack replaced in place stops matching entries
+/// and engines made from the old one, while a pinned pack written again with the same bytes (a
+/// remount, a copy, a re-adoption) keeps them. It costs a `stat` and an `open` per language; a
+/// file is read once per call, and on Unix only once per settled version, as
+/// [`PinTables::classify`] does. Returns false when a file cannot be identified: nothing keyed on
+/// it may be stored or reused.
+#[must_use]
+pub(crate) fn hash_pack_identities<'a>(
+    hasher: &mut blake3::Hasher,
+    directory: &Path,
+    languages: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    hash_pack_identities_with(hasher, directory, languages, &PINNED)
+}
+
+#[must_use]
+fn hash_pack_identities_with<'a>(
+    hasher: &mut blake3::Hasher,
+    directory: &Path,
+    languages: impl IntoIterator<Item = &'a str>,
+    pins: &PinTables<'_>,
+) -> bool {
+    let mut identified = true;
+    for lang in languages {
+        hasher.update(&(lang.len() as u64).to_le_bytes());
+        hasher.update(lang.as_bytes());
+        let path = directory.join(format!("{lang}.traineddata"));
+        match std::fs::metadata(&path) {
+            Ok(metadata) if metadata.is_file() => {
+                if !hash_pack_key(hasher, lang, &path, &metadata, pins) {
+                    identified = false;
+                    hasher.update(&[2]);
+                    hasher.update(&metadata.len().to_le_bytes());
+                }
+            }
+            _ => {
+                hasher.update(&[0]);
+            }
+        }
+    }
+    identified
+}
+
+/// Hash what tells the regular file at `path` from every other version of it, or return false
+/// when nothing can.
+#[cfg(not(target_arch = "wasm32"))]
+fn hash_pack_key(
+    hasher: &mut blake3::Hasher,
+    lang: &str,
+    path: &Path,
+    _metadata: &std::fs::Metadata,
+    pins: &PinTables<'_>,
+) -> bool {
+    use crate::ocr::tessdata_download::{PackIdentity, VerifiedSet};
+
+    let digest = match pins.pack_identity(lang, path) {
+        PackIdentity::Pinned(set, digest) => {
+            let set = match set {
+                VerifiedSet::Fast => 1,
+                VerifiedSet::Best => 2,
+                VerifiedSet::Shared => 3,
+                VerifiedSet::Unknown => 0,
+            };
+            hasher.update(&[3, set]);
+            hasher.update(digest.as_bytes());
+            return true;
+        }
+        PackIdentity::Unpinned(Some(digest)) => digest,
+        PackIdentity::Unpinned(None) => match crate::ocr::tessdata_download::content_sha256(path) {
+            Some(digest) => digest,
+            None => return false,
+        },
+    };
+    hasher.update(&[4]);
+    hasher.update(digest.as_bytes());
+    true
+}
+
+#[cfg(target_arch = "wasm32")]
+fn hash_pack_key(
+    hasher: &mut blake3::Hasher,
+    _lang: &str,
+    _path: &Path,
+    metadata: &std::fs::Metadata,
+    _pins: &PinTables<'_>,
+) -> bool {
+    hash_stamp(hasher, metadata)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn hash_stamp(hasher: &mut blake3::Hasher, metadata: &std::fs::Metadata) -> bool {
+    let Some(stamp) = FileStamp::of(metadata) else {
+        return false;
+    };
+    hasher.update(&[1]);
+    stamp.hash_into(hasher);
+    true
+}
+
+/// Refuse a language that is not a model name before it is joined into a file path.
+///
+/// `OcrConfig::validate` rejects these first; this covers callers that build a `TesseractConfig`
+/// without it. ~keep
+fn require_language_names<S: AsRef<str>>(languages: &[S]) -> Result<(), OcrError> {
+    match languages
+        .iter()
+        .map(AsRef::as_ref)
+        .find(|name| !crate::core::config::ocr::is_tesseract_language_name(name))
+    {
+        Some(name) => Err(OcrError::InvalidLanguageCode(format!(
+            "Tesseract language '{name}' is not a model name; set tessdata_path to use models from another directory"
+        ))),
+        None => Ok(()),
     }
 }
 
@@ -247,16 +483,18 @@ fn any_language_exists(directory: &Path, languages: &[String]) -> bool {
 }
 
 /// Local directories a missing pack of the requested set may be copied from after its pin is
-/// verified: the flat cache and the `fast` cache (for `best` too, since `osd` and `equ` are the
-/// same bytes in both sets; a directory is never its own source), then the built-in `best`
-/// directory and the system paths.
-fn adoption_sources(cache_base: &Path, tessdata_env: &TessdataEnv, system: &SystemTessdataDirs<'_>) -> Vec<PathBuf> {
-    let mut sources = vec![
-        cache_base.join("tessdata"),
-        model_cache_dir(cache_base, TessdataModel::Fast),
-    ];
-    if tessdata_env.system_paths {
-        if tessdata_env.model == TessdataModel::Best {
+/// verified: the flat cache `flat` and the `fast` cache beside it (for `best` too, since `osd`
+/// and `equ` are the same bytes in both sets; a directory is never its own source), then the
+/// built-in `best` directory and the system paths.
+fn adoption_sources(
+    flat: &Path,
+    model: TessdataModel,
+    system_paths: bool,
+    system: &SystemTessdataDirs<'_>,
+) -> Vec<PathBuf> {
+    let mut sources = vec![flat.to_path_buf(), flat.join(TessdataModel::Fast.as_str())];
+    if system_paths {
+        if model == TessdataModel::Best {
             sources.extend(system.best.iter().map(PathBuf::from));
         }
         sources.extend(system.fast.iter().map(PathBuf::from));
@@ -264,8 +502,22 @@ fn adoption_sources(cache_base: &Path, tessdata_env: &TessdataEnv, system: &Syst
     sources
 }
 
+/// [`adoption_sources`] for a caller that fills a set directory outside the resolver (`cache
+/// warm`): the same list for the cache whose flat tessdata directory is `flat`, with the system
+/// directories unless `XBERG_TESSDATA_SYSTEM_PATHS` turns them off.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn adoption_sources_beside(flat: &Path, model: TessdataModel) -> Vec<PathBuf> {
+    adoption_sources(
+        flat,
+        model,
+        TessdataEnv::from_process().system_paths,
+        &SYSTEM_TESSDATA_DIRS,
+    )
+}
+
 /// The size and modification time of each candidate source file, to tell whether a failed
 /// adoption is worth retrying.
+#[cfg(not(target_arch = "wasm32"))]
 type SourceState = Vec<Option<(u64, std::time::SystemTime)>>;
 
 /// Copy the packs both sets share (`osd`, `equ`) into the managed directory from verified local
@@ -306,7 +558,13 @@ fn adopt_shared_packs(directory: &Path, model: TessdataModel, sources: &[PathBuf
 #[cfg(target_arch = "wasm32")]
 fn adopt_shared_packs(_directory: &Path, _model: TessdataModel, _sources: &[PathBuf], _pins: &PinTables<'_>) {}
 
-fn log_resolved(directory: &str, override_path: Option<&Path>, tessdata_env: &TessdataEnv) {
+fn log_resolved(
+    directory: &str,
+    languages: &[String],
+    override_path: Option<&Path>,
+    tessdata_env: &TessdataEnv,
+    pins: &PinTables<'_>,
+) {
     let explicit = override_path.and_then(Path::to_str) == Some(directory)
         || tessdata_env.tessdata_prefix.as_deref() == Some(directory);
     tracing::debug!(
@@ -315,16 +573,72 @@ fn log_resolved(directory: &str, override_path: Option<&Path>, tessdata_env: &Te
         model_applies = !explicit,
         "Resolved tessdata directory"
     );
-    if explicit && tessdata_env.model == TessdataModel::Best && first_best_warning_for(directory) {
+    if explicit && tessdata_env.model == TessdataModel::Best {
+        warn_unverified_best(directory, languages, pins);
+    }
+}
+
+/// Warn that a `best` request is served from an explicit directory whose models are not verified
+/// `tessdata_best`, once per directory and finding: naming the languages when their packs are
+/// verified `tessdata_fast`, and with the general notice when a pack is no pinned one (a
+/// user-trained model stays usable). Silent when every requested pack is verified `best`.
+#[cfg(not(target_arch = "wasm32"))]
+fn warn_unverified_best(directory: &str, languages: &[String], pins: &PinTables<'_>) {
+    if pins.verified_model(Path::new(directory), languages) == Some(TessdataModel::Best) {
+        return;
+    }
+    let fast = packs_verified_fast(directory, languages, pins);
+    if fast.is_empty() {
+        if first_best_warning_for(directory) {
+            warn_explicit_directory_used_as_given(directory);
+        }
+        return;
+    }
+    let languages = fast.join("+");
+    if first_best_warning_for(&format!("{directory}\0{languages}")) {
         tracing::warn!(
             directory,
-            "tessdata_model 'best' was requested, but this explicit tessdata directory \
-             (tessdata_path or TESSDATA_PREFIX) is used as given, whichever model set it holds"
+            languages = %languages,
+            "tessdata_model 'best' was requested, but this explicit tessdata directory (tessdata_path or \
+             TESSDATA_PREFIX) holds tessdata_fast models for these languages, and they are used as given. For \
+             tessdata_best, unset the directory so xberg downloads verified models (`xberg cache warm \
+             --tessdata-model best` fetches them ahead of time), or replace the files with tessdata_best ones"
         );
     }
 }
 
-/// Whether `directory` has not yet had the explicit-directory warning in this process.
+/// WASM has no pins to verify a pack against.
+#[cfg(target_arch = "wasm32")]
+fn warn_unverified_best(directory: &str, _languages: &[String], _pins: &PinTables<'_>) {
+    if first_best_warning_for(directory) {
+        warn_explicit_directory_used_as_given(directory);
+    }
+}
+
+fn warn_explicit_directory_used_as_given(directory: &str) {
+    tracing::warn!(
+        directory,
+        "tessdata_model 'best' was requested, but this explicit tessdata directory \
+         (tessdata_path or TESSDATA_PREFIX) is used as given, whichever model set it holds"
+    );
+}
+
+/// The requested languages whose pack in `directory` is verified to be the pinned
+/// `tessdata_fast` one.
+#[cfg(not(target_arch = "wasm32"))]
+fn packs_verified_fast<'a>(directory: &str, languages: &'a [String], pins: &PinTables<'_>) -> Vec<&'a str> {
+    languages
+        .iter()
+        .map(String::as_str)
+        .filter(|lang| {
+            let pack = Path::new(directory).join(format!("{lang}.traineddata"));
+            pins.classify(lang, &pack) == crate::ocr::tessdata_download::VerifiedSet::Fast
+        })
+        .collect()
+}
+
+/// Whether `key` (a directory, or a directory and finding) has not yet had its explicit-directory
+/// warning in this process.
 fn first_best_warning_for(directory: &str) -> bool {
     static WARNED: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
         std::sync::LazyLock::new(Default::default);
@@ -358,15 +672,112 @@ pub(crate) fn existing_tessdata_dir_for(
     override_path: Option<&Path>,
     tessdata_env: &TessdataEnv,
 ) -> Option<String> {
-    first_directory_holding(&tessdata_search_dirs(override_path, tessdata_env), languages)
+    first_serving_dir(languages, override_path, tessdata_env, &SYSTEM_TESSDATA_DIRS, &PINNED)
 }
 
-/// The first of `directories` that holds a `.traineddata` for every one of `languages`.
-pub(crate) fn first_directory_holding(directories: &[String], languages: &[String]) -> Option<String> {
+/// The first candidate directory that serves every one of `languages`, in the resolver's order.
+fn first_serving_dir(
+    languages: &[String],
+    override_path: Option<&Path>,
+    tessdata_env: &TessdataEnv,
+    system: &SystemTessdataDirs<'_>,
+    pins: &PinTables<'_>,
+) -> Option<String> {
+    // ~keep The offline probe is reached without the resolver's check, from cache keys too.
+    require_language_names(languages).ok()?;
+    tessdata_search_dirs_with(override_path, tessdata_env, system)
+        .into_iter()
+        .find(|dir| {
+            let verified = holds_verified_best(dir, override_path, tessdata_env, system);
+            directory_serves(dir, languages, verified, pins)
+        })
+}
+
+/// Whether `directory` is one xberg vouches for as `tessdata_best`: the managed best cache or the
+/// read-only best directory of an image, reached through the search order rather than named by
+/// the caller. A pack there is held to its pin; everywhere else a file is used as it is.
+fn holds_verified_best(
+    directory: &str,
+    override_path: Option<&Path>,
+    tessdata_env: &TessdataEnv,
+    system: &SystemTessdataDirs<'_>,
+) -> bool {
+    if tessdata_env.model != TessdataModel::Best
+        || override_path.and_then(Path::to_str) == Some(directory)
+        || tessdata_env.tessdata_prefix.as_deref() == Some(directory)
+    {
+        return false;
+    }
+    let cache_base = crate::cache_dir::cache_base_for(tessdata_env.cache_dir.as_deref());
+    Path::new(directory) == model_cache_dir(&cache_base, TessdataModel::Best) || system.best.contains(&directory)
+}
+
+/// Whether `directory` holds a usable pack for every one of `languages`: a regular file, which in
+/// a `verified_best` directory must also be the pinned `tessdata_best` pack when its language has
+/// one. A wrong, empty or truncated file there counts as missing.
+fn directory_serves(directory: &str, languages: &[String], verified_best: bool, pins: &PinTables<'_>) -> bool {
+    !directory.is_empty()
+        && !languages.is_empty()
+        && languages.iter().all(|lang| {
+            let pack = Path::new(directory).join(format!("{lang}.traineddata"));
+            pack_serves(&pack, lang, verified_best, pins)
+        })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn pack_serves(pack: &Path, lang: &str, verified_best: bool, pins: &PinTables<'_>) -> bool {
+    if verified_best && pins.pin(lang, TessdataModel::Best).is_some() {
+        pins.classify(lang, pack).is(TessdataModel::Best)
+    } else {
+        pack.is_file()
+    }
+}
+
+/// WASM has no pins to hold a pack to.
+#[cfg(target_arch = "wasm32")]
+fn pack_serves(pack: &Path, _lang: &str, _verified_best: bool, _pins: &PinTables<'_>) -> bool {
+    pack.is_file()
+}
+
+/// A candidate tessdata directory and whether the primary resolution holds its packs to the
+/// `tessdata_best` pins ([`holds_verified_best`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SearchDir {
+    pub(crate) path: String,
+    pub(crate) verified_best: bool,
+}
+
+impl SearchDir {
+    /// A directory whose files are used as they are.
+    #[cfg(test)]
+    pub(crate) fn as_given(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            verified_best: false,
+        }
+    }
+}
+
+/// [`tessdata_search_dirs`], each held to the pins the primary resolution holds it to, so the
+/// script retry passes never read a pack of another set than the first pass.
+pub(crate) fn retry_search_dirs(override_path: Option<&Path>, tessdata_env: &TessdataEnv) -> Vec<SearchDir> {
+    tessdata_search_dirs(override_path, tessdata_env)
+        .into_iter()
+        .map(|path| SearchDir {
+            verified_best: holds_verified_best(&path, override_path, tessdata_env, &SYSTEM_TESSDATA_DIRS),
+            path,
+        })
+        .collect()
+}
+
+/// The first of `directories` that serves every one of `languages`, by the same rule as the
+/// primary resolution ([`directory_serves`]).
+pub(crate) fn first_directory_holding(directories: &[SearchDir], languages: &[String]) -> Option<String> {
+    require_language_names(languages).ok()?;
     directories
         .iter()
-        .find(|dir| all_languages_exist(dir, languages).unwrap_or(false))
-        .cloned()
+        .find(|dir| directory_serves(&dir.path, languages, dir.verified_best, &PINNED))
+        .map(|dir| dir.path.clone())
 }
 
 /// Candidate tessdata directories in the resolver's priority order:
@@ -463,32 +874,14 @@ const SYSTEM_TESSDATA_PATHS: &[&str] = &[
     r#"C:\ProgramData\Tesseract-OCR\tessdata"#,
 ];
 
-/// Check if all languages in the list exist as traineddata files in the given directory.
-fn all_languages_exist(tessdata_path: &str, languages: &[String]) -> Result<bool, OcrError> {
-    if tessdata_path.is_empty() || languages.is_empty() {
-        return Ok(false);
-    }
-
-    let tessdata_dir = Path::new(tessdata_path);
-    if !tessdata_dir.exists() {
-        return Ok(false);
-    }
-
-    for lang in languages {
-        let traineddata_path = tessdata_dir.join(format!("{}.traineddata", lang));
-        if !traineddata_path.exists() {
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
-
 /// Materialize missing `model` language files into `tessdata_path`.
 ///
 /// A pack is copied from the first of `sources` holding a file that matches its pin; for
 /// [`TessdataModel::Fast`], `eng` can come from the bundled bytes; everything else is a pinned,
 /// verified download. A `best` request never uses the bundled model, which is tessdata_fast.
+///
+/// Returns the languages whose wrong file in the `best` directory could not be moved aside
+/// because the directory cannot be written: they are left as they are.
 #[cfg(not(target_arch = "wasm32"))]
 fn materialize_missing_languages(
     tessdata_path: &Path,
@@ -496,10 +889,34 @@ fn materialize_missing_languages(
     model: TessdataModel,
     sources: &[PathBuf],
     provision: &Provision<'_>,
-) -> Result<(), OcrError> {
+) -> Result<Vec<String>, OcrError> {
+    let mut used_as_given = Vec::new();
+    // ~keep Best packs are only ever filled into the managed best directory, where a file that
+    // is not the pinned pack (hand-copied fast data, an empty or truncated file) is replaced
+    // rather than served.
+    let verified_best = model == TessdataModel::Best;
     for lang in languages {
         let traineddata_path = tessdata_path.join(format!("{}.traineddata", lang));
-        if traineddata_path.exists() || provision.pins.adopt(lang, model, tessdata_path, sources) {
+        if pack_serves(&traineddata_path, lang, verified_best, provision.pins) {
+            continue;
+        }
+        if verified_best {
+            let set_aside = provision
+                .pins
+                .set_aside_unverified(lang, model, tessdata_path)
+                .map_err(|e| {
+                    OcrError::TesseractInitializationFailed(format!(
+                        "'{}' is not the pinned {} language pack and could not be moved aside: {e}. Remove it",
+                        traineddata_path.display(),
+                        model.repository()
+                    ))
+                })?;
+            if set_aside == crate::ocr::tessdata_download::SetAside::Blocked {
+                used_as_given.push(lang.clone());
+                continue;
+            }
+        }
+        if provision.pins.adopt(lang, model, tessdata_path, sources) {
             continue;
         }
 
@@ -507,7 +924,9 @@ fn materialize_missing_languages(
             && lang == "eng"
             && let Some(bundled_bytes) = xberg_tesseract::bundled_eng_traineddata()
         {
-            std::fs::write(&traineddata_path, bundled_bytes).map_err(|e| {
+            // ~keep Other threads accept this directory as soon as the file exists, so it must
+            // never be visible half-written.
+            crate::ocr::tessdata_download::publish(bundled_bytes, &traineddata_path).map_err(|e| {
                 OcrError::TesseractInitializationFailed(format!(
                     "Failed to write bundled eng.traineddata to '{}': {}",
                     traineddata_path.display(),
@@ -521,7 +940,7 @@ fn materialize_missing_languages(
         (provision.fetch)(lang, model, tessdata_path)?;
     }
 
-    Ok(())
+    Ok(used_as_given)
 }
 
 /// WASM stub: no network access, no file writes.
@@ -532,7 +951,7 @@ fn materialize_missing_languages(
     _model: TessdataModel,
     _sources: &[PathBuf],
     _provision: &Provision<'_>,
-) -> Result<(), OcrError> {
+) -> Result<Vec<String>, OcrError> {
     Err(OcrError::TesseractInitializationFailed(format!(
         "Cannot download language packs on WASM. Requested: {:?}",
         languages

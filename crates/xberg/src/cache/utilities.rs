@@ -68,8 +68,33 @@ pub(crate) fn blake3_hash_bytes(data: &[u8]) -> String {
 ///
 /// Returns a 32-char hex string (128 bits of blake3 output).
 pub(crate) fn blake3_hash_file(path: &Path) -> Result<String> {
+    #[cfg(test)]
+    if unreadable_for_tests::contains(path) {
+        return Err(crate::error::XbergError::cache(
+            "Failed to open file for hashing: permission denied (test fault)",
+        ));
+    }
     let file = std::fs::File::open(path)
         .map_err(|e| crate::error::XbergError::cache(format!("Failed to open file for hashing: {e}")))?;
+    blake3_hash_reader(&file)
+}
+
+/// [`blake3_hash_file`] of `path` read through `file`, already opened from it, so the bytes hashed
+/// are those of the handle the caller stamped.
+#[cfg(feature = "ocr")]
+pub(crate) fn blake3_hash_opened(path: &Path, file: &std::fs::File) -> Result<String> {
+    #[cfg(test)]
+    if unreadable_for_tests::contains(path) {
+        return Err(crate::error::XbergError::cache(
+            "Failed to open file for hashing: permission denied (test fault)",
+        ));
+    }
+    #[cfg(not(test))]
+    let _ = path;
+    blake3_hash_reader(file)
+}
+
+fn blake3_hash_reader(file: &std::fs::File) -> Result<String> {
     let mut reader = std::io::BufReader::with_capacity(64 * 1024, file);
     let mut hasher = blake3::Hasher::new();
 
@@ -146,4 +171,35 @@ pub(crate) fn fast_hash(data: &[u8]) -> u64 {
 #[cfg(test)]
 pub(crate) fn validate_cache_key(key: &str) -> bool {
     key.len() == 32 && key.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Files [`blake3_hash_file`] refuses to read in tests, as if their permissions denied it.
+///
+/// Permissions cannot make a file unreadable for root, so tests that need a model file that
+/// cannot be read register it here instead and run the same for every user.
+#[cfg(test)]
+pub(crate) mod unreadable_for_tests {
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    static UNREADABLE: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
+
+    fn canonical(path: &Path) -> PathBuf {
+        std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    }
+
+    /// Make every later [`super::blake3_hash_file`] of `path` fail; the file itself is untouched.
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
+    pub(crate) fn insert(path: &Path) {
+        UNREADABLE
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(canonical(path));
+    }
+
+    pub(super) fn contains(path: &Path) -> bool {
+        let unreadable = UNREADABLE.lock().unwrap_or_else(PoisonError::into_inner);
+        !unreadable.is_empty() && unreadable.contains(&canonical(path))
+    }
 }

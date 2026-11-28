@@ -7,7 +7,7 @@ use std::path::Path;
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
 use super::api_pool::{RetryApiPools, RetryStage};
-use super::validation::{TessdataEnv, first_directory_holding, tessdata_search_dirs};
+use super::validation::{SearchDir, TessdataEnv, first_directory_holding, retry_search_dirs};
 use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::RetainedWordConfidenceStats;
@@ -63,16 +63,80 @@ pub(crate) fn may_retry_language(language: &str) -> bool {
     super::execution::is_all_languages(language) || supports_retry_language(language)
 }
 
-pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<&Path>, env: &TessdataEnv) -> bool {
-    // A wildcard is expanded by the processor after resolving the primary tessdata directory. ~keep
-    if super::execution::is_all_languages(language) {
-        return true;
-    }
+/// Whether the outer result cache cannot key the retry models of `language`: a wildcard is
+/// expanded by the processor after resolving the primary tessdata directory. The Han retry models
+/// of every other list are keyed on [`outer_han_retry_models`].
+pub(crate) fn requires_outer_cache_bypass(language: &str) -> bool {
+    super::execution::is_all_languages(language)
+}
+
+/// What the outer result cache knows of the models the Han retry would load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HanRetryModels {
+    /// The retry cannot run: the list reads Han already, or no directory holds OSD and the list
+    /// with the Han model.
+    Absent,
+    /// The directories and the identity of every model file the retry would load there.
+    Identified(blake3::Hash),
+    /// A model file cannot be identified, or a memo-only run would have had to read one.
+    Unidentified,
+}
+
+pub(crate) fn outer_han_retry_models(
+    language: &str,
+    override_path: Option<&Path>,
+    env: &TessdataEnv,
+) -> HanRetryModels {
+    observe_han_retry_models(&retry_search_dirs(override_path, env), language)
+}
+
+/// The identity ([`hash_pack_identities`](super::validation::hash_pack_identities)) of the OSD
+/// pack and the Han list the retry would load from `directories`, recorded as an observation of
+/// the current operation so a change between the outer key and the OCR that reads the models
+/// (and back) blocks publication. The outer key and [`RetryModels::observe_horizontal`] observe
+/// the same value.
+///
+/// A memo-only run that missed the memo records nothing: its answer is discarded and computed
+/// again where files may be read. Any other run that cannot identify a pack makes the operation
+/// uncacheable, since nothing would key a result read with that pack.
+fn observe_han_retry_models(directories: &[SearchDir], language: &str) -> HanRetryModels {
+    observe_han_retry_models_with(directories, language, |hash, directory, models| {
+        super::validation::hash_pack_identities(hash, directory, models.iter().copied())
+    })
+}
+
+fn observe_han_retry_models_with(
+    directories: &[SearchDir],
+    language: &str,
+    identify: impl Fn(&mut blake3::Hasher, &Path, &[&str]) -> bool,
+) -> HanRetryModels {
     if !supports_retry_language(language) {
-        return false;
+        return HanRetryModels::Absent;
     }
-    let directories = tessdata_search_dirs(override_path, env);
-    retry_directories(&directories, &retry_list(language, HAN_MODEL)).is_some()
+    let han = retry_list(language, HAN_MODEL);
+    let mut identified = true;
+    let identity = retry_directories(directories, &han).map(|(osd, recognition)| {
+        // ~keep PSM 0, 1 and 12 also load OSD from the recognition directory.
+        let recognition_models: Vec<&str> = han.iter().map(String::as_str).chain(["osd"]).collect();
+        let mut hash = blake3::Hasher::new();
+        for (directory, models) in [(&osd, vec!["osd"]), (&recognition, recognition_models)] {
+            hash.update(&(directory.len() as u64).to_le_bytes());
+            hash.update(directory.as_bytes());
+            identified &= identify(&mut hash, Path::new(directory), &models);
+        }
+        hash.finalize()
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    if crate::ocr::tessdata_download::memo_only_run_missed() {
+        return HanRetryModels::Unidentified;
+    }
+    if !identified {
+        cacheability::invalidate_current();
+        return HanRetryModels::Unidentified;
+    }
+    let paths: Vec<String> = directories.iter().map(|directory| directory.path.clone()).collect();
+    cacheability::observe_han_retry_models(&paths, &han.join("+"), identity);
+    identity.map_or(HanRetryModels::Absent, HanRetryModels::Identified)
 }
 
 pub(crate) fn may_retry_khmer(language: &str) -> bool {
@@ -86,7 +150,7 @@ pub(crate) fn requires_khmer_outer_cache_bypass(
 ) -> bool {
     may_retry_khmer(language)
         && first_directory_holding(
-            &tessdata_search_dirs(override_path, env),
+            &retry_search_dirs(override_path, env),
             &retry_list(language, KHMER_MODEL),
         )
         .is_some()
@@ -245,7 +309,7 @@ impl HanModels {
     }
 }
 
-fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, String)> {
+fn retry_directories(directories: &[SearchDir], han: &[String]) -> Option<(String, String)> {
     let osd_directory = first_directory_holding(directories, &["osd".to_string()])?;
     let han_directory = first_directory_holding(directories, han)?;
     Some((osd_directory, han_directory))
@@ -256,27 +320,113 @@ pub(crate) fn outer_vertical_model_fingerprint(
     override_path: Option<&Path>,
     env: &TessdataEnv,
 ) -> crate::Result<Option<blake3::Hash>> {
-    vertical_outer_model_fingerprint(language, &tessdata_search_dirs(override_path, env))
+    vertical_outer_model_fingerprint(language, &retry_search_dirs(override_path, env))
 }
 
-fn vertical_outer_model_fingerprint(language: &str, directories: &[String]) -> crate::Result<Option<blake3::Hash>> {
-    let model =
-        observe_vertical_model(directories, language).map_err(|error| crate::XbergError::cache(error.to_string()))?;
+fn vertical_outer_model_fingerprint(language: &str, directories: &[SearchDir]) -> crate::Result<Option<blake3::Hash>> {
+    let model = observe_vertical_model_with(directories, language, memoized_vertical_revision)
+        .map_err(|error| crate::XbergError::cache(error.to_string()))?;
     Ok(model.as_ref().map(vertical_model_identity))
 }
 
-fn observe_vertical_model(directories: &[String], language: &str) -> Result<Option<ModelSet>, OcrError> {
+fn observe_vertical_model(directories: &[SearchDir], language: &str) -> Result<Option<ModelSet>, OcrError> {
+    observe_vertical_model_with(directories, language, read_vertical_revision)
+}
+
+fn read_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
+    Ok(hash_language_models(directory, [VERTICAL_JAPANESE_MODEL], crate::cache::blake3_hash_file)?.finalize())
+}
+
+/// [`read_vertical_revision`], read through one opened handle and, on Unix, once per (path,
+/// [`FileStamp`](super::validation::FileStamp) of that handle) in this process, once it is old
+/// enough to be remembered ([`FileStamp::settled_at`](super::validation::FileStamp::settled_at)).
+/// Off Unix a stamp is only the size and modification time, which a replacement can keep, so the
+/// model is read on every call there.
+///
+/// The outer cache key asks for it on every request whose OCR may retry vertical Japanese; the
+/// memo lets that key be computed on the async thread
+/// ([`without_reading_packs`](crate::ocr::tessdata_download::without_reading_packs)) once the
+/// model has been read.
+fn memoized_vertical_revision(directory: &Path) -> Result<blake3::Hash, OcrError> {
+    let path = directory.join(format!("{VERTICAL_JAPANESE_MODEL}.traineddata"));
+    let failed = |error: crate::XbergError| engine_error(&format!("fingerprint model '{}'", path.display()), error);
+    let file = std::fs::File::open(&path).map_err(|error| {
+        failed(crate::XbergError::cache(format!(
+            "Failed to open file for hashing: {error}"
+        )))
+    })?;
+    #[cfg(unix)]
+    let before = vertical_memo::stamp(&file);
+    #[cfg(unix)]
+    if let Some(revision) = vertical_memo::get(&path, before) {
+        return Ok(revision);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if crate::ocr::tessdata_download::must_not_read() {
+        return Err(OcrError::ProcessingFailed(
+            "The vertical Japanese model has not been read yet".into(),
+        ));
+    }
+    let digest = crate::cache::blake3_hash_opened(&path, &file).map_err(failed)?;
+    let revision = blake3::hash(digest.as_bytes());
+    // ~keep A file that changed while it was read is not remembered under either stamp, nor one
+    // read so soon after it was written that a later write could keep the stamp.
+    #[cfg(unix)]
+    if let Some(before) = before
+        && vertical_memo::stamp(&file) == Some(before)
+        && before.settled_at(std::time::SystemTime::now())
+    {
+        vertical_memo::insert(path, before, revision);
+    }
+    Ok(revision)
+}
+
+/// The vertical model revisions [`memoized_vertical_revision`] has read, by path and the stamp of
+/// the handle each was read through.
+#[cfg(unix)]
+mod vertical_memo {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    use super::super::validation::FileStamp;
+
+    static SEEN: LazyLock<Mutex<HashMap<PathBuf, (FileStamp, blake3::Hash)>>> = LazyLock::new(Default::default);
+
+    pub(super) fn stamp(file: &std::fs::File) -> Option<FileStamp> {
+        file.metadata()
+            .ok()
+            .filter(std::fs::Metadata::is_file)
+            .as_ref()
+            .and_then(FileStamp::of)
+    }
+
+    pub(super) fn get(path: &Path, stamp: Option<FileStamp>) -> Option<blake3::Hash> {
+        let stamp = stamp?;
+        let seen = SEEN.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.get(path)
+            .filter(|(seen, _)| *seen == stamp)
+            .map(|(_, revision)| *revision)
+    }
+
+    pub(super) fn insert(path: PathBuf, stamp: FileStamp, revision: blake3::Hash) {
+        SEEN.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(path, (stamp, revision));
+    }
+}
+
+fn observe_vertical_model_with(
+    directories: &[SearchDir],
+    language: &str,
+    read_revision: impl FnOnce(&Path) -> Result<blake3::Hash, OcrError>,
+) -> Result<Option<ModelSet>, OcrError> {
     if language != "eng" {
         return Ok(None);
     }
     let model = vertical_japanese_directory(directories)
         .map(|directory| -> Result<ModelSet, OcrError> {
-            let revision = hash_language_models(
-                Path::new(&directory),
-                [VERTICAL_JAPANESE_MODEL],
-                crate::cache::blake3_hash_file,
-            )?
-            .finalize();
+            let revision = read_revision(Path::new(&directory))?;
             Ok(ModelSet::from_revision(
                 directory,
                 VERTICAL_JAPANESE_MODEL.into(),
@@ -285,7 +435,8 @@ fn observe_vertical_model(directories: &[String], language: &str) -> Result<Opti
             ))
         })
         .transpose()?;
-    cacheability::observe_vertical_model(directories, model.as_ref().map(vertical_model_identity));
+    let paths: Vec<String> = directories.iter().map(|directory| directory.path.clone()).collect();
+    cacheability::observe_vertical_model(&paths, model.as_ref().map(vertical_model_identity));
     Ok(model)
 }
 
@@ -298,8 +449,7 @@ fn vertical_model_identity(model: &ModelSet) -> blake3::Hash {
 #[tokio::test]
 async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
     let root = tempfile::tempdir().unwrap();
-    let directory = root.path().to_str().unwrap().to_owned();
-    let directories = [directory];
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
     let path = root.path().join("jpn_vert.traineddata");
     std::fs::write(&path, b"model one").unwrap();
 
@@ -308,7 +458,7 @@ async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
         assert!(before.is_some());
         assert!(cacheability::can_publish_outer_result());
         cacheability::with_ocr_cancellation(None, async {
-            std::fs::write(&path, b"model two").unwrap();
+            std::fs::write(&path, b"model two, longer").unwrap();
             let observed = RetryModels::resolve_vertical(&directories, "eng", 3).unwrap().unwrap();
             assert_eq!(
                 observed.revision,
@@ -328,9 +478,153 @@ async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
 }
 
 #[test]
+fn outer_han_retry_identity_tracks_the_osd_and_han_packs_the_retry_would_load() {
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    let pack = |name: &str| root.path().join(format!("{name}.traineddata"));
+    for name in ["eng", "osd", "chi_sim"] {
+        std::fs::write(pack(name), format!("{name} fixture")).unwrap();
+    }
+    let identity = || observe_han_retry_models(&directories, "eng");
+
+    let present = identity();
+    assert!(matches!(present, HanRetryModels::Identified(_)), "{present:?}");
+    assert_eq!(identity(), present);
+    // ~keep A different length: two writes within one clock tick can share a modification time.
+    std::fs::write(pack("chi_sim"), b"chi_sim fixture, replaced").unwrap();
+    let han_changed = identity();
+    assert!(matches!(han_changed, HanRetryModels::Identified(_)));
+    assert_ne!(han_changed, present);
+    std::fs::write(pack("osd"), b"osd fixture, replaced").unwrap();
+    let osd_changed = identity();
+    assert!(matches!(osd_changed, HanRetryModels::Identified(_)));
+    assert_ne!(osd_changed, han_changed);
+    std::fs::remove_file(pack("osd")).unwrap();
+    assert_eq!(identity(), HanRetryModels::Absent);
+    std::fs::write(pack("osd"), b"osd fixture").unwrap();
+    std::fs::remove_file(pack("chi_sim")).unwrap();
+    assert_eq!(identity(), HanRetryModels::Absent);
+    assert_eq!(
+        observe_han_retry_models(&directories, "eng+chi_sim"),
+        HanRetryModels::Absent,
+        "a list that reads Han never retries"
+    );
+}
+
+#[test]
+fn outer_han_retry_identity_follows_the_directories_the_retry_selects() {
+    let osd_root = tempfile::tempdir().unwrap();
+    let han_root = tempfile::tempdir().unwrap();
+    std::fs::write(osd_root.path().join("osd.traineddata"), b"osd fixture").unwrap();
+    for name in ["eng", "chi_sim"] {
+        std::fs::write(han_root.path().join(format!("{name}.traineddata")), name).unwrap();
+    }
+    let directories = [
+        SearchDir::as_given(osd_root.path().to_str().unwrap()),
+        SearchDir::as_given(han_root.path().to_str().unwrap()),
+    ];
+    let split = observe_han_retry_models(&directories, "eng");
+    assert!(matches!(split, HanRetryModels::Identified(_)));
+    // ~keep The recognition directory's own OSD pack is loaded by PSM 0, 1 and 12.
+    std::fs::write(han_root.path().join("osd.traineddata"), b"implicit osd").unwrap();
+    assert_ne!(observe_han_retry_models(&directories, "eng"), split);
+    assert!(matches!(
+        observe_han_retry_models(&directories[1..], "eng"),
+        HanRetryModels::Identified(_)
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn outer_han_retry_identity_is_answered_without_reading_until_a_pack_changes() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    for name in ["eng", "osd", "chi_sim"] {
+        std::fs::write(
+            root.path().join(format!("{name}.traineddata")),
+            format!("{name} fixture"),
+        )
+        .unwrap();
+    }
+    for name in ["eng", "osd", "chi_sim"] {
+        super::validation::wait_until_settled(&root.path().join(format!("{name}.traineddata")));
+    }
+    let identity = || observe_han_retry_models(&directories, "eng");
+
+    let first = identity();
+    assert!(matches!(first, HanRetryModels::Identified(_)));
+    assert_eq!(
+        without_reading_packs(identity),
+        Some(first),
+        "packs read before come from the memo"
+    );
+    std::fs::write(root.path().join("chi_sim.traineddata"), b"chi_sim fixture, replaced").unwrap();
+    assert_eq!(
+        without_reading_packs(identity),
+        None,
+        "a changed pack must be read again, which the async thread may not do"
+    );
+    super::validation::wait_until_settled(&root.path().join("chi_sim.traineddata"));
+    let second = identity();
+    assert_ne!(second, first);
+    assert_eq!(without_reading_packs(identity), Some(second));
+}
+
+#[tokio::test]
+async fn an_unidentifiable_han_retry_pack_makes_the_operation_uncacheable() {
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    for name in ["eng", "osd", "chi_sim"] {
+        std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+    }
+    cacheability::scope(async {
+        assert!(matches!(
+            observe_han_retry_models(&directories, "eng"),
+            HanRetryModels::Identified(_)
+        ));
+        assert!(cacheability::is_cacheable());
+        assert_eq!(
+            observe_han_retry_models_with(&directories, "eng", |_, _, models| !models.contains(&HAN_MODEL)),
+            HanRetryModels::Unidentified
+        );
+        assert!(
+            !cacheability::is_cacheable(),
+            "nothing would key a result read with that pack"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn a_memo_only_miss_of_a_han_retry_pack_leaves_the_operation_cacheable() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    for name in ["eng", "osd", "chi_sim"] {
+        std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+    }
+
+    cacheability::scope(async {
+        std::fs::write(root.path().join("chi_sim.traineddata"), b"chi_sim, not read yet").unwrap();
+        assert_eq!(
+            without_reading_packs(|| observe_han_retry_models(&directories, "eng")),
+            None
+        );
+        assert!(
+            cacheability::is_cacheable(),
+            "the miss is computed again where reads are allowed"
+        );
+    })
+    .await;
+}
+
+#[test]
 fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     let root = tempfile::tempdir().unwrap();
-    let directories = [root.path().to_str().unwrap().to_owned()];
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
     let model = root.path().join("jpn_vert.traineddata");
     let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).unwrap();
 
@@ -339,12 +633,13 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     let first = fingerprint();
     assert!(first.is_some());
     assert_eq!(fingerprint(), first);
-    std::fs::write(&model, b"model two").unwrap();
+    // ~keep A different length: two writes within one clock tick can share a modification time.
+    std::fs::write(&model, b"model two!").unwrap();
     let second = fingerprint();
     assert_ne!(second, first);
     let other = tempfile::tempdir().unwrap();
     std::fs::copy(&model, other.path().join("jpn_vert.traineddata")).unwrap();
-    let other_directories = [other.path().to_str().unwrap().to_owned()];
+    let other_directories = [SearchDir::as_given(other.path().to_str().unwrap())];
     assert_ne!(
         vertical_outer_model_fingerprint("eng", &other_directories).unwrap(),
         second
@@ -353,7 +648,89 @@ fn outer_vertical_model_identity_tracks_path_presence_and_content() {
     assert_eq!(fingerprint(), None);
 }
 
-fn vertical_japanese_directory(directories: &[String]) -> Option<String> {
+#[test]
+fn the_memoized_vertical_revision_is_the_one_read_from_the_path() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("jpn_vert.traineddata"), b"vertical model").unwrap();
+
+    let expected = read_vertical_revision(root.path()).unwrap();
+    assert_eq!(memoized_vertical_revision(root.path()).unwrap(), expected);
+    assert_eq!(memoized_vertical_revision(root.path()).unwrap(), expected);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_vertical_model_read_right_after_it_was_written_is_not_remembered() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let model = root.path().join("jpn_vert.traineddata");
+    std::fs::write(&model, b"vertical model").unwrap();
+    let expected = read_vertical_revision(root.path()).unwrap();
+    let memoized = || memoized_vertical_revision(root.path()).ok();
+
+    assert_eq!(memoized(), Some(expected));
+    assert_eq!(
+        without_reading_packs(memoized),
+        None,
+        "a write in the same timestamp tick would keep the stamp, so the model is read again"
+    );
+    super::validation::wait_until_settled(&model);
+    assert_eq!(memoized(), Some(expected));
+    assert_eq!(
+        without_reading_packs(memoized),
+        Some(Some(expected)),
+        "a settled model is remembered"
+    );
+}
+
+#[cfg(all(not(unix), not(target_arch = "wasm32")))]
+#[test]
+fn outer_vertical_model_identity_is_never_answered_from_a_stamp_off_unix() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    std::fs::write(root.path().join("jpn_vert.traineddata"), b"model one").unwrap();
+    let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).ok().flatten();
+
+    assert!(fingerprint().is_some());
+    assert_eq!(without_reading_packs(fingerprint), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn outer_vertical_model_identity_is_answered_without_reading_until_the_model_changes() {
+    use crate::ocr::tessdata_download::without_reading_packs;
+
+    let root = tempfile::tempdir().unwrap();
+    let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
+    let model = root.path().join("jpn_vert.traineddata");
+    std::fs::write(&model, b"model one").unwrap();
+    let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).ok().flatten();
+
+    super::validation::wait_until_settled(&model);
+    let first = fingerprint();
+    assert!(first.is_some());
+    assert_eq!(
+        without_reading_packs(fingerprint),
+        Some(first),
+        "a model read before is answered from the memo"
+    );
+    // ~keep A different length: two writes within one clock tick can share a modification time.
+    std::fs::write(&model, b"model one, replaced").unwrap();
+    assert_eq!(
+        without_reading_packs(fingerprint),
+        None,
+        "a changed model must be read again, which the async thread may not do"
+    );
+    super::validation::wait_until_settled(&model);
+    let second = fingerprint();
+    assert_ne!(second, first);
+    assert_eq!(without_reading_packs(fingerprint), Some(second));
+}
+
+fn vertical_japanese_directory(directories: &[SearchDir]) -> Option<String> {
     first_directory_holding(directories, &[VERTICAL_JAPANESE_MODEL.to_owned()])
 }
 
@@ -363,7 +740,7 @@ impl RetryModels {
     }
 
     #[cfg(test)]
-    fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
+    fn resolve(directories: &[SearchDir], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
         Ok(Self::from_snapshots(
             Self::resolve_han(directories, language, psm, |_| {})?,
             Self::resolve_requested_khmer(directories, language, psm)?,
@@ -371,7 +748,7 @@ impl RetryModels {
     }
 
     pub(super) fn resolve_requested_khmer(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
     ) -> Result<Option<ModelSet>, OcrError> {
@@ -384,7 +761,7 @@ impl RetryModels {
 
     #[cfg(test)]
     fn resolve_han(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
         on_vertical_error: impl FnOnce(&OcrError),
@@ -397,8 +774,16 @@ impl RetryModels {
         Ok(HanModels::from_snapshots(horizontal, vertical_japanese))
     }
 
+    /// Record the Han retry models' identity for the operation ([`observe_han_retry_models`]).
+    /// Taken once per model context, when its retry models are selected: the later checks
+    /// compare [`ModelSet`] snapshots, whose digests the request freezes, so a page never hashes
+    /// the packs again.
+    pub(super) fn observe_horizontal(directories: &[SearchDir], language: &str) -> HanRetryModels {
+        observe_han_retry_models(directories, language)
+    }
+
     pub(super) fn resolve_horizontal(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
     ) -> Result<Option<(ModelSet, ModelSet)>, OcrError> {
@@ -416,7 +801,7 @@ impl RetryModels {
     }
 
     pub(super) fn resolve_vertical(
-        directories: &[String],
+        directories: &[SearchDir],
         language: &str,
         psm: u8,
     ) -> Result<Option<ModelSet>, OcrError> {
@@ -426,7 +811,7 @@ impl RetryModels {
         observe_vertical_model(directories, language)
     }
 
-    fn resolve_khmer(directories: &[String], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
+    fn resolve_khmer(directories: &[SearchDir], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
         let languages = retry_list(language, KHMER_MODEL);
         let implicit_osd = matches!(psm, 0 | 1 | 12);
         let mut required = languages.clone();
@@ -2215,7 +2600,7 @@ mod tests {
         for language in ["eng", "deu", "chi_sim", "osd"] {
             write(&last, language);
         }
-        let directories = [&absent, &first, &second, &last].map(|dir| dir.to_str().unwrap().to_owned());
+        let directories = [&absent, &first, &second, &last].map(|dir| SearchDir::as_given(dir.to_str().unwrap()));
         assert!(RetryModels::resolve(&directories[..3], "eng+deu", 3).unwrap().is_none());
         let models = RetryModels::resolve(&directories, "eng+deu", 3)
             .unwrap()
@@ -2223,9 +2608,9 @@ mod tests {
             .han
             .unwrap();
         let (osd, recognition) = models.horizontal.unwrap();
-        assert_eq!(osd.directory, directories[1]);
+        assert_eq!(osd.directory, directories[1].path);
         assert_eq!(osd.languages, "osd");
-        assert_eq!(recognition.directory, directories[3]);
+        assert_eq!(recognition.directory, directories[3].path);
         assert_eq!(recognition.languages, "eng+deu+chi_sim");
         assert!(!absent.exists());
     }
@@ -2233,7 +2618,7 @@ mod tests {
     #[test]
     fn broken_vertical_japanese_engine_falls_through_to_working_horizontal_han() {
         let fixture = crate::utils::read_test_fixture("images/chi_sim_image.jpeg");
-        let directories = tessdata_search_dirs(None, &TessdataEnv::from_process());
+        let directories = retry_search_dirs(None, &TessdataEnv::from_process());
         let horizontal = RetryModels::resolve_han(&directories, "eng", 6, |_| {})
             .unwrap()
             .and_then(|models| models.horizontal);
@@ -2294,7 +2679,7 @@ mod tests {
     #[test]
     fn vertical_retry_models_are_independent_of_horizontal_han_and_track_revision() {
         let root = tempfile::tempdir().unwrap();
-        let directories = [root.path().to_str().unwrap().to_owned()];
+        let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
         let model = root.path().join("jpn_vert.traineddata");
         assert!(
             RetryModels::resolve_han(&directories, "eng", 11, |_| {})
@@ -2327,7 +2712,7 @@ mod tests {
     #[test]
     fn khmer_retry_requires_an_installed_complete_model_set() {
         let root = tempfile::tempdir().unwrap();
-        let directories = [root.path().to_str().unwrap().to_owned()];
+        let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
         for name in ["eng", "deu"] {
             std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
         }
@@ -2343,6 +2728,44 @@ mod tests {
             RetryModels::resolve_khmer(&directories, "deu+eng", 1)
                 .unwrap()
                 .is_none()
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn retry_holds_the_managed_best_directory_to_the_pins_the_first_pass_does() {
+        use crate::core::config::TessdataModel;
+        use crate::ocr::processor::validation::model_cache_dir;
+
+        let cache = tempfile::tempdir().unwrap();
+        let env = |model| TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().into()),
+            system_paths: false,
+            model,
+        };
+        // ~keep The retry also needs the primary language; one without a pin is served as it is
+        // everywhere, so only the Khmer pack decides.
+        let primary = "xberg_unpinned_fixture";
+        for model in [TessdataModel::Fast, TessdataModel::Best] {
+            let managed = model_cache_dir(cache.path(), model);
+            std::fs::create_dir_all(&managed).unwrap();
+            std::fs::write(managed.join(format!("{primary}.traineddata")), primary).unwrap();
+            std::fs::write(managed.join("khm.traineddata"), b"not the pinned pack").unwrap();
+        }
+        let best = model_cache_dir(cache.path(), TessdataModel::Best);
+
+        assert!(
+            requires_khmer_outer_cache_bypass(primary, None, &env(TessdataModel::Fast)),
+            "a fast directory serves a file as it is"
+        );
+        assert!(
+            !requires_khmer_outer_cache_bypass(primary, None, &env(TessdataModel::Best)),
+            "the managed best directory serves only the pinned pack, for the retry as for the first pass"
+        );
+        assert!(
+            requires_khmer_outer_cache_bypass(primary, Some(best.as_path()), &env(TessdataModel::Best)),
+            "a directory the caller names is used as given"
         );
     }
 
@@ -2545,7 +2968,7 @@ mod tests {
     #[test]
     fn khmer_hint_keeps_han_models_with_or_without_khmer_installed() {
         let root = tempfile::tempdir().unwrap();
-        let directories = [root.path().to_str().unwrap().to_owned()];
+        let directories = [SearchDir::as_given(root.path().to_str().unwrap())];
         for name in ["eng", "osd", "chi_sim"] {
             std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
         }

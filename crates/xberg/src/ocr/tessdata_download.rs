@@ -8,10 +8,13 @@
 
 use crate::core::config::TessdataModel;
 use crate::ocr::error::OcrError;
+use crate::ocr::processor::validation::FileStamp;
 use sha2::{Digest as _, Sha256};
+use std::collections::HashMap;
 use std::io::{ErrorKind, Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 mod pins;
 
@@ -21,6 +24,14 @@ const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const RETRY_BACKOFF: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
 const MAX_TRAINEDDATA_BYTES: u64 = 64 * 1024 * 1024;
+/// The largest model file that is not a pinned pack still identified by its bytes. Tesseract
+/// loads a whole model into memory and the largest published ones (legacy `chi_tra`, `jpn`) are
+/// tens of MiB, so nothing above this is a usable model, while reading it on every cache lookup
+/// would cost seconds; such a file is unidentified, so results that depend on it are not cached.
+const MAX_UNPINNED_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
+/// How long a failed download is remembered. An offline host otherwise spends the whole retry
+/// budget (about 93 s) per language on every image.
+const FAILURE_TTL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, thiserror::Error)]
 enum DownloadError {
@@ -53,6 +64,42 @@ impl DownloadError {
 
 /// One pinned pack: language, SHA-256 and byte size.
 pub(crate) type Pin<'a> = (&'a str, &'a str, u64);
+
+/// What [`PinTables::pack_identity`] found a model file to be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PackIdentity<'a> {
+    /// The pinned pack of this set, with its pinned SHA-256.
+    Pinned(VerifiedSet, &'a str),
+    /// No pinned pack of the language, with the file's SHA-256 when it was read to tell: only a
+    /// file of a pinned size is.
+    Unpinned(Option<String>),
+}
+
+/// The pinned pack a `.traineddata` file was verified to be, by size and SHA-256.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VerifiedSet {
+    /// The pinned `tessdata_fast` pack of its language.
+    Fast,
+    /// The pinned `tessdata_best` pack of its language.
+    Best,
+    /// The pack both sets pin with the same bytes (`osd`, `equ`).
+    Shared,
+    /// No pinned pack of its language: user-trained, another revision, damaged, unreadable or
+    /// missing.
+    Unknown,
+}
+
+impl VerifiedSet {
+    /// Whether the file is the pinned `model` pack of its language.
+    pub(crate) fn is(self, model: TessdataModel) -> bool {
+        match self {
+            Self::Shared => true,
+            Self::Fast => model == TessdataModel::Fast,
+            Self::Best => model == TessdataModel::Best,
+            Self::Unknown => false,
+        }
+    }
+}
 
 /// Pin tables per model set, each sorted by language code: [`PINNED`] in production, small
 /// tables in tests.
@@ -91,6 +138,136 @@ impl<'a> PinTables<'a> {
             .map(|pack| pack.0)
     }
 
+    /// Which pinned pack of `lang` the file at `path` is.
+    ///
+    /// The size is compared first, so a file that is no pinned size (every user-trained model)
+    /// is never read; a file of a pinned size is hashed as [`memoized_sha256`] does: once per
+    /// (path, [`FileStamp`]) on Unix, on every call elsewhere.
+    pub(crate) fn classify(&self, lang: &str, path: &Path) -> VerifiedSet {
+        self.classify_reading(lang, path).0
+    }
+
+    /// [`Self::classify`], with the SHA-256 of the file when it was read to tell.
+    fn classify_reading(&self, lang: &str, path: &Path) -> (VerifiedSet, Option<String>) {
+        let Ok(metadata) = std::fs::metadata(path) else {
+            return (VerifiedSet::Unknown, None);
+        };
+        let sized = |model| {
+            self.pin(lang, model)
+                .filter(|pin| metadata.is_file() && pin.2 == metadata.len())
+        };
+        let (fast, best) = (sized(TessdataModel::Fast), sized(TessdataModel::Best));
+        if fast.is_none() && best.is_none() {
+            return (VerifiedSet::Unknown, None);
+        }
+        let Some(digest) = memoized_sha256(path, MAX_TRAINEDDATA_BYTES) else {
+            return (VerifiedSet::Unknown, None);
+        };
+        let set = match (
+            fast.is_some_and(|pin| pin.1 == digest),
+            best.is_some_and(|pin| pin.1 == digest),
+        ) {
+            (true, true) => VerifiedSet::Shared,
+            (true, false) => VerifiedSet::Fast,
+            (false, true) => VerifiedSet::Best,
+            (false, false) => VerifiedSet::Unknown,
+        };
+        (set, Some(digest))
+    }
+
+    /// Which pinned pack of `lang` the file at `path` is, by [`Self::classify`], or the SHA-256
+    /// read to find it is none, so the caller need not read the file again.
+    ///
+    /// The same bytes give the same answer wherever and however they were written, so cache keys
+    /// built from it survive a pack copied, restored or re-adopted unchanged.
+    pub(crate) fn pack_identity(&self, lang: &str, path: &Path) -> PackIdentity<'a> {
+        let (set, digest) = self.classify_reading(lang, path);
+        let model = match set {
+            VerifiedSet::Fast | VerifiedSet::Shared => TessdataModel::Fast,
+            VerifiedSet::Best => TessdataModel::Best,
+            VerifiedSet::Unknown => return PackIdentity::Unpinned(digest),
+        };
+        match self.pin(lang, model) {
+            Some(pin) => PackIdentity::Pinned(set, pin.1),
+            None => PackIdentity::Unpinned(digest),
+        }
+    }
+
+    /// The set every one of `languages` in `directory` was verified to be, ignoring the packs
+    /// both sets share. `None` when a pack is not a pinned one, when the sets are mixed, or when
+    /// only shared packs were named: the directory then holds models xberg cannot vouch for.
+    pub(crate) fn verified_model<S: AsRef<str>>(&self, directory: &Path, languages: &[S]) -> Option<TessdataModel> {
+        let mut verified = None;
+        for lang in languages {
+            let lang = lang.as_ref();
+            let model = match self.classify(lang, &directory.join(format!("{lang}.traineddata"))) {
+                VerifiedSet::Shared => continue,
+                VerifiedSet::Fast => TessdataModel::Fast,
+                VerifiedSet::Best => TessdataModel::Best,
+                VerifiedSet::Unknown => return None,
+            };
+            if verified.is_some_and(|seen| seen != model) {
+                return None;
+            }
+            verified = Some(model);
+        }
+        verified
+    }
+
+    /// Move a file in `output_dir` that is not the pinned `model` pack of `lang` out of the way
+    /// (to `<lang>.traineddata.unverified`, or a unique name beside it when an earlier file holds
+    /// that one), so the pinned pack can be published there without replacing anything. A
+    /// language with no pin is left alone.
+    ///
+    /// For the directories xberg vouches for: a wrong file there would otherwise keep being
+    /// served as the pinned pack. A directory that cannot be written (permissions, a read-only
+    /// file system) keeps the file, with a warning, and reports [`SetAside::Blocked`].
+    pub(crate) fn set_aside_unverified(
+        &self,
+        lang: &str,
+        model: TessdataModel,
+        output_dir: &Path,
+    ) -> std::io::Result<SetAside> {
+        // ~keep One mover at a time, deciding on what is there now: a thread that saw the wrong
+        // file earlier must not move the pack another thread has published since.
+        static MOVING: Mutex<()> = Mutex::new(());
+        let _alone = MOVING.lock().unwrap_or_else(PoisonError::into_inner);
+
+        let path = output_dir.join(format!("{lang}.traineddata"));
+        match std::fs::symlink_metadata(&path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(SetAside::Untouched),
+            Err(error) => return Err(error),
+        }
+        if self.pin(lang, model).is_none() || self.classify(lang, &path).is(model) {
+            return Ok(SetAside::Untouched);
+        }
+        let aside = unused_unverified_path(output_dir, lang);
+        match rename_aside(&path, &aside) {
+            Ok(()) => {}
+            // ~keep Another process moved it first.
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(SetAside::Untouched),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem
+                ) =>
+            {
+                warn_blocked_once(&path, model, &error);
+                return Ok(SetAside::Blocked);
+            }
+            Err(error) => return Err(error),
+        }
+        tracing::warn!(
+            path = %path.display(),
+            moved_to = %aside.display(),
+            model = %model,
+            "A file in xberg's tessdata directory is not the pinned language pack; moved it aside to \
+             fetch the pinned one"
+        );
+        Ok(SetAside::Moved)
+    }
+
     /// Copy the pinned `model` pack for `lang` into `output_dir` from the first of `sources`
     /// that holds exactly those bytes. Never downloads. Returns whether `output_dir` now holds
     /// the pack.
@@ -107,8 +284,178 @@ impl<'a> PinTables<'a> {
     }
 }
 
+/// What [`PinTables::set_aside_unverified`] did with a language's file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SetAside {
+    /// Nothing to move: no file, no pin, or the pinned pack.
+    Untouched,
+    /// The file was moved aside; the pack can be published in its place.
+    Moved,
+    /// The file is not the pinned pack, but the directory cannot be written, so it stays and is
+    /// used as given.
+    Blocked,
+}
+
+fn rename_aside(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if from.parent().is_some_and(read_only_for_tests::contains) {
+        return Err(std::io::Error::from(ErrorKind::PermissionDenied));
+    }
+    std::fs::rename(from, to)
+}
+
+/// `<lang>.traineddata.unverified` in `output_dir`, or, when an earlier set-aside file holds that
+/// name, one made unique by the time and process.
+fn unused_unverified_path(output_dir: &Path, lang: &str) -> PathBuf {
+    let plain = output_dir.join(format!("{lang}.traineddata.unverified"));
+    if matches!(std::fs::symlink_metadata(&plain), Err(error) if error.kind() == ErrorKind::NotFound) {
+        return plain;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos());
+    output_dir.join(format!("{lang}.traineddata.unverified.{nanos}.{}", std::process::id()))
+}
+
+/// Warn, once per file in this process, that a wrong file in a verified directory stays because
+/// the directory cannot be written.
+fn warn_blocked_once(path: &Path, model: TessdataModel, error: &std::io::Error) {
+    static WARNED: LazyLock<Mutex<std::collections::HashSet<PathBuf>>> = LazyLock::new(Default::default);
+    if WARNED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(path.to_path_buf())
+    {
+        tracing::warn!(
+            path = %path.display(),
+            model = %model,
+            %error,
+            "A file in xberg's tessdata directory is not the pinned language pack and cannot be moved \
+             aside; it is used as given. Replace it with the pinned pack or make the directory writable"
+        );
+    }
+}
+
+/// Stamp and SHA-256 of the files [`memoized_sha256`] has read.
+#[cfg(unix)]
+type SeenDigest = (FileStamp, String);
+#[cfg(unix)]
+static DIGESTS: LazyLock<Mutex<HashMap<PathBuf, SeenDigest>>> = LazyLock::new(Default::default);
+
+std::thread_local! {
+    /// Set while [`without_reading_packs`] runs on this thread.
+    static MEMO_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether a digest was asked for under [`MEMO_ONLY`] that the memo did not hold.
+    static MEMO_MISSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `compute` with every pack digest taken from the memo, never by reading a file: stat calls
+/// only, cheap enough for an async thread. `None` when it asked for a digest the memo did not
+/// hold, since its answer then treated that file as unverified.
+pub(crate) fn without_reading_packs<T>(compute: impl FnOnce() -> T) -> Option<T> {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            MEMO_ONLY.with(|memo_only| memo_only.set(self.0));
+        }
+    }
+
+    let _restore = Restore(MEMO_ONLY.with(|memo_only| memo_only.replace(true)));
+    let missed_outside = MEMO_MISSED.with(|missed| missed.replace(false));
+    let result = compute();
+    // ~keep An enclosing run must see this miss too, or it keeps an answer computed from ours.
+    let missed = MEMO_MISSED.with(|missed| {
+        let inner = missed.get();
+        missed.set(missed_outside || inner);
+        inner
+    });
+    (!missed).then_some(result)
+}
+
+/// Whether a model file must not be read here because [`without_reading_packs`] runs on this
+/// thread. A memo that does not hold the file asks this before reading it; when it is true, the
+/// miss is recorded, so the run's answer is discarded and computed again where reads are allowed.
+pub(crate) fn must_not_read() -> bool {
+    let memo_only = MEMO_ONLY.with(std::cell::Cell::get);
+    if memo_only {
+        MEMO_MISSED.with(|missed| missed.set(true));
+    }
+    memo_only
+}
+
+/// Whether the [`without_reading_packs`] run on this thread has already missed the memo, so its
+/// answer will be discarded. False outside such a run. Lets a caller skip recording a side effect
+/// computed from a file it could not identify.
+pub(crate) fn memo_only_run_missed() -> bool {
+    MEMO_ONLY.with(std::cell::Cell::get) && MEMO_MISSED.with(std::cell::Cell::get)
+}
+
+/// The SHA-256 of the regular file at `path`: on Unix read once per (path, [`FileStamp`]) in this
+/// process, elsewhere read on every call, since a stamp there is only the size and modification
+/// time, which a replacement (`cp -p`, robocopy, an extracted archive) can keep. A file read too
+/// soon after it was written is read again next time ([`FileStamp::settled_at`]).
+///
+/// The stamp is taken from the opened file, not from an earlier `stat` of the path, so a file
+/// replaced between the two is never remembered under the stamp of the one it replaced.
+/// A file longer than `limit` bytes has no digest.
+fn memoized_sha256(path: &Path, limit: u64) -> Option<String> {
+    let file = std::fs::File::open(path).ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() > limit {
+        return None;
+    }
+    let state = FileStamp::of(&metadata)?;
+    #[cfg(unix)]
+    if let Some((seen, digest)) = DIGESTS.lock().unwrap_or_else(PoisonError::into_inner).get(path)
+        && *seen == state
+    {
+        return Some(digest.clone());
+    }
+    if must_not_read() {
+        return None;
+    }
+    let mut reader = (&file).take(limit.saturating_add(1));
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0_u8; 64 * 1024];
+    let mut read = 0_u64;
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => {
+                hasher.update(&buffer[..count]);
+                read += count as u64;
+            }
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+    // ~keep A file that changed while it was read has no digest worth remembering under the
+    // stamp taken before it.
+    if read != metadata.len() || file.metadata().ok().as_ref().and_then(FileStamp::of) != Some(state) {
+        return None;
+    }
+    let digest = hex::encode(hasher.finalize());
+    #[cfg(unix)]
+    if state.settled_at(std::time::SystemTime::now()) {
+        DIGESTS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(path.to_path_buf(), (state, digest.clone()));
+    }
+    Some(digest)
+}
+
+/// The SHA-256 of the regular file at `path`, as [`memoized_sha256`] reads it; `None` above
+/// [`MAX_UNPINNED_MODEL_BYTES`].
+///
+/// The identity of a pack that is no pinned one: unlike a stamp, it survives a chmod, hard link,
+/// restore or remount of the same bytes, and off Unix it sees a replacement that keeps the size
+/// and modification time.
+pub(crate) fn content_sha256(path: &Path) -> Option<String> {
+    memoized_sha256(path, MAX_UNPINNED_MODEL_BYTES)
+}
+
 /// The pinned language packs of `model`, sorted by language code.
-#[cfg(any(paddle_ocr, test))]
 pub(crate) fn pinned_packs(model: TessdataModel) -> &'static [PinnedPack] {
     PINNED.packs(model)
 }
@@ -142,6 +489,10 @@ pub(super) fn pinned_source_url(lang: &str, model: TessdataModel) -> String {
 /// Make the pinned `model` pack for `lang` present in `output_dir`: keep an existing file, else
 /// copy a verified one from the first of `sources` holding it, else download it.
 ///
+/// For [`TessdataModel::Best`] an existing file is kept only when it is the pinned pack; the
+/// caller moves a wrong one aside first ([`PinTables::set_aside_unverified`]), and one that is
+/// still there (another process wrote it meanwhile) is an error rather than reported as present.
+///
 /// Returns whether this call published a new file.
 pub(crate) fn ensure_language_pack(
     lang: &str,
@@ -149,13 +500,130 @@ pub(crate) fn ensure_language_pack(
     output_dir: &Path,
     sources: &[PathBuf],
 ) -> Result<bool, OcrError> {
-    if output_dir.join(format!("{lang}.traineddata")).is_file() {
+    let output_path = output_dir.join(format!("{lang}.traineddata"));
+    let published = materialize_once(&output_path, || {
+        if PINNED.adopt(lang, model, output_dir, sources) {
+            return Ok(true);
+        }
+        download_missing_language_pack(lang, model, output_dir)
+    })?;
+    if !published
+        && model == TessdataModel::Best
+        && PINNED.pin(lang, model).is_some()
+        && !PINNED.classify(lang, &output_path).is(model)
+    {
+        return Err(OcrError::TesseractInitializationFailed(format!(
+            "'{}' is not the pinned {} language pack. Remove it",
+            output_path.display(),
+            model.repository()
+        )));
+    }
+    Ok(published)
+}
+
+/// Run `materialize` unless `output_path` is already a file, one caller at a time per path in
+/// this process, so the pages of one document do not each download the same pack. A caller that
+/// waited finds the file and returns `Ok(false)`.
+fn materialize_once(
+    output_path: &Path,
+    materialize: impl FnOnce() -> Result<bool, OcrError>,
+) -> Result<bool, OcrError> {
+    static IN_FLIGHT: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = LazyLock::new(Default::default);
+
+    if output_path.is_file() {
         return Ok(false);
     }
-    if PINNED.adopt(lang, model, output_dir, sources) {
-        return Ok(true);
+    let flight = Arc::clone(
+        IN_FLIGHT
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .entry(output_path.to_path_buf())
+            .or_default(),
+    );
+    let _alone = flight.lock().unwrap_or_else(PoisonError::into_inner);
+    if output_path.is_file() {
+        return Ok(false);
     }
-    download_missing_language_pack(lang, model, output_dir)
+    materialize()
+}
+
+/// Download failures of this process per (set, language), so a pack that just failed to download
+/// is not requested again until [`FAILURE_TTL`] has passed.
+struct FailureMemo {
+    ttl: Duration,
+    failed: Mutex<HashMap<(TessdataModel, String), (Instant, String)>>,
+}
+
+impl FailureMemo {
+    fn new(ttl: Duration) -> Self {
+        Self {
+            ttl,
+            failed: Mutex::default(),
+        }
+    }
+
+    /// The message of a failure recorded less than the time to live before `now`.
+    fn recent(&self, lang: &str, model: TessdataModel, now: Instant) -> Option<String> {
+        let mut failed = self.failed.lock().unwrap_or_else(PoisonError::into_inner);
+        let key = (model, lang.to_owned());
+        match failed.get(&key) {
+            Some((at, message)) if now.saturating_duration_since(*at) < self.ttl => Some(message.clone()),
+            Some(_) => {
+                failed.remove(&key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    fn record(&self, lang: &str, model: TessdataModel, now: Instant, message: String) {
+        self.failed
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert((model, lang.to_owned()), (now, message));
+    }
+}
+
+static DOWNLOAD_FAILURES: LazyLock<FailureMemo> = LazyLock::new(|| FailureMemo::new(FAILURE_TTL));
+
+/// Run `download` unless the same pack failed to download within the memo's time to live.
+///
+/// A transfer or integrity failure is remembered: it is a property of the (set, language) pack,
+/// not of the directory. A failure to write the file is not, since another directory may work.
+fn download_unless_failed_recently(
+    memo: &FailureMemo,
+    lang: &str,
+    model: TessdataModel,
+    now: impl Fn() -> Instant,
+    download: impl FnOnce() -> Result<bool, DownloadError>,
+) -> Result<bool, OcrError> {
+    if let Some(message) = memo.recent(lang, model, now()) {
+        return Err(download_failure(
+            lang,
+            model,
+            &format!(
+                "{message} (not retried: a failed download is retried after {} s)",
+                memo.ttl.as_secs()
+            ),
+        ));
+    }
+    download().map_err(|error| {
+        let message = error.to_string();
+        if !matches!(error, DownloadError::Publish(_)) {
+            memo.record(lang, model, now(), message.clone());
+        }
+        download_failure(lang, model, &message)
+    })
+}
+
+fn download_failure(lang: &str, model: TessdataModel, cause: &str) -> OcrError {
+    OcrError::TesseractInitializationFailed(format!(
+        "Failed to download pinned {} language pack '{lang}': {cause}. To provide it without a download, run \
+         `xberg cache warm --tessdata-model {model} --tessdata-languages {lang}` where the network is \
+         reachable, or point TESSDATA_PREFIX or ocr.tessdata_path at a directory that holds \
+         {lang}.traineddata",
+        model.repository()
+    ))
 }
 
 /// Publish a copy of `source` at `output_path` when the bytes read from it are exactly `size`
@@ -221,18 +689,15 @@ fn download_missing_language_pack(lang: &str, model: TessdataModel, output_dir: 
             source_language(lang)
         ),
     ];
-    download_with_retries(
-        &download_agent(),
-        [&urls[0], &urls[1]],
-        &output_path,
-        sha256,
-        size,
-        std::thread::sleep,
-    )
-    .map_err(|error| {
-        OcrError::TesseractInitializationFailed(format!(
-            "Failed to download pinned {repository} language pack '{lang}': {error}"
-        ))
+    download_unless_failed_recently(&DOWNLOAD_FAILURES, lang, model, Instant::now, || {
+        download_with_retries(
+            &download_agent(),
+            [&urls[0], &urls[1]],
+            &output_path,
+            sha256,
+            size,
+            std::thread::sleep,
+        )
     })
 }
 
@@ -303,7 +768,7 @@ fn download_file(
 
 /// Atomically publish `bytes` at `output_path` without replacing an existing pack. Returns whether
 /// this call created the file.
-fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool> {
+pub(crate) fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool> {
     let directory = output_path
         .parent()
         .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidInput, "missing language pack directory"))?;
@@ -323,6 +788,34 @@ fn publish(bytes: &[u8], output_path: &Path) -> std::io::Result<bool> {
         Ok(_) => Ok(true),
         Err(error) if error.error.kind() == ErrorKind::AlreadyExists && output_path.is_file() => Ok(false),
         Err(error) => Err(error.error),
+    }
+}
+
+/// Directories in which moving a pack aside fails in tests, as on a read-only cache.
+///
+/// Permissions cannot stop root from renaming, so tests of a cache that cannot be written
+/// register its directory here instead and run the same for every user.
+#[cfg(test)]
+pub(crate) mod read_only_for_tests {
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, PoisonError};
+
+    static READ_ONLY: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
+
+    /// Make every later move aside of a pack in `directory` fail with permission denied.
+    pub(crate) fn insert(directory: &Path) {
+        READ_ONLY
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(directory.to_path_buf());
+    }
+
+    pub(super) fn contains(directory: &Path) -> bool {
+        READ_ONLY
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(directory)
     }
 }
 
@@ -556,13 +1049,454 @@ mod tests {
     }
 
     #[test]
-    fn a_cached_vertical_model_is_kept_without_reverification() {
+    fn a_cached_fast_model_is_kept_without_reverification() {
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("jpn_vert.traineddata");
         std::fs::write(&output, b"locally supplied vertical model").unwrap();
-        assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[]).unwrap());
+        assert!(!super::ensure_language_pack("jpn_vert", super::TessdataModel::Fast, directory.path(), &[]).unwrap());
         assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
         assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn an_existing_best_file_that_is_not_the_pinned_pack_is_not_reported_present() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("jpn_vert.traineddata");
+        std::fs::write(&output, b"locally supplied vertical model").unwrap();
+        let error = super::ensure_language_pack("jpn_vert", super::TessdataModel::Best, directory.path(), &[])
+            .expect_err("an unpinned file must not pass for the best pack");
+        assert!(error.to_string().contains("tessdata_best"), "{error}");
+        assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
+        assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn a_replacement_that_keeps_size_and_modification_time_is_classified_again() {
+        use super::{PinTables, VerifiedSet};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+        #[cfg(unix)]
+        crate::ocr::processor::validation::wait_until_settled(&pack);
+        assert_eq!(pins.classify("eng", &pack), VerifiedSet::Fast);
+
+        let modified = std::fs::metadata(&pack).unwrap().modified().unwrap();
+        let staged = directory.path().join("staged");
+        std::fs::write(&staged, b"user english").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&staged)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        std::fs::rename(&staged, &pack).unwrap();
+        let replaced = std::fs::metadata(&pack).unwrap();
+        assert_eq!((replaced.len(), replaced.modified().unwrap()), (12, modified));
+
+        assert_eq!(
+            pins.classify("eng", &pack),
+            VerifiedSet::Unknown,
+            "the memo must not vouch for the bytes it read before"
+        );
+    }
+
+    #[test]
+    fn a_miss_in_a_nested_memo_only_pass_discards_the_enclosing_answer() {
+        use super::{PinTables, VerifiedSet, without_reading_packs};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+
+        assert_eq!(
+            without_reading_packs(
+                || without_reading_packs(|| pins.classify("eng", &pack)).unwrap_or(VerifiedSet::Unknown)
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn a_file_one_byte_over_the_limit_has_no_digest() {
+        let directory = tempfile::tempdir().unwrap();
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"12345").unwrap();
+
+        assert_eq!(super::memoized_sha256(&pack, 4), None);
+        assert_eq!(
+            super::memoized_sha256(&pack, 5),
+            Some(hex::encode(Sha256::digest(b"12345")))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_digest_read_right_after_the_file_was_written_is_not_remembered() {
+        use super::without_reading_packs;
+
+        let directory = tempfile::tempdir().unwrap();
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+        let digest = Some(hex::encode(Sha256::digest(b"fast english")));
+
+        assert_eq!(super::memoized_sha256(&pack, 64), digest);
+        assert_eq!(
+            without_reading_packs(|| super::memoized_sha256(&pack, 64)),
+            None,
+            "a write in the same timestamp tick would keep the stamp, so the digest is read again"
+        );
+        crate::ocr::processor::validation::wait_until_settled(&pack);
+        assert_eq!(super::memoized_sha256(&pack, 64), digest);
+        assert_eq!(
+            without_reading_packs(|| super::memoized_sha256(&pack, 64)),
+            Some(digest),
+            "a settled file is remembered"
+        );
+    }
+
+    #[test]
+    fn a_pinned_size_file_that_is_no_pinned_pack_carries_the_digest_read_to_tell() {
+        use super::{PackIdentity, PinTables, VerifiedSet};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+
+        std::fs::write(&pack, b"user english").unwrap();
+        assert_eq!(
+            pins.pack_identity("eng", &pack),
+            PackIdentity::Unpinned(Some(hex::encode(Sha256::digest(b"user english"))))
+        );
+        std::fs::write(&pack, b"a user-trained model of another size").unwrap();
+        assert_eq!(
+            pins.pack_identity("eng", &pack),
+            PackIdentity::Unpinned(None),
+            "a file of no pinned size is not read"
+        );
+        std::fs::write(&pack, b"fast english").unwrap();
+        assert_eq!(
+            pins.pack_identity("eng", &pack),
+            PackIdentity::Pinned(VerifiedSet::Fast, fast_digest.as_str())
+        );
+    }
+
+    // ~keep A sparse file costs no disk on Unix file systems; NTFS would allocate the whole length.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_above_the_unpinned_model_ceiling_has_no_content_digest() {
+        let directory = tempfile::tempdir().unwrap();
+        let pack = directory.path().join("custom.traineddata");
+        let file = std::fs::File::create(&pack).unwrap();
+        file.set_len(super::MAX_UNPINNED_MODEL_BYTES + 1).unwrap();
+        drop(file);
+
+        assert_eq!(super::content_sha256(&pack), None);
+        std::fs::write(&pack, b"custom model").unwrap();
+        assert_eq!(
+            super::content_sha256(&pack),
+            Some(hex::encode(Sha256::digest(b"custom model")))
+        );
+    }
+
+    #[test]
+    fn a_memo_only_pass_never_reads_a_pack_and_reports_a_miss() {
+        use super::{PinTables, VerifiedSet, without_reading_packs};
+
+        let directory = tempfile::tempdir().unwrap();
+        let fast_digest = hex::encode(Sha256::digest(b"fast english"));
+        let fast = [("eng", fast_digest.as_str(), 12)];
+        let pins = PinTables { fast: &fast, best: &[] };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast english").unwrap();
+
+        assert_eq!(without_reading_packs(|| pins.classify("eng", &pack)), None, "cold memo");
+        #[cfg(unix)]
+        crate::ocr::processor::validation::wait_until_settled(&pack);
+        assert_eq!(
+            without_reading_packs(|| pins.classify("custom", &pack)),
+            Some(VerifiedSet::Unknown),
+            "a language with no pin needs no digest"
+        );
+        assert_eq!(
+            pins.classify("eng", &pack),
+            VerifiedSet::Fast,
+            "outside, the file is read"
+        );
+        #[cfg(unix)]
+        assert_eq!(
+            without_reading_packs(|| pins.classify("eng", &pack)),
+            Some(VerifiedSet::Fast),
+            "warm memo"
+        );
+        #[cfg(not(unix))]
+        assert_eq!(
+            without_reading_packs(|| pins.classify("eng", &pack)),
+            None,
+            "off Unix a size-and-time stamp cannot vouch for bytes read before"
+        );
+    }
+
+    #[test]
+    fn a_pack_is_classified_by_its_pinned_size_and_digest() {
+        use super::{PinTables, TessdataModel, VerifiedSet};
+
+        let directory = tempfile::tempdir().unwrap();
+        let digest = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
+        let (fast_eng, best_eng, shared) = (digest(b"fast english"), digest(b"best english!"), digest(b"osd"));
+        let fast = [("eng", fast_eng.as_str(), 12), ("osd", shared.as_str(), 3)];
+        let best = [("eng", best_eng.as_str(), 13), ("osd", shared.as_str(), 3)];
+        let pins = PinTables {
+            fast: &fast,
+            best: &best,
+        };
+        let path = |lang: &str| directory.path().join(format!("{lang}.traineddata"));
+        let classify = |lang: &str, bytes: &[u8]| {
+            std::fs::write(path(lang), bytes).unwrap();
+            pins.classify(lang, &path(lang))
+        };
+
+        assert_eq!(pins.classify("eng", &path("eng")), VerifiedSet::Unknown, "missing");
+        assert_eq!(classify("eng", b"fast english"), VerifiedSet::Fast);
+        assert_eq!(pins.classify("eng", &path("eng")), VerifiedSet::Fast, "memoized");
+        assert_eq!(classify("eng", b"best english!"), VerifiedSet::Best);
+        // ~keep Consecutive writes differ in length: two writes within one clock tick of the
+        // file system can share a modification time, which is all the memo could tell apart.
+        assert_eq!(
+            classify("eng", b"user trained"),
+            VerifiedSet::Unknown,
+            "pinned size, other bytes"
+        );
+        assert_eq!(classify("eng", b"BEST ENGLISH!"), VerifiedSet::Unknown);
+        assert_eq!(classify("eng", b""), VerifiedSet::Unknown);
+        assert_eq!(classify("osd", b"osd"), VerifiedSet::Shared);
+        assert_eq!(classify("custom", b"fast english"), VerifiedSet::Unknown, "no pin");
+        std::fs::create_dir(path("deu")).unwrap();
+        assert_eq!(pins.classify("deu", &path("deu")), VerifiedSet::Unknown, "not a file");
+
+        assert!(VerifiedSet::Shared.is(TessdataModel::Best) && VerifiedSet::Shared.is(TessdataModel::Fast));
+        assert!(VerifiedSet::Best.is(TessdataModel::Best) && !VerifiedSet::Best.is(TessdataModel::Fast));
+        assert!(!VerifiedSet::Fast.is(TessdataModel::Best) && !VerifiedSet::Unknown.is(TessdataModel::Fast));
+    }
+
+    #[test]
+    fn only_a_wrong_file_for_a_pinned_language_is_set_aside() {
+        use super::{PinTables, SetAside, TessdataModel};
+
+        let directory = tempfile::tempdir().unwrap();
+        let digest = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
+        let (fast_pack, best_pack) = (digest(b"fast"), digest(b"best!"));
+        let fast = [("eng", fast_pack.as_str(), 4)];
+        let best = [("eng", best_pack.as_str(), 5)];
+        let pins = PinTables {
+            fast: &fast,
+            best: &best,
+        };
+        let pack = |lang: &str| directory.path().join(format!("{lang}.traineddata"));
+        let set_aside = |lang: &str| {
+            pins.set_aside_unverified(lang, TessdataModel::Best, directory.path())
+                .unwrap()
+        };
+        let set_aside_files = || {
+            let mut contents: Vec<Vec<u8>> = directory
+                .path()
+                .read_dir()
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| path.to_string_lossy().contains(".traineddata.unverified"))
+                .map(|path| std::fs::read(path).unwrap())
+                .collect();
+            contents.sort();
+            contents
+        };
+
+        assert_eq!(set_aside("eng"), SetAside::Untouched, "nothing there");
+        std::fs::write(pack("custom"), b"user trained").unwrap();
+        assert_eq!(set_aside("custom"), SetAside::Untouched, "no pin to hold it to");
+        std::fs::write(pack("eng"), b"best!").unwrap();
+        assert_eq!(set_aside("eng"), SetAside::Untouched, "the pinned pack stays");
+        assert_eq!(std::fs::read(pack("eng")).unwrap(), b"best!");
+
+        std::fs::remove_file(pack("eng")).unwrap();
+        std::fs::write(pack("eng"), b"fast").unwrap();
+        assert_eq!(set_aside("eng"), SetAside::Moved);
+        assert!(!pack("eng").exists());
+        assert_eq!(
+            std::fs::read(directory.path().join("eng.traineddata.unverified")).unwrap(),
+            b"fast"
+        );
+        std::fs::write(pack("eng"), b"").unwrap();
+        assert_eq!(
+            set_aside("eng"),
+            SetAside::Moved,
+            "an earlier set-aside file does not block the next"
+        );
+        assert!(!pack("eng").exists());
+        assert_eq!(
+            set_aside_files(),
+            [b"".to_vec(), b"fast".to_vec()],
+            "the earlier set-aside file is kept, not overwritten"
+        );
+    }
+
+    #[test]
+    fn a_wrong_file_in_a_directory_that_cannot_be_written_stays() {
+        use super::{PinTables, SetAside, TessdataModel};
+
+        let directory = tempfile::tempdir().unwrap();
+        let best_pack = hex::encode(Sha256::digest(b"best!"));
+        let best = [("eng", best_pack.as_str(), 5)];
+        let pins = PinTables { fast: &[], best: &best };
+        let pack = directory.path().join("eng.traineddata");
+        std::fs::write(&pack, b"fast").unwrap();
+        super::read_only_for_tests::insert(directory.path());
+
+        let outcome = pins.set_aside_unverified("eng", TessdataModel::Best, directory.path());
+        assert_eq!(outcome.unwrap(), SetAside::Blocked);
+        assert_eq!(std::fs::read(&pack).unwrap(), b"fast");
+    }
+
+    #[test]
+    fn a_directory_is_verified_only_when_every_named_pack_is_of_one_set() {
+        use super::{PinTables, TessdataModel};
+
+        let directory = tempfile::tempdir().unwrap();
+        let digest = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
+        let (fast_pack, best_pack, shared) = (digest(b"fast"), digest(b"best!"), digest(b"osd"));
+        let fast = [
+            ("deu", fast_pack.as_str(), 4),
+            ("eng", fast_pack.as_str(), 4),
+            ("osd", shared.as_str(), 3),
+        ];
+        let best = [
+            ("deu", best_pack.as_str(), 5),
+            ("eng", best_pack.as_str(), 5),
+            ("osd", shared.as_str(), 3),
+        ];
+        let pins = PinTables {
+            fast: &fast,
+            best: &best,
+        };
+        let write = |lang: &str, bytes: &[u8]| {
+            std::fs::write(directory.path().join(format!("{lang}.traineddata")), bytes).unwrap();
+        };
+        let verified = |languages: &[&str]| pins.verified_model(directory.path(), languages);
+
+        write("eng", b"best!");
+        write("osd", b"osd");
+        assert_eq!(verified(&["eng"]), Some(TessdataModel::Best));
+        assert_eq!(verified(&["eng", "osd"]), Some(TessdataModel::Best));
+        assert_eq!(verified(&["osd"]), None, "shared packs name no set");
+        assert_eq!(verified(&["eng", "deu"]), None, "a missing pack");
+        write("deu", b"fast");
+        assert_eq!(verified(&["eng", "deu"]), None, "mixed sets");
+        assert_eq!(verified(&["deu"]), Some(TessdataModel::Fast));
+        write("deu", b"user trained");
+        assert_eq!(verified(&["deu"]), None);
+    }
+
+    #[test]
+    fn a_failed_download_is_not_repeated_until_its_memo_expires() {
+        use super::{DownloadError, FailureMemo, TessdataModel, download_unless_failed_recently};
+
+        let memo = FailureMemo::new(Duration::from_secs(60));
+        let start = Instant::now();
+        let clock = std::cell::Cell::new(start);
+        let calls = std::cell::Cell::new(0_u32);
+        let fetch = |lang: &str, model, outcome: fn() -> Result<bool, DownloadError>| {
+            download_unless_failed_recently(
+                &memo,
+                lang,
+                model,
+                || clock.get(),
+                || {
+                    calls.set(calls.get() + 1);
+                    outcome()
+                },
+            )
+        };
+        fn unreachable() -> Result<bool, DownloadError> {
+            Err(DownloadError::Request(ureq::Error::ConnectionFailed))
+        }
+
+        for _ in 0..5 {
+            let message = fetch("eng", TessdataModel::Best, unreachable).unwrap_err().to_string();
+            for remedy in [
+                "xberg cache warm --tessdata-model best --tessdata-languages eng",
+                "TESSDATA_PREFIX",
+                "ocr.tessdata_path",
+            ] {
+                assert!(message.contains(remedy), "{message}");
+            }
+        }
+        assert_eq!(calls.get(), 1, "one failure answers the following requests");
+
+        assert!(fetch("eng", TessdataModel::Fast, unreachable).is_err());
+        assert!(fetch("deu", TessdataModel::Best, unreachable).is_err());
+        assert_eq!(calls.get(), 3, "the memo is per set and language");
+
+        clock.set(start + Duration::from_secs(59));
+        assert!(fetch("eng", TessdataModel::Best, unreachable).is_err());
+        assert_eq!(calls.get(), 3);
+        clock.set(start + Duration::from_secs(60));
+        assert!(fetch("eng", TessdataModel::Best, || Ok(true)).unwrap());
+        assert_eq!(calls.get(), 4, "the download is tried again once the memo expires");
+    }
+
+    #[test]
+    fn a_failure_to_write_the_pack_is_not_remembered() {
+        use super::{DownloadError, FailureMemo, TessdataModel, download_unless_failed_recently};
+
+        let memo = FailureMemo::new(Duration::from_secs(60));
+        let now = Instant::now();
+        let read_only = || {
+            Err(DownloadError::Publish(std::io::Error::from(
+                std::io::ErrorKind::PermissionDenied,
+            )))
+        };
+
+        assert!(download_unless_failed_recently(&memo, "eng", TessdataModel::Best, || now, read_only).is_err());
+        assert!(
+            download_unless_failed_recently(&memo, "eng", TessdataModel::Best, || now, || Ok(true)).unwrap(),
+            "another directory may be writable"
+        );
+    }
+
+    #[test]
+    fn concurrent_requests_for_one_pack_materialize_it_once() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let start = std::sync::Barrier::new(8);
+
+        let published: Vec<bool> = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        start.wait();
+                        super::materialize_once(&output, || {
+                            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            std::thread::sleep(Duration::from_millis(50));
+                            std::fs::write(&output, PAYLOAD).unwrap();
+                            Ok(true)
+                        })
+                        .unwrap()
+                    })
+                })
+                .collect();
+            workers.into_iter().map(|worker| worker.join().unwrap()).collect()
+        });
+
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(published.iter().filter(|created| **created).count(), 1);
     }
 
     #[test]

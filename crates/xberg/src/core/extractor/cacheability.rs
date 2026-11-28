@@ -44,6 +44,9 @@ enum ModelObservation {
     Osd(PathBuf),
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     VerticalJapanese(Vec<String>),
+    /// The candidate directories and the `+`-joined list the Han retry reads with.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    HanRetry(Vec<String>, String),
 }
 
 #[derive(Default)]
@@ -305,12 +308,36 @@ pub(crate) fn defer_ocr_cache_write(write: impl FnOnce() + Send + 'static) {
     }
 }
 
+/// Like [`defer_ocr_cache_write`], for a whole-extraction write: it runs after the request's
+/// OCR writes and is never displaced by them.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn defer_outer_cache_write(write: impl FnOnce() + Send + 'static) {
+    if ocr_stop_requested() {
+        return;
+    }
+    if let Some(models) = current().and_then(|context| context.2) {
+        models.defer_outer(write);
+    } else {
+        write();
+    }
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn observe_vertical_model(directories: &[String], revision: Option<blake3::Hash>) {
     if let Some(context) = current() {
         context.observe_model(
             ModelObservation::VerticalJapanese(directories.to_vec()),
             revision.unwrap_or_else(|| blake3::hash(b"missing-vertical-japanese")),
+        );
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn observe_han_retry_models(directories: &[String], languages: &str, revision: Option<blake3::Hash>) {
+    if let Some(context) = current() {
+        context.observe_model(
+            ModelObservation::HanRetry(directories.to_vec(), languages.to_owned()),
+            revision.unwrap_or_else(|| blake3::hash(b"missing-han-retry")),
         );
     }
 }

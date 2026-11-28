@@ -63,35 +63,35 @@ fn test_resolve_all_installed_languages_empty_path() {
 }
 
 #[test]
-fn test_all_languages_exist_returns_true_when_present() {
+fn test_directory_serves_returns_true_when_present() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("eng.traineddata"), b"x").unwrap();
     std::fs::write(dir.path().join("fra.traineddata"), b"x").unwrap();
 
     let langs = vec!["eng".to_string(), "fra".to_string()];
-    assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert!(directory_serves(dir.path().to_str().unwrap(), &langs, false, &PINNED));
 }
 
 #[test]
-fn test_all_languages_exist_returns_false_when_one_missing() {
+fn test_directory_serves_returns_false_when_one_missing() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("eng.traineddata"), b"x").unwrap();
 
     let langs = vec!["eng".to_string(), "deu".to_string()];
-    assert!(!all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert!(!directory_serves(dir.path().to_str().unwrap(), &langs, false, &PINNED));
 }
 
 #[test]
-fn test_all_languages_exist_false_for_empty_path_or_langs() {
-    assert!(!all_languages_exist("", &["eng".to_string()]).unwrap());
+fn test_directory_serves_false_for_empty_path_or_langs() {
+    assert!(!directory_serves("", &["eng".to_string()], false, &PINNED));
     let dir = tempfile::tempdir().unwrap();
-    assert!(!all_languages_exist(dir.path().to_str().unwrap(), &[]).unwrap());
+    assert!(!directory_serves(dir.path().to_str().unwrap(), &[], false, &PINNED));
 }
 
 #[test]
-fn test_all_languages_exist_false_for_missing_dir() {
+fn test_directory_serves_false_for_missing_dir() {
     let langs = vec!["eng".to_string()];
-    assert!(!all_languages_exist("/nonexistent/path/xyz", &langs).unwrap());
+    assert!(!directory_serves("/nonexistent/path/xyz", &langs, false, &PINNED));
 }
 
 #[test]
@@ -116,6 +116,42 @@ fn test_resolve_tessdata_path_skips_override_missing_lang() {
     if let Ok(path) = result {
         assert_ne!(path, dir.path().to_str().unwrap());
     }
+}
+
+#[test]
+fn test_a_language_that_is_a_path_never_reaches_the_file_system() {
+    let outside = tempfile::tempdir().unwrap();
+    let directory = outside.path().join("tessdata");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(outside.path().join("secret.traineddata"), b"x").unwrap();
+    std::fs::write(directory.join("eng.traineddata"), b"x").unwrap();
+    let cache = tempfile::tempdir().unwrap();
+
+    for language in ["../secret", "/etc/passwd", r"..\secret", "eng/../../secret", ""] {
+        let error = resolve_tessdata_path_with(
+            &[language.to_string()],
+            Some(&directory),
+            &cache_env(cache.path(), TessdataModel::Fast),
+            &offline(&NO_SYSTEM, &PINNED),
+        )
+        .expect_err("a path is not a language");
+        assert!(matches!(error, OcrError::InvalidLanguageCode(_)), "{language}: {error}");
+    }
+    assert!(!cache.path().join("tessdata").exists(), "nothing may be created");
+    let outside_pack = ["../secret".to_string()];
+    let explicit_env = TessdataEnv {
+        tessdata_prefix: Some(directory.to_str().unwrap().to_owned()),
+        ..cache_env(cache.path(), TessdataModel::Fast)
+    };
+    assert_eq!(existing_tessdata_dir_for(&outside_pack, None, &explicit_env), None);
+    assert_eq!(
+        first_directory_holding(&[SearchDir::as_given(directory.to_str().unwrap())], &outside_pack),
+        None
+    );
+    assert!(matches!(
+        validate_language_and_traineddata("eng+../secret", directory.to_str().unwrap()),
+        Err(OcrError::InvalidLanguageCode(_))
+    ));
 }
 
 fn given_env(model: TessdataModel, system_paths: bool) -> TessdataEnv {
@@ -197,7 +233,7 @@ fn test_fast_search_dirs_never_hold_the_built_in_best_directory() {
 #[test]
 fn test_adoption_sources_per_model() {
     let base = Path::new("/given/cache");
-    let sources = |model, system_paths| adoption_sources(base, &given_env(model, system_paths), &GIVEN_SYSTEM);
+    let sources = |model, system_paths| adoption_sources(&base.join("tessdata"), model, system_paths, &GIVEN_SYSTEM);
 
     assert_eq!(
         sources(TessdataModel::Best, true),
@@ -219,6 +255,11 @@ fn test_adoption_sources_per_model() {
     assert_eq!(
         sources(TessdataModel::Fast, false),
         [base.join("tessdata"), base.join("tessdata").join("fast")]
+    );
+    assert_eq!(
+        adoption_sources_beside(&base.join("tessdata"), TessdataModel::Best)[..2],
+        [base.join("tessdata"), base.join("tessdata").join("fast")],
+        "cache warm adopts from the same directories as the resolver"
     );
 }
 
@@ -259,7 +300,13 @@ fn test_best_request_never_resolves_to_a_fast_only_directory() {
         model,
     };
     let langs = vec!["eng".to_string()];
-    let find = |model| first_directory_holding(&tessdata_search_dirs_with(None, &env(model), &system), &langs);
+    let find = |model| {
+        let directories: Vec<SearchDir> = tessdata_search_dirs_with(None, &env(model), &system)
+            .into_iter()
+            .map(SearchDir::as_given)
+            .collect();
+        first_directory_holding(&directories, &langs)
+    };
 
     assert_eq!(
         find(TessdataModel::Fast).as_deref(),
@@ -308,6 +355,39 @@ fn test_best_explicit_directory_warning_fires_once_per_directory() {
 
     assert!(first_best_warning_for(directory));
     assert!(!first_best_warning_for(directory));
+}
+
+#[test]
+fn test_an_explicit_best_directory_is_checked_pack_by_pack_and_stays_usable() {
+    let explicit = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    let directory = explicit.path().to_str().unwrap();
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let fast = [("deu", fast_pack.as_str(), 4), ("eng", fast_pack.as_str(), 4)];
+    let best = [("deu", best_pack.as_str(), 5), ("eng", best_pack.as_str(), 5)];
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let languages = ["eng".to_string(), "deu".to_string(), "custom".to_string()];
+    std::fs::write(explicit.path().join("eng.traineddata"), b"best!").unwrap();
+    std::fs::write(explicit.path().join("deu.traineddata"), b"fast").unwrap();
+    std::fs::write(explicit.path().join("custom.traineddata"), b"user trained").unwrap();
+
+    assert_eq!(packs_verified_fast(directory, &languages, &pins), ["deu"]);
+    assert_eq!(
+        pins.verified_model(explicit.path(), &languages[..1]),
+        Some(TessdataModel::Best)
+    );
+    assert_eq!(pins.verified_model(explicit.path(), &languages), None);
+    let resolved = resolve_tessdata_path_with(
+        &languages,
+        Some(explicit.path()),
+        &cache_env(cache.path(), TessdataModel::Best),
+        &offline(&NO_SYSTEM, &pins),
+    )
+    .unwrap();
+    assert_eq!(resolved, directory, "an explicit directory is used whatever it holds");
 }
 
 #[test]
@@ -442,7 +522,40 @@ fn test_materialize_eng_from_bundled_bytes() {
     let provision = offline(&NO_SYSTEM, &PINNED);
     materialize_missing_languages(dir.path(), &langs, TessdataModel::Fast, &[], &provision).unwrap();
     assert!(dir.path().join("eng.traineddata").exists());
-    assert!(all_languages_exist(dir.path().to_str().unwrap(), &langs).unwrap());
+    assert!(directory_serves(dir.path().to_str().unwrap(), &langs, false, &PINNED));
+    assert_eq!(
+        std::fs::read(dir.path().join("eng.traineddata")).unwrap(),
+        xberg_tesseract::bundled_eng_traineddata().unwrap()
+    );
+    assert_eq!(
+        dir.path().read_dir().unwrap().count(),
+        1,
+        "the model is published by rename, leaving no temporary file"
+    );
+}
+
+#[test]
+fn test_publishing_a_model_never_exposes_a_partial_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("eng.traineddata");
+    let bytes = vec![7_u8; 1 << 20];
+
+    let seen_partial = std::thread::scope(|scope| {
+        let reader = scope.spawn(|| {
+            loop {
+                match std::fs::metadata(&target) {
+                    Ok(metadata) => break metadata.len() != bytes.len() as u64,
+                    Err(_) => std::thread::yield_now(),
+                }
+            }
+        });
+        assert!(crate::ocr::tessdata_download::publish(&bytes, &target).unwrap());
+        reader.join().unwrap()
+    });
+
+    assert!(!seen_partial, "the file must appear with its full length");
+    assert!(!crate::ocr::tessdata_download::publish(b"other", &target).unwrap());
+    assert_eq!(std::fs::read(&target).unwrap(), bytes);
 }
 
 const NO_SYSTEM: SystemTessdataDirs<'static> = SystemTessdataDirs { fast: &[], best: &[] };
@@ -526,6 +639,161 @@ fn test_shared_packs_reach_the_best_directory_once_a_source_appears() {
         std::fs::read(best.join("osd.traineddata")).unwrap(),
         b"orientation",
         "a directory is not skipped after an earlier attempt found no source"
+    );
+}
+
+#[test]
+fn test_a_wrong_file_in_the_managed_best_directory_is_replaced_not_served() {
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let (fast, best) = ([("eng", fast_pack.as_str(), 4)], [("eng", best_pack.as_str(), 5)]);
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let wrong_files: [&[u8]; 3] = [b"fast", b"", b"BEST!"];
+
+    for wrong in wrong_files {
+        let cache = tempfile::tempdir().unwrap();
+        let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+        std::fs::create_dir_all(&managed).unwrap();
+        std::fs::write(managed.join("eng.traineddata"), wrong).unwrap();
+        let env = cache_env(cache.path(), TessdataModel::Best);
+        let languages = ["eng".to_string()];
+        assert_eq!(
+            first_serving_dir(&languages, None, &env, &NO_SYSTEM, &pins),
+            None,
+            "{wrong:?} must not count as the best pack"
+        );
+
+        let fetched = std::cell::Cell::new(0_u32);
+        let fetch = |lang: &str, model: TessdataModel, directory: &Path| -> Result<bool, OcrError> {
+            assert_eq!((lang, model), ("eng", TessdataModel::Best));
+            fetched.set(fetched.get() + 1);
+            std::fs::write(directory.join("eng.traineddata"), b"best!").unwrap();
+            Ok(true)
+        };
+        let provision = Provision {
+            system: &NO_SYSTEM,
+            pins: &pins,
+            fetch: &fetch,
+        };
+
+        let resolved = resolve_tessdata_path_with(&languages, None, &env, &provision).unwrap();
+        assert_eq!(resolved, managed.to_str().unwrap());
+        assert_eq!(std::fs::read(managed.join("eng.traineddata")).unwrap(), b"best!");
+        assert_eq!(
+            std::fs::read(managed.join("eng.traineddata.unverified")).unwrap(),
+            wrong
+        );
+        assert_eq!(
+            resolve_tessdata_path_with(&languages, None, &env, &provision).unwrap(),
+            resolved
+        );
+        assert_eq!(fetched.get(), 1, "the verified pack is not fetched again");
+    }
+}
+
+#[test]
+fn test_a_wrong_best_pack_that_cannot_be_replaced_is_an_error() {
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let (fast, best) = ([("eng", fast_pack.as_str(), 4)], [("eng", best_pack.as_str(), 5)]);
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let cache = tempfile::tempdir().unwrap();
+    let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+    std::fs::create_dir_all(&managed).unwrap();
+    std::fs::write(managed.join("eng.traineddata"), b"fast").unwrap();
+    let offline_fetch = |_: &str, _: TessdataModel, _: &Path| -> Result<bool, OcrError> {
+        Err(OcrError::TesseractInitializationFailed("offline".into()))
+    };
+    let provision = Provision {
+        system: &NO_SYSTEM,
+        pins: &pins,
+        fetch: &offline_fetch,
+    };
+
+    let result = resolve_tessdata_path_with(
+        &["eng".to_string()],
+        None,
+        &cache_env(cache.path(), TessdataModel::Best),
+        &provision,
+    );
+
+    assert!(result.is_err(), "fast data must not be served for best: {result:?}");
+}
+
+#[test]
+fn test_a_wrong_pack_in_the_built_in_best_directory_is_skipped() {
+    let (fast_pack, best_pack) = (sha256_hex(b"fast"), sha256_hex(b"best!"));
+    let (fast, best) = ([("eng", fast_pack.as_str(), 4)], [("eng", best_pack.as_str(), 5)]);
+    let pins = PinTables {
+        fast: &fast,
+        best: &best,
+    };
+    let cache = tempfile::tempdir().unwrap();
+    let image = tempfile::tempdir().unwrap();
+    let image_dirs = [image.path().to_str().unwrap()];
+    let system = SystemTessdataDirs {
+        fast: &[],
+        best: &image_dirs,
+    };
+    let env = TessdataEnv {
+        system_paths: true,
+        ..cache_env(cache.path(), TessdataModel::Best)
+    };
+    let languages = ["eng".to_string(), "custom".to_string()];
+    std::fs::write(image.path().join("custom.traineddata"), b"user trained").unwrap();
+    let serving = || first_serving_dir(&languages, None, &env, &system, &pins);
+
+    std::fs::write(image.path().join("eng.traineddata"), b"fast").unwrap();
+    assert_eq!(serving(), None);
+    assert_eq!(
+        first_serving_dir(&languages, Some(image.path()), &env, &system, &pins).as_deref(),
+        image.path().to_str(),
+        "the same directory named by the caller is used as given"
+    );
+    std::fs::remove_file(image.path().join("eng.traineddata")).unwrap();
+    std::fs::write(image.path().join("eng.traineddata"), b"best!").unwrap();
+    assert_eq!(
+        serving().as_deref(),
+        image.path().to_str(),
+        "a language with no pin only has to be a file"
+    );
+    assert_eq!(
+        std::fs::read(image.path().join("eng.traineddata")).unwrap(),
+        b"best!",
+        "a read-only image directory is never written"
+    );
+}
+
+#[test]
+fn test_a_directory_named_like_a_pack_is_not_a_pack() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("eng.traineddata")).unwrap();
+
+    assert!(!directory_serves(
+        dir.path().to_str().unwrap(),
+        &["eng".to_string()],
+        false,
+        &PINNED
+    ));
+}
+
+#[test]
+fn test_the_offline_probe_holds_the_managed_best_directory_to_the_real_pins() {
+    let cache = tempfile::tempdir().unwrap();
+    let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+    std::fs::create_dir_all(&managed).unwrap();
+    std::fs::write(managed.join("eng.traineddata"), b"not the pinned pack").unwrap();
+    std::fs::write(managed.join("my_custom.traineddata"), b"user trained").unwrap();
+    let env = cache_env(cache.path(), TessdataModel::Best);
+
+    assert_eq!(existing_tessdata_dir_for(&["eng".to_string()], None, &env), None);
+    assert_eq!(
+        existing_tessdata_dir_for(&["my_custom".to_string()], None, &env).as_deref(),
+        managed.to_str()
     );
 }
 
@@ -670,4 +938,161 @@ fn test_strip_control_characters_delete_char() {
     let input = "Hello\x7FWorld";
     let output = strip_control_characters(input);
     assert_eq!(output, "HelloWorld");
+}
+
+/// Replace `path` with `bytes`, keeping its size and modification time, the way a copy tool that
+/// preserves times does: through a new file renamed over it.
+#[cfg(not(target_arch = "wasm32"))]
+fn replace_keeping_size_and_time(path: &Path, bytes: &[u8]) {
+    let before = std::fs::metadata(path).unwrap();
+    assert_eq!(before.len(), bytes.len() as u64, "the replacement must keep the size");
+    let staged = path.with_extension("staged");
+    std::fs::write(&staged, bytes).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&staged)
+        .unwrap()
+        .set_modified(before.modified().unwrap())
+        .unwrap();
+    std::fs::rename(&staged, path).unwrap();
+    let after = std::fs::metadata(path).unwrap();
+    assert_eq!(
+        (after.len(), after.modified().unwrap()),
+        (before.len(), before.modified().unwrap())
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_pack_identity_sees_a_replacement_that_keeps_size_and_modification_time() {
+    let directory = tempfile::tempdir().unwrap();
+    let pack = directory.path().join("eng.traineddata");
+    std::fs::write(&pack, b"first model").unwrap();
+    let identity = || {
+        let mut hasher = blake3::Hasher::new();
+        assert!(hash_pack_identities(&mut hasher, directory.path(), ["eng"]));
+        hasher.finalize()
+    };
+
+    let first = identity();
+    assert_eq!(identity(), first);
+    replace_keeping_size_and_time(&pack, b"other model");
+    assert_ne!(identity(), first);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_pack_identity_survives_a_permission_change_a_hard_link_and_a_restore() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let directory = tempfile::tempdir().unwrap();
+    let pack = directory.path().join("eng.traineddata");
+    std::fs::write(&pack, b"custom model").unwrap();
+    let identity = || {
+        let mut hasher = blake3::Hasher::new();
+        assert!(hash_pack_identities(&mut hasher, directory.path(), ["eng"]));
+        hasher.finalize()
+    };
+
+    let first = identity();
+    std::fs::set_permissions(&pack, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(identity(), first, "a chmod keeps the model");
+    std::fs::hard_link(&pack, directory.path().join("linked")).unwrap();
+    assert_eq!(identity(), first, "a hard link keeps the model");
+    replace_keeping_size_and_time(&pack, b"custom model");
+    assert_eq!(
+        identity(),
+        first,
+        "the same bytes restored to a new inode keep the model"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_a_pinned_pack_written_again_with_the_same_bytes_keeps_its_identity() {
+    let fast_pack = sha256_hex(b"fast");
+    let fast = [("eng", fast_pack.as_str(), 4)];
+    let pins = PinTables { fast: &fast, best: &[] };
+    let directory = tempfile::tempdir().unwrap();
+    let pack = directory.path().join("eng.traineddata");
+    let identity = || {
+        let mut hasher = blake3::Hasher::new();
+        assert!(hash_pack_identities_with(&mut hasher, directory.path(), ["eng"], &pins));
+        hasher.finalize()
+    };
+    // ~keep A new file with another modification time, as a restore or copy that keeps no times
+    // writes it: everything a stamp sees differs, only the bytes are the same.
+    let write_again = |bytes: &[u8], seconds: u64| {
+        let staged = directory.path().join("staged");
+        std::fs::write(&staged, bytes).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&staged)
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds))
+            .unwrap();
+        std::fs::rename(&staged, &pack).unwrap();
+    };
+
+    write_again(b"fast", 1_000_000);
+    let pinned = identity();
+    write_again(b"fast", 2_000_000);
+    assert_eq!(identity(), pinned, "the same pinned bytes keep their cache keys");
+    write_again(b"fasT", 3_000_000);
+    assert_ne!(identity(), pinned, "other bytes are another pack");
+    write_again(b"fast", 4_000_000);
+    assert_eq!(identity(), pinned, "the pinned bytes are recognised again");
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_a_wrong_best_pack_in_a_read_only_cache_is_used_as_given() {
+    let best_pack = sha256_hex(b"best!");
+    let best = [("eng", best_pack.as_str(), 5)];
+    let pins = PinTables { fast: &[], best: &best };
+    let cache = tempfile::tempdir().unwrap();
+    let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+    std::fs::create_dir_all(&managed).unwrap();
+    std::fs::write(managed.join("eng.traineddata"), b"fast").unwrap();
+    crate::ocr::tessdata_download::read_only_for_tests::insert(&managed);
+
+    let resolved = resolve_tessdata_path_with(
+        &["eng".to_string()],
+        None,
+        &cache_env(cache.path(), TessdataModel::Best),
+        &offline(&NO_SYSTEM, &pins),
+    );
+    assert_eq!(resolved.unwrap(), managed.to_str().unwrap());
+    assert_eq!(std::fs::read(managed.join("eng.traineddata")).unwrap(), b"fast");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_stamp_is_settled_only_once_both_its_times_are_outside_the_racy_window() {
+    use std::time::{Duration, SystemTime};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("eng.traineddata");
+    std::fs::write(&path, b"model").unwrap();
+    let stamp = |path: &Path| FileStamp::of(&std::fs::metadata(path).unwrap()).unwrap();
+    let now = SystemTime::now();
+    let hour = Duration::from_secs(3600);
+
+    assert!(!stamp(&path).settled_at(now), "a file written just now is racy");
+    assert!(stamp(&path).settled_at(now + hour), "an hour later it is settled");
+    assert!(
+        !stamp(&path).settled_at(now - hour),
+        "a stamp from after the read is never settled"
+    );
+
+    // ~keep Backdating the modification time (`cp -p`, an extracted archive) leaves the
+    // status-change time at now, and a write within its tick would still keep the whole stamp.
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(now - hour)
+        .unwrap();
+    assert!(!stamp(&path).settled_at(SystemTime::now()));
+    assert!(stamp(&path).settled_at(SystemTime::now() + hour));
 }

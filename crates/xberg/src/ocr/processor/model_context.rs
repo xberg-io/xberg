@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::script_retry::{self, HanModels, RetryModels, hash_language_models, hash_model_file};
-use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
+use super::validation::{SearchDir, TessdataEnv, resolve_tessdata_path_in, retry_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 
@@ -18,7 +18,14 @@ fn invalidate_script_cache(invalidated: &AtomicBool, script: &str, error: &OcrEr
 #[derive(Clone)]
 pub(super) struct ModelContext {
     pub(super) directory: String,
+    /// `directory` as caches key it, resolved once with the context rather than on every key.
+    canonical_directory: std::path::PathBuf,
     pub(super) osd_revision: Option<blake3::Hash>,
+    /// The identity of each primary language's model file
+    /// ([`hash_pack_identities`](super::validation::hash_pack_identities)), for cache and pool
+    /// keys. Unlike `primary` it is taken for every PSM; on Unix it reads a file at most once per
+    /// version.
+    identity: Option<PackIdentity>,
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
@@ -29,6 +36,27 @@ pub(super) struct ModelContext {
 }
 
 #[derive(Clone)]
+struct PackIdentity {
+    languages: Vec<String>,
+    hash: blake3::Hash,
+    /// False when a file has no stamp: results and engines are then neither stored nor reused,
+    /// since `hash` cannot tell the file from a replacement of the same size.
+    known: bool,
+}
+
+/// The identity hash of `languages`' model files in `directory`, and whether every file could be
+/// identified.
+fn identify_packs(directory: &str, languages: &[String]) -> (blake3::Hash, bool) {
+    let mut hasher = blake3::Hasher::new();
+    let known = super::validation::hash_pack_identities(
+        &mut hasher,
+        std::path::Path::new(directory),
+        languages.iter().map(String::as_str),
+    );
+    (hasher.finalize(), known)
+}
+
+#[derive(Clone)]
 struct PrimaryModels {
     languages: Vec<String>,
     revision: blake3::Hash,
@@ -36,7 +64,7 @@ struct PrimaryModels {
 
 #[derive(Clone)]
 struct RetryContext {
-    directories: Vec<String>,
+    directories: Vec<SearchDir>,
     models: Option<RetryModels>,
     noisy_below: f64,
 }
@@ -64,12 +92,13 @@ impl ModelContext {
         if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config))
             && !crate::core::extractor::cacheability::ocr_stop_requested()
         {
-            context.select_retry(config, tessdata_search_dirs(override_path, &env), noisy_below);
+            context.select_retry(config, retry_search_dirs(override_path, &env), noisy_below);
         }
         Ok(context)
     }
 
-    fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
+    fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<SearchDir>, noisy_below: f64) {
+        RetryModels::observe_horizontal(&directories, &config.language);
         let horizontal =
             RetryModels::resolve_horizontal(&directories, &config.language, config.psm).unwrap_or_else(|error| {
                 self.invalidate_han_cache(&error);
@@ -131,6 +160,40 @@ impl ModelContext {
 
     pub(super) fn primary_revision(&self) -> Option<blake3::Hash> {
         self.primary.as_ref().map(|primary| primary.revision)
+    }
+
+    /// The model directory as caches key it.
+    pub(super) fn canonical_directory(&self) -> &std::path::Path {
+        &self.canonical_directory
+    }
+
+    /// What identifies the primary model files this context was resolved against.
+    pub(super) fn identity(&self) -> Option<blake3::Hash> {
+        self.identity.as_ref().map(|identity| identity.hash)
+    }
+
+    /// Whether the primary model files are still the ones this context was resolved against and
+    /// could be identified at all: a pack replaced between resolution and use must not have the
+    /// text or engine read from it kept under the old key.
+    ///
+    /// Either failure also invalidates the enclosing operation: a pack restored before the outer
+    /// result is published would otherwise let text read from the other pack be stored under the
+    /// key computed for the restored one.
+    fn packs_are_current(&self) -> bool {
+        let Some(identity) = &self.identity else {
+            return true;
+        };
+        if !identity.known {
+            crate::core::extractor::cacheability::invalidate_current();
+            return false;
+        }
+        if identify_packs(&self.directory, &identity.languages) == (identity.hash, true) {
+            return true;
+        }
+        self.invalidated.store(true, Ordering::Release);
+        crate::core::extractor::cacheability::invalidate_current();
+        tracing::warn!("Tesseract model files changed during use; skipping cache reuse and discarding native state");
+        false
     }
 
     fn read_primary_revision(&self, languages: &[String]) -> Result<blake3::Hash, OcrError> {
@@ -286,6 +349,12 @@ impl ModelContext {
 
     fn for_config(directory: String, psm: u8, languages: Vec<String>) -> Result<Self, OcrError> {
         let mut context = Self::for_path(directory, psm)?;
+        let (hash, known) = identify_packs(&context.directory, &languages);
+        context.identity = Some(PackIdentity {
+            languages: languages.clone(),
+            hash,
+            known,
+        });
         if context.osd_revision.is_some() {
             let revision = context.read_primary_revision(&languages)?;
             context.primary = Some(PrimaryModels { languages, revision });
@@ -301,8 +370,10 @@ impl ModelContext {
             None
         };
         Ok(Self {
+            canonical_directory: super::validation::canonical_tessdata_dir(&directory),
             directory,
             osd_revision,
+            identity: None,
             primary: None,
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
@@ -319,6 +390,7 @@ impl ModelContext {
                 .operation
                 .as_ref()
                 .is_some_and(|operation| !operation.is_cacheable())
+            || !self.packs_are_current()
             || !self.primary_is_current()
         {
             return None;
@@ -348,7 +420,15 @@ impl ModelContext {
     }
 
     pub(super) fn result_key(&self, config: &TesseractConfig) -> String {
-        let mut base = super::config::hash_config(config, &self.directory);
+        let mut base = super::config::hash_config_in(config, &self.canonical_directory);
+        // ~keep The directory path alone keeps matching after a pack is replaced in place.
+        if let Some(identity) = self.identity() {
+            let mut hash = blake3::Hasher::new();
+            hash.update(b"tesseract-primary-model-identity-v1");
+            hash.update(base.as_bytes());
+            hash.update(identity.as_bytes());
+            base = hash.finalize().to_hex().to_string();
+        }
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
             hash.update(b"tesseract-script-retry-v7");
@@ -394,9 +474,102 @@ fn model_read_error(path: &std::path::Path, error: impl std::fmt::Display) -> Oc
     ))
 }
 
+/// Make every model read of the file at `path` fail while it stays a regular file, on every
+/// platform and for every user, root included.
+#[cfg(test)]
+pub(super) fn make_unreadable(path: &std::path::Path) {
+    crate::cache::unreadable_for_tests::insert(path);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn result_key_changes_when_a_primary_model_is_replaced_in_place_without_osd() {
+        let root = tempfile::tempdir().unwrap();
+        let english = root.path().join("eng.traineddata");
+        std::fs::write(&english, b"first model").unwrap();
+        std::fs::write(root.path().join("deu.traineddata"), b"german").unwrap();
+        let config = TesseractConfig {
+            language: "eng".into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 3,
+            ..Default::default()
+        };
+        let key = || {
+            let context = ModelContext::for_provisioned(&config).unwrap();
+            assert!(context.osd_revision.is_none() && context.primary_revision().is_none());
+            context.result_key(&config)
+        };
+
+        let first = key();
+        assert_eq!(first, key(), "an unchanged model keeps its entries");
+        std::fs::write(root.path().join("deu.traineddata"), b"another german model").unwrap();
+        assert_eq!(first, key(), "a language that is not requested is not part of the key");
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&english, b"a replaced model").unwrap();
+        assert_ne!(
+            first,
+            key(),
+            "text read with the old model must not be served for the new one"
+        );
+    }
+
+    #[test]
+    fn result_key_ignores_how_the_directory_is_spelled() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("eng.traineddata"), b"model").unwrap();
+        let key = |directory: String| {
+            let config = TesseractConfig {
+                language: "eng".into(),
+                tessdata_path: Some(directory.into()),
+                psm: 3,
+                ..Default::default()
+            };
+            ModelContext::for_provisioned(&config).unwrap().result_key(&config)
+        };
+        let directory = root.path().to_str().unwrap();
+
+        assert_eq!(
+            key(directory.to_owned()),
+            key(format!("{directory}{}", std::path::MAIN_SEPARATOR))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn result_key_names_the_directory_resolved_with_the_context() {
+        let root = tempfile::tempdir().unwrap();
+        let (first, second, link) = (root.path().join("a"), root.path().join("b"), root.path().join("link"));
+        for directory in [&first, &second] {
+            std::fs::create_dir(directory).unwrap();
+            std::fs::write(directory.join("eng.traineddata"), b"model").unwrap();
+        }
+        std::os::unix::fs::symlink(&first, &link).unwrap();
+        let config = TesseractConfig {
+            language: "eng".into(),
+            psm: 3,
+            ..Default::default()
+        };
+        let context = ModelContext::for_path(link.to_str().unwrap().into(), config.psm).unwrap();
+        let key = context.result_key(&config);
+        assert_eq!(context.canonical_directory(), std::fs::canonicalize(&first).unwrap());
+
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&second, &link).unwrap();
+        assert_eq!(
+            context.result_key(&config),
+            key,
+            "the directory is resolved once with the context, not again for every key"
+        );
+        assert_ne!(
+            ModelContext::for_path(link.to_str().unwrap().into(), config.psm)
+                .unwrap()
+                .result_key(&config),
+            key
+        );
+    }
 
     #[test]
     fn osd_only_key_requires_the_captured_osd_bytes() {
@@ -492,17 +665,17 @@ mod tests {
         cacheability::scope(async {
             let root = tempfile::tempdir().unwrap();
             let directory = root.path().to_str().unwrap().to_owned();
-            for name in ["eng", "osd", "chi_sim"] {
+            for name in ["eng", "osd", "chi_sim", "khm"] {
                 std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
             }
-            std::fs::create_dir(root.path().join("khm.traineddata")).unwrap();
+            make_unreadable(&root.path().join("khm.traineddata"));
             script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
                 let config = TesseractConfig {
                     psm: 3,
                     ..Default::default()
                 };
                 let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-                context.select_retry(&config, vec![directory], 75.0);
+                context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
                 assert!(
                     context.retry_models(&config, 30.0, || true).is_some(),
                     "Han must remain selectable"
@@ -528,7 +701,7 @@ mod tests {
             ..Default::default()
         };
         let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-        context.select_retry(&config, vec![directory], 75.0);
+        context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
         let header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext";
         for (token, confidence, expected) in [("|", 20, true), ("|", 65, false), ("1", 20, false)] {
             let tsv = format!("{header}\n5\t1\t1\t1\t1\t1\t0\t100\t3\t40\t{confidence}\t{token}");
@@ -556,7 +729,7 @@ mod tests {
         };
         script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
             let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-            context.select_retry(&config, vec![directory], 75.0);
+            context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
             let models = context.retry_models(&config, 30.0, || false).unwrap();
             assert!(models.han.is_none());
             assert!(models.khmer.is_some());
@@ -575,6 +748,84 @@ mod tests {
         assert_han_snapshot_failure_keeps_khmer(false).await;
     }
 
+    fn han_retry_fixture() -> (tempfile::TempDir, String) {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(
+                root.path().join(format!("{name}.traineddata")),
+                format!("{name} fixture"),
+            )
+            .unwrap();
+        }
+        let directory = root.path().to_str().unwrap().to_owned();
+        (root, directory)
+    }
+
+    fn select_han_retry(directory: &str, config: &TesseractConfig) -> ModelContext {
+        let mut context = ModelContext::for_path(directory.to_owned(), config.psm).unwrap();
+        context.select_retry(config, vec![SearchDir::as_given(directory)], 75.0);
+        context
+    }
+
+    #[test]
+    fn han_retry_rechecks_do_not_hash_the_packs_again() {
+        use crate::ocr::tessdata_download::without_reading_packs;
+
+        let (root, directory) = han_retry_fixture();
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+        let context = select_han_retry(&directory, &config);
+        // ~keep A new stamp, so a pack identity could only come from reading the file, which the
+        // memo-only run refuses; off Unix no identity is ever memoized.
+        std::fs::write(root.path().join("chi_sim.traineddata"), b"chi_sim fixture, replaced").unwrap();
+        assert_eq!(
+            without_reading_packs(|| context.han_retry_is_current(&config)),
+            Some(false),
+            "the recheck compares snapshots, sees the change, and never hashes a pack identity"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn han_retry_model_rollback_between_key_and_ocr_cannot_publish() {
+        use crate::core::extractor::cacheability;
+        use script_retry::HanRetryModels;
+
+        let (root, directory) = han_retry_fixture();
+        let directories = [SearchDir::as_given(directory.clone())];
+        let han = root.path().join("chi_sim.traineddata");
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+
+        cacheability::scope(async {
+            let before = RetryModels::observe_horizontal(&directories, "eng");
+            assert!(matches!(before, HanRetryModels::Identified(_)));
+            assert!(cacheability::can_publish_outer_result());
+            std::fs::write(&han, b"chi_sim fixture, replaced").unwrap();
+            // ~keep Outside an OCR request scope, so only the observation can notice the rollback.
+            select_han_retry(&directory, &config);
+            std::fs::write(&han, b"chi_sim fixture").unwrap();
+
+            assert_eq!(RetryModels::observe_horizontal(&directories, "eng"), before);
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
+
+        cacheability::scope(async {
+            RetryModels::observe_horizontal(&directories, "eng");
+            select_han_retry(&directory, &config);
+            assert!(
+                cacheability::can_publish_outer_result(),
+                "unchanged models still publish"
+            );
+        })
+        .await;
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     async fn assert_han_snapshot_failure_keeps_khmer(fail_at_selection: bool) {
         use crate::core::extractor::cacheability;
@@ -586,10 +837,9 @@ mod tests {
             for name in ["eng", "osd", "khm"] {
                 std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
             }
+            std::fs::write(&han, b"Han revision one").unwrap();
             if fail_at_selection {
-                std::fs::create_dir(&han).unwrap();
-            } else {
-                std::fs::write(&han, b"Han revision one").unwrap();
+                make_unreadable(&han);
             }
             script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
                 let config = TesseractConfig {
@@ -597,7 +847,7 @@ mod tests {
                     ..Default::default()
                 };
                 let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-                context.select_retry(&config, vec![directory], 75.0);
+                context.select_retry(&config, vec![SearchDir::as_given(directory)], 75.0);
                 if !fail_at_selection {
                     assert!(context.if_result_current(&config, || ()).is_some());
                     std::fs::write(&han, b"Han revision two").unwrap();
@@ -629,13 +879,16 @@ mod tests {
         write(&primary, "eng", b"eng");
         write(&fallback, "osd", b"osd");
         write(&fallback, "chi_sim", b"han1");
-        let directories: Vec<String> = vec![primary.to_str().unwrap().into(), fallback.to_str().unwrap().into()];
+        let directories = vec![
+            SearchDir::as_given(primary.to_str().unwrap()),
+            SearchDir::as_given(fallback.to_str().unwrap()),
+        ];
         let config = TesseractConfig {
             psm: 3,
             ..Default::default()
         };
         let snapshot = |threshold| {
-            let mut context = ModelContext::for_path(directories[0].clone(), config.psm).unwrap();
+            let mut context = ModelContext::for_path(directories[0].path.clone(), config.psm).unwrap();
             context.select_retry(&config, directories.clone(), threshold);
             context
         };
@@ -812,6 +1065,48 @@ mod tests {
         .await;
 
         assert_eq!(snapshot().if_current(|| 7), Some(7));
+    }
+
+    #[tokio::test]
+    async fn a_pack_replaced_and_restored_before_publication_invalidates_the_request() {
+        use crate::core::extractor::cacheability;
+
+        let root = tempfile::tempdir().unwrap();
+        let pack = root.path().join("eng.traineddata");
+        std::fs::write(&pack, b"first model").unwrap();
+
+        cacheability::scope(async {
+            let before = ModelContext::for_config(root.path().to_str().unwrap().into(), 3, vec!["eng".into()]).unwrap();
+            assert!(cacheability::can_publish_outer_result());
+            // ~keep Different lengths: two writes within one clock tick can share a modification time.
+            std::fs::write(&pack, b"a replaced model").unwrap();
+            assert!(before.if_current(|| ()).is_none());
+            std::fs::write(&pack, b"first model").unwrap();
+
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
+    }
+
+    #[test]
+    fn a_pack_replaced_after_resolution_is_neither_cached_nor_pooled() {
+        let root = tempfile::tempdir().unwrap();
+        let pack = root.path().join("eng.traineddata");
+        std::fs::write(&pack, b"first model").unwrap();
+        let resolve = || ModelContext::for_config(root.path().to_str().unwrap().into(), 3, vec!["eng".into()]).unwrap();
+
+        let before = resolve();
+        assert_eq!(before.if_current(|| 7), Some(7));
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&pack, b"a replaced model").unwrap();
+        assert!(
+            before
+                .if_current(|| panic!("text or an engine of the old pack must not be kept"))
+                .is_none()
+        );
+        let after = resolve();
+        assert_ne!(after.identity(), before.identity());
+        assert_eq!(after.if_current(|| 7), Some(7));
     }
 
     #[cfg(unix)]

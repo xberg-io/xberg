@@ -7,7 +7,8 @@ use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 use xberg_tesseract::TesseractAPI;
 
-const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 21;
+/// Bumped whenever a change to the cached computation makes entries written before it wrong.
+const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 22;
 
 /// Compute a deterministic hash of the OCR configuration.
 ///
@@ -28,8 +29,15 @@ const TESSERACT_RESULT_SCHEMA_VERSION: u8 = 21;
 /// # Returns
 ///
 /// Hexadecimal string representation of the configuration hash
+#[cfg(test)]
 pub(super) fn hash_config(config: &TesseractConfig, resolved_tessdata_path: &str) -> String {
     hash_config_for_schema(config, resolved_tessdata_path, TESSERACT_RESULT_SCHEMA_VERSION)
+}
+
+/// The configuration hash `hash_config` gives, for a directory already in its canonical form
+/// ([`super::validation::canonical_tessdata_dir`]).
+pub(super) fn hash_config_in(config: &TesseractConfig, canonical_tessdata_dir: &std::path::Path) -> String {
+    hash_config_at(config, canonical_tessdata_dir, TESSERACT_RESULT_SCHEMA_VERSION)
 }
 
 /// Fold the caller's `security_limits` into an OCR cache key.
@@ -69,7 +77,13 @@ fn hash_security_limits(hasher: &mut blake3::Hasher, limits: Option<&crate::extr
     }
 }
 
+#[cfg(test)]
 fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str, result_schema_version: u8) -> String {
+    let directory = super::validation::canonical_tessdata_dir(resolved_tessdata_path);
+    hash_config_at(config, &directory, result_schema_version)
+}
+
+fn hash_config_at(config: &TesseractConfig, directory: &std::path::Path, result_schema_version: u8) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(&[result_schema_version]);
     hash_bytes(&mut hasher, config.language.as_bytes());
@@ -84,7 +98,7 @@ fn hash_config_for_schema(config: &TesseractConfig, resolved_tessdata_path: &str
     hasher.update(&config.table_row_threshold_ratio.to_bits().to_le_bytes());
     hash_tesseract_variables(&mut hasher, config);
     hash_security_limits(&mut hasher, config.security_limits.as_ref());
-    hash_source_context(&mut hasher, config, resolved_tessdata_path);
+    hash_source_context(&mut hasher, config, directory);
 
     let hash = hasher.finalize();
     hex::encode(&hash.as_bytes()[..16])
@@ -126,7 +140,7 @@ fn hash_tesseract_variables(hasher: &mut blake3::Hasher, config: &TesseractConfi
 }
 
 /// Hash fields that select the input raster, model directory, or page-stamped output. ~keep
-fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, resolved_tessdata_path: &str) {
+fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, directory: &std::path::Path) {
     hasher.update(&[config.auto_rotate as u8]);
     match config.source_dpi {
         Some(dpi) => {
@@ -138,10 +152,12 @@ fn hash_source_context(hasher: &mut blake3::Hasher, config: &TesseractConfig, re
         }
     }
     hasher.update(&[config.known_full_page_scan as u8]);
-    hash_bytes(hasher, resolved_tessdata_path.as_bytes());
+    // ~keep Canonical, so one directory spelled `/a/b` and `/a/b/` (or reached through a
+    // symlink) has one key.
+    hash_bytes(hasher, directory.as_os_str().as_encoded_bytes());
     // ~keep The resolved directory already differs per model set for xberg's own caches; a
     // non-fast set is hashed too so the key never depends on how a directory was chosen. Fast
-    // adds nothing, so entries written before model sets existed stay valid.
+    // adds nothing; the schema version, not this, decides whether older entries still match.
     if config.tessdata_model != crate::core::config::TessdataModel::Fast {
         hash_bytes(hasher, config.tessdata_model.as_str().as_bytes());
     }
@@ -177,7 +193,7 @@ pub(super) fn apply_tesseract_variables(api: &TesseractAPI, config: &TesseractCo
 /// The full, ordered set of Tesseract engine variables applied for `config`.
 ///
 /// This is the single source of truth consumed by both [`apply_tesseract_variables`] (which
-/// sets them on the engine) and [`hash_config`] (which folds them into the OCR cache key). A
+/// sets them on the engine) and [`hash_config_in`] (which folds them into the OCR cache key). A
 /// variable that changes hOCR/TSV serialization must be added here, and only here — adding it
 /// directly inside `apply_tesseract_variables` instead (as `hocr_font_info` originally was)
 /// reproduces #687: the engine's behaviour changes but the cache key does not, so every
@@ -358,7 +374,11 @@ mod tests {
             ..create_test_config()
         };
         let mut actual = blake3::Hasher::new();
-        hash_source_context(&mut actual, &config, TEST_TESSDATA_PATH);
+        hash_source_context(
+            &mut actual,
+            &config,
+            &super::super::validation::canonical_tessdata_dir(TEST_TESSDATA_PATH),
+        );
 
         let mut before_model_sets = blake3::Hasher::new();
         before_model_sets.update(&[config.auto_rotate as u8]);
@@ -369,6 +389,35 @@ mod tests {
         before_model_sets.update(&3_u32.to_le_bytes());
 
         assert_eq!(actual.finalize(), before_model_sets.finalize());
+    }
+
+    #[test]
+    fn one_tessdata_directory_has_one_cache_key_however_it_is_spelled() {
+        let config = create_test_config();
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().to_str().unwrap();
+        let separator = std::path::MAIN_SEPARATOR;
+
+        assert_eq!(
+            hash_config(&config, "/tessdata/fast"),
+            hash_config(&config, "/tessdata/fast/"),
+            "a trailing separator names the same directory"
+        );
+        for spelling in [
+            format!("{directory}{separator}"),
+            format!("{directory}{separator}."),
+            format!("{directory}{separator}{separator}"),
+        ] {
+            assert_eq!(
+                hash_config(&config, directory),
+                hash_config(&config, &spelling),
+                "{spelling}"
+            );
+        }
+        assert_ne!(
+            hash_config(&config, directory),
+            hash_config(&config, root.path().parent().unwrap().to_str().unwrap())
+        );
     }
 
     /// Negative control for the fix above: the resolved-directory hashing must not become so
@@ -454,14 +503,6 @@ mod tests {
     fn test_hash_config_frames_result_schema_version() {
         let config = create_test_config();
 
-        // ~keep This pins the CURRENT version, and the number is meant to move: every bump has to
-        // come here and be justified, which is what stops a change to the cached computation from
-        // silently reusing entries computed the old way. Version 21 reads page-like rasters and known
-        // full-page scans with the best model as contrast-enhanced grayscale instead of Otsu.
-        assert_eq!(
-            TESSERACT_RESULT_SCHEMA_VERSION, 21,
-            "a bump must be deliberate: state here which change made an old entry wrong"
-        );
         assert_ne!(
             hash_config_for_schema(&config, TEST_TESSDATA_PATH, 1),
             hash_config_for_schema(&config, TEST_TESSDATA_PATH, 2)

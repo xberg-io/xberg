@@ -6550,7 +6550,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retry_cache_hit_blocks_outer_publication_after_models_are_removed() {
+    async fn retry_cache_hit_blocks_outer_publication_under_an_unchanged_key() {
         use crate::core::extractor::{cache_context, cacheability};
 
         let root = tempdir().unwrap();
@@ -6576,13 +6576,18 @@ mod tests {
         )];
         let snapshot = || cache_context::fingerprint(&dependencies, None);
 
+        for model in [language, "osd"] {
+            std::fs::write(root.path().join(format!("{model}.traineddata")), model).unwrap();
+        }
+        // ~keep Outside the operation: a model that comes and goes within one is an observed change.
+        let missing = snapshot().await.unwrap();
+        assert!(missing.as_ref().is_some_and(|context| !context.is_empty()));
+        std::fs::write(root.path().join("chi_sim.traineddata"), "chi_sim").unwrap();
+
         cacheability::scope(async {
             let before = snapshot().await.unwrap();
-            assert!(before.as_ref().is_some_and(|context| !context.is_empty()));
-            for model in [language, "osd", "chi_sim"] {
-                std::fs::write(root.path().join(format!("{model}.traineddata")), model).unwrap();
-            }
-            assert_eq!(snapshot().await.unwrap(), None);
+            assert!(before.is_some(), "the Han retry models are keyed, not bypassed");
+            assert_ne!(before, missing);
 
             let threshold = Some(75.0);
             let models = ModelContext::resolve_with_retry(&config, threshold).unwrap();
@@ -6628,10 +6633,16 @@ mod tests {
             assert_eq!(read.content, cached.content);
             assert_eq!(read.metadata, cached.metadata);
 
-            std::fs::remove_file(root.path().join("chi_sim.traineddata")).unwrap();
             assert_eq!(snapshot().await.unwrap(), before);
             assert!(cacheability::is_cacheable(), "only outer publication is blocked");
             assert!(!cacheability::can_publish_outer_result());
+
+            std::fs::remove_file(root.path().join("chi_sim.traineddata")).unwrap();
+            assert_eq!(snapshot().await.unwrap(), missing);
+            assert!(
+                !cacheability::is_cacheable(),
+                "the Han models the request observed were removed during it"
+            );
         })
         .await;
         assert!(cacheability::can_publish_outer_result());
@@ -6765,8 +6776,8 @@ mod tests {
         std::fs::write(&vertical, b"initial snapshot").unwrap();
         let captured = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
         assert!(captured.vertical_retry_is_current(&config));
-        std::fs::remove_file(&vertical).unwrap();
-        std::fs::create_dir(&vertical).unwrap();
+        std::fs::write(&vertical, b"drifted snapshot").unwrap();
+        super::super::model_context::make_unreadable(&vertical);
         let fresh = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
         let pool = TesseractApiPool::new();
         for models in [captured, fresh] {

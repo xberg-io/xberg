@@ -12,6 +12,11 @@ pub(crate) struct CacheDependency {
     stage_models: Vec<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     script_retry: Option<ModelSelection>,
+    /// The Tesseract models a request may read when OCR runs. Their resolved directory and the
+    /// identity of their files enter the key, so text read with one set of model files is never
+    /// served for another.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    tessdata: Vec<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     uncertifiable: bool,
     /// The OCR configuration of a request the image PaddleOCR fallback may run for; its model
@@ -27,6 +32,7 @@ impl CacheDependency {
             let dependency = Self {
                 model: ModelSelection::for_config(config, mime),
                 script_retry: ModelSelection::for_script_retry(config, mime),
+                tessdata: ModelSelection::for_tessdata(config, mime),
                 #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
                 paddle_image_fallback: crate::extractors::image::paddle_fallback_model_request(config, mime),
                 ..Self::default()
@@ -93,13 +99,37 @@ async fn fingerprint_with_reader(
         .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty());
     let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
     let has_paddle_fallback = paddle_fallback_requested(dependencies);
-    if has_orientation_models || has_script_retry || has_paddle_fallback {
+    let has_tessdata = dependencies.iter().any(|dependency| !dependency.tessdata.is_empty());
+    // ~keep Once the pack digests and the vertical model's revision are memoized, the tessdata and
+    // script-retry contexts are stat calls and skip the blocking-pool hop. Orientation and Paddle
+    // models are always read, and off Unix so is every pack (no memo is kept), so it is not tried.
+    if cfg!(unix)
+        && (has_tessdata || has_script_retry)
+        && !(has_orientation_models || has_paddle_fallback)
+        && let Some(result) =
+            crate::ocr::tessdata_download::without_reading_packs(|| retry_and_tessdata_context(dependencies, cancel))
+    {
+        return match result {
+            Ok(identified) => Ok(identified.into_context()),
+            Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+            Err(error) => {
+                static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                super::cacheability::invalidate_current();
+                if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    tracing::warn!(%error, "Cannot identify the Tesseract model files; bypassing result cache");
+                }
+                Ok(None)
+            }
+        };
+    }
+    if has_orientation_models || has_script_retry || has_paddle_fallback || has_tessdata {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
             check_cancelled(worker_cancel.as_ref())?;
             // Retry models can appear or change during extraction; check again before an outer write. ~keep
-            let Some(retry_context) = script_retry_cache_context(&dependencies, worker_cancel.as_ref())? else {
+            let Some(retry_context) = script_retry_cache_context(&dependencies, worker_cancel.as_ref())?.into_context()
+            else {
                 return Ok(None);
             };
             let mut context = if has_orientation_models {
@@ -109,6 +139,10 @@ async fn fingerprint_with_reader(
             };
             context.push_str(&retry_context);
             context.push_str(&paddle_fallback_context(&dependencies));
+            let Some(tessdata) = tessdata_context(&dependencies, worker_cancel.as_ref())? else {
+                return Ok(unidentified_model());
+            };
+            context.push_str(&tessdata);
             Ok(Some(context))
         }))
         .await;
@@ -128,6 +162,46 @@ async fn fingerprint_with_reader(
         };
     }
     Ok(Some(String::new()))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+enum Identified {
+    Context(String),
+    /// The script retry may read models the outer key cannot follow (a wildcard list, Khmer);
+    /// nothing is cached.
+    Bypass,
+    /// A model file cannot be identified.
+    Unidentified,
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+impl Identified {
+    /// The context, or nothing when the operation must not be cached.
+    fn into_context(self) -> Option<String> {
+        match self {
+            Self::Context(context) => Some(context),
+            Self::Bypass => None,
+            Self::Unidentified => unidentified_model(),
+        }
+    }
+}
+
+/// The context of requests with no orientation or PaddleOCR models: the script-retry context,
+/// then the tessdata identities, as the blocking path joins them.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn retry_and_tessdata_context(
+    dependencies: &[CacheDependency],
+    cancel: Option<&CancellationToken>,
+) -> crate::Result<Identified> {
+    let mut context = match script_retry_cache_context(dependencies, cancel)? {
+        Identified::Context(context) => context,
+        other => return Ok(other),
+    };
+    let Some(tessdata) = tessdata_context(dependencies, cancel)? else {
+        return Ok(Identified::Unidentified);
+    };
+    context.push_str(&tessdata);
+    Ok(Identified::Context(context))
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -173,15 +247,145 @@ fn paddle_fallback_context(dependencies: &[CacheDependency]) -> String {
     }
 }
 
+/// The resolved directory and model-file identity of every Tesseract selection the requests may
+/// run OCR with, or nothing when none may. `None` when a model file cannot be identified.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn tessdata_context(
+    dependencies: &[CacheDependency],
+    cancel: Option<&CancellationToken>,
+) -> crate::Result<Option<String>> {
+    use crate::ocr::processor::validation::TessdataEnv;
+
+    let mut hash = blake3::Hasher::new();
+    let mut any = false;
+    for (index, dependency) in dependencies.iter().enumerate() {
+        for selection in &dependency.tessdata {
+            check_cancelled(cancel)?;
+            any = true;
+            hash.update(&(index as u64).to_le_bytes());
+            let env = TessdataEnv::from_process().for_model(selection.tessdata_model);
+            if !hash_tessdata_selection(&mut hash, selection, &env) {
+                return Ok(None);
+            }
+        }
+    }
+    Ok(Some(if any {
+        format!(":tessdata-v1:{}", hash.finalize().to_hex())
+    } else {
+        String::new()
+    }))
+}
+
+/// Make the operation uncacheable because a model file cannot be identified, and return the
+/// context that says so.
+///
+/// A platform that reports no modification time does so for every file and request, so the
+/// warning is given once per process; the results stay uncached every time.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn unidentified_model() -> Option<String> {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    super::cacheability::invalidate_current();
+    if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        tracing::warn!(
+            "Cannot identify a Tesseract model file (no modification time, or unreadable); results that \
+             may read it are not cached"
+        );
+    }
+    None
+}
+
+/// Hash the model set of `selection`, the directory that serves it and the identity
+/// ([`hash_pack_identities`](crate::ocr::processor::validation::hash_pack_identities)) of each of
+/// its model files there. Returns false when a model file cannot be identified, so the key cannot
+/// be trusted.
+///
+/// Stats files: it never creates a directory or downloads, and reads a model only to identify it
+/// (a pinned-size pack against its pin, and off Unix any other pack by its bytes), on Unix once
+/// per file version, since it runs for requests that may not reach OCR at all. A selection that no directory serves yet (the engine
+/// would download its packs) is keyed on its set, languages, candidate directories and the
+/// identity of the packs already in them instead; once the packs exist the key changes, so
+/// nothing read before is served after.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[must_use]
+fn hash_tessdata_selection(
+    hash: &mut blake3::Hasher,
+    selection: &ModelSelection,
+    env: &crate::ocr::processor::validation::TessdataEnv,
+) -> bool {
+    use crate::ocr::processor::validation::{
+        canonical_tessdata_dir, existing_tessdata_dir_for, hash_pack_identities, tessdata_search_dirs,
+    };
+
+    fn frame(hash: &mut blake3::Hasher, bytes: &[u8]) {
+        hash.update(&(bytes.len() as u64).to_le_bytes());
+        hash.update(bytes);
+    }
+
+    frame(hash, selection.tessdata_model.as_str().as_bytes());
+    let languages: Vec<&str> = selection
+        .languages
+        .iter()
+        .flat_map(|entry| entry.split('+'))
+        .map(str::trim)
+        .collect();
+    // ~keep The engine expands the wildcard to every model installed beside English.
+    let wildcard = matches!(languages.as_slice(), [all] if *all == "*" || all.eq_ignore_ascii_case("all"));
+    let required: Vec<String> = if wildcard {
+        vec![crate::core::config::ocr::DEFAULT_OCR_LANGUAGE.to_owned()]
+    } else {
+        languages.iter().map(|language| (*language).to_owned()).collect()
+    };
+    let override_path = selection.directory.as_deref();
+    let Some(directory) = existing_tessdata_dir_for(&required, override_path, env) else {
+        hash.update(&[0]);
+        let mut identified = true;
+        for candidate in tessdata_search_dirs(override_path, env) {
+            frame(hash, candidate.as_bytes());
+            // ~keep A wrong pack in a verified directory that cannot be moved aside serves no key
+            // here but is read as given, so its identity has to follow the file.
+            identified &= hash_pack_identities(
+                hash,
+                std::path::Path::new(&candidate),
+                required.iter().map(String::as_str),
+            );
+        }
+        for language in &languages {
+            frame(hash, language.as_bytes());
+        }
+        return identified;
+    };
+    let directory = canonical_tessdata_dir(&directory);
+    hash.update(&[1]);
+    frame(hash, directory.as_os_str().as_encoded_bytes());
+    if wildcard {
+        let mut installed: Vec<String> = std::fs::read_dir(&directory)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.ok()?.file_name().into_string().ok()?;
+                name.strip_suffix(".traineddata").map(str::to_owned)
+            })
+            .collect();
+        installed.sort();
+        hash_pack_identities(hash, &directory, installed.iter().map(String::as_str))
+    } else {
+        hash_pack_identities(hash, &directory, languages.iter().copied())
+    }
+}
+
+/// The vertical Japanese and Han retry models of every request, as the outer key follows them.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn script_retry_cache_context(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
-) -> crate::Result<Option<String>> {
-    use crate::ocr::processor::{script_retry, validation::TessdataEnv};
+) -> crate::Result<Identified> {
+    use crate::ocr::processor::{
+        script_retry::{self, HanRetryModels},
+        validation::TessdataEnv,
+    };
 
     let mut checked = std::collections::HashSet::new();
-    let mut vertical = blake3::Hasher::new();
+    let mut retry = blake3::Hasher::new();
     for model in dependencies
         .iter()
         .filter_map(|dependency| dependency.script_retry.as_ref())
@@ -194,10 +398,10 @@ fn script_retry_cache_context(
         let languages = model.languages.join("+");
         let directory = model.directory.as_deref();
         if checked.len() > MAX_MODEL_SELECTIONS
-            || script_retry::requires_outer_cache_bypass(&languages, directory, &env)
+            || script_retry::requires_outer_cache_bypass(&languages)
             || (model.mixed_pdf_khmer && script_retry::requires_khmer_outer_cache_bypass(&languages, directory, &env))
         {
-            return Ok(None);
+            return Ok(Identified::Bypass);
         }
         let revision = if model.vertical_japanese_retry {
             script_retry::outer_vertical_model_fingerprint(&languages, directory, &env)?
@@ -205,16 +409,29 @@ fn script_retry_cache_context(
             None
         };
         if let Some(revision) = revision {
-            vertical.update(&[1]);
-            vertical.update(revision.as_bytes());
+            retry.update(&[1]);
+            retry.update(revision.as_bytes());
         } else {
-            vertical.update(&[0]);
+            retry.update(&[0]);
+        }
+        match script_retry::outer_han_retry_models(&languages, directory, &env) {
+            HanRetryModels::Absent => {
+                retry.update(&[0]);
+            }
+            HanRetryModels::Identified(identity) => {
+                retry.update(&[1]);
+                retry.update(identity.as_bytes());
+            }
+            HanRetryModels::Unidentified => return Ok(Identified::Unidentified),
         }
     }
     if checked.is_empty() {
-        return Ok(Some(String::new()));
+        return Ok(Identified::Context(String::new()));
     }
-    Ok(Some(format!(":script-retry-outer-v2:{}", vertical.finalize().to_hex())))
+    Ok(Identified::Context(format!(
+        ":script-retry-outer-v3:{}",
+        retry.finalize().to_hex()
+    )))
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -287,6 +504,57 @@ impl ModelSelection {
                 .and_then(|tesseract| tesseract.psm)
                 .is_none_or(|psm| matches!(psm, 3 | 11)),
         })
+    }
+
+    /// The Tesseract models the request may read when OCR runs: those of the `ocr` section, or of
+    /// the default one OCR runs with when there is none, and of each Tesseract pipeline stage.
+    /// Empty when OCR cannot run for the request. Read from the config alone.
+    ///
+    /// The backend is not asked: other backends still read with Tesseract for orientation and
+    /// recovery probes, and a selection whose models are never used only costs a few `stat` calls.
+    fn for_tessdata(config: &ExtractionConfig, mime: Option<&str>) -> Vec<Self> {
+        if !config.use_cache || config.effective_disable_ocr() {
+            return Vec::new();
+        }
+        let mime = mime.map(|mime| mime.split(';').next().unwrap_or_default().trim());
+        if mime.is_some_and(|mime| mime.eq_ignore_ascii_case("text/plain")) {
+            return Vec::new();
+        }
+        let image = mime.is_some_and(|mime| {
+            mime.split('/')
+                .next()
+                .is_some_and(|kind| kind.eq_ignore_ascii_case("image"))
+        });
+        let pdf = cfg!(feature = "pdf") && mime.is_some_and(|mime| mime.eq_ignore_ascii_case("application/pdf"));
+        if !(image || pdf || mime.is_none_or(str::is_empty) || config.runs_ocr_on_embedded_images()) {
+            return Vec::new();
+        }
+        let default_ocr = config.ocr_or_default();
+        let ocr: &crate::core::config::OcrConfig = &default_ocr;
+        let tessdata_model = ocr.effective_tessdata_model();
+        let selection = move |languages, directory| Self {
+            languages,
+            directory,
+            tessdata_model,
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        #[cfg_attr(not(feature = "pdf"), allow(unused_mut))]
+        let mut selections = vec![selection(ocr.effective_tesseract_language(), ocr.tessdata_path.clone())];
+        #[cfg(feature = "pdf")]
+        if let Some(pipeline) = &ocr.pipeline {
+            for stage in pipeline.stages.iter().take(MAX_MODEL_SELECTIONS) {
+                let inputs = crate::extractors::pdf::ocr::stage_model_inputs::StageModelInputs::new(ocr, stage);
+                if inputs.backend() != "tesseract" {
+                    continue;
+                }
+                let stage = selection(inputs.languages(), inputs.directory().map(std::path::Path::to_path_buf));
+                if !selections.contains(&stage) {
+                    selections.push(stage);
+                }
+            }
+        }
+        selections
     }
 
     fn for_config(config: &ExtractionConfig, mime: Option<&str>) -> Option<Self> {
@@ -496,6 +764,7 @@ mod tests {
     async fn orientation_context(config: &ExtractionConfig) -> Option<String> {
         let mut dependency = CacheDependency::for_config(config, Some("application/pdf"));
         dependency.script_retry = None;
+        dependency.tessdata.clear();
         fingerprint(&[dependency], None).await.unwrap()
     }
 
@@ -575,6 +844,200 @@ mod tests {
                 .is_none()
         );
         assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn every_request_that_may_run_ocr_selects_its_tesseract_models() {
+        let selected = |config: &ExtractionConfig, mime: Option<&str>| {
+            CacheDependency::for_config(config, mime)
+                .tessdata
+                .iter()
+                .map(|selection| (selection.languages.join("+"), selection.tessdata_model))
+                .collect::<Vec<_>>()
+        };
+        let fast = crate::core::config::TessdataModel::Fast;
+        let best = crate::core::config::TessdataModel::Best;
+        let docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+        let default = ExtractionConfig::default();
+        for mime in [
+            Some("application/pdf"),
+            Some("image/png"),
+            Some("IMAGE/JPEG; q=1"),
+            None,
+        ] {
+            assert_eq!(selected(&default, mime), [("eng".to_string(), fast)], "{mime:?}");
+        }
+        assert!(selected(&default, Some(docx)).is_empty(), "no OCR, no model dependency");
+        assert!(selected(&default, Some("text/plain")).is_empty());
+
+        let top_level = ExtractionConfig {
+            tessdata_model: Some(best),
+            ..Default::default()
+        };
+        assert_eq!(
+            selected(&top_level, Some("application/pdf")),
+            [("eng".to_string(), best)],
+            "the inherited set reaches a request with no ocr section"
+        );
+
+        let mut with_section = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                language: vec!["deu".into(), "fra".into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(selected(&with_section, Some(docx)), [("deu+fra".to_string(), fast)]);
+        with_section.use_cache = false;
+        assert!(selected(&with_section, Some("image/png")).is_empty());
+        with_section.use_cache = true;
+        with_section.disable_ocr = true;
+        assert!(selected(&with_section, Some("image/png")).is_empty());
+    }
+
+    #[test]
+    fn tessdata_context_follows_the_model_files_without_creating_or_reading_anything() {
+        use crate::ocr::processor::validation::TessdataEnv;
+
+        let models = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let english = models.path().join("eng.traineddata");
+        std::fs::write(&english, b"first model").unwrap();
+        let selection = |tessdata_model| ModelSelection {
+            languages: vec!["eng".into()],
+            directory: None,
+            tessdata_model,
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        let env = |prefix: Option<String>, tessdata_model| TessdataEnv {
+            tessdata_prefix: prefix,
+            cache_dir: Some(cache.path().into()),
+            system_paths: false,
+            model: tessdata_model,
+        };
+        let context = |prefix: Option<String>, tessdata_model| {
+            let mut hash = blake3::Hasher::new();
+            assert!(hash_tessdata_selection(
+                &mut hash,
+                &selection(tessdata_model),
+                &env(prefix, tessdata_model)
+            ));
+            hash.finalize()
+        };
+        let fast = crate::core::config::TessdataModel::Fast;
+        let best = crate::core::config::TessdataModel::Best;
+        let prefix = || Some(models.path().to_str().unwrap().to_owned());
+
+        let through_prefix = context(prefix(), best);
+        assert_eq!(through_prefix, context(prefix(), best));
+        assert_eq!(
+            through_prefix,
+            context(
+                prefix().map(|path| format!("{path}{}", std::path::MAIN_SEPARATOR)),
+                best
+            ),
+            "one directory, one context"
+        );
+        assert_ne!(
+            through_prefix,
+            context(prefix(), fast),
+            "the requested set is part of the context"
+        );
+
+        let unset = context(None, best);
+        assert_ne!(
+            through_prefix, unset,
+            "text read through TESSDATA_PREFIX must not be served once the prefix is unset"
+        );
+        assert_eq!(unset, context(None, best));
+        assert_ne!(unset, context(None, fast));
+        assert_eq!(
+            cache.path().read_dir().unwrap().count(),
+            0,
+            "computing a key must not create cache directories or download"
+        );
+
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&english, b"a replaced model").unwrap();
+        assert_ne!(through_prefix, context(prefix(), best), "a pack replaced in place");
+    }
+
+    #[test]
+    fn a_wrong_best_pack_served_as_given_is_part_of_the_tessdata_context() {
+        use crate::core::config::TessdataModel;
+        use crate::ocr::processor::validation::{TessdataEnv, model_cache_dir};
+
+        let cache = tempfile::tempdir().unwrap();
+        let managed = model_cache_dir(cache.path(), TessdataModel::Best);
+        std::fs::create_dir_all(&managed).unwrap();
+        let pack = managed.join("eng.traineddata");
+        std::fs::write(&pack, b"not the pinned best pack").unwrap();
+        let selection = ModelSelection {
+            languages: vec!["eng".into()],
+            directory: None,
+            tessdata_model: TessdataModel::Best,
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        let env = TessdataEnv {
+            tessdata_prefix: None,
+            cache_dir: Some(cache.path().into()),
+            system_paths: false,
+            model: TessdataModel::Best,
+        };
+        assert!(
+            crate::ocr::processor::validation::existing_tessdata_dir_for(&["eng".to_owned()], None, &env).is_none(),
+            "a wrong pack serves no verified directory"
+        );
+        let context = || {
+            let mut hash = blake3::Hasher::new();
+            assert!(hash_tessdata_selection(&mut hash, &selection, &env));
+            hash.finalize()
+        };
+
+        let first = context();
+        assert_eq!(first, context());
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(&pack, b"another pack that is not the pinned one").unwrap();
+        assert_ne!(
+            first,
+            context(),
+            "text read from the pack used as given must not be served once it changes"
+        );
+    }
+
+    #[test]
+    fn wildcard_tessdata_context_follows_every_installed_model() {
+        use crate::ocr::processor::validation::TessdataEnv;
+
+        let models = tempfile::tempdir().unwrap();
+        std::fs::write(models.path().join("eng.traineddata"), b"english").unwrap();
+        let selection = ModelSelection {
+            languages: vec!["all".into()],
+            directory: Some(models.path().into()),
+            tessdata_model: Default::default(),
+            mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
+        };
+        let context = || {
+            let mut hash = blake3::Hasher::new();
+            assert!(hash_tessdata_selection(
+                &mut hash,
+                &selection,
+                &TessdataEnv::from_lookup(|_| None)
+            ));
+            hash.finalize()
+        };
+
+        let english_only = context();
+        std::fs::write(models.path().join("deu.traineddata"), b"german").unwrap();
+        assert_ne!(
+            english_only,
+            context(),
+            "an added model changes what the wildcard reads"
+        );
     }
 
     #[cfg(unix)]
@@ -660,6 +1123,177 @@ mod tests {
             "a new snapshot must re-read changed model bytes"
         );
     }
+    // ~keep Off Unix no pack digest is memoized, so a pack that exists is always read on the pool.
+    #[cfg(unix)]
+    #[test]
+    fn tessdata_identities_alone_do_not_wait_for_the_blocking_pool() {
+        use std::future::Future;
+        use std::sync::mpsc;
+
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("eng.traineddata"), b"model fixture").unwrap();
+        crate::ocr::processor::validation::wait_until_settled(&root.path().join("eng.traineddata"));
+        let dependencies = [CacheDependency {
+            tessdata: vec![ModelSelection {
+                languages: vec!["eng".into()],
+                directory: Some(root.path().into()),
+                tessdata_model: crate::core::config::TessdataModel::Fast,
+                mixed_pdf_khmer: false,
+                vertical_japanese_retry: false,
+            }],
+            ..Default::default()
+        }];
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        // ~keep The pack's digest is read once, on the pool; later requests are answered from the memo.
+        runtime.block_on(fingerprint(&dependencies, None)).unwrap();
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let blocker = runtime.spawn_blocking(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        started_rx.recv().unwrap();
+
+        let context = runtime.block_on(async {
+            let mut pending = Box::pin(fingerprint(&dependencies, None));
+            let first_poll =
+                std::future::poll_fn(|context| std::task::Poll::Ready(pending.as_mut().poll(context))).await;
+            release_tx.send(()).unwrap();
+            blocker.await.unwrap();
+            first_poll
+        });
+        let std::task::Poll::Ready(context) = context else {
+            panic!("the tessdata context must not queue behind the occupied blocking worker");
+        };
+        assert!(context.unwrap().unwrap().starts_with(":tessdata-v1:"));
+    }
+
+    // ~keep Off Unix no pack digest is memoized, so a pack that exists is always read on the pool.
+    #[cfg(unix)]
+    #[test]
+    fn an_ordinary_request_does_not_wait_for_the_blocking_pool_once_its_models_were_read() {
+        use crate::ocr::tessdata_download::without_reading_packs;
+        use std::future::Future;
+        use std::sync::mpsc;
+
+        let models = tempfile::tempdir().unwrap();
+        std::fs::write(models.path().join("eng.traineddata"), b"english model fixture").unwrap();
+        std::fs::write(models.path().join("jpn_vert.traineddata"), b"vertical model fixture").unwrap();
+        for model in ["eng", "jpn_vert"] {
+            crate::ocr::processor::validation::wait_until_settled(&models.path().join(format!("{model}.traineddata")));
+        }
+        let mut dependency = CacheDependency::for_config(&ExtractionConfig::default(), Some("application/pdf"));
+        assert!(
+            dependency.model.is_none()
+                && dependency
+                    .script_retry
+                    .as_ref()
+                    .is_some_and(|retry| retry.vertical_japanese_retry)
+                && !dependency.tessdata.is_empty(),
+            "the default request may retry its script, vertical Japanese included, and read the default models"
+        );
+        // ~keep The host's tessdata may hold no pack at all, which would leave the memo unused.
+        if let Some(retry) = dependency.script_retry.as_mut() {
+            retry.directory = Some(models.path().into());
+        }
+        for selection in &mut dependency.tessdata {
+            selection.directory = Some(models.path().into());
+        }
+        let dependencies = [dependency];
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let read = runtime.block_on(fingerprint(&dependencies, None)).unwrap();
+        // ~keep The retry context searches the host's tessdata directories from the process env: a
+        // host with `osd` and a Han model there bypasses the cache and fails here, not vacuously.
+        assert!(
+            read.as_deref()
+                .is_some_and(|context| context.starts_with(":script-retry-outer-v3:")),
+            "the request is cacheable: {read:?}"
+        );
+        assert!(
+            tessdata_context(&dependencies, None)
+                .unwrap()
+                .is_some_and(|context| context.starts_with(":tessdata-v1:")),
+            "the pinned directory serves the pack"
+        );
+        assert!(
+            matches!(
+                without_reading_packs(|| retry_and_tessdata_context(&dependencies, None)),
+                Some(Ok(Identified::Context(_)))
+            ),
+            "the pack and the vertical model read before are answered from the memos"
+        );
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let blocker = runtime.spawn_blocking(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        started_rx.recv().unwrap();
+
+        let context = runtime.block_on(async {
+            let mut pending = Box::pin(fingerprint(&dependencies, None));
+            let first_poll =
+                std::future::poll_fn(|context| std::task::Poll::Ready(pending.as_mut().poll(context))).await;
+            release_tx.send(()).unwrap();
+            blocker.await.unwrap();
+            first_poll
+        });
+        let std::task::Poll::Ready(context) = context else {
+            panic!("a request whose models were read before must not queue behind the occupied blocking worker");
+        };
+        assert_eq!(
+            context.unwrap(),
+            read,
+            "the inline context is the one the blocking pool computes"
+        );
+    }
+
+    #[tokio::test]
+    async fn han_retry_models_key_a_default_pdf_request_instead_of_bypassing_it() {
+        let models = tempfile::tempdir().unwrap();
+        let pack = |name: &str| models.path().join(format!("{name}.traineddata"));
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(pack(name), format!("{name} fixture")).unwrap();
+        }
+        let mut dependency = CacheDependency::for_config(&ExtractionConfig::default(), Some("application/pdf"));
+        assert!(
+            dependency.model.is_none() && dependency.script_retry.is_some(),
+            "a default PDF request may retry its script and reads no orientation model"
+        );
+        // ~keep The override is searched first, so the host's tessdata cannot serve the retry set.
+        if let Some(retry) = dependency.script_retry.as_mut() {
+            retry.directory = Some(models.path().into());
+        }
+        for selection in &mut dependency.tessdata {
+            selection.directory = Some(models.path().into());
+        }
+        let dependencies = [dependency];
+        let context = || fingerprint(&dependencies, None);
+
+        let present = context()
+            .await
+            .unwrap()
+            .expect("a complete Han retry set is keyed, not bypassed");
+        assert!(present.contains(":script-retry-outer-v3:"), "{present}");
+        assert_eq!(context().await.unwrap().as_deref(), Some(present.as_str()));
+        // ~keep A different length: two writes within one clock tick can share a modification time.
+        std::fs::write(pack("chi_sim"), b"chi_sim fixture, replaced").unwrap();
+        let han_changed = context().await.unwrap().expect("a changed Han pack is keyed");
+        assert_ne!(han_changed, present);
+        std::fs::remove_file(pack("osd")).unwrap();
+        let without_osd = context().await.unwrap().expect("a missing OSD pack is keyed");
+        assert_ne!(without_osd, han_changed);
+        assert_ne!(without_osd, present);
+    }
+
     #[test]
     fn cancellation_while_queued_prevents_the_model_job_and_all_stream_reads() {
         use std::future::Future;
@@ -801,10 +1435,16 @@ mod explicit_mode_tests {
         cache.set_default(legacy_key, legacy_result.clone(), None).unwrap();
 
         let han = root.path().join("chi_sim.traineddata");
-        for bytes in [b"han-v1", b"han-v2"] {
+        let missing_key = apply_context(Some(legacy_key.into()), &missing).expect("no retry set is keyed");
+        let mut keys = Vec::new();
+        for bytes in [b"han-v1".as_slice(), b"han-v2, longer"] {
             std::fs::write(&han, bytes).unwrap();
             super::super::cacheability::scope(async {
-                assert!(apply_context(Some("warm".into()), &context().await.unwrap()).is_none());
+                let key = apply_context(Some(legacy_key.into()), &context().await.unwrap())
+                    .expect("a complete retry set is keyed on its models");
+                assert_ne!(key, legacy_key);
+                assert_ne!(key, missing_key);
+                keys.push(key);
                 let plain_context = fingerprint(std::slice::from_ref(&plain), None).await.unwrap();
                 assert_eq!(
                     apply_context(Some("warm".into()), &plain_context).as_deref(),
@@ -817,11 +1457,17 @@ mod explicit_mode_tests {
             })
             .await;
         }
+        assert_ne!(keys[0], keys[1], "the Han pack's bytes are part of the key");
 
         let mut no_retry = config.clone();
         no_retry.ocr.as_mut().unwrap().language = vec!["chi_sim".into()];
-        let no_retry = CacheDependency::for_config(&no_retry, Some("image/png"));
+        let mut no_retry = CacheDependency::for_config(&no_retry, Some("image/png"));
+        no_retry.tessdata.clear();
         assert_eq!(fingerprint(&[no_retry], None).await.unwrap().as_deref(), Some(""));
+
+        let present_key = &keys[1];
+        let retry_result = "汉字 read while the retry set was present".as_bytes().to_vec();
+        cache.set_default(present_key, retry_result.clone(), None).unwrap();
 
         std::fs::remove_file(han).unwrap();
         let after_removal = context().await.unwrap();
@@ -829,7 +1475,12 @@ mod explicit_mode_tests {
         let current_key = apply_context(Some(legacy_key.into()), &after_removal)
             .expect("an image without the retry models remains cacheable");
         assert_eq!(cache.get_default(legacy_key, None).unwrap(), Some(legacy_result));
-        assert_eq!(cache.get_default(&current_key, None).unwrap(), None);
+        assert_eq!(cache.get_default(present_key, None).unwrap(), Some(retry_result));
+        assert_eq!(
+            cache.get_default(&current_key, None).unwrap(),
+            None,
+            "an entry stored with the retry set is not served once its packs are removed"
+        );
     }
 
     #[tokio::test]
@@ -860,8 +1511,9 @@ mod explicit_mode_tests {
             let ocr = config.ocr.as_mut().unwrap();
             ocr.tesseract_config.as_mut().unwrap().output_format = "hocr".into();
             ocr.tessdata_path = Some("unavailable-model-root".into());
-            let dependency = CacheDependency::for_config(&config, Some("image/png"));
+            let mut dependency = CacheDependency::for_config(&config, Some("image/png"));
             assert!(dependency.model.is_none());
+            dependency.tessdata.clear();
             assert_eq!(fingerprint(&[dependency], None).await.unwrap().as_deref(), Some(""));
         }
     }

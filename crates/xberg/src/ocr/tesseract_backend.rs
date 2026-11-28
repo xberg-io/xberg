@@ -426,7 +426,7 @@ impl TesseractBackend {
         //
         // The languages are threaded through for the same reason the override is, and it is the
         // same agreement: `tessdata_search_dirs` accepts a candidate directory only when
-        // `all_languages_exist` holds for the languages it is given, so a hardcoded `eng` here
+        // `directory_serves` holds for the languages it is given, so a hardcoded `eng` here
         // rejected a `tessdata_path` holding only the caller's own language, fell through to
         // another directory, and denied a language every real job with that config loads. See
         // GH#1891. `probe_languages` is what keeps the fallback from downloading. ~keep
@@ -1338,11 +1338,11 @@ mod tests {
 
     /// GH#1891. A `tessdata_path` holding only the caller's own language must satisfy the probe,
     /// because it satisfies a real job: `tessdata_search_dirs` accepts a candidate directory only
-    /// when `all_languages_exist` holds for the languages it is given, so the hardcoded `eng` the
+    /// when `directory_serves` holds for the languages it is given, so the hardcoded `eng` the
     /// probe used to pass rejected the override and fell through to the rest of the chain.
     ///
     /// Asserted on the resolution step rather than through `query_available_languages`, so it needs
-    /// no Tesseract engine and no real model bytes -- `all_languages_exist` is a file-existence
+    /// no Tesseract engine and no real model bytes -- `directory_serves` is a file-existence
     /// check, which is exactly the step that was being handed the wrong languages. Nothing reads or
     /// writes the process environment, so this needs no `#[serial]`.
     #[test]
@@ -1406,7 +1406,7 @@ mod tests {
         assert_eq!(
             TesseractBackend::probe_languages(&[], None, &tessdata_env),
             eng(),
-            "and an empty request must too: `all_languages_exist` rejects every directory for an \
+            "and an empty request must too: `directory_serves` rejects every directory for an \
              empty language list, which would send resolution down the same download path"
         );
     }
