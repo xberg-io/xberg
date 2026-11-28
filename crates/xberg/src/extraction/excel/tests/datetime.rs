@@ -25,3 +25,17 @@ fn test_format_cell_value_date_in_the_1904_system() {
     let date = Data::DateTime(ExcelDateTime::new(44103.0, ExcelDateTimeType::DateTime, true));
     assert_eq!(format_cell_to_string(&date), "2024-09-30");
 }
+
+#[test]
+fn should_render_serial_zero_in_the_1904_system_as_its_epoch_date_gh3441() {
+    let epoch = Data::DateTime(ExcelDateTime::new(0.0, ExcelDateTimeType::DateTime, true));
+    assert_eq!(format_cell_to_string(&epoch), "1904-01-01");
+    let time = Data::DateTime(ExcelDateTime::new(
+        0.7027777777777777,
+        ExcelDateTimeType::DateTime,
+        true,
+    ));
+    assert_eq!(format_cell_to_string(&time), "16:52:00");
+    let next_day = Data::DateTime(ExcelDateTime::new(1.0, ExcelDateTimeType::DateTime, true));
+    assert_eq!(format_cell_to_string(&next_day), "1904-01-02");
+}

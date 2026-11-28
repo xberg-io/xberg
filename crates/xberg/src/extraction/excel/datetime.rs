@@ -10,7 +10,9 @@ pub(super) fn format_excel_datetime(dt: &ExcelDateTime) -> String {
     }
     let serial = dt.as_f64();
     let (year, month, day, hour, min, sec, _milli) = dt.to_ymd_hms_milli();
-    if (0.0..1.0).contains(&serial) {
+    // ~keep Serial 0 maps to 1904-01-01 only in the 1904 system, where it is a date rather than midnight.
+    let is_1904_epoch = serial == 0.0 && (year, month, day) == (1904, 1, 1);
+    if (0.0..1.0).contains(&serial) && !is_1904_epoch {
         format!("{hour:02}:{min:02}:{sec:02}")
     } else if serial.fract() == 0.0 {
         format!("{year:04}-{month:02}-{day:02}")
