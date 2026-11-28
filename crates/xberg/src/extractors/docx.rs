@@ -2541,12 +2541,18 @@ mod tests {
     /// Plain text of the header and footer layers (body excluded) for a document built from
     /// `document_xml` and the extra `files`, with headers and footers included.
     async fn hf_text(document_xml: &str, files: &[(&str, &str)]) -> String {
+        hf_text_undeclared(document_xml, files, &[]).await
+    }
+
+    /// Like [`hf_text`], but the parts at the `undeclared` paths are in the package without a
+    /// relationship naming them.
+    async fn hf_text_undeclared(document_xml: &str, files: &[(&str, &str)], undeclared: &[&str]) -> String {
         use crate::core::config::{ContentFilterConfig, OutputFormat};
         let hf_files: Vec<(&str, &str)> = files
             .iter()
             .copied()
             .filter(|(path, _)| path.starts_with("word/header") || path.starts_with("word/footer"))
-            .filter(|(path, _)| !path.contains("orphan"))
+            .filter(|(path, _)| !undeclared.contains(path))
             .collect();
         let rels = hf_rels(&hf_files);
         let mut all = files.to_vec();
@@ -2644,14 +2650,18 @@ mod tests {
             ("word/header1.xml", hf_part("hdr", "Inherited First Header")),
             ("word/footer1.xml", hf_part("ftr", "Inherited First Footer")),
         ];
-        let first = r#"<w:headerReference w:type="first" r:id="header1"/><w:footerReference w:type="first" r:id="footer1"/>"#;
+        let first =
+            r#"<w:headerReference w:type="first" r:id="header1"/><w:footerReference w:type="first" r:id="footer1"/>"#;
         let body = sectioned_body(&[first, "<w:titlePg/>"]);
         let text = hf_text(&body, &hf_files(&parts)).await;
         assert_eq!(text.matches("Inherited First Header").count(), 1, "{text}");
         assert_eq!(text.matches("Inherited First Footer").count(), 1, "{text}");
 
         let without_inheritor = hf_text(&sectioned_body(&[first]), &hf_files(&parts)).await;
-        assert!(!without_inheritor.contains("Inherited First Header"), "{without_inheritor}");
+        assert!(
+            !without_inheritor.contains("Inherited First Header"),
+            "{without_inheritor}"
+        );
     }
 
     #[tokio::test]
@@ -2688,9 +2698,12 @@ mod tests {
             .extract_content(&data, DOCX_MIME, &config)
             .await
             .unwrap();
-        let text =
-            crate::extraction::derive::derive_extraction_result(internal, false, crate::core::config::OutputFormat::Plain)
-                .content;
+        let text = crate::extraction::derive::derive_extraction_result(
+            internal,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        )
+        .content;
         assert!(text.contains("Dotted Header"), "{text}");
     }
 
@@ -2711,16 +2724,124 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn title_pg_without_a_first_page_part_emits_nothing_extra() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "Unreferenced First Header")),
+        ];
+        let sect = r#"<w:headerReference w:type="default" r:id="header1"/><w:titlePg/>"#;
+        let text = hf_text(&sectioned_body(&[sect]), &hf_files(&parts)).await;
+        assert_eq!(text.matches("Default Header").count(), 1, "{text}");
+        assert!(!text.contains("Unreferenced First Header"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn even_and_default_parts_carry_across_sections_and_a_later_section_adds_its_own() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default One")),
+            ("word/header2.xml", hf_part("hdr", "Even One")),
+            ("word/header3.xml", hf_part("hdr", "Default Three")),
+        ];
+        let settings = settings_part("<w:evenAndOddHeaders/>");
+        let first =
+            r#"<w:headerReference w:type="default" r:id="header1"/><w:headerReference w:type="even" r:id="header2"/>"#;
+        let third = r#"<w:headerReference w:type="default" r:id="header3"/>"#;
+        let mut files = hf_files(&parts);
+        files.push(("word/settings.xml", settings.as_str()));
+        let text = hf_text(&sectioned_body(&[first, "", third]), &files).await;
+        for needle in ["Default One", "Even One", "Default Three"] {
+            assert_eq!(text.matches(needle).count(), 1, "{needle}: {text}");
+        }
+        assert!(
+            text.find("Default One").unwrap() < text.find("Default Three").unwrap(),
+            "{text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_document_without_any_sect_pr_emits_no_headers_or_footers() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Unshown Header")),
+            ("word/footer1.xml", hf_part("ftr", "Unshown Footer")),
+        ];
+        let text = hf_text(HF_BODY_XML, &hf_files(&parts)).await;
+        assert!(text.contains("Body content here."), "{text}");
+        assert!(!text.contains("Unshown"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn the_body_level_sect_pr_adds_its_part_after_an_earlier_paragraph_level_one() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Paragraph Section Header")),
+            ("word/header2.xml", hf_part("hdr", "Body Section Header")),
+        ];
+        let early = r#"<w:headerReference w:type="default" r:id="header1"/>"#;
+        let last = r#"<w:headerReference w:type="default" r:id="header2"/>"#;
+        let text = hf_text(&sectioned_body(&[early, last]), &hf_files(&parts)).await;
+        let early_at = text.find("Paragraph Section Header").expect(&text);
+        let last_at = text.find("Body Section Header").expect(&text);
+        assert!(early_at < last_at, "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_second_title_pg_section_does_not_re_emit_the_default_part() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "First Header")),
+        ];
+        let first = r#"<w:headerReference w:type="default" r:id="header1"/><w:headerReference w:type="first" r:id="header2"/><w:titlePg/>"#;
+        let text = hf_text(&sectioned_body(&[first, "<w:titlePg/>"]), &hf_files(&parts)).await;
+        assert_eq!(text.matches("Default Header").count(), 1, "{text}");
+        assert_eq!(text.matches("First Header").count(), 1, "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_strict_namespace_settings_part_enables_even_and_odd_headers() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Default Header")),
+            ("word/header2.xml", hf_part("hdr", "Even Header")),
+        ];
+        let settings = r#"<s:settings xmlns:s="http://purl.oclc.org/ooxml/wordprocessingml/main"><s:evenAndOddHeaders/></s:settings>"#;
+        let sect =
+            r#"<w:headerReference w:type="default" r:id="header1"/><w:headerReference w:type="even" r:id="header2"/>"#;
+        let mut files = hf_files(&parts);
+        files.push(("word/settings.xml", settings));
+        let text = hf_text(&sectioned_body(&[sect]), &files).await;
+        assert!(text.contains("Even Header"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_section_break_inside_a_paragraph_property_change_activates_nothing() {
+        let parts = [
+            ("word/header1.xml", hf_part("hdr", "Current Header")),
+            ("word/header2.xml", hf_part("hdr", "Historical Header")),
+        ];
+        let historical = format!(
+            r#"<w:p><w:pPr><w:pPrChange w:id="1"><w:pPr><w:sectPr xmlns:r="{REL_NS}"><w:headerReference w:type="default" r:id="header2"/></w:sectPr></w:pPr></w:pPrChange></w:pPr><w:r><w:t>Edited paragraph.</w:t></w:r></w:p>"#
+        );
+        let sect = r#"<w:headerReference w:type="default" r:id="header1"/>"#;
+        let document = sectioned_body(&[sect]).replace("<w:body>", &format!("<w:body>{historical}"));
+        let text = hf_text(&document, &hf_files(&parts)).await;
+        assert!(text.contains("Current Header"), "{text}");
+        assert!(!text.contains("Historical Header"), "{text}");
+    }
+
+    #[tokio::test]
     async fn header_and_footer_parts_no_section_references_are_not_emitted() {
         let parts = [
             ("word/header1.xml", hf_part("hdr", "Referenced Header")),
             ("word/header2.xml", hf_part("hdr", "Declared But Unreferenced Header")),
-            ("word/header9-orphan.xml", hf_part("hdr", "Orphan Header")),
+            ("word/header9.xml", hf_part("hdr", "Orphan Header")),
             ("word/header10.xml", hf_part("hdr", "Undeclared Header")),
             ("word/footer1.xml", hf_part("ftr", "Declared But Unreferenced Footer")),
         ];
         let sect = r#"<w:headerReference w:type="default" r:id="header1"/>"#;
-        let text = hf_text(&sectioned_body(&[sect]), &hf_files(&parts)).await;
+        let text = hf_text_undeclared(
+            &sectioned_body(&[sect]),
+            &hf_files(&parts),
+            &["word/header9.xml", "word/header10.xml"],
+        )
+        .await;
         assert!(text.contains("Referenced Header"), "{text}");
         for absent in [
             "Declared But Unreferenced Header",
@@ -2923,6 +3044,79 @@ mod tests {
         assert!(plain.contains("After table[^1]"), "later note is numbered 1: {plain}");
         assert!(plain.contains("Kept note text."), "{plain}");
         assert!(!plain.contains("[^2]"), "numbering did not skip: {plain}");
+    }
+
+    #[tokio::test]
+    async fn footnote_in_a_tracked_deleted_cell_is_dropped_and_does_not_shift_numbering() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:tcPr><w:cellDel w:id="9" w:author="A"/></w:tcPr><w:p><w:r><w:t>Removed cell</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Kept cell</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>After table</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let footnotes_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="1"><w:p><w:r><w:t>Removed note text.</w:t></w:r></w:p></w:footnote>
+  <w:footnote w:id="2"><w:p><w:r><w:t>Kept note text.</w:t></w:r></w:p></w:footnote>
+</w:footnotes>"#;
+        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None, None);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(
+            !plain.contains("Removed"),
+            "deleted cell and its note are gone: {plain}"
+        );
+        assert!(plain.contains("Kept cell"), "{plain}");
+        assert!(plain.contains("After table[^1]"), "later note is numbered 1: {plain}");
+        assert!(plain.contains("Kept note text."), "{plain}");
+        assert!(!plain.contains("[^2]"), "numbering did not skip: {plain}");
+    }
+
+    #[tokio::test]
+    async fn comment_only_referenced_in_a_tracked_deleted_cell_is_dropped() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:tcPr><w:cellDel w:id="9" w:author="A"/></w:tcPr><w:p><w:r><w:t>Removed cell</w:t></w:r><w:r><w:commentReference w:id="0"/></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Kept cell</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>Live text</w:t></w:r><w:r><w:commentReference w:id="1"/></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        let comments_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:comment w:id="0" w:author="A"><w:p><w:r><w:t>Removed comment text.</w:t></w:r></w:p></w:comment>
+  <w:comment w:id="1" w:author="A"><w:p><w:r><w:t>Live comment text.</w:t></w:r></w:p></w:comment>
+</w:comments>"#;
+        let data = build_test_docx_with_files(document_xml, &[("word/comments.xml", comments_xml)]);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(!plain.contains("Removed"), "{plain}");
+        assert!(plain.contains("Kept cell"), "{plain}");
+        assert!(plain.contains("Live comment text."), "{plain}");
     }
 
     #[tokio::test]

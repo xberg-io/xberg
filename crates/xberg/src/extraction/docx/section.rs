@@ -7,8 +7,8 @@ use super::parser::HeaderFooterType;
 #[cfg(test)]
 use crate::extraction::ooxml_constants::WORDPROCESSINGML_NAMESPACE;
 use crate::extractors::security::{SecurityBudget, SecurityError};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 /// Page orientation.
 #[cfg_attr(alef, alef(skip))]

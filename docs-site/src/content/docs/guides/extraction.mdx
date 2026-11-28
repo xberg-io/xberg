@@ -616,7 +616,7 @@ let output = extract(ExtractInput::from_uri("contract.pdf"), &config).await?;
 </TabItem>
 </Tabs>
 
-For DOCX, DOC, and ODT, enabled headers and footers are appended after the body
+For DOCX, DOC, ODT, RTF, HWPX, and WordPerfect, enabled headers and footers are appended after the body
 text, not placed per page. DOCX emits each distinct header or footer variant
 (first-page, even, odd) once, dropping verbatim duplicates.
 
