@@ -1994,12 +1994,7 @@ impl InternalDocumentExtractor for OdtExtractor {
         };
 
         if let Some(ref filter) = config.content_filter {
-            use crate::types::document_structure::ContentLayer;
-            doc.elements.retain(|elem| match elem.layer {
-                ContentLayer::Header => filter.include_headers,
-                ContentLayer::Footer => filter.include_footers,
-                _ => true,
-            });
+            doc.apply_furniture_filter(filter);
         }
 
         tracing::debug!(
@@ -2972,6 +2967,52 @@ mod tests {
             let xml = format!("<text:s {NS} {attribute}/>");
             let doc = roxmltree::Document::parse(&xml).unwrap();
             assert_eq!(odf_space_run(doc.root_element()), expected, "for {attribute:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn odt_header_and_footer_text_renders_only_when_the_content_filter_includes_it() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        let content_xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content {CONTENT_XML_NAMESPACES}>
+  <office:body><office:text><text:p>Body text</text:p></office:text></office:body>
+</office:document-content>"#
+        );
+        let styles_xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles {CONTENT_XML_NAMESPACES}>
+  <office:master-styles><style:master-page style:name="Standard">
+    <style:header><text:p>Running header</text:p></style:header>
+    <style:footer><text:p>Running footer</text:p></style:footer>
+  </style:master-page></office:master-styles>
+</office:document-styles>"#
+        );
+        let bytes = build_odt_zip(&[("content.xml", &content_xml), ("styles.xml", &styles_xml)])
+            .into_inner()
+            .into_inner();
+        for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+            for (headers, footers) in [(true, true), (true, false), (false, true), (false, false)] {
+                let config = ExtractionConfig {
+                    content_filter: Some(ContentFilterConfig {
+                        include_headers: headers,
+                        include_footers: footers,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
+                let doc = OdtExtractor::new()
+                    .extract_content(&bytes, "application/vnd.oasis.opendocument.text", &config)
+                    .await
+                    .unwrap();
+                let content = crate::extraction::derive::derive_extraction_result(doc, false, format.clone()).content;
+                assert!(content.contains("Body text"), "{content}");
+                assert_eq!(content.contains("Running header"), headers, "{format:?} {content}");
+                assert_eq!(content.contains("Running footer"), footers, "{format:?} {content}");
+                if let Some(at) = content.find("Running header") {
+                    assert!(at > content.find("Body text").unwrap(), "{content}");
+                }
+            }
         }
     }
 }

@@ -966,6 +966,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn header_only_and_footer_only_filters_render_only_their_own_layer() {
+        use crate::core::config::{ContentFilterConfig, OutputFormat};
+        for (include_headers, include_footers) in [(true, false), (false, true)] {
+            let config = ExtractionConfig {
+                content_filter: Some(ContentFilterConfig {
+                    include_headers,
+                    include_footers,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let doc = extract_synthetic_with_config(PlcKind::Valid, PlcKind::Valid, config).await;
+            assert_eq!(on_layer(&doc, ContentLayer::Header, "Odd page header"), include_headers);
+            assert_eq!(on_layer(&doc, ContentLayer::Footer, "Odd page footer"), include_footers);
+            let content = crate::extraction::derive::derive_extraction_result(doc, false, OutputFormat::Plain).content;
+            let body = content.find("Body paragraph").expect("body text");
+            assert_eq!(content.contains("Odd page header"), include_headers, "{content}");
+            assert_eq!(content.contains("Odd page footer"), include_footers, "{content}");
+            for needle in ["Odd page header", "Odd page footer"] {
+                if let Some(at) = content.find(needle) {
+                    assert!(at > body, "{needle} precedes the body: {content}");
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn include_footnotes_false_drops_footnotes_but_preserves_comments() {
         let config = ExtractionConfig {
             content_filter: Some(crate::core::config::ContentFilterConfig::default()),
