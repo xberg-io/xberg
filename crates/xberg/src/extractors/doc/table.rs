@@ -9,16 +9,115 @@ pub(super) struct PendingTable {
     columns: usize,
     reserved_cells: usize,
     scripts: Vec<crate::rendering::table_scripts::CellScriptAnnotation>,
+    /// A row end was seen: this table has the structure of a table, not just text.
+    saw_row_end: bool,
+    /// Tables nested in this one, innermost last; `nested[0]` sits at depth two.
+    nested: Vec<PendingTable>,
+    /// Nested tables read so far, emitted ahead of this table.
+    finished_nested: Vec<(
+        Vec<Vec<String>>,
+        Vec<crate::rendering::table_scripts::CellScriptAnnotation>,
+    )>,
 }
 
 impl PendingTable {
-    /// Add one table paragraph. A cell's paragraphs are joined by line breaks.
+    /// Add one table paragraph to the table at the paragraph's depth.
+    ///
+    /// A nested table (`mark.depth` > 1) gets its own table on a stack and is
+    /// emitted as a separate table once a shallower paragraph (or the end of
+    /// the outer table) closes it, because the document model has no
+    /// table-in-cell. Depths that skip a level, or a nested table without a
+    /// single row end, keep the old behaviour: their text is flattened into the
+    /// enclosing cell, so no text is ever dropped.
     pub(super) fn add(
         &mut self,
         paragraph: &DocParagraph,
         mark: DocTableMark,
         budget: &mut SecurityBudget,
     ) -> Result<()> {
+        let depth = usize::from(mark.depth.clamp(1, crate::extraction::doc::MAX_TABLE_DEPTH));
+        while self.nested.len() + 1 > depth {
+            self.close_innermost(budget)?;
+        }
+        if depth > self.nested.len() + 2 {
+            // The depth jumps a level: flatten into the innermost open cell.
+            let flat = DocTableMark {
+                cell_end: false,
+                row_end: false,
+                depth: mark.depth,
+            };
+            return self.innermost().add_own(paragraph, flat, budget);
+        }
+        if depth == self.nested.len() + 2 {
+            self.nested.push(PendingTable::default());
+        }
+        self.innermost().add_own(paragraph, mark, budget)
+    }
+
+    fn innermost(&mut self) -> &mut PendingTable {
+        if self.nested.is_empty() {
+            return self;
+        }
+        let last = self.nested.len() - 1;
+        &mut self.nested[last]
+    }
+
+    /// Close the innermost nested table into its parent: as a table of its
+    /// own when it has rows, else as text in the parent's current cell.
+    fn close_innermost(&mut self, budget: &mut SecurityBudget) -> Result<()> {
+        let Some(mut table) = self.nested.pop() else {
+            return Ok(());
+        };
+        table.close_nested(budget)?;
+        let saw_row_end = table.saw_row_end;
+        let parent = self.innermost();
+        let (cells, scripts) = table.take_rows(budget)?;
+        if saw_row_end {
+            parent.finished_nested.append(&mut table.finished_nested);
+            if !cells.iter().flatten().all(|cell| cell.trim().is_empty()) {
+                parent.finished_nested.push((cells, scripts));
+            }
+            return Ok(());
+        }
+        let text = cells
+            .iter()
+            .flatten()
+            .map(|cell| cell.trim())
+            .filter(|cell| !cell.is_empty());
+        let text = text.collect::<Vec<_>>().join("\n");
+        parent.finished_nested.append(&mut table.finished_nested);
+        if !text.is_empty() {
+            if !parent.cell.is_empty() {
+                parent.cell.push('\n');
+            }
+            parent.cell.push_str(&text);
+        }
+        Ok(())
+    }
+
+    fn close_nested(&mut self, budget: &mut SecurityBudget) -> Result<()> {
+        while !self.nested.is_empty() {
+            self.close_innermost(budget)?;
+        }
+        Ok(())
+    }
+
+    fn take_rows(
+        &mut self,
+        budget: &mut SecurityBudget,
+    ) -> Result<(
+        Vec<Vec<String>>,
+        Vec<crate::rendering::table_scripts::CellScriptAnnotation>,
+    )> {
+        self.end_row(budget)?;
+        self.columns = 0;
+        self.reserved_cells = 0;
+        Ok((std::mem::take(&mut self.rows), std::mem::take(&mut self.scripts)))
+    }
+
+    /// Add one paragraph to this table's own cell. A cell's paragraphs are
+    /// joined by line breaks.
+    fn add_own(&mut self, paragraph: &DocParagraph, mark: DocTableMark, budget: &mut SecurityBudget) -> Result<()> {
         let text = paragraph.content.trim();
         if !text.is_empty() {
             if !self.cell.is_empty() {
@@ -31,6 +130,7 @@ impl PendingTable {
             self.end_cell(budget)?;
         }
         if mark.row_end {
+            self.saw_row_end = true;
             self.end_row(budget)?;
         }
         Ok(())
@@ -114,30 +214,39 @@ impl PendingTable {
 
     /// Emit the table read so far, unless it holds no text, and start over.
     pub(super) fn flush(&mut self, doc: &mut InternalDocument, budget: &mut SecurityBudget) -> Result<()> {
-        self.end_row(budget)?;
-        let cells = std::mem::take(&mut self.rows);
-        let scripts = std::mem::take(&mut self.scripts);
-        self.columns = 0;
-        self.reserved_cells = 0;
+        self.close_nested(budget)?;
+        let (cells, scripts) = self.take_rows(budget)?;
+        self.saw_row_end = false;
+        for (cells, scripts) in std::mem::take(&mut self.finished_nested) {
+            emit_table(doc, cells, scripts);
+        }
         if cells.iter().flatten().all(|cell| cell.trim().is_empty()) {
             return Ok(());
         }
-        let markdown = crate::rendering::common::render_table_markdown(&cells);
-        let table_index = doc.push_table(Table {
-            cells,
-            markdown,
-            ..Default::default()
-        });
-        let mut element = InternalElement::text(ElementKind::Table { table_index }, "", 0);
-        if !scripts.is_empty() {
-            let encoded =
-                serde_json::to_string(&scripts).expect("table script annotations contain only serializable values");
-            element.attributes = Some(AHashMap::from_iter([(
-                crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE.to_string(),
-                encoded,
-            )]));
-        }
-        doc.push_element(element);
+        emit_table(doc, cells, scripts);
         Ok(())
     }
+}
+
+fn emit_table(
+    doc: &mut InternalDocument,
+    cells: Vec<Vec<String>>,
+    scripts: Vec<crate::rendering::table_scripts::CellScriptAnnotation>,
+) {
+    let markdown = crate::rendering::common::render_table_markdown(&cells);
+    let table_index = doc.push_table(Table {
+        cells,
+        markdown,
+        ..Default::default()
+    });
+    let mut element = InternalElement::text(ElementKind::Table { table_index }, "", 0);
+    if !scripts.is_empty() {
+        let encoded =
+            serde_json::to_string(&scripts).expect("table script annotations contain only serializable values");
+        element.attributes = Some(AHashMap::from_iter([(
+            crate::rendering::table_scripts::TABLE_CELL_SCRIPTS_ATTRIBUTE.to_string(),
+            encoded,
+        )]));
+    }
+    doc.push_element(element);
 }

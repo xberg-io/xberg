@@ -13,14 +13,17 @@ fn paragraph(content: &str, table: Option<DocTableMark>) -> DocParagraph {
 const CELL: Option<DocTableMark> = Some(DocTableMark {
     cell_end: true,
     row_end: false,
+    depth: 1,
 });
 const ROW: Option<DocTableMark> = Some(DocTableMark {
     cell_end: false,
     row_end: true,
+    depth: 1,
 });
 const IN_CELL: Option<DocTableMark> = Some(DocTableMark {
     cell_end: false,
     row_end: false,
+    depth: 1,
 });
 
 fn element_kinds(doc: &InternalDocument) -> Vec<&'static str> {
@@ -342,4 +345,197 @@ fn should_reset_doc_table_script_coordinates_between_tables_gh2275() {
     assert_eq!(html.matches("<sup>").count(), 1, "{html}");
     assert_eq!(doc.tables.len(), 2);
     assert!(doc.elements[2].attributes.is_none());
+}
+
+const fn inner(cell_end: bool, row_end: bool, depth: u8) -> Option<DocTableMark> {
+    Some(DocTableMark {
+        cell_end,
+        row_end,
+        depth,
+    })
+}
+
+fn push_all(paragraphs: &[DocParagraph]) -> InternalDocument {
+    let mut doc = InternalDocument::new("doc");
+    push_paragraph_elements(&mut doc, paragraphs, &mut SecurityBudget::with_defaults())
+        .expect("paragraphs fit the default budget");
+    doc
+}
+
+fn all_text(doc: &InternalDocument) -> String {
+    doc.tables
+        .iter()
+        .flat_map(|table| table.cells.iter().flatten())
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+#[test]
+fn should_emit_a_table_that_starts_at_level_two_with_its_row_and_column_pairs_gh3438() {
+    let paragraphs = [
+        paragraph("A long introduction paragraph.", None),
+        paragraph("INNER_A", inner(true, false, 2)),
+        paragraph("INNER_B", inner(true, false, 2)),
+        paragraph("", inner(false, true, 2)),
+        paragraph("INNER_C", inner(true, false, 2)),
+        paragraph("INNER_D", inner(true, false, 2)),
+        paragraph("", inner(false, true, 2)),
+        paragraph("", CELL),
+        paragraph("OUTER_RIGHT", CELL),
+        paragraph("", ROW),
+        paragraph("AFTER_LEFT", CELL),
+        paragraph("AFTER_RIGHT", CELL),
+        paragraph("", ROW),
+    ];
+
+    let doc = push_all(&paragraphs);
+
+    assert_eq!(element_kinds(&doc), ["paragraph", "table", "table"]);
+    assert_eq!(
+        doc.tables[0].cells,
+        [
+            vec!["INNER_A".to_string(), "INNER_B".to_string()],
+            vec!["INNER_C".to_string(), "INNER_D".to_string()]
+        ]
+    );
+    assert_eq!(
+        doc.tables[1].cells,
+        [
+            vec![String::new(), "OUTER_RIGHT".to_string()],
+            vec!["AFTER_LEFT".to_string(), "AFTER_RIGHT".to_string()]
+        ]
+    );
+}
+
+#[test]
+fn should_emit_a_table_nested_in_a_level_one_cell_beside_its_parent_gh3438() {
+    let paragraphs = [
+        paragraph("outer text", IN_CELL),
+        paragraph("N1", inner(true, false, 2)),
+        paragraph("N2", inner(true, false, 2)),
+        paragraph("", inner(false, true, 2)),
+        paragraph("", CELL),
+        paragraph("right", CELL),
+        paragraph("", ROW),
+    ];
+
+    let doc = push_all(&paragraphs);
+
+    assert_eq!(doc.tables[0].cells, [vec!["N1".to_string(), "N2".to_string()]]);
+    assert_eq!(
+        doc.tables[1].cells,
+        [vec!["outer text".to_string(), "right".to_string()]]
+    );
+}
+
+#[test]
+fn should_nest_three_levels_deep_without_losing_text_gh3438() {
+    let paragraphs = [
+        paragraph("L2", inner(false, false, 2)),
+        paragraph("L3", inner(true, false, 3)),
+        paragraph("", inner(false, true, 3)),
+        paragraph("", inner(true, false, 2)),
+        paragraph("", inner(false, true, 2)),
+        paragraph("L1", CELL),
+        paragraph("", ROW),
+    ];
+
+    let doc = push_all(&paragraphs);
+
+    assert_eq!(doc.tables.len(), 3);
+    assert_eq!(all_text(&doc), "L3|L2|L1");
+}
+
+#[test]
+fn should_flatten_a_depth_that_skips_a_level_instead_of_dropping_its_text_gh3438() {
+    let paragraphs = [
+        paragraph("start", IN_CELL),
+        paragraph("deep", inner(true, false, 4)),
+        paragraph("", inner(false, true, 4)),
+        paragraph("end", CELL),
+        paragraph("", ROW),
+    ];
+
+    let doc = push_all(&paragraphs);
+
+    assert_eq!(doc.tables.len(), 1);
+    assert_eq!(doc.tables[0].cells, [vec!["start\ndeep\nend".to_string()]]);
+}
+
+#[test]
+fn should_flatten_a_nested_table_with_no_row_end_into_the_enclosing_cell_gh3438() {
+    let paragraphs = [
+        paragraph("outer", IN_CELL),
+        paragraph("x", inner(true, false, 2)),
+        paragraph("y", inner(true, false, 2)),
+        paragraph("", CELL),
+        paragraph("", ROW),
+    ];
+
+    let doc = push_all(&paragraphs);
+
+    assert_eq!(doc.tables.len(), 1);
+    assert_eq!(doc.tables[0].cells, [vec!["outer\nx\ny".to_string()]]);
+}
+
+#[test]
+fn should_keep_a_nested_table_left_open_at_the_end_of_the_document_gh3438() {
+    let paragraphs = [
+        paragraph("a", inner(true, false, 2)),
+        paragraph("", inner(false, true, 2)),
+    ];
+
+    let doc = push_all(&paragraphs);
+
+    assert_eq!(doc.tables[0].cells, [vec!["a".to_string()]]);
+}
+
+/// Level-two paragraphs end with paragraph marks; `sprmPItap` 2 and the inner
+/// cell and row sprms are what make them cells and rows.
+#[tokio::test]
+async fn should_read_a_level_two_table_from_papx_depth_and_inner_marks_gh3438() {
+    const ITAP2: [u8; 6] = [0x49, 0x66, 2, 0, 0, 0];
+    let cell = [&ITAP2[..], &[0x4B, 0x24, 1][..]].concat();
+    let row = [&ITAP2[..], &[0x4C, 0x24, 1][..]].concat();
+    let outer_cell = [0x16u8, 0x24, 1];
+    let outer_row = [0x16u8, 0x24, 1, 0x17, 0x24, 1];
+    let mut text = String::from("intro\r");
+    let mut spans: Vec<(std::ops::Range<usize>, &[u8])> = vec![(0..6, &[][..])];
+    for (piece, which) in [
+        ("A\r", 0),
+        ("B\r", 0),
+        ("\r", 1),
+        ("C\r", 0),
+        ("D\r", 0),
+        ("\r", 1),
+        ("\x07", 2),
+        ("RIGHT\x07", 2),
+        ("\x07", 3),
+    ] {
+        let range = text.len()..text.len() + piece.len();
+        text.push_str(piece);
+        let grpprl: &[u8] = match which {
+            0 => &cell,
+            1 => &row,
+            2 => &outer_cell,
+            _ => &outer_row,
+        };
+        spans.push((range, grpprl));
+    }
+    let bytes = crate::extraction::doc::tests::build_utf16_doc_with_papx(&text, &spans);
+
+    let doc = DocExtractor::new()
+        .extract_content(&bytes, LEGACY_WORD_MIME_TYPE, &ExtractionConfig::default())
+        .await
+        .expect("extraction succeeds");
+
+    assert_eq!(
+        doc.tables[0].cells,
+        [
+            vec!["A".to_string(), "B".to_string()],
+            vec!["C".to_string(), "D".to_string()]
+        ]
+    );
+    assert_eq!(doc.tables[1].cells, [vec![String::new(), "RIGHT".to_string()]]);
 }

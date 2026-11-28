@@ -50,6 +50,21 @@ const SPRM_P_F_IN_TABLE: u16 = 0x2416;
 /// a row: it holds only the row's end mark. `spra` = 1.
 const SPRM_P_F_TTP: u16 = 0x2417;
 
+/// `sprmPItap` -- the paragraph's table depth (1 = outermost table). `spra` = 3,
+/// so a 4-byte operand.
+const SPRM_P_ITAP: u16 = 0x6649;
+
+/// `sprmPFInnerTableCell` -- the paragraph ends a cell of a table nested at
+/// depth two or more. `spra` = 1.
+const SPRM_P_F_INNER_TABLE_CELL: u16 = 0x244B;
+
+/// `sprmPFInnerTtp` -- the paragraph ends a row of a table nested at depth two
+/// or more. `spra` = 1.
+const SPRM_P_F_INNER_TTP: u16 = 0x244C;
+
+/// The deepest nesting Word writes ([MS-DOC] `sprmPItap` is at most 15).
+pub(crate) const MAX_TABLE_DEPTH: u8 = 15;
+
 /// `sprmTDefTable` and `sprmTDefTable10` -- a row's cell layout, the sprms
 /// whose length takes two bytes. A row's terminating paragraph carries the
 /// row's table sprms, so its PAPX has one.
@@ -157,8 +172,14 @@ pub(super) fn list_binding_from_grpprl(grpprl: &[u8]) -> Option<ListBinding> {
 /// A paragraph's place in a table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct TableParagraph {
-    /// The paragraph is the row's terminating paragraph (`sprmPFTtp`).
+    /// The paragraph is the row's terminating paragraph (`sprmPFTtp`, or
+    /// `sprmPFInnerTtp` in a nested table).
     pub row_end: bool,
+    /// The paragraph ends a cell of a nested table (`sprmPFInnerTableCell`).
+    /// Only set below depth one, where the cell mark is a paragraph mark.
+    pub inner_cell_end: bool,
+    /// Table depth (`sprmPItap`); 1 for an outermost table.
+    pub depth: u8,
 }
 
 /// Scan a `grpprl` for table membership; `None` when the paragraph is not in a
@@ -166,16 +187,32 @@ pub(super) struct TableParagraph {
 fn table_paragraph_from_grpprl(grpprl: &[u8]) -> Option<TableParagraph> {
     let mut in_table = false;
     let mut row_end = false;
+    let mut inner_row_end = false;
+    let mut inner_cell_end = false;
+    let mut itap = 0u32;
 
     for_each_sprm(grpprl, |sprm, operand| match sprm {
         SPRM_P_F_IN_TABLE => in_table = operand.first().is_some_and(|&v| v != 0),
         SPRM_P_F_TTP => row_end = operand.first().is_some_and(|&v| v != 0),
+        SPRM_P_F_INNER_TTP => inner_row_end = operand.first().is_some_and(|&v| v != 0),
+        SPRM_P_F_INNER_TABLE_CELL => inner_cell_end = operand.first().is_some_and(|&v| v != 0),
+        SPRM_P_ITAP => {
+            if let Some(bytes) = operand.get(..4) {
+                itap = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+            }
+        }
         _ => {}
     });
 
+    let row_end = row_end || inner_row_end;
     // A row's terminating paragraph is in the table whether or not it also ~keep
     // says so. ~keep
-    (in_table || row_end).then_some(TableParagraph { row_end })
+    let depth = u8::try_from(itap).unwrap_or(u8::MAX);
+    (in_table || row_end || inner_cell_end || depth > 0).then_some(TableParagraph {
+        row_end,
+        inner_cell_end,
+        depth: depth.max(1),
+    })
 }
 
 /// Extract one `BxPap` entry's `GrpPrlAndIstd`: the paragraph's style index
@@ -497,13 +534,44 @@ mod tests {
         assert_eq!(table_paragraph_from_grpprl(&[0x03, 0x24, 0x01]), None, "sprmPJc alone");
         assert_eq!(
             table_paragraph_from_grpprl(&[0x16, 0x24, 0x01]),
-            Some(TableParagraph { row_end: false })
+            Some(TableParagraph {
+                row_end: false,
+                inner_cell_end: false,
+                depth: 1
+            })
         );
         assert_eq!(
             table_paragraph_from_grpprl(&[0x16, 0x24, 0x01, 0x17, 0x24, 0x01]),
-            Some(TableParagraph { row_end: true })
+            Some(TableParagraph {
+                row_end: true,
+                inner_cell_end: false,
+                depth: 1
+            })
         );
         assert_eq!(table_paragraph_from_grpprl(&[0x16, 0x24, 0x00]), None, "fInTable off");
+    }
+
+    #[test]
+    fn nested_table_depth_and_inner_marks_are_read() {
+        // sprmPItap = 2, sprmPFInnerTableCell on, no fInTable: still a table paragraph.
+        assert_eq!(
+            table_paragraph_from_grpprl(&[0x49, 0x66, 2, 0, 0, 0, 0x4B, 0x24, 1]),
+            Some(TableParagraph {
+                row_end: false,
+                inner_cell_end: true,
+                depth: 2
+            })
+        );
+        // sprmPFInnerTtp ends a nested row.
+        assert_eq!(
+            table_paragraph_from_grpprl(&[0x49, 0x66, 3, 0, 0, 0, 0x4C, 0x24, 1]),
+            Some(TableParagraph {
+                row_end: true,
+                inner_cell_end: false,
+                depth: 3
+            })
+        );
+        assert_eq!(table_paragraph_from_grpprl(&[0x49, 0x66, 0, 0, 0, 0]), None, "itap 0");
     }
 
     #[test]
@@ -516,7 +584,11 @@ mod tests {
         grpprl.extend_from_slice(&[0x16, 0x24, 0x01, 0x17, 0x24, 0x01]);
         assert_eq!(
             table_paragraph_from_grpprl(&grpprl),
-            Some(TableParagraph { row_end: true })
+            Some(TableParagraph {
+                row_end: true,
+                inner_cell_end: false,
+                depth: 1
+            })
         );
 
         // sprmPChgTabs in its long form: one tab deleted, two added. ~keep
@@ -524,7 +596,11 @@ mod tests {
         grpprl.extend_from_slice(&[0x16, 0x24, 0x01]);
         assert_eq!(
             table_paragraph_from_grpprl(&grpprl),
-            Some(TableParagraph { row_end: false })
+            Some(TableParagraph {
+                row_end: false,
+                inner_cell_end: false,
+                depth: 1
+            })
         );
     }
 
@@ -532,24 +608,52 @@ mod tests {
     fn table_runs_are_looked_up_by_the_range_that_holds_the_mark() {
         let index = ParagraphListIndex {
             table_runs: vec![
-                (100, 120, TableParagraph { row_end: false }),
-                (120, 122, TableParagraph { row_end: true }),
+                (
+                    100,
+                    120,
+                    TableParagraph {
+                        row_end: false,
+                        inner_cell_end: false,
+                        depth: 1,
+                    },
+                ),
+                (
+                    120,
+                    122,
+                    TableParagraph {
+                        row_end: true,
+                        inner_cell_end: false,
+                        depth: 1,
+                    },
+                ),
             ],
             ..Default::default()
         };
         assert_eq!(
             index.table_for_paragraph_end(106),
-            Some(TableParagraph { row_end: false }),
+            Some(TableParagraph {
+                row_end: false,
+                inner_cell_end: false,
+                depth: 1
+            }),
             "inside a run"
         );
         assert_eq!(
             index.table_for_paragraph_end(120),
-            Some(TableParagraph { row_end: false }),
+            Some(TableParagraph {
+                row_end: false,
+                inner_cell_end: false,
+                depth: 1
+            }),
             "a run's last byte"
         );
         assert_eq!(
             index.table_for_paragraph_end(122),
-            Some(TableParagraph { row_end: true })
+            Some(TableParagraph {
+                row_end: true,
+                inner_cell_end: false,
+                depth: 1
+            })
         );
         assert_eq!(index.table_for_paragraph_end(100), None, "before the first run");
         assert_eq!(index.table_for_paragraph_end(130), None, "after the last run");
