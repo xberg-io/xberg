@@ -410,6 +410,15 @@ fn stacks_with(
     x0 - left_edge >= size * FRACTION_LEFT_GAP_EM
 }
 
+/// Whether every full-size glyph of `cluster` is a big operator or bracket sign: such a cluster
+/// is the operator's own limit or bracket piece, not a line of text with a sign among it.
+fn full_size_glyphs_are_operator_signs(cluster: &[&Piece<'_>], size: f32) -> bool {
+    cluster
+        .iter()
+        .filter(|piece| piece.size > size * SCRIPT_SIZE_RATIO)
+        .all(|piece| piece.is_operator_sign())
+}
+
 /// Hang each unpaired cluster on the item it scripts; a cluster with no base in reach gets an
 /// [`ItemKind::Orphan`] base at its own position. `None` when a cluster is a full-size line
 /// (a problem number over an expression, a line of a stack that is no fraction): no script is
@@ -434,7 +443,7 @@ fn attach_scripts<'p, 'a>(
         && above
             .iter()
             .chain(&below)
-            .any(|cluster| is_line(cluster) && !cluster.iter().any(|piece| piece.is_operator_sign()))
+            .any(|cluster| is_line(cluster) && !full_size_glyphs_are_operator_signs(cluster, size))
     {
         return None;
     }

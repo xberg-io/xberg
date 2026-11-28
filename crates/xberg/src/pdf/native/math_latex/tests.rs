@@ -433,6 +433,26 @@ fn should_not_script_a_full_size_row_label_onto_a_formula() {
     assert!(rewrite_math_spans(&spans).is_none());
 }
 
+/// A big operator sign beside a problem number does not exempt the number's line.
+#[test]
+fn should_still_refuse_a_full_size_label_beside_an_operator_sign() {
+    let spans = vec![
+        span("(15)", MR, 11.96, 47.71, 20.81, 519.55),
+        span("P", "XXJGHY+CMEX10", 11.96, 69.0, 11.52, 519.55),
+        span("(", MR, 11.96, 75.57, 4.55, 511.35),
+        span("x", MMI, 11.96, 80.12, 6.65, 511.35),
+        span("+ 2)(", MR, 11.96, 89.43, 26.72, 511.35),
+        span("x", MMI, 11.96, 116.15, 6.65, 511.35),
+        span("2", "PSEHXM+CMR8", 7.97, 122.80, 4.23, 514.9),
+    ];
+    let rewritten = rewrite_math_spans(&spans).unwrap_or_default();
+    assert!(
+        rewritten.iter().all(|span| !span.text.starts_with('$')),
+        "{:?}",
+        texts(&rewritten)
+    );
+}
+
 /// Gutenberg 33283 p161: `y = ∛x`, a CMEX radical drawn above the axis with its degree over
 /// the radical's left edge.
 #[test]
